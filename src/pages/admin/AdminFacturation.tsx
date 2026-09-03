@@ -22,10 +22,23 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { estDocumentComptabilise, montantDocumentComptable } from '@/lib/adminInvoiceAccounting';
 import { estFactureProduction, perimetreFacture, type FactureAvecPerimetre } from '@/lib/adminInvoiceScope';
 import { RevuesTvaMissions } from '@/components/admin/RevuesTvaMissions';
+import { normaliserLignesFactureCommission } from '@/lib/factureCommissionUi';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0');
 const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/ /g, '\u00a0');
+const formatHeures = (v: unknown) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(Number(v ?? 0))} h`;
+const tauxMission = (mission: any) => Number(mission.taux_rist_plafonne ?? mission.taux_horaire_base ?? 0);
 
 // Statuts demandant une action admin → section « À traiter » en tête de page.
 // Le reste est relégué dans l'historique replié (pattern « file de travail », Session D).
@@ -90,6 +103,11 @@ function FactureDetailContenu({ missions, loading, error, mode }: { missions: an
           const sg = m.soignants as any;
           return (
             <div key={m.id} className="rounded-lg border border-border/60 bg-background p-2.5 space-y-1.5">
+              {m.ecart_avec_mission_courante && (
+                <p className="rounded-md border border-amber-300/60 bg-amber-50 px-2 py-1 text-[10px] text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
+                  Montants alignés sur la facture émise après recalcul de la mission.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions/${m.id}`); }}
@@ -112,9 +130,9 @@ function FactureDetailContenu({ missions, loading, error, mode }: { missions: an
                 {m.profession_requise} · {formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}
               </p>
               <div className="grid grid-cols-2 gap-1 text-[11px] pt-1 border-t border-border/40">
-                <span className="text-muted-foreground">Heures : <span className="text-foreground font-medium">{m.duree_heures}h</span></span>
-                <span className="text-muted-foreground">Taux : <span className="text-foreground font-medium">{formatEur(m.taux_horaire_base)}</span></span>
-                <span className="text-muted-foreground">Brut : <span className="text-foreground font-medium">{formatEur(m.total_brut || 0)}</span></span>
+                <span className="text-muted-foreground">Heures retenues : <span className="text-foreground font-medium">{formatHeures(m.duree_heures)}</span></span>
+                <span className="text-muted-foreground">Taux retenu : <span className="text-foreground font-medium">{formatEur(tauxMission(m))}</span></span>
+                {!m.ecart_avec_mission_courante && <span className="text-muted-foreground">Brut : <span className="text-foreground font-medium">{formatEur(m.total_brut || 0)}</span></span>}
                 <span className="text-muted-foreground">Com. HT : <span className="text-primary font-semibold">{formatEur(m.montant_commission_ht || 0)}</span></span>
               </div>
             </div>
@@ -135,7 +153,7 @@ function FactureDetailContenu({ missions, loading, error, mode }: { missions: an
             <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Profession</th>
             <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Dates</th>
             <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Heures</th>
-            <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Taux/h</th>
+            <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Taux retenu</th>
             <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Brut soignant</th>
             <th className="text-right py-1.5 font-medium text-muted-foreground">Commission HT</th>
           </tr>
@@ -167,9 +185,9 @@ function FactureDetailContenu({ missions, loading, error, mode }: { missions: an
                 </td>
                 <td className="py-1.5 pr-2 text-muted-foreground">{m.profession_requise}</td>
                 <td className="py-1.5 pr-2 text-muted-foreground">{formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}</td>
-                <td className="py-1.5 pr-2 text-right">{m.duree_heures}h</td>
-                <td className="py-1.5 pr-2 text-right">{formatEur(m.taux_horaire_base)}</td>
-                <td className="py-1.5 pr-2 text-right">{formatEur(m.total_brut || 0)}</td>
+                <td className="py-1.5 pr-2 text-right">{formatHeures(m.duree_heures)}</td>
+                <td className="py-1.5 pr-2 text-right">{formatEur(tauxMission(m))}</td>
+                <td className="py-1.5 pr-2 text-right">{m.ecart_avec_mission_courante ? 'Recalculée' : formatEur(m.total_brut || 0)}</td>
                 <td className="py-1.5 text-right font-semibold text-primary">{formatEur(m.montant_commission_ht || 0)}</td>
               </tr>
             );
@@ -185,7 +203,7 @@ function FactureDetailContenu({ missions, loading, error, mode }: { missions: an
  * Permet de partager la logique entre FactureDetailRow (desktop)
  * et le rendu mobile inline.
  */
-function useMissionsFacture(factureId: string) {
+function useMissionsFacture(facture: any) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,8 +216,8 @@ function useMissionsFacture(factureId: string) {
       try {
         const { data, error: missionsError } = await (supabase
           .from('missions')
-          .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
-          .eq('facture_id', factureId)
+          .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id')
+          .eq('facture_id', facture.id)
           .order('debut_le', { ascending: true }) as any);
         if (missionsError) throw missionsError;
         const mList = (data as any[]) || [];
@@ -210,7 +228,13 @@ function useMissionsFacture(factureId: string) {
           if (soignantsError) throw soignantsError;
           if (sgData) for (const s of sgData) sgMap[s.id] = s;
         }
-        if (actif) setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
+        if (actif) {
+          const enrichies = mList.map((m: any) => ({
+            ...m,
+            soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+          }));
+          setMissions(normaliserLignesFactureCommission(enrichies, facture));
+        }
       } catch (fetchError: any) {
         console.error('useMissionsFacture fetch error', fetchError);
         if (actif) {
@@ -222,13 +246,13 @@ function useMissionsFacture(factureId: string) {
       }
     })();
     return () => { actif = false; };
-  }, [factureId]);
+  }, [facture]);
 
   return { missions, loading, error };
 }
 
-function FactureDetailRow({ factureId }: { factureId: string }) {
-  const { missions, loading, error } = useMissionsFacture(factureId);
+function FactureDetailRow({ facture }: { facture: any }) {
+  const { missions, loading, error } = useMissionsFacture(facture);
   return (
     <TableRow>
       <TableCell colSpan={10} className="bg-muted/30 p-0">
@@ -238,8 +262,8 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   );
 }
 
-function FactureDetailMobile({ factureId }: { factureId: string }) {
-  const { missions, loading, error } = useMissionsFacture(factureId);
+function FactureDetailMobile({ facture }: { facture: any }) {
+  const { missions, loading, error } = useMissionsFacture(facture);
   return (
     <div className="bg-muted/30 rounded-lg p-3 -mx-1">
       <FactureDetailContenu missions={missions} loading={loading} error={error} mode="mobile" />
@@ -251,8 +275,8 @@ function FactureDetailMobile({ factureId }: { factureId: string }) {
  * Détail responsive pour les cartes « À traiter » (affichées à toutes les largeurs) :
  * un seul fetch, rendu desktop sur md+ et rendu mobile en dessous.
  */
-function FactureDetailATraiter({ factureId }: { factureId: string }) {
-  const { missions, loading, error } = useMissionsFacture(factureId);
+function FactureDetailATraiter({ facture }: { facture: any }) {
+  const { missions, loading, error } = useMissionsFacture(facture);
   return (
     <div className="bg-muted/30 rounded-lg">
       <div className="hidden md:block">
@@ -287,6 +311,11 @@ export default function AdminFacturation() {
   const [recherche, setRecherche] = useState(searchParams.get('q') ?? '');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [inclureTestsDansFile, setInclureTestsDansFile] = useState(false);
+  const [confirmationFacture, setConfirmationFacture] = useState<{
+    facture: any;
+    action: 'CONFIRMER' | 'REJETER';
+  } | null>(null);
   // Historique replié par défaut (pattern « file de travail »), mais ouvert d'emblée
   // si on arrive depuis la recherche globale ⌘K (?q=) pour que le résultat cherché
   // soit immédiatement visible. État au niveau page : il survit aux refetchs
@@ -330,12 +359,18 @@ export default function AdminFacturation() {
   const aTraiter = useMemo(() => {
     const ts = (f: any) => (f.date_emission ? new Date(f.date_emission).getTime() : 0);
     return factures
-      .filter((f: any) => estFactureProduction(f) && STATUTS_A_TRAITER.includes(f.statut))
+      .filter((f: any) => (
+        STATUTS_A_TRAITER.includes(f.statut)
+        && (
+          estFactureProduction(f)
+          || (inclureTestsDansFile && perimetreFacture(f) === 'TEST')
+        )
+      ))
       .sort((a: any, b: any) => {
         if (a.statut !== b.statut) return a.statut === 'VIREMENT_DECLARE' ? -1 : 1;
         return ts(a) - ts(b);
       });
-  }, [factures]);
+  }, [factures, inclureTestsDansFile]);
 
   // Filtres statut + recherche sur l'ensemble (sert aux totaux et au rapport PDF,
   // comportement inchangé), puis l'historique en exclut les statuts « à traiter ».
@@ -350,8 +385,14 @@ export default function AdminFacturation() {
   }, [factures, filtreStatut, recherche]);
 
   const historique = useMemo(
-    () => filtered.filter((f: any) => !estFactureProduction(f) || !STATUTS_A_TRAITER.includes(f.statut)),
-    [filtered]
+    () => filtered.filter((f: any) => !(
+      STATUTS_A_TRAITER.includes(f.statut)
+      && (
+        estFactureProduction(f)
+        || (inclureTestsDansFile && perimetreFacture(f) === 'TEST')
+      )
+    )),
+    [filtered, inclureTestsDansFile]
   );
 
   const historiqueProduction = useMemo(
@@ -539,6 +580,21 @@ export default function AdminFacturation() {
 
         <RevuesTvaMissions />
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 text-sm">
+          <Checkbox
+            aria-label="Inclure les factures de test dans la file à traiter"
+            checked={inclureTestsDansFile}
+            onCheckedChange={(checked) => setInclureTestsDansFile(checked === true)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block font-semibold text-foreground">Mode contrôle TEST</span>
+            <span className="block text-xs text-muted-foreground">
+              Affiche les virements de recette dans la file d’action, sans les inclure dans les totaux ni les exports comptables de production.
+            </span>
+          </span>
+        </label>
+
         <details className="group rounded-xl border border-border bg-card">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
             <span>
@@ -702,7 +758,7 @@ export default function AdminFacturation() {
                             className="min-h-[36px] text-xs gap-1"
                             disabled={actionId === f.id}
                             iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
-                            onClick={() => confirmerVirement(f)}
+                            onClick={() => setConfirmationFacture({ facture: f, action: 'CONFIRMER' })}
                           >
                             Confirmer
                           </BoutonY2K>
@@ -712,7 +768,7 @@ export default function AdminFacturation() {
                             className="min-h-[36px] text-xs gap-1"
                             disabled={actionId === f.id}
                             iconeGauche={<XCircle className="h-3.5 w-3.5" />}
-                            onClick={() => rejeterVirement(f)}
+                            onClick={() => setConfirmationFacture({ facture: f, action: 'REJETER' })}
                           >
                             Rejeter
                           </BoutonY2K>
@@ -731,7 +787,7 @@ export default function AdminFacturation() {
 
                     {isExpanded && (
                       <div className="pl-7 pt-1">
-                        <FactureDetailATraiter factureId={f.id} />
+                        <FactureDetailATraiter facture={f} />
                       </div>
                     )}
                   </div>
@@ -824,7 +880,17 @@ export default function AdminFacturation() {
                               />
                             </TableCell>
                             <TableCell className="w-8 pr-0">
-                              {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                              <button
+                                type="button"
+                                aria-label={`${isExpanded ? 'Masquer' : 'Afficher'} les missions de la facture ${f.numero_facture}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedId(isExpanded ? null : f.id);
+                                }}
+                                className="rounded p-1 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
                             </TableCell>
                             <TableCell className="font-mono text-xs font-medium">
                               <div className="flex flex-wrap items-center gap-1.5">
@@ -852,7 +918,7 @@ export default function AdminFacturation() {
                             </TableCell>
                             <TableCell className="w-auto pr-2" />
                           </TableRow>
-                          {isExpanded && <FactureDetailRow factureId={f.id} />}
+                          {isExpanded && <FactureDetailRow facture={f} />}
                         </React.Fragment>
                       );
                     })}
@@ -972,7 +1038,7 @@ export default function AdminFacturation() {
 
                           {isExpanded && (
                             <div className="pl-7 pt-1">
-                              <FactureDetailMobile factureId={f.id} />
+                              <FactureDetailMobile facture={f} />
                             </div>
                           )}
                         </div>
@@ -985,6 +1051,50 @@ export default function AdminFacturation() {
           )}
         </section>
       </div>
+
+      <AlertDialog
+        open={confirmationFacture !== null}
+        onOpenChange={(open) => { if (!open && actionId === null) setConfirmationFacture(null); }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmationFacture?.action === 'CONFIRMER'
+                ? 'Confirmer la réception du virement ?'
+                : 'Rejeter cette déclaration de virement ?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Facture {confirmationFacture?.facture?.numero_facture ?? '—'} ·{' '}
+              {formatEur(montantDocumentComptable(confirmationFacture?.facture ?? {}, 'ttc'))}
+              {confirmationFacture?.facture?.virement_reference
+                ? ` · Référence ${confirmationFacture.facture.virement_reference}`
+                : ''}.
+              {confirmationFacture?.action === 'CONFIRMER'
+                ? ' Cette action marque la facture comme payée.'
+                : ' La facture repassera au statut « Émise » afin que l’établissement puisse corriger sa déclaration.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionId !== null}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={actionId !== null || confirmationFacture === null}
+              onClick={() => {
+                const confirmation = confirmationFacture;
+                setConfirmationFacture(null);
+                if (!confirmation) return;
+                if (confirmation.action === 'CONFIRMER') {
+                  void confirmerVirement(confirmation.facture);
+                } else {
+                  void rejeterVirement(confirmation.facture);
+                }
+              }}
+              className={confirmationFacture?.action === 'REJETER' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+            >
+              {confirmationFacture?.action === 'CONFIRMER' ? 'Confirmer le paiement' : 'Rejeter la déclaration'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </LayoutAdmin>
   );
 }

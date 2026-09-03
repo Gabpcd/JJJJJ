@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download, ChevronDown, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
@@ -16,6 +16,7 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
+import { normaliserLignesFactureCommission } from '@/lib/factureCommissionUi';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -51,6 +52,12 @@ function dureeEntre(debut: string, fin: string): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+function formatTauxPourcent(taux: unknown): string {
+  const valeur = Number(taux ?? 0);
+  const pourcent = valeur > 0 && valeur <= 1 ? valeur * 100 : valeur;
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(pourcent);
 }
 
 /** Groupe les pointages par jour (gère les pauses entre shifts sur une même journée) */
@@ -96,7 +103,7 @@ function PresencesJour({ presences }: { presences: any[] }) {
             </span>
           ))}
           {pList.length > 1 && (
-            <span className="text-[10px] text-primary font-medium">(pause entre shifts)</span>
+            <span className="text-[10px] text-primary font-medium">(pauses entre segments)</span>
           )}
         </div>
       ))}
@@ -137,7 +144,7 @@ function MissionDetail({ mission }: { mission: any }) {
               {' → '}
               {mission.fin_le ? format(new Date(mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
             </span>
-            <span>{Number(mission.duree_heures ?? 0)}h</span>
+            <span>{Number(mission.duree_heures ?? 0)} h retenues</span>
           </div>
         </div>
         <div className="text-right shrink-0 ml-3">
@@ -148,19 +155,30 @@ function MissionDetail({ mission }: { mission: any }) {
 
       {open && (
         <div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
+          {mission.ecart_avec_mission_courante && (
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
+              Cette ligne reprend les montants figés sur la facture. La mission a été recalculée après son émission ; les anciennes valeurs de simulation ne sont pas utilisées ici.
+            </div>
+          )}
           {/* Décomposition financière */}
-          <div>
+          {!mission.ecart_avec_mission_courante && <div>
             <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
               💶 Décomposition financière
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux horaire</span>
-                <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
+                <span className="text-muted-foreground">Taux retenu</span>
+                <span className="font-medium">{formatEur(mission.taux_rist_plafonne ?? mission.taux_horaire_base ?? 0)}/h</span>
               </div>
+              {mission.rist_plafond_applique && mission.taux_rist_plafonne != null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taux demandé</span>
+                  <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
+                </div>
+              )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Durée</span>
-                <span className="font-medium">{Number(mission.duree_heures ?? 0)}h</span>
+                <span className="text-muted-foreground">Heures retenues</span>
+                <span className="font-medium">{Number(mission.duree_heures ?? 0)} h</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Brut soignant</span>
@@ -186,18 +204,18 @@ function MissionDetail({ mission }: { mission: any }) {
               )}
               {Number(mission.montant_ifm ?? 0) > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">IFM ({Number(mission.taux_ifm ?? 10)}%)</span>
+                  <span className="text-muted-foreground">IFM ({formatTauxPourcent(mission.taux_ifm)}%)</span>
                   <span className="font-medium">{formatEur(mission.montant_ifm)}</span>
                 </div>
               )}
               {Number(mission.montant_icp ?? 0) > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">ICP ({Number(mission.taux_icp ?? 10)}%)</span>
+                  <span className="text-muted-foreground">ICP ({formatTauxPourcent(mission.taux_icp)}%)</span>
                   <span className="font-medium">{formatEur(mission.montant_icp)}</span>
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Commission Jolene */}
           <div>
@@ -269,6 +287,10 @@ export default function DetailFacture() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const requeteCourante = useRef(0);
+  const missionsFacturees = useMemo(
+    () => facture ? normaliserLignesFactureCommission(missions, facture) : [],
+    [facture, missions],
+  );
 
   const charger = useCallback(async () => {
     if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
@@ -411,7 +433,6 @@ export default function DetailFacture() {
     && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
     && !facture.est_secteur_public
     && !estSepaAutomatique;
-
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
@@ -489,17 +510,20 @@ export default function DetailFacture() {
 
         {/* Missions table */}
         <h2 className="text-sm font-bold text-foreground mb-3 uppercase tracking-wider">
-          📋 Missions facturées ({missions.length})
+          📋 Missions facturées ({missionsFacturees.length})
         </h2>
 
-        {missions.length === 0 ? (
+        {missionsFacturees.length === 0 ? (
           <p className="text-sm text-muted-foreground italic py-4">Aucune mission liée à cette facture.</p>
         ) : (
           <div className="mb-6">
+            <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              Les montants de commission affichés ci-dessous sont ceux du document émis. Toute correction ultérieure doit apparaître sur un avoir ou une facture complémentaire distincte.
+            </div>
             <p className="text-xs text-muted-foreground mb-3">
               Cliquez sur une mission pour voir le détail complet (heures, majorations nuit/dimanche/férié, IFM, ICP, commission, pointages).
             </p>
-            {missions.map((m: any) => (
+            {missionsFacturees.map((m: any) => (
               <MissionDetail key={m.id} mission={m} />
             ))}
           </div>
