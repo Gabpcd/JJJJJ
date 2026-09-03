@@ -207,6 +207,8 @@ jobs:
                    contrat_service_signe_le = COALESCE(contrat_service_signe_le, now()),
                    siret_verifie = true,
                    siret_verifie_le = COALESCE(siret_verifie_le, now()),
+                   finess_verifie = true,
+                   finess_verifie_le = COALESCE(finess_verifie_le, now()),
                    statut_verification = 'VERIFIE',
                    peut_publier_missions = true,
                    representant_identite_verifiee = true,
@@ -304,6 +306,7 @@ jobs:
                 WHERE u.email = 'admin@jolene.app' AND ea.actif IS TRUE
                   AND cardinality(ea.acces_groupes) >= 8);
           ")"
+          echo "État profils E2E : $READY"
           test "$READY" = '1|1|1'
           echo "Trois profils E2E staging prêts, sans reset."
 
