@@ -259,7 +259,11 @@ export default function ContratMission() {
     }).then(({ data, error }) => {
       if (cancelled) return;
       if (error || !(data as any)?.success) {
-        setErreurRenduContrat('Le document contractuel final n’a pas pu être préparé. Réessayez avant de signer.');
+        const motifBrut = typeof (data as any)?.error === 'string'
+          ? (data as any).error
+          : error?.message;
+        const motifServeur = motifBrut ? ` ${String(motifBrut).slice(0, 180)}` : '';
+        setErreurRenduContrat(`Le document contractuel final n’a pas pu être préparé.${motifServeur} Réessayez avant de signer.`);
         return;
       }
       // Reload le contrat pour récupérer storage_path + hash
