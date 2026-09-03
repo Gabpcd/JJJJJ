@@ -205,7 +205,7 @@ jobs:
             -- verdicts sont posés dans un second UPDATE afin que le trigger
             -- d'invalidation voie d'abord le changement de source.
             UPDATE public.etablissements
-               SET siret = '99999999999999',
+               SET siret = '90000000000001',
                    finess = '750012345',
                    siret_raison_sociale = 'Clinique Playwright Test',
                    finess_raison_sociale = 'Clinique Playwright Test',

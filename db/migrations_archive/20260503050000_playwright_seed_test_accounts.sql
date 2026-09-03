@@ -162,7 +162,7 @@ BEGIN
   ) VALUES (
     v_etab_id,
     'Clinique Playwright Test',
-    '99999999999999',
+    '90000000000001',
     'CLINIQUE_PRIVEE',
     '1 rue de Test', 'Paris', '75002', 48.8666, 2.3322,
     'playwright-etab@jolene.app', '+33100000001',
