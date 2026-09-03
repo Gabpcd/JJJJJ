@@ -26,6 +26,8 @@ const ALLOWED_ORIGINS = new Set([
   'capacitor://localhost',
   'http://localhost:5173',
   'http://localhost:8080',
+  'http://localhost:8085',
+  'http://127.0.0.1:8085',
 ]);
 
 const LOVABLE_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.lovable\.app$/i;
