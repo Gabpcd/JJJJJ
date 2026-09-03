@@ -21,7 +21,12 @@ const enCentimes = (montant: unknown) => Math.round(Number(montant ?? 0) * 100);
 export function normaliserLignesFactureCommission<T extends LigneMissionCommission>(
   missions: T[],
   facture: FactureCommissionTotaux,
-): Array<T & { ecart_avec_mission_courante: boolean }> {
+): Array<T & {
+  montant_commission_ht: number;
+  montant_commission_tva: number;
+  montant_commission_ttc: number;
+  ecart_avec_mission_courante: boolean;
+}> {
   if (missions.length === 0) return [];
 
   const totalHt = enCentimes(facture.montant_ht);

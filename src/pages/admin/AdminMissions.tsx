@@ -35,6 +35,8 @@ const STATUT_LABEL: Record<string, string> = {
   ABSENCE: 'Absence',
   EXPIREE: 'Expirée',
   ANNULEE: 'Annulée',
+  ANNULEE_PAR_ETABLISSEMENT: 'Annulée par l’établissement',
+  ANNULEE_PAR_SOIGNANT: 'Annulée par le soignant',
 };
 
 const SELECT_MISSIONS = 'id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, est_asap, est_urgente, soignant_assigne_id, etablissement_id, etablissements(nom, est_compte_test), soignants(prenom, nom, est_compte_test)';
@@ -52,6 +54,8 @@ function statutBadge(statut: string) {
     ABSENCE: 'error',
     EXPIREE: 'warning',
     ANNULEE: 'error',
+    ANNULEE_PAR_ETABLISSEMENT: 'error',
+    ANNULEE_PAR_SOIGNANT: 'error',
   };
   return <BadgeY2K variant={map[statut] ?? 'info'} size="sm">{STATUT_LABEL[statut] ?? statut}</BadgeY2K>;
 }
@@ -159,7 +163,9 @@ export default function AdminMissions() {
         .order('debut_le', { ascending: false })
         .limit(200);
 
-      if (filtre !== 'TOUTES') {
+      if (filtre === 'ANNULEE') {
+        queryListe = queryListe.in('statut', ['ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT']);
+      } else if (filtre !== 'TOUTES') {
         queryListe = queryListe.eq('statut', filtre);
       }
 
