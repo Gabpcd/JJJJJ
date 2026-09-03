@@ -188,6 +188,12 @@ jobs:
           URL="${{ steps.staging-url.outputs.url }}"
           psql "$URL" -v ON_ERROR_STOP=1 \
             -f db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql
+          # Le bootstrap du staging copie le schéma de production mais pas les
+          # données de référence. Sans templates actifs, le parcours frontend
+          # de signature ne peut pas figer le contrat et retombe sur un aperçu
+          # incomplet. Ce seed est idempotent et limité aux modèles de contrat.
+          psql "$URL" -v ON_ERROR_STOP=1 \
+            -f db/migrations_archive/20260512160000_pr5_templates_contrats_seed.sql
           psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $repair_etablissement$
           DECLARE
