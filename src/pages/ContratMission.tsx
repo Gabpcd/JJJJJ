@@ -28,6 +28,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { sha256Hex } from '@/lib/crypto-hash';
 import {
   choisirContenuContratAffiche,
+  contratNecessiteRenduServeur,
   contientVariablesContratNonRendues,
 } from '@/lib/contratMissionUi';
 
@@ -249,7 +250,7 @@ export default function ContratMission() {
   useEffect(() => {
     if (!contrat?.id) return;
     if (contrat.statut === 'ANNULE' || contrat.statut === 'EXPIRE' || contrat.statut === 'REFUSE') return;
-    const renduNecessaire = !contrat.storage_path || contientVariablesContratNonRendues(contrat.contenu_html);
+    const renduNecessaire = contratNecessiteRenduServeur(contrat.contenu_html, contrat.storage_path);
     if (!renduNecessaire) return;
     let cancelled = false;
     setRenduContratEnCours(true);

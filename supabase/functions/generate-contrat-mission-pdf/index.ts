@@ -45,6 +45,19 @@ function formatDate(value: any): string {
   } catch { return '—'; }
 }
 
+function formatDateOnly(value: any): string {
+  if (!value) return 'non renseignée';
+  try {
+    const iso = String(value).slice(0, 10);
+    const d = new Date(`${iso}T12:00:00Z`);
+    if (isNaN(d.getTime())) return 'non renseignée';
+    return d.toLocaleDateString('fr-FR', {
+      dateStyle: 'long',
+      timeZone: BUSINESS_TIME_ZONE,
+    });
+  } catch { return 'non renseignée'; }
+}
+
 function replaceTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, key) => {
     const trimmed = key.trim();
@@ -78,7 +91,7 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     etablissement_ville: escapeHtml(etab?.adresse_ville),
     soignant_nom: escapeHtml(soignant?.nom),
     soignant_prenom: escapeHtml(soignant?.prenom),
-    soignant_date_naissance: escapeHtml(soignant?.date_naissance),
+    soignant_date_naissance: escapeHtml(formatDateOnly(soignant?.date_naissance)),
     soignant_adresse: escapeHtml(adresseSoignant),
     soignant_rpps: escapeHtml(soignant?.numero_rpps),
     soignant_siret: escapeHtml(soignant?.siret),
