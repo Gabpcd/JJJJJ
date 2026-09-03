@@ -201,21 +201,24 @@ jobs:
               RAISE EXCEPTION 'Compte playwright-etab absent du staging';
             END IF;
 
+            -- Sources fictives strictement bornées au compte de test. Les
+            -- verdicts sont posés dans un second UPDATE afin que le trigger
+            -- d'invalidation voie d'abord le changement de source.
             UPDATE public.etablissements
                SET siret = '90000000000001',
+                   finess = '750012345',
+                   siret_raison_sociale = 'Clinique Playwright Test',
+                   finess_raison_sociale = 'Clinique Playwright Test',
+                   siret_est_actif = true,
+                   representant_nom = 'Test',
+                   representant_prenom = 'Admin',
+                   dirigeants = jsonb_build_array(jsonb_build_object(
+                     'type_dirigeant', 'Personne physique',
+                     'nom', 'Test',
+                     'prenoms', 'Admin'
+                   )),
                    contrat_service_signe = true,
                    contrat_service_signe_le = COALESCE(contrat_service_signe_le, now()),
-                   siret_verifie = true,
-                   siret_verifie_le = COALESCE(siret_verifie_le, now()),
-                   finess_verifie = true,
-                   finess_verifie_le = COALESCE(finess_verifie_le, now()),
-                   statut_verification = 'VERIFIE',
-                   peut_publier_missions = true,
-                   representant_identite_verifiee = true,
-                   representant_identite_verifiee_le = COALESCE(representant_identite_verifiee_le, now()),
-                   rattachement_methode = 'ADMIN',
-                   rattachement_verifie = true,
-                   rattachement_verifie_le = COALESCE(rattachement_verifie_le, now()),
                    email_contact_verifie = true,
                    email_contact_verifie_le = COALESCE(email_contact_verifie_le, now()),
                    onboarding_termine_le = COALESCE(onboarding_termine_le, now()),
@@ -226,6 +229,19 @@ jobs:
                    supprime_le = NULL
              WHERE id = v_etab_id
                AND est_compte_test IS TRUE;
+
+            UPDATE public.etablissements
+               SET siret_verifie = true,
+                   siret_verifie_le = COALESCE(siret_verifie_le, now()),
+                   finess_verifie = true,
+                   finess_verifie_le = COALESCE(finess_verifie_le, now()),
+                   representant_identite_verifiee = true,
+                   representant_identite_verifiee_le = COALESCE(representant_identite_verifiee_le, now())
+             WHERE id = v_etab_id
+               AND est_compte_test IS TRUE;
+
+            PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+            PERFORM public.fn_evaluer_rattachement_etablissement(v_etab_id);
 
             INSERT INTO public.membres_etablissement (
               etablissement_id, user_id, role, actif, accepte_le
@@ -300,8 +316,12 @@ jobs:
               (SELECT count(*) FROM public.etablissements e JOIN auth.users u ON u.id = e.id
                 WHERE u.email = 'playwright-etab@jolene.app'
                   AND e.est_compte_test IS TRUE
-                  AND e.statut_verification = 'VERIFIE'
-                  AND e.peut_publier_missions IS TRUE),
+                  AND e.siret_verifie IS TRUE
+                  AND e.siret_est_actif IS TRUE
+                  AND e.finess_verifie IS TRUE
+                  AND e.representant_identite_verifiee IS TRUE
+                  AND e.rattachement_verifie IS TRUE
+                  AND e.contrat_service_signe IS TRUE),
               (SELECT count(*) FROM public.equipe_admin ea JOIN auth.users u ON u.id = ea.user_id
                 WHERE u.email = 'admin@jolene.app' AND ea.actif IS TRUE
                   AND cardinality(ea.acces_groupes) >= 8);
