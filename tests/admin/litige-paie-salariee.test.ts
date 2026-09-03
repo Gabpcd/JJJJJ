@@ -26,6 +26,9 @@ describe('résolution admin des litiges de paie salariée', () => {
     expect(migration).toContain("set_config('jolene.admin_override_gel', v_mission.id::text");
     expect(migration).toContain('DROP TRIGGER IF EXISTS trg_calculer_financier');
     expect(migration).toContain('CREATE TRIGGER zzzz_calculer_financier');
+    expect(migration).toContain(
+      'ROUND((v_total_brut + NEW.montant_ifm) * v_taux_icp, 2)',
+    );
     expect(migration).toContain('fn_calculer_cotisations(v_mission.id)');
     expect(migration).toContain('v_commission_delta_ht');
     expect(migration).toContain('FACTURE_COMPLEMENTAIRE');

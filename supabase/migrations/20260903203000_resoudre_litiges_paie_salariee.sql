@@ -166,7 +166,10 @@ BEGIN
   NEW.taux_ifm := v_taux_ifm;
   NEW.taux_icp := v_taux_icp;
   NEW.montant_ifm := ROUND(v_total_brut * v_taux_ifm, 2);
-  NEW.montant_icp := ROUND(v_total_brut * v_taux_icp, 2);
+  -- Les congés payés d'un CDD incluent l'IFM dans leur assiette. Conserver
+  -- cette assiette canonique évite de sous-estimer à la fois le dû soignant
+  -- et la commission calculée ensuite sur ce dû.
+  NEW.montant_icp := ROUND((v_total_brut + NEW.montant_ifm) * v_taux_icp, 2);
   NEW.net_a_payer := ROUND(v_total_brut + NEW.montant_ifm + NEW.montant_icp, 2);
   NEW.net_estime := ROUND(NEW.net_a_payer * 0.78, 2);
 
