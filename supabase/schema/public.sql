@@ -7973,11 +7973,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id"
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_user_id UUID := auth.uid();
-  v_mission RECORD;
-  v_litige_id UUID;
-  v_est_informatif BOOLEAN;
-  v_facture_id UUID;
+  v_user_id uuid := auth.uid();
+  v_mission record;
+  v_litige_id uuid;
+  v_est_informatif boolean;
+  v_facture_id uuid;
 BEGIN
   IF v_user_id IS NULL OR NOT public.est_admin() THEN
     RETURN jsonb_build_object('error', 'Admin requis pour cette opération.');
@@ -7991,15 +7991,20 @@ BEGIN
 
   SELECT id, etablissement_id, soignant_assigne_id
     INTO v_mission
-    FROM public.missions WHERE id = p_mission_id;
+    FROM public.missions
+   WHERE id = p_mission_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('error', 'Mission introuvable');
+  END IF;
+  IF v_mission.soignant_assigne_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Un soignant doit être assigné avant de créer une intervention.');
   END IF;
 
   IF p_type_litige IN ('DESACCORD_MONTANT_FACTURE', 'NON_PAIEMENT', 'FRAIS_COMPLEMENTAIRES') THEN
     SELECT id INTO v_facture_id
       FROM public.factures_honoraires
-     WHERE mission_id = p_mission_id AND statut <> 'BROUILLON'
+     WHERE mission_id = p_mission_id
+       AND statut <> 'BROUILLON'
      ORDER BY date_emission DESC NULLS LAST
      LIMIT 1;
   END IF;
@@ -8013,8 +8018,9 @@ BEGIN
     motif, statut, type_litige, est_informatif, facture_id
   )
   VALUES (
-    p_mission_id, v_mission.soignant_assigne_id, v_mission.etablissement_id, 'ADMIN',
-    trim(p_motif), 'OUVERT', p_type_litige, v_est_informatif, v_facture_id
+    p_mission_id, v_mission.soignant_assigne_id,
+    v_mission.etablissement_id, 'SYSTEME', trim(p_motif), 'OUVERT',
+    p_type_litige, v_est_informatif, v_facture_id
   )
   RETURNING id INTO v_litige_id;
 
@@ -8026,13 +8032,14 @@ BEGIN
       'type_litige', p_type_litige,
       'est_informatif', v_est_informatif,
       'raison_bypass', trim(p_raison_bypass),
-      'facture_id', v_facture_id
+      'facture_id', v_facture_id,
+      'origine_litige', 'SYSTEME_ADMIN'
     ),
     NULL, NULL
   );
 
   RETURN jsonb_build_object(
-    'success', TRUE,
+    'success', true,
     'litige_id', v_litige_id,
     'est_informatif', v_est_informatif,
     'facture_id', v_facture_id
@@ -8044,7 +8051,7 @@ $$;
 ALTER FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_raison_bypass" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_raison_bypass" "text") IS 'Admin-only : crée un litige en bypassant la fenêtre de contestation. FIX T18 : résout facture_id pour types financiers + stocke dans litiges.facture_id. Flag est_informatif=TRUE si hors fenêtre. Audit RGPD obligatoire avec raison.';
+COMMENT ON FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_raison_bypass" "text") IS 'Admin-only : crée une intervention avec origine SYSTEME compatible avec la contrainte ; l admin et sa raison sont consignés dans journaux_audit.';
 
 
 
@@ -14061,6 +14068,19 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Action financière invalide.');
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM public.litiges l
+    JOIN public.missions m ON m.id = l.mission_id
+    WHERE l.id = p_litige_id
+      AND COALESCE(m.type_contrat_applique::text, '') = 'SALARIE'
+  ) THEN
+    RETURN public.fn_admin_resoudre_litige_salarie(
+      p_litige_id, p_resolution, p_en_faveur_de,
+      p_ajuster_heures, p_ajuster_taux, v_action
+    );
+  END IF;
+
   IF v_action IN ('AUTO', 'COMPLEMENT') THEN
     v_result := public.fn_admin_resoudre_litige_complement_honoraires(
       p_litige_id, p_resolution, p_en_faveur_de,
@@ -14193,6 +14213,553 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text" DEFAULT NULL::"text", "p_ajuster_heures" numeric DEFAULT NULL::numeric, "p_ajuster_taux" numeric DEFAULT NULL::numeric, "p_action_financiere" "text" DEFAULT 'AUTO'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_action text := upper(btrim(COALESCE(p_action_financiere, 'AUTO')));
+  v_faveur text := upper(btrim(COALESCE(p_en_faveur_de, 'NEUTRE')));
+  v_nouveau_statut text;
+  v_litige public.litiges%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_mission_apres public.missions%ROWTYPE;
+  v_presence public.presences%ROWTYPE;
+  v_presence_trouvee boolean := false;
+  v_payload jsonb;
+  v_type_payload text;
+  v_modifications jsonb;
+  v_arrivee_payload timestamptz;
+  v_depart_payload timestamptz;
+  v_heures_payload numeric;
+  v_heures_avant numeric;
+  v_heures_final numeric;
+  v_taux_avant numeric;
+  v_taux_final numeric;
+  v_ajustement_demande boolean := false;
+  v_accord_remplace boolean := false;
+  v_helper_result jsonb;
+  v_calcul_result jsonb;
+  v_cot public.cotisations_sociales%ROWTYPE;
+  v_bulletin_precedent public.bulletins_paie%ROWTYPE;
+  v_bulletin_precedent_trouve boolean := false;
+  v_bulletin_id uuid;
+  v_numero_bulletin text;
+  v_statut_bulletin text := 'EMIS';
+  v_date_paiement date;
+  v_total_confirme numeric := 0;
+  v_nb_paiements integer := 0;
+  v_regularisation_paiement boolean := false;
+  v_ecart_paiement numeric := 0;
+  v_commission_delta_ht numeric := 0;
+  v_commission_delta_tva numeric := 0;
+  v_commission_delta_ttc numeric := 0;
+  v_document_commission_id uuid;
+  v_document_commission_numero text;
+  v_document_commission_type text;
+  v_rows integer;
+  v_audit_result jsonb;
+BEGIN
+  IF v_uid IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Administrateur requis.');
+  END IF;
+  IF length(btrim(COALESCE(p_resolution, ''))) < 10
+     OR length(btrim(COALESCE(p_resolution, ''))) > 5000 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La résolution doit contenir entre 10 et 5 000 caractères.'
+    );
+  END IF;
+  IF v_faveur NOT IN ('SOIGNANT', 'ETABLISSEMENT', 'NEUTRE') THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'p_en_faveur_de doit être SOIGNANT, ETABLISSEMENT ou NEUTRE.'
+    );
+  END IF;
+  IF v_action NOT IN ('AUTO', 'AUCUNE') THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Une mission salariée utilise la rectification de paie automatique, pas une action de facture d’honoraires.'
+    );
+  END IF;
+  IF p_ajuster_heures IS NOT NULL
+     AND (p_ajuster_heures::text IN ('NaN', 'Infinity', '-Infinity')
+       OR p_ajuster_heures <= 0 OR p_ajuster_heures > 168) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Les heures ajustées doivent être strictement positives et au plus égales à 168.'
+    );
+  END IF;
+  IF p_ajuster_taux IS NOT NULL
+     AND (p_ajuster_taux::text IN ('NaN', 'Infinity', '-Infinity')
+       OR p_ajuster_taux < 0.01 OR p_ajuster_taux > 1000) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Le taux ajusté doit être strictement positif et au plus égal à 1 000 €.'
+    );
+  END IF;
+
+  SELECT l.* INTO v_litige
+  FROM public.litiges l
+  WHERE l.id = p_litige_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Litige introuvable.');
+  END IF;
+  IF v_litige.statut NOT IN (
+    'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Ce litige est déjà résolu ou non modifiable.'
+    );
+  END IF;
+
+  SELECT m.* INTO v_mission
+  FROM public.missions m
+  WHERE m.id = v_litige.mission_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Mission du litige introuvable.');
+  END IF;
+  IF COALESCE(v_mission.type_contrat_applique::text, '') <> 'SALARIE' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Cette mission ne relève pas du circuit de paie salariée.'
+    );
+  END IF;
+  IF COALESCE(v_mission.commission_facturee, false) AND v_mission.facture_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Commission marquée facturée sans facture d’origine : intervention comptable requise.'
+    );
+  END IF;
+  IF v_mission.facture_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.factures f WHERE f.id = v_mission.facture_id
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La facture de commission d’origine est introuvable.'
+    );
+  END IF;
+
+  IF v_litige.presence_id IS NOT NULL THEN
+    SELECT p.* INTO v_presence
+    FROM public.presences p
+    WHERE p.id = v_litige.presence_id
+      AND p.mission_id = v_litige.mission_id
+    FOR UPDATE;
+    v_presence_trouvee := FOUND;
+  ELSE
+    SELECT p.* INTO v_presence
+    FROM public.presences p
+    WHERE p.mission_id = v_litige.mission_id
+    ORDER BY p.valide_le DESC NULLS LAST, p.cree_le DESC
+    LIMIT 1
+    FOR UPDATE;
+    v_presence_trouvee := FOUND;
+  END IF;
+
+  v_payload := v_litige.payload_modifications;
+  IF v_payload IS NOT NULL THEN
+    IF v_litige.modifications_executees IS TRUE THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'Les modifications de cet accord ont déjà été exécutées.'
+      );
+    END IF;
+    IF v_litige.statut <> 'REVUE_ADMIN'
+       OR v_litige.accord_soignant IS NOT TRUE
+       OR v_litige.accord_etablissement IS NOT TRUE
+       OR v_litige.accord_soignant_le IS NULL
+       OR v_litige.accord_etablissement_le IS NULL THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'Un accord financier exige le double accord horodaté des parties.'
+      );
+    END IF;
+    v_type_payload := v_payload->>'type';
+    v_modifications := v_payload->'modifications';
+    IF v_type_payload NOT IN ('MODIFICATION_HORAIRES', 'MIXTE') THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'Pour une mission salariée, renseignez les heures ou le taux : un montant TTC isolé ne définit pas une paie.'
+      );
+    END IF;
+    BEGIN
+      v_arrivee_payload := (v_modifications->>'pointage_arrivee_le')::timestamptz;
+      v_depart_payload := (v_modifications->>'pointage_depart_le')::timestamptz;
+    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Format des horaires convenus invalide.');
+    END;
+    IF v_arrivee_payload IS NULL OR v_depart_payload IS NULL
+       OR v_depart_payload <= v_arrivee_payload
+       OR v_depart_payload - v_arrivee_payload > interval '7 days' THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Plage horaire convenue invalide.');
+    END IF;
+    IF NOT v_presence_trouvee THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error', 'Aucune présence verrouillable pour appliquer les heures.'
+      );
+    END IF;
+    v_heures_payload := round(
+      GREATEST(
+        0,
+        EXTRACT(epoch FROM (v_depart_payload - v_arrivee_payload)) / 3600
+          - COALESCE(v_presence.duree_pause_min, 0) / 60
+      )::numeric,
+      2
+    );
+    IF v_heures_payload <= 0 OR v_heures_payload > 168 THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Durée nette convenue hors limites.');
+    END IF;
+  END IF;
+
+  v_ajustement_demande := p_ajuster_heures IS NOT NULL
+    OR p_ajuster_taux IS NOT NULL
+    OR v_payload IS NOT NULL;
+  IF v_action = 'AUCUNE' AND v_ajustement_demande THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'AUCUNE est interdite lorsqu’un ajustement de paie existe.'
+    );
+  END IF;
+  IF v_ajustement_demande AND v_mission.statut <> 'TERMINEE' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La mission doit être terminée avant de rectifier sa paie.'
+    );
+  END IF;
+  IF (p_ajuster_heures IS NOT NULL OR v_heures_payload IS NOT NULL)
+     AND NOT v_presence_trouvee THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Aucune présence verrouillable pour appliquer les heures.'
+    );
+  END IF;
+
+  v_heures_avant := COALESCE(
+    CASE WHEN v_presence_trouvee THEN v_presence.heures_ajustees_litige END,
+    CASE WHEN v_presence_trouvee THEN v_presence.heures_reelles END,
+    v_mission.duree_heures
+  );
+  v_taux_avant := COALESCE(
+    v_mission.taux_horaire_base_fige,
+    v_mission.taux_horaire_base
+  );
+  v_heures_final := COALESCE(p_ajuster_heures, v_heures_payload, v_heures_avant);
+  v_taux_final := COALESCE(p_ajuster_taux, v_taux_avant);
+
+  IF v_ajustement_demande AND (
+    v_heures_final IS NULL OR v_heures_final <= 0 OR v_heures_final > 168
+    OR v_taux_final IS NULL OR v_taux_final < 0.01 OR v_taux_final > 1000
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Heures ou taux de référence absents ou hors limites.'
+    );
+  END IF;
+
+  IF v_payload IS NOT NULL THEN
+    v_accord_remplace := p_ajuster_taux IS NOT NULL
+      OR (
+        p_ajuster_heures IS NOT NULL
+        AND abs(p_ajuster_heures - v_heures_payload) > 0.005
+      );
+  END IF;
+
+  IF v_ajustement_demande THEN
+    IF v_payload IS NOT NULL AND p_ajuster_heures IS NULL THEN
+      v_helper_result := public.fn_modifier_horaires_presence(
+        v_presence.id,
+        v_arrivee_payload,
+        v_depart_payload,
+        v_payload->>'justification'
+      );
+      IF COALESCE(v_helper_result @> '{"success": true}'::jsonb, false) IS NOT TRUE THEN
+        RAISE EXCEPTION 'Échec atomique de la correction des horaires: %',
+          COALESCE(v_helper_result->>'error', 'résultat interne invalide');
+      END IF;
+      UPDATE public.presences
+      SET heures_ajustees_litige = NULL,
+          ajustement_litige_id = p_litige_id,
+          motif_litige = left('Accord litige : ' || (v_payload->>'justification'), 2000),
+          modifie_le = now()
+      WHERE id = v_presence.id;
+    ELSIF p_ajuster_heures IS NOT NULL THEN
+      UPDATE public.presences
+      SET heures_ajustees_litige = p_ajuster_heures,
+          ajustement_litige_id = p_litige_id,
+          motif_litige = left('Décision admin litige : ' || btrim(p_resolution), 2000),
+          modifie_le = now()
+      WHERE id = v_presence.id;
+    END IF;
+
+    PERFORM set_config('jolene.admin_override_gel', v_mission.id::text, true);
+    PERFORM set_config(
+      'jolene.admin_override_reason',
+      'Résolution litige paie salariée ' || p_litige_id::text,
+      true
+    );
+    PERFORM set_config('jolene.heures_litige_mission_id', v_mission.id::text, true);
+    PERFORM set_config('jolene.heures_litige_override', v_heures_final::text, true);
+
+    UPDATE public.missions
+    SET duree_heures = v_heures_final,
+        taux_horaire_base = v_taux_final,
+        taux_horaire_base_fige = v_taux_final,
+        commission_a_recalculer = false,
+        modifie_le = now()
+    WHERE id = v_mission.id;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    IF v_rows <> 1 THEN
+      RAISE EXCEPTION 'Recalcul de la mission non appliqué';
+    END IF;
+
+    PERFORM set_config('jolene.heures_litige_mission_id', '', true);
+    PERFORM set_config('jolene.heures_litige_override', '', true);
+
+    SELECT m.* INTO v_mission_apres
+    FROM public.missions m WHERE m.id = v_mission.id;
+
+    v_calcul_result := public.fn_calculer_cotisations(v_mission.id);
+    IF COALESCE((v_calcul_result->>'success')::boolean, false) IS NOT TRUE THEN
+      RAISE EXCEPTION 'Calcul des cotisations échoué: %',
+        COALESCE(v_calcul_result->>'error', 'résultat interne invalide');
+    END IF;
+    SELECT c.* INTO v_cot
+    FROM public.cotisations_sociales c
+    WHERE c.mission_id = v_mission.id;
+    IF NOT FOUND OR v_cot.type_contrat <> 'CDD' THEN
+      RAISE EXCEPTION 'Cotisations salariées rectificatives introuvables';
+    END IF;
+
+    SELECT bp.* INTO v_bulletin_precedent
+    FROM public.bulletins_paie bp
+    WHERE bp.mission_id = v_mission.id
+      AND bp.statut <> 'ANNULE'
+    ORDER BY bp.cree_le DESC
+    LIMIT 1
+    FOR UPDATE;
+    v_bulletin_precedent_trouve := FOUND;
+
+    IF v_bulletin_precedent_trouve THEN
+      UPDATE public.bulletins_paie
+      SET statut = 'ANNULE', modifie_le = now()
+      WHERE id = v_bulletin_precedent.id
+        AND statut <> 'ANNULE';
+      GET DIAGNOSTICS v_rows = ROW_COUNT;
+      IF v_rows <> 1 THEN
+        RAISE EXCEPTION 'Annulation concurrente de la simulation de paie refusée';
+      END IF;
+    END IF;
+
+    SELECT
+      COALESCE(sum(ps.montant_net) FILTER (WHERE ps.statut IN ('CONFIRME', 'RESOLU')), 0),
+      max(ps.date_paiement) FILTER (WHERE ps.statut IN ('CONFIRME', 'RESOLU')),
+      count(*) FILTER (WHERE ps.statut IN ('DECLARE', 'CONFIRME', 'RESOLU'))
+    INTO v_total_confirme, v_date_paiement, v_nb_paiements
+    FROM public.paiements_soignant ps
+    WHERE ps.mission_id = v_mission.id;
+
+    v_ecart_paiement := round(v_cot.net_avant_impot - v_total_confirme, 2);
+    v_regularisation_paiement := v_nb_paiements > 0 AND abs(v_ecart_paiement) > 0.01;
+    IF v_nb_paiements > 0 AND abs(v_ecart_paiement) <= 0.01 THEN
+      v_statut_bulletin := 'PAYE';
+    END IF;
+
+    v_numero_bulletin := public.fn_next_bulletin_paie_number(
+      v_mission.soignant_assigne_id
+    );
+    INSERT INTO public.bulletins_paie (
+      numero_bulletin, soignant_id, mission_id, etablissement_id,
+      periode_debut, periode_fin, salaire_brut,
+      total_cotisations_salariales, total_cotisations_patronales,
+      net_avant_impot, ifm, icp, statut, date_emission, date_paiement,
+      bulletin_precedent_id, litige_id, nature_document, motif_rectification
+    ) VALUES (
+      v_numero_bulletin, v_mission.soignant_assigne_id, v_mission.id,
+      v_mission.etablissement_id, v_mission.debut_le::date, v_mission.fin_le::date,
+      v_cot.salaire_brut, v_cot.total_cotisations_salariales,
+      v_cot.total_cotisations_patronales, v_cot.net_avant_impot,
+      COALESCE(v_cot.ifm, 0), COALESCE(v_cot.icp, 0),
+      v_statut_bulletin, current_date,
+      CASE WHEN v_statut_bulletin = 'PAYE' THEN v_date_paiement ELSE NULL END,
+      CASE WHEN v_bulletin_precedent_trouve THEN v_bulletin_precedent.id ELSE NULL END,
+      p_litige_id,
+      CASE WHEN v_bulletin_precedent_trouve THEN 'RECTIFICATIF' ELSE 'SIMULATION' END,
+      left(btrim(p_resolution), 2000)
+    ) RETURNING id INTO v_bulletin_id;
+
+    v_commission_delta_ht := round(
+      COALESCE(v_mission_apres.montant_commission_ht, 0)
+        - COALESCE(v_mission.montant_commission_ht, 0),
+      2
+    );
+    IF COALESCE(v_mission.commission_facturee, false)
+       AND abs(v_commission_delta_ht) > 0.01 THEN
+      v_commission_delta_tva := round(abs(v_commission_delta_ht) * 0.20, 2);
+      v_commission_delta_ttc := abs(v_commission_delta_ht) + v_commission_delta_tva;
+      IF v_commission_delta_ht < 0 THEN
+        v_document_commission_type := 'AVOIR';
+        v_document_commission_numero := public.next_avoir_commission_number(
+          v_mission.etablissement_id
+        );
+      ELSE
+        v_document_commission_type := 'FACTURE_COMPLEMENTAIRE';
+        v_document_commission_numero := public.next_facture_complementaire_number(
+          v_mission.etablissement_id
+        );
+      END IF;
+      INSERT INTO public.factures (
+        etablissement_id, numero_facture, mission_id, type_document,
+        facture_precedente_id, montant_ht, taux_tva, montant_tva, montant_ttc,
+        nombre_missions, statut, date_emission, date_echeance,
+        periode_debut, periode_fin
+      ) VALUES (
+        v_mission.etablissement_id, v_document_commission_numero, v_mission.id,
+        v_document_commission_type, v_mission.facture_id,
+        abs(v_commission_delta_ht), 20, v_commission_delta_tva,
+        v_commission_delta_ttc, 1, 'EMISE', now(), current_date + 30,
+        v_mission.debut_le::date, v_mission.fin_le::date
+      ) RETURNING id INTO v_document_commission_id;
+    END IF;
+  ELSE
+    v_mission_apres := v_mission;
+    v_action := 'AUCUNE';
+  END IF;
+
+  v_nouveau_statut := CASE v_faveur
+    WHEN 'SOIGNANT' THEN 'RESOLU_SOIGNANT'
+    WHEN 'ETABLISSEMENT' THEN 'RESOLU_ETABLISSEMENT'
+    ELSE 'RESOLU_ADMIN'
+  END;
+  UPDATE public.litiges
+  SET statut = v_nouveau_statut,
+      resolution = btrim(p_resolution),
+      resolu_par = v_uid,
+      resolu_le = now(),
+      modifications_executees = CASE
+        WHEN v_payload IS NOT NULL THEN true ELSE modifications_executees
+      END,
+      modifications_executees_a = CASE
+        WHEN v_payload IS NOT NULL THEN now() ELSE modifications_executees_a
+      END,
+      modifications_executees_par = CASE
+        WHEN v_payload IS NOT NULL THEN v_uid ELSE modifications_executees_par
+      END
+  WHERE id = p_litige_id
+    AND statut IN (
+      'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+    );
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'Résolution concurrente refusée';
+  END IF;
+
+  v_audit_result := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := 'ADMIN_PLATEFORME',
+    p_action := 'LITIGE_RESOLUTION',
+    p_type_ressource := 'litige',
+    p_id_ressource := p_litige_id,
+    p_details := jsonb_build_object(
+      'evenement', 'LITIGE_RESOLUTION_PAIE_SALARIEE',
+      'en_faveur_de', v_faveur,
+      'heures_avant', v_heures_avant,
+      'heures_apres', v_heures_final,
+      'taux_avant', v_taux_avant,
+      'taux_apres', v_taux_final,
+      'brut_mission_avant', v_mission.total_brut,
+      'brut_mission_apres', v_mission_apres.total_brut,
+      'net_simule_apres', CASE WHEN v_ajustement_demande THEN v_cot.net_avant_impot ELSE NULL END,
+      'commission_ht_avant', v_mission.montant_commission_ht,
+      'commission_ht_apres', v_mission_apres.montant_commission_ht,
+      'bulletin_precedent_id', CASE
+        WHEN v_bulletin_precedent_trouve THEN v_bulletin_precedent.id ELSE NULL
+      END,
+      'bulletin_rectificatif_id', v_bulletin_id,
+      'document_commission_id', v_document_commission_id,
+      'document_commission_type', v_document_commission_type,
+      'regularisation_paiement_requise', v_regularisation_paiement,
+      'ecart_paiement', v_ecart_paiement,
+      'accord_remplace', v_accord_remplace
+    )
+  );
+  IF COALESCE(v_audit_result @> '{"success": true}'::jsonb, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'Audit de résolution non écrit: %',
+      COALESCE(v_audit_result->>'error', 'résultat interne invalide');
+  END IF;
+
+  IF v_ajustement_demande THEN
+    PERFORM public.fn_litige_push_notification(
+      v_litige.soignant_id,
+      'SOIGNANT',
+      'LITIGE_RESOLU_AJUSTE',
+      'Litige résolu — simulation de paie rectifiée',
+      CASE WHEN v_regularisation_paiement
+        THEN 'Les heures et la simulation de paie ont été rectifiées. Une régularisation du paiement reste à traiter.'
+        ELSE 'Les heures, la simulation de paie et la commission ont été recalculées.'
+      END,
+      p_litige_id,
+      jsonb_build_object(
+        'bulletin_rectificatif_id', v_bulletin_id,
+        'net_simule', v_cot.net_avant_impot,
+        'regularisation_paiement_requise', v_regularisation_paiement
+      )
+    );
+    PERFORM public.fn_litige_push_notification(
+      v_litige.etablissement_id,
+      'ETABLISSEMENT',
+      'LITIGE_RESOLU_AJUSTE',
+      'Litige résolu — paie salariée rectifiée',
+      CASE WHEN v_regularisation_paiement
+        THEN 'La paie simulée a été rectifiée. Traitez maintenant la régularisation du paiement.'
+        ELSE 'La paie simulée et la commission de la mission ont été recalculées.'
+      END,
+      p_litige_id,
+      jsonb_build_object(
+        'bulletin_rectificatif_id', v_bulletin_id,
+        'net_simule', v_cot.net_avant_impot,
+        'regularisation_paiement_requise', v_regularisation_paiement
+      )
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'action_financiere', CASE
+      WHEN v_ajustement_demande THEN 'RECTIFICATION_PAIE_SALARIEE'
+      ELSE 'AUCUNE'
+    END,
+    'statut', v_nouveau_statut,
+    'heures_final', v_heures_final,
+    'taux_final', v_taux_final,
+    'salaire_brut', CASE WHEN v_ajustement_demande THEN v_cot.salaire_brut ELSE NULL END,
+    'net_avant_impot', CASE WHEN v_ajustement_demande THEN v_cot.net_avant_impot ELSE NULL END,
+    'bulletin_annule_id', CASE
+      WHEN v_bulletin_precedent_trouve THEN v_bulletin_precedent.id ELSE NULL
+    END,
+    'bulletin_rectificatif_id', v_bulletin_id,
+    'document_commission_id', v_document_commission_id,
+    'document_commission_type', v_document_commission_type,
+    'regularisation_paiement_requise', v_regularisation_paiement,
+    'ecart_paiement', v_ecart_paiement,
+    'accord_remplace', v_accord_remplace
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") IS 'Résolution admin sans MFA des litiges salariés : conserve les preuves de pointage, recalcule paie et commission, annule la simulation précédente et émet un rectificatif audité.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_resume_alertes_pointage"() RETURNS "jsonb"
@@ -20440,6 +21007,140 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_calculer_cotisations"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_calculer_financier_mission"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_duree numeric;
+  v_taux_effectif numeric;
+  v_brut_base numeric;
+  v_total_majorations numeric;
+  v_total_brut numeric;
+  v_etab record;
+  v_commission_taux numeric;
+  v_commission_ht numeric;
+  v_commission_tva numeric;
+  v_commission_ttc numeric;
+  v_has_creneaux boolean;
+  v_est_liberal boolean;
+  v_taux_ifm numeric;
+  v_taux_icp numeric;
+  v_override_mission text := current_setting('jolene.heures_litige_mission_id', true);
+  v_override_heures text := current_setting('jolene.heures_litige_override', true);
+BEGIN
+  v_est_liberal := COALESCE(NEW.type_contrat_applique::text, '') = 'LIBERAL'
+                OR COALESCE(NEW.type_paiement_soignant::text, '') = 'NOTE_HONORAIRES'
+                OR COALESCE(NEW.choix_contrat_soignant, '') = 'LIBERAL';
+
+  IF v_override_mission = NEW.id::text AND NULLIF(v_override_heures, '') IS NOT NULL THEN
+    BEGIN
+      v_duree := v_override_heures::numeric;
+    EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
+      RAISE EXCEPTION 'Heures de résolution de litige invalides';
+    END;
+    IF v_duree::text IN ('NaN', 'Infinity', '-Infinity')
+       OR v_duree <= 0 OR v_duree > 168 THEN
+      RAISE EXCEPTION 'Heures de résolution de litige hors limites';
+    END IF;
+  ELSE
+    SELECT GREATEST(
+      COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)
+        FILTER (WHERE type_creneau = 'PREVISIONNEL' AND NOT est_pause), 0),
+      COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)
+        FILTER (WHERE type_creneau = 'EFFECTIF' AND fin IS NOT NULL AND NOT est_pause), 0)
+    )
+    INTO v_duree
+    FROM public.mission_creneaux WHERE mission_id = NEW.id;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.mission_creneaux WHERE mission_id = NEW.id
+    ) INTO v_has_creneaux;
+
+    IF NOT v_has_creneaux THEN
+      v_duree := COALESCE(
+        NEW.duree_heures,
+        EXTRACT(EPOCH FROM (NEW.fin_le - NEW.debut_le)) / 3600.0
+      );
+    END IF;
+  END IF;
+
+  NEW.duree_heures := v_duree;
+
+  SELECT taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
+         taux_majoration_ferie_pourcent, taux_commission_negocie,
+         rist_plafond_actif, rist_taux_base_horaire
+  INTO v_etab
+  FROM public.etablissements WHERE id = NEW.etablissement_id;
+
+  v_taux_effectif := NEW.taux_horaire_base;
+  IF COALESCE(v_etab.rist_plafond_actif, true)
+     AND NEW.taux_horaire_base > COALESCE(v_etab.rist_taux_base_horaire, 25) THEN
+    NEW.rist_plafond_applique := true;
+    NEW.taux_rist_plafonne := COALESCE(v_etab.rist_taux_base_horaire, 25);
+    v_taux_effectif := NEW.taux_rist_plafonne;
+  ELSE
+    NEW.rist_plafond_applique := false;
+    NEW.taux_rist_plafonne := NULL;
+  END IF;
+
+  v_brut_base := v_taux_effectif * v_duree;
+  NEW.montant_majoration_nuit := ROUND(
+    COALESCE(NEW.heures_nuit, 0) * v_taux_effectif
+      * COALESCE(v_etab.taux_majoration_nuit_pourcent, 25) / 100.0,
+    2
+  );
+  NEW.montant_majoration_dimanche := ROUND(
+    COALESCE(NEW.heures_dimanche, 0) * v_taux_effectif
+      * COALESCE(v_etab.taux_majoration_dimanche_pourcent, 50) / 100.0,
+    2
+  );
+  NEW.montant_majoration_ferie := ROUND(
+    COALESCE(NEW.heures_ferie, 0) * v_taux_effectif
+      * COALESCE(v_etab.taux_majoration_ferie_pourcent, 100) / 100.0,
+    2
+  );
+
+  v_total_majorations := COALESCE(NEW.montant_majoration_nuit, 0)
+    + COALESCE(NEW.montant_majoration_dimanche, 0)
+    + COALESCE(NEW.montant_majoration_ferie, 0);
+  v_total_brut := ROUND(v_brut_base + v_total_majorations, 2);
+  NEW.total_brut := v_total_brut;
+
+  v_taux_ifm := CASE WHEN v_est_liberal THEN 0 ELSE COALESCE(NEW.taux_ifm, 0.10) END;
+  v_taux_icp := CASE WHEN v_est_liberal THEN 0 ELSE COALESCE(NEW.taux_icp, 0.10) END;
+  NEW.taux_ifm := v_taux_ifm;
+  NEW.taux_icp := v_taux_icp;
+  NEW.montant_ifm := ROUND(v_total_brut * v_taux_ifm, 2);
+  -- Les congés payés d'un CDD incluent l'IFM dans leur assiette. Conserver
+  -- cette assiette canonique évite de sous-estimer à la fois le dû soignant
+  -- et la commission calculée ensuite sur ce dû.
+  NEW.montant_icp := ROUND((v_total_brut + NEW.montant_ifm) * v_taux_icp, 2);
+  NEW.net_a_payer := ROUND(v_total_brut + NEW.montant_ifm + NEW.montant_icp, 2);
+  NEW.net_estime := ROUND(NEW.net_a_payer * 0.78, 2);
+
+  v_commission_taux := COALESCE(
+    NEW.taux_commission_fige,
+    NEW.taux_commission,
+    v_etab.taux_commission_negocie,
+    public.fn_param_num('commission_defaut_pct', 15)
+  );
+  NEW.taux_commission := v_commission_taux;
+  v_commission_ht := ROUND(NEW.net_a_payer * v_commission_taux / 100.0, 2);
+  v_commission_tva := ROUND(v_commission_ht * 0.20, 2);
+  v_commission_ttc := ROUND(v_commission_ht + v_commission_tva, 2);
+  NEW.montant_commission_ht := v_commission_ht;
+  NEW.montant_commission_tva := v_commission_tva;
+  NEW.montant_commission_ttc := v_commission_ttc;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_calculer_financier_mission"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_calculer_heures_majorees"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) RETURNS TABLE("heures_nuit" numeric, "heures_dimanche" numeric, "heures_ferie" numeric)
@@ -26737,7 +27438,7 @@ DECLARE
   v_mission RECORD;
   v_creneau_id uuid;
   v_creneau_debut timestamptz;
-  v_arrondi timestamptz;
+  v_arrondi_audit timestamptz;
   v_scan_numero smallint;
   v_new_code text;
   v_new_hmac text;
@@ -26747,7 +27448,8 @@ BEGIN
   SELECT id, soignant_assigne_id, etablissement_id, nb_scans, statut
   INTO v_mission
   FROM missions
-  WHERE id = p_mission_id AND statut IN ('ASSIGNEE', 'EN_COURS')
+  WHERE id = p_mission_id
+    AND statut IN ('ASSIGNEE', 'EN_COURS')
   FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -26755,7 +27457,7 @@ BEGIN
       USING ERRCODE = 'no_data_found';
   END IF;
 
-  v_caller_is_soignant := (auth.uid() = v_mission.soignant_assigne_id);
+  v_caller_is_soignant := auth.uid() = v_mission.soignant_assigne_id;
   v_caller_is_etab_admin := est_admin_etablissement()
     AND mon_etablissement_id() = v_mission.etablissement_id;
 
@@ -26766,25 +27468,26 @@ BEGIN
 
   SELECT id, debut INTO v_creneau_id, v_creneau_debut
   FROM mission_creneaux
-  WHERE mission_id = v_mission.id AND type_creneau = 'EFFECTIF' AND fin IS NULL
-  ORDER BY debut DESC LIMIT 1;
+  WHERE mission_id = v_mission.id
+    AND type_creneau = 'EFFECTIF'
+    AND fin IS NULL
+  ORDER BY debut DESC
+  LIMIT 1;
 
   IF v_creneau_id IS NULL THEN
     RAISE EXCEPTION 'Aucun créneau effectif ouvert à fermer pour cette mission.'
       USING ERRCODE = 'no_data_found';
   END IF;
-
   IF p_heure_fin <= v_creneau_debut THEN
     RAISE EXCEPTION 'L''heure de fin (%) doit être postérieure au début du créneau (%).',
       p_heure_fin, v_creneau_debut USING ERRCODE = 'check_violation';
   END IF;
 
-  v_arrondi := fn_arrondir_quart_heure(p_heure_fin);
-  IF v_arrondi <= v_creneau_debut THEN
-    v_arrondi := v_creneau_debut + INTERVAL '15 minutes';
-  END IF;
+  v_arrondi_audit := fn_arrondir_quart_heure(p_heure_fin);
 
-  UPDATE mission_creneaux SET fin = v_arrondi WHERE id = v_creneau_id;
+  UPDATE mission_creneaux
+  SET fin = p_heure_fin
+  WHERE id = v_creneau_id;
 
   v_scan_numero := COALESCE(v_mission.nb_scans, 0) + 1;
   INSERT INTO scans_pointage (
@@ -26793,14 +27496,33 @@ BEGIN
     est_en_avance, validation_etab_requise
   ) VALUES (
     v_mission.id, v_mission.soignant_assigne_id, 'RETROACTIF', v_scan_numero, 'FERMETURE',
-    now(), v_arrondi, v_creneau_id,
+    now(), v_arrondi_audit, v_creneau_id,
     false, true
   );
 
+  UPDATE presences
+  SET pointage_depart_le = p_heure_fin,
+      heures_reelles = (
+        SELECT COALESCE(
+          ROUND(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)::numeric, 2),
+          0
+        )
+        FROM mission_creneaux
+        WHERE mission_id = v_mission.id
+          AND type_creneau = 'EFFECTIF'
+          AND fin IS NOT NULL
+          AND NOT est_pause
+      ),
+      modifie_le = now()
+  WHERE mission_id = v_mission.id
+    AND soignant_id = v_mission.soignant_assigne_id;
+
   v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
   WHILE EXISTS (
-    SELECT 1 FROM missions
-    WHERE code_pointage_actif = v_new_code AND id != v_mission.id
+    SELECT 1
+    FROM missions
+    WHERE code_pointage_actif = v_new_code
+      AND id != v_mission.id
       AND statut IN ('ASSIGNEE', 'EN_COURS')
   ) LOOP
     v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
@@ -26808,33 +27530,43 @@ BEGIN
 
   v_new_hmac := CASE
     WHEN current_setting('app.settings.hmac_secret', true) IS NOT NULL THEN
-      encode(extensions.hmac(v_mission.id::text || ':' || v_new_code,
-        current_setting('app.settings.hmac_secret', true), 'sha256'), 'hex')
+      encode(
+        extensions.hmac(
+          v_mission.id::text || ':' || v_new_code,
+          current_setting('app.settings.hmac_secret', true),
+          'sha256'
+        ),
+        'hex'
+      )
     ELSE NULL
   END;
 
-  UPDATE missions SET
-    code_pointage_actif = v_new_code,
-    code_pointage_hmac = v_new_hmac,
-    prochain_type_scan = 'OUVERTURE',
-    nb_scans = v_scan_numero
+  UPDATE missions
+  SET code_pointage_actif = v_new_code,
+      code_pointage_hmac = v_new_hmac,
+      prochain_type_scan = 'OUVERTURE',
+      nb_scans = v_scan_numero
   WHERE id = v_mission.id;
 
-  INSERT INTO journaux_audit
-    (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
-  VALUES (
+  INSERT INTO journaux_audit (
+    acteur_id, type_acteur, action, type_ressource, id_ressource, details
+  ) VALUES (
     auth.uid(),
-    CASE WHEN v_caller_is_soignant THEN 'SOIGNANT'
-         WHEN v_caller_is_etab_admin THEN 'ADMIN_ETABLISSEMENT'
-         ELSE 'ADMIN_PLATEFORME' END,
-    'POINTAGE', 'mission', v_mission.id,
+    CASE
+      WHEN v_caller_is_soignant THEN 'SOIGNANT'
+      WHEN v_caller_is_etab_admin THEN 'ADMIN_ETABLISSEMENT'
+      ELSE 'ADMIN_PLATEFORME'
+    END,
+    'POINTAGE',
+    'mission',
+    v_mission.id,
     jsonb_build_object(
       'sous_action', 'FIN_RETROACTIVE',
       'raison', p_raison,
       'creneau_effectif_id', v_creneau_id,
       'debut_creneau', v_creneau_debut,
       'heure_fin_declaree', p_heure_fin,
-      'horodatage_arrondi', v_arrondi,
+      'horodatage_arrondi_audit', v_arrondi_audit,
       'validation_etab_requise', true
     )
   );
@@ -26842,7 +27574,8 @@ BEGIN
   RETURN jsonb_build_object(
     'creneau_effectif_id', v_creneau_id,
     'debut_creneau', v_creneau_debut,
-    'fin_declaree', v_arrondi,
+    'fin_declaree', p_heure_fin,
+    'horodatage_arrondi', v_arrondi_audit,
     'validation_etab_requise', true,
     'nouveau_code', v_new_code,
     'nouveau_hmac', v_new_hmac,
@@ -42440,6 +43173,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_notifier_candidature_acceptee"("p_missio
 DECLARE
   v_mission public.missions%ROWTYPE;
   v_conversation_id uuid;
+  v_contrat_id uuid;
   v_notification_id uuid;
   v_lien text;
   v_titre text;
@@ -42465,8 +43199,6 @@ BEGIN
     );
   END IF;
 
-  -- Sérialise aussi deux appels Edge simultanés, sans supprimer l'historique
-  -- existant et sans dépendre d'un index partiel difficile à upsert.
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
       'CANDIDATURE_ACCEPTEE:' || p_mission_id::text || ':' ||
@@ -42480,9 +43212,20 @@ BEGIN
     p_soignant_id,
     v_mission.etablissement_id
   );
+
+  SELECT cm.id
+  INTO v_contrat_id
+  FROM public.contrats_mission cm
+  WHERE cm.mission_id = p_mission_id
+    AND cm.soignant_id = p_soignant_id
+    AND cm.etablissement_id = v_mission.etablissement_id
+    AND cm.statut NOT IN ('ANNULE', 'EXPIRE')
+  ORDER BY cm.cree_le DESC, cm.id DESC
+  LIMIT 1;
+
   v_lien := CASE
-    WHEN v_conversation_id IS NOT NULL
-      THEN '/soignant/messagerie?conv=' || v_conversation_id::text
+    WHEN v_contrat_id IS NOT NULL
+      THEN '/contrat/' || v_contrat_id::text
     ELSE '/soignant/missions/' || p_mission_id::text
   END;
   v_titre := COALESCE(
@@ -42542,6 +43285,7 @@ BEGIN
     'success', true,
     'notification_id', v_notification_id,
     'conversation_id', v_conversation_id,
+    'contrat_id', v_contrat_id,
     'lien', v_lien
   );
 END;
@@ -52359,113 +53103,257 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_mission RECORD; v_now timestamptz := now(); v_arrondi timestamptz;
-  v_dernier_scan timestamptz; v_premier_prevu timestamptz; v_dernier_prevu timestamptz;
-  v_est_en_avance boolean := false; v_validation_requise boolean := false;
-  v_creneau_id uuid; v_creneau_debut timestamptz;
-  v_new_code text; v_new_hmac text; v_scan_numero smallint;
+  v_mission RECORD;
+  v_now timestamptz := now();
+  v_arrondi_audit timestamptz;
+  v_dernier_scan timestamptz;
+  v_premier_prevu timestamptz;
+  v_dernier_prevu timestamptz;
+  v_est_en_avance boolean := false;
+  v_validation_requise boolean := false;
+  v_creneau_id uuid;
+  v_creneau_debut timestamptz;
+  v_new_code text;
+  v_new_hmac text;
+  v_scan_numero smallint;
 BEGIN
   SELECT id, soignant_assigne_id, code_pointage_actif, prochain_type_scan, nb_scans, statut
-  INTO v_mission FROM missions WHERE code_pointage_actif = p_code AND statut IN ('ASSIGNEE','EN_COURS') FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Code de pointage invalide ou expiré.' USING ERRCODE = 'no_data_found'; END IF;
-  IF auth.uid() != v_mission.soignant_assigne_id THEN RAISE EXCEPTION 'Vous n''êtes pas assigné(e) à cette mission.' USING ERRCODE = 'insufficient_privilege'; END IF;
+  INTO v_mission
+  FROM missions
+  WHERE code_pointage_actif = p_code
+    AND statut IN ('ASSIGNEE', 'EN_COURS')
+  FOR UPDATE;
 
-  SELECT scanne_le INTO v_dernier_scan FROM scans_pointage WHERE mission_id = v_mission.id ORDER BY numero_scan DESC LIMIT 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Code de pointage invalide ou expiré.' USING ERRCODE = 'no_data_found';
+  END IF;
+  IF auth.uid() != v_mission.soignant_assigne_id THEN
+    RAISE EXCEPTION 'Vous n''êtes pas assigné(e) à cette mission.' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT scanne_le INTO v_dernier_scan
+  FROM scans_pointage
+  WHERE mission_id = v_mission.id
+  ORDER BY numero_scan DESC
+  LIMIT 1;
+
   IF v_dernier_scan IS NOT NULL AND v_now - v_dernier_scan < INTERVAL '2 minutes' THEN
     RAISE EXCEPTION 'Scan déjà pris en compte. Prochain scan possible dans % secondes.',
-      CEIL(EXTRACT(EPOCH FROM (v_dernier_scan + INTERVAL '2 minutes' - v_now))) USING ERRCODE = 'check_violation';
+      CEIL(EXTRACT(EPOCH FROM (v_dernier_scan + INTERVAL '2 minutes' - v_now)))
+      USING ERRCODE = 'check_violation';
   END IF;
 
   v_scan_numero := COALESCE(v_mission.nb_scans, 0) + 1;
-  v_arrondi := fn_arrondir_quart_heure(v_now);
+  v_arrondi_audit := fn_arrondir_quart_heure(v_now);
 
   IF v_mission.prochain_type_scan = 'OUVERTURE' THEN
-    -- GATE LÉGAL : aucun pointage d'arrivée/reprise sans contrat signé complet.
-    IF NOT EXISTS (SELECT 1 FROM contrats_mission WHERE mission_id = v_mission.id AND statut = 'SIGNE_COMPLET') THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM contrats_mission
+      WHERE mission_id = v_mission.id
+        AND statut = 'SIGNE_COMPLET'
+    ) THEN
       RAISE EXCEPTION 'Le contrat doit être signé avant le pointage.' USING ERRCODE = 'check_violation';
     END IF;
 
-    SELECT MIN(debut) INTO v_premier_prevu FROM mission_creneaux WHERE mission_id = v_mission.id AND type_creneau = 'PREVISIONNEL';
+    SELECT MIN(debut) INTO v_premier_prevu
+    FROM mission_creneaux
+    WHERE mission_id = v_mission.id
+      AND type_creneau = 'PREVISIONNEL';
+
     IF v_premier_prevu IS NOT NULL AND v_now < v_premier_prevu - INTERVAL '15 minutes' THEN
       RAISE EXCEPTION 'Pointage trop tôt. Mission commence à %. Possible à partir de %.',
         TO_CHAR(v_premier_prevu AT TIME ZONE 'Europe/Paris', 'HH24:MI'),
-        TO_CHAR((v_premier_prevu - INTERVAL '15 minutes') AT TIME ZONE 'Europe/Paris', 'HH24:MI') USING ERRCODE = 'check_violation';
+        TO_CHAR((v_premier_prevu - INTERVAL '15 minutes') AT TIME ZONE 'Europe/Paris', 'HH24:MI')
+        USING ERRCODE = 'check_violation';
     END IF;
-    v_est_en_avance := (v_premier_prevu IS NOT NULL AND v_now < v_premier_prevu);
-    SELECT MAX(fin) INTO v_dernier_prevu FROM mission_creneaux WHERE mission_id = v_mission.id AND type_creneau = 'PREVISIONNEL';
-    v_validation_requise := v_est_en_avance OR (v_dernier_prevu IS NOT NULL AND v_now > v_dernier_prevu + INTERVAL '24 hours');
 
-    INSERT INTO mission_creneaux (mission_id, debut, fin, est_pause, ordre, type_creneau)
-    VALUES (v_mission.id, v_arrondi, NULL, false,
-      COALESCE((SELECT MAX(ordre)+1 FROM mission_creneaux WHERE mission_id = v_mission.id), 1), 'EFFECTIF')
+    v_est_en_avance := v_premier_prevu IS NOT NULL AND v_now < v_premier_prevu;
+
+    SELECT MAX(fin) INTO v_dernier_prevu
+    FROM mission_creneaux
+    WHERE mission_id = v_mission.id
+      AND type_creneau = 'PREVISIONNEL';
+
+    v_validation_requise := v_est_en_avance
+      OR (v_dernier_prevu IS NOT NULL AND v_now > v_dernier_prevu + INTERVAL '24 hours');
+
+    INSERT INTO mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    ) VALUES (
+      v_mission.id,
+      v_now,
+      NULL,
+      false,
+      COALESCE((
+        SELECT MAX(ordre) + 1
+        FROM mission_creneaux
+        WHERE mission_id = v_mission.id
+      ), 1),
+      'EFFECTIF'
+    )
     RETURNING id INTO v_creneau_id;
 
-    INSERT INTO scans_pointage (mission_id, soignant_id, code_saisi, numero_scan, type_scan, scanne_le, horodatage_arrondi, creneau_effectif_id, est_en_avance, validation_etab_requise, latitude, longitude, precision_gps_m, id_terminal, ip_address)
-    VALUES (v_mission.id, auth.uid(), p_code, v_scan_numero, 'OUVERTURE', v_now, v_arrondi, v_creneau_id, v_est_en_avance, v_validation_requise,
-      (p_metadata->>'latitude')::numeric, (p_metadata->>'longitude')::numeric, (p_metadata->>'precision_gps_m')::numeric, p_metadata->>'id_terminal', (p_metadata->>'ip_address')::inet);
+    INSERT INTO scans_pointage (
+      mission_id, soignant_id, code_saisi, numero_scan, type_scan,
+      scanne_le, horodatage_arrondi, creneau_effectif_id,
+      est_en_avance, validation_etab_requise,
+      latitude, longitude, precision_gps_m, id_terminal, ip_address
+    ) VALUES (
+      v_mission.id, auth.uid(), p_code, v_scan_numero, 'OUVERTURE',
+      v_now, v_arrondi_audit, v_creneau_id,
+      v_est_en_avance, v_validation_requise,
+      (p_metadata->>'latitude')::numeric,
+      (p_metadata->>'longitude')::numeric,
+      (p_metadata->>'precision_gps_m')::numeric,
+      p_metadata->>'id_terminal',
+      (p_metadata->>'ip_address')::inet
+    );
 
-    IF NOT EXISTS (SELECT 1 FROM presences WHERE mission_id = v_mission.id AND soignant_id = auth.uid()) THEN
-      INSERT INTO presences (mission_id, soignant_id, pointage_arrivee_le,
-        arrivee_lat, arrivee_lng, arrivee_precision_gps_m, arrivee_id_terminal, methode_pointage_arrivee)
-      VALUES (v_mission.id, auth.uid(), v_arrondi,
-        (p_metadata->>'latitude')::numeric, (p_metadata->>'longitude')::numeric,
-        (p_metadata->>'precision_gps_m')::numeric, p_metadata->>'id_terminal', 'CODE');
-      UPDATE missions SET statut = 'EN_COURS', modifie_le = now()
-        WHERE id = v_mission.id AND statut = 'ASSIGNEE';
+    IF NOT EXISTS (
+      SELECT 1
+      FROM presences
+      WHERE mission_id = v_mission.id
+        AND soignant_id = auth.uid()
+    ) THEN
+      INSERT INTO presences (
+        mission_id, soignant_id, pointage_arrivee_le,
+        arrivee_lat, arrivee_lng, arrivee_precision_gps_m,
+        arrivee_id_terminal, methode_pointage_arrivee
+      ) VALUES (
+        v_mission.id, auth.uid(), v_now,
+        (p_metadata->>'latitude')::numeric,
+        (p_metadata->>'longitude')::numeric,
+        (p_metadata->>'precision_gps_m')::numeric,
+        p_metadata->>'id_terminal',
+        'CODE'
+      );
+
+      UPDATE missions
+      SET statut = 'EN_COURS', modifie_le = now()
+      WHERE id = v_mission.id
+        AND statut = 'ASSIGNEE';
     ELSE
-      UPDATE presences SET pointage_depart_le = NULL, modifie_le = now()
-        WHERE mission_id = v_mission.id AND soignant_id = auth.uid();
+      UPDATE presences
+      SET pointage_depart_le = NULL,
+          modifie_le = now()
+      WHERE mission_id = v_mission.id
+        AND soignant_id = auth.uid();
     END IF;
 
-  ELSE -- FERMETURE
-    SELECT id, debut INTO v_creneau_id, v_creneau_debut FROM mission_creneaux
-    WHERE mission_id = v_mission.id AND type_creneau = 'EFFECTIF' AND fin IS NULL ORDER BY debut DESC LIMIT 1;
-    IF v_creneau_id IS NULL THEN RAISE EXCEPTION 'Aucun créneau effectif ouvert à fermer.' USING ERRCODE = 'no_data_found'; END IF;
+  ELSE
+    SELECT id, debut INTO v_creneau_id, v_creneau_debut
+    FROM mission_creneaux
+    WHERE mission_id = v_mission.id
+      AND type_creneau = 'EFFECTIF'
+      AND fin IS NULL
+    ORDER BY debut DESC
+    LIMIT 1;
 
-    IF v_arrondi <= v_creneau_debut THEN
-      v_arrondi := v_creneau_debut + INTERVAL '15 minutes';
+    IF v_creneau_id IS NULL THEN
+      RAISE EXCEPTION 'Aucun créneau effectif ouvert à fermer.' USING ERRCODE = 'no_data_found';
+    END IF;
+    IF v_now <= v_creneau_debut THEN
+      RAISE EXCEPTION 'La fin réelle doit être postérieure au début réel du créneau.' USING ERRCODE = 'check_violation';
     END IF;
 
-    UPDATE mission_creneaux SET fin = v_arrondi WHERE id = v_creneau_id;
+    UPDATE mission_creneaux
+    SET fin = v_now
+    WHERE id = v_creneau_id;
 
-    SELECT MAX(fin) INTO v_dernier_prevu FROM mission_creneaux WHERE mission_id = v_mission.id AND type_creneau = 'PREVISIONNEL';
-    v_validation_requise := (v_dernier_prevu IS NOT NULL AND v_now > v_dernier_prevu + INTERVAL '24 hours');
+    SELECT MAX(fin) INTO v_dernier_prevu
+    FROM mission_creneaux
+    WHERE mission_id = v_mission.id
+      AND type_creneau = 'PREVISIONNEL';
 
-    INSERT INTO scans_pointage (mission_id, soignant_id, code_saisi, numero_scan, type_scan, scanne_le, horodatage_arrondi, creneau_effectif_id, est_en_avance, validation_etab_requise, latitude, longitude, precision_gps_m, id_terminal, ip_address)
-    VALUES (v_mission.id, auth.uid(), p_code, v_scan_numero, 'FERMETURE', v_now, v_arrondi, v_creneau_id, false, v_validation_requise,
-      (p_metadata->>'latitude')::numeric, (p_metadata->>'longitude')::numeric, (p_metadata->>'precision_gps_m')::numeric, p_metadata->>'id_terminal', (p_metadata->>'ip_address')::inet);
+    v_validation_requise := v_dernier_prevu IS NOT NULL
+      AND v_now > v_dernier_prevu + INTERVAL '24 hours';
 
-    UPDATE presences SET
-      pointage_depart_le = v_arrondi,
-      depart_lat = (p_metadata->>'latitude')::numeric,
-      depart_lng = (p_metadata->>'longitude')::numeric,
-      methode_pointage_depart = 'CODE',
-      heures_reelles = (
-        SELECT COALESCE(ROUND(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)::numeric, 2), 0)
-        FROM mission_creneaux
-        WHERE mission_id = v_mission.id AND type_creneau = 'EFFECTIF'
-          AND fin IS NOT NULL AND NOT est_pause
-      ),
-      modifie_le = now()
-    WHERE mission_id = v_mission.id AND soignant_id = auth.uid();
+    INSERT INTO scans_pointage (
+      mission_id, soignant_id, code_saisi, numero_scan, type_scan,
+      scanne_le, horodatage_arrondi, creneau_effectif_id,
+      est_en_avance, validation_etab_requise,
+      latitude, longitude, precision_gps_m, id_terminal, ip_address
+    ) VALUES (
+      v_mission.id, auth.uid(), p_code, v_scan_numero, 'FERMETURE',
+      v_now, v_arrondi_audit, v_creneau_id,
+      false, v_validation_requise,
+      (p_metadata->>'latitude')::numeric,
+      (p_metadata->>'longitude')::numeric,
+      (p_metadata->>'precision_gps_m')::numeric,
+      p_metadata->>'id_terminal',
+      (p_metadata->>'ip_address')::inet
+    );
+
+    UPDATE presences
+    SET pointage_depart_le = v_now,
+        depart_lat = (p_metadata->>'latitude')::numeric,
+        depart_lng = (p_metadata->>'longitude')::numeric,
+        methode_pointage_depart = 'CODE',
+        heures_reelles = (
+          SELECT COALESCE(
+            ROUND(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)::numeric, 2),
+            0
+          )
+          FROM mission_creneaux
+          WHERE mission_id = v_mission.id
+            AND type_creneau = 'EFFECTIF'
+            AND fin IS NOT NULL
+            AND NOT est_pause
+        ),
+        modifie_le = now()
+    WHERE mission_id = v_mission.id
+      AND soignant_id = auth.uid();
   END IF;
 
   v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
-  WHILE EXISTS (SELECT 1 FROM missions WHERE code_pointage_actif = v_new_code AND id != v_mission.id AND statut IN ('ASSIGNEE','EN_COURS')) LOOP
+  WHILE EXISTS (
+    SELECT 1
+    FROM missions
+    WHERE code_pointage_actif = v_new_code
+      AND id != v_mission.id
+      AND statut IN ('ASSIGNEE', 'EN_COURS')
+  ) LOOP
     v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
   END LOOP;
-  v_new_hmac := CASE WHEN current_setting('app.settings.hmac_secret', true) IS NOT NULL
-    THEN encode(extensions.hmac(v_mission.id::text || ':' || v_new_code, current_setting('app.settings.hmac_secret', true), 'sha256'), 'hex') ELSE NULL END;
 
-  UPDATE missions SET code_pointage_actif = v_new_code, code_pointage_hmac = v_new_hmac,
-    prochain_type_scan = CASE WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE' ELSE 'OUVERTURE' END,
-    nb_scans = v_scan_numero WHERE id = v_mission.id;
+  v_new_hmac := CASE
+    WHEN current_setting('app.settings.hmac_secret', true) IS NOT NULL THEN
+      encode(
+        extensions.hmac(
+          v_mission.id::text || ':' || v_new_code,
+          current_setting('app.settings.hmac_secret', true),
+          'sha256'
+        ),
+        'hex'
+      )
+    ELSE NULL
+  END;
 
-  RETURN jsonb_build_object('nouveau_code', v_new_code, 'nouveau_hmac', v_new_hmac,
+  UPDATE missions
+  SET code_pointage_actif = v_new_code,
+      code_pointage_hmac = v_new_hmac,
+      prochain_type_scan = CASE
+        WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE'
+        ELSE 'OUVERTURE'
+      END,
+      nb_scans = v_scan_numero
+  WHERE id = v_mission.id;
+
+  RETURN jsonb_build_object(
+    'nouveau_code', v_new_code,
+    'nouveau_hmac', v_new_hmac,
     'type_scan_effectue', v_mission.prochain_type_scan,
-    'prochain_type_scan', CASE WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE' ELSE 'OUVERTURE' END,
-    'creneau_effectif_id', v_creneau_id, 'horodatage_arrondi', v_arrondi,
-    'numero_scan', v_scan_numero, 'validation_etab_requise', v_validation_requise);
+    'prochain_type_scan', CASE
+      WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE'
+      ELSE 'OUVERTURE'
+    END,
+    'creneau_effectif_id', v_creneau_id,
+    'horodatage_effectif', v_now,
+    'horodatage_arrondi', v_arrondi_audit,
+    'numero_scan', v_scan_numero,
+    'validation_etab_requise', v_validation_requise
+  );
 END;
 $$;
 
@@ -56472,50 +57360,194 @@ CREATE OR REPLACE FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid")
     AS $$
 DECLARE
   v_mission record;
-  v_nb_presences integer;
+  v_est_admin boolean := public.est_admin();
+  v_nb_presences integer := 0;
+  v_nb_departs integer := 0;
+  v_nb_segments_ouverts integer := 0;
+  v_nb_creneaux_futurs integer := 0;
+  v_planning_incomplet boolean := false;
+  v_fin_reference timestamptz;
+  v_litige_id uuid;
+  v_cloture_anticipee boolean := false;
 BEGIN
   SELECT * INTO v_mission
-  FROM public.missions WHERE id = p_mission_id;
+  FROM public.missions
+  WHERE id = p_mission_id;
+
   IF v_mission IS NULL THEN
-    RETURN jsonb_build_object('error', 'Mission introuvable');
+    RETURN jsonb_build_object('success', false, 'error', 'Mission introuvable');
   END IF;
-  IF NOT public.est_admin()
+
+  IF NOT v_est_admin
      AND v_mission.etablissement_id <> public.mon_etablissement_id() THEN
-    RETURN jsonb_build_object('error', 'Accès refusé');
+    RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
   END IF;
+
   IF v_mission.statut <> 'EN_COURS' THEN
     RETURN jsonb_build_object(
+      'success', false,
       'error', 'La mission doit être EN_COURS pour être terminée. Statut actuel : '
         || v_mission.statut
     );
   END IF;
+
   IF v_mission.est_arret_maladie IS TRUE THEN
     RETURN jsonb_build_object(
+      'success', false,
       'error_code', 'RECONCILIATION_HEURES_REQUISE',
       'error', 'Mission interrompue : validation admin des heures effectives requise avant clôture.'
     );
   END IF;
-  SELECT count(*) INTO v_nb_presences
-  FROM public.presences WHERE mission_id = p_mission_id;
-  IF v_nb_presences = 0 AND NOT public.est_admin() THEN
+
+  SELECT
+    count(*) FILTER (
+      WHERE mc.type_creneau = 'EFFECTIF'
+        AND NOT mc.est_pause
+        AND mc.fin IS NULL
+    ),
+    count(*) FILTER (
+      WHERE mc.type_creneau = 'EFFECTIF'
+        AND NOT mc.est_pause
+        AND mc.fin IS NOT NULL
+    ),
+    count(*) FILTER (
+      WHERE mc.type_creneau = 'PREVISIONNEL'
+        AND NOT mc.est_pause
+        AND mc.debut > now()
+    ),
+    bool_or(
+      mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NULL
+    ),
+    max(mc.fin) FILTER (
+      WHERE mc.type_creneau = 'PREVISIONNEL'
+        AND NOT mc.est_pause
+        AND mc.fin IS NOT NULL
+    )
+  INTO
+    v_nb_segments_ouverts,
+    v_nb_departs,
+    v_nb_creneaux_futurs,
+    v_planning_incomplet,
+    v_fin_reference
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = p_mission_id;
+
+  IF coalesce(v_planning_incomplet, false) THEN
     RETURN jsonb_build_object(
-      'error', 'Impossible de terminer : aucune présence enregistrée. Le soignant doit pointer son arrivée et son départ.'
+      'success', false,
+      'error_code', 'PLANNING_INCOMPLET',
+      'error', 'Impossible de terminer : le planning contient un créneau incomplet.'
     );
   END IF;
+
+  IF v_nb_segments_ouverts > 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'SEGMENT_OUVERT',
+      'error', 'Impossible de terminer : le soignant doit pointer son départ.'
+    );
+  END IF;
+
+  SELECT count(*) INTO v_nb_presences
+  FROM public.presences
+  WHERE mission_id = p_mission_id;
+
+  SELECT v_nb_departs + count(*) INTO v_nb_departs
+  FROM public.presences
+  WHERE mission_id = p_mission_id
+    AND pointage_depart_le IS NOT NULL;
+
+  IF v_nb_departs = 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'AUCUN_DEPART',
+      'error', 'Impossible de terminer : aucun départ n’est enregistré pour cette mission.'
+    );
+  END IF;
+
+  v_fin_reference := coalesce(v_fin_reference, v_mission.fin_le);
+  IF v_fin_reference IS NULL OR now() < v_fin_reference THEN
+    IF NOT v_est_admin THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error_code', 'AVANT_DERNIER_CRENEAU',
+        'error', 'La mission ne peut être terminée qu’après le dernier créneau planifié.'
+      );
+    END IF;
+
+    SELECT l.id INTO v_litige_id
+    FROM public.litiges l
+    WHERE l.mission_id = p_mission_id
+      AND l.statut IN (
+        'OUVERT',
+        'EN_DISCUSSION',
+        'EN_MEDIATION',
+        'MEDIATION_EN_COURS',
+        'REVUE_ADMIN'
+      )
+    ORDER BY l.cree_le DESC
+    LIMIT 1;
+
+    IF v_litige_id IS NULL THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error_code', 'LITIGE_ACTIF_REQUIS',
+        'error', 'Une clôture anticipée admin exige un litige actif et traçable.'
+      );
+    END IF;
+
+    v_cloture_anticipee := true;
+  END IF;
+
   UPDATE public.missions
-     SET statut = 'TERMINEE', terminee_le = now(), modifie_le = now()
-   WHERE id = p_mission_id;
+  SET statut = 'TERMINEE', terminee_le = now(), modifie_le = now()
+  WHERE id = p_mission_id;
+
+  IF v_cloture_anticipee THEN
+    INSERT INTO public.journaux_audit (
+      acteur_id,
+      type_acteur,
+      action,
+      type_ressource,
+      id_ressource,
+      details
+    ) VALUES (
+      auth.uid(),
+      'ADMIN_PLATEFORME',
+      'ADMIN_ACTION',
+      'mission',
+      p_mission_id,
+      jsonb_build_object(
+        'evenement', 'CLOTURE_ANTICIPEE_APRES_ARBITRAGE',
+        'litige_id', v_litige_id,
+        'fin_planifiee', v_fin_reference,
+        'creneaux_futurs', v_nb_creneaux_futurs,
+        'segments_effectifs_fermes', v_nb_departs,
+        'presences', v_nb_presences
+      )
+    );
+  END IF;
+
   IF v_mission.soignant_assigne_id IS NOT NULL THEN
     INSERT INTO public.notifications (
       destinataire_id, type, titre, corps, lien, type_destinataire
     ) VALUES (
-      v_mission.soignant_assigne_id, 'SYSTEM', 'Mission terminée ✅',
-      'La mission "' || v_mission.intitule
-        || '" est terminée. Consultez vos gains.',
-      '/soignant/mes-gains', 'SOIGNANT'
+      v_mission.soignant_assigne_id,
+      'SYSTEM',
+      'Mission terminée ✅',
+      'La mission "' || v_mission.intitule || '" est terminée. Consultez vos gains.',
+      '/soignant/mes-gains',
+      'SOIGNANT'
     );
   END IF;
-  RETURN jsonb_build_object('success', true);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'cloture_anticipee_admin', v_cloture_anticipee,
+    'litige_id', v_litige_id
+  );
 END;
 $$;
 
@@ -64288,6 +65320,11 @@ CREATE TABLE IF NOT EXISTS "public"."bulletins_paie" (
     "pdf_s3_key" "text",
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "modifie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "bulletin_precedent_id" "uuid",
+    "litige_id" "uuid",
+    "nature_document" "text" DEFAULT 'SIMULATION'::"text" NOT NULL,
+    "motif_rectification" "text",
+    CONSTRAINT "bulletins_paie_nature_document_check" CHECK (("nature_document" = ANY (ARRAY['SIMULATION'::"text", 'RECTIFICATIF'::"text"]))),
     CONSTRAINT "bulletins_paie_statut_check" CHECK (("statut" = ANY (ARRAY['EMIS'::"text", 'PAYE'::"text", 'ANNULE'::"text"])))
 );
 
@@ -68155,11 +69192,6 @@ ALTER TABLE ONLY "public"."bulletins_paie"
 
 
 ALTER TABLE ONLY "public"."bulletins_paie"
-    ADD CONSTRAINT "bulletins_paie_unique_mission" UNIQUE ("mission_id");
-
-
-
-ALTER TABLE ONLY "public"."bulletins_paie"
     ADD CONSTRAINT "bulletins_paie_unique_numero_par_soignant" UNIQUE ("soignant_id", "numero_bulletin");
 
 
@@ -69274,6 +70306,10 @@ ALTER TABLE ONLY "public"."utilisateurs_bloques"
 
 
 
+CREATE UNIQUE INDEX "bulletins_paie_unique_actif_mission" ON "public"."bulletins_paie" USING "btree" ("mission_id") WHERE ("statut" <> 'ANNULE'::"text");
+
+
+
 CREATE INDEX "idx_acquisition_actions_file" ON "public"."acquisition_actions" USING "btree" ("statut", "score" DESC, "cree_le" DESC);
 
 
@@ -69415,6 +70451,10 @@ CREATE INDEX "idx_bp_periode" ON "public"."bulletins_paie" USING "btree" ("perio
 
 
 CREATE INDEX "idx_bp_soignant" ON "public"."bulletins_paie" USING "btree" ("soignant_id");
+
+
+
+CREATE INDEX "idx_bulletins_paie_litige" ON "public"."bulletins_paie" USING "btree" ("litige_id") WHERE ("litige_id" IS NOT NULL);
 
 
 
@@ -71966,6 +73006,10 @@ CREATE OR REPLACE TRIGGER "trg_zzz_corriger_strategie_facturation" BEFORE UPDATE
 
 
 
+CREATE OR REPLACE TRIGGER "zzzz_calculer_financier" BEFORE INSERT OR UPDATE OF "taux_horaire_base", "duree_heures", "debut_le", "fin_le", "heures_nuit", "heures_dimanche", "heures_ferie", "taux_ifm", "taux_icp" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_calculer_financier_mission"();
+
+
+
 ALTER TABLE ONLY "public"."acquisition_actions"
     ADD CONSTRAINT "acquisition_actions_responsable_id_fkey" FOREIGN KEY ("responsable_id") REFERENCES "public"."equipe_admin"("user_id") ON DELETE SET NULL;
 
@@ -72047,7 +73091,17 @@ ALTER TABLE ONLY "public"."bfa_suivi"
 
 
 ALTER TABLE ONLY "public"."bulletins_paie"
+    ADD CONSTRAINT "bulletins_paie_bulletin_precedent_id_fkey" FOREIGN KEY ("bulletin_precedent_id") REFERENCES "public"."bulletins_paie"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."bulletins_paie"
     ADD CONSTRAINT "bulletins_paie_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
+
+
+
+ALTER TABLE ONLY "public"."bulletins_paie"
+    ADD CONSTRAINT "bulletins_paie_litige_id_fkey" FOREIGN KEY ("litige_id") REFERENCES "public"."litiges"("id") ON DELETE RESTRICT;
 
 
 
@@ -76649,6 +77703,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "service_role";
@@ -77138,6 +78198,11 @@ GRANT ALL ON FUNCTION "public"."fn_calculer_bfa_tous"() TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."fn_calculer_cotisations"("p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_calculer_cotisations"("p_mission_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_calculer_financier_mission"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_calculer_financier_mission"() TO "service_role";
 
 
 
