@@ -74,11 +74,18 @@ export function CertificatSignature({ contratId, variant = 'resume' }: Props) {
     </div>
   );
 
-  if (signatures.length === 0) return (
-    <div className="text-sm text-muted-foreground italic">
-      Aucune signature enregistrée pour ce contrat.
-    </div>
-  );
+  // La signature manuscrite historique est portée directement par
+  // contrats_mission et ne crée pas de ligne signatures_contrats. Sur la
+  // page du contrat, le statut des deux parties reste donc la source de
+  // vérité : ne pas afficher un faux « aucune signature » contradictoire.
+  if (signatures.length === 0) {
+    if (variant === 'resume') return null;
+    return (
+      <div className="text-sm text-muted-foreground italic">
+        Aucune preuve OTP détaillée enregistrée pour ce contrat.
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">

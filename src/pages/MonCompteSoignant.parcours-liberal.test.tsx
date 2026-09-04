@@ -58,6 +58,16 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 describe('MonCompteSoignant — parcours libéral', () => {
+  it('donne un accès permanent aux litiges depuis le profil mobile', async () => {
+    render(
+      <MemoryRouter>
+        <MonCompteSoignant />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Litiges & contestations' })).toBeInTheDocument();
+  });
+
   it.each(professionsLiberales)(
     'le rend accessible sur le hub compte pour la profession éligible %s',
     async (profession) => {

@@ -581,7 +581,7 @@ export default function RechercheMissions() {
         </div>
 
         {/* Chips rapides 1-tap — au-dessus du deck COMME de la liste (6c.1) */}
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 shrink-0">
           {[
             { actif: urgentesOnly, label: '🔥 Urgentes', toggle: () => setUrgentesOnly(v => !v) },
             { actif: horaire === 'WEEKEND', label: '📅 Week-end', toggle: () => setHoraire(h => h === 'WEEKEND' ? 'TOUS' : 'WEEKEND') },
@@ -593,7 +593,7 @@ export default function RechercheMissions() {
               type="button"
               onClick={chip.toggle}
               aria-pressed={chip.actif}
-              className={`shrink-0 inline-flex items-center rounded-full px-4 min-h-[44px] md:min-h-0 md:py-1.5 text-xs font-semibold transition-snap border ${
+              className={`shrink-0 inline-flex items-center rounded-full px-3 min-h-[44px] md:min-h-0 md:py-1.5 text-[11px] min-[390px]:text-xs font-semibold transition-snap border ${
                 chip.actif
                   ? 'bg-gradient-hero text-white border-transparent shadow-md'
                   : 'bg-card text-jolene-bubblegum border-jolene-rose-200 hover:border-jolene-rose-300'

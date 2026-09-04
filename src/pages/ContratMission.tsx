@@ -26,6 +26,11 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { sha256Hex } from '@/lib/crypto-hash';
+import {
+  choisirContenuContratAffiche,
+  contratNecessiteRenduServeur,
+  contientVariablesContratNonRendues,
+} from '@/lib/contratMissionUi';
 
 function escapeContractValue(value: unknown): string {
   return String(value ?? '')
@@ -39,6 +44,11 @@ function escapeContractValue(value: unknown): string {
 function formatContractDate(value?: string | null): string {
   if (!value) return '—';
   return format(new Date(value), "dd/MM/yyyy 'à' HH:mm", { locale: fr });
+}
+
+function formatContractBirthDate(value?: string | null): string {
+  if (!value) return 'non renseignée';
+  return format(new Date(`${value.slice(0, 10)}T12:00:00`), 'dd/MM/yyyy', { locale: fr });
 }
 
 function replaceTemplateVariables(template: string, values: Record<string, string>): string {
@@ -66,21 +76,40 @@ function buildFallbackContractHtml({
     mission_debut: escapeContractValue(formatContractDate(mission?.debut_le)),
     mission_fin: escapeContractValue(formatContractDate(mission?.fin_le)),
     mission_duree_heures: escapeContractValue(mission?.duree_heures ?? '—'),
+    intitule_mission: escapeContractValue(mission?.intitule ?? 'Mission'),
+    profession: escapeContractValue(soignant?.profession ?? '—'),
+    debut_le: escapeContractValue(formatContractDate(mission?.debut_le)),
+    fin_le: escapeContractValue(formatContractDate(mission?.fin_le)),
+    duree_heures: escapeContractValue(mission?.duree_heures ?? '—'),
     taux_horaire: mission?.taux_horaire_base != null ? `${Number(mission.taux_horaire_base).toFixed(2)} €` : '—',
     etablissement_nom: escapeContractValue(etablissement?.nom ?? '—'),
     etablissement_siret: escapeContractValue(etablissement?.siret ?? '—'),
     etablissement_finess: escapeContractValue(etablissement?.finess ?? '—'),
     etablissement_email: escapeContractValue(etablissement?.email_contact ?? '—'),
     etablissement_telephone: escapeContractValue(etablissement?.telephone_contact ?? '—'),
+    etablissement_ville: escapeContractValue(etablissement?.adresse_ville ?? '—'),
     etablissement_adresse: escapeContractValue([
       etablissement?.adresse_rue,
       etablissement?.adresse_code_postal,
       etablissement?.adresse_ville,
     ].filter(Boolean).join(', ') || '—'),
-    soignant_nom: escapeContractValue([soignant?.prenom, soignant?.nom].filter(Boolean).join(' ') || '—'),
+    soignant_nom: escapeContractValue(soignant?.nom ?? '—'),
     soignant_prenom: escapeContractValue(soignant?.prenom ?? '—'),
     soignant_profession: escapeContractValue(soignant?.profession ?? '—'),
     soignant_rpps: escapeContractValue(soignant?.numero_rpps ?? '—'),
+    soignant_date_naissance: escapeContractValue(formatContractBirthDate(soignant?.date_naissance)),
+    soignant_adresse: escapeContractValue([
+      soignant?.adresse_rue,
+      soignant?.adresse_code_postal,
+      soignant?.adresse_ville,
+    ].filter(Boolean).join(', ') || 'non renseignée'),
+    motif_cdd: escapeContractValue(contrat?.motif_cdd || "remplacement / surcroît temporaire d'activité"),
+    convention_collective: escapeContractValue(etablissement?.convention_collective || "CCN applicable à l'établissement"),
+    periode_essai_libelle: escapeContractValue(`${Number(contrat?.periode_essai_jours || 1)} ${Number(contrat?.periode_essai_jours || 1) === 1 ? 'jour' : 'jours'}`),
+    periode_essai_jours: escapeContractValue(contrat?.periode_essai_jours || 1),
+    caisse_retraite: escapeContractValue(etablissement?.caisse_retraite || 'AGIRC-ARRCO'),
+    regime_prevoyance: escapeContractValue(etablissement?.regime_prevoyance || "celui de l'employeur"),
+    date_signature: escapeContractValue(new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })),
   };
 
   const templateReconstruit = templateHtml
@@ -129,6 +158,8 @@ export default function ContratMission() {
   const [smsExterneDesactive, setSmsExterneDesactive] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState('');
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
+  const [renduContratEnCours, setRenduContratEnCours] = useState(false);
+  const [erreurRenduContrat, setErreurRenduContrat] = useState<string | null>(null);
 
   const { role: serverRole } = useRole();
   const role: UserRole = serverRole === 'INCONNU'
@@ -146,7 +177,7 @@ export default function ContratMission() {
       const data = dataRaw as any;
 
       if (data) {
-        const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
+        const [missionRes, soignantRes, etabRes, etabCompteRes, templateRes] = await Promise.all([
           supabase
             .from('missions')
             .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base')
@@ -154,13 +185,18 @@ export default function ContratMission() {
             .maybeSingle(),
           supabase
             .from('soignants')
-            .select('prenom, nom, profession, numero_rpps, est_compte_test')
+            .select('prenom, nom, profession, numero_rpps, est_compte_test, date_naissance, adresse_rue, adresse_code_postal, adresse_ville')
             .eq('id', data.soignant_id)
             .maybeSingle(),
           supabase.rpc('fn_etablissement_pour_mission' as any, { p_etablissement_id: data.etablissement_id }).then(({ data: d, error: e }) => ({
             data: Array.isArray(d) ? d[0] || null : d,
             error: e,
           })),
+          supabase
+            .from('etablissements')
+            .select('id, est_compte_test')
+            .eq('id', data.etablissement_id)
+            .maybeSingle(),
           supabase
             .from('templates_contrat')
             .select('contenu_html')
@@ -176,7 +212,13 @@ export default function ContratMission() {
           etablissement: etabRes.data,
           templateHtml: templateRes.data?.contenu_html,
         }));
-        const compteTestCourant = data.soignant_id === user?.id && soignantRes.data?.est_compte_test === true;
+        const compteTestCourant = (
+          data.soignant_id === user?.id
+          && soignantRes.data?.est_compte_test === true
+        ) || (
+          data.etablissement_id === user?.id
+          && etabCompteRes.data?.est_compte_test === true
+        );
         setSmsExterneDesactive(compteTestCourant);
         if (compteTestCourant) setModeSignature('CANVAS');
       } else {
@@ -194,11 +236,12 @@ export default function ContratMission() {
   // (rendu via generate-contrat-mission-pdf), on l'utilise. Sinon fallback
   // sur un hash calculé localement.
   useEffect(() => {
-    if (contrat?.hash_document) {
+    const contenuServeurIncomplet = contientVariablesContratNonRendues(contrat?.contenu_html);
+    if (contrat?.hash_document && !contenuServeurIncomplet) {
       setHashContratAffiche(contrat.hash_document);
       return;
     }
-    const html = contrat?.contenu_html || fallbackHtml;
+    const html = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml);
     if (!html) {
       setHashContratAffiche(null);
       return;
@@ -216,25 +259,48 @@ export default function ContratMission() {
   // appelle l'edge function pour le rendre (idempotent côté serveur grâce
   // à upsert: false sur le path timestamped).
   useEffect(() => {
-    if (!contrat?.id || contrat.storage_path) return;
+    if (!contrat?.id) return;
     if (contrat.statut === 'ANNULE' || contrat.statut === 'EXPIRE' || contrat.statut === 'REFUSE') return;
+    const renduNecessaire = contratNecessiteRenduServeur(contrat.contenu_html, contrat.storage_path);
+    if (!renduNecessaire) return;
     let cancelled = false;
+    setRenduContratEnCours(true);
+    setErreurRenduContrat(null);
     supabase.functions.invoke('generate-contrat-mission-pdf', {
       body: { contrat_id: contrat.id },
     }).then(({ data, error }) => {
-      if (cancelled || error || !(data as any)?.success) return;
+      if (cancelled) return;
+      if (error || !(data as any)?.success) {
+        const motifBrut = typeof (data as any)?.error === 'string'
+          ? (data as any).error
+          : error?.message;
+        const motifServeur = motifBrut ? ` ${String(motifBrut).slice(0, 180)}` : '';
+        setErreurRenduContrat(`Le document contractuel final n’a pas pu être préparé.${motifServeur} Réessayez avant de signer.`);
+        return;
+      }
       // Reload le contrat pour récupérer storage_path + hash
-      supabase.from('contrats_mission')
+      return supabase.from('contrats_mission')
         .select('*' as any)
         .eq('id', contrat.id)
         .single()
-        .then(({ data: updated }) => { if (!cancelled && updated) setContrat(updated); });
-    }).catch(() => { /* silencieux : si ça échoue, on garde le fallback */ });
+        .then(({ data: updated, error: reloadError }) => {
+          if (cancelled) return;
+          if (reloadError || !updated || contientVariablesContratNonRendues((updated as any).contenu_html)) {
+            setErreurRenduContrat('Le document contractuel final est encore incomplet. Réessayez avant de signer.');
+            return;
+          }
+          setContrat(updated);
+        });
+    }).catch(() => {
+      if (!cancelled) setErreurRenduContrat('Le document contractuel final n’a pas pu être préparé. Réessayez avant de signer.');
+    }).finally(() => {
+      if (!cancelled) setRenduContratEnCours(false);
+    });
     return () => { cancelled = true; };
-  }, [contrat?.id, contrat?.storage_path, contrat?.statut]);
+  }, [contrat?.contenu_html, contrat?.id, contrat?.storage_path, contrat?.statut]);
 
   const handleDownloadContract = async () => {
-    const contractHtml = contrat?.contenu_html || fallbackHtml;
+    const contractHtml = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml);
     if (!contractHtml) {
       afficherNotification({ type: 'erreur', message: 'Aucun contrat téléchargeable pour le moment.' });
       return;
@@ -344,7 +410,12 @@ export default function ContratMission() {
 
   const isSoignant = contrat.soignant_id === user?.id;
   const dejaSigneParMoi = isSoignant ? contrat.signature_soignant : contrat.signature_etablissement;
-  const contractHtml = contrat.contenu_html || fallbackHtml;
+  const contractHtml = choisirContenuContratAffiche(contrat.contenu_html, fallbackHtml);
+  const contratServeurPret = !!contrat.storage_path
+    && !!contrat.hash_document
+    && !contientVariablesContratNonRendues(contrat.contenu_html)
+    && !renduContratEnCours
+    && !erreurRenduContrat;
 
   return (
     <LayoutApp role={role}>
@@ -507,6 +578,12 @@ export default function ContratMission() {
           <div className="card-base space-y-4">
             <h3 className="font-bold text-foreground">Votre signature</h3>
 
+                {(renduContratEnCours || erreurRenduContrat) && (
+                  <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm" role={erreurRenduContrat ? 'alert' : 'status'}>
+                    {erreurRenduContrat || 'Préparation du document contractuel final…'}
+                  </div>
+                )}
+
                 {/* Mode selector */}
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
@@ -568,7 +645,7 @@ export default function ContratMission() {
                     <div className="flex gap-3">
                       <button
                         onClick={() => setShowConfirmSign(true)}
-                        disabled={!accepte || signing || !signatureData}
+                        disabled={!accepte || signing || !signatureData || !contratServeurPret}
                         className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}

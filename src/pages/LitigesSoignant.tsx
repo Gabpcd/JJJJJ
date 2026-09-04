@@ -27,6 +27,8 @@ import { TimelineLitige } from '@/components/litige/TimelineLitige';
 import { CompteARebours7j } from '@/components/litige/CompteARebours7j';
 import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
 import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
+import { enrichirMissionsLitigeAvecEtablissements } from '@/lib/litigeResolutionUi';
 
 type FiltreStatut = 'TOUS' | 'OUVERT' | 'MEDIATION' | 'ACTION_ATTENDUE' | 'RESOLU' | 'FERME';
 
@@ -61,12 +63,28 @@ export function LitigesSoignantContent() {
 
   const charger = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('litiges')
-      .select('*, missions(id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom))')
+      .select('*, etablissements:etablissement_id(nom), missions(id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom))')
       .eq('soignant_id', user.id)
       .order('cree_le', { ascending: false });
-    setLitiges(data || []);
+    if (error) {
+      toast.error('Impossible de charger les litiges.');
+      setLitiges([]);
+      setLoading(false);
+      return;
+    }
+    const lignes = data || [];
+    const etablissements = await fetchEtablissementsSafe(
+      lignes.map((litige: any) => litige.etablissement_id).filter(Boolean),
+    );
+    setLitiges(lignes.map((litige: any) => ({
+      ...litige,
+      etablissements: etablissements[litige.etablissement_id]
+        || litige.etablissements
+        || litige.missions?.etablissements
+        || null,
+    })));
     setLoading(false);
   }, [user]);
 
@@ -124,8 +142,15 @@ export function LitigesSoignantContent() {
           .eq('soignant_id', user.id),
       ]);
       if (e1 || e2) { toast.error('Impossible de charger les missions.'); return; }
+      const etablissements = await fetchEtablissementsSafe(
+        (missions || []).map((mission: any) => mission.etablissement_id).filter(Boolean),
+      );
       const litigesMissionIds = new Set((existingLitiges || []).map((l: any) => l.mission_id));
-      setMissionsTerminees((missions || []).filter((m: any) => !litigesMissionIds.has(m.id)));
+      setMissionsTerminees(enrichirMissionsLitigeAvecEtablissements(
+        missions || [],
+        etablissements,
+        litigesMissionIds,
+      ));
       setSelectedMissionId('');
       setNewMotif('');
       setShowNew(true);
@@ -233,7 +258,7 @@ export function LitigesSoignantContent() {
                       {mission?.intitule || 'Mission'}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      🏥 {mission?.etablissements?.nom || '—'}
+                      🏥 {l.etablissements?.nom || mission?.etablissements?.nom || 'Établissement non disponible'}
                       {mission?.debut_le && ` · ${format(new Date(mission.debut_le), 'd MMM yyyy', { locale: fr })}`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
@@ -300,7 +325,7 @@ export function LitigesSoignantContent() {
                   <SelectContent>
                     {missionsTerminees.map(m => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.intitule} — {m.etablissements?.nom || ''} — {m.debut_le ? format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr }) : ''}
+                        {m.intitule} — {m.etablissements?.nom || 'Établissement non disponible'} — {m.debut_le ? format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr }) : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -342,6 +342,7 @@ export default function InscriptionSoignant() {
       // Affichage inline avec code + action proposée.
       const erreurMappee = mapperErreurInscription(err);
       setErreurInscription(erreurMappee);
+      if (erreurMappee.code === 'EMAIL_CONFIRMATION_REQUIRED') setEtape(1);
       // Sentry UNIQUEMENT pour les vraies anomalies. Un refus métier attendu
       // (e-mail/RPPS déjà utilisé, captcha, mot de passe faible…) est déjà
       // affiché clairement à l'utilisateur → pas d'issue Sentry (sinon le feed

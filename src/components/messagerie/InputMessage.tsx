@@ -178,7 +178,7 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
           maxLength={MAX_LENGTH}
           disabled={envoi}
           className="flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-jolene-rose-400/40 disabled:opacity-50 transition-shadow"
-          style={{ maxHeight: 100, minHeight: 40 }}
+          style={{ maxHeight: 100, minHeight: 44 }}
           aria-label="Saisir un message"
         />
         <BoutonY2K
@@ -188,7 +188,7 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
           loading={envoi}
           disabled={envoi || !texte.trim()}
           aria-label="Envoyer le message"
-          className="!p-2.5 !min-w-0"
+          className="!min-h-11 !min-w-11 !p-2.5"
         >
           {!envoi && <Send className="h-4 w-4" />}
         </BoutonY2K>

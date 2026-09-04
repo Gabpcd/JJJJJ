@@ -5,6 +5,7 @@ import {
   creneauxPrevisionnels,
   choisirContratPointage,
   evaluerDisponibilitePointage,
+  evaluerClotureAdminMission,
   evaluerTerminaisonMission,
   filtrerMissionsEnCours,
   prochainCreneauPointage,
@@ -145,5 +146,38 @@ describe('disponibilité du pointage', () => {
     });
 
     expect(resultat).toMatchObject({ peutTerminer: true, motif: null });
+  });
+
+  it('priorise un segment ouvert sur la date du dernier créneau', () => {
+    const resultat = evaluerTerminaisonMission({
+      creneaux: [
+        creneau('2026-09-03T17:00:00.000Z', '2026-09-03T18:00:00.000Z'),
+        creneau('2026-09-04T05:00:00.000Z', '2026-09-04T17:00:00.000Z'),
+        creneau('2026-09-03T17:05:00.000Z', null, 'EFFECTIF'),
+      ],
+      finMission: '2026-09-04T17:00:00.000Z',
+      maintenant: new Date('2026-09-03T17:30:00.000Z'),
+    });
+
+    expect(resultat).toMatchObject({ peutTerminer: false, motif: 'SEGMENT_OUVERT' });
+  });
+
+  it('réserve la clôture anticipée à un admin intervenant sur un litige actif', () => {
+    const terminaison = evaluerTerminaisonMission({
+      creneaux: [
+        creneau('2026-09-03T17:00:00.000Z', '2026-09-03T18:00:00.000Z'),
+        creneau('2026-09-04T05:00:00.000Z', '2026-09-04T17:00:00.000Z'),
+        creneau('2026-09-03T17:05:00.000Z', '2026-09-03T17:25:00.000Z', 'EFFECTIF'),
+      ],
+      finMission: '2026-09-04T17:00:00.000Z',
+      maintenant: new Date('2026-09-03T17:30:00.000Z'),
+    });
+
+    expect(evaluerClotureAdminMission({ terminaison, estAdmin: true, litigeActif: true }))
+      .toMatchObject({ peutTerminer: true, clotureAnticipee: true, motif: null });
+    expect(evaluerClotureAdminMission({ terminaison, estAdmin: false, litigeActif: true }))
+      .toMatchObject({ peutTerminer: false, clotureAnticipee: false, motif: 'AVANT_DERNIER_CRENEAU' });
+    expect(evaluerClotureAdminMission({ terminaison, estAdmin: true, litigeActif: false }))
+      .toMatchObject({ peutTerminer: false, clotureAnticipee: false, motif: 'AVANT_DERNIER_CRENEAU' });
   });
 });

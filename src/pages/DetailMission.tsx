@@ -16,6 +16,10 @@ import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
+import {
+  CarteContratElectroniqueMission,
+  type ContratElectroniqueMissionResume,
+} from '@/components/CarteContratElectroniqueMission';
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -57,10 +61,13 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import {
   ajouterRepliMissionPonctuelle,
   creneauxPrevisionnels,
+  evaluerClotureAdminMission,
   evaluerTerminaisonMission,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
 import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
+import { LITIGE_ADMIN_TYPES, type LitigeAdminType } from '@/lib/litigeAdminUi';
+import { estResolu, statutBadgeV2 } from '@/lib/statutLitige';
 
 type DetailMissionRole = 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 
@@ -424,6 +431,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [terminating, setTerminating] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [alerteRequalif, setAlerteRequalif] = useState<any>(null);
+  const [contratElectronique, setContratElectronique] = useState<ContratElectroniqueMissionResume | null>(null);
 
   // IA Matching
   const [recommandations, setRecommandations] = useState<any[]>([]);
@@ -442,6 +450,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [showLitigeForm, setShowLitigeForm] = useState(false);
   const [litigeMotif, setLitigeMotif] = useState('');
   const [litigeCreating, setLitigeCreating] = useState(false);
+  const [adminLitigeOuvert, setAdminLitigeOuvert] = useState(false);
+  const [adminLitigeType, setAdminLitigeType] = useState<LitigeAdminType>('DESACCORD_HEURES_POINTAGE');
+  const [adminLitigeMotif, setAdminLitigeMotif] = useState('');
+  const [adminLitigeJustification, setAdminLitigeJustification] = useState('');
 
   const ouvrirLitige = async () => {
     if (litigeMotif.trim().length < 10) {
@@ -460,6 +472,32 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
     toast.success('Litige ouvert avec succès');
     refresh();
+  };
+
+  const ouvrirLitigeAdmin = async () => {
+    if (!id || !isAdmin) return;
+    if (adminLitigeMotif.trim().length < 10 || adminLitigeJustification.trim().length < 10) {
+      toast.error('Le motif et la justification doivent contenir au moins 10 caractères.');
+      return;
+    }
+    setLitigeCreating(true);
+    const { data, error } = await supabase.rpc('fn_admin_creer_litige_force' as any, {
+      p_mission_id: id,
+      p_type_litige: adminLitigeType,
+      p_motif: adminLitigeMotif.trim(),
+      p_raison_bypass: adminLitigeJustification.trim(),
+    });
+    setLitigeCreating(false);
+    const resultat = data as any;
+    if (error || resultat?.error || !resultat?.success) {
+      toast.error(resultat?.error || error?.message || 'Impossible de créer le dossier d’intervention.');
+      return;
+    }
+    toast.success('Dossier d’intervention créé et journalisé.');
+    setAdminLitigeOuvert(false);
+    setAdminLitigeMotif('');
+    setAdminLitigeJustification('');
+    navigate(`/admin/litiges?litige=${encodeURIComponent(resultat.litige_id)}`);
   };
 
   // Stripe Connect
@@ -533,7 +571,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   useEffect(() => {
     if (!id) return;
     const load = async () => {
-      const [missionResult, creneauxResult, missionTvaResult] = await Promise.all([
+      const [missionResult, creneauxResult, missionTvaResult, contratElectroniqueResult] = await Promise.all([
         supabase
           .from('missions')
           .select(`
@@ -569,6 +607,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
           .eq('id', id)
           .maybeSingle(),
+        supabase
+          .from('contrats_mission')
+          .select('id, numero_contrat, statut, signature_soignant, signature_etablissement')
+          .eq('mission_id', id)
+          .in('statut', ['BROUILLON', 'EN_ATTENTE_SIGNATURES', 'SIGNE_SOIGNANT', 'SIGNE_ETABLISSEMENT', 'SIGNE_COMPLET'])
+          .order('cree_le', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       const m = missionResult.data;
@@ -586,6 +632,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       if (m && missionTvaResult.data) Object.assign(m as any, missionTvaResult.data);
 
       setErreurMission(null);
+      if (contratElectroniqueResult.error) {
+        logger.warn('[DetailMission] Contrat électronique indisponible', contratElectroniqueResult.error);
+      }
+      setContratElectronique((contratElectroniqueResult.data as ContratElectroniqueMissionResume | null) || null);
 
       setErreurPlanning(creneauxResult.error ? extraireMessageErreur(creneauxResult.error) : null);
       const missionAvecPlanning = m
@@ -620,8 +670,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         setNbCandidatures(count || 0);
       }
 
-      // Check if litige exists for this mission
-      if (m && ['TERMINEE', 'LITIGE', 'EN_COURS'].includes((m as any).statut)) {
+      // Check if a dispute exists for this mission. The administrator needs
+      // this control on every assigned mission, including before completion.
+      setLitigeExistant(null);
+      if (m && (m as any).soignant_assigne_id) {
         const { data: litigeData } = await supabase.rpc('fn_litige_pour_mission' as any, { p_mission_id: id });
         if (litigeData && (litigeData as any).exists !== false && (litigeData as any).litige_id) {
           setLitigeExistant(litigeData);
@@ -772,7 +824,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     presences: m.presences ?? [],
     maintenant: new Date(maintenantMs),
   });
-  const peutTerminer = terminaison.peutTerminer;
+  const statutLitigeMission = String(litigeExistant?.statut || '').toUpperCase();
+  const litigeClos = Boolean(statutLitigeMission && estResolu(statutLitigeMission));
+  const badgeLitigeMission = statutLitigeMission ? statutBadgeV2(statutLitigeMission) : null;
+  const litigeActif = Boolean(litigeExistant?.litige_id && !litigeClos);
+  const clotureAdmin = evaluerClotureAdminMission({
+    terminaison,
+    estAdmin: isAdmin,
+    litigeActif,
+  });
+  const peutTerminer = isAdmin ? clotureAdmin.peutTerminer : terminaison.peutTerminer;
+  const clotureAnticipeeAdmin = isAdmin && clotureAdmin.clotureAnticipee;
   const finReferenceTerminaison = terminaison.finReference;
   const estPeriodeEtendue = fin.getTime() - debut.getTime() > 24 * 60 * 60_000 || creneauxComplets.length > 1;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
@@ -825,9 +887,127 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       </button>
 
       {isAdmin && (
-        <div className="mb-4 rounded-xl border border-info/30 bg-info/5 px-4 py-3 text-sm text-foreground" role="status">
-          Consultation administrateur en lecture seule. Les actions métier restent réservées à l’établissement propriétaire.
-        </div>
+        <section
+          className="mb-5 rounded-2xl border border-primary/30 bg-primary/5 p-4"
+          aria-labelledby="admin-mission-control-title"
+          data-testid="admin-mission-control"
+        >
+          <div className="flex items-start gap-3">
+            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 id="admin-mission-control-title" className="font-semibold text-foreground">
+                Centre de contrôle admin
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Vous pouvez intervenir sans dépendre du compte établissement. Chaque correction sensible est confirmée et journalisée.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Link
+              to={`/admin/presences/mission/${m.id}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:border-primary/40 hover:bg-primary/5"
+            >
+              <Clock className="h-4 w-4 text-primary" aria-hidden="true" /> Présences & pauses
+            </Link>
+            {litigeActif ? (
+              <Link
+                to={`/admin/litiges?litige=${encodeURIComponent(litigeExistant.litige_id)}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-warning/40 bg-warning/5 px-3 py-2 text-sm font-semibold text-foreground hover:bg-warning/10"
+              >
+                <Scale className="h-4 w-4 text-warning" aria-hidden="true" /> Traiter le litige
+              </Link>
+            ) : m.soignant_assigne_id ? (
+              <button
+                type="button"
+                onClick={() => setAdminLitigeOuvert((value) => !value)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-warning/40 bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-warning/5"
+                aria-expanded={adminLitigeOuvert}
+                aria-controls="admin-litige-form"
+              >
+                <Scale className="h-4 w-4 text-warning" aria-hidden="true" />
+                {litigeExistant?.litige_id ? 'Nouvelle intervention' : 'Ouvrir une intervention'}
+              </button>
+            ) : (
+              <span className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+                Litige disponible après attribution
+              </span>
+            )}
+            <Link
+              to={`/admin/facturation?q=${encodeURIComponent((m.etablissements as any)?.nom || '')}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:border-primary/40 hover:bg-primary/5"
+            >
+              <FileText className="h-4 w-4 text-primary" aria-hidden="true" /> Facturation
+            </Link>
+            <Link
+              to="/admin/finances"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:border-primary/40 hover:bg-primary/5"
+            >
+              <Banknote className="h-4 w-4 text-primary" aria-hidden="true" /> Paiements & commission
+            </Link>
+          </div>
+          {litigeExistant?.litige_id && !litigeActif && (
+            <div className="mt-3 flex flex-col gap-2 rounded-xl border border-success/30 bg-success/5 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-foreground">Le dernier litige est clôturé. Une nouvelle intervention crée un dossier séparé et traçable.</p>
+              <Link
+                to={`/admin/litiges?litige=${encodeURIComponent(litigeExistant.litige_id)}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                Consulter la décision
+              </Link>
+            </div>
+          )}
+          {adminLitigeOuvert && !litigeActif && (
+            <div id="admin-litige-form" className="mt-3 space-y-3 rounded-xl border border-warning/30 bg-card p-3">
+              <p className="text-sm font-semibold text-foreground">Créer un dossier d’intervention</p>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-foreground">Sujet *</span>
+                <select
+                  className="input-base min-h-11"
+                  value={adminLitigeType}
+                  onChange={(event) => setAdminLitigeType(event.target.value as LitigeAdminType)}
+                  disabled={litigeCreating}
+                >
+                  {LITIGE_ADMIN_TYPES.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-foreground">Problème constaté *</span>
+                <Textarea
+                  value={adminLitigeMotif}
+                  onChange={(event) => setAdminLitigeMotif(event.target.value)}
+                  placeholder="Décrivez les heures, le paiement ou le contrat à régulariser…"
+                  rows={3}
+                  disabled={litigeCreating}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-foreground">Raison de l’intervention admin * (audit)</span>
+                <Textarea
+                  value={adminLitigeJustification}
+                  onChange={(event) => setAdminLitigeJustification(event.target.value)}
+                  placeholder="Expliquez pourquoi l’intervention directe de Jolene est nécessaire…"
+                  rows={2}
+                  disabled={litigeCreating}
+                />
+              </label>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <BoutonY2K variant="secondary" onClick={() => setAdminLitigeOuvert(false)} disabled={litigeCreating}>
+                  Annuler
+                </BoutonY2K>
+                <BoutonY2K
+                  onClick={ouvrirLitigeAdmin}
+                  loading={litigeCreating}
+                  disabled={litigeCreating || adminLitigeMotif.trim().length < 10 || adminLitigeJustification.trim().length < 10}
+                >
+                  Créer et traiter
+                </BoutonY2K>
+              </div>
+            </div>
+          )}
+        </section>
       )}
 
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
@@ -842,7 +1022,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       )}
 
       {/* Candidatures en haut si mode CANDIDATURE et OUVERTE */}
-      {!isAdmin && m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
+      {m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
         <div id="bloc-candidatures" className="mb-4">
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
@@ -865,7 +1045,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
-          {!isAdmin && m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
+          {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="details">
@@ -877,7 +1057,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   <BadgeStatut statut={m.statut} />
                   {m.statut === 'EN_COURS' && (
                     <span className="text-xs text-muted-foreground">
-                      Période active · {creneauActuel ? 'créneau en cours' : 'hors créneau actuellement'}
+                      Période active · {creneauActuel ? 'créneau planifié en cours' : 'hors créneau planifié actuellement'}
                     </span>
                   )}
                   {m.est_urgente && (
@@ -954,7 +1134,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       <button
                         type="button"
                         onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
-                        className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                        className="min-h-11 min-w-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                        aria-label="Contacter le soignant"
                         title="Contacter le soignant"
                       >
                         <MessageCircle className="h-4 w-4" />
@@ -1015,17 +1196,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               </div>
 
               {/* Alert pool urgence button */}
-              {!isAdmin && m.statut === 'OUVERTE' && m.est_urgente && (
+              {m.statut === 'OUVERTE' && m.est_urgente && (
                 <AlerterPoolUrgence missionId={m.id} mission={m} user={user} afficherNotification={afficherNotification} />
               )}
 
               {/* Boost + garantie remplacement */}
-              {!isAdmin && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
+              {(m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
                 <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev) => ({ ...prev, ...patch }))} />
               )}
 
               {/* Rétrocession : déclaration des honoraires encaissés en fin de mission */}
-              {!isAdmin && m.statut === 'TERMINEE' && m.mode_remuneration === 'RETROCESSION' && (
+              {m.statut === 'TERMINEE' && m.mode_remuneration === 'RETROCESSION' && (
                 <div id="bloc-retro-declaration">
                   {user?.id && <DeclarationRetrocession mission={m} uploaderId={user.id} onMaj={(patch) => setMission((prev) => ({ ...prev, ...patch }))} />}
                 </div>
@@ -1033,7 +1214,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
 
               {/* Recherche remplaçant urgence si ABSENCE */}
-              {!isAdmin && m.statut === 'ABSENCE' && (
+              {m.statut === 'ABSENCE' && (
                 <div id="bloc-remplacant">
                 <RechercheRemplacantUrgence
                   missionId={m.id}
@@ -1097,10 +1278,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   )}
                 </div>
               )}
+              {m.soignant_assigne_id && (
+                <CarteContratElectroniqueMission
+                  contrat={contratElectronique}
+                  viewerRole={isAdmin ? 'ADMIN' : 'ETABLISSEMENT'}
+                  onOpen={(contratId) => navigate(isAdmin ? `/admin/contrats/${contratId}` : `/contrat/${contratId}`)}
+                />
+              )}
               {/* Contrat de travail SALARIE (Partie 2 onboarding) — étab uploade
                   le contrat CDD pour les missions salariées. Affichage seulement si
                   type_contrat_applique=SALARIE et soignant assigné. */}
-              {!isAdmin && m.soignant_assigne_id && (
+              {m.soignant_assigne_id && (
                 <div className="mb-4">
                   <BlocContratTravailMission
                     missionId={m.id}
@@ -1108,7 +1296,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     soignantAssigneId={m.soignant_assigne_id}
                     etablissementId={m.etablissement_id}
                     debutLe={m.debut_le}
-                    role="ETABLISSEMENT"
+                    role={isAdmin ? 'ADMIN' : 'ETABLISSEMENT'}
                   />
                 </div>
               )}
@@ -1119,7 +1307,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <FactureHonorairesCard missionId={m.id} viewerRole={isAdmin ? 'ADMIN' : 'ETAB'} />
               )}
               {/* Workflow paiement mission */}
-              {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+              {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                 <WorkflowPaiementMission
                   missionId={m.id}
                   soignantAssigneId={m.soignant_assigne_id}
@@ -1173,8 +1361,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {/* Litige section */}
               {!isAdmin && (m.statut === 'TERMINEE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
                 litigeExistant ? (
-                  <div className="card-base border-warning/30">
-                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2"><Scale className="h-4 w-4 text-warning shrink-0" aria-hidden="true" />Litige en cours</h2>
+                  <div className={`card-base ${litigeClos ? 'border-success/30 bg-success/5' : 'border-warning/30'}`}>
+                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <Scale className={`h-4 w-4 shrink-0 ${litigeClos ? 'text-success' : 'text-warning'}`} aria-hidden="true" />
+                      {litigeClos ? 'Décision du litige' : 'Litige en cours'}
+                    </h2>
+                    {badgeLitigeMission && (
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        Statut : <span className="font-medium text-foreground">{badgeLitigeMission.label}</span>
+                      </p>
+                    )}
                     <FilDiscussionLitige
                       litige={{
                         id: litigeExistant.litige_id,
@@ -1221,7 +1417,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   </div>
                 )
               )}
-              {!isAdmin && (m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
+              {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <AffichageCodeRotatifEtab missionId={m.id} />
               )}
               {isAdmin && (
@@ -1255,7 +1451,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </TabsContent>
 
 
-        {!isAdmin && m.statut === 'OUVERTE' && (
+        {m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">
             <div className="card-base">
               <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2"><Bot className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />Soignants recommandés par l'IA</h2>
@@ -1408,16 +1604,50 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       </div>
       )}
 
+      {isAdmin && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
+        <div className="mt-6 flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:justify-end" aria-label="Actions administrateur sur la mission">
+          {m.statut === 'EN_COURS' && (
+            <div className="flex flex-1 flex-col sm:flex-none">
+              <button
+                type="button"
+                onClick={() => setModalTerminer(true)}
+                disabled={!peutTerminer}
+                aria-describedby={!peutTerminer ? 'aide-terminer-mission-admin' : undefined}
+                className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-success px-4 py-2 text-sm font-semibold text-success-foreground transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                {clotureAnticipeeAdmin ? 'Clôturer après arbitrage' : 'Terminer la mission'}
+              </button>
+              {clotureAnticipeeAdmin ? (
+                <span className="mt-1 max-w-xs text-[10px] text-warning">
+                  Clôture anticipée exceptionnelle : le litige actif et l’intervention seront conservés dans l’audit.
+                </span>
+              ) : !peutTerminer && (
+                <span id="aide-terminer-mission-admin" className="mt-1 max-w-xs text-[10px] text-muted-foreground">
+                  Vérifiez d’abord les créneaux et les départs dans « Présences & pauses ».
+                </span>
+              )}
+            </div>
+          )}
+          {(m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
+            <button type="button" onClick={() => setModalAnnuler(true)} className="btn-danger min-h-11 text-sm sm:flex-none">
+              Annuler la mission
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
           Sprint 8 ter-G : lazy mount uniquement quand ouverte (code splitting) */}
-      {!isAdmin && modalAnnuler && (
+      {modalAnnuler && (
         <Suspense fallback={null}>
           <ModaleAnnulationMissionEtab
             ouvert={true}
             onFermer={() => setModalAnnuler(false)}
             onAnnulee={() => {
               setModalAnnuler(false);
-              navigate('/etablissement/missions');
+              if (isAdmin) refresh();
+              else navigate('/etablissement/missions');
             }}
             mission={{
               id: m.id,
@@ -1439,12 +1669,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         ouvert={modalDupliquer}
         onFermer={() => setModalDupliquer(false)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-        titre="Dupliquer cette mission ?"
-        message={`Une copie de « ${m.intitule} » sera créée avec le statut OUVERTE.`}
-        labelConfirmer="Dupliquer"
+        titre="Préremplir une nouvelle mission ?"
+        message={`Le formulaire reprendra les informations de « ${m.intitule} ». Vérifiez et remplacez les dates passées avant de publier : aucune mission ne sera créée automatiquement.`}
+        labelConfirmer="Ouvrir le formulaire"
       />}
 
-      {!isAdmin && <ModalConfirmation
+      <ModalConfirmation
         ouvert={modalTerminer}
         onFermer={() => setModalTerminer(false)}
         onConfirmer={async () => {
@@ -1470,10 +1700,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           }
           setTerminating(false);
         }}
-        titre="Terminer cette mission ?"
-        message="Êtes-vous sûr de vouloir terminer cette mission ? Le soignant sera notifié et la facture sera générée."
-        labelConfirmer="Terminer la mission"
-      />}
+        titre={clotureAnticipeeAdmin ? 'Clôturer cette mission après arbitrage ?' : 'Terminer cette mission ?'}
+        message={clotureAnticipeeAdmin
+          ? 'Cette clôture anticipée est exceptionnelle : les créneaux futurs ne seront pas travaillés, le litige actif restera traçable et la facturation sera générée avant sa régularisation.'
+          : 'Êtes-vous sûr de vouloir terminer cette mission ? Le soignant sera notifié et la facture sera générée.'}
+        labelConfirmer={clotureAnticipeeAdmin ? 'Confirmer la clôture admin' : 'Terminer la mission'}
+      />
 
       {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
         <Suspense fallback={null}>
@@ -1487,7 +1719,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </Suspense>
       )}
 
-      {!isAdmin && showConnectCheckout && connectClientSecret && connectCheckoutSessionId && (
+      {showConnectCheckout && connectClientSecret && connectCheckoutSessionId && (
         <StripeEmbeddedCheckout
           factureId={m.id}
           preparedClientSecret={connectClientSecret}

@@ -37,7 +37,7 @@ export function ErreurInscription({ erreur, onRetry, onSeConnecter }: Props) {
           <button
             type="button"
             onClick={onSeConnecter}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
           >
             <LogIn className="h-3.5 w-3.5" />
             Se connecter
@@ -48,17 +48,17 @@ export function ErreurInscription({ erreur, onRetry, onSeConnecter }: Props) {
           <button
             type="button"
             onClick={onRetry}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/5"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/5"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Réessayer
+            {erreur.code === 'EMAIL_CONFIRMATION_REQUIRED' ? 'J’ai confirmé mon email' : 'Réessayer'}
           </button>
         )}
 
         {erreur.action === 'support' && (
           <a
             href="mailto:support@jolene.app?subject=Problème inscription Jolene"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/5"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/5"
           >
             <LifeBuoy className="h-3.5 w-3.5" />
             Contacter le support
@@ -76,6 +76,8 @@ function titrePourCode(code: string): string {
     case 'EMAIL_RATE_LIMIT':
     case 'RATE_LIMITED':
       return 'Trop de tentatives';
+    case 'EMAIL_CONFIRMATION_REQUIRED':
+      return 'Confirmez votre email';
     case 'INVALID_EMAIL':
       return 'Email invalide';
     case 'WEAK_PASSWORD':

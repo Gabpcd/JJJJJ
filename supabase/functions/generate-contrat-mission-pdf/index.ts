@@ -20,6 +20,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
+const BUSINESS_TIME_ZONE = 'Europe/Paris';
+
 function escapeHtml(s: unknown): string {
   if (s == null) return '';
   return String(s)
@@ -35,8 +37,25 @@ function formatDate(value: any): string {
   try {
     const d = new Date(value);
     if (isNaN(d.getTime())) return '—';
-    return d.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+    return d.toLocaleString('fr-FR', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+      timeZone: BUSINESS_TIME_ZONE,
+    });
   } catch { return '—'; }
+}
+
+function formatDateOnly(value: any): string {
+  if (!value) return 'non renseignée';
+  try {
+    const iso = String(value).slice(0, 10);
+    const d = new Date(`${iso}T12:00:00Z`);
+    if (isNaN(d.getTime())) return 'non renseignée';
+    return d.toLocaleDateString('fr-FR', {
+      dateStyle: 'long',
+      timeZone: BUSINESS_TIME_ZONE,
+    });
+  } catch { return 'non renseignée'; }
 }
 
 function replaceTemplate(template: string, vars: Record<string, string>): string {
@@ -59,6 +78,9 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     .filter(Boolean).join(', ');
   const adresseSoignant = [soignant?.adresse_rue, soignant?.adresse_code_postal, soignant?.adresse_ville]
     .filter(Boolean).join(', ');
+  const periodeEssaiJours = Number(contrat?.periode_essai_jours || 1);
+  const periodeEssaiLibelle = `${periodeEssaiJours} ${periodeEssaiJours === 1 ? 'jour' : 'jours'}`;
+
   return {
     numero_contrat: escapeHtml(contrat?.numero_contrat),
     type_contrat: escapeHtml(contrat?.type_contrat),
@@ -69,7 +91,7 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     etablissement_ville: escapeHtml(etab?.adresse_ville),
     soignant_nom: escapeHtml(soignant?.nom),
     soignant_prenom: escapeHtml(soignant?.prenom),
-    soignant_date_naissance: escapeHtml(soignant?.date_naissance),
+    soignant_date_naissance: escapeHtml(formatDateOnly(soignant?.date_naissance)),
     soignant_adresse: escapeHtml(adresseSoignant),
     soignant_rpps: escapeHtml(soignant?.numero_rpps),
     soignant_siret: escapeHtml(soignant?.siret),
@@ -81,10 +103,13 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     motif_cdd: escapeHtml(contrat?.motif_cdd || 'remplacement / surcroît temporaire d\'activité'),
     convention_collective: escapeHtml(etab?.convention_collective || 'CCN applicable à l\'établissement'),
     periode_essai_jours: escapeHtml(contrat?.periode_essai_jours || '1'),
+    periode_essai_libelle: escapeHtml(periodeEssaiLibelle),
     taux_horaire: mission?.taux_horaire_base != null ? Number(mission.taux_horaire_base).toFixed(2) : '—',
     caisse_retraite: escapeHtml(etab?.caisse_retraite || 'AGIRC-ARRCO'),
     regime_prevoyance: escapeHtml(etab?.regime_prevoyance || 'celui de l\'employeur'),
-    date_signature: escapeHtml(new Date().toLocaleDateString('fr-FR')),
+    date_signature: escapeHtml(new Date().toLocaleDateString('fr-FR', {
+      timeZone: BUSINESS_TIME_ZONE,
+    })),
   };
 }
 

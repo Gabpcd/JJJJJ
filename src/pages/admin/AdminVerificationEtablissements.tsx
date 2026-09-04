@@ -20,6 +20,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +43,13 @@ import {
 type JsonObject = Record<string, unknown>;
 type Preuve = 'IDENTITE' | 'FONCTION';
 type Decision = 'APPROUVER' | 'REJETER';
+type ConfirmationAdmin = {
+  titre: string;
+  description: string;
+  libelleAction: string;
+  destructive?: boolean;
+  executer: () => Promise<void>;
+};
 
 interface Dirigeant extends JsonObject {
   nom?: string;
@@ -153,6 +170,7 @@ export default function AdminVerificationEtablissements() {
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [motifs, setMotifs] = useState<Record<string, string>>({});
   const [datesNaissance, setDatesNaissance] = useState<Record<string, string>>({});
+  const [confirmation, setConfirmation] = useState<ConfirmationAdmin | null>(null);
 
   const charger = useCallback(async () => {
     setLoading(true);
@@ -166,10 +184,10 @@ export default function AdminVerificationEtablissements() {
       if (error || !payload?.success) {
         throw error || new Error(payload?.error || 'Erreur de chargement');
       }
-      // La file est un outil opérationnel : les fixtures restent accessibles
-      // dans les vues admin dédiées, mais ne doivent pas masquer les dossiers
-      // réels ni faire diverger la page du KPI du cockpit.
-      setEtabs((payload.etablissements || []).filter(etab => etab.est_compte_test !== true));
+      // Les comptes de recette restent hors des KPI réels côté serveur, mais
+      // doivent être pilotables ici : ils sont soumis au même verrou de
+      // publication et seraient sinon impossibles à débloquer depuis l'admin.
+      setEtabs(payload.etablissements || []);
     } catch (error) {
       const message = error instanceof Error && error.message
         ? error.message
@@ -229,7 +247,6 @@ export default function AdminVerificationEtablissements() {
       afficherNotification({ type: 'erreur', message: 'Saisissez un motif de rejet (5 caractères minimum).' });
       return;
     }
-    if (!window.confirm(`${decision === 'APPROUVER' ? 'Approuver' : 'Rejeter'} cette preuve après revue visuelle ?`)) return;
     const sourceKey = preuve === 'IDENTITE'
       ? etab.representant_piece_s3_key
       : etab.justificatif_fonction_s3_key;
@@ -273,7 +290,6 @@ export default function AdminVerificationEtablissements() {
   };
 
   const finaliser = async (etab: EtabAVerifier) => {
-    if (!window.confirm(`Finaliser la vérification de « ${etab.nom || 'cet établissement'} » ?`)) return;
     const key = `${etab.id}:FINALISER`;
     setActionKey(key);
     try {
@@ -309,7 +325,6 @@ export default function AdminVerificationEtablissements() {
       });
       return;
     }
-    if (!window.confirm(`Rejeter entièrement le dossier de « ${etab.nom || 'cet établissement'} » ?`)) return;
     setActionKey(key);
     try {
       const { data, error } = await supabase.rpc(
@@ -337,6 +352,50 @@ export default function AdminVerificationEtablissements() {
     } finally {
       setActionKey(null);
     }
+  };
+
+  const demanderDecisionPreuve = (etab: EtabAVerifier, preuve: Preuve, decision: Decision) => {
+    const key = `${etab.id}:${preuve}`;
+    const motif = (motifs[key] || '').trim();
+    if (decision === 'REJETER' && motif.length < 5) {
+      afficherNotification({ type: 'erreur', message: 'Saisissez un motif de rejet (5 caractères minimum).' });
+      return;
+    }
+    const nomPreuve = preuve === 'IDENTITE' ? "la pièce d'identité" : 'le justificatif de fonction';
+    setConfirmation({
+      titre: decision === 'APPROUVER' ? 'Approuver cette preuve ?' : 'Rejeter cette preuve ?',
+      description: `${etab.nom || 'Établissement'} — ${nomPreuve}. La décision et votre note de revue seront journalisées.`,
+      libelleAction: decision === 'APPROUVER' ? 'Confirmer l’approbation' : 'Confirmer le rejet',
+      destructive: decision === 'REJETER',
+      executer: () => deciderPreuve(etab, preuve, decision),
+    });
+  };
+
+  const demanderFinalisation = (etab: EtabAVerifier) => {
+    setConfirmation({
+      titre: 'Autoriser la publication des missions ?',
+      description: `${etab.nom || 'Établissement'} — le serveur vérifiera de nouveau chaque contrôle avant d’activer le compte.`,
+      libelleAction: 'Finaliser et autoriser',
+      executer: () => finaliser(etab),
+    });
+  };
+
+  const demanderRejetDossier = (etab: EtabAVerifier) => {
+    const motif = (motifs[`${etab.id}:DOSSIER`] || '').trim();
+    if (motif.length < 10) {
+      afficherNotification({
+        type: 'erreur',
+        message: 'Saisissez un motif de rejet explicite (10 caractères minimum).',
+      });
+      return;
+    }
+    setConfirmation({
+      titre: 'Rejeter tout le dossier ?',
+      description: `${etab.nom || 'Établissement'} ne pourra plus publier de mission. Le motif saisi sera conservé dans l’audit.`,
+      libelleAction: 'Confirmer le rejet du dossier',
+      destructive: true,
+      executer: () => rejeterDossier(etab),
+    });
   };
 
   return (
@@ -493,8 +552,8 @@ export default function AdminVerificationEtablissements() {
                         <Textarea id={`motif-identite-${etab.id}`} value={motifs[`${etab.id}:IDENTITE`] || ''} onChange={event => setMotifs(current => ({ ...current, [`${etab.id}:IDENTITE`]: event.target.value }))} placeholder="Obligatoire pour rejeter" className="mt-1" />
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <BoutonY2K size="sm" className="min-h-[44px] gap-1" disabled={!etab.representant_piece_s3_key || actionKey !== null} onClick={() => void deciderPreuve(etab, 'IDENTITE', 'APPROUVER')}>{actionKey === `${etab.id}:IDENTITE` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approuver</BoutonY2K>
-                        <BoutonY2K size="sm" variant="destructive" className="min-h-[44px] gap-1" disabled={!etab.representant_piece_s3_key || actionKey !== null} onClick={() => void deciderPreuve(etab, 'IDENTITE', 'REJETER')}><XCircle className="h-4 w-4" /> Rejeter</BoutonY2K>
+                        <BoutonY2K size="sm" className="min-h-[44px] gap-1" disabled={!etab.representant_piece_s3_key || actionKey !== null} onClick={() => demanderDecisionPreuve(etab, 'IDENTITE', 'APPROUVER')}>{actionKey === `${etab.id}:IDENTITE` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approuver</BoutonY2K>
+                        <BoutonY2K size="sm" variant="destructive" className="min-h-[44px] gap-1" disabled={!etab.representant_piece_s3_key || actionKey !== null} onClick={() => demanderDecisionPreuve(etab, 'IDENTITE', 'REJETER')}><XCircle className="h-4 w-4" /> Rejeter</BoutonY2K>
                       </div>
                     </section>
 
@@ -519,8 +578,8 @@ export default function AdminVerificationEtablissements() {
                         <Textarea id={`motif-fonction-${etab.id}`} value={motifs[`${etab.id}:FONCTION`] || ''} onChange={event => setMotifs(current => ({ ...current, [`${etab.id}:FONCTION`]: event.target.value }))} placeholder="Obligatoire pour rejeter" className="mt-1" />
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <BoutonY2K size="sm" className="min-h-[44px] gap-1" disabled={!etab.justificatif_fonction_s3_key || !gateIdentite || actionKey !== null} onClick={() => void deciderPreuve(etab, 'FONCTION', 'APPROUVER')}>{actionKey === `${etab.id}:FONCTION` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approuver</BoutonY2K>
-                        <BoutonY2K size="sm" variant="destructive" className="min-h-[44px] gap-1" disabled={!etab.justificatif_fonction_s3_key || actionKey !== null} onClick={() => void deciderPreuve(etab, 'FONCTION', 'REJETER')}><XCircle className="h-4 w-4" /> Rejeter</BoutonY2K>
+                        <BoutonY2K size="sm" className="min-h-[44px] gap-1" disabled={!etab.justificatif_fonction_s3_key || !gateIdentite || actionKey !== null} onClick={() => demanderDecisionPreuve(etab, 'FONCTION', 'APPROUVER')}>{actionKey === `${etab.id}:FONCTION` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approuver</BoutonY2K>
+                        <BoutonY2K size="sm" variant="destructive" className="min-h-[44px] gap-1" disabled={!etab.justificatif_fonction_s3_key || actionKey !== null} onClick={() => demanderDecisionPreuve(etab, 'FONCTION', 'REJETER')}><XCircle className="h-4 w-4" /> Rejeter</BoutonY2K>
                       </div>
                     </section>
                   </div>
@@ -533,7 +592,7 @@ export default function AdminVerificationEtablissements() {
                         Contrôles manquants : {gatesManquantes.join(', ')}.
                       </p>
                     )}
-                    <BoutonY2K className="mt-3 min-h-[44px] gap-2" disabled={!peutFinaliser || actionKey !== null} onClick={() => void finaliser(etab)}>{actionKey === `${etab.id}:FINALISER` ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Finaliser le dossier</BoutonY2K>
+                    <BoutonY2K className="mt-3 min-h-[44px] gap-2" disabled={!peutFinaliser || actionKey !== null} onClick={() => demanderFinalisation(etab)}>{actionKey === `${etab.id}:FINALISER` ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Finaliser le dossier</BoutonY2K>
                     <div className="mt-4 border-t border-border pt-3">
                       <Label htmlFor={`motif-dossier-${etab.id}`}>Motif de rejet global du dossier</Label>
                       <Textarea
@@ -550,7 +609,7 @@ export default function AdminVerificationEtablissements() {
                         className="mt-2 min-h-[44px] gap-2"
                         variant="destructive"
                         disabled={actionKey !== null}
-                        onClick={() => void rejeterDossier(etab)}
+                        onClick={() => demanderRejetDossier(etab)}
                       >
                         {actionKey === `${etab.id}:DOSSIER`
                           ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -564,6 +623,33 @@ export default function AdminVerificationEtablissements() {
             })}
           </div>
         )}
+        <AlertDialog
+          open={confirmation !== null}
+          onOpenChange={(open) => {
+            if (!open && actionKey === null) setConfirmation(null);
+          }}
+        >
+          <AlertDialogContent className="w-[calc(100%-2rem)] rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmation?.titre}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmation?.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={actionKey !== null}>Revenir au dossier</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!confirmation || actionKey !== null}
+                className={confirmation?.destructive ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+                onClick={() => {
+                  const action = confirmation?.executer;
+                  setConfirmation(null);
+                  if (action) void action();
+                }}
+              >
+                {confirmation?.libelleAction}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </LayoutAdmin>
   );

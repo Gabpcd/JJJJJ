@@ -40,15 +40,7 @@ import {
   type DocumentModerationProfile,
   type DocumentValidationPayload,
 } from '@/components/admin/DocumentModerationReview';
-
-// Libellés français affichés à l'écran — les valeurs envoyées aux RPCs restent inchangées.
-const LABELS_TYPE_LITIGE_FORCE: Record<string, string> = {
-  PAIEMENT: 'Paiement',
-  ABSENCE: 'Absence',
-  QUALITE: 'Qualité',
-  CONTRAT: 'Contrat',
-  AUTRE: 'Autre',
-};
+import { LITIGE_ADMIN_TYPES, type LitigeAdminType } from '@/lib/litigeAdminUi';
 
 const LABELS_PERIMETRE_GEL: Record<string, string> = {
   MISSION_ENTIERE: 'Mission entière (toutes les factures de la mission)',
@@ -113,7 +105,7 @@ export default function AdminModeration() {
   // Task 7 — créer litige (bypass)
   const [showCreerLitige, setShowCreerLitige] = useState(false);
   const [creerLitigeMissionId, setCreerLitigeMissionId] = useState('');
-  const [creerLitigeType, setCreerLitigeType] = useState('PAIEMENT');
+  const [creerLitigeType, setCreerLitigeType] = useState<LitigeAdminType>('DESACCORD_HEURES_POINTAGE');
   const [creerLitigeMotif, setCreerLitigeMotif] = useState('');
   const [creerLitigeRaison, setCreerLitigeRaison] = useState('');
   const [creerLitigeLoading, setCreerLitigeLoading] = useState(false);
@@ -826,9 +818,9 @@ export default function AdminModeration() {
             </label>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">Type de litige *</span>
-              <select value={creerLitigeType} onChange={(e) => setCreerLitigeType(e.target.value)} className="input-base" disabled={creerLitigeLoading}>
-                {Object.entries(LABELS_TYPE_LITIGE_FORCE).map(([valeur, libelle]) => (
-                  <option key={valeur} value={valeur}>{libelle}</option>
+              <select value={creerLitigeType} onChange={(e) => setCreerLitigeType(e.target.value as LitigeAdminType)} className="input-base" disabled={creerLitigeLoading}>
+                {LITIGE_ADMIN_TYPES.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
                 ))}
               </select>
             </label>

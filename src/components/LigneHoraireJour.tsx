@@ -49,7 +49,7 @@ export function LigneHoraireJour({
             aria-label={`Début du créneau ${index + 1} du ${date}`}
             type="time"
             value={creneau.heureDebut}
-            onChange={(event) => onChange({ ...creneau, heureDebut: event.target.value })}
+            onInput={(event) => onChange({ ...creneau, heureDebut: event.currentTarget.value })}
             className="input-base mt-1 w-full text-center"
           />
         </label>
@@ -62,7 +62,7 @@ export function LigneHoraireJour({
             aria-label={`Fin du créneau ${index + 1} du ${date}`}
             type="time"
             value={creneau.heureFin}
-            onChange={(event) => onChange({ ...creneau, heureFin: event.target.value })}
+            onInput={(event) => onChange({ ...creneau, heureFin: event.currentTarget.value })}
             className="input-base mt-1 w-full text-center"
           />
         </label>

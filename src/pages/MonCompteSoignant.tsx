@@ -104,6 +104,12 @@ export default function MonCompteSoignant() {
       ],
     },
     {
+      titre: 'Suivi',
+      lignes: [
+        { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
+      ],
+    },
+    {
       titre: 'Réglages',
       lignes: [
         { icone: Bell, label: 'Notifications', route: '/soignant/parametres/notifications' },

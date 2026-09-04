@@ -5,6 +5,7 @@
 export type CodeErreurInscription =
   | 'USER_ALREADY_REGISTERED'
   | 'EMAIL_RATE_LIMIT'
+  | 'EMAIL_CONFIRMATION_REQUIRED'
   | 'INVALID_EMAIL'
   | 'WEAK_PASSWORD'
   | 'RPPS_FORMAT_INVALID'
@@ -175,6 +176,7 @@ export function mapperErreurInscription(err: any): ErreurInscriptionMappee {
 
 const CODES_CONNUS = new Set<string>([
   'USER_ALREADY_REGISTERED', 'EMAIL_RATE_LIMIT', 'INVALID_EMAIL', 'WEAK_PASSWORD',
+  'EMAIL_CONFIRMATION_REQUIRED',
   'RPPS_FORMAT_INVALID', 'RPPS_NOT_FOUND', 'RPPS_TRAITS_MISMATCH', 'RPPS_API_UNAVAILABLE',
   'RPPS_ALREADY_REGISTERED', 'RPPS_PROFESSION_MISMATCH',
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
@@ -203,6 +205,7 @@ function estCodeConnu(code: string): boolean {
  */
 export const CODES_REFUS_ATTENDU_INSCRIPTION = new Set<string>([
   'USER_ALREADY_REGISTERED', 'EMAIL_RATE_LIMIT', 'INVALID_EMAIL', 'WEAK_PASSWORD',
+  'EMAIL_CONFIRMATION_REQUIRED',
   'RPPS_FORMAT_INVALID', 'RPPS_NOT_FOUND', 'RPPS_TRAITS_MISMATCH',
   'RPPS_ALREADY_REGISTERED', 'RPPS_PROFESSION_MISMATCH',
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
@@ -266,6 +269,12 @@ function enrichirParCode(
       return {
         code,
         message: messageBackend || 'Trop de tentatives récentes. Veuillez réessayer dans quelques minutes.',
+        action: 'retry',
+      };
+    case 'EMAIL_CONFIRMATION_REQUIRED':
+      return {
+        code,
+        message: messageBackend || 'Confirmez votre adresse grâce à l’email reçu, revenez ici, puis reprenez votre inscription.',
         action: 'retry',
       };
     case 'INVALID_EMAIL':

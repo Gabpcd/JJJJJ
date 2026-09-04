@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Download, CheckCircle, Clock, AlertTriangle, Loader2 } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, AlertTriangle, Loader2, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -88,9 +88,16 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
     return () => { cancelled = true; };
   }, [missionId, reloadKey]);
 
-  const resume = useMemo(() => resumerFacturesMission(factures), [factures]);
-  const totalNetFacture = useMemo(() => totalFacturesComptabilisables(factures), [factures]);
-  const nbAvoirs = useMemo(() => factures.filter(factureEstAvoir).length, [factures]);
+  // ERREUR_GENERATION décrit une tentative technique, pas une pièce comptable.
+  // Elle ne doit ni gonfler le compteur ni être présentée comme une facture.
+  const facturesMetier = useMemo(
+    () => factures.filter((facture) => facture.statut !== 'ERREUR_GENERATION'),
+    [factures],
+  );
+  const nbTentativesEchouees = factures.length - facturesMetier.length;
+  const resume = useMemo(() => resumerFacturesMission(facturesMetier), [facturesMetier]);
+  const totalNetFacture = useMemo(() => totalFacturesComptabilisables(facturesMetier), [facturesMetier]);
+  const nbAvoirs = useMemo(() => facturesMetier.filter(factureEstAvoir).length, [facturesMetier]);
 
   if (loading) {
     return (
@@ -116,6 +123,22 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
     );
   }
   if (factures.length === 0) return null;
+
+  if (facturesMetier.length === 0) {
+    return (
+      <div className="card-base border-warning/30 bg-warning/5" role="status">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Document d’honoraires en attente</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              La génération technique n’a pas abouti. Aucun document ni montant n’est comptabilisé ; Jolene peut relancer l’émission sans créer de doublon.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownload = async (factureId: string) => {
     setTelechargementId(factureId);
@@ -146,7 +169,7 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
           <h3 className="font-semibold text-foreground text-sm">{titre}</h3>
         </div>
         <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-          {factures.length} document{factures.length > 1 ? 's' : ''}
+          {facturesMetier.length} document{facturesMetier.length > 1 ? 's' : ''}
         </span>
       </div>
 
@@ -175,6 +198,18 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
         </p>
       )}
 
+      {nbTentativesEchouees > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground" role="status">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            {nbTentativesEchouees === 1
+              ? '1 tentative technique de génération a échoué puis a été écartée.'
+              : `${nbTentativesEchouees} tentatives techniques de génération ont échoué puis ont été écartées.`}
+            {' '}Elles ne sont ni des factures ni comptées dans les montants.
+          </span>
+        </p>
+      )}
+
       {erreurTelechargement && (
         <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">
           {erreurTelechargement}
@@ -182,7 +217,7 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
       )}
 
       <div className="divide-y divide-border rounded-xl border border-border">
-        {factures.map((facture) => {
+        {facturesMetier.map((facture) => {
           const config = configStatut(facture.statut);
           const StatutIcon = config.Icon;
           const estAvoir = factureEstAvoir(facture);

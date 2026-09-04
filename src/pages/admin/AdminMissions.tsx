@@ -12,9 +12,9 @@ import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCarte
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { ExternalLink, Clock, CheckCircle, CheckCircle2, ChevronDown, History, PlayCircle, Send, ClipboardList, UserX, Building2, User, CalendarDays, FlaskConical } from 'lucide-react';
-import { estMissionTestAdmin, formatEuroAdmin } from '@/lib/adminPresentation';
+import { estMissionTestAdmin, formatDureeHeuresAdmin, formatEuroAdmin } from '@/lib/adminPresentation';
 
-type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
+type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE' | 'ABSENCE' | 'EXPIREE' | 'ANNULEE';
 
 const FILTRES: { cle: FiltreStatut; label: string; icone: React.ElementType; couleur: string }[] = [
   { cle: 'TOUTES', label: 'Toutes', icone: ClipboardList, couleur: 'bg-muted text-foreground' },
@@ -22,6 +22,9 @@ const FILTRES: { cle: FiltreStatut; label: string; icone: React.ElementType; cou
   { cle: 'ASSIGNEE', label: 'Assignées', icone: Send, couleur: 'bg-info/10 text-info' },
   { cle: 'EN_COURS', label: 'En cours', icone: PlayCircle, couleur: 'bg-primary/10 text-primary' },
   { cle: 'TERMINEE', label: 'Terminées', icone: CheckCircle, couleur: 'bg-success/10 text-success' },
+  { cle: 'ABSENCE', label: 'Absences', icone: UserX, couleur: 'bg-destructive/10 text-destructive' },
+  { cle: 'EXPIREE', label: 'Expirées', icone: History, couleur: 'bg-muted text-muted-foreground' },
+  { cle: 'ANNULEE', label: 'Annulées', icone: History, couleur: 'bg-muted text-muted-foreground' },
 ];
 
 const STATUT_LABEL: Record<string, string> = {
@@ -29,7 +32,11 @@ const STATUT_LABEL: Record<string, string> = {
   ASSIGNEE: 'Assignée',
   EN_COURS: 'En cours',
   TERMINEE: 'Terminée',
+  ABSENCE: 'Absence',
+  EXPIREE: 'Expirée',
   ANNULEE: 'Annulée',
+  ANNULEE_PAR_ETABLISSEMENT: 'Annulée par l’établissement',
+  ANNULEE_PAR_SOIGNANT: 'Annulée par le soignant',
 };
 
 const SELECT_MISSIONS = 'id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, est_asap, est_urgente, soignant_assigne_id, etablissement_id, etablissements(nom, est_compte_test), soignants(prenom, nom, est_compte_test)';
@@ -44,7 +51,11 @@ function statutBadge(statut: string) {
     ASSIGNEE: 'info',
     EN_COURS: 'info',
     TERMINEE: 'success',
+    ABSENCE: 'error',
+    EXPIREE: 'warning',
     ANNULEE: 'error',
+    ANNULEE_PAR_ETABLISSEMENT: 'error',
+    ANNULEE_PAR_SOIGNANT: 'error',
   };
   return <BadgeY2K variant={map[statut] ?? 'info'} size="sm">{STATUT_LABEL[statut] ?? statut}</BadgeY2K>;
 }
@@ -152,7 +163,9 @@ export default function AdminMissions() {
         .order('debut_le', { ascending: false })
         .limit(200);
 
-      if (filtre !== 'TOUTES') {
+      if (filtre === 'ANNULEE') {
+        queryListe = queryListe.in('statut', ['ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT']);
+      } else if (filtre !== 'TOUTES') {
         queryListe = queryListe.eq('statut', filtre);
       }
 
@@ -252,15 +265,15 @@ export default function AdminMissions() {
         return (
           <span className="text-muted-foreground whitespace-nowrap">
             {formatDate(m.debut_le)}
-            <span className="text-[10px] ml-1">{formatHeure(m.debut_le)}</span>
+            <span className="text-[10px]"> · {formatHeure(m.debut_le)}</span>
           </span>
         );
       case 'duree':
-        return <span className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>;
+        return <span className="text-muted-foreground">{formatDureeHeuresAdmin(m.duree_heures)}</span>;
       case 'taux':
         return <span className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</span>;
       case 'actions':
-        return m.soignant_assigne_id ? (
+        return m.statut === 'ABSENCE' && m.soignant_assigne_id ? (
           <div onClick={(e) => e.stopPropagation()}>
             <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
               Absence
@@ -296,10 +309,10 @@ export default function AdminMissions() {
           <p className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 shrink-0" /> {etabNom ?? '—'}</p>
           <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> {soignantNom || 'Non assigné'}</p>
           <p className="flex items-center gap-1.5 whitespace-nowrap">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" /> {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" /> {formatDate(m.debut_le)} · {formatHeure(m.debut_le)} · {formatDureeHeuresAdmin(m.duree_heures)} · {formatEur(m.taux_horaire_base)}
           </p>
         </div>
-        {m.soignant_assigne_id && (
+        {m.statut === 'ABSENCE' && m.soignant_assigne_id && (
           <div className="pt-1" onClick={(e) => e.stopPropagation()}>
             <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
               Absence

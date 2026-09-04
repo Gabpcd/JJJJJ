@@ -1,16 +1,14 @@
-import { LogoJolene } from '@/components/LogoJolene';
+import { LoaderCircle } from 'lucide-react';
 
 export function ChargementPage() {
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-background" role="status" aria-label="Chargement en cours">
-      <div className="flex flex-col items-center gap-3">
-        <LogoJolene
-          decoratif
-          className="flex-col gap-3"
-          imageClassName="h-10 w-10 animate-pulse"
-          nomClassName="text-lg text-rose"
-        />
-      </div>
+    <div
+      className="flex min-h-[50dvh] items-center justify-center bg-background py-12"
+      role="status"
+      aria-label="Chargement en cours"
+    >
+      <LoaderCircle className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+      <span className="sr-only">Chargement en cours</span>
     </div>
   );
 }

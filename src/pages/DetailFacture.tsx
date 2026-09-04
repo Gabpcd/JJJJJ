@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download, ChevronDown, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
@@ -16,6 +16,7 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
+import { normaliserLignesFactureCommission } from '@/lib/factureCommissionUi';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -53,14 +54,30 @@ function dureeEntre(debut: string, fin: string): string {
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
 }
 
+function formatTauxPourcent(taux: unknown): string {
+  const valeur = Number(taux ?? 0);
+  const pourcent = valeur > 0 && valeur <= 1 ? valeur * 100 : valeur;
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(pourcent);
+}
+
 /** Groupe les pointages par jour (gère les pauses entre shifts sur une même journée) */
-function PresencesJour({ presences }: { presences: any[] }) {
-  if (!presences || presences.length === 0) {
+function PresencesJour({ presences, segments }: { presences: any[]; segments?: any[] }) {
+  const pointages = segments && segments.length > 0
+    ? segments.map((segment) => ({
+        id: segment.id,
+        pointage_arrivee_le: segment.debut,
+        pointage_depart_le: segment.fin,
+        methode_pointage_arrivee: presences?.[0]?.methode_pointage_arrivee,
+        valide_par_etablissement: presences?.[0]?.valide_par_etablissement,
+      }))
+    : presences;
+
+  if (!pointages || pointages.length === 0) {
     return <p className="text-xs text-muted-foreground italic py-1">Aucun pointage enregistré</p>;
   }
 
   const parJour: Record<string, any[]> = {};
-  presences.forEach(p => {
+  pointages.forEach(p => {
     const jour = p.pointage_arrivee_le
       ? format(new Date(p.pointage_arrivee_le), 'yyyy-MM-dd')
       : 'inconnu';
@@ -70,36 +87,64 @@ function PresencesJour({ presences }: { presences: any[] }) {
 
   return (
     <div className="space-y-1">
-      {Object.entries(parJour).sort().map(([jour, pList]) => (
-        <div key={jour} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
-          <span className="font-medium text-foreground w-36 capitalize">
+      {Object.entries(parJour).sort().map(([jour, pList]) => {
+        const lignes = [...pList].sort((a, b) => (
+          new Date(a.pointage_arrivee_le || 0).getTime() - new Date(b.pointage_arrivee_le || 0).getTime()
+        ));
+        const minutesTravaillees = lignes.reduce((total, pointage) => (
+          pointage.pointage_arrivee_le && pointage.pointage_depart_le
+            ? total + Math.max(0, differenceInMinutes(new Date(pointage.pointage_depart_le), new Date(pointage.pointage_arrivee_le)))
+            : total
+        ), 0);
+        return (
+        <div key={jour} className="rounded-lg border border-border/60 bg-background/70 p-2.5 text-xs">
+          <span className="font-medium text-foreground capitalize">
             {jour !== 'inconnu' ? formatDateCourte(jour + 'T00:00:00') : '—'}
           </span>
-          {pList.map((p) => (
-            <span key={p.id} className="text-muted-foreground">
-              {p.pointage_arrivee_le ? formatHeure(p.pointage_arrivee_le) : '?'}
-              {' → '}
-              {p.pointage_depart_le ? formatHeure(p.pointage_depart_le) : '?'}
-              {p.pointage_arrivee_le && p.pointage_depart_le && (
-                <span className="text-foreground font-medium ml-1">
-                  ({dureeEntre(p.pointage_arrivee_le, p.pointage_depart_le)})
-                </span>
-              )}
-              {p.methode_pointage_arrivee && (
-                <span className="ml-1 text-[10px] text-muted-foreground/70">
-                  [{p.methode_pointage_arrivee}]
-                </span>
-              )}
-              {p.valide_par_etablissement && (
-                <CheckCircle className="inline h-3 w-3 ml-0.5 text-green-600" />
-              )}
-            </span>
-          ))}
-          {pList.length > 1 && (
-            <span className="text-[10px] text-primary font-medium">(pause entre shifts)</span>
+          <div className="mt-1.5 space-y-1.5">
+            {lignes.map((p, index) => {
+              const precedent = lignes[index - 1];
+              const pauseMinutes = index > 0 && precedent?.pointage_depart_le && p.pointage_arrivee_le
+                ? Math.max(0, differenceInMinutes(new Date(p.pointage_arrivee_le), new Date(precedent.pointage_depart_le)))
+                : 0;
+              return (
+                <React.Fragment key={p.id}>
+                  {index > 0 && pauseMinutes > 0 && (
+                    <p className="pl-2 text-[10px] font-medium text-primary">Interruption : {pauseMinutes} min</p>
+                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-muted-foreground">
+                    <span>Segment {index + 1}</span>
+                    <span className="tabular-nums">
+                      {p.pointage_arrivee_le ? formatHeure(p.pointage_arrivee_le) : '?'}
+                      {' → '}
+                      {p.pointage_depart_le ? formatHeure(p.pointage_depart_le) : '?'}
+                      {p.pointage_arrivee_le && p.pointage_depart_le && (
+                        <span className="text-foreground font-medium ml-1">
+                          ({dureeEntre(p.pointage_arrivee_le, p.pointage_depart_le)})
+                        </span>
+                      )}
+                      {p.methode_pointage_arrivee && (
+                        <span className="ml-1 text-[10px] text-muted-foreground/70">
+                          [{p.methode_pointage_arrivee}]
+                        </span>
+                      )}
+                      {p.valide_par_etablissement && (
+                        <CheckCircle className="inline h-3 w-3 ml-0.5 text-green-600" />
+                      )}
+                    </span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+          {lignes.length > 1 && (
+            <p className="mt-2 border-t border-border/60 pt-1.5 text-[10px] text-muted-foreground">
+              Total travaillé hors interruptions : <strong className="text-foreground">{Math.floor(minutesTravaillees / 60)}h{String(minutesTravaillees % 60).padStart(2, '0')}</strong>
+            </p>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -137,7 +182,7 @@ function MissionDetail({ mission }: { mission: any }) {
               {' → '}
               {mission.fin_le ? format(new Date(mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
             </span>
-            <span>{Number(mission.duree_heures ?? 0)}h</span>
+            <span>{Number(mission.duree_heures ?? 0)} h retenues</span>
           </div>
         </div>
         <div className="text-right shrink-0 ml-3">
@@ -148,19 +193,30 @@ function MissionDetail({ mission }: { mission: any }) {
 
       {open && (
         <div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
+          {mission.ecart_avec_mission_courante && (
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
+              Cette ligne reprend les montants figés sur la facture. La mission a été recalculée après son émission ; les anciennes valeurs de simulation ne sont pas utilisées ici.
+            </div>
+          )}
           {/* Décomposition financière */}
-          <div>
+          {!mission.ecart_avec_mission_courante && <div>
             <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
               💶 Décomposition financière
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux horaire</span>
-                <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
+                <span className="text-muted-foreground">Taux retenu</span>
+                <span className="font-medium">{formatEur(mission.taux_rist_plafonne ?? mission.taux_horaire_base ?? 0)}/h</span>
               </div>
+              {mission.rist_plafond_applique && mission.taux_rist_plafonne != null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taux demandé</span>
+                  <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
+                </div>
+              )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Durée</span>
-                <span className="font-medium">{Number(mission.duree_heures ?? 0)}h</span>
+                <span className="text-muted-foreground">Heures retenues</span>
+                <span className="font-medium">{Number(mission.duree_heures ?? 0)} h</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Brut soignant</span>
@@ -186,18 +242,18 @@ function MissionDetail({ mission }: { mission: any }) {
               )}
               {Number(mission.montant_ifm ?? 0) > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">IFM ({Number(mission.taux_ifm ?? 10)}%)</span>
+                  <span className="text-muted-foreground">IFM ({formatTauxPourcent(mission.taux_ifm)}%)</span>
                   <span className="font-medium">{formatEur(mission.montant_ifm)}</span>
                 </div>
               )}
               {Number(mission.montant_icp ?? 0) > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">ICP ({Number(mission.taux_icp ?? 10)}%)</span>
+                  <span className="text-muted-foreground">ICP ({formatTauxPourcent(mission.taux_icp)}%)</span>
                   <span className="font-medium">{formatEur(mission.montant_icp)}</span>
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Commission Jolene */}
           <div>
@@ -229,7 +285,7 @@ function MissionDetail({ mission }: { mission: any }) {
             <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
               ⏱️ Pointages détaillés
             </h4>
-            <PresencesJour presences={presences} />
+            <PresencesJour presences={presences} segments={mission.segments_effectifs} />
           </div>
         </div>
       )}
@@ -269,6 +325,10 @@ export default function DetailFacture() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const requeteCourante = useRef(0);
+  const missionsFacturees = useMemo(
+    () => facture ? normaliserLignesFactureCommission(missions, facture) : [],
+    [facture, missions],
+  );
 
   const charger = useCallback(async () => {
     if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
@@ -304,8 +364,32 @@ export default function DetailFacture() {
         throw new Error('Réponse facture incomplète');
       }
 
+      const missionIds = detail.missions.map((mission: any) => mission.id).filter(Boolean);
+      let segmentsParMission: Record<string, any[]> = {};
+      if (missionIds.length > 0) {
+        const { data: segments, error: segmentsError } = await supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, type_creneau, est_pause')
+          .in('mission_id', missionIds)
+          .eq('type_creneau', 'EFFECTIF')
+          .eq('est_pause', false)
+          .not('fin', 'is', null)
+          .order('debut', { ascending: true });
+        if (segmentsError) {
+          logger.warn('[DetailFacture] segments de pointage indisponibles', segmentsError.message);
+        } else {
+          segmentsParMission = (segments ?? []).reduce<Record<string, any[]>>((acc, segment) => {
+            (acc[segment.mission_id] ||= []).push(segment);
+            return acc;
+          }, {});
+        }
+      }
+
       setFacture(detail.facture);
-      setMissions(detail.missions);
+      setMissions(detail.missions.map((mission: any) => ({
+        ...mission,
+        segments_effectifs: segmentsParMission[mission.id] ?? [],
+      })));
       setEtab(resE.data);
     } catch (error) {
       if (numeroRequete !== requeteCourante.current) return;
@@ -411,7 +495,6 @@ export default function DetailFacture() {
     && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
     && !facture.est_secteur_public
     && !estSepaAutomatique;
-
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
@@ -489,17 +572,20 @@ export default function DetailFacture() {
 
         {/* Missions table */}
         <h2 className="text-sm font-bold text-foreground mb-3 uppercase tracking-wider">
-          📋 Missions facturées ({missions.length})
+          📋 Missions facturées ({missionsFacturees.length})
         </h2>
 
-        {missions.length === 0 ? (
+        {missionsFacturees.length === 0 ? (
           <p className="text-sm text-muted-foreground italic py-4">Aucune mission liée à cette facture.</p>
         ) : (
           <div className="mb-6">
+            <div className="mb-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              Les montants de commission affichés ci-dessous sont ceux du document émis. Toute correction ultérieure doit apparaître sur un avoir ou une facture complémentaire distincte.
+            </div>
             <p className="text-xs text-muted-foreground mb-3">
               Cliquez sur une mission pour voir le détail complet (heures, majorations nuit/dimanche/férié, IFM, ICP, commission, pointages).
             </p>
-            {missions.map((m: any) => (
+            {missionsFacturees.map((m: any) => (
               <MissionDetail key={m.id} mission={m} />
             ))}
           </div>

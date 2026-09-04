@@ -121,6 +121,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
+  const [blocageVerification, setBlocageVerification] = useState<string | null>(null);
   const [toleranceGpsMetres, setToleranceGpsMetres] = useState<number | null>(null);
   // Sprint 7 PR 1 — Modal récap mission (P1-4)
   const [modalRecapOuvert, setModalRecapOuvert] = useState(false);
@@ -178,6 +179,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         // Même source que fn_blocage_publication_etab : une signature active.
         // `contrat_valide` est l'ancien statut d'un PDF et ne débloque rien.
         setContratNonValide(!contratServiceEstSigne(data));
+        setBlocageVerification(
+          (data as any).statut_verification !== 'VERIFIE'
+            || (data as any).peut_publier_missions !== true
+            ? "La vérification de votre établissement n'est pas terminée. Complétez l'habilitation du représentant ou demandez une validation à l'administrateur Jolene."
+            : null,
+        );
       }
     });
   }, [user]);
@@ -378,8 +385,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         return;
       }
       if (rpcResult && !(rpcResult as any).success) {
-        const msg = (rpcResult as any).error || 'Erreur lors de la création de la mission.';
+        const code = String((rpcResult as any).error || (rpcResult as any).code || '');
+        const msg = code === 'ETABLISSEMENT_NON_VERIFIE' || code === 'VERIFICATION_INCOMPLETE'
+          ? ((rpcResult as any).message || "La vérification de votre établissement n'est pas terminée. Complétez l'habilitation du représentant ou demandez une validation à l'administrateur Jolene.")
+          : ((rpcResult as any).message || (rpcResult as any).error || 'Erreur lors de la création de la mission.');
         if (msg.includes('facture') || msg.includes('impayée')) setErreurFactureImpayee(true);
+        if (code === 'ETABLISSEMENT_NON_VERIFIE' || code === 'VERIFICATION_INCOMPLETE') {
+          setBlocageVerification(msg);
+          setModalRecapOuvert(false);
+        }
         afficherNotification({ type: 'erreur', message: msg });
         return;
       }
@@ -463,6 +477,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const canSubmit = !officineNonProposee
     && !siretInvalide
     && contratNonValide === false
+    && !blocageVerification
     && !erreurFactureImpayee
     && !!intitule
     && !!profession
@@ -512,6 +527,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span>Votre contrat de service n'est pas encore signé. <Link to="/etablissement/activer" className="text-primary hover:underline font-medium">Signer le contrat →</Link></span>
+        </div>
+      )}
+
+      {blocageVerification && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <span>
+            {blocageVerification}{' '}
+            <Link to="/etablissement/activer" className="font-medium text-primary hover:underline">
+              Terminer la vérification →
+            </Link>
+          </span>
         </div>
       )}
 
@@ -625,7 +652,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <div>
           <label className="text-sm font-medium text-foreground mb-2 block">Type de contrat proposé</label>
           <div className="space-y-2">
-            {modeExerciceLoading && profession && etablissementType ? (
+            {!profession ? (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                Choisissez d’abord la profession pour afficher les contrats réellement disponibles.
+              </div>
+            ) : modeExerciceLoading && etablissementType ? (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Vérification du mode d'exercice…
@@ -703,7 +734,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         </div>
 
-        {contratPreference !== 'SALARIE' && (
+        {profession
+          && etablissementType
+          && !modeExerciceLoading
+          && liberalSelectionnableMission
+          && contratPreference !== 'SALARIE' && (
           <fieldset className="rounded-xl border border-primary/20 bg-primary/5 p-4">
             <legend className="px-1 text-sm font-semibold text-foreground">
               Nature TVA prévue de la prestation libérale *

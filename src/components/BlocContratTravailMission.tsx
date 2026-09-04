@@ -12,7 +12,7 @@ interface Props {
   soignantAssigneId: string | null;
   etablissementId: string;
   debutLe: string | null;
-  role: 'ETABLISSEMENT' | 'SOIGNANT';
+  role: 'ETABLISSEMENT' | 'SOIGNANT' | 'ADMIN';
 }
 
 interface ContratTravail {
@@ -207,9 +207,9 @@ export function BlocContratTravailMission({
       <div className="rounded-xl border-2 border-warning/40 bg-warning/10 p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
         <div className="flex-1">
-          <p className="font-semibold text-foreground">Contrat de travail manquant</p>
+          <p className="font-semibold text-foreground">Copie PDF employeur à déposer</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Votre établissement n'a pas encore déposé votre contrat de travail. Vous pouvez le contacter pour le rappeler.
+            Votre contrat Jolene peut déjà être signé. L'établissement doit encore déposer la copie PDF employeur utilisée pour ses obligations sociales. Vous pouvez le contacter pour le lui rappeler.
           </p>
         </div>
       </div>
@@ -235,8 +235,10 @@ export function BlocContratTravailMission({
     );
   }
 
-  // Cas ETABLISSEMENT : aucun contrat → prompt upload
-  if (!contrat && role === 'ETABLISSEMENT') {
+  // L'admin plateforme peut déposer ou remplacer le contrat au nom de
+  // l'établissement : l'opération reste attribuée à son propre compte dans
+  // l'audit serveur.
+  if (!contrat && role !== 'SOIGNANT') {
     return (
       <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
         <div className="flex items-start gap-3">
@@ -244,7 +246,10 @@ export function BlocContratTravailMission({
           <div className="flex-1">
             <p className="font-semibold text-foreground">Contrat de travail à déposer</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Vous êtes employeur du soignant pour cette mission salariée. Déposez le contrat de travail CDD signé par les deux parties au plus tard le premier jour de mission. Format PDF, max 10 Mo.
+              {role === 'ADMIN'
+                ? "Intervenez pour l’établissement : déposez le contrat de travail CDD signé par les deux parties. L’action sera journalisée au nom de l’admin."
+                : "Vous êtes employeur du soignant pour cette mission salariée. Déposez le contrat de travail CDD signé par les deux parties au plus tard le premier jour de mission."}
+              {' '}Format PDF, max 10 Mo.
             </p>
           </div>
         </div>
@@ -274,8 +279,8 @@ export function BlocContratTravailMission({
     );
   }
 
-  // Cas ETABLISSEMENT avec contrat uploadé
-  if (contrat && role === 'ETABLISSEMENT') {
+  // Cas établissement ou admin avec contrat uploadé
+  if (contrat && role !== 'SOIGNANT') {
     return (
       <div className="rounded-xl border border-success/30 bg-success/5 p-4 space-y-3">
         <div className="flex items-center gap-2">

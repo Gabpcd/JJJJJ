@@ -38,6 +38,16 @@ import {
   type EnFaveurDe,
   type LitigeEnrichi,
 } from './types';
+import {
+  decrireAccordAccepte,
+  estMissionSalariee,
+  formatHeuresArbitrage,
+  heuresContractuellesMission,
+  LABELS_TYPE_ACCORD,
+  tauxContractuelMission,
+  tauxEffectifCalculMission,
+  TYPES_ACCORD_VALIDATION_DEDIEE,
+} from '@/lib/litigeResolutionUi';
 
 type Props = {
   litige: LitigeEnrichi | null;
@@ -50,13 +60,21 @@ type ResolutionResult = {
   success?: boolean;
   error?: string;
   litige_id?: string;
-  action_financiere?: ActionFinanciere | 'RECTIFICATION_DESCRIPTIVE';
+  action_financiere?: ActionFinanciere | 'RECTIFICATION_DESCRIPTIVE' | 'RECTIFICATION_PAIE_SALARIEE';
   nouvelle_facture_id?: string | null;
   avoir_id?: string | null;
   rectification_id?: string | null;
   mode_remboursement?: string | null;
   delta_ttc?: number | null;
   regularisation_sociale_requise?: boolean;
+  regularisation_paiement_requise?: boolean;
+  ecart_paiement?: number | null;
+  salaire_brut?: number | null;
+  net_avant_impot?: number | null;
+  bulletin_annule_id?: string | null;
+  bulletin_rectificatif_id?: string | null;
+  document_commission_id?: string | null;
+  document_commission_type?: string | null;
   regen_pdf_request_ids?: string[];
   [key: string]: unknown;
 };
@@ -84,14 +102,6 @@ type FactureCible = {
   quantite_heures_snapshot: number | null;
   taux_horaire_snapshot: number | null;
   nature_correction: string | null;
-};
-
-const LABELS_TYPE_ACCORD: Record<string, string> = {
-  MODIFICATION_HORAIRES: 'Correction des horaires',
-  MODIFICATION_MONTANT: 'Ajustement du montant total',
-  MIXTE: 'Correction des horaires et du montant',
-  ANNULATION_TOTALE: 'Annulation totale',
-  COMPENSATION_PARTIELLE: 'Compensation partielle',
 };
 
 function formatDateAccord(value: unknown): string | null {
@@ -187,13 +197,17 @@ export function LitigeResolutionModal({
     ? Number(soldeCorrection.montant_ttc)
     : null;
   const aDejaDesCorrections = soldeCorrection?.a_des_corrections === true;
+  const missionSalariee = estMissionSalariee(litige);
+  const tauxContractuel = tauxContractuelMission(litige);
+  const tauxMission = tauxEffectifCalculMission(litige);
+  const heuresMission = heuresContractuellesMission(litige);
   const heuresEffectives = heuresNum
     ?? (tauxNum != null && !aDejaDesCorrections
-      ? factureCible?.quantite_heures_snapshot ?? null
+      ? factureCible?.quantite_heures_snapshot ?? heuresMission
       : null);
   const tauxEffectif = tauxNum
     ?? (heuresNum != null && !aDejaDesCorrections
-      ? factureCible?.taux_horaire_snapshot ?? null
+      ? factureCible?.taux_horaire_snapshot ?? tauxMission
       : null);
   const montantProjete = heuresEffectives != null && tauxEffectif != null
     ? Number((heuresEffectives * tauxEffectif * (1 + Number(factureCible?.taux_tva ?? 0) / 100)).toFixed(2))
@@ -206,25 +220,54 @@ export function LitigeResolutionModal({
   const factureContextInvalide = Boolean(
     litige?.facture_id && !factureLoading && !factureCible,
   );
+  const accord = litige?.statut === 'REVUE_ADMIN'
+    ? litige.payload_modifications
+    : null;
+  const accordModifications = accord?.modifications ?? {};
+  const accordValidationDediee = Boolean(
+    accord?.type && TYPES_ACCORD_VALIDATION_DEDIEE.has(accord.type),
+  );
 
   const preview = useMemo(() => {
     if (!litige) return null;
     const messages: string[] = [];
     if (heuresNum != null && !Number.isNaN(heuresNum)) {
       messages.push(
-        `Heures → ${heuresNum} h (recalcul montant facture en fonction).`,
+        missionSalariee
+          ? `Heures retenues → ${formatHeuresArbitrage(heuresNum)} (recalcul de la paie simulée et de la commission).`
+          : `Heures → ${heuresNum} h (recalcul du montant de la facture).`,
       );
+      if (tauxNum == null && factureCible == null && tauxMission != null) {
+        messages.push(`Taux contractuel figé repris automatiquement → ${tauxMission} €/h.`);
+      }
     }
     if (tauxNum != null && !Number.isNaN(tauxNum)) {
       messages.push(`Taux horaire → ${tauxNum} €/h.`);
     }
-    if (messages.length === 0) {
+    if (messages.length === 0 && accord) {
+      messages.push(...decrireAccordAccepte(accord));
+    } else if (messages.length === 0) {
       messages.push('Aucun ajustement financier — clôture litige uniquement.');
+    }
+    if (accordValidationDediee) {
+      messages.push('Cet accord doit être exécuté depuis l’action dédiée « Valider l’accord et exécuter ».');
+      return messages;
     }
     if (factureCible && montantProjete != null && deltaProjete != null) {
       messages.push(
         `Facture ${factureCible.numero_facture} : solde corrigé ${Number(soldeActuelTtc).toFixed(2)} € → ${montantProjete.toFixed(2)} € TTC (écart ${deltaProjete >= 0 ? '+' : ''}${deltaProjete.toFixed(2)} €).`,
       );
+    }
+    if (missionSalariee) {
+      if (montantProjete != null) {
+        messages.push(
+          `Base brute avant IFM/ICP et cotisations → ${montantProjete.toFixed(2)} € (${formatHeuresArbitrage(heuresEffectives)} × ${tauxEffectif} €/h).`,
+        );
+      }
+      messages.push(
+        'Action financière : rectification salariée automatique → l’ancienne simulation est annulée, une nouvelle simulation liée au litige est émise, puis la commission est recalculée. Un paiement déjà déclaré n’est jamais réécrit silencieusement.',
+      );
+      return messages;
     }
     switch (actionFinanciere) {
       case 'AUTO':
@@ -254,13 +297,9 @@ export function LitigeResolutionModal({
         break;
     }
     return messages;
-  }, [litige, heuresNum, tauxNum, actionFinanciere, factureCible, montantProjete, deltaProjete, soldeActuelTtc]);
+  }, [litige, heuresNum, tauxNum, accord, accordValidationDediee, actionFinanciere, factureCible, montantProjete, deltaProjete, soldeActuelTtc, tauxMission, missionSalariee, heuresEffectives, tauxEffectif]);
 
   const disclaimerURSSAF = heuresNum != null && heuresNum > 0;
-  const accord = litige?.statut === 'REVUE_ADMIN'
-    ? litige.payload_modifications
-    : null;
-  const accordModifications = accord?.modifications ?? {};
   const accordArrivee = formatDateAccord(
     accordModifications.pointage_arrivee_le,
   );
@@ -284,6 +323,10 @@ export function LitigeResolutionModal({
 
   const submit = async () => {
     if (!litige) return;
+    if (accordValidationDediee) {
+      toast.error('Utilisez « Valider l’accord et exécuter » pour appliquer cet accord exact.');
+      return;
+    }
     if (!resolutionText.trim() || resolutionText.trim().length < 10) {
       toast.error('La résolution doit contenir au moins 10 caractères.');
       return;
@@ -425,6 +468,30 @@ export function LitigeResolutionModal({
                 ) : null}
               </div>
             )}
+            {!litige.facture_id && tauxMission != null && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                <p className="font-semibold">Base contractuelle de la mission</p>
+                <p className="mt-1 text-muted-foreground">
+                  {litige.mission?.type_contrat_applique === 'SALARIE'
+                    ? 'Mission salariée sans facture d’honoraires'
+                    : 'Aucune facture d’honoraires encore rattachée'}
+                  {' · '}taux demandé figé : <strong>{tauxContractuel} €/h</strong>
+                  {missionSalariee
+                    && litige.mission?.rist_plafond_applique
+                    && tauxMission !== tauxContractuel
+                    ? <> · taux retenu après plafond RIST : <strong>{tauxMission} €/h</strong></>
+                    : null}.
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  Le taux effectivement applicable est repris automatiquement si vous corrigez uniquement les heures.
+                </p>
+                {missionSalariee && heuresMission != null && (
+                  <p className="mt-1 text-muted-foreground">
+                    Durée actuellement retenue : <strong>{formatHeuresArbitrage(heuresMission)}</strong>.
+                  </p>
+                )}
+              </div>
+            )}
             {accord && (
               <div
                 className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950"
@@ -474,6 +541,12 @@ export function LitigeResolutionModal({
                   <dt className="font-medium">Justification</dt>
                   <dd>{accord.justification}</dd>
                 </dl>
+              </div>
+            )}
+            {accordValidationDediee && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
+                Cette résolution générique est désactivée : revenez au litige et utilisez
+                « Valider l’accord et exécuter » afin d’appliquer exactement l’accord accepté.
               </div>
             )}
             <div>
@@ -526,18 +599,23 @@ export function LitigeResolutionModal({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs">
-                        Ajuster les heures à la hausse déclenche une
-                        régularisation sociale URSSAF / Carpimko côté soignant
-                        libéral. Un email{' '}
-                        <code>REGULARISATION_SOCIALE_REQUISE</code> sera
-                        poussé.
+                        {missionSalariee
+                          ? 'Toute correction recalcule la simulation de paie, les cotisations et la commission. Si un paiement existe déjà, une régularisation explicite sera signalée.'
+                          : (
+                            <>
+                              Ajuster les heures à la hausse déclenche une
+                              régularisation sociale URSSAF / Carpimko côté soignant
+                              libéral. Un email{' '}
+                              <code>REGULARISATION_SOCIALE_REQUISE</code> sera poussé.
+                            </>
+                          )}
                       </TooltipContent>
                     </Tooltip>
                   )}
                 </div>
                 <Input
                   type="number"
-                  step="0.25"
+                  step="0.01"
                   min="0.01"
                   max="168"
                   value={ajusterHeures}
@@ -561,7 +639,14 @@ export function LitigeResolutionModal({
               </div>
             </div>
 
-            <div>
+            {missionSalariee ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs" data-testid="action-paie-salariee">
+                <p className="font-semibold text-foreground">Rectification de paie automatique</p>
+                <p className="mt-1 text-muted-foreground">
+                  Aucun choix de facture d’honoraires n’est applicable à une mission salariée. Les preuves restent conservées et les nouveaux montants sont liés à ce litige.
+                </p>
+              </div>
+            ) : <div>
               <div className="mb-1.5 flex items-center gap-1.5">
                 <Label>Action financière</Label>
                 <Tooltip>
@@ -600,7 +685,7 @@ export function LitigeResolutionModal({
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {LABELS_ACTION_FINANCIERE[actionFinanciere].tooltip}
               </p>
-            </div>
+            </div>}
 
             {preview && (
               <div
@@ -659,6 +744,24 @@ export function LitigeResolutionModal({
                       ? resultat.regen_pdf_request_ids.join(', ')
                       : '—'}
                   </dd>
+                  {resultat.action_financiere === 'RECTIFICATION_PAIE_SALARIEE' && (
+                    <>
+                      <dt>nouvelle simulation</dt>
+                      <dd className="font-mono break-all">{resultat.bulletin_rectificatif_id ?? '—'}</dd>
+                      <dt>simulation annulée</dt>
+                      <dd className="font-mono break-all">{resultat.bulletin_annule_id ?? '—'}</dd>
+                      <dt>brut recalculé</dt>
+                      <dd className="font-mono">{resultat.salaire_brut != null ? `${resultat.salaire_brut} €` : '—'}</dd>
+                      <dt>net avant impôt</dt>
+                      <dd className="font-mono">{resultat.net_avant_impot != null ? `${resultat.net_avant_impot} €` : '—'}</dd>
+                      <dt>régularisation paiement</dt>
+                      <dd className="font-mono">
+                        {resultat.regularisation_paiement_requise
+                          ? `requise (${resultat.ecart_paiement ?? '—'} €)`
+                          : 'non'}
+                      </dd>
+                    </>
+                  )}
                 </dl>
               </div>
             )}
@@ -680,6 +783,7 @@ export function LitigeResolutionModal({
               factureLoading ||
               factureContextInvalide ||
               ajustementReferenceIncomplet
+              || accordValidationDediee
             }
             loading={submitting}
           >

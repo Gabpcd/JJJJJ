@@ -38,7 +38,7 @@ import {
   regrouperFacturesParMission,
   resumerFacturesMission,
 } from '@/lib/factureHonorairesUi';
-import { indexerDernierPaiementParMission } from '@/lib/paiementSoignantUi';
+import { indexerDernierPaiementParMission, repartirPaiementConfirme } from '@/lib/paiementSoignantUi';
 import { cleJourParis, cleMoisParis, formatParis } from '@/lib/date-heure-paris';
 import { chargerCreneauxMissionsPagines, type CreneauMissionCharge } from '@/lib/mission-creneaux-pagines';
 import { construireExportPaiePeriode } from '@/lib/export-paie-planning';
@@ -208,7 +208,8 @@ export function MesGainsApercuContent() {
     }
   }, [allMissions, creneauxMissions, moisFiltre]);
   const missions = periodeMissions.missions;
-  const erreurAffichee = erreurChargement ?? periodeMissions.erreur;
+  const erreurAffichee = erreurChargement;
+  const exportIndisponible = erreurChargement ?? periodeMissions.erreur;
 
   const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (Number(m.total_brut) || 0), 0), [missions]);
   const totalHeures = useMemo(() => missions.reduce((s, m) => s + (Number(m.duree_heures) || 0), 0), [missions]);
@@ -249,7 +250,7 @@ export function MesGainsApercuContent() {
       // 9.1 — aValider.ids : liste des missions comptées (pour la règle singleton
       // du deep link : 1 seule → détail mission direct).
       aValider: { montant: 0, nb: 0, ids: [] as string[] },
-      enAttente: { montant: 0, nb: 0 },
+      enAttente: { montant: 0, nb: 0, nbPartiels: 0 },
       paye: { montant: 0, nb: 0, nbFactures: 0, nbPaiements: 0 },
     };
 
@@ -279,9 +280,17 @@ export function MesGainsApercuContent() {
 
       const paye = p && (p.statut === 'CONFIRME' || p.statut === 'RESOLU');
       if (paye) {
-        etapes.paye.montant += montantPaiement;
-        etapes.paye.nb += 1;
-        etapes.paye.nbPaiements += 1;
+        const repartition = repartirPaiementConfirme(montantDefaut, montantPaiement);
+        if (repartition.montantPaye > 0) {
+          etapes.paye.montant += repartition.montantPaye;
+          etapes.paye.nb += 1;
+          etapes.paye.nbPaiements += 1;
+        }
+        if (repartition.montantRestant > 0) {
+          etapes.enAttente.montant += repartition.montantRestant;
+          etapes.enAttente.nb += 1;
+          etapes.enAttente.nbPartiels += Number(repartition.estPartiel);
+        }
         return;
       }
       // Paiement déclaré non confirmé → « En attente de paiement ».
@@ -322,7 +331,7 @@ export function MesGainsApercuContent() {
   }, [loading, pipeline.paye.nb]);
 
   const exporterCSV = () => {
-    if (erreurAffichee) return;
+    if (exportIndisponible) return;
     const header = 'Début,Fin,Mission,Service,Établissement,Heures,Taux horaire,Brut,Montant affiché,Nature\n';
     const rows = missions.flatMap(m => {
       const finance = montantFinanceAfficheMission(m);
@@ -350,7 +359,15 @@ export function MesGainsApercuContent() {
           </BoutonY2K>
         </div>
       )}
-      <BandeauPaiementDeclare />
+      {periodeMissions.erreur && !erreurChargement && (
+        <div className="mb-5 rounded-xl border border-warning/30 bg-warning/5 p-4" role="status">
+          <p className="font-semibold text-foreground">Totaux et export en attente de validation</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {periodeMissions.erreur} Les paiements à confirmer et les simulations de paie restent disponibles ; cette mission est seulement exclue des totaux et du CSV tant que le relevé n’est pas validé.
+          </p>
+        </div>
+      )}
+      <BandeauPaiementDeclare onUpdate={() => setReloadKey((key) => key + 1)} />
 
       {/* Paiement rapide ⚡ (escrow) — bloc « À venir » en tête. Masqué si aucun
           paiement escrow (cf. PaiementsEscrowAVenir + spec §4). */}
@@ -384,7 +401,9 @@ export function MesGainsApercuContent() {
               },
               {
                 label: 'En attente de paiement',
-                detail: 'facture ou paie en cours',
+                detail: pipeline.enAttente.nbPartiels > 0
+                  ? `${pipeline.enAttente.nbPartiels} paiement${pipeline.enAttente.nbPartiels > 1 ? 's' : ''} partiel${pipeline.enAttente.nbPartiels > 1 ? 's' : ''} à solder`
+                  : 'facture ou paie en cours',
                 etape: pipeline.enAttente,
                 onClick: () => navigate(destinationPaiements),
               },
@@ -519,7 +538,7 @@ export function MesGainsApercuContent() {
             ))}
           </SelectContent>
         </Select>
-        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} disabled={Boolean(erreurAffichee) || missions.length === 0} className="gap-1.5">
+        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} disabled={Boolean(exportIndisponible) || missions.length === 0} className="gap-1.5">
           <Download className="h-4 w-4" /> CSV
         </BoutonY2K>
         <BoutonY2K variant="secondary" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
@@ -700,7 +719,7 @@ export function MesGainsApercuContent() {
             </button>
           )}
         </div>
-      ) : erreurAffichee ? null : allMissions.length === 0 ? (
+      ) : erreurAffichee || periodeMissions.erreur ? null : allMissions.length === 0 ? (
         <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} compact />
       ) : (
         /* 6d.1 : historique existant mais période vide → message scopé, pas un

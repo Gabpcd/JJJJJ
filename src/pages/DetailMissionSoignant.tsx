@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Building2, MessageCircle, MoreHorizontal, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Building2, MessageCircle, MoreHorizontal, AlertTriangle, RefreshCw, Scale } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { BadgeScoreEtabPublic } from '@/components/BadgeScoreEtabPublic';
@@ -15,7 +15,6 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
-import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
@@ -55,6 +54,7 @@ import {
   construirePlanningCandidat,
   creneauxConfirmesPourAction,
 } from '@/components/planning/planning-candidat';
+import { estResolu, statutBadgeV2 } from '@/lib/statutLitige';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 type NatureTvaPrestation = 'SOIN_THERAPEUTIQUE_EXONERE' | 'PRESTATION_TAXABLE';
@@ -194,6 +194,7 @@ export default function DetailMissionSoignant() {
   const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
   const [erreurCreneaux, setErreurCreneaux] = useState(false);
   const [acceptationEnCours, setAcceptationEnCours] = useState(false);
+  const [litigeMission, setLitigeMission] = useState<any>(null);
 
   // Modals
   const [modalConfirm, setModalConfirm] = useState(false);
@@ -234,6 +235,7 @@ export default function DetailMissionSoignant() {
     setChargementProlonge(false);
     setErreurChargement(null);
     setErreurCreneaux(false);
+    setLitigeMission(null);
 
     const chargerDonneesCritiques = async () => {
       let derniereErreur: unknown;
@@ -352,6 +354,22 @@ export default function DetailMissionSoignant() {
           if (!annule) setEtabSafe(safe[m.etablissement_id] || null);
         })
         .catch((error) => handleErrorSilent(error, 'DetailMissionSoignant.etablissement-safe'));
+
+      if (m.soignant_assigne_id === user.id) {
+        void (async () => {
+          try {
+            const { data, error } = await supabase.rpc('fn_litige_pour_mission' as any, {
+              p_mission_id: id,
+            });
+            if (error) throw error;
+            if (!annule && data && (data as any).exists !== false && (data as any).litige_id) {
+              setLitigeMission(data);
+            }
+          } catch (error) {
+            handleErrorSilent(error, 'DetailMissionSoignant.litige');
+          }
+        })();
+      }
 
       void (async () => {
         try {
@@ -493,9 +511,13 @@ export default function DetailMissionSoignant() {
   if (!mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><h1 className="text-lg font-semibold text-foreground">Mission introuvable</h1><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
   if (!soignant) return <LayoutApp role="SOIGNANT"><div className="mx-auto max-w-lg py-16 text-center" role="alert"><h1 className="text-lg font-semibold text-foreground">Profil indisponible</h1><p className="mt-2 text-sm text-muted-foreground">Ton profil n'a pas pu être chargé.</p><button type="button" onClick={() => setTentativeChargement((valeur) => valeur + 1)} className="btn-primary mt-5">Réessayer</button></div></LayoutApp>;
 
+  // Les comptes de recette sont volontairement exclus de la fiche publique,
+  // mais la RPC sécurisée renvoie les informations non sensibles nécessaires
+  // à l'expérience mission. Ne jamais laisser une carte établissement vide.
+  const etablissementAffiche = etablissement ?? etabSafe;
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,
-    etablissement?.adresse_lat, etablissement?.adresse_lng
+    etablissementAffiche?.adresse_lat, etablissementAffiche?.adresse_lng
   );
   const resumeCompletion = calculerCompletionProfil(soignant as any);
   const completionProfil = resumeCompletion.pourcentage;
@@ -516,6 +538,9 @@ export default function DetailMissionSoignant() {
   const ongletPresences = aCreneauAujourdhui
     ? 'aujourdhui'
     : mission.statut === 'EN_COURS' ? 'encours' : 'avenir';
+  const statutLitigeNormalise = String(litigeMission?.statut || '').toUpperCase();
+  const litigeEstClos = Boolean(statutLitigeNormalise && estResolu(statutLitigeNormalise));
+  const badgeLitige = statutLitigeNormalise ? statutBadgeV2(statutLitigeNormalise) : null;
   // Le régime financier se lit sur la mission, jamais sur le statut général du
   // profil. Un même soignant peut enchaîner des missions salariées et libérales.
   // En l'absence de valeur explicite, le défaut de sécurité reste SALARIE.
@@ -696,7 +721,7 @@ export default function DetailMissionSoignant() {
         p_cle_s3: null,
         p_details: {
           intitule: mission.intitule,
-          etablissement: etablissement?.nom,
+          etablissement: etablissementAffiche?.nom,
           debut: mission.debut_le,
           fin: mission.fin_le,
         },
@@ -721,7 +746,7 @@ export default function DetailMissionSoignant() {
           data: {
             prenom: soignant.prenom,
             mission: mission.intitule,
-            etablissement: etablissement?.nom || '',
+            etablissement: etablissementAffiche?.nom || '',
             date: formatParis(mission.debut_le, 'EEEE d MMMM yyyy'),
             heure_debut: formatParis(mission.debut_le, "HH'h'mm"),
             heure_fin: formatParis(mission.fin_le, "HH'h'mm"),
@@ -825,7 +850,9 @@ export default function DetailMissionSoignant() {
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                  <h3 className="font-semibold text-sm text-foreground">
+                    {etablissementAffiche?.nom || 'Établissement'}
+                  </h3>
                   {estAssigne && mission.etablissement_id && (
                     <BadgeScoreEtabPublic etablissementId={mission.etablissement_id} />
                   )}
@@ -855,31 +882,37 @@ export default function DetailMissionSoignant() {
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(etablissement?.type)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}
-                  {etablissement?.adresse_departement && ` (${etablissement.adresse_departement})`}
-                </p>
+                {etablissementAffiche?.type && (
+                  <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(etablissementAffiche.type)}</p>
+                )}
+                {etablissementAffiche?.adresse_ville && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {[etablissementAffiche.adresse_rue, `${etablissementAffiche.adresse_code_postal || ''} ${etablissementAffiche.adresse_ville}`.trim()]
+                      .filter(Boolean)
+                      .join(', ')}
+                    {etablissementAffiche.adresse_departement && ` (${etablissementAffiche.adresse_departement})`}
+                  </p>
+                )}
                 <div className="mt-1 flex items-center gap-2 flex-wrap">
                   <BadgeDistance distanceKm={distance} />
                   {/* Session E-6 : liens de navigation utiles à J-1 de la mission,
                       bruit au moment de candidater → visibles seulement si assigné. */}
-                  {estAssigne && etablissement?.adresse_lat && etablissement?.adresse_lng && (
+                  {estAssigne && etablissementAffiche?.adresse_lat && etablissementAffiche?.adresse_lng && (
                     <>
                       <button
-                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).plans()}
+                        onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).plans()}
                         className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         📍 Plans
                       </button>
                       <button
-                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).googleMaps()}
+                        onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).googleMaps()}
                         className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🗺️ Maps
                       </button>
                       <button
-                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).waze()}
+                        onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).waze()}
                         className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🚗 Waze
@@ -943,16 +976,25 @@ export default function DetailMissionSoignant() {
             </div>
           </div>
 
-          {/* Horaires */}
+          {/* Le planning contractuel ne doit jamais être présenté comme le
+              relevé de pointage d'une mission déjà terminée. */}
           <div className="card-base">
-            <h3 className="font-semibold text-sm text-foreground mb-2">🕐 Horaires</h3>
+            <h3 className="font-semibold text-sm text-foreground mb-2">
+              🕐 {estTerminee ? 'Horaires planifiés' : 'Horaires'}
+            </h3>
             <PlanningMissionCandidat
               mission={{
                 ...mission,
                 creneaux_planifies: creneauxPlanifies,
                 erreur_planning: erreurCreneaux,
               }}
+              afficherMentionJoursNonTravailles={!estTerminee}
             />
+            {estTerminee && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Planning prévu au contrat. Les heures réellement travaillées et les pauses sont détaillées dans le relevé de pointage.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
               {(mission.heures_nuit || 0) > 0 && <span className="badge-base bg-indigo-100 text-indigo-700">🌙 {mission.heures_nuit}h de nuit</span>}
               {(mission.heures_dimanche || 0) > 0 && <span className="badge-base bg-amber-100 text-amber-700">☀️ {mission.heures_dimanche}h de dimanche</span>}
@@ -971,22 +1013,10 @@ export default function DetailMissionSoignant() {
             />
           )}
 
-          {/* Rémunération — Note d'honoraires pour libéraux, décomposition classique sinon */}
-          {missionEstLiberale && estTerminee ? (
-            <NoteHonoraires
-              mission={mission}
-              soignant={soignant}
-              onAudit={() => {
-                supabase.rpc('fn_ecrire_audit_safe', {
-                  p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
-                  p_action: 'NOTE_HONORAIRES_GENEREE',
-                  p_type_ressource: 'mission', p_id_ressource: id!,
-                  p_cle_s3: null, p_details: { numero: mission.numero_note_honoraires },
-                  p_ip: null, p_navigateur: navigator.userAgent,
-                });
-              }}
-            />
-          ) : (mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
+          {/* Rémunération — la décomposition explique le contrat. Les pièces
+              officielles sont exclusivement celles chargées plus bas depuis
+              factures_honoraires : aucun faux PDF local ne doit les doubler. */}
+          {(mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
             <div id="bloc-retro-confirm" className="card-base border-warning/40 bg-warning/5 space-y-2">
               <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
               <p className="text-xs text-muted-foreground">
@@ -1032,13 +1062,15 @@ export default function DetailMissionSoignant() {
           ) : (
             <DecompositionFinanciere
               mission={mission}
-              etablissement={etablissement}
+              etablissement={etablissementAffiche}
               role="SOIGNANT"
             />
           )}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
           <p className="text-xs text-muted-foreground/60 italic text-center">
-            Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+            {missionEstLiberale && estTerminee
+              ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
+              : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
           </p>
           )}
 
@@ -1076,6 +1108,43 @@ export default function DetailMissionSoignant() {
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
           {estTerminee && missionEstLiberale && (
             <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
+          )}
+
+          {litigeMission?.litige_id && (
+            <section
+              className={`card-base ${litigeEstClos ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5'}`}
+              aria-labelledby="titre-litige-mission"
+            >
+              <div className="flex items-start gap-3">
+                {badgeLitige ? (
+                  <badgeLitige.icon
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${litigeEstClos ? 'text-success' : 'text-warning'}`}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Scale className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 id="titre-litige-mission" className="font-semibold text-foreground">
+                    {litigeEstClos ? 'Décision du litige' : 'Litige en cours sur cette mission'}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Statut : {badgeLitige?.label || 'En cours'}.
+                    {litigeEstClos
+                      ? ' La décision, les heures retenues et ses effets financiers restent consultables dans le dossier.'
+                      : ' Les échanges et décisions restent accessibles depuis le suivi du litige.'}
+                  </p>
+                  <BoutonY2K
+                    size="sm"
+                    variant="secondary"
+                    className="mt-3 min-h-11"
+                    onClick={() => navigate(`/soignant/litiges?litige=${litigeMission.litige_id}`)}
+                  >
+                    {litigeEstClos ? 'Consulter la décision' : 'Voir le litige'}
+                  </BoutonY2K>
+                </div>
+              </div>
+            </section>
           )}
 
           {estTerminee && estAssigne && (
@@ -1286,6 +1355,15 @@ export default function DetailMissionSoignant() {
                     🕐 Présences et pointage
                   </button>
                 )}
+                {estTerminee && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/soignant/presences/mission/${mission.id}`)}
+                    className="btn-primary w-full text-sm py-2.5 mb-3"
+                  >
+                    🕐 Voir mes heures pointées et mes pauses
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
@@ -1455,7 +1533,7 @@ export default function DetailMissionSoignant() {
           estAsap={Boolean((mission as any).est_urgente)}
           missionInfo={{
             intitule: mission.intitule,
-            etablissementNom: etablissement?.nom || 'Établissement',
+            etablissementNom: etablissementAffiche?.nom || 'Établissement',
             debut_le: mission.debut_le,
             fin_le: mission.fin_le,
           }}

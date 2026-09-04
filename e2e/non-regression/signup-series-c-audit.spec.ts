@@ -151,6 +151,26 @@ async function responseDiagnostic(response: Response | APIResponse) {
   };
 }
 
+async function handleStagingEmailRateLimit(
+  page: Page,
+  signup: Awaited<ReturnType<typeof responseDiagnostic>>,
+  role: FreshAccountRole,
+  testInfo: TestInfo,
+) {
+  if (signup.status !== 429) return false;
+
+  const rateLimit = page.locator('[data-error-code="EMAIL_RATE_LIMIT"], [data-error-code="RATE_LIMITED"]');
+  await expect(rateLimit, 'le quota email staging doit produire une erreur explicite et actionnable').toBeVisible();
+  await expect(rateLimit).toContainText('Trop de tentatives');
+  await expect(rateLimit.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+  await expectMobileFormIntegrity(page, `/inscription/${role}-quota-email`, testInfo);
+  testInfo.annotations.push({
+    type: 'quota staging',
+    description: `GoTrue a refusé la création ${role} avec HTTP 429 ; l’UI de reprise est conforme, mais le compte neuf complet doit être rejoué après réouverture du quota email.`,
+  });
+  return true;
+}
+
 function captureSignupDiagnostics(page: Page) {
   const events: string[] = [];
   const sanitize = (value: string) => value
@@ -483,8 +503,26 @@ test.describe('inscriptions mobile Série C', () => {
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
 
     const signup = await responseDiagnostic(await signupResponse);
+    if (await handleStagingEmailRateLimit(page, signup, 'soignant', testInfo)) return;
     expect(signup, 'GoTrue signup').toMatchObject({ status: 200, ok: true });
-    const registerRaw = await registerResponse;
+    const confirmationEmail = page.locator('[data-error-code="EMAIL_CONFIRMATION_REQUIRED"]');
+    const issueDeCreation = await Promise.race([
+      registerResponse.then((response) => ({ type: 'register' as const, response })),
+      confirmationEmail.waitFor({ state: 'visible', timeout: 30_000 })
+        .then(() => ({ type: 'confirmation' as const, response: null })),
+    ]);
+    if (issueDeCreation.type === 'confirmation') {
+      await expect(confirmationEmail).toContainText('Confirmez votre email');
+      await expect(confirmationEmail.getByRole('button', { name: 'J’ai confirmé mon email' })).toBeVisible();
+      await expect(page.locator('input[type="email"]')).not.toHaveValue('');
+      await expectMobileFormIntegrity(page, '/inscription/soignant-confirmation-email', testInfo);
+      testInfo.annotations.push({
+        type: 'configuration staging',
+        description: 'La confirmation email est active : le profil métier sera créé après confirmation puis reprise du formulaire.',
+      });
+      return;
+    }
+    const registerRaw = issueDeCreation.response;
     expect(registerRaw, `register-soignant absent après signup: ${JSON.stringify(signup)}; événements: ${JSON.stringify(events)}`).not.toBeNull();
     const register = await responseDiagnostic(registerRaw!);
     expect(register, 'register-soignant').toMatchObject({ status: 200, ok: true });
@@ -511,8 +549,26 @@ test.describe('inscriptions mobile Série C', () => {
     await page.getByRole('button', { name: 'Créer le compte' }).click();
 
     const signup = await responseDiagnostic(await signupResponse);
+    if (await handleStagingEmailRateLimit(page, signup, 'etab', testInfo)) return;
     expect(signup, 'GoTrue signup').toMatchObject({ status: 200, ok: true });
-    const registerRaw = await registerResponse;
+    const confirmationEmail = page.locator('[data-error-code="EMAIL_CONFIRMATION_REQUIRED"]');
+    const issueDeCreation = await Promise.race([
+      registerResponse.then((response) => ({ type: 'register' as const, response })),
+      confirmationEmail.waitFor({ state: 'visible', timeout: 30_000 })
+        .then(() => ({ type: 'confirmation' as const, response: null })),
+    ]);
+    if (issueDeCreation.type === 'confirmation') {
+      await expect(confirmationEmail).toContainText('Confirmez votre email');
+      await expect(confirmationEmail.getByRole('button', { name: 'J’ai confirmé mon email' })).toBeVisible();
+      await expect(page.locator('input[type="email"]')).not.toHaveValue('');
+      await expectMobileFormIntegrity(page, '/inscription/etablissement-confirmation-email', testInfo);
+      testInfo.annotations.push({
+        type: 'configuration staging',
+        description: 'La confirmation email est active : le profil métier sera créé après confirmation puis reprise du formulaire.',
+      });
+      return;
+    }
+    const registerRaw = issueDeCreation.response;
     expect(registerRaw, `register-etablissement absent après signup: ${JSON.stringify(signup)}; événements: ${JSON.stringify(events)}`).not.toBeNull();
     const register = await responseDiagnostic(registerRaw!);
     expect(register, 'register-etablissement').toMatchObject({ status: 200, ok: true });

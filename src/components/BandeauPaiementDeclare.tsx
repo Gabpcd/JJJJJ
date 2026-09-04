@@ -7,6 +7,8 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { formatParis } from '@/lib/date-heure-paris';
+import { formatDureeMinutes } from '@/lib/synthese-presence-mission';
 
 interface PaiementDeclare {
   id: string;
@@ -22,6 +24,8 @@ interface PaiementDeclare {
     fin_le: string;
     duree_heures: number | null;
     taux_horaire_base: number;
+    taux_rist_plafonne: number | null;
+    rist_plafond_applique: boolean | null;
     total_brut: number | null;
     net_a_payer: number | null;
   } | null;
@@ -29,6 +33,14 @@ interface PaiementDeclare {
     pointage_arrivee_le: string | null;
     pointage_depart_le: string | null;
     methode_pointage_arrivee: string | null;
+    heures_ajustees_litige: number | null;
+  }[];
+  creneaux?: {
+    id: string;
+    debut: string;
+    fin: string | null;
+    est_pause: boolean | null;
+    type_creneau: string | null;
   }[];
 }
 
@@ -65,7 +77,7 @@ function formatMethode(m: string | null): string {
   return m;
 }
 
-export function BandeauPaiementDeclare() {
+export function BandeauPaiementDeclare({ onUpdate }: { onUpdate?: () => void } = {}) {
   const { user } = useAuth();
   const [paiements, setPaiements] = useState<PaiementDeclare[]>([]);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -102,27 +114,41 @@ export function BandeauPaiementDeclare() {
       const missionIds = [...new Set(data.map((p: any) => p.mission_id).filter(Boolean))] as string[];
       const missionMap: Record<string, any> = {};
       const presenceMap: Record<string, any[]> = {};
+      const creneauxMap: Record<string, any[]> = {};
 
       if (missionIds.length > 0) {
         const { data: missions, error: missionsError } = await supabase
           .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer')
+          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer')
           .in('id', missionIds);
         if (missionsError) throw missionsError;
         if (missions) {
           missions.forEach((m: any) => { missionMap[m.id] = m; });
         }
 
-        const { data: presences, error: presencesError } = await supabase
-          .from('presences')
-          .select('mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee')
-          .in('mission_id', missionIds)
-          .order('pointage_arrivee_le', { ascending: true });
+        const [{ data: presences, error: presencesError }, { data: creneaux, error: creneauxError }] = await Promise.all([
+          supabase
+            .from('presences')
+            .select('mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee, heures_ajustees_litige')
+            .in('mission_id', missionIds)
+            .order('pointage_arrivee_le', { ascending: true }),
+          supabase
+            .from('mission_creneaux')
+            .select('id, mission_id, debut, fin, est_pause, type_creneau')
+            .in('mission_id', missionIds)
+            .order('debut', { ascending: true }),
+        ]);
         if (presencesError) throw presencesError;
+        if (creneauxError) throw creneauxError;
         if (presences) {
           presences.forEach((p: any) => {
             if (!presenceMap[p.mission_id]) presenceMap[p.mission_id] = [];
             presenceMap[p.mission_id].push(p);
+          });
+        }
+        if (creneaux) {
+          creneaux.forEach((creneau: any) => {
+            (creneauxMap[creneau.mission_id] ||= []).push(creneau);
           });
         }
       }
@@ -138,6 +164,7 @@ export function BandeauPaiementDeclare() {
         date_paiement: p.date_paiement,
         mission: p.mission_id ? missionMap[p.mission_id] || null : null,
         presences: p.mission_id ? presenceMap[p.mission_id] || [] : [],
+        creneaux: p.mission_id ? creneauxMap[p.mission_id] || [] : [],
       })));
       } catch (error: any) {
         if (actif) setErreurChargement(error?.message || 'Impossible de charger les paiements à confirmer.');
@@ -168,6 +195,7 @@ export function BandeauPaiementDeclare() {
       toast.success(confirme ? 'Paiement confirmé ✅' : 'Contestation envoyée');
       setPaiements(prev => prev.filter(p => p.id !== paiementId));
       setContesting(null);
+      onUpdate?.();
     } catch {
       toast.error('Erreur lors du traitement');
     }
@@ -195,6 +223,19 @@ export function BandeauPaiementDeclare() {
       {paiements.map(p => {
         const isExpanded = expanded === p.id;
         const isContesting = contesting === p.id;
+        const creneauxPlanifies = (p.creneaux || []).filter((creneau) => (
+          creneau.type_creneau === 'PREVISIONNEL' && !creneau.est_pause && Boolean(creneau.fin)
+        ));
+        const creneauxEffectifs = (p.creneaux || []).filter((creneau) => (
+          creneau.type_creneau === 'EFFECTIF' && !creneau.est_pause && Boolean(creneau.fin)
+        ));
+        const minutesPlanifiees = creneauxPlanifies.reduce((total, creneau) => (
+          total + Math.max(0, new Date(creneau.fin!).getTime() - new Date(creneau.debut).getTime()) / 60_000
+        ), 0);
+        const heuresRetenues = p.presences?.find((presence) => presence.heures_ajustees_litige != null)?.heures_ajustees_litige;
+        const tauxRetenu = p.mission?.rist_plafond_applique && p.mission.taux_rist_plafonne != null
+          ? Number(p.mission.taux_rist_plafonne)
+          : Number(p.mission?.taux_horaire_base || 0);
         return (
           <div key={p.id} className="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden">
             {/* Header — always visible */}
@@ -267,16 +308,27 @@ export function BandeauPaiementDeclare() {
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {format(new Date(p.mission.debut_le), 'EEE d MMM yyyy', { locale: fr })}
+                        {creneauxPlanifies.length > 1
+                          ? `${formatParis(creneauxPlanifies[0].debut, 'd MMM yyyy')} → ${formatParis(creneauxPlanifies.at(-1)!.fin!, 'd MMM yyyy')}`
+                          : formatParis(p.mission.debut_le, 'EEE d MMM yyyy')}
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {format(new Date(p.mission.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(p.mission.fin_le), "HH'h'mm", { locale: fr })}
-                        {p.mission.duree_heures ? ` (${p.mission.duree_heures}h)` : ''}
+                        {creneauxPlanifies.length > 0
+                          ? `${creneauxPlanifies.length} créneau${creneauxPlanifies.length > 1 ? 'x' : ''} · ${formatDureeMinutes(minutesPlanifiees)} planifiées`
+                          : `${formatParis(p.mission.debut_le, "HH'h'mm")} → ${formatParis(p.mission.fin_le, "HH'h'mm")}`}
                       </div>
                     </div>
-                    <div className="flex gap-4 text-xs">
-                      <span className="text-muted-foreground">Taux : <strong className="text-foreground">{p.mission.taux_horaire_base} €/h</strong></span>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground">
+                        Taux retenu : <strong className="text-foreground">{fmt(tauxRetenu)}/h</strong>
+                        {p.mission.rist_plafond_applique && tauxRetenu !== Number(p.mission.taux_horaire_base)
+                          ? ` (demandé : ${fmt(p.mission.taux_horaire_base)}/h)`
+                          : ''}
+                      </span>
+                      {heuresRetenues != null && (
+                        <span className="text-muted-foreground">Heures retenues après litige : <strong className="text-foreground">{formatDureeMinutes(Number(heuresRetenues) * 60)}</strong></span>
+                      )}
                       {p.mission.total_brut != null && <span className="text-muted-foreground">Brut : <strong className="text-foreground">{fmt(p.mission.total_brut)}</strong></span>}
                       <span className="text-muted-foreground">Montant déclaré : <strong className="text-primary">{fmt(p.montant)}</strong></span>
                     </div>
@@ -284,7 +336,29 @@ export function BandeauPaiementDeclare() {
                 )}
 
                 {/* Presences / pointages */}
-                {p.presences && p.presences.length > 0 && (
+                {creneauxEffectifs.length > 0 ? (
+                  <div className="border border-border rounded-lg p-3">
+                    <p className="text-xs font-semibold text-foreground mb-2">
+                      Pointages enregistrés · {creneauxEffectifs.length} segment{creneauxEffectifs.length > 1 ? 's' : ''}
+                    </p>
+                    <div className="space-y-1.5">
+                      {creneauxEffectifs.map((creneau, index) => {
+                        const pauseMinutes = index > 0
+                          ? Math.max(0, Math.round((new Date(creneau.debut).getTime() - new Date(creneauxEffectifs[index - 1].fin!).getTime()) / 60_000))
+                          : 0;
+                        const dureeMinutes = Math.max(0, (new Date(creneau.fin!).getTime() - new Date(creneau.debut).getTime()) / 60_000);
+                        return (
+                          <div key={creneau.id} className="rounded-lg bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+                            {pauseMinutes > 0 && <p className="mb-1">Pause précédente : {formatDureeMinutes(pauseMinutes)}</p>}
+                            <p>
+                              <span className="font-medium text-foreground">Segment {index + 1}</span> · {formatParis(creneau.debut, "d MMM · HH'h'mm")} → {formatParis(creneau.fin!, "HH'h'mm")} · {formatDureeMinutes(dureeMinutes)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : p.presences && p.presences.length > 0 && (
                   <div className="border border-border rounded-lg p-3">
                     <p className="text-xs font-semibold text-foreground mb-2">Pointages enregistrés</p>
                     <div className="space-y-1.5">

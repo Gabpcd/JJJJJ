@@ -39,7 +39,7 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
+      <button type="button" onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
         <Banknote className="h-3.5 w-3.5" /> Virement
       </button>
     );
@@ -57,8 +57,12 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
         <p><strong>Référence :</strong> {facture.numero_facture}</p>
       </div>
       <div>
-        <label className="text-xs font-medium text-foreground block mb-1">Référence de votre virement</label>
+        <label htmlFor="reference-virement-commission" className="text-xs font-medium text-foreground block mb-1">Référence de votre virement</label>
         <input
+          id="reference-virement-commission"
+          name="reference_virement_commission"
+          autoComplete="off"
+          inputMode="text"
           value={reference}
           onChange={e => setReference(e.target.value)}
           placeholder="Ex: VIR-20260312-001"
@@ -66,11 +70,11 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
         />
       </div>
       <div className="flex gap-2">
-        <button onClick={confirmer} disabled={loading || !reference.trim()} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
+        <button type="button" onClick={confirmer} disabled={loading || !reference.trim()} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           ✅ J'ai effectué le virement
         </button>
-        <button onClick={() => setOpen(false)} className="btn-secondary text-xs">Annuler</button>
+        <button type="button" onClick={() => setOpen(false)} className="btn-secondary text-xs">Annuler</button>
       </div>
     </div>
   );

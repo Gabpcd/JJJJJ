@@ -172,7 +172,7 @@ export type LitigeEnrichi = {
   soignant_id: string;
   etablissement_id: string;
   mission_id: string;
-  initie_par: 'SOIGNANT' | 'ETABLISSEMENT';
+  initie_par: 'SOIGNANT' | 'ETABLISSEMENT' | 'SYSTEME';
   resolution: string | null;
   resolu_le: string | null;
   type_litige?: TypeLitige | null;
@@ -209,6 +209,12 @@ export type LitigeEnrichi = {
     debut_le: string;
     fin_le: string;
     statut: string | null;
+    duree_heures: number | null;
+    taux_horaire_base: number | null;
+    taux_horaire_base_fige: number | null;
+    taux_rist_plafonne: number | null;
+    rist_plafond_applique: boolean | null;
+    type_contrat_applique: string | null;
   } | null;
 };
 

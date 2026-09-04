@@ -38,8 +38,9 @@ describe('revue admin établissement durcie', () => {
   });
 
   it('sépare les décisions identité/fonction de la finalisation globale', () => {
-    expect(adminPage).toContain("deciderPreuve(etab, 'IDENTITE', 'APPROUVER')");
-    expect(adminPage).toContain("deciderPreuve(etab, 'FONCTION', 'REJETER')");
+    expect(adminPage).toContain("demanderDecisionPreuve(etab, 'IDENTITE', 'APPROUVER')");
+    expect(adminPage).toContain("demanderDecisionPreuve(etab, 'FONCTION', 'REJETER')");
+    expect(adminPage).toContain('executer: () => deciderPreuve(etab, preuve, decision)');
     expect(adminPage).toContain('fn_admin_finaliser_verification_etablissement');
     expect(adminPage).toContain('disabled={!peutFinaliser || actionKey !== null}');
     expect(migration).toContain('Recalcule toujours le rattachement');

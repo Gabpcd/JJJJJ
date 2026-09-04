@@ -111,14 +111,15 @@ describe('FactureHonorairesCard', () => {
     mocks.from.mockImplementation(() => construireRequete());
   });
 
-  it('affiche toutes les semaines, le retard et l avoir avec des agrégats exacts', async () => {
+  it('affiche les documents métier sans transformer les erreurs techniques en factures', async () => {
     render(<FactureHonorairesCard missionId="mission-longue" viewerRole="SOIGNANT" />);
 
     expect(await screen.findByText('F-S27')).toBeInTheDocument();
     expect(screen.getByText('F-S28')).toBeInTheDocument();
     expect(screen.getByText('F-S29')).toBeInTheDocument();
     expect(screen.getByText('AV-2026-1')).toBeInTheDocument();
-    expect(screen.getByText('F-ERREUR')).toBeInTheDocument();
+    expect(screen.queryByText('F-ERREUR')).not.toBeInTheDocument();
+    expect(screen.getByText(/1 tentative technique de génération a échoué/)).toBeInTheDocument();
     expect(screen.getByText('Semaine 27/2026')).toBeInTheDocument();
     expect(screen.getByText('Semaine 28/2026')).toBeInTheDocument();
     expect(screen.getByText('Semaine 29/2026')).toBeInTheDocument();
@@ -137,6 +138,25 @@ describe('FactureHonorairesCard', () => {
     expect(screen.getAllByRole('button', { name: /Télécharger le PDF/ })).toHaveLength(4);
     fireEvent.click(screen.getByRole('button', { name: 'Télécharger le PDF F-S28' }));
     await waitFor(() => expect(mocks.telecharger).toHaveBeenCalledWith('f-retard'));
+  });
+
+  it('explique une génération échouée sans afficher de faux document', async () => {
+    mocks.data = [
+      {
+        id: 'erreur-seule',
+        numero_facture: 'F-ERREUR-SEULE',
+        statut: 'ERREUR_GENERATION',
+        type_document: 'FACTURE',
+        montant_ttc: 500,
+        montant_signe: 500,
+      },
+    ];
+
+    render(<FactureHonorairesCard missionId="mission-erreur" viewerRole="SOIGNANT" />);
+
+    expect(await screen.findByText('Document d’honoraires en attente')).toBeInTheDocument();
+    expect(screen.getByText(/Aucun document ni montant n’est comptabilisé/)).toBeInTheDocument();
+    expect(screen.queryByText('F-ERREUR-SEULE')).not.toBeInTheDocument();
   });
 
   it('affiche l erreur de lecture et permet de relancer la requête', async () => {

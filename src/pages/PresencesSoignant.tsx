@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
+import { construireHistoriqueEffectifsSansPresence } from '@/lib/presencesSoignantUi';
 
 export default function PresencesSoignant() {
   usePageTitle('Présences');
@@ -112,7 +113,7 @@ export default function PresencesSoignant() {
       const aujourdhui = debutJourParis(new Date());
       const demain = ajouterJoursCivilsParis(aujourdhui, 1);
       const il7jours = ajouterJoursCivilsParis(new Date(), -7);
-      const [missionsResult, valideesResult, historiqueResult] = await Promise.all([
+      const [missionsResult, valideesResult, historiqueResult, missionsHistoriqueResult] = await Promise.all([
         supabase
           .from('missions')
           .select(`
@@ -149,23 +150,33 @@ export default function PresencesSoignant() {
           .eq('soignant_id', user!.id)
           .order('cree_le', { ascending: false })
           .limit(100),
+        supabase
+          .from('missions')
+          .select('id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id, type_contrat_applique, type_contrat_recherche, total_brut, net_a_payer, net_estime')
+          .eq('soignant_assigne_id', user!.id)
+          .in('statut', ['TERMINEE', 'LITIGE', 'ABSENCE'])
+          .order('fin_le', { ascending: false })
+          .limit(100),
       ]);
 
       if (missionsResult.error) throw missionsResult.error;
       if (valideesResult.error) throw valideesResult.error;
       if (historiqueResult.error) throw historiqueResult.error;
+      if (missionsHistoriqueResult.error) throw missionsHistoriqueResult.error;
 
       const missionsActives = missionsResult.data || [];
       const missionIds = missionsActives.map((mission: any) => mission.id);
       const presencesValideesBrutes = valideesResult.data || [];
       const historiqueBrut = historiqueResult.data || [];
+      const missionsHistoriques = missionsHistoriqueResult.data || [];
       const tousMissionIds = [...new Set([
         ...missionIds,
         ...presencesValideesBrutes.map((presence: any) => presence.mission_id),
         ...historiqueBrut.map((presence: any) => presence.mission_id),
+        ...missionsHistoriques.map((mission: any) => mission.id),
       ].filter(Boolean))];
 
-      const [creneauxResult, contratsResult, etabMap, etabMapValidees, etabMapHistorique] = await Promise.all([
+      const [creneauxResult, contratsResult, etabMap, etabMapValidees, etabMapHistorique, etabMapMissionsHistorique] = await Promise.all([
         tousMissionIds.length > 0
           ? supabase
             .from('mission_creneaux')
@@ -185,6 +196,9 @@ export default function PresencesSoignant() {
         ),
         fetchEtablissementsSafe(
           historiqueBrut.map((presence: any) => presence.missions?.etablissement_id).filter(Boolean),
+        ),
+        fetchEtablissementsSafe(
+          missionsHistoriques.map((mission: any) => mission.etablissement_id).filter(Boolean),
         ),
       ]);
 
@@ -270,7 +284,7 @@ export default function PresencesSoignant() {
         },
       }));
 
-      const allList = historiqueBrut.map((presence: any) => ({
+      const historiqueLegacy = historiqueBrut.map((presence: any) => ({
         ...presence,
         missions: {
           ...presence.missions,
@@ -278,6 +292,22 @@ export default function PresencesSoignant() {
           creneaux: creneauxParMission[presence.mission_id] || [],
         },
       }));
+      const historiqueEffectifs = construireHistoriqueEffectifsSansPresence({
+        missions: missionsHistoriques,
+        presences: historiqueBrut,
+        creneauxParMission,
+        etablissements: etabMapMissionsHistorique,
+        soignantId: user!.id,
+      });
+      const dateHistorique = (presence: any) => new Date(
+        presence.pointage_depart_le
+          || presence.pointage_arrivee_le
+          || presence.missions?.fin_le
+          || presence.missions?.debut_le
+          || 0,
+      ).getTime();
+      const allList = [...historiqueLegacy, ...historiqueEffectifs]
+        .sort((a, b) => dateHistorique(b) - dateHistorique(a));
 
       return {
         missions: missionsList,
@@ -477,7 +507,10 @@ export default function PresencesSoignant() {
     charger();
   };
 
-  if (loading || !consentementCharge) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  // Pendant une restauration/rotation de session, React Query est désactivé
+  // quelques millisecondes. Conserver un état de chargement évite le flash
+  // trompeur « aucune mission » entre deux pointages.
+  if (loading || !consentementCharge || !user) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   if (chargementEnErreur) {
     return (
@@ -748,7 +781,7 @@ export default function PresencesSoignant() {
                       )}
                     </div>
 
-                    {!p.valide_par_etablissement && (
+                    {!p.valide_par_etablissement && !p.origine_effectifs_sans_presence && (
                       <div className="mt-2">
                         <PanneauContestation
                           presenceId={p.id}
@@ -759,6 +792,23 @@ export default function PresencesSoignant() {
                           role="SOIGNANT"
                           onUpdate={charger}
                         />
+                      </div>
+                    )}
+                    {p.origine_effectifs_sans_presence && (
+                      <div className="mt-2 rounded-lg border border-warning/30 bg-warning/5 p-2.5 text-xs text-muted-foreground">
+                        <p>
+                          Relevé reconstruit depuis les segments de pointage. La validation historique n’est pas disponible sur cet ancien dossier.
+                        </p>
+                        <button
+                          type="button"
+                          className="mt-2 min-h-11 font-semibold text-primary hover:underline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate('/soignant/litiges');
+                          }}
+                        >
+                          Voir ou signaler un litige
+                        </button>
                       </div>
                     )}
                   </div>
