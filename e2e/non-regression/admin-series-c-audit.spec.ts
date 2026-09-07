@@ -268,12 +268,14 @@ function isLocalPreviewTransportNoise(message: string, route = '') {
     || /WebSocket connection to 'wss:\/\/[^']+\.supabase\.co\/realtime\/v1\/websocket\?[^']+' failed: The operation couldn’t be completed\. Socket is not connected/.test(message);
 }
 
-function isLocalPreviewCancelledSupabaseRequest(message: string, route = '') {
-  if (!/^http:\/\/127\.0\.0\.1:\d+/.test(process.env.PLAYWRIGHT_BASE_URL || '')) return false;
+function isLocalPreviewCancelledExternalRequest(message: string, route = '') {
+  if (!/^http:\/\/(?:127\.0\.0\.1|localhost):\d+/.test(process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080')) return false;
   const cancelledRestRequest = /supabase\.co\/rest\/v1\/.+ due to access control checks\.$/.test(message);
   const cancelledHealthFunction = isLocalPreviewHealthRoute(route)
     && /supabase\.co\/functions\/v1\/.+ due to access control checks\.$/.test(message);
-  return cancelledRestRequest || cancelledHealthFunction;
+  const cancelledSentryEnvelope = /(?:^|\/)o\d+\.ingest\.[a-z-]+\.sentry\.io\/api\/\d+\/envelope\/\?.+ due to access control checks\.$/.test(message);
+  const stripeFrameIsolation = /from accessing a frame with origin "https:\/\/js\.stripe\.com"\.[\s\S]*Protocols must match\./.test(message);
+  return cancelledRestRequest || cancelledHealthFunction || cancelledSentryEnvelope || stripeFrameIsolation;
 }
 
 test.describe('audit frontend administrateur Série C', () => {
@@ -296,7 +298,7 @@ test.describe('audit frontend administrateur Série C', () => {
       }
     });
     page.on('pageerror', (error) => {
-      if (!isLocalPreviewCancelledSupabaseRequest(error.message, currentRoute)) {
+      if (!isLocalPreviewCancelledExternalRequest(error.message, currentRoute)) {
         pageErrors.push(`${currentRoute}: ${error.message}`);
       }
     });
@@ -400,7 +402,7 @@ test.describe('audit frontend administrateur Série C', () => {
       if (!isLocalPreviewTransportNoise(message.text())) consoleErrors.push(message.text());
     });
     page.on('pageerror', (error) => {
-      if (!isLocalPreviewCancelledSupabaseRequest(error.message)) pageErrors.push(error.message);
+      if (!isLocalPreviewCancelledExternalRequest(error.message)) pageErrors.push(error.message);
     });
     page.on('response', (response) => {
       if ([401, 403].includes(response.status()) || response.status() >= 500) {

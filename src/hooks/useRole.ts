@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
 import type { RpcGetMyRole } from '@/lib/supabase-rpc-types';
@@ -74,6 +74,7 @@ async function recupererRoleAvecDelai(controller: AbortController) {
 export function useRole(): UseRoleResult {
   const [state, setState] = useState<RoleState>(ETAT_INITIAL);
   const [retryVersion, setRetryVersion] = useState(0);
+  const utilisateurActifRef = useRef<string | null>(null);
   const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export function useRole(): UseRoleResult {
         }
 
         const sessionUserId = sessionData.session.user.id;
+        utilisateurActifRef.current = sessionUserId;
         if (
           !force
           && roleCache?.userId === sessionUserId
@@ -192,11 +194,20 @@ export function useRole(): UseRoleResult {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       if (session) {
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (event === 'SIGNED_IN') {
+          // Supabase réémet SIGNED_IN au retour d'une vue native iOS
+          // (photothèque, caméra, calendrier), même pour le même compte. Une
+          // nouvelle résolution mettait alors RouteProtegee en chargement et
+          // démontait la modale qui attendait le résultat natif.
+          if (utilisateurActifRef.current === session.user.id) return;
+          reinitialiserCacheRole();
+          void fetchRole(true);
+        } else if (event === 'USER_UPDATED') {
           reinitialiserCacheRole();
           void fetchRole(true);
         }
       } else {
+        utilisateurActifRef.current = null;
         reinitialiserCacheRole();
         requestVersion += 1;
         for (const controller of controllers) controller.abort();

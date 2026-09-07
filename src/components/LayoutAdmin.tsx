@@ -7,7 +7,6 @@ import { AdminInterfaceProvider } from '@/contexts/AdminInterfaceContext';
 import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
-import { useScrollDirection } from '@/hooks/useScrollDirection';
 import {
   ADMIN_LEGAL_ITEMS,
   ADMIN_MOBILE_PRIMARY_GROUP_IDS,
@@ -98,7 +97,6 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const { accesTotal, aAcces } = useAccesAdmin();
-  const scrollDirection = useScrollDirection();
   const [rechercheOuverte, setRechercheOuverte] = useState(false);
   const [menuMobileOuvert, setMenuMobileOuvert] = useState(false);
   const menuMobileRef = useRef<HTMLDivElement>(null);
@@ -280,8 +278,11 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
         <header
           className={cn(
             'fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-card/95 px-4 backdrop-blur md:hidden',
-            'transition-transform duration-200 motion-reduce:transition-none',
-            scrollDirection === 'down' ? '-translate-y-full' : 'translate-y-0',
+            // L'admin est une opératrice unique : recherche, alertes et
+            // déconnexion doivent rester disponibles, même après un très long
+            // tableau. Le masquage à la descente pouvait rester bloqué après
+            // un retour programmatique en haut dans WKWebView.
+            'translate-y-0',
           )}
         >
           <div className="min-w-0">

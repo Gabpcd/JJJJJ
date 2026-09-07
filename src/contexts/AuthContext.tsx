@@ -38,6 +38,16 @@ function toAppUser(user: User): AppUser {
   };
 }
 
+function conserverUtilisateurStable(precedent: AppUser | null, suivant: AppUser | null): AppUser | null {
+  if (!precedent || !suivant) return suivant;
+  return precedent.id === suivant.id
+    && precedent.email === suivant.email
+    && precedent.prenom === suivant.prenom
+    && precedent.nom === suivant.nom
+    ? precedent
+    : suivant;
+}
+
 function erreurConfirmationEmail(): Error {
   const erreur = new Error(
     'Un email de confirmation vient de vous être envoyé. Ouvrez-le, revenez ici, puis appuyez sur « J’ai confirmé mon email » pour terminer votre inscription.',
@@ -104,7 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      setUser(session?.user ? toAppUser(session.user) : null);
+      // Un retour d'écran natif (photothèque, caméra, calendrier…) peut
+      // provoquer un nouvel événement SIGNED_IN/TOKEN_REFRESHED alors que
+      // l'identité n'a pas changé. Conserver la même référence empêche les
+      // formulaires ouverts de relancer leurs chargements et de perdre l'état
+      // saisi au moment exact où l'utilisateur revient dans l'app.
+      const prochainUtilisateur = session?.user ? toAppUser(session.user) : null;
+      setUser((precedent) => conserverUtilisateurStable(precedent, prochainUtilisateur));
       setLoading(false);
 
       // Detect session expiry / sign out triggered by token refresh failure
@@ -116,7 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ? toAppUser(session.user) : null);
+      const prochainUtilisateur = session?.user ? toAppUser(session.user) : null;
+      setUser((precedent) => conserverUtilisateurStable(precedent, prochainUtilisateur));
       setLoading(false);
     });
 

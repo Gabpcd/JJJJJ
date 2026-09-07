@@ -251,7 +251,10 @@ export async function prendrePhoto(): Promise<{ dataUrl: string } | null> {
     const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera');
     const photo = await Camera.getPhoto({
       resultType: CameraResultType.DataUrl,
-      source: CameraSource.Prompt,
+      // Le bouton appelant est explicitement « Prendre une photo ». Ouvrir
+      // directement la caméra évite la feuille Capacitor non localisée
+      // « From Photos / Take Picture », la galerie ayant sa propre action.
+      source: CameraSource.Camera,
       quality: 80,
     });
     return photo.dataUrl ? { dataUrl: photo.dataUrl } : null;
