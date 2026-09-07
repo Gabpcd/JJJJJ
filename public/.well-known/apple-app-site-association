@@ -3,6 +3,26 @@
     "apps": [],
     "details": [
       {
+        "appID": "GDU5AA28M9.app.jolene",
+        "paths": [
+          "/soignant/*",
+          "/etablissement/*",
+          "/groupe/*",
+          "/admin/*",
+          "/connexion",
+          "/inscription/*",
+          "/reset-password",
+          "/auth/psc/callback",
+          "/etab/invitation/*",
+          "/mission/*",
+          "/contrat/*",
+          "/soignant/missions",
+          "/soignant/missions/*",
+          "/etablissement/missions",
+          "/etablissement/missions/*"
+        ]
+      },
+      {
         "appID": "FPQ78HDF4Y.app.jolene",
         "paths": [
           "/soignant/*",
@@ -26,6 +46,7 @@
   },
   "webcredentials": {
     "apps": [
+      "GDU5AA28M9.app.jolene",
       "FPQ78HDF4Y.app.jolene"
     ]
   }

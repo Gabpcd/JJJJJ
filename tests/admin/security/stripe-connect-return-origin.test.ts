@@ -13,6 +13,11 @@ const appleAppSiteAssociation = readFileSync(
   'public/.well-known/apple-app-site-association',
   'utf8',
 );
+const iosProject = readFileSync('ios/App/App.xcodeproj/project.pbxproj', 'utf8');
+const iosExportOptions = readFileSync('ios/ExportOptions-AppStore.plist', 'utf8');
+
+const CURRENT_APPLE_TEAM_ID = 'GDU5AA28M9';
+const LEGACY_APPLE_TEAM_ID = 'FPQ78HDF4Y';
 
 describe('Stripe Connect onboarding — URL de retour de confiance', () => {
   it('réutilise la décision CORS partagée et refuse toute origine absente ou inconnue', () => {
@@ -63,7 +68,10 @@ describe('Stripe Connect onboarding — URL de retour de confiance', () => {
 
     const association = JSON.parse(appleAppSiteAssociation);
     const paths = association.applinks.details
-      .filter((detail: { appID?: string }) => detail.appID === 'FPQ78HDF4Y.app.jolene')
+      .filter(
+        (detail: { appID?: string }) =>
+          detail.appID === `${CURRENT_APPLE_TEAM_ID}.app.jolene`,
+      )
       .flatMap((detail: { paths?: string[] }) => detail.paths ?? []);
     expect(paths).toContain('/soignant/*');
     expect(paths).toContain('/etablissement/*');
@@ -72,7 +80,10 @@ describe('Stripe Connect onboarding — URL de retour de confiance', () => {
   it('conserve la parité des familles de liens universels iOS et Android', () => {
     const association = JSON.parse(appleAppSiteAssociation);
     const paths = association.applinks.details
-      .filter((detail: { appID?: string }) => detail.appID === 'FPQ78HDF4Y.app.jolene')
+      .filter(
+        (detail: { appID?: string }) =>
+          detail.appID === `${CURRENT_APPLE_TEAM_ID}.app.jolene`,
+      )
       .flatMap((detail: { paths?: string[] }) => detail.paths ?? []);
     const sharedFamilies = [
       ['/groupe/*', 'android:pathPrefix="/groupe/"'],
@@ -85,5 +96,24 @@ describe('Stripe Connect onboarding — URL de retour de confiance', () => {
       expect(paths).toContain(iosPath);
       expect(androidManifest).toContain(androidPath);
     }
+  });
+
+  it('signe la prochaine version avec le compte JOLENE tout en préservant les installations transférées', () => {
+    const association = JSON.parse(appleAppSiteAssociation);
+    const appIDs = association.applinks.details.map(
+      (detail: { appID?: string }) => detail.appID,
+    );
+
+    expect(iosProject).toContain(`DEVELOPMENT_TEAM = ${CURRENT_APPLE_TEAM_ID};`);
+    expect(iosProject).not.toContain(`DEVELOPMENT_TEAM = ${LEGACY_APPLE_TEAM_ID};`);
+    expect(iosExportOptions).toContain(`<string>${CURRENT_APPLE_TEAM_ID}</string>`);
+    expect(appIDs).toContain(`${CURRENT_APPLE_TEAM_ID}.app.jolene`);
+    expect(appIDs).toContain(`${LEGACY_APPLE_TEAM_ID}.app.jolene`);
+    expect(association.webcredentials.apps).toEqual(
+      expect.arrayContaining([
+        `${CURRENT_APPLE_TEAM_ID}.app.jolene`,
+        `${LEGACY_APPLE_TEAM_ID}.app.jolene`,
+      ]),
+    );
   });
 });
