@@ -303,7 +303,18 @@ export default function InscriptionEtablissement() {
                   <label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label>
                   <div className="relative">
                     <input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess}
-                      onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))}
+                      onChange={e => {
+                        if (form.type === 'PHARMACIE_OFFICINE') {
+                          maj('numeroLicence', e.target.value);
+                          return;
+                        }
+
+                        // Le résultat appartient à la valeur qui vient d'être
+                        // vérifiée. Dès que l'utilisateur la corrige ou l'efface,
+                        // ne pas conserver un avertissement FINESS devenu faux.
+                        setFinessCheck(null);
+                        maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9));
+                      }}
                       onBlur={() => { if (form.type !== 'PHARMACIE_OFFICINE' && form.finess.length === 9) verifierFinessLive(form.finess); }}
                       className="input-base" />
                     {finessLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}

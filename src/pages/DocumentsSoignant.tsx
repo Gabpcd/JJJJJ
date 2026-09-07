@@ -145,6 +145,7 @@ export default function DocumentsSoignant() {
 export function DocumentsSoignantContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id;
   const [soignant, setSoignant] = useState<any>(null);
   const [documentsRequis, setDocumentsRequis] = useState<any[]>([]);
   const [mesDocuments, setMesDocuments] = useState<any[]>([]);
@@ -165,7 +166,7 @@ export function DocumentsSoignantContent() {
     if (afficherChargement) setLoading(true);
     setErreurChargement(null);
 
-    if (!user) {
+    if (!userId) {
       setErreurChargement('Votre session n’a pas pu être identifiée. Reconnectez-vous puis réessayez.');
       setLoading(false);
       return;
@@ -173,9 +174,9 @@ export function DocumentsSoignantContent() {
 
     try {
       const [profilResultat, reglesResultat, documentsResultat] = await Promise.all([
-        supabase.from('soignants').select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie').eq('id', user.id).maybeSingle(),
+        supabase.from('soignants').select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie').eq('id', userId).maybeSingle(),
         supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
-        supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
+        supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', userId).is('supprime_le', null).order('televerse_le', { ascending: false }),
       ]);
 
       if (profilResultat.error || reglesResultat.error || documentsResultat.error) {
@@ -222,7 +223,10 @@ export function DocumentsSoignantContent() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  // Dépendre de l'identifiant, pas de l'objet utilisateur. Supabase renouvelle
+  // l'objet de session au retour du sélecteur photo iOS ; l'id reste stable et
+  // la modale ne doit surtout pas être démontée pendant ce retour natif.
+  }, [userId]);
 
   useEffect(() => { void charger(true); }, [charger]);
 

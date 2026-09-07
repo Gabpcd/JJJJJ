@@ -52,4 +52,39 @@ describe('garde-fous de l’expérience iOS native', () => {
     expect(layout).toContain('px-4 py-4 md:py-6');
     expect(revenus).toMatch(/titre="Pas encore de gains"[\s\S]{0,300}compact/);
   });
+
+  it('ouvre les deux parcours document iOS sans menu caméra ambigu', () => {
+    const infoPlist = lire('ios/App/App/Info.plist');
+    const platform = lire('src/lib/platform.ts');
+
+    expect(infoPlist).toContain('<key>NSCameraUsageDescription</key>');
+    expect(infoPlist).toContain('<key>NSPhotoLibraryUsageDescription</key>');
+    expect(infoPlist).toContain('<key>NSPhotoLibraryAddUsageDescription</key>');
+    expect(platform).toContain('source: CameraSource.Camera');
+    expect(platform).not.toContain('source: CameraSource.Prompt');
+  });
+
+  it('conserve la modale documentaire au retour de la photothèque native', () => {
+    const authContext = lire('src/contexts/AuthContext.tsx');
+    const documents = lire('src/pages/DocumentsSoignant.tsx');
+
+    expect(authContext).toContain('conserverUtilisateurStable');
+    expect(authContext).toContain('setUser((precedent) => conserverUtilisateurStable');
+    expect(documents).toContain('const userId = user?.id');
+    expect(documents).toContain('}, [userId]);');
+  });
+
+  it('retire immédiatement un verdict FINESS devenu obsolète', () => {
+    const inscription = lire('src/pages/InscriptionEtablissement.tsx');
+
+    expect(inscription).toMatch(/setFinessCheck\(null\);[\s\S]{0,160}maj\('finess'/);
+  });
+
+  it('laisse les commandes critiques de l’admin accessibles sur mobile', () => {
+    const layoutAdmin = lire('src/components/LayoutAdmin.tsx');
+
+    expect(layoutAdmin).toContain('aria-label="Se déconnecter"');
+    expect(layoutAdmin).toContain("'translate-y-0'");
+    expect(layoutAdmin).not.toContain("'-translate-y-full'");
+  });
 });

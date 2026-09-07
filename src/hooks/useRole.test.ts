@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   onAuthStateChange: vi.fn(),
   unsubscribe: vi.fn(),
+  authCallback: null as null | ((event: string, session: any) => void),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -45,8 +46,11 @@ describe('useRole — résolution fail-closed', () => {
       data: { session: { user: { id: 'utilisateur-id' } } },
       error: null,
     });
-    mocks.onAuthStateChange.mockReturnValue({
+    mocks.onAuthStateChange.mockImplementation((callback) => {
+      mocks.authCallback = callback;
+      return {
       data: { subscription: { unsubscribe: mocks.unsubscribe } },
+      };
     });
   });
 
@@ -145,6 +149,24 @@ describe('useRole — résolution fail-closed', () => {
     expect(second.result.current.etablissement_id).toBe('etablissement-cache');
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
     second.unmount();
+  });
+
+  it('ne démonte pas la route lors d’un SIGNED_IN répété au retour d’une vue native', async () => {
+    mocks.rpc.mockReturnValue(requeteRpc({
+      data: { role: 'SOIGNANT', etablissement_id: null },
+      error: null,
+    }));
+
+    const { result } = renderHook(() => useRole());
+    await waitFor(() => expect(result.current.resolved).toBe(true));
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      mocks.authCallback?.('SIGNED_IN', { user: { id: 'utilisateur-id' } });
+    });
+
+    expect(result.current).toMatchObject({ role: 'SOIGNANT', loading: false, resolved: true });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('expose l’erreur RPC sans considérer le rôle comme résolu', async () => {

@@ -116,13 +116,18 @@ else
   echo "   OK"
 fi
 
-echo "── Garde-fou 9 : mentions de localisation iOS exigées par App Store Connect"
-# Le SDK de géolocalisation référence les API WhenInUse et AlwaysAndWhenInUse.
-# Apple exige les deux purpose strings même si Jolene ne demande jamais la
-# localisation en arrière-plan (ITMS-90683 détecté sur le build 3).
+echo "── Garde-fou 9 : mentions d’autorisation iOS exigées par les SDK natifs"
+# Les SDK natifs doivent avoir leurs purpose strings avant toute ouverture du
+# sélecteur système. Camera.getPhoto(source: Photos) exige notamment les trois
+# mentions caméra/photothèque, sinon Capacitor échoue avant d’afficher le picker.
 IOS_PLIST="ios/App/App/Info.plist"
 MISSING_IOS_PURPOSE=0
-for key in NSLocationWhenInUseUsageDescription NSLocationAlwaysAndWhenInUseUsageDescription; do
+for key in \
+  NSLocationWhenInUseUsageDescription \
+  NSLocationAlwaysAndWhenInUseUsageDescription \
+  NSCameraUsageDescription \
+  NSPhotoLibraryUsageDescription \
+  NSPhotoLibraryAddUsageDescription; do
   if ! KEY="$key" perl -0777 -e '
     $s = <>;
     $k = $ENV{"KEY"};
@@ -204,8 +209,16 @@ if grep -ni "0 donnée de santé" src/pages/APropos.tsx; then
 fi
 if [ "$LEGAL_CLAIMS_FAIL" -ne 0 ]; then FAIL=1; else echo "   OK"; fi
 
+echo "── Garde-fou 17 : le bouton photo ouvre directement la caméra native"
+if grep -n "source: CameraSource.Prompt" src/lib/platform.ts; then
+  echo "   le menu Capacitor non localisé a été réintroduit sur « Prendre une photo »"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 16 garde-fous passent."
+echo "✓ guards.sh : les 17 garde-fous passent."

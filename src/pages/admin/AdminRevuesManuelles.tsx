@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 
 type Decision = 'APPROUVER' | 'REJETER';
+type FiltreJeuDonnees = 'TOUTES' | 'REELLES' | 'TESTS';
 
 interface RevueManuelle {
   id: string;
@@ -117,6 +118,25 @@ export default function AdminRevuesManuelles() {
   const [ouvertureId, setOuvertureId] = useState<string | null>(null);
   const [motifs, setMotifs] = useState<Record<string, string>>({});
   const [ibans, setIbans] = useState<Record<string, string>>({});
+  const [recherche, setRecherche] = useState('');
+  const [filtreJeuDonnees, setFiltreJeuDonnees] = useState<FiltreJeuDonnees>('TOUTES');
+
+  const revuesFiltrees = useMemo(() => {
+    const terme = recherche.trim().toLocaleLowerCase('fr-FR');
+    return revues.filter((revue) => {
+      if (filtreJeuDonnees === 'REELLES' && revue.est_compte_test) return false;
+      if (filtreJeuDonnees === 'TESTS' && !revue.est_compte_test) return false;
+      if (!terme) return true;
+
+      const indexRecherche = [
+        revue.ressource_libelle,
+        revue.preuve_type,
+        revue.service_en_echec,
+        LIBELLES_SERVICE[revue.service_en_echec],
+      ].filter(Boolean).join(' ').toLocaleLowerCase('fr-FR');
+      return indexRecherche.includes(terme);
+    });
+  }, [filtreJeuDonnees, recherche, revues]);
 
   const charger = useCallback(async () => {
     setLoading(true);
@@ -300,10 +320,54 @@ export default function AdminRevuesManuelles() {
           />
         ) : (
           <section aria-label={`${revues.length} revues manuelles en attente`} className="space-y-4">
+            <div className="space-y-3 rounded-2xl border border-border bg-card p-3 sm:p-4">
+              <Label htmlFor="recherche-revue">Retrouver une revue</Label>
+              <Input
+                id="recherche-revue"
+                type="search"
+                value={recherche}
+                onChange={(event) => setRecherche(event.target.value)}
+                placeholder="Nom, document ou contrôle…"
+                autoComplete="off"
+                className="min-h-[44px]"
+              />
+              <div className="grid grid-cols-3 gap-2" role="group" aria-label="Filtrer les données">
+                {([
+                  ['TOUTES', 'Toutes'],
+                  ['REELLES', 'Réelles'],
+                  ['TESTS', 'Tests'],
+                ] as const).map(([valeur, libelle]) => (
+                  <button
+                    key={valeur}
+                    type="button"
+                    onClick={() => setFiltreJeuDonnees(valeur)}
+                    aria-pressed={filtreJeuDonnees === valeur}
+                    className={`min-h-11 rounded-xl border px-2 text-sm font-medium transition-colors ${
+                      filtreJeuDonnees === valeur
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground'
+                    }`}
+                  >
+                    {libelle}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <p role="status" className="text-sm text-muted-foreground">
-              {revues.length} revue{revues.length > 1 ? 's' : ''} en attente
+              {revuesFiltrees.length} revue{revuesFiltrees.length > 1 ? 's' : ''} affichée{revuesFiltrees.length > 1 ? 's' : ''}
+              {revuesFiltrees.length !== revues.length ? ` sur ${revues.length} en attente` : ' en attente'}
             </p>
-            {revues.map(revue => {
+
+            {revuesFiltrees.length === 0 && (
+              <EmptyState
+                icone={<FileSearch />}
+                titre="Aucune revue ne correspond"
+                description="Modifiez la recherche ou le filtre pour retrouver le dossier à traiter."
+              />
+            )}
+
+            {revuesFiltrees.map(revue => {
               const contexte = contexteRevue(revue);
               const actionEnCours = actionId === revue.id;
               return (

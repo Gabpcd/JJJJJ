@@ -54,6 +54,8 @@
 	<string>Jolene ajoute au calendrier les missions que vous sélectionnez.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Jolene accède à vos photos pour téléverser vos documents professionnels.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Jolene peut enregistrer une photo de document dans votre photothèque uniquement lorsque vous le demandez.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Jolene utilise Face ID ou Touch ID pour sécuriser la connexion à votre compte.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

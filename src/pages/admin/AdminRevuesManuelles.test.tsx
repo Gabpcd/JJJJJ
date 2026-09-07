@@ -78,4 +78,54 @@ describe('AdminRevuesManuelles', () => {
     expect(await screen.findByText('Aucune revue en attente')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('permet à l’admin seule de retrouver immédiatement une revue dans une file chargée', async () => {
+    const revue = (id: string, nom: string, estCompteTest: boolean) => ({
+      id,
+      type_entite: 'TELEVERSEMENT_DOCUMENT',
+      id_entite: id,
+      service_en_echec: 'REVUE_DEMANDEE_PAR_SOIGNANT',
+      motif_echec: 'Contrôle humain demandé',
+      statut: 'EN_ATTENTE',
+      priorite: 4,
+      cree_le: '2026-09-07T12:00:00Z',
+      expire_le: null,
+      est_compte_test: estCompteTest,
+      decision_directe: false,
+      ressource_libelle: nom,
+      route_ressource: '/admin/moderation?onglet=documents',
+      preuve_bucket: 'documents',
+      preuve_path: `${id}.pdf`,
+      preuve_type: 'DIPLOME',
+      contexte: {},
+      jeton_cas: `jeton-${id}`,
+    });
+    mocks.rpc.mockResolvedValue({
+      data: {
+        success: true,
+        revues: [
+          revue('1', 'Camille Audit', true),
+          revue('2', 'Clinique Réelle', false),
+        ],
+      },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <AdminRevuesManuelles />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Camille Audit')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Retrouver une revue'), { target: { value: 'Clinique' } });
+    expect(screen.getByText('Clinique Réelle')).toBeInTheDocument();
+    expect(screen.queryByText('Camille Audit')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Retrouver une revue'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tests' }));
+    expect(screen.getByText('Camille Audit')).toBeInTheDocument();
+    expect(screen.queryByText('Clinique Réelle')).not.toBeInTheDocument();
+    expect(screen.getByText('1 revue affichée sur 2 en attente')).toBeInTheDocument();
+  });
 });
