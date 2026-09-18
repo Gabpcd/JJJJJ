@@ -31,3 +31,11 @@ Les données locales de recette sont simulées ; elles ne sont pas présentées 
 L’URL exacte `https://jolene.app/inscription/confirmer` a été ajoutée à la liste des redirections Auth autorisées, en conservant les entrées existantes. La configuration de confirmation email et de captcha n’a pas été modifiée.
 
 La mise à jour web ne remplace pas le bundle des versions iOS/Android déjà installées ; leur distribution nécessite un nouveau binaire Store.
+
+## Captures du simulateur
+
+Captures du nouveau frontend dans Safari sur le simulateur iPhone, avec l’API locale de recette :
+
+- [Compte établissement](inscription-progressive-images/etablissement-compte-ios.png)
+- [Brouillon établissement](inscription-progressive-images/etablissement-brouillon-ios.png)
+- [Découverte des missions côté soignant](inscription-progressive-images/soignant-missions-ios.png)
