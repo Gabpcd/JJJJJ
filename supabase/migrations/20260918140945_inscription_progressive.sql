@@ -1,6 +1,6 @@
 -- Le compte Auth peut exister avant le profil professionnel. Ce brouillon
 -- privé ne donne aucun rôle métier et ne crée aucune mission publiée.
-CREATE TABLE public.parcours_inscription (
+CREATE TABLE IF NOT EXISTS public.parcours_inscription (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   type_compte text NOT NULL CHECK (type_compte IN ('SOIGNANT', 'ETABLISSEMENT')),
   donnees jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(donnees) = 'object' AND octet_length(donnees::text) <= 32768),
@@ -14,10 +14,11 @@ ALTER TABLE public.parcours_inscription ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.parcours_inscription FROM anon, authenticated;
 GRANT SELECT ON public.parcours_inscription TO authenticated;
 GRANT ALL ON public.parcours_inscription TO service_role;
+DROP POLICY IF EXISTS parcours_inscription_proprietaire ON public.parcours_inscription;
 CREATE POLICY parcours_inscription_proprietaire ON public.parcours_inscription
   FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()) AND (SELECT public.fn_compte_auth_actif()));
 
-CREATE FUNCTION public.fn_demarrer_inscription(p_type_compte text, p_profession text DEFAULT NULL,
+CREATE OR REPLACE FUNCTION public.fn_demarrer_inscription(p_type_compte text, p_profession text DEFAULT NULL,
   p_nom text DEFAULT NULL, p_cgu boolean DEFAULT false, p_cgv boolean DEFAULT false)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, auth
 AS $body$
@@ -62,7 +63,7 @@ $body$;
 REVOKE ALL ON FUNCTION public.fn_demarrer_inscription(text,text,text,boolean,boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_demarrer_inscription(text,text,text,boolean,boolean) TO authenticated;
 
-CREATE FUNCTION public.fn_enregistrer_parcours_inscription(p_donnees jsonb)
+CREATE OR REPLACE FUNCTION public.fn_enregistrer_parcours_inscription(p_donnees jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, auth
 AS $body$
 DECLARE v_parcours public.parcours_inscription;
@@ -92,7 +93,7 @@ GRANT EXECUTE ON FUNCTION public.fn_enregistrer_parcours_inscription(jsonb) TO a
 
 -- Compensation d'un échec de complétion : garder le compte et son brouillon,
 -- libérer uniquement la réservation détenue par cet appel pour une reprise.
-CREATE FUNCTION public.fn_liberer_inscription_progressive(p_user_id uuid, p_claim_token uuid)
+CREATE OR REPLACE FUNCTION public.fn_liberer_inscription_progressive(p_user_id uuid, p_claim_token uuid)
 RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public
 AS $body$
   UPDATE public.types_comptes_auth t SET claim_token = NULL, claim_expire_le = NULL
@@ -103,7 +104,7 @@ GRANT EXECUTE ON FUNCTION public.fn_liberer_inscription_progressive(uuid,uuid) T
 
 -- Aperçu borné : critères de visibilité de fn_apercu_marche_profession,
 -- sans identité d'établissement, contact, notes internes ou rémunération.
-CREATE FUNCTION public.fn_missions_decouverte_inscription(p_ville text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.fn_missions_decouverte_inscription(p_ville text DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
 AS $body$
 DECLARE v_profession text; v_resultat jsonb;
@@ -130,7 +131,7 @@ $body$;
 REVOKE ALL ON FUNCTION public.fn_missions_decouverte_inscription(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_missions_decouverte_inscription(text) TO authenticated;
 
-CREATE FUNCTION public.fn_accepter_cgu_decouverte_soignant()
+CREATE OR REPLACE FUNCTION public.fn_accepter_cgu_decouverte_soignant()
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, auth
 AS $body$
 BEGIN
