@@ -11,6 +11,7 @@ export default defineConfig({
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "tests/admin/**/*.{test,spec}.{ts,tsx}",
+      "tests/security/registration-recovery.test.ts",
     ],
   },
   resolve: {

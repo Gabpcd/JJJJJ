@@ -96,8 +96,7 @@ CREATE FUNCTION public.fn_liberer_inscription_progressive(p_user_id uuid, p_clai
 RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public
 AS $body$
   UPDATE public.types_comptes_auth t SET claim_token = NULL, claim_expire_le = NULL
-  WHERE t.user_id = p_user_id AND t.claim_token = p_claim_token AND t.finalise_le IS NULL
-    AND EXISTS (SELECT 1 FROM public.parcours_inscription p WHERE p.user_id = t.user_id);
+  WHERE t.user_id = p_user_id AND t.claim_token = p_claim_token AND t.finalise_le IS NULL;
 $body$;
 REVOKE ALL ON FUNCTION public.fn_liberer_inscription_progressive(uuid,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_liberer_inscription_progressive(uuid,uuid) TO service_role;
