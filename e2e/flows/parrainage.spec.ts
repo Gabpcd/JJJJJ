@@ -27,7 +27,8 @@ test.describe('Flow parrainage soignant', () => {
 
   test('inscription avec ?ref=CODE pré-remplit le champ filleul', async ({ page }) => {
     await page.goto('/inscription/soignant?ref=JO-TEST123', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText('Étape 1', { exact: false })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Créez votre compte.' })).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('jolene.parrainage_code'))).toBe('JO-TEST123');
   });
 });
 

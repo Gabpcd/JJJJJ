@@ -1,14 +1,16 @@
 import { TYPES_ETABLISSEMENT } from '@/lib/constantes';
 
 interface SelectTypeEtablissementProps {
+  id?: string;
   value: string;
   onChange: (val: string) => void;
   disabled?: boolean;
 }
 
-export function SelectTypeEtablissement({ value, onChange, disabled }: SelectTypeEtablissementProps) {
+export function SelectTypeEtablissement({ id, value, onChange, disabled }: SelectTypeEtablissementProps) {
   return (
     <select
+      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}

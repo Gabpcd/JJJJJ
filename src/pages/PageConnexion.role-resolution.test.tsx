@@ -58,6 +58,7 @@ function renderConnexion() {
     <MemoryRouter initialEntries={['/connexion']}>
       <Routes>
         <Route path="/connexion" element={<PageConnexion />} />
+        <Route path="/inscription/reprendre" element={<div>Reprise inscription</div>} />
         <Route path="/inscription/soignant" element={<div>Inscription soignant</div>} />
         <Route path="/soignant/tableau-de-bord" element={<div>Tableau de bord soignant</div>} />
       </Routes>
@@ -117,18 +118,14 @@ describe('PageConnexion — résolution sûre du rôle', () => {
     }));
   });
 
-  it('réserve la déconnexion au cas où la RPC réussit réellement sans rôle', async () => {
+  it('reprend une inscription partielle sans perdre la session', async () => {
     mocks.rpc.mockResolvedValue({ data: { role: null }, error: null });
 
     renderConnexion();
     await soumettreConnexion();
 
-    expect(await screen.findByText('Inscription soignant')).toBeInTheDocument();
-    expect(mocks.signOut).toHaveBeenCalledTimes(1);
-    expect(mocks.afficherNotification).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'erreur',
-      message: expect.stringContaining('inscription n\'est pas complète'),
-    }));
+    expect(await screen.findByText('Reprise inscription')).toBeInTheDocument();
+    expect(mocks.signOut).not.toHaveBeenCalled();
   });
 
   it('n’annonce un envoi qu’après la vraie demande et normalise l’adresse', async () => {

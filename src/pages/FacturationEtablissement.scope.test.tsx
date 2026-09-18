@@ -1,9 +1,10 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FacturationEtablissement from './FacturationEtablissement';
+import { logger } from '@/lib/logger';
 
 const mocks = vi.hoisted(() => ({
   scope: {
@@ -162,6 +163,23 @@ describe('FacturationEtablissement — périmètre des membres', () => {
     mocks.permissions.error = null;
     mocks.rpc.mockImplementation(() => new Promise<never>(() => {}));
     mocks.from.mockImplementation((table: string) => requeteEnAttente(table));
+  });
+
+  it('ignore une erreur de transport arrivée après avoir quitté la facturation', async () => {
+    activerScope();
+    configurerChargement();
+    const implementation = mocks.rpc.getMockImplementation()!;
+    let rejeter!: (error: Error) => void;
+    const attente = new Promise((_resolve, reject) => { rejeter = reject; });
+    mocks.rpc.mockImplementation((fn: string) => fn === 'fn_paiements_etablissement' ? attente : implementation(fn));
+    const erreur = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    try {
+      const vue = render(<MemoryRouter><FacturationEtablissement /></MemoryRouter>);
+      await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_paiements_etablissement'));
+      vue.unmount();
+      await act(async () => { rejeter(new Error('Navigation interrompue')); });
+      expect(erreur).not.toHaveBeenCalled();
+    } finally { erreur.mockRestore(); }
   });
 
   it('attend le scope puis filtre historique, transferts et prélèvements avec l’établissement partagé', async () => {

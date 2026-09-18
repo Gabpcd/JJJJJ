@@ -97,7 +97,7 @@ test.describe('release review — reprise de session iPad', () => {
 
   test('l’inscription soignant expose les consentements et champs essentiels sur iPad', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await expect(page.getByRole('heading', { name: /Inscription Soignant/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Créez votre compte.' })).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]').first()).toBeVisible();
     await expect(page.getByRole('checkbox').first()).toBeVisible();

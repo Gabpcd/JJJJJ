@@ -4,6 +4,7 @@ import {
   type APIResponse,
   type ConsoleMessage,
   type Page,
+  type Request,
   type Response,
   type TestInfo,
 } from '@playwright/test';
@@ -105,40 +106,52 @@ async function expectMobileFormIntegrity(page: Page, route: string, testInfo: Te
   expect(result.offscreenControls, `${route}: contrôles intégralement dans le viewport`).toEqual([]);
 }
 
-async function fillCredentials(page: Page, email: string, legalCheckboxCount: number) {
+async function fillQuickAccount(page: Page, email: string, role: FreshAccountRole) {
   const consent = page.getByRole('button', { name: 'Accepter', exact: true });
   if (await consent.isVisible().catch(() => false)) await consent.click();
-  await page.locator('input[type="email"]').fill(email);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('input[type="password"]').nth(1).fill(PASSWORD);
-  const checkboxes = page.locator('input[type="checkbox"]');
-  for (let index = 0; index < legalCheckboxCount; index += 1) await checkboxes.nth(index).check();
-  await expect(page.getByRole('button', { name: 'Continuer', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Continuer', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Créez votre compte.' })).toBeVisible();
+  await expect(page.locator('form input:not([type="checkbox"]):not([type="hidden"]), form select')).toHaveCount(3);
+  await expect(page.locator('input[type="password"]')).toHaveCount(1);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Mot de passe', { exact: true }).fill(PASSWORD);
+  if (role === 'soignant') {
+    // IDE ouvre ensuite tout le périmètre, dont « Passer en libéral ».
+    await page.getByLabel('Profession', { exact: true }).selectOption('IDE');
+    await expect(page.getByLabel('Profession', { exact: true })).toHaveValue('IDE');
+  } else {
+    await page.getByLabel('Nom de l’établissement', { exact: true }).fill('Clinique Audit Jolene');
+    await expect(page.getByLabel('Nom de l’établissement', { exact: true })).toHaveValue('Clinique Audit Jolene');
+    await page.locator('#cgv').check();
+  }
+  await page.locator('#cgu').check();
+  await expect(page.getByLabel('Email', { exact: true })).toHaveValue(email);
+  await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveValue(PASSWORD);
+  await expect(page.getByRole('button', { name: 'Créer mon compte', exact: true })).toBeEnabled();
 }
 
 async function fillSoignantProfile(page: Page) {
+  await expect(page.getByRole('heading', { name: 'Vos informations professionnelles' })).toBeVisible();
+  await expect(page.locator('input[type="email"], input[type="password"]')).toHaveCount(0);
   await page.locator('label').filter({ hasText: /^Prénom/ }).locator('input').fill('Camille');
   await page.locator('label').filter({ hasText: /^Nom/ }).locator('input').fill('Audit');
   await page.locator('input[type="tel"]').fill('+33612345678');
   await page.locator('input[type="date"]').fill('1990-05-15');
-  await page.locator('#profession-select').click();
-  // IDE ouvre le périmètre fonctionnel le plus large, notamment le parcours
-  // « Passer en libéral ». Un profil AS y est redirigé par règle métier et ne
-  // permet donc pas d'en auditer l'état de premier accès.
-  await page.getByTestId('profession-option-IDE').click();
-  await page.getByRole('checkbox', { name: 'Contrat à Durée Déterminée (CDD)' }).click();
-  await expect(page.getByRole('button', { name: 'Créer mon compte' })).toBeEnabled({ timeout: 10_000 });
+  await expect(page.locator('#profession-select'), 'la profession du compte rapide est reprise').toContainText('(IDE)');
+  await page.getByRole('checkbox', { name: 'Contrat à Durée Déterminée (CDD)' }).check();
+  await expect(page.getByRole('button', { name: 'Enregistrer mon profil', exact: true })).toBeEnabled();
 }
 
 async function fillEtablissementProfile(page: Page, siret: string) {
-  await page.getByText("Nom de l'établissement *", { exact: true }).locator('..').locator('input').fill('Clinique Audit Jolene');
-  const siretInput = page.getByText('SIRET * (14 chiffres)', { exact: true }).locator('..').locator('input');
+  await expect(page.getByRole('heading', { name: 'Identifier votre établissement' })).toBeVisible();
+  await expect(page.locator('input[type="email"], input[type="password"]')).toHaveCount(0);
+  await expect(page.locator('#profil-nom'), 'le nom du compte rapide est repris').toHaveValue('Clinique Audit Jolene');
+  await page.locator('#profil-nom').fill('Clinique Audit Jolene');
+  const siretInput = page.locator('#profil-siret');
   await siretInput.fill(siret);
   await siretInput.blur();
-  await page.locator('select').selectOption({ index: 1 });
-  await page.locator('input[placeholder="Ville"]').fill('Paris');
-  await expect(page.getByRole('button', { name: 'Créer le compte' })).toBeEnabled({ timeout: 10_000 });
+  await page.locator('#profil-type').selectOption('CLINIQUE_PRIVEE');
+  await page.locator('#profil-ville').fill('Paris');
+  await expect(page.getByRole('button', { name: 'Enregistrer mon établissement', exact: true })).toBeEnabled();
 }
 
 async function responseDiagnostic(response: Response | APIResponse) {
@@ -148,6 +161,11 @@ async function responseDiagnostic(response: Response | APIResponse) {
     ok: response.ok(),
     code: raw.error_code ?? raw.code ?? null,
     message: raw.msg ?? raw.message ?? raw.error ?? null,
+    hasSession: typeof raw.access_token === 'string' && raw.access_token.length > 0,
+    businessOk: raw.ok ?? raw.success ?? null,
+    verification: raw.statut_verification ?? null,
+    canPublish: raw.peut_publier_missions ?? null,
+    verificationRequired: raw.verification_complete_requise ?? null,
   };
 }
 
@@ -159,16 +177,72 @@ async function handleStagingEmailRateLimit(
 ) {
   if (signup.status !== 429) return false;
 
-  const rateLimit = page.locator('[data-error-code="EMAIL_RATE_LIMIT"], [data-error-code="RATE_LIMITED"]');
+  const rateLimit = page.getByRole('alert').filter({ hasText: /rate|limit|quota|tentatives/i });
   await expect(rateLimit, 'le quota email staging doit produire une erreur explicite et actionnable').toBeVisible();
-  await expect(rateLimit).toContainText('Trop de tentatives');
-  await expect(rateLimit.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Créer mon compte', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Email', { exact: true })).not.toHaveValue('');
   await expectMobileFormIntegrity(page, `/inscription/${role}-quota-email`, testInfo);
   testInfo.annotations.push({
     type: 'quota staging',
     description: `GoTrue a refusé la création ${role} avec HTTP 429 ; l’UI de reprise est conforme, mais le compte neuf complet doit être rejoué après réouverture du quota email.`,
   });
   return true;
+}
+
+async function createQuickAccount(page: Page, role: FreshAccountRole, testInfo: TestInfo) {
+  const registrations: string[] = [];
+  const onRegister = (request: Request) => {
+    if (/\/functions\/v1\/register-(soignant|etablissement)$/.test(new URL(request.url()).pathname)) {
+      registrations.push(new URL(request.url()).pathname);
+    }
+  };
+  page.on('request', onRegister);
+  const roleResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith('/rpc/fn_get_my_role'),
+    { timeout: 30_000 },
+  ).catch(() => null);
+  try {
+    const signupResponse = page.waitForResponse(
+      (response) => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/auth/v1/signup',
+    );
+    await page.getByRole('button', { name: 'Créer mon compte', exact: true }).click();
+    const signup = await responseDiagnostic(await signupResponse);
+    await testInfo.attach(`signup-auth-${role}.json`, {
+      body: Buffer.from(JSON.stringify(signup, null, 2)), contentType: 'application/json',
+    });
+    if (await handleStagingEmailRateLimit(page, signup, role, testInfo)) return false;
+    expect(signup, 'GoTrue signup').toMatchObject({ status: 200, ok: true });
+
+    if (!signup.hasSession) {
+      await expect(page.getByRole('status').filter({ hasText: 'Un lien de confirmation' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'J’ai confirmé mon email', exact: true })).toBeVisible();
+      await expect(page.getByLabel('Email', { exact: true })).not.toHaveValue('');
+      await expectMobileFormIntegrity(page, `/inscription/${role}-confirmation-email`, testInfo);
+      expect(registrations, 'aucun profil métier avant confirmation email').toEqual([]);
+      const description = `Confirmation email requise pour ${role} : compte Auth créé sans session ; profil métier non créé et audit des écrans non exécuté. Confirmer le compte puis rejouer la recette complète.`;
+      testInfo.annotations.push({ type: 'confirmation email requise', description });
+      await testInfo.attach(`signup-${role}-confirmation-requise.txt`, {
+        body: description, contentType: 'text/plain',
+      });
+      throw new Error(description);
+    }
+
+    await expect(page).toHaveURL(/\/inscription\/reprendre$/, { timeout: 30_000 });
+    await expect(page.getByRole('heading', {
+      name: role === 'soignant' ? 'Découvrez vos missions.' : 'Préparez votre première mission.',
+    })).toBeVisible();
+    const roleRaw = await roleResponse;
+    expect(roleRaw, 'le compte rapide doit faire vérifier son rôle serveur').not.toBeNull();
+    expect(roleRaw!.ok(), 'la vérification du rôle doit réussir').toBe(true);
+    const roleData = await roleRaw!.json() as { role: string | null };
+    expect([null, 'INCONNU'], 'le brouillon privé ne donne aucun rôle métier').toContain(roleData.role);
+    expect(registrations, 'la création du compte rapide ne doit pas appeler register-*').toEqual([]);
+    await expectMobileFormIntegrity(page, `/inscription/${role}-espace-prive`, testInfo);
+    return true;
+  } finally {
+    page.off('request', onRegister);
+  }
 }
 
 function captureSignupDiagnostics(page: Page) {
@@ -461,7 +535,7 @@ async function auditFreshAccountRoutes(
 test.describe('inscriptions mobile Série C', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      // Le bandeau web arrive après 1,5 s et peut masquer l'étape 2. Dans la
+      // Le bandeau web arrive après 1,5 s et peut masquer le formulaire. Dans la
       // coquille native il n'existe pas ; mémoriser ici le choix déjà exprimé
       // isole donc bien le funnel mobile testé.
       localStorage.setItem('cookie-consent', 'accepted');
@@ -470,112 +544,132 @@ test.describe('inscriptions mobile Série C', () => {
 
   test('les deux funnels restent intègres sur la matrice mobile', async ({ page }, testInfo) => {
     test.setTimeout(90_000);
+    const signupRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/auth/v1/signup') {
+        signupRequests.push(request.url());
+      }
+    });
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
       await page.goto('/inscription/soignant');
-      await expectMobileFormIntegrity(page, `/inscription/soignant-etape-1-${viewport.name}`, testInfo);
-      await fillCredentials(page, uniqueEmail('soignant'), 1);
-      await fillSoignantProfile(page);
-      await expectMobileFormIntegrity(page, `/inscription/soignant-etape-2-${viewport.name}`, testInfo);
+      await expectMobileFormIntegrity(page, `/inscription/soignant-vide-${viewport.name}`, testInfo);
+      await fillQuickAccount(page, uniqueEmail('soignant'), 'soignant');
+      await expectMobileFormIntegrity(page, `/inscription/soignant-trois-champs-${viewport.name}`, testInfo);
 
       await page.goto('/inscription/etablissement');
-      await expectMobileFormIntegrity(page, `/inscription/etablissement-etape-1-${viewport.name}`, testInfo);
-      await fillCredentials(page, uniqueEmail('etab'), 2);
+      await expectMobileFormIntegrity(page, `/inscription/etablissement-vide-${viewport.name}`, testInfo);
+      await fillQuickAccount(page, uniqueEmail('etab'), 'etab');
+      await expectMobileFormIntegrity(page, `/inscription/etablissement-trois-champs-${viewport.name}`, testInfo);
+    }
+    expect(signupRequests, 'la matrice de viewports ne crée aucun compte Auth').toEqual([]);
+  });
+
+  test('inscription soignant réelle : compte rapide → espace privé → profil → tous les écrans', async ({ page }, testInfo) => {
+    test.setTimeout(360_000);
+    const [signupViewport] = freshAccountViewports(testInfo);
+    await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
+    const events = captureSignupDiagnostics(page);
+    try {
+      await page.goto('/inscription/soignant');
+      await fillQuickAccount(page, uniqueEmail('soignant'), 'soignant');
+      if (!await createQuickAccount(page, 'soignant', testInfo)) return;
+
+      await page.getByRole('link', { name: /Compléter mon profil/ }).click();
+      await expect(page).toHaveURL(/\/inscription\/completer$/);
+      await fillSoignantProfile(page);
+      await expectMobileFormIntegrity(page, '/inscription/soignant-profil', testInfo);
+      const registerResponse = page.waitForResponse(
+        (response) => response.request().method() === 'POST'
+          && new URL(response.url()).pathname === '/functions/v1/register-soignant',
+        { timeout: 30_000 },
+      ).catch(() => null);
+      await page.getByRole('button', { name: 'Enregistrer mon profil', exact: true }).click();
+      const registerRaw = await registerResponse;
+      expect(registerRaw, `register-soignant absent après complétion ; événements: ${JSON.stringify(events)}`).not.toBeNull();
+      const register = await responseDiagnostic(registerRaw!);
+      await testInfo.attach('signup-register-soignant.json', {
+        body: Buffer.from(JSON.stringify(register, null, 2)), contentType: 'application/json',
+      });
+      expect(register, 'register-soignant crée réellement le profil').toMatchObject({ status: 200, ok: true, businessOk: true });
+      await expect(page).toHaveURL(/\/soignant\/recherche-missions$/, { timeout: 30_000 });
+      await settleFreshAccountDashboard(page);
+      await page.goto('/soignant/tableau-de-bord');
+      await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
+      await auditFreshAccountRoutes(page, testInfo, 'soignant', ROUTES_SOIGNANT);
+    } finally {
+      await testInfo.attach('signup-soignant-evenements.json', {
+        body: Buffer.from(JSON.stringify(events, null, 2)), contentType: 'application/json',
+      });
+    }
+  });
+
+  test('inscription établissement réelle : compte rapide → brouillon privé → profil → tous les écrans', async ({ page }, testInfo) => {
+    test.setTimeout(360_000);
+    const [signupViewport] = freshAccountViewports(testInfo);
+    await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
+    const events = captureSignupDiagnostics(page);
+    try {
+      await page.goto('/inscription/etablissement');
+      await fillQuickAccount(page, uniqueEmail('etab'), 'etab');
+      if (!await createQuickAccount(page, 'etab', testInfo)) return;
+
+      const missionDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+      await page.getByLabel('Profession recherchée', { exact: true }).selectOption('IDE');
+      await page.getByLabel('Ville de la mission', { exact: true }).fill('Paris');
+      await page.getByLabel('Date de début', { exact: true }).fill(missionDate);
+      await page.getByLabel('Heure de début (facultatif)', { exact: true }).fill('07:00');
+      await page.getByLabel('Heure de fin (facultatif)', { exact: true }).fill('19:00');
+      await expectMobileFormIntegrity(page, '/inscription/etablissement-brouillon', testInfo);
+      const savedDraftResponse = page.waitForResponse(
+        (response) => new URL(response.url()).pathname.endsWith('/rpc/fn_enregistrer_parcours_inscription'),
+      );
+      await page.getByRole('button', { name: 'Enregistrer le brouillon', exact: true }).click();
+      expect((await savedDraftResponse).ok(), 'le brouillon doit être enregistré en SQL').toBe(true);
+      await expect(page.getByRole('heading', { name: 'Votre brouillon est enregistré.' })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'Votre brouillon est enregistré.' })).toBeVisible();
+      await expect(page.getByText('Brouillon · non publié', { exact: true })).toBeVisible();
+      await expect(page.getByText('07:00–19:00', { exact: true })).toBeVisible();
+
+      await page.getByRole('link', { name: 'Activer mon établissement', exact: true }).click();
+      await expect(page).toHaveURL(/\/inscription\/completer$/);
       await fillEtablissementProfile(page, uniqueValidSiret());
-      await expectMobileFormIntegrity(page, `/inscription/etablissement-etape-2-${viewport.name}`, testInfo);
-    }
-  });
-
-  test('inscription soignant réelle : UI → Auth → Edge Function → tous les écrans', async ({ page }, testInfo) => {
-    test.setTimeout(360_000);
-    const [signupViewport] = freshAccountViewports(testInfo);
-    await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
-    const events = captureSignupDiagnostics(page);
-    await page.goto('/inscription/soignant');
-    await fillCredentials(page, uniqueEmail('soignant'), 1);
-    await fillSoignantProfile(page);
-    const signupResponse = page.waitForResponse((response) => response.url().includes('/auth/v1/signup'));
-    const registerResponse = page.waitForResponse(
-      (response) => response.url().includes('/functions/v1/register-soignant'),
-      { timeout: 30_000 },
-    ).catch(() => null);
-    await page.getByRole('button', { name: 'Créer mon compte' }).click();
-
-    const signup = await responseDiagnostic(await signupResponse);
-    if (await handleStagingEmailRateLimit(page, signup, 'soignant', testInfo)) return;
-    expect(signup, 'GoTrue signup').toMatchObject({ status: 200, ok: true });
-    const confirmationEmail = page.locator('[data-error-code="EMAIL_CONFIRMATION_REQUIRED"]');
-    const issueDeCreation = await Promise.race([
-      registerResponse.then((response) => ({ type: 'register' as const, response })),
-      confirmationEmail.waitFor({ state: 'visible', timeout: 30_000 })
-        .then(() => ({ type: 'confirmation' as const, response: null })),
-    ]);
-    if (issueDeCreation.type === 'confirmation') {
-      await expect(confirmationEmail).toContainText('Confirmez votre email');
-      await expect(confirmationEmail.getByRole('button', { name: 'J’ai confirmé mon email' })).toBeVisible();
-      await expect(page.locator('input[type="email"]')).not.toHaveValue('');
-      await expectMobileFormIntegrity(page, '/inscription/soignant-confirmation-email', testInfo);
-      testInfo.annotations.push({
-        type: 'configuration staging',
-        description: 'La confirmation email est active : le profil métier sera créé après confirmation puis reprise du formulaire.',
+      await expectMobileFormIntegrity(page, '/inscription/etablissement-profil', testInfo);
+      const registerResponse = page.waitForResponse(
+        (response) => response.request().method() === 'POST'
+          && new URL(response.url()).pathname === '/functions/v1/register-etablissement',
+        { timeout: 30_000 },
+      ).catch(() => null);
+      await page.getByRole('button', { name: 'Enregistrer mon établissement', exact: true }).click();
+      const registerRaw = await registerResponse;
+      expect(registerRaw, `register-etablissement absent après complétion ; événements: ${JSON.stringify(events)}`).not.toBeNull();
+      const register = await responseDiagnostic(registerRaw!);
+      await testInfo.attach('signup-register-etablissement.json', {
+        body: Buffer.from(JSON.stringify(register, null, 2)), contentType: 'application/json',
       });
-      return;
-    }
-    const registerRaw = issueDeCreation.response;
-    expect(registerRaw, `register-soignant absent après signup: ${JSON.stringify(signup)}; événements: ${JSON.stringify(events)}`).not.toBeNull();
-    const register = await responseDiagnostic(registerRaw!);
-    expect(register, 'register-soignant').toMatchObject({ status: 200, ok: true });
-    await expect(page).toHaveURL(/\/inscription\/succes\?role=soignant/, { timeout: 30_000 });
-    await expect(page.getByRole('heading', { name: 'Bienvenue sur Jolene !' })).toBeVisible();
-    await page.getByRole('button', { name: /Compléter mon profil/ }).click();
-    await expect(page).toHaveURL(/\/soignant\/tableau-de-bord/);
-    await auditFreshAccountRoutes(page, testInfo, 'soignant', ROUTES_SOIGNANT);
-  });
-
-  test('inscription établissement réelle : UI → Auth → Edge Function → tous les écrans', async ({ page }, testInfo) => {
-    test.setTimeout(360_000);
-    const [signupViewport] = freshAccountViewports(testInfo);
-    await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
-    const events = captureSignupDiagnostics(page);
-    await page.goto('/inscription/etablissement');
-    await fillCredentials(page, uniqueEmail('etab'), 2);
-    await fillEtablissementProfile(page, uniqueValidSiret());
-    const signupResponse = page.waitForResponse((response) => response.url().includes('/auth/v1/signup'));
-    const registerResponse = page.waitForResponse(
-      (response) => response.url().includes('/functions/v1/register-etablissement'),
-      { timeout: 30_000 },
-    ).catch(() => null);
-    await page.getByRole('button', { name: 'Créer le compte' }).click();
-
-    const signup = await responseDiagnostic(await signupResponse);
-    if (await handleStagingEmailRateLimit(page, signup, 'etab', testInfo)) return;
-    expect(signup, 'GoTrue signup').toMatchObject({ status: 200, ok: true });
-    const confirmationEmail = page.locator('[data-error-code="EMAIL_CONFIRMATION_REQUIRED"]');
-    const issueDeCreation = await Promise.race([
-      registerResponse.then((response) => ({ type: 'register' as const, response })),
-      confirmationEmail.waitFor({ state: 'visible', timeout: 30_000 })
-        .then(() => ({ type: 'confirmation' as const, response: null })),
-    ]);
-    if (issueDeCreation.type === 'confirmation') {
-      await expect(confirmationEmail).toContainText('Confirmez votre email');
-      await expect(confirmationEmail.getByRole('button', { name: 'J’ai confirmé mon email' })).toBeVisible();
-      await expect(page.locator('input[type="email"]')).not.toHaveValue('');
-      await expectMobileFormIntegrity(page, '/inscription/etablissement-confirmation-email', testInfo);
-      testInfo.annotations.push({
-        type: 'configuration staging',
-        description: 'La confirmation email est active : le profil métier sera créé après confirmation puis reprise du formulaire.',
+      // Un SIRET technique peut laisser l'identité en revue. Le test ne contourne
+      // aucune vérification et ne confond pas profil créé avec publication autorisée.
+      expect(register, 'register-etablissement crée un profil restant à vérifier').toMatchObject({
+        status: 200, ok: true, businessOk: true, canPublish: false, verificationRequired: true,
       });
-      return;
+      await expect(page).toHaveURL(/\/inscription\/reprendre$/, { timeout: 30_000 });
+      await expect(page.getByRole('link', { name: 'Reprendre ce brouillon dans mon espace', exact: true })).toBeVisible();
+
+      // L'entrée normale de création retrouve aussi le brouillon après inscription.
+      await page.goto('/etablissement/missions/creer');
+      await expect(page.getByText('Brouillon repris', { exact: true })).toBeVisible();
+      await expect(page.getByLabel(/Première date affichée/)).toHaveValue(missionDate);
+      await expect(page.getByLabel(`Début du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('07:00');
+      await expect(page.getByLabel(`Fin du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('19:00');
+      await page.goto('/etablissement/tableau-de-bord');
+      await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
+      await auditFreshAccountRoutes(page, testInfo, 'etab', ROUTES_ETABLISSEMENT);
+    } finally {
+      await testInfo.attach('signup-etablissement-evenements.json', {
+        body: Buffer.from(JSON.stringify(events, null, 2)), contentType: 'application/json',
+      });
     }
-    const registerRaw = issueDeCreation.response;
-    expect(registerRaw, `register-etablissement absent après signup: ${JSON.stringify(signup)}; événements: ${JSON.stringify(events)}`).not.toBeNull();
-    const register = await responseDiagnostic(registerRaw!);
-    expect(register, 'register-etablissement').toMatchObject({ status: 200, ok: true });
-    await expect(page).toHaveURL(/\/inscription\/succes\?role=etab/, { timeout: 30_000 });
-    await expect(page.getByRole('heading', { name: 'Bienvenue sur Jolene !' })).toBeVisible();
-    await page.getByRole('button', { name: /Publier ma première mission/ }).click();
-    await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord/);
-    await auditFreshAccountRoutes(page, testInfo, 'etab', ROUTES_ETABLISSEMENT);
   });
 });

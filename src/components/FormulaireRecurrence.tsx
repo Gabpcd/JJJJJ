@@ -45,6 +45,7 @@ interface FormulaireRecurrenceProps {
     validation: ValidationFlexResult,
   ) => void;
   initialCreneaux?: PlanningInitialCreneau[];
+  initialBrouillon?: { date: string; heureDebut: string; heureFin: string };
   initialDateDebut?: string;
   initialDateFin?: string;
 }
@@ -128,8 +129,19 @@ export function FormulaireRecurrence({
   initialCreneaux = [],
   initialDateDebut = '',
   initialDateFin = '',
+  initialBrouillon,
 }: FormulaireRecurrenceProps) {
-  const [initial] = useState(() => initialiserDepuisCreneaux(initialCreneaux));
+  const [initial] = useState(() => initialiserDepuisCreneaux(initialCreneaux) ?? (initialBrouillon ? {
+    dateDebut: initialBrouillon.date,
+    dateFin: initialBrouillon.date,
+    jours: [{ date: initialBrouillon.date, actif: true, creneaux: [{
+      clientId: nouvelIdClient(),
+      heureDebut: initialBrouillon.heureDebut,
+      heureFin: initialBrouillon.heureFin,
+      finJourSuivant: !!initialBrouillon.heureDebut && !!initialBrouillon.heureFin
+        && initialBrouillon.heureFin < initialBrouillon.heureDebut,
+    }] }],
+  } : null));
   const [dateDebut, setDateDebut] = useState(initial?.dateDebut ?? initialDateDebut);
   const [dateFin, setDateFin] = useState(initial?.dateFin ?? initialDateFin);
   const [jours, setJours] = useState<JourPlanningDate[]>(initial?.jours ?? []);

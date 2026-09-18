@@ -1,3 +1,4 @@
+import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -30,7 +31,7 @@ interface SiretInseeResult {
   message: string;
 }
 
-export default function InscriptionEtablissement() {
+export default function InscriptionEtablissement({ parcours }: { parcours?: ParcoursInscription } = {}) {
   usePageTitle('Inscription Établissement');
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();
@@ -46,7 +47,7 @@ export default function InscriptionEtablissement() {
       }
     } catch { /* noop */ }
   }, []);
-  const [etape, setEtape] = useState(1);
+  const [etape, setEtape] = useState(parcours ? 2 : 1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
   const [cgv, setCgv] = useState(false);
@@ -54,14 +55,14 @@ export default function InscriptionEtablissement() {
   const [erreurInscription, setErreurInscription] = useState<ErreurInscriptionMappee | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
     nom: '', siret: '', finess: '', type: '',
     rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
     numeroLicence: '',
     lat: null as number | null, lng: null as number | null,
-  });
+}, parcours?.donnees || {}));
 
   const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
   const [inseeCheck, setInseeCheck] = useState<SiretInseeResult | null>(null);
@@ -71,7 +72,7 @@ export default function InscriptionEtablissement() {
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
-  const siretEstValide = siretValidation?.valide === true;
+  const siretEstValide = validerSiret(form.siret).valide;
   // Funnel 2 étapes : étape 2 = identité établissement fusionnée (les anciennes
   // « Votre établissement » + « Coordonnées » réunies en un seul écran court).
   // N'exige que les 4 champs réellement requis par register-etablissement :
@@ -161,6 +162,14 @@ export default function InscriptionEtablissement() {
     }
   };
 
+  const enregistrerEtQuitter = async () => {
+    if (!parcours) { setEtape(1); return; }
+    setSubmitting(true);
+    try { await enregistrerParcours(donneesFormulaire(form)); navigate('/inscription/reprendre'); }
+    catch (err) { setErreurInscription(mapperErreurInscription(err)); }
+    finally { setSubmitting(false); }
+  };
+
   const handleRetry = () => {
     setErreurInscription(null);
     document.querySelector<HTMLFormElement>('form')?.requestSubmit();
@@ -168,15 +177,24 @@ export default function InscriptionEtablissement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!etape2Valide) {
+      const manque = [!form.nom && 'nom', !siretEstValide && 'SIRET valide', !form.type && 'type d’établissement', !form.ville && 'ville'].filter(Boolean);
+      setErreurInscription({ code: 'MISSING_REQUIRED_FIELDS', message: `Vérifiez les informations suivantes : ${manque.join(', ')}.` }); return;
+    }
     setErreurInscription(null);
     setSubmitting(true);
     try {
+      if (parcours) {
+        await finaliserProfil('ETABLISSEMENT', form);
+        navigate('/inscription/reprendre');
+        return;
+      }
       await inscriptionEtablissement({ ...form, turnstileToken });
       // PII (email) hors URL : sessionStorage évite leak via historique navigateur
       try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
       navigate('/inscription/succes?role=etab');
     } catch (err) {
-      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+      if (parcours || !gererErreurSupabase(err, () => handleSubmit(e))) {
         // Message précis et VISIBLE (avant : toast shadcn non rendu → erreur invisible).
         // mapperErreurInscription couvre tous les cas : SIRET déjà enregistré,
         // e-mail déjà utilisé, mot de passe trop faible, captcha, rate-limit, réseau…
@@ -187,7 +205,7 @@ export default function InscriptionEtablissement() {
         // revenir à l'étape 1 où se trouvent ces champs, pour que la correction soit
         // possible (le bouton de soumission est sur l'étape 2).
         const codesEtape1 = ['USER_ALREADY_REGISTERED', 'WEAK_PASSWORD', 'INVALID_EMAIL', 'CAPTCHA_FAILED', 'EMAIL_RATE_LIMIT', 'EMAIL_CONFIRMATION_REQUIRED'];
-        if (codesEtape1.includes(mappee.code)) setEtape(1);
+        if (!parcours && codesEtape1.includes(mappee.code)) setEtape(1);
         // Refus métier attendu (SIRET déjà pris, e-mail déjà utilisé, captcha…) :
         // déjà affiché à l'utilisateur → pas d'issue Sentry. On ne capture que les
         // vraies anomalies (INTERNAL_ERROR, réseau, edge non-2xx inattendu…).
@@ -201,16 +219,17 @@ export default function InscriptionEtablissement() {
   };
 
   return (
-    <AuthLayout backTo="/connexion">
+    <AuthLayout backTo={parcours ? "/inscription/reprendre" : "/connexion"}>
       <div className="card-base max-w-lg w-full">
         <LogoJolene
           className="mx-auto mb-6 flex w-fit"
           imageClassName="h-7 w-7"
           nomClassName="text-xl text-rose"
         />
-        <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Établissement</h1>
-        <SwitchTypeInscription actif="etablissement" />
+        <h1 className="text-xl font-bold text-foreground text-center mb-2">{parcours ? 'Identifier votre établissement' : 'Inscription Établissement'}</h1>
+        {!parcours && <SwitchTypeInscription actif="etablissement" />}
 
+        {!parcours && <>
         <div className="flex items-center justify-center gap-0 mb-2">
           {[1, 2].map((n) => (
             <React.Fragment key={n}>
@@ -225,7 +244,8 @@ export default function InscriptionEtablissement() {
           Étape {etape}/2 — {etape === 1 ? 'Identifiants' : 'Votre établissement'} · ≈ 2 minutes
         </p>
 
-        <form onSubmit={handleSubmit}>
+        </>}
+        <form onSubmit={handleSubmit} noValidate={!!parcours}>
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
@@ -276,8 +296,8 @@ export default function InscriptionEtablissement() {
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label>
-                <input value={form.nom} onChange={e => maj('nom', e.target.value)} className={`input-base ${coherenceNom === 'INCOHERENT' ? 'border-amber-500' : ''}`} required />
+                <label htmlFor="profil-nom" className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label>
+                <input id="profil-nom" value={form.nom} onChange={e => maj('nom', e.target.value)} className={`input-base ${coherenceNom === 'INCOHERENT' ? 'border-amber-500' : ''}`} required />
                 {coherenceNom === 'INCOHERENT' && inseeCheck?.raison_sociale && (
                   <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
                     <p><AlertTriangle className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Ce nom ne correspond pas à la raison sociale officielle du SIRET : <strong>{inseeCheck.raison_sociale}</strong>.</p>
@@ -290,9 +310,9 @@ export default function InscriptionEtablissement() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
+                  <label htmlFor="profil-siret" className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
                   <div className="relative">
-                    <input value={form.siret} onChange={e => { maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14)); setSiretValidation(null); setInseeCheck(null); }} onBlur={handleSiretBlur} className={`input-base pr-10 ${siretValidation && !siretValidation.valide ? 'border-destructive' : ''} ${siretEstValide ? 'border-green-500' : ''}`} required />
+                    <input id="profil-siret" value={form.siret} onChange={e => { maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14)); setSiretValidation(null); setInseeCheck(null); }} onBlur={handleSiretBlur} className={`input-base pr-10 ${siretValidation && !siretValidation.valide ? 'border-destructive' : ''} ${siretEstValide ? 'border-green-500' : ''}`} required />
                     {inseeLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />}
                     {!inseeLoading && siretEstValide && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />}
                     {!inseeLoading && siretValidation && !siretValidation.valide && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />}
@@ -300,9 +320,9 @@ export default function InscriptionEtablissement() {
                   {siretValidation && !siretValidation.valide && <p className="text-xs text-destructive mt-1">{siretValidation.message}</p>}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label>
+                  <label htmlFor="profil-identifiant" className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label>
                   <div className="relative">
-                    <input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess}
+                    <input id="profil-identifiant" value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess}
                       onChange={e => {
                         if (form.type === 'PHARMACIE_OFFICINE') {
                           maj('numeroLicence', e.target.value);
@@ -358,7 +378,7 @@ export default function InscriptionEtablissement() {
                 </div>
               )}
 
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
+              <div><label htmlFor="profil-type" className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement id="profil-type" value={form.type} onChange={v => maj('type', v)} /></div>
               {form.type !== 'PHARMACIE_OFFICINE' && (
                 <p className="text-xs text-muted-foreground"><Info className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
               )}
@@ -369,8 +389,8 @@ export default function InscriptionEtablissement() {
                   vides (rue → « Non renseigné », CP → « 00000 », email_contact →
                   email du compte). */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Ville *</label>
-                <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" autoComplete="address-level2" required />
+                <label htmlFor="profil-ville" className="text-sm font-medium text-foreground mb-1.5 block">Ville *</label>
+                <input id="profil-ville" value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" autoComplete="address-level2" required />
               </div>
               {erreurInscription && (
                 <ErreurInscription
@@ -379,12 +399,12 @@ export default function InscriptionEtablissement() {
                   onSeConnecter={() => navigate('/connexion')}
                 />
               )}
-              <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
+              {!parcours && <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                <button type="button" disabled={submitting} onClick={() => void enregistrerEtQuitter()} className="btn-secondary flex-1">{parcours ? "Enregistrer et continuer plus tard" : "Retour"}</button>
+                <button type="submit" disabled={submitting || (!parcours && !etape2Valide)} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {submitting ? 'Création…' : 'Créer le compte'}
+                  {submitting ? 'Enregistrement…' : parcours ? 'Enregistrer mon établissement' : 'Créer le compte'}
                 </button>
               </div>
             </div>

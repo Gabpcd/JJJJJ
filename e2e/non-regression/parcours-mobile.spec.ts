@@ -43,7 +43,7 @@ test.describe('inscription soignant — iPhone 16 Pro Max', () => {
     });
   });
 
-  test('ouvre chaque étape en haut dans une surface native stable', async ({ page }) => {
+  test('ouvre le compte simplifié dans une surface native stable', async ({ page }) => {
     const carte = page.locator('.auth-scroll > .card-base');
     await expect(carte).toBeVisible();
     const chrome = await carte.evaluate((element) => {
@@ -77,29 +77,17 @@ test.describe('inscription soignant — iPhone 16 Pro Max', () => {
     ));
     expect(champsTropPetits, 'aucun champ visible ne doit provoquer le zoom iOS').toEqual([]);
 
-    await page.locator('input[type="email"]').fill('mobile.ios@jolene.app');
-    await page.locator('input[type="password"]').nth(0).fill('Jolene2026!');
-    await page.locator('input[type="password"]').nth(1).fill('Jolene2026!');
-    await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole('button', { name: 'Continuer' }).click();
+    await expect(page.getByLabel('Profession', { exact: true })).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
+    await expect(page.locator('input[type="date"]')).toHaveCount(0);
 
-    await expect(page.getByText('Étape 2 — Ton profil professionnel')).toBeVisible();
-    const scrollTop = await page.locator('.auth-scroll').evaluate((element) => element.scrollTop);
-    expect(scrollTop).toBeLessThanOrEqual(1);
-
-    const date = page.locator('input[type="date"]');
-    const dimensions = await date.evaluate((element) => ({
-      input: element.getBoundingClientRect().width,
-      parent: element.parentElement?.getBoundingClientRect().width ?? 0,
-    }));
-    expect(dimensions.input).toBeLessThanOrEqual(dimensions.parent + 0.5);
   });
 
   test('garde le CTA accessible au-dessus de la zone sûre en fin de formulaire', async ({ page }) => {
     const scroller = page.locator('.auth-scroll');
     await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: 'auto' }));
 
-    const continuer = page.getByRole('button', { name: 'Continuer' });
+    const continuer = page.getByRole('button', { name: 'Créer mon compte', exact: true });
     await expect(continuer).toBeVisible();
     const geometry = await continuer.evaluate((element) => ({
       bottom: element.getBoundingClientRect().bottom,
@@ -108,16 +96,9 @@ test.describe('inscription soignant — iPhone 16 Pro Max', () => {
     expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight - 16);
   });
 
-  test('ouvre les professions en feuille mobile sans déclencher le clavier', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('mobile.sheet@jolene.app');
-    await page.locator('input[type="password"]').nth(0).fill('Jolene2026!');
-    await page.locator('input[type="password"]').nth(1).fill('Jolene2026!');
-    await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole('button', { name: 'Continuer' }).click();
-
-    await page.getByRole('combobox', { name: 'Profession' }).click();
-    await expect(page.getByText('Choisir une profession')).toBeVisible();
-    await expect(page.getByPlaceholder('Rechercher une profession...')).not.toBeFocused();
-    await expect(page.getByTestId('profession-option-IDE')).toBeVisible();
+  test('choisit la profession depuis le contrôle natif sans étape supplémentaire', async ({ page }) => {
+    await page.getByRole('combobox', { name: 'Profession', exact: true }).selectOption('IDE');
+    await expect(page.getByRole('combobox', { name: 'Profession', exact: true })).toHaveValue('IDE');
+    await expect(page.getByRole('button', { name: 'Créer mon compte', exact: true })).toBeVisible();
   });
 });
