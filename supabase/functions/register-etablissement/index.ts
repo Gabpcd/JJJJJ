@@ -321,10 +321,20 @@ Deno.serve(async (req) => {
   });
   let suppressionAuthAutorisee = false;
   let inscriptionFinalisee = false;
+  let finalisationDemandee = false;
+  let parcoursProgressif = false;
   const claimToken = crypto.randomUUID();
   const annulerCompteAuth = async (raison: string) => {
     // Ne jamais supprimer un compte existant qui rappelle l'endpoint. Seule la
     // reservation fraiche possedee par cette requete autorise la compensation.
+    if (inscriptionFinalisee || finalisationDemandee) return;
+    if (parcoursProgressif) {
+      const { error } = await supabaseAdmin.rpc('fn_liberer_inscription_progressive', {
+        p_user_id: user.id, p_claim_token: claimToken,
+      });
+      if (error) console.error('Libération du brouillon échouée:', error.code);
+      return;
+    }
     if (!suppressionAuthAutorisee || inscriptionFinalisee) return;
     try {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
@@ -356,6 +366,16 @@ Deno.serve(async (req) => {
       return errorResponse(cors, status, code, message);
     }
     suppressionAuthAutorisee = reservationResult.fresh === true;
+    const { data: parcours, error: parcoursError } = await supabaseAdmin
+      .from('parcours_inscription').select('user_id').eq('user_id', user.id).maybeSingle();
+    if (parcoursError) {
+      await supabaseAdmin.rpc('fn_liberer_inscription_progressive', {
+        p_user_id: user.id, p_claim_token: claimToken,
+      });
+      return errorResponse(cors, 503, 'ACCOUNT_RESERVATION_UNAVAILABLE', 'Votre inscription est conservée. Réessayez dans quelques instants.');
+    }
+    parcoursProgressif = !!parcours;
+
 
     const rawBody = await req.json().catch(() => null);
     if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
@@ -531,15 +551,24 @@ Deno.serve(async (req) => {
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
     }
 
-    const { data: typeFinalise, error: finalisationError } = await supabaseAdmin.rpc(
-      'fn_finaliser_type_compte',
-      { p_user_id: user.id, p_type_compte: 'ETABLISSEMENT', p_claim_token: claimToken },
-    );
-    if (finalisationError || typeFinalise !== true) {
-      console.error('[register-etablissement] Finalisation type compte echouee:', finalisationError?.code || 'INVALID_RESULT');
-      await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
-      await annulerCompteAuth('ACCOUNT_TYPE_FINALIZATION_FAILED');
-      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
+    // Après l'envoi, une erreur réseau ne prouve pas un échec SQL : ne jamais
+    // supprimer le profil ni Auth. Réconcilier la réponse avant de poursuivre.
+    finalisationDemandee = true;
+    let typeFinalise = false;
+    for (let tentative = 0; tentative < 2 && !typeFinalise; tentative++) {
+      const { data, error } = await supabaseAdmin.rpc('fn_finaliser_type_compte', {
+        p_user_id: user.id, p_type_compte: 'ETABLISSEMENT', p_claim_token: claimToken,
+      });
+      typeFinalise = !error && data === true;
+      if (!typeFinalise) {
+        const { data: etat, error: lectureError } = await supabaseAdmin.from('types_comptes_auth')
+          .select('type_compte,finalise_le').eq('user_id', user.id).maybeSingle();
+        typeFinalise = !lectureError && etat?.type_compte === 'ETABLISSEMENT' && !!etat.finalise_le;
+      }
+    }
+    if (!typeFinalise) {
+      return errorResponse(cors, 503, 'ACCOUNT_FINALIZATION_PENDING',
+        'Votre profil est enregistré. Reconnectez-vous pour reprendre votre espace.');
     }
     inscriptionFinalisee = true;
 
