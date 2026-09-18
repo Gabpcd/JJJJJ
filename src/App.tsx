@@ -38,9 +38,11 @@ const AdminBFA = lazy(() => import("./pages/admin/AdminBFA"));
 const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
 const AdminChorusPro = lazy(() => import("./pages/admin/AdminChorusPro"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
-const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
+const ConfirmationInscription = lazy(() => import('./pages/ConfirmationInscription'));
+const InscriptionRapide = lazy(() => import("./pages/InscriptionRapide"));
+const ParcoursInscription = lazy(() => import("./pages/ParcoursInscription"));
 const InscriptionSoignantCompletion = lazy(() => import("./pages/InscriptionSoignantCompletion"));
-const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
+
 const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
 const RecruterSoignants = lazy(() => import("./pages/RecruterSoignants"));
@@ -278,9 +280,12 @@ function AppRoutes() {
           <Route path="/reset-password" element={<PageResetPassword />} />
           <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
-          <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
+          <Route path="/inscription/soignant" element={<InscriptionRapide key="soignant" type="SOIGNANT" />} />
           <Route path="/inscription/soignant/completion" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><InscriptionSoignantCompletion /></RouteProtegee>} />
-          <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
+          <Route path="/inscription/etablissement" element={<InscriptionRapide key="etablissement" type="ETABLISSEMENT" />} />
+          <Route path="/inscription/confirmer" element={<ConfirmationInscription />} />
+          <Route path="/inscription/reprendre" element={<ParcoursInscription />} />
+          <Route path="/inscription/completer" element={<ParcoursInscription completer />} />
           <Route path="/inscription/succes" element={<PageInscriptionSucces />} />
           <Route path="/verification-email-etab" element={<VerificationEmailEtab />} />
 

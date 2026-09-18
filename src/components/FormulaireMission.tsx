@@ -1,3 +1,4 @@
+import { chargerParcours, enregistrerParcours } from '@/lib/inscriptionProgressive';
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -106,6 +107,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [natureTvaPrestation, setNatureTvaPrestation] = useState<NatureTvaPrestation | ''>('');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
+  const reprendreInscription = !missionSource && (searchParams.size === 0 || searchParams.get('inscription') === '1');
+  const [brouillonCharge, setBrouillonCharge] = useState(!reprendreInscription);
+  const [brouillonInscription, setBrouillonInscription] = useState<Record<string, unknown> | null>(null);
+  const [erreurBrouillonInscription, setErreurBrouillonInscription] = useState('');
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
   const [ristPlafondActif, setRistPlafondActif] = useState(false);
   const [tauxCommission, setTauxCommission] = useState(15);
@@ -188,6 +193,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       }
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!reprendreInscription) return;
+    let active = true;
+    chargerParcours().then(parcours => {
+      if (!active || parcours?.type_compte !== 'ETABLISSEMENT' || parcours.donnees.brouillonMission !== true) return;
+      const d = parcours.donnees;
+      setBrouillonInscription(d);
+      if (typeof d.missionProfession === 'string') setProfession(d.missionProfession);
+    }).catch(() => { if (active) setErreurBrouillonInscription('Votre brouillon n’a pas pu être chargé. Revenez à votre espace pour réessayer.'); }).finally(() => { if (active) setBrouillonCharge(true); });
+    return () => { active = false; };
+  }, [reprendreInscription]);
 
   // Load from query params (soignant_id from pool, or duplication)
   useEffect(() => {
@@ -292,6 +309,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     || !sourceRepublication
     || !planningSourceRepublication?.exact
   );
+
+  const planningBrouillon = useMemo(() => {
+    const d = brouillonInscription;
+    if (!d || missionSource || republicationDemandee || typeof d.missionDate !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(d.missionDate)) return undefined;
+    const date = new Date(`${d.missionDate}T12:00:00Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== d.missionDate) return undefined;
+    const heure = (v: unknown) => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '';
+    return { date: d.missionDate, heureDebut: heure(d.missionDebut), heureFin: heure(d.missionFin) };
+  }, [brouillonInscription, missionSource, republicationDemandee]);
 
   const planningInitial = useMemo<PlanningInitialCreneau[]>(() => {
     const source = Array.isArray(missionSource?.creneaux)
@@ -410,6 +437,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         }).then(() => {}, () => {});
       }
       afficherNotification({ type: 'succes', message: 'Mission publiée ! Les soignants à proximité sont prévenus 🔔' });
+      if (brouillonInscription) {
+        try { await enregistrerParcours({ brouillonMission: false }); }
+        catch { console.warn('Mission créée, le brouillon reste disponible.'); }
+      }
       navigate('/etablissement/missions');
     } finally {
       setPublicationEnCours(false);
@@ -514,6 +545,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     modeExerciceMission,
   };
 
+  if (!brouillonCharge) return <p role="status" className="p-6">Chargement de votre brouillon…</p>;
+
   return (
     <>
       {siretInvalide && (
@@ -542,6 +575,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
       )}
 
+      {erreurBrouillonInscription && <p role="alert" className="text-destructive p-3">{erreurBrouillonInscription}</p>}
+      {brouillonInscription && <div className="bg-primary/5 p-4 rounded-xl mb-4 text-sm"><strong>Brouillon repris</strong><p>{String(brouillonInscription.missionVille || '')} · {String(brouillonInscription.missionDate || '')}</p><p>Complétez les horaires et les conditions avant publication. La mission utilisera l’adresse vérifiée de votre établissement.</p></div>}
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
           <ClipboardList aria-hidden="true" className="inline-block h-4 w-4 mr-1 -mt-0.5" />Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
@@ -800,6 +835,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             key={planningInitial.map((item) => `${item.id ?? 'new'}:${item.debut}:${item.fin}`).join('|') || 'planning-vide'}
             onChange={handleRecurrenceChange}
             initialCreneaux={planningInitial}
+            initialBrouillon={planningBrouillon}
           />
           {contientCreneauPasse && (
             <p className="mt-2 flex items-center gap-1 text-xs font-medium text-destructive" role="alert">

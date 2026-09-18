@@ -13,35 +13,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FooterLegal } from '@/components/FooterLegal';
 import { logger } from '@/lib/logger';
 
-// Étapes du parcours d'inscription PSC : 1. Identité (PSC ✓) → 2. Compléter profil → 3. Documents → 4. Compte vérifié
-function StepperCompletion() {
-  return (
-    <div className="flex items-center justify-center gap-0 mb-6">
-      <div className="flex flex-col items-center gap-1">
-        <div className="h-9 w-9 rounded-full bg-success text-success-foreground flex items-center justify-center">
-          <Check className="h-4 w-4" />
-        </div>
-        <span className="text-[10px] text-success font-semibold">Identité PSC</span>
-      </div>
-      <div className="h-1 w-10 mx-1 rounded-full bg-primary" />
-      <div className="flex flex-col items-center gap-1">
-        <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">2</div>
-        <span className="text-[10px] text-primary font-semibold">Profil</span>
-      </div>
-      <div className="h-1 w-10 mx-1 rounded-full bg-muted" />
-      <div className="flex flex-col items-center gap-1">
-        <div className="h-9 w-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-sm font-bold">3</div>
-        <span className="text-[10px] text-muted-foreground">Documents</span>
-      </div>
-      <div className="h-1 w-10 mx-1 rounded-full bg-muted" />
-      <div className="flex flex-col items-center gap-1">
-        <div className="h-9 w-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-sm font-bold">4</div>
-        <span className="text-[10px] text-muted-foreground">Vérifié</span>
-      </div>
-    </div>
-  );
-}
-
 function JaugeForce({ motDePasse }: { motDePasse: string }) {
   let force = 0;
   if (motDePasse.length >= 8) force++;
@@ -73,6 +44,7 @@ export default function InscriptionSoignantCompletion() {
   const [chargement, setChargement] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [afficherMdp, setAfficherMdp] = useState(false);
+  const [personnaliser, setPersonnaliser] = useState(false);
 
   const [form, setForm] = useState({
     telephone: '',
@@ -133,10 +105,10 @@ export default function InscriptionSoignantCompletion() {
   // Session E-1 : téléphone optionnel (harmonisé avec le flow email — il est
   // redemandé au bon moment, p.ex. à l'activation des alertes SMS pool urgence).
   const formValide =
-    (form.telephone.trim() === '' || form.telephone.trim().length >= 8) &&
-    form.typesContrat.length > 0 &&
+    (!personnaliser || form.telephone.trim() === '' || form.telephone.trim().length >= 8) &&
+    (!personnaliser || form.typesContrat.length > 0) &&
     form.cgu &&
-    (form.motDePasse === '' || form.motDePasse.length >= 8);
+    (!personnaliser || form.motDePasse === '' || form.motDePasse.length >= 8);
 
   // Règle de PROFIL issue du référentiel DB, indépendante des règles de mission.
   const {
@@ -154,6 +126,9 @@ export default function InscriptionSoignantCompletion() {
     if (!formValide || !user) return;
     setSubmitting(true);
     try {
+      const { error: consentError } = await supabase.rpc('fn_accepter_cgu_decouverte_soignant' as any);
+      if (consentError) throw consentError;
+      if (!personnaliser) { navigate('/soignant/recherche-missions'); return; }
       // 1. Mettre à jour le profil soignant avec les champs complémentaires
       const { error: updErr } = await supabase
         .from('soignants')
@@ -176,8 +151,8 @@ export default function InscriptionSoignantCompletion() {
         }
       }
 
-      afficherNotification({ type: 'succes', message: 'Profil complété ! Passons à vos documents.' });
-      navigate('/soignant/documents');
+      afficherNotification({ type: 'succes', message: 'Préférences enregistrées.' });
+      navigate('/soignant/recherche-missions');
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
@@ -203,11 +178,11 @@ export default function InscriptionSoignantCompletion() {
             nomClassName="text-xl text-rose"
           />
 
-          <StepperCompletion />
 
-          <h1 className="text-xl font-bold text-foreground text-center mb-1">Compléter votre profil</h1>
+
+          <h1 className="text-xl font-bold text-foreground text-center mb-1">Votre compte est prêt.</h1>
           <p className="text-sm text-muted-foreground text-center mb-6">
-            Quelques informations supplémentaires pour finaliser votre inscription.
+            Découvrez les missions. Vous pourrez compléter vos préférences et vos documents depuis votre espace.
           </p>
 
           {/* Récap identité PSC */}
@@ -224,7 +199,9 @@ export default function InscriptionSoignantCompletion() {
             </div>
           )}
 
+          <button type="button" className="text-primary underline text-sm mb-4" onClick={() => setPersonnaliser(v => !v)}>{personnaliser ? 'Compléter mes préférences plus tard' : 'Personnaliser mes préférences (facultatif)'}</button>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {personnaliser && <>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone mobile</label>
               <input
@@ -321,6 +298,7 @@ export default function InscriptionSoignantCompletion() {
               <p className="text-[10px] text-muted-foreground mt-1">Vous pourrez toujours vous connecter avec votre carte CPS/e-CPS. Le mot de passe est utile pour les appareils sans lecteur de carte.</p>
             </div>
 
+            </>}
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -340,7 +318,7 @@ export default function InscriptionSoignantCompletion() {
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {submitting ? 'Enregistrement…' : 'Continuer vers les documents'}
+              {submitting ? 'Enregistrement…' : 'Découvrir les missions'}
             </button>
           </form>
         </div>

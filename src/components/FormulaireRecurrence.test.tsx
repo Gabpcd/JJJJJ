@@ -141,4 +141,18 @@ describe('FormulaireRecurrence — planning exact établissement', () => {
       expect(config.jours.find((jour) => jour.date === '2026-08-12')?.actif).toBe(true);
     });
   });
+  it.each([
+    ['', ''], ['07:30', ''], ['20:00', '08:00'],
+  ])('reprend le brouillon civil %s–%s sans inventer les horaires manquants', async (heureDebut, heureFin) => {
+    const onChange = vi.fn();
+    render(<FormulaireRecurrence onChange={onChange} initialBrouillon={{ date: '2026-09-20', heureDebut, heureFin }} />);
+    expect(screen.getByLabelText(/Première date affichée/i)).toHaveValue('2026-09-20');
+    expect(screen.getByLabelText('Début du créneau 1 du 2026-09-20')).toHaveValue(heureDebut);
+    expect(screen.getByLabelText('Fin du créneau 1 du 2026-09-20')).toHaveValue(heureFin);
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const [, creneaux, validation] = onChange.mock.calls.at(-1)!;
+    if (!heureFin) { expect(creneaux).toEqual([]); expect(validation.valide).toBe(false); }
+    else expect(creneaux).toEqual([expect.objectContaining({ debut: '2026-09-20T18:00:00.000Z', fin: '2026-09-21T06:00:00.000Z', dureeHeures: 12 })]);
+  });
+
 });

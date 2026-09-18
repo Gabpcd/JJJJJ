@@ -127,14 +127,9 @@ export default function PageConnexion() {
       destination = destinationPourRole(role);
     }
 
-    // Ici seulement, la RPC a répondu avec succès mais aucun rôle n'existe :
-    // il s'agit bien d'une inscription incomplète, pas d'un incident transitoire.
     if (!destination) {
-      if (import.meta.env.DEV) console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
-      afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
-      await supabase.auth.signOut();
-      navigate('/inscription/soignant');
-      return false;
+      navigate('/inscription/reprendre');
+      return true;
     }
 
     // Propose biometric on first login (native only)

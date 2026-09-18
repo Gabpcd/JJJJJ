@@ -17,61 +17,60 @@ import { generateTestUser, TEST_ACCOUNTS, loginAs } from './helpers/auth';
 import { waitForToast } from './helpers/wait';
 
 test.describe('Inscription soignant', () => {
-  test('charge la page avec le wizard étape 1', async ({ page }) => {
+  test('propose uniquement les trois champs du compte avant le dossier', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await expect(page.getByText('Étape 1', { exact: false })).toBeVisible();
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Créez votre compte.' })).toBeVisible();
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Profession', { exact: true })).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
+    await expect(page.locator('input[type="date"]')).toHaveCount(0);
   });
-
-  test('refuse password < 8 caractères (HTML5 minLength)', async ({ page }) => {
+  test('explique la longueur minimum du mot de passe à la soumission', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    const user = generateTestUser('soignant');
-    await page.locator('input[type="email"]').fill(user.email);
-    await page.locator('input[type="password"]').first().fill('short');
-    await page.locator('input[type="password"]').nth(1).fill('short');
-    // CGU
-    await page.getByText("J'accepte les").click();
-    // Le bouton Continuer reste désactivé car etape1Valide = false
-    await expect(page.getByRole('button', { name: /Continuer/i })).toBeDisabled();
+    await page.getByLabel('Email', { exact: true }).fill(generateTestUser('soignant').email);
+    await page.getByLabel('Mot de passe', { exact: true }).fill('short');
+    await page.getByRole('button', { name: 'Créer mon compte', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: '8 caractères minimum' })).toBeVisible();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toBeFocused();
   });
-
-  test('refuse email malformé', async ({ page }) => {
+  test('signale un email malformé sans perdre la saisie', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await page.locator('input[type="email"]').fill('pas-un-email');
-    await page.locator('input[type="password"]').first().fill('Playwright!Test2026');
-    await page.locator('input[type="password"]').nth(1).fill('Playwright!Test2026');
-    // Erreur affichée + bouton désactivé
-    await expect(page.getByText(/Format d'email invalide/i)).toBeVisible();
+    await page.getByLabel('Email', { exact: true }).fill('pas-un-email');
+    await page.getByRole('button', { name: 'Créer mon compte', exact: true }).click();
+    await expect(page.getByText('Saisissez une adresse email valide.')).toBeVisible();
+    await expect(page.getByLabel('Email', { exact: true })).toHaveValue('pas-un-email');
   });
-
-  test('passwords ne matchent pas → erreur affichée', async ({ page }) => {
+  test('permet de vérifier son mot de passe sans le saisir deux fois', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await page.locator('input[type="password"]').first().fill('Playwright!Test2026');
-    await page.locator('input[type="password"]').nth(1).fill('different');
-    await expect(page.getByText(/ne correspondent pas/i)).toBeVisible();
+    await page.getByLabel('Mot de passe', { exact: true }).fill('Playwright!Test2026');
+    await page.getByRole('button', { name: 'Afficher le mot de passe' }).click();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: 'Masquer le mot de passe' }).click();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute('type', 'password');
   });
-
-  test('JaugeForce affichée au remplissage password', async ({ page }) => {
+  test('demande une profession et les conditions avant la création', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await page.locator('input[type="password"]').first().fill('a');
-    await expect(page.getByText(/Force du mot de passe/i)).toBeVisible();
+    await page.getByRole('button', { name: 'Créer mon compte', exact: true }).click();
+    await expect(page.getByText('Choisissez votre profession.')).toBeVisible();
+    await expect(page.getByText('Acceptez les conditions pour créer votre compte.')).toBeVisible();
   });
 });
 
 test.describe('Inscription établissement', () => {
-  test('charge la page d\'inscription étab', async ({ page }) => {
+  test('propose email, mot de passe et nom avant les vérifications', async ({ page }) => {
     await page.goto('/inscription/etablissement');
-    await expect(page.locator('text=Jolene').first()).toBeVisible();
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Nom de l’établissement', { exact: true })).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
+    await expect(page.getByLabel(/SIRET/)).toHaveCount(0);
   });
-
-  test('charge le wizard étab étape 1', async ({ page }) => {
+  test('conserve le consentement CGV obligatoire', async ({ page }) => {
     await page.goto('/inscription/etablissement');
-    // Le SIRET est demandé à l'étape 2 du wizard. À l'étape 1 on a email/password.
-    // .first() : « Étape 1 » apparaît 2× sur la page étab (stepper + titre de section)
-    await expect(page.getByText('Étape 1', { exact: false }).first()).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Créer mon compte', exact: true }).click();
+    await expect(page.getByText('Acceptez les conditions générales de vente.')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /conditions générales de vente/ })).toBeVisible();
   });
 });
 

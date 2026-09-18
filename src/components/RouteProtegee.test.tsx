@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouteProtegee } from './RouteProtegee';
 
@@ -32,9 +32,9 @@ vi.mock('@/components/ChargementPage', () => ({ ChargementPage: () => <p>Chargem
 function rendre() {
   return render(
     <MemoryRouter>
-      <RouteProtegee rolesAutorises={['SOIGNANT']}>
+      <Routes><Route path="/inscription/reprendre" element={<p>Reprise inscription</p>} /><Route path="/" element={<RouteProtegee rolesAutorises={['SOIGNANT']}>
         <p>Espace soignant</p>
-      </RouteProtegee>
+      </RouteProtegee>} /></Routes>
     </MemoryRouter>,
   );
 }
@@ -68,8 +68,8 @@ describe('RouteProtegee — reprise de session native', () => {
     Object.assign(mocks.roleState, { role: 'INCONNU', resolved: true, error: null });
     rendre();
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Accès à cet espace non autorisé');
-    fireEvent.click(screen.getByRole('button', { name: 'Se reconnecter' }));
-    expect(mocks.deconnexion).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Reprise inscription')).toBeInTheDocument();
+    expect(screen.queryByText('Espace soignant')).not.toBeInTheDocument();
+    expect(mocks.deconnexion).not.toHaveBeenCalled();
   });
 });

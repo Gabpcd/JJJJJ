@@ -23,6 +23,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     // où le code peut être consommé deux fois ou confondu avec une session
     // ordinaire déjà présente dans le navigateur.
     detectSessionInUrl:
-      typeof window === 'undefined' || window.location.pathname !== '/reset-password',
+      typeof window === 'undefined' || !['/reset-password', '/inscription/confirmer'].includes(window.location.pathname),
   }
 });

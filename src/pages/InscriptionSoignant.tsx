@@ -1,5 +1,6 @@
+import { finaliserProfil, restaurerFormulaire, donneesFormulaire, enregistrerParcours, type ParcoursInscription } from '@/lib/inscriptionProgressive';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Sentry from '@sentry/react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
@@ -96,7 +97,7 @@ function ExerciceTypeSection({ profession, uniqueType, loading, indisponible, es
   );
 }
 
-export default function InscriptionSoignant() {
+export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursInscription } = {}) {
   usePageTitle('Inscription Soignant');
   const navigate = useNavigate();
   const { inscriptionSoignant } = useAuth();
@@ -113,7 +114,7 @@ export default function InscriptionSoignant() {
       }
     } catch { /* noop */ }
   }, []);
-  const [etape, setEtape] = useState(1);
+  const [etape, setEtape] = useState(parcours ? 2 : 1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -123,14 +124,14 @@ export default function InscriptionSoignant() {
   const champsAHighlighter = new Set(erreurInscription?.champs_highlight ?? []);
   const classeChampErreur = (champ: string) => champsAHighlighter.has(champ) ? 'border-destructive ring-1 ring-destructive/30' : '';
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
     estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
-  });
+}, parcours?.donnees || {}));
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
@@ -179,16 +180,16 @@ export default function InscriptionSoignant() {
   const typesExerciceConnus = Array.isArray(typesExerciceProfil);
   const peutEtreLiberal = !!form.profession
     && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
-  // Une sélection libérale faite pour la profession précédente ne doit jamais
-  // rester cachée dans le formulaire pendant le chargement de la nouvelle.
+  const professionPrecedente = useRef(form.profession);
   useEffect(() => {
-    if (!form.profession) return;
+    const professionChangee = professionPrecedente.current !== form.profession;
+    professionPrecedente.current = form.profession;
+    if (!professionChangee && (!typesExerciceConnus || peutEtreLiberal)) return;
     setForm(prev => {
       const cleaned = prev.typesContrat.filter(v => v !== 'LIBERAL' && v !== 'VACATION');
-      if (cleaned.length === prev.typesContrat.length) return prev;
-      return { ...prev, typesContrat: cleaned };
+      return cleaned.length === prev.typesContrat.length ? prev : { ...prev, typesContrat: cleaned };
     });
-  }, [form.profession]);
+  }, [form.profession, typesExerciceConnus, peutEtreLiberal]);
 
   // Les aides-soignants peuvent désormais disposer d'une identité RPPS : le
   // champ reste optionnel pour eux. AES/AP restent vérifiés par diplôme + CNI.
@@ -222,7 +223,7 @@ export default function InscriptionSoignant() {
   // Mismatch de profession (RPPS d'une autre profession) = bloquant, au même titre que nom/prénom.
   const rppsProfessionMismatch = !!rppsResultat?.trouve && rppsResultat?.profession_correspond === false;
   const rppsBloquant = form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false || rppsProfessionMismatch) && !rppsVerifManuelle;
-  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && telephoneValide && (!TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
+  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && telephoneValide && (!!parcours || !TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
 
   // Verify RPPS when 11 digits entered
   useEffect(() => {
@@ -319,6 +320,10 @@ export default function InscriptionSoignant() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!etape2Valide) {
+      const manque = [!form.prenom && 'prénom', !form.nom && 'nom', !telephoneValide && 'téléphone valide', !dateNaissanceMajeur && 'date de naissance (18 ans minimum)', !form.profession && 'profession', !form.typesContrat.length && 'type de contrat', rppsObligatoireInscription && form.rpps.length !== 11 && 'numéro RPPS à 11 chiffres', rppsBloquant && 'cohérence du RPPS'].filter(Boolean);
+      setErreurInscription({ code: 'MISSING_REQUIRED_FIELDS', message: `Vérifiez les informations suivantes : ${manque.join(', ')}.` }); return;
+    }
     setSubmitting(true);
     setErreurInscription(null);
     try {
@@ -326,6 +331,12 @@ export default function InscriptionSoignant() {
       const etudiantDetails = form.estEtudiant && form.scolariteFormation && form.scolariteAnnee
         ? `${formationLabel} — année ${form.scolariteAnnee} validée`
         : null;
+      if (parcours) {
+        await finaliserProfil('SOIGNANT', { ...form, etudiant_details: etudiantDetails });
+        const mission = parcours.donnees.missionChoisie;
+        navigate(typeof mission === 'string' && /^[a-f0-9-]{36}$/i.test(mission) ? `/soignant/missions/${mission}` : '/soignant/recherche-missions');
+        return;
+      }
       await inscriptionSoignant({ ...form, turnstileToken, est_etudiant: form.estEtudiant, etudiant_details: etudiantDetails });
       // PII (email) hors URL : sessionStorage évite leak via historique/referer
       // + profession pour l'aperçu marché de la page succès (Session E-2)
@@ -335,14 +346,14 @@ export default function InscriptionSoignant() {
       } catch { /* sessionStorage indisponible */ }
       navigate('/inscription/succes?role=soignant');
     } catch (err) {
-      if (gererErreurSupabase(err, () => handleSubmit(e))) {
+      if (!parcours && gererErreurSupabase(err, () => handleSubmit(e))) {
         // Erreur réseau / session — gérée par l'helper, pas d'affichage local.
         return;
       }
       // Affichage inline avec code + action proposée.
       const erreurMappee = mapperErreurInscription(err);
       setErreurInscription(erreurMappee);
-      if (erreurMappee.code === 'EMAIL_CONFIRMATION_REQUIRED') setEtape(1);
+      if (!parcours && erreurMappee.code === 'EMAIL_CONFIRMATION_REQUIRED') setEtape(1);
       // Sentry UNIQUEMENT pour les vraies anomalies. Un refus métier attendu
       // (e-mail/RPPS déjà utilisé, captcha, mot de passe faible…) est déjà
       // affiché clairement à l'utilisateur → pas d'issue Sentry (sinon le feed
@@ -355,7 +366,7 @@ export default function InscriptionSoignant() {
       }
       // Si l'erreur cible un champ d'étape 1 mais on est en étape 2,
       // remonter à l'étape 1 pour rendre le champ visible.
-      if (erreurMappee.champs_highlight?.some(c => c === 'email' || c === 'motDePasse') && etape !== 1) {
+      if (!parcours && erreurMappee.champs_highlight?.some(c => c === 'email' || c === 'motDePasse') && etape !== 1) {
         setEtape(1);
       }
       // Pas de toast : l'Alert inline juste au-dessus du bouton submit
@@ -370,6 +381,14 @@ export default function InscriptionSoignant() {
     navigate('/connexion');
   };
 
+  const enregistrerEtQuitter = async () => {
+    if (!parcours) { setEtape(1); return; }
+    setSubmitting(true);
+    try { await enregistrerParcours(donneesFormulaire(form)); navigate('/inscription/reprendre'); }
+    catch (err) { setErreurInscription(mapperErreurInscription(err)); }
+    finally { setSubmitting(false); }
+  };
+
   const handleRetry = () => {
     setErreurInscription(null);
     // Re-soumettre le formulaire en simulant un submit.
@@ -378,16 +397,17 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <AuthLayout backTo="/connexion" scrollKey={etape}>
+    <AuthLayout backTo={parcours ? "/inscription/reprendre" : "/connexion"} scrollKey={etape}>
       <div className="card-base max-w-lg w-full">
         <LogoJolene
           className="mx-auto mb-6 flex w-fit"
           imageClassName="h-7 w-7"
           nomClassName="text-xl text-rose"
         />
-        <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
-        <SwitchTypeInscription actif="soignant" />
+        <h1 className="text-xl font-bold text-foreground text-center mb-2">{parcours ? 'Vos informations professionnelles' : 'Inscription Soignant'}</h1>
+        {!parcours && <SwitchTypeInscription actif="soignant" />}
 
+        {!parcours && <>
         {/* Stepper honnête : la création du compte se termine à l'étape Profil.
             Les documents et la vérification sont des tâches post-inscription,
             réalisées tranquillement depuis le tableau de bord
@@ -415,6 +435,7 @@ export default function InscriptionSoignant() {
           ≈ 2 minutes. Tes documents et la vérification se font ensuite, tranquillement, depuis ton espace — pas maintenant.
         </p>
 
+        </>}
         {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
         {etape === 1 && (
           <div className="mb-6">
@@ -437,7 +458,7 @@ export default function InscriptionSoignant() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate={!!parcours}>
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Tes identifiants</p>
@@ -482,7 +503,7 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
-              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Ton profil professionnel</p>
+              <p className="text-sm font-medium text-muted-foreground mb-4">{parcours ? 'Ces informations permettent de vérifier votre profil avant de candidater.' : 'Étape 2 — Ton profil professionnel'}</p>
               {/* La valeur avant l'effort (Session E-2) : dès la profession choisie,
                   montrer le marché réel — missions et taux, ou établissements inscrits.
                   Rendu prominent (carte mise en avant) : c'est la motivation à finir.
@@ -513,7 +534,7 @@ export default function InscriptionSoignant() {
                 <p className="text-[11px] text-muted-foreground mt-1">Nécessaire pour qu'un établissement puisse te joindre (missions urgentes).</p>
               </label>
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className={`input-base ${classeChampErreur('dateNaissance')}`} max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
-                {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
+                {dateNaissanceRequise && erreurInscription && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
                 {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Tu dois avoir 18 ans révolus pour t'inscrire</p>}
               </label>
               <div>
@@ -659,7 +680,7 @@ export default function InscriptionSoignant() {
                   rayon par défaut de 30 km est conservé silencieusement dans le
                   state du formulaire et transmis au backend, qui l'accepte
                   (register-soignant: rayon par défaut = 30 si non numérique). */}
-              <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
+              {!parcours && <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />}
               {erreurInscription && etape === 2 && !champsAHighlighter.has('email') && !champsAHighlighter.has('motDePasse') && (
                 <ErreurInscription
                   erreur={erreurInscription}
@@ -668,10 +689,10 @@ export default function InscriptionSoignant() {
                 />
               )}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting}>
+                <button type="button" disabled={submitting} onClick={() => void enregistrerEtQuitter()} className="btn-secondary flex-1">{parcours ? "Enregistrer et continuer plus tard" : "Retour"}</button>
+                <button type="submit" disabled={submitting || (!parcours && !etape2Valide)} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting}>
                   {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
-                  {submitting ? 'Création…' : 'Créer mon compte'}
+                  {submitting ? 'Enregistrement…' : parcours ? 'Enregistrer mon profil' : 'Créer mon compte'}
                 </button>
               </div>
             </div>
