@@ -36,7 +36,7 @@ const endpoints = [
 function harness(endpoint: typeof endpoints[number], options: {
   progressive?: boolean;
   draftReadErrors?: number;
-  finalization?: 'success' | 'committed_response_lost' | 'unavailable';
+  finalization?: 'success' | 'committed_response_lost' | 'first_attempt_unavailable' | 'unavailable';
   existingRole?: BusinessRole;
 } = {}) {
   const roleType = (role: BusinessRole): AccountType => role === 'SOIGNANT'
@@ -54,6 +54,7 @@ function harness(endpoint: typeof endpoints[number], options: {
   };
   let draftReadErrors = options.draftReadErrors ?? 0;
   let finalizationResponsesLost = options.finalization === 'committed_response_lost' ? 1 : 0;
+  let finalizationAttemptsFailed = options.finalization === 'first_attempt_unavailable' ? 1 : 0;
   const ok = (data: unknown = null): Result => ({ data, error: null });
   const failure = (): Result => ({ data: null, error: { code: 'FETCH_ERROR' } });
   const user = () => ({
@@ -92,7 +93,7 @@ function harness(endpoint: typeof endpoints[number], options: {
       return ok({ allowed: true, fresh: state.role === null, type_compte: state.accountType });
     }
     if (name === 'fn_finaliser_type_compte') {
-      if (options.finalization === 'unavailable') return failure();
+      if (options.finalization === 'unavailable' || finalizationAttemptsFailed-- > 0) return failure();
       if (!state.profileExists || state.claim !== args.p_claim_token) return ok(false);
       state.finalizedAt = new Date().toISOString();
       state.claim = null;
@@ -209,6 +210,15 @@ describe.each(endpoints)('$name — reprise de l’inscription', (endpoint) => {
     const response = await h.request();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true });
+    expect(h.state).toMatchObject({ authExists: true, profileExists: true, role: endpoint.role, claim: null });
+    expect(h.state.finalizedAt).not.toBeNull();
+    expect(h.deleteAuth).not.toHaveBeenCalled();
+    expect(h.deleteProfile).not.toHaveBeenCalled();
+  });
+
+  it('réessaie une finalisation non committée après une indisponibilité transitoire', async () => {
+    const h = harness(endpoint, { finalization: 'first_attempt_unavailable' });
+    expect((await h.request()).status).toBe(200);
     expect(h.state).toMatchObject({ authExists: true, profileExists: true, role: endpoint.role, claim: null });
     expect(h.state.finalizedAt).not.toBeNull();
     expect(h.deleteAuth).not.toHaveBeenCalled();
