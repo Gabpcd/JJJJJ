@@ -163,12 +163,21 @@ Deno.serve(async (req) => {
   });
   let suppressionAuthAutorisee = false;
   let inscriptionFinalisee = false;
+  let parcoursProgressif = false;
   const claimToken = crypto.randomUUID();
   const annulerCompteAuth = async (raison: string) => {
     // La compensation ne s'applique qu'au user Auth fraichement cree et
     // reserve atomiquement par CETTE inscription. Elle ne doit jamais pouvoir
     // supprimer un compte existant qui rappelle l'endpoint.
-    if (!suppressionAuthAutorisee || inscriptionFinalisee) return;
+    if (inscriptionFinalisee) return;
+    if (parcoursProgressif) {
+      const { error } = await supabaseAdmin.rpc('fn_liberer_inscription_progressive', {
+        p_user_id: user.id, p_claim_token: claimToken,
+      });
+      if (error) console.error('Libération du brouillon échouée:', error.code);
+      return;
+    }
+    if (!suppressionAuthAutorisee) return;
     try {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
       if (error) throw error;
@@ -202,6 +211,13 @@ Deno.serve(async (req) => {
       return errorResponse(cors, status, code, message);
     }
     suppressionAuthAutorisee = reservationResult.fresh === true;
+    const { data: parcours, error: parcoursError } = await supabaseAdmin
+      .from('parcours_inscription').select('user_id').eq('user_id', user.id).maybeSingle();
+    if (parcoursError) {
+      return errorResponse(cors, 503, 'ACCOUNT_RESERVATION_UNAVAILABLE', 'Votre inscription est conservée. Réessayez dans quelques instants.');
+    }
+    parcoursProgressif = !!parcours;
+
 
     const body = await req.json();
     const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, est_etudiant, etudiant_details } = body;
