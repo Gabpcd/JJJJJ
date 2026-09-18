@@ -191,28 +191,59 @@ function SepaIbanForm({
 }
 
 // SEPA Setup Section wrapper
-function SepaSetupSection({ userId }: { userId?: string }) {
+export function SepaSetupSection({ etablissementId }: { etablissementId?: string }) {
   const [sepaStatus, setSepaStatus] = useState<{ has_sepa: boolean; last4?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [compteTest, setCompteTest] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!userId) {
+    let active = true;
+    setError('');
+    setSepaStatus(null);
+    setShowForm(false);
+    setCompteTest(null);
+    if (!etablissementId) {
       setLoading(false);
       return;
     }
+    setLoading(true);
     (async () => {
       try {
+        const { data: classification, error: classificationError } = await supabase
+          .from('etablissements')
+          .select('est_compte_test')
+          .eq('id', etablissementId)
+          .maybeSingle();
+        if (classificationError || typeof classification?.est_compte_test !== 'boolean') {
+          throw new Error('Impossible de vérifier le compte pour le prélèvement. Réessayez.');
+        }
+        if (!active) return;
+        setCompteTest(classification.est_compte_test);
+        if (classification.est_compte_test) return;
         const data = await appelerSetupSepa({ action: 'get_sepa_status' });
-        setSepaStatus({ has_sepa: data.has_sepa === true, last4: data.last4 });
-      } catch {
-        setSepaStatus({ has_sepa: false });
+        if (active) setSepaStatus({ has_sepa: data.has_sepa === true, last4: data.last4 });
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'Le service de paiement est temporairement indisponible.');
+      } finally {
+        if (active) setLoading(false);
       }
-      setLoading(false);
     })();
-  }, [userId]);
+    return () => { active = false; };
+  }, [etablissementId, retry]);
+
+  if (!etablissementId) return null;
+  if (compteTest) return <p role="status" className="mt-4 text-sm text-muted-foreground">{messageErreurSepa('TEST_ACCOUNT_PAYMENT_DISABLED')}</p>;
 
   if (loading) return <div className="mt-4 text-sm text-muted-foreground">Chargement…</div>;
+  if (error) return (
+    <div className="mt-4 space-y-3">
+      <p role="alert" className="text-sm text-destructive">{error}</p>
+      <button type="button" className="btn-secondary min-h-11" onClick={() => setRetry(v => v + 1)}>Réessayer</button>
+    </div>
+  );
 
   if (sepaStatus?.has_sepa && !showForm) {
     return (
@@ -809,7 +840,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
 
           {/* SEPA IBAN setup section */}
           {modePaiement === 'SEPA_DEBIT' && (
-            <SepaSetupSection userId={user?.id} />
+            <SepaSetupSection etablissementId={etablissementId ?? undefined} />
           )}
         </div>
         )}

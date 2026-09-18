@@ -264,7 +264,9 @@ export default function FacturationEtablissement() {
   }, [loading, searchParams]);
 
   // ── Data loading ──
+  const chargementVersionRef = useRef(0);
   const charger = useCallback(async () => {
+    const version = ++chargementVersionRef.current;
     if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
     if (!user || !etablissementId) {
       setLoading(false);
@@ -333,6 +335,7 @@ export default function FacturationEtablissement() {
           .eq('statut', 'CONTESTE'),
       ]);
 
+      if (version !== chargementVersionRef.current) return;
       // Valider l'ensemble avant le moindre rendu : une seule erreur transport,
       // RLS ou payload interdit d'afficher un agrégat financier partiel.
       verifierReponseChargement('Profil établissement', resEtab, estObjet);
@@ -369,6 +372,7 @@ export default function FacturationEtablissement() {
       setFacturesBloqueesParLitige(facturesBloquees);
       setMissionsBloqueesParLitige(missionsBloquees);
     } catch (err) {
+      if (version !== chargementVersionRef.current) return;
       logger.error('Facturation charger error', err);
       setEtab(null);
       setData(null);
@@ -382,7 +386,7 @@ export default function FacturationEtablissement() {
       setMissionsBloqueesParLitige(new Set());
       setErreurChargement('Impossible de charger les données de facturation en toute sécurité.');
     } finally {
-      setLoading(false);
+      if (version === chargementVersionRef.current) setLoading(false);
     }
   }, [
     user,
@@ -394,7 +398,10 @@ export default function FacturationEtablissement() {
     canReadFinance,
   ]);
 
-  useEffect(() => { void charger(); }, [charger]);
+  useEffect(() => {
+    void charger();
+    return () => { chargementVersionRef.current += 1; };
+  }, [charger]);
 
   // ── Handler : générer facture commission mensuelle ──
   const genererFactureMensuelle = async () => {

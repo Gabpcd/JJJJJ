@@ -244,7 +244,7 @@ export default function InscriptionRapide({
               {error("nom")}
             </div>
           )}
-          <label className="flex gap-3 items-start py-2 text-sm">
+          <label className="flex min-h-11 gap-3 items-start py-2 text-sm">
             <input
               id="cgu"
               type="checkbox"
@@ -277,7 +277,7 @@ export default function InscriptionRapide({
           {error("cgu")}
           {!soignant && (
             <>
-              <label className="flex gap-3 items-start py-2 text-sm">
+              <label className="flex min-h-11 gap-3 items-start py-2 text-sm">
                 <input
                   id="cgv"
                   type="checkbox"

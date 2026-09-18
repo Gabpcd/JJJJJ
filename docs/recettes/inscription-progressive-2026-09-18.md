@@ -39,3 +39,9 @@ Captures du nouveau frontend dans Safari sur le simulateur iPhone, avec l’API 
 - [Compte établissement](inscription-progressive-images/etablissement-compte-ios.png)
 - [Brouillon établissement](inscription-progressive-images/etablissement-brouillon-ios.png)
 - [Découverte des missions côté soignant](inscription-progressive-images/soignant-missions-ios.png)
+
+## Constats supplémentaires de la CI mobile
+
+La première passe complète a révélé une cible CGV de 36 px sur écran de 375 px, une navigation de test déclenchée avant la fin de l’arrivée dans l’espace soignant, et un appel SEPA interdit pour les comptes de test. Les labels mesurent désormais au moins 44 px. L’audit attend le contenu chargé avant sa navigation suivante. Le statut test est lu sur la table établissement avec l’id canonique et les règles RLS existantes avant toute lecture SEPA ; une classification inconnue ou une erreur de lecture bloque le formulaire et permet de réessayer. Le refus serveur des comptes de test reste inchangé.
+
+Une réponse de facturation arrivée après départ de la page ou changement de périmètre ne provoque plus d’erreur sur l’écran suivant. Les erreurs du chargement actif restent bloquantes. Treize tests ciblés et une revue indépendante valident ces corrections ; la vérification WebKit contre le serveur de production, avec un compte CI, confirme l’absence d’appel SEPA pour ce compte. Les labels CGU/CGV mesurent respectivement 56/44 px à 375 px de largeur.

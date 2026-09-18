@@ -594,6 +594,7 @@ test.describe('inscriptions mobile Série C', () => {
       });
       expect(register, 'register-soignant crée réellement le profil').toMatchObject({ status: 200, ok: true, businessOk: true });
       await expect(page).toHaveURL(/\/soignant\/recherche-missions$/, { timeout: 30_000 });
+      await settleFreshAccountDashboard(page);
       await page.goto('/soignant/tableau-de-bord');
       await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
       await auditFreshAccountRoutes(page, testInfo, 'soignant', ROUTES_SOIGNANT);
