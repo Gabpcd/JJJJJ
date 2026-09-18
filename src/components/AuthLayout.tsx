@@ -110,12 +110,13 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
           recentrage quand le clavier natif iOS s'ouvre/se ferme (WKWebView
           resize:'native' rétrécit le webview → justify-center recentrerait la
           carte, créant un « rabaissement » visible au clic sur Se connecter).
-          Centré verticalement à partir de sm (desktop/tablette, pas de clavier
-          natif qui resize). */}
+          Centré verticalement à partir de sm si le formulaire tient à l'écran.
+          Les marges auto reviennent à zéro quand le contenu déborde, notamment
+          après le chargement du captcha ou l'affichage d'erreurs. */}
       <main
         ref={scrollRef}
         id="contenu-principal"
-        className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:justify-center px-4 py-6"
+        className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:[&>:first-child]:mt-auto sm:[&>:last-child]:mb-auto sm:[&>*]:shrink-0 px-4 py-6"
         onClick={handleBackgroundClick}
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
