@@ -4923,6 +4923,28 @@ $$;
 ALTER FUNCTION "public"."fn_a_permission_etablissement"("p_permission" "text", "p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_accepter_cgu_decouverte_soignant"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif()
+     OR NOT EXISTS (SELECT 1 FROM public.soignants WHERE id = auth.uid() AND supprime_le IS NULL)
+     OR NOT EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND email_confirmed_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'Compte soignant confirmé requis.' USING ERRCODE = '42501';
+  END IF;
+  INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details)
+  SELECT auth.uid(), 'SOIGNANT', 'RGPD_CONSENTEMENT_DONNE', 'soignant', auth.uid(),
+    jsonb_build_object('type','psc_decouverte','cgu',true,'confidentialite',true)
+  WHERE NOT EXISTS (SELECT 1 FROM public.journaux_audit WHERE acteur_id=auth.uid()
+    AND action='RGPD_CONSENTEMENT_DONNE' AND details->>'type'='psc_decouverte');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_accepter_cgu_decouverte_soignant"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
@@ -28855,6 +28877,53 @@ $$;
 ALTER FUNCTION "public"."fn_demander_revue_document"("p_document_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text" DEFAULT NULL::"text", "p_nom" "text" DEFAULT NULL::"text", "p_cgu" boolean DEFAULT false, "p_cgv" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_claim uuid := gen_random_uuid();
+  v_reservation jsonb;
+  v_parcours public.parcours_inscription;
+BEGIN
+  IF v_uid IS NULL OR NOT public.fn_compte_auth_actif() THEN
+    RAISE EXCEPTION 'Session invalide.' USING ERRCODE = '42501';
+  END IF;
+  IF p_type_compte NOT IN ('SOIGNANT', 'ETABLISSEMENT') OR p_type_compte IS NULL
+    OR p_cgu IS NOT TRUE OR (p_type_compte = 'ETABLISSEMENT' AND p_cgv IS NOT TRUE) THEN
+    RAISE EXCEPTION 'Vérifiez le type de compte et les conditions acceptées.' USING ERRCODE = '22023';
+  END IF;
+  IF p_type_compte = 'SOIGNANT' AND (p_profession IS NULL OR NOT EXISTS (
+    SELECT 1 FROM unnest(enum_range(NULL::public.type_profession)) p WHERE p::text = p_profession
+  )) THEN RAISE EXCEPTION 'Choisissez votre profession.' USING ERRCODE = '22023'; END IF;
+  IF p_type_compte = 'ETABLISSEMENT' AND (length(btrim(COALESCE(p_nom, ''))) NOT BETWEEN 1 AND 200) THEN
+    RAISE EXCEPTION 'Indiquez le nom de votre établissement.' USING ERRCODE = '22023';
+  END IF;
+
+  -- Même verrou/réservation que les endpoints historiques, y compris lors de
+  -- deux créations concurrentes de rôles différents. Aucun rôle dans le JWT.
+  v_reservation := public.fn_reserver_type_compte(v_uid, p_type_compte, v_claim);
+  IF (v_reservation ->> 'allowed')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION '%', v_reservation ->> 'code' USING ERRCODE = '23505';
+  END IF;
+  INSERT INTO public.parcours_inscription(user_id, type_compte, donnees, consentement_cgv_le)
+  VALUES (v_uid, p_type_compte,
+    CASE WHEN p_type_compte = 'SOIGNANT' THEN jsonb_build_object('profession', p_profession)
+      ELSE jsonb_build_object('nom', btrim(p_nom)) END,
+    CASE WHEN p_type_compte = 'ETABLISSEMENT' THEN now() END)
+  ON CONFLICT (user_id) DO NOTHING;
+  UPDATE public.types_comptes_auth SET claim_token = NULL, claim_expire_le = NULL
+    WHERE user_id = v_uid AND claim_token = v_claim AND finalise_le IS NULL;
+  SELECT * INTO v_parcours FROM public.parcours_inscription WHERE user_id = v_uid;
+  RETURN to_jsonb(v_parcours);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text", "p_nom" "text", "p_cgu" boolean, "p_cgv" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_deposer_chorus"("p_facture_id" "uuid", "p_chorus_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -31087,6 +31156,37 @@ ALTER FUNCTION "public"."fn_enregistrer_numero_dpae"("p_contrat_id" "uuid", "p_d
 
 COMMENT ON FUNCTION "public"."fn_enregistrer_numero_dpae"("p_contrat_id" "uuid", "p_dpae_numero" "text") IS 'Sprint 15 PR 3 : enregistre le n° DPAE URSSAF avec validation format strict + email best-effort au soignant via send-email (template DPAE_DECLAREE_SOIGNANT).';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE v_parcours public.parcours_inscription;
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() THEN
+    RAISE EXCEPTION 'Session invalide.' USING ERRCODE = '42501';
+  END IF;
+  IF p_donnees IS NULL OR jsonb_typeof(p_donnees) <> 'object' OR octet_length(p_donnees::text) > 32768 THEN
+    RAISE EXCEPTION 'Brouillon invalide.' USING ERRCODE = '22023';
+  END IF;
+  -- Aucun mot de passe, jeton, pièce ni état de vérification dans le brouillon.
+  IF EXISTS (SELECT 1 FROM jsonb_object_keys(p_donnees) k WHERE k NOT IN (
+    'profession','prenom','nom','telephone','dateNaissance','typesContrat','rpps','rayon',
+    'estSalarieEtablissement','estEtudiant','scolariteFormation','scolariteAnnee',
+    'siret','finess','type','rue','ville','codePostal','departement','emailContact',
+    'telephoneContact','numeroLicence','missionProfession','missionVille','missionDate',
+    'missionDebut','missionFin','missionChoisie','brouillonMission'
+  )) THEN RAISE EXCEPTION 'Champ non autorisé dans le brouillon.' USING ERRCODE = '22023'; END IF;
+  UPDATE public.parcours_inscription SET donnees = donnees || p_donnees, modifie_le = now()
+    WHERE user_id = auth.uid() RETURNING * INTO v_parcours;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Inscription introuvable.' USING ERRCODE = 'P0002'; END IF;
+  RETURN to_jsonb(v_parcours);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_enregistrer_pings_gps"("p_mission_id" "uuid", "p_pings" "jsonb", "p_terminal_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -37830,6 +37930,18 @@ $$;
 ALTER FUNCTION "public"."fn_is_valid_uuid"("p_text" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_liberer_inscription_progressive"("p_user_id" "uuid", "p_claim_token" "uuid") RETURNS "void"
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  UPDATE public.types_comptes_auth t SET claim_token = NULL, claim_expire_le = NULL
+  WHERE t.user_id = p_user_id AND t.claim_token = p_claim_token AND t.finalise_le IS NULL;
+$$;
+
+
+ALTER FUNCTION "public"."fn_liberer_inscription_progressive"("p_user_id" "uuid", "p_claim_token" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "uuid", "p_expected_s3_cle" "text", "p_iban" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'extensions'
@@ -41030,6 +41142,36 @@ ALTER FUNCTION "public"."fn_mission_publique"("p_id" "uuid") OWNER TO "postgres"
 
 COMMENT ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") IS 'SECURITY DEFINER anonyme revue : fiche publique filtrée, comptes test exclus.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_missions_decouverte_inscription"("p_ville" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE v_profession text; v_resultat jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() THEN
+    RAISE EXCEPTION 'Session invalide.' USING ERRCODE = '42501';
+  END IF;
+  SELECT donnees ->> 'profession' INTO v_profession FROM public.parcours_inscription
+    WHERE user_id = auth.uid() AND type_compte = 'SOIGNANT';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Espace soignant requis.' USING ERRCODE = '42501'; END IF;
+  SELECT COALESCE(jsonb_agg(to_jsonb(mission)), '[]'::jsonb) INTO v_resultat FROM (
+    SELECT m.id, m.profession_requise, e.adresse_ville AS ville, m.debut_le, m.fin_le
+    FROM public.missions m JOIN public.etablissements e ON e.id = m.etablissement_id
+    WHERE m.statut = 'OUVERTE' AND m.debut_le > now() AND m.soignant_assigne_id IS NULL
+      AND e.supprime_le IS NULL AND e.est_compte_test IS FALSE
+      AND private.fn_mission_lie_compte_test(m.id) IS FALSE
+      AND m.profession_requise::text = v_profession
+      AND (nullif(btrim(p_ville), '') IS NULL OR e.adresse_ville ILIKE '%' || left(btrim(p_ville), 100) || '%')
+    ORDER BY m.debut_le, m.id LIMIT 20
+  ) mission;
+  RETURN v_resultat;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_missions_decouverte_inscription"("p_ville" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_missions_ouvertes_sitemap"() RETURNS TABLE("id" "uuid", "maj" timestamp with time zone)
@@ -67649,6 +67791,23 @@ COMMENT ON TABLE "public"."parametres_litiges" IS 'Paramètres globaux du systè
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."parcours_inscription" (
+    "user_id" "uuid" NOT NULL,
+    "type_compte" "text" NOT NULL,
+    "donnees" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "consentement_cgu_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "consentement_cgv_le" timestamp with time zone,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "modifie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "parcours_inscription_check" CHECK ((("type_compte" <> 'ETABLISSEMENT'::"text") OR ("consentement_cgv_le" IS NOT NULL))),
+    CONSTRAINT "parcours_inscription_donnees_check" CHECK ((("jsonb_typeof"("donnees") = 'object'::"text") AND ("octet_length"(("donnees")::"text") <= 32768))),
+    CONSTRAINT "parcours_inscription_type_compte_check" CHECK (("type_compte" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text"])))
+);
+
+
+ALTER TABLE "public"."parcours_inscription" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."parrainage_fraude_signals" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "parrainage_id" "uuid" NOT NULL,
@@ -69823,6 +69982,11 @@ ALTER TABLE ONLY "public"."parametres_litiges"
 
 ALTER TABLE ONLY "public"."parametres_systeme"
     ADD CONSTRAINT "parametres_systeme_pkey" PRIMARY KEY ("cle");
+
+
+
+ALTER TABLE ONLY "public"."parcours_inscription"
+    ADD CONSTRAINT "parcours_inscription_pkey" PRIMARY KEY ("user_id");
 
 
 
@@ -73685,6 +73849,11 @@ ALTER TABLE ONLY "public"."paiements_soignant"
 
 
 
+ALTER TABLE ONLY "public"."parcours_inscription"
+    ADD CONSTRAINT "parcours_inscription_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."parcours_liberal_soignants"
     ADD CONSTRAINT "parcours_liberal_soignants_soignant_id_fkey" FOREIGN KEY ("soignant_id") REFERENCES "public"."soignants"("id") ON DELETE CASCADE;
 
@@ -74678,6 +74847,13 @@ ALTER TABLE "public"."parametres_litiges" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."parametres_systeme" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."parcours_inscription" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "parcours_inscription_proprietaire" ON "public"."parcours_inscription" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."fn_compte_auth_actif"() AS "fn_compte_auth_actif")));
+
 
 
 ALTER TABLE "public"."parcours_liberal_soignants" ENABLE ROW LEVEL SECURITY;
@@ -77078,6 +77254,12 @@ GRANT ALL ON FUNCTION "public"."fn_a_permission_etablissement"("p_permission" "t
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_accepter_cgu_decouverte_soignant"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_accepter_cgu_decouverte_soignant"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_accepter_cgu_decouverte_soignant"() TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") TO "authenticated";
@@ -78731,6 +78913,12 @@ GRANT ALL ON FUNCTION "public"."fn_demander_revue_document"("p_document_id" "uui
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text", "p_nom" "text", "p_cgu" boolean, "p_cgv" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text", "p_nom" "text", "p_cgu" boolean, "p_cgv" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_demarrer_inscription"("p_type_compte" "text", "p_profession" "text", "p_nom" "text", "p_cgu" boolean, "p_cgv" boolean) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_deposer_chorus"("p_facture_id" "uuid", "p_chorus_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_deposer_chorus"("p_facture_id" "uuid", "p_chorus_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_deposer_chorus"("p_facture_id" "uuid", "p_chorus_id" "text") TO "service_role";
@@ -78873,6 +79061,12 @@ GRANT ALL ON FUNCTION "public"."fn_enregistrer_mon_iban"("p_iban" "text", "p_tit
 REVOKE ALL ON FUNCTION "public"."fn_enregistrer_numero_dpae"("p_contrat_id" "uuid", "p_dpae_numero" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_enregistrer_numero_dpae"("p_contrat_id" "uuid", "p_dpae_numero" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_enregistrer_numero_dpae"("p_contrat_id" "uuid", "p_dpae_numero" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_enregistrer_parcours_inscription"("p_donnees" "jsonb") TO "authenticated";
 
 
 
@@ -79473,6 +79667,11 @@ GRANT ALL ON FUNCTION "public"."fn_is_valid_uuid"("p_text" "text") TO "authentic
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_liberer_inscription_progressive"("p_user_id" "uuid", "p_claim_token" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_liberer_inscription_progressive"("p_user_id" "uuid", "p_claim_token" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "uuid", "p_expected_s3_cle" "text", "p_iban" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "uuid", "p_expected_s3_cle" "text", "p_iban" "text") TO "service_role";
 
@@ -79798,6 +79997,12 @@ REVOKE ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") FROM PUBLIC
 GRANT ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") TO "anon";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_missions_decouverte_inscription"("p_ville" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_missions_decouverte_inscription"("p_ville" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_missions_decouverte_inscription"("p_ville" "text") TO "authenticated";
 
 
 
@@ -82432,6 +82637,11 @@ GRANT ALL ON TABLE "public"."paliers_commission" TO "service_role";
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."parametres_litiges" TO "authenticated";
 GRANT ALL ON TABLE "public"."parametres_litiges" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."parcours_inscription" TO "service_role";
+GRANT SELECT ON TABLE "public"."parcours_inscription" TO "authenticated";
 
 
 
