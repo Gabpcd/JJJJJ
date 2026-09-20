@@ -87,13 +87,25 @@ async function verifierSansDebordementHorizontal(page: Page, route: string) {
 }
 
 test.describe('release review — reprise de session iPad', () => {
-  test('les pages publiques critiques restent lisibles sur iPad', async ({ page }) => {
-    for (const route of ['/tarifs', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/aide']) {
+  // Chaque page est une entrée publique indépendante. Enchaîner six goto sur
+  // le même document pouvait faire annuler /cgu par une navigation /tarifs
+  // encore en cours dans WebKit. Une fixture page par cas isole leur chargement
+  // sans délai arbitraire, retry supplémentaire ou contrôle supprimé.
+  for (const { route, titre } of [
+    { route: '/tarifs', titre: 'Nos tarifs — Transparence totale' },
+    { route: '/cgu', titre: "Conditions Générales d'Utilisation" },
+    { route: '/cgv', titre: 'Conditions Générales de Vente' },
+    { route: '/mentions-legales', titre: 'Mentions Légales' },
+    { route: '/confidentialite', titre: 'Politique de Confidentialité' },
+    { route: '/aide', titre: "Centre d'aide" },
+  ]) {
+    test(`page publique ${route} — contenu lisible sur iPad`, async ({ page }) => {
       await page.goto(route);
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${route}$`));
+      await expect(page.getByRole('heading', { level: 1, name: titre, exact: true })).toBeVisible();
       await verifierSansDebordementHorizontal(page, route);
-    }
-  });
+    });
+  }
 
   test('l’inscription soignant expose les consentements et champs essentiels sur iPad', async ({ page }) => {
     await page.goto('/inscription/soignant');
