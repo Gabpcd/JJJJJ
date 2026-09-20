@@ -1,6 +1,7 @@
 name: Mobile delivery (signed updates + store submission)
 
 on:
+  status:
   workflow_run:
     workflows: ['Validate PR (tests + typecheck + build + drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf + a11y + best-practices + SEO)']
     types: [completed]
@@ -17,6 +18,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  statuses: read
 
 concurrency:
   group: mobile-delivery
@@ -27,7 +29,7 @@ env:
 
 jobs:
   plan:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'status' && github.event.context == 'Vercel' && github.event.state == 'success') || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
@@ -35,7 +37,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The planner itself always comes from trusted main, even on a PR status event.
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
@@ -43,7 +46,7 @@ jobs:
       - id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          MOBILE_DELIVERY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          MOBILE_DELIVERY_SHA: ${{ github.event.workflow_run.head_sha || github.event.sha || github.sha }}
           MOBILE_DELIVERY_MODE: ${{ inputs.mode || 'auto' }}
         run: node scripts/mobile/delivery-plan.mjs
 
