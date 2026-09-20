@@ -1,0 +1,240 @@
+name: Mobile delivery (signed updates + store submission)
+
+on:
+  workflow_run:
+    workflows: ['Validate PR (tests + typecheck + build + drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf + a11y + best-practices + SEO)']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [auto, native]
+        default: auto
+        description: 'Release current main after all quality gates'
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: mobile-delivery
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MOBILE_DELIVERY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          MOBILE_DELIVERY_MODE: ${{ inputs.mode || 'auto' }}
+        run: node scripts/mobile/delivery-plan.mjs
+
+  ota:
+    needs: plan
+    if: needs.plan.outputs.mode == 'ota'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build compatible mobile bundle
+        env:
+          VITE_NATIVE_BUILD: 'true'
+          GIT_COMMIT_SHA: ${{ needs.plan.outputs.sha }}
+          VITE_ENV: production
+          VITE_TURNSTILE_SITE_KEY: ''
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: npm run preflight:mobile && REQUIRE_ANDROID_APP_LINKS=1 npm run build
+      - name: Sign the archive and compatibility manifest
+        env:
+          MOBILE_UPDATE_PRIVATE_KEY: ${{ secrets.MOBILE_UPDATE_PRIVATE_KEY }}
+          MOBILE_UPDATE_KEY_FILE: ${{ runner.temp }}/mobile-update.pem
+        run: |
+          node -e 'require("fs").writeFileSync(process.env.MOBILE_UPDATE_KEY_FILE,process.env.MOBILE_UPDATE_PRIVATE_KEY,{mode:0o600})'
+          node scripts/mobile/sign-update.mjs
+      - name: Publish archive first and manifest last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/mobile/publish-update.mjs
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/mobile-update.pem"
+
+  reserve-native:
+    needs: plan
+    if: needs.plan.outputs.mode == 'native'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+        run: node scripts/mobile/release-state.mjs reserve
+
+  native:
+    needs: [plan, reserve-native]
+    if: needs.plan.outputs.mode == 'native'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ios
+            runner: macos-26
+          - platform: android
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      GIT_COMMIT_SHA: ${{ needs.plan.outputs.sha }}
+      VITE_ENV: production
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - id: state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+        run: node scripts/mobile/release-state.mjs check ${{ matrix.platform }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - uses: actions/setup-java@v5
+        if: matrix.platform == 'android' && steps.state.outputs.submitted != 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - if: steps.state.outputs.submitted != 'true'
+        run: npm ci
+      - if: steps.state.outputs.submitted != 'true'
+        run: npm run build:mobile
+      - name: Restore Android signing
+        if: matrix.platform == 'android' && steps.state.outputs.submitted != 'true'
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_PASSWORD: ${{ secrets.ANDROID_UPLOAD_PASSWORD }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64 }}
+        run: node scripts/mobile/prepare-ci-signing.mjs android
+      - name: Build Android release
+        if: matrix.platform == 'android' && steps.state.outputs.submitted != 'true'
+        working-directory: android
+        run: ./gradlew bundleRelease
+      - name: Restore Apple signing
+        if: matrix.platform == 'ios' && steps.state.outputs.submitted != 'true'
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          node scripts/mobile/prepare-ci-signing.mjs ios
+          keychain="$RUNNER_TEMP/jolene-signing/release.keychain-db"
+          security create-keychain -p "$IOS_CERTIFICATE_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$IOS_CERTIFICATE_PASSWORD" "$keychain"
+          security import "$RUNNER_TEMP/jolene-signing/distribution.p12" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$IOS_CERTIFICATE_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          mkdir -p "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          cp "$RUNNER_TEMP/jolene-signing/distribution.mobileprovision" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"
+      - name: Build Apple release
+        if: matrix.platform == 'ios' && steps.state.outputs.submitted != 'true'
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Jolene.xcarchive" archive CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=GDU5AA28M9 'CODE_SIGN_IDENTITY=Apple Distribution: Jolene App (GDU5AA28M9)' 'PROVISIONING_PROFILE_SPECIFIER=Jolene App Store Distribution'
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Jolene.xcarchive" -exportPath "$RUNNER_TEMP/ios-export" -exportOptionsPlist ios/ExportOptions-AppStore.plist
+      - uses: actions/upload-artifact@v4
+        if: steps.state.outputs.submitted != 'true'
+        with:
+          name: mobile-${{ matrix.platform }}-${{ needs.plan.outputs.sha }}
+          path: |
+            ${{ runner.temp }}/ios-export/*.ipa
+            android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Submit Android for review
+        if: matrix.platform == 'android' && steps.state.outputs.submitted != 'true'
+        env:
+          GOOGLE_PLAY_KEY_FILE: ${{ runner.temp }}/jolene-signing/play.json
+          ANDROID_AAB_PATH: ${{ github.workspace }}/android/app/build/outputs/bundle/release/app-release.aab
+        run: bundle exec fastlane android submit
+      - name: Submit Apple for review
+        if: matrix.platform == 'ios' && steps.state.outputs.submitted != 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          IOS_IPA_PATH="$(find "$RUNNER_TEMP/ios-export" -maxdepth 1 -name '*.ipa' -print -quit)"
+          export IOS_IPA_PATH
+          bundle exec fastlane ios submit
+      - name: Record platform submission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+        run: node scripts/mobile/release-state.mjs record ${{ matrix.platform }}
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [ "${{ matrix.platform }}" = ios ]; then security delete-keychain "$RUNNER_TEMP/jolene-signing/release.keychain-db" || true; fi
+          rm -rf "$RUNNER_TEMP/jolene-signing"
+
+  record-native:
+    needs: [plan, native]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Record the submitted native runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+        run: node scripts/mobile/release-state.mjs complete

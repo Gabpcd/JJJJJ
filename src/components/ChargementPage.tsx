@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react';
 export function ChargementPage() {
   return (
     <div
+      data-native-route-loading
       className="flex min-h-[50dvh] items-center justify-center bg-background py-12"
       role="status"
       aria-label="Chargement en cours"

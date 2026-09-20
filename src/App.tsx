@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
+import { NativeUpdateReady } from './components/NativeUpdateReady';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -494,6 +495,7 @@ function AppRoutes() {
 
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <NativeUpdateReady />
       </Suspense>
     </PageTransition>
   );

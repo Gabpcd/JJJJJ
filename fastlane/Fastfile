@@ -1,0 +1,60 @@
+require 'json'
+ROOT = File.expand_path('..', __dir__)
+
+default_platform(:ios)
+
+def release_config
+  JSON.parse(File.read(File.join(ROOT, 'config/mobile-release.json')))
+end
+
+platform :ios do
+  desc 'Submit the signed Jolene build; keep manual release after Apple review'
+  lane :submit do
+    release = release_config
+    api = app_store_connect_api_key(
+      key_id: ENV.fetch('ASC_KEY_ID'), issuer_id: ENV.fetch('ASC_ISSUER_ID'),
+      key_content: ENV.fetch('ASC_PRIVATE_KEY_BASE64'), is_key_content_base64: true
+    )
+    app = Spaceship::ConnectAPI::App.find('app.jolene')
+    builds = app.get_builds(filter: { version: release.fetch('buildNumber').to_s }, includes: 'preReleaseVersion')
+    existing = builds.find { |build| build.app_version == release.fetch('marketingVersion') }
+    submitted_states = %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE PROCESSING_FOR_APP_STORE READY_FOR_SALE READY_FOR_DISTRIBUTION]
+    version = app.get_app_store_versions(filter: { versionString: release.fetch('marketingVersion'), platform: 'IOS' }, includes: 'build').first
+    if existing && version && version.build&.id == existing.id && submitted_states.include?(version.app_store_state)
+      UI.success('This exact Apple build is already submitted')
+      next
+    end
+    unless existing
+      upload_to_testflight(api_key: api, app_identifier: 'app.jolene', ipa: ENV.fetch('IOS_IPA_PATH'),
+        skip_submission: true, skip_waiting_for_build_processing: false)
+    end
+    upload_to_app_store(
+      api_key: api, app_identifier: 'app.jolene', app_version: release.fetch('marketingVersion'),
+      build_number: release.fetch('buildNumber').to_s, skip_binary_upload: true,
+      skip_screenshots: true, skip_metadata: false,
+      release_notes: { 'fr-FR' => File.read(File.join(ROOT, 'config/mobile-release-notes.txt')).strip },
+      submit_for_review: true, automatic_release: false, force: true,
+      run_precheck_before_submit: false
+    )
+  end
+end
+
+platform :android do
+  desc 'Upload the production Android bundle and send changes to review'
+  lane :submit do
+    existing = google_play_track_version_codes(package_name: 'app.jolene',
+      json_key: ENV.fetch('GOOGLE_PLAY_KEY_FILE'), track: 'production')
+    if existing.map(&:to_s).include?(release_config.fetch('buildNumber').to_s)
+      UI.success('This exact Android versionCode is already on the production track')
+      next
+    end
+    upload_to_play_store(
+      package_name: 'app.jolene', json_key: ENV.fetch('GOOGLE_PLAY_KEY_FILE'),
+      aab: ENV.fetch('ANDROID_AAB_PATH'), track: 'production', release_status: 'completed',
+      version_name: release_config.fetch('marketingVersion'),
+      skip_upload_metadata: true, skip_upload_images: true, skip_upload_screenshots: true,
+      skip_upload_changelogs: false, metadata_path: File.join(ROOT, 'fastlane/metadata/android'),
+      changes_not_sent_for_review: false, rescue_changes_not_sent_for_review: false
+    )
+  end
+end
