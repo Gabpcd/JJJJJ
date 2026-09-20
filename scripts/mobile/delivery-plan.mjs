@@ -21,6 +21,17 @@ if ((await api('git/ref/heads/main')).object.sha !== sha) {
   output('none', 'A newer main commit exists.');
   process.exit(0);
 }
+const release = JSON.parse(readFileSync('config/mobile-release.json', 'utf8'));
+let submitted;
+try { submitted = git('rev-parse', '--verify', `refs/tags/mobile-native-${release.buildNumber}`); } catch { /* First delivery. */ }
+if (!submitted) {
+  let reserved;
+  try { reserved = git('rev-parse', '--verify', `refs/tags/mobile-native-source-${release.buildNumber}`); } catch { /* First attempt. */ }
+  if (reserved) {
+    execFileSync('git', ['merge-base', '--is-ancestor', reserved, sha]);
+    sha = reserved; // Check and resume exactly the previously reserved commit.
+  }
+}
 for (const workflow of ['validate-pr.yml', 'playwright-e2e.yml', 'lighthouse.yml']) {
   const { workflow_runs: runs } = await api(`actions/workflows/${workflow}/runs?head_sha=${sha}&event=push&per_page=100`);
   const latest = runs.filter(run => run.head_branch === 'main').sort((a, b) => b.id - a.id)[0];
@@ -34,10 +45,7 @@ if (!deployment.statuses.some(status => status.context === 'Vercel' && status.st
   output('none', 'Waiting for the Vercel deployment of this exact commit.');
   process.exit(0);
 }
-const release = JSON.parse(readFileSync('config/mobile-release.json', 'utf8'));
 const requested = process.env.MOBILE_DELIVERY_MODE || 'auto';
-let submitted;
-try { submitted = git('rev-parse', '--verify', `refs/tags/mobile-native-${release.buildNumber}`); } catch { /* First delivery. */ }
 if (submitted === sha) {
   output('none', 'This native runtime has already been submitted.');
   process.exit(0);
@@ -46,12 +54,6 @@ if (requested === 'native' || !submitted) {
   if (submitted) throw new Error('Build number already submitted from another commit');
   const previousBuilds = git('tag', '--list', 'mobile-native-*').split('\n').map(tag => Number(tag.replace('mobile-native-', ''))).filter(Number.isFinite);
   if (release.buildNumber <= Math.max(19, ...previousBuilds)) throw new Error('Native build number must increase');
-  let reserved;
-  try { reserved = git('rev-parse', '--verify', `refs/tags/mobile-native-source-${release.buildNumber}`); } catch { /* First attempt. */ }
-  if (reserved) {
-    execFileSync('git', ['merge-base', '--is-ancestor', reserved, sha]);
-    sha = reserved; // Resume exactly the binaries reserved by the first attempt.
-  }
   output('native', `Store submission ${release.marketingVersion} (${release.buildNumber}).`);
 } else {
   const prs = await api(`commits/${sha}/pulls`);
