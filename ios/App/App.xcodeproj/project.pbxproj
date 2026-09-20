@@ -329,7 +329,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				APS_ENVIRONMENT = production;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution: Jolene App (GDU5AA28M9)";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Jolene App Store Distribution";
 				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = GDU5AA28M9;
 				INFOPLIST_FILE = App/Info.plist;
