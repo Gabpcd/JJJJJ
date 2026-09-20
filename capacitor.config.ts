@@ -1,5 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 import { KeyboardResize } from '@capacitor/keyboard';
+import { readFileSync } from 'node:fs';
+import type {} from '@capawesome/capacitor-live-update';
 
 const config: CapacitorConfig = {
   appId: 'app.jolene',
@@ -11,6 +13,12 @@ const config: CapacitorConfig = {
     // url: 'http://localhost:8080',
   },
   plugins: {
+    LiveUpdate: {
+      autoUpdateStrategy: 'none',
+      publicKey: readFileSync('config/mobile-update-public.pem', 'utf8').replace(/\r?\n/g, ''),
+      readyTimeout: 30000,
+      autoBlockRolledBackBundles: true,
+    },
     SplashScreen: {
       // Aucun écran de splash applicatif : iOS/Android montrent uniquement le
       // fond natif uni, puis l'interface dès qu'elle est prête.

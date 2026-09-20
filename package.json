@@ -60,6 +60,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@capawesome/capacitor-live-update": "8.4.2",
     "@capgo/capacitor-native-biometric": "^8.4.2",
     "@ebarooni/capacitor-calendar": "8.2.0",
     "@hookform/resolvers": "^3.10.0",
