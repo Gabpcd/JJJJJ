@@ -3,7 +3,8 @@ name: Mobile delivery (signed updates + store submission)
 on:
   status:
   workflow_run:
-    workflows: ['Validate PR (tests + typecheck + build + drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf + a11y + best-practices + SEO)']
+    # GitHub interprets these names as filter patterns; escape literal plus signs.
+    workflows: ['Validate PR (tests \+ typecheck \+ build \+ drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf \+ a11y \+ best-practices \+ SEO)']
     types: [completed]
     branches: [main]
   workflow_dispatch:
