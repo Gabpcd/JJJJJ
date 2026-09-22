@@ -6,6 +6,9 @@ const missionId = '69000000-0000-4000-8000-000000000072';
 async function compteNeuf(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT', offres = false) {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('cookie-consent', 'refused'));
+  // Ces comptes sont simulés : aucune télémétrie de fixture ne part vers Sentry.
+  await page.route(/https:\/\/[^/]+\.ingest\.[^/]+\.sentry\.io\/api\/[^/]+\/envelope\//,
+    route => route.fulfill({ json: {} }));
   const user = { id: userId, email: 'recette-navigation@example.invalid', aud: 'authenticated', role: 'authenticated', email_confirmed_at: new Date().toISOString(), app_metadata: {}, user_metadata: {}, identities: [] };
   const session = { user, token_type: 'bearer', access_token: 'fixture-auth', refresh_token: 'fixture-refresh', expires_in: 3600, expires_at: Math.floor(Date.now()/1000)+3600 };
   const parcours = { user_id: userId, type_compte: type, donnees: type === 'SOIGNANT' ? {profession: 'IDE'} as Record<string, unknown> : {nom: 'Résidence Camille'}, modifie_le: new Date().toISOString() };
@@ -53,13 +56,15 @@ async function inscrire(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT') {
   await page.getByRole('button',{name:'Créer mon compte',exact:true}).click();
 }
 async function preuve(page: Page, nom: string, testInfo: any) {
+  await expect(page.locator('.page-transition')).toHaveClass(/page-enter/);
+  await expect(page.locator('.page-transition')).toHaveCSS('opacity', '1');
   if (process.env.RECETTE_DIR) {
     await mkdir(process.env.RECETTE_DIR, {recursive:true});
     await writeFile(`${process.env.RECETTE_DIR}/${nom}.txt`, await page.locator('body').ariaSnapshot());
-    if (/explorer-vide|detail-libre|etablissement-brouillon/.test(nom)) await page.screenshot({path:`${process.env.RECETTE_DIR}/${nom}.png`,fullPage:true});
+    if (/explorer-vide|detail-libre|etablissement-brouillon/.test(nom)) await page.screenshot({path:`${process.env.RECETTE_DIR}/${nom}.png`,fullPage:true,animations:'disabled'});
   }
   await testInfo.attach(`${nom}-aria`, {body:await page.locator('body').ariaSnapshot(),contentType:'text/plain'});
-  await testInfo.attach(`${nom}-capture`, {body:await page.screenshot({fullPage:true}),contentType:'image/png'});
+  await testInfo.attach(`${nom}-capture`, {body:await page.screenshot({fullPage:true,animations:'disabled'}),contentType:'image/png'});
 }
 
 test('compte soignant neuf : vraie navigation même sans mission, profil facultatif', async ({page}, testInfo) => {

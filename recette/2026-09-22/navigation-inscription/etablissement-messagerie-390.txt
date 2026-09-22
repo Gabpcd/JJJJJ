@@ -29,6 +29,8 @@
   - tablist "Filtrer conversations":
     - tab "Actives" [selected]
     - tab "Archivées"
-  - text: Chargement…
+  - img "Logo Jolene, aucun élément"
+  - paragraph: Aucune conversation
+  - paragraph: Les conversations s'ouvrent automatiquement quand votre candidature est acceptée.
 - region "Notifications alt+T"
 - region "Notifications"
