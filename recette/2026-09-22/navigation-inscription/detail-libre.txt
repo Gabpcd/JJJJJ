@@ -45,7 +45,7 @@
   - region "Planning exact de la mission":
     - text: 1 créneau 8 h au total
     - list "Jours et horaires travaillés":
-      - listitem: mardi 29 septembre 2026 15h26 → 23h26 · 8 h
+      - listitem: mardi 29 septembre 2026 15h28 → 23h28 · 8 h
   - paragraph: 📊 Plafond hebdomadaire
   - text: Semaine du 28 sept. 8h / 48h
   - paragraph: "Planifiées : 0h + mission : 8h"

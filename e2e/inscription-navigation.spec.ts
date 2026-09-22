@@ -129,7 +129,7 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     await expect(page).toHaveURL(/inscription\/completer/);
     await page.getByRole('button',{name:'Retour',exact:true}).click();
     await expect(page).toHaveURL(/etablissement\/tableau-de-bord/);
-    await page.goto('/etablissement/missions/creer');
+    await page.getByRole('button',{name:viewport.width < 768 ? 'Publier' : 'Publier une mission',exact:true}).last().click();
     await expect(page.getByRole('heading',{name:/Publier une mission/})).toBeVisible();
     await page.getByLabel(/Intitulé/).fill('Renfort de nuit');
     await expect(page.getByText(/Veuillez compléter votre SIRET/)).toHaveCount(0);
@@ -141,7 +141,7 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     expect(mutations).toEqual([]); expect(errors).toEqual([]);
     await page.getByRole('button',{name:'Retour',exact:true}).click();
     await expect(page).toHaveURL(/etablissement\/tableau-de-bord/);
-    await page.goto('/etablissement/missions/creer');
+    await page.getByRole('button',{name:viewport.width < 768 ? 'Publier' : 'Publier une mission',exact:true}).last().click();
     await expect(page.getByLabel(/Intitulé/)).toHaveValue('Renfort de nuit');
   });
 }
