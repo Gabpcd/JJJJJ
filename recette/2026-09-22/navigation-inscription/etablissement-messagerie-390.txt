@@ -1,0 +1,36 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Missions":
+    - img
+    - text: Missions
+  - button "Publier":
+    - img
+    - text: Publier
+  - button "Messages":
+    - img
+    - text: Messages
+  - button "Menu":
+    - img
+    - text: Menu
+- main:
+  - heading "Messagerie" [level=1]:
+    - img
+    - text: Messagerie
+  - img
+  - textbox "Rechercher une conversation":
+    - /placeholder: Rechercher une conversation…
+  - tablist "Filtrer conversations":
+    - tab "Actives" [selected]
+    - tab "Archivées"
+  - img "Logo Jolene, aucun élément"
+  - paragraph: Aucune conversation
+  - paragraph: Les conversations s'ouvrent automatiquement quand votre candidature est acceptée.
+- region "Notifications alt+T"
+- region "Notifications"

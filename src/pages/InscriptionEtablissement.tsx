@@ -186,7 +186,7 @@ export default function InscriptionEtablissement({ parcours }: { parcours?: Parc
     try {
       if (parcours) {
         await finaliserProfil('ETABLISSEMENT', form);
-        navigate('/inscription/reprendre');
+        navigate(parcours.donnees.brouillonMission === true ? '/etablissement/missions/creer?inscription=1' : '/etablissement/tableau-de-bord');
         return;
       }
       await inscriptionEtablissement({ ...form, turnstileToken });

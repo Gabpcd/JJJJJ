@@ -1,3 +1,4 @@
+import { useRole } from '@/hooks/useRole';
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -99,6 +100,7 @@ async function enrichirAvecPlanning<T extends {
 }
 
 export default function MissionsSoignant() {
+  const { parcours } = useRole();
   usePageTitle('Missions');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -355,7 +357,7 @@ export default function MissionsSoignant() {
           page = candidatures / à venir / passées. Les états vides renvoient déjà
           vers /recherche-missions pour la conversion. */}
 
-      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
+      {!parcours && (!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div role="tablist" aria-label="Catégories de missions" className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map((o, index) => (
           <button

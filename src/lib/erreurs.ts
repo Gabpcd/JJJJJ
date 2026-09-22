@@ -80,6 +80,15 @@ export function mapperErreurInscription(err: any): ErreurInscriptionMappee {
   const msgRaw: string = String(err?.message ?? err?.error_description ?? err ?? '');
   const msgLower = msgRaw.toLowerCase();
 
+  if (codeMachine === 'weak_password' || /password is known to be weak|password.*easy to guess|password.*leaked/.test(msgLower)) {
+    return {
+      code: 'WEAK_PASSWORD',
+      message: 'Ce mot de passe est trop facile à deviner ou a déjà été divulgué. Choisissez un autre mot de passe.',
+      action: 'highlight_password',
+      champs_highlight: ['motDePasse'],
+    };
+  }
+
   if (msgLower.includes('user already registered') || msgLower.includes('already registered')) {
     return {
       code: 'USER_ALREADY_REGISTERED',
@@ -164,9 +173,6 @@ export function mapperErreurInscription(err: any): ErreurInscriptionMappee {
   }
 
   // Cas 5 : fallback générique.
-  if (import.meta.env.DEV && msgRaw) {
-    return { code: 'UNKNOWN', message: `Erreur: ${msgRaw}`, action: 'support' };
-  }
   return {
     code: 'UNKNOWN',
     message: 'Une erreur inattendue est survenue. Réessayez ou contactez le support.',

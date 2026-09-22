@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
 import type { RpcGetMyRole } from '@/lib/supabase-rpc-types';
+import type { ParcoursInscription } from '@/lib/inscriptionProgressive';
 
 export const ROLE_RESOLUTION_TIMEOUT_MS = 8_000;
 export const ROLE_CACHE_TTL_MS = 5 * 60_000;
@@ -18,6 +19,8 @@ function normaliserRole(role: unknown): RoleCompte | null {
 
 interface UseRoleResult {
   role: RoleCompte;
+  /** Espace de navigation uniquement : aucun profil ni droit métier accordé. */
+  parcours?: ParcoursInscription | null;
   etablissement_id: string | null;
   loading: boolean;
   resolved: boolean;
@@ -50,11 +53,8 @@ function normaliserErreur(error: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
-async function recupererRoleAvecDelai(controller: AbortController) {
+async function requeteRoleAvecDelai<T>(requete: PromiseLike<T>, controller: AbortController) {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const requete = supabase
-    .rpc('fn_get_my_role')
-    .abortSignal(controller.signal);
 
   try {
     return await Promise.race([
@@ -139,7 +139,7 @@ export function useRole(): UseRoleResult {
         controllers.add(controller);
         let response;
         try {
-          response = await recupererRoleAvecDelai(controller);
+          response = await requeteRoleAvecDelai(supabase.rpc('fn_get_my_role').abortSignal(controller.signal), controller);
         } finally {
           controllers.delete(controller);
         }
@@ -148,9 +148,31 @@ export function useRole(): UseRoleResult {
         if (response.error) throw response.error;
 
         const result = response.data as unknown as RpcGetMyRole | null;
-        const role = normaliserRole(result?.role) ?? 'INCONNU';
+        let role = normaliserRole(result?.role) ?? 'INCONNU';
+        let parcours: ParcoursInscription | null = null;
+        if (role === 'INCONNU') {
+          // Le brouillon appartient au compte et sa famille a été réservée par
+          // le serveur. Ne jamais tirer ce droit de navigation de user_metadata.
+          const parcoursController = new AbortController();
+          controllers.add(parcoursController);
+          let responseParcours;
+          try {
+            responseParcours = await requeteRoleAvecDelai(
+              supabase.from('parcours_inscription' as any)
+                .select('user_id,type_compte,donnees,modifie_le')
+                .eq('user_id', sessionUserId).abortSignal(parcoursController.signal).maybeSingle(),
+              parcoursController,
+            );
+          } finally { controllers.delete(parcoursController); }
+          if (cancelled || currentRequest !== requestVersion) return;
+          if (responseParcours.error) throw responseParcours.error;
+          parcours = responseParcours.data as unknown as ParcoursInscription | null;
+          if (parcours?.type_compte === 'SOIGNANT') role = 'SOIGNANT';
+          else if (parcours?.type_compte === 'ETABLISSEMENT') role = 'ADMIN_ETABLISSEMENT';
+        }
         const roleState: RoleState = {
           role,
+          parcours,
           etablissement_id: typeof result?.etablissement_id === 'string' ? result.etablissement_id : null,
           loading: false,
           resolved: true,

@@ -1,0 +1,64 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Retour":
+    - img
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - paragraph: → À faire maintenant
+  - paragraph: Cette mission vous intéresse ?
+  - button "Candidater"
+  - text: Ouverte
+  - heading "Remplacement infirmier de jour" [level=1]
+  - paragraph: Renfort équipe de jour.
+  - paragraph: Infirmier(ère) Diplômé(e) d'État (IDE)
+  - img
+  - heading "Résidence Camille" [level=3]
+  - paragraph: EHPAD
+  - paragraph: 75001 Paris
+  - img
+  - text: Distance non disponible
+  - paragraph: Cet établissement a publié 0 mission sur Jolene
+  - button "Autres actions":
+    - img
+    - text: Autres actions
+  - heading "🕐 Horaires" [level=3]
+  - region "Planning exact de la mission":
+    - text: 1 créneau 8 h au total
+    - list "Jours et horaires travaillés":
+      - listitem: mardi 29 septembre 2026 15h26 → 23h26 · 8 h
+  - paragraph: 📊 Plafond hebdomadaire
+  - text: Semaine du 28 sept. 8h / 48h
+  - paragraph: "Planifiées : 0h + mission : 8h"
+  - paragraph: ✅ Il vous reste 40h de disponibilité sur cette semaine
+  - heading "💰 Décomposition financière" [level=3]
+  - text: Contrat salarié (CDD) Net salarié estimé avant PAS* 240,00 €
+  - paragraph: Estimation indicative avant prélèvement à la source. Le montant net exact à payer figure sur le bulletin officiel établi par l'établissement employeur.
+  - button "Détail comptable (brut, IFM, ICP, cotisations)":
+    - text: Détail comptable (brut, IFM, ICP, cotisations)
+    - img
+  - paragraph: Estimation non contractuelle. Le bulletin de paie officiel est établi et fourni par « Résidence Camille ».
+  - paragraph: Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+  - button "📅 Voir dans mon planning"
+  - button "Candidater"
+- region "Notifications alt+T"
+- region "Notifications"

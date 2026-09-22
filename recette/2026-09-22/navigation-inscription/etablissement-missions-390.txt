@@ -1,0 +1,24 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Missions":
+    - img
+    - text: Missions
+  - button "Publier":
+    - img
+    - text: Publier
+  - button "Messages":
+    - img
+    - text: Messages
+  - button "Menu":
+    - img
+    - text: Menu
+- main
+- region "Notifications alt+T"
+- region "Notifications"

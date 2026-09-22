@@ -1,3 +1,4 @@
+vi.mock('@/hooks/useRole', () => ({ useRole: () => ({ parcours: null }) }));
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

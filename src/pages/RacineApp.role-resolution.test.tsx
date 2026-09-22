@@ -29,6 +29,7 @@ function renderRacine() {
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<RacineApp />} />
+        <Route path="/inscription/reprendre" element={<div>Reprise de mon espace</div>} />
         <Route path="/soignant/tableau-de-bord" element={<div>Tableau de bord soignant</div>} />
       </Routes>
     </MemoryRouter>,
@@ -89,7 +90,7 @@ describe('RacineApp — résolution sûre du rôle natif', () => {
     renderRacine();
 
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('Écran de connexion')).toBeInTheDocument();
+    expect(await screen.findByText('Reprise de mon espace')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

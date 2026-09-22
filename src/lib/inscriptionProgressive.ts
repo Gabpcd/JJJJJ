@@ -33,6 +33,7 @@ export async function demarrerParcours(
     p_cgv: input.cgv,
   });
   if (error) throw error;
+  reinitialiserCacheRole();
   return data as unknown as ParcoursInscription;
 }
 

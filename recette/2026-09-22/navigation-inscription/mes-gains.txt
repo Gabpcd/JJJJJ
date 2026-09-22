@@ -1,0 +1,58 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - heading "💰 Revenus" [level=1]
+  - paragraph: Tes gains, factures, simulations de paie et avance de trésorerie au même endroit
+  - tablist:
+    - tab "Aperçu" [selected]:
+      - img
+      - text: Aperçu
+    - tab "Simulations":
+      - img
+      - text: Simulations
+  - tabpanel "Aperçu":
+    - button "Brut · septembre 2026 0,00 €":
+      - text: Brut · septembre 2026
+      - paragraph: 0,00 €
+    - button "0 mission 0h":
+      - text: 0 mission
+      - paragraph: 0h
+    - paragraph:
+      - text: 💼 Le net exact figure sur le
+      - strong: bulletin de paie fourni par l'établissement employeur
+      - text: .
+    - combobox: Ce mois
+    - button "CSV" [disabled]:
+      - img
+      - text: CSV
+    - button "Attestation":
+      - img
+      - text: Attestation
+    - paragraph: "* Aucun montant net n’est inventé tant que le régime n’est pas qualifié. Seuls les montants calculés par le moteur de paie / la facture font foi."
+    - status:
+      - heading "Pas encore de gains" [level=3]
+      - paragraph: Tes gains apparaîtront ici après ta première mission terminée.
+      - button "Trouver une mission"
+- region "Notifications alt+T"
+- region "Notifications"

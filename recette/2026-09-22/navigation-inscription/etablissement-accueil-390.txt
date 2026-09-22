@@ -1,0 +1,65 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Missions":
+    - img
+    - text: Missions
+  - button "Publier":
+    - img
+    - text: Publier
+  - button "Messages":
+    - img
+    - text: Messages
+  - button "Menu":
+    - img
+    - text: Menu
+- main:
+  - img "Logo Jolene"
+  - heading "Tableau de bord" [level=1]
+  - button "Publier une mission":
+    - img
+    - text: Publier une mission
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Missions ouvertes 0":
+    - text: Missions ouvertes
+    - paragraph: "0"
+  - button "Assignées 0":
+    - text: Assignées
+    - paragraph: "0"
+  - button "En cours 0":
+    - text: En cours
+    - paragraph: "0"
+  - button "Terminées 0":
+    - text: Terminées
+    - paragraph: "0"
+  - 'button "Soignants ce mois 0 Pool urgence : 0"':
+    - text: Soignants ce mois
+    - paragraph: "0"
+    - text: "Pool urgence : 0"
+  - button "Paiements à jour 0":
+    - text: Paiements à jour
+    - paragraph: "0"
+  - img
+  - heading "Planning missions à venir" [level=2]
+  - text: (0 créneau)
+  - tablist:
+    - tab "Semaine"
+    - tab "Liste" [selected]
+  - paragraph: Aucun créneau planifié dans les 31 prochains jours.
+  - button "Statistiques détaillées":
+    - img
+    - text: Statistiques détaillées
+    - img
+  - heading "Dernières missions" [level=2]
+  - button "Voir tout →"
+  - paragraph: Aucune mission récente.
+- region "Notifications alt+T"
+- region "Notifications"

@@ -1,3 +1,5 @@
+import { useRole } from '@/hooks/useRole';
+import { chargerFavorisInscription, sauvegarderFavoriInscription } from '@/lib/explorationInscription';
 /**
  * BoutonSauvegarderMission — étoile « sauvegarder cette mission » (D1, Lot 6c).
  *
@@ -19,26 +21,47 @@ interface Props {
 
 export const BoutonSauvegarderMission = React.memo(function BoutonSauvegarderMission({ missionId, className = '' }: Props) {
   const { user } = useAuth();
+  const { parcours } = useRole();
   const [sauvegardee, setSauvegardee] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    if (parcours) {
+      void chargerFavorisInscription().then(ids => { if (!cancelled) setSauvegardee(ids.includes(missionId)); })
+        .catch(() => { /* Le clic permet de réessayer la lecture et la sauvegarde. */ });
+      return () => { cancelled = true; };
+    }
     supabase
       .from('missions_sauvegardees' as any)
       .select('id')
       .eq('mission_id', missionId)
       .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setSauvegardee(!!data); });
+      .then(async ({ data }) => {
+        const ids = await chargerFavorisInscription().catch(() => []);
+        if (!cancelled) setSauvegardee(!!data || ids.includes(missionId));
+      });
     return () => { cancelled = true; };
-  }, [user, missionId]);
+  }, [user, missionId, parcours]);
 
   const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation(); // la carte parente est cliquable (détail mission)
     if (!user || loading) return;
     setLoading(true);
+    if (parcours) {
+      try {
+        await sauvegarderFavoriInscription(missionId, !sauvegardee);
+        setSauvegardee(!sauvegardee);
+        toast.success(sauvegardee ? 'Mission retirée de tes favoris' : 'Mission sauvegardée ⭐');
+      } catch { toast.error('Sauvegarde impossible pour le moment'); }
+      finally { setLoading(false); }
+      return;
+    }
     if (sauvegardee) {
+      try {
+        if ((await chargerFavorisInscription()).includes(missionId)) await sauvegarderFavoriInscription(missionId, false);
+      } catch { toast.error('Votre favori n’a pas pu être retiré. Réessayez.'); setLoading(false); return; }
       const { error } = await supabase
         .from('missions_sauvegardees' as any)
         .delete()

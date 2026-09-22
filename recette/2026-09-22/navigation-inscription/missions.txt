@@ -1,0 +1,37 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - heading "Mes missions" [level=1]
+  - tablist "Catégories de missions":
+    - tab "Candidatures"
+    - tab "À venir" [selected]
+    - tab "Passées"
+  - tabpanel "À venir":
+    - status:
+      - img "Logo Jolene, traitement en cours"
+      - heading "Tu n'as pas encore de mission en cours" [level=3]
+      - paragraph: Découvre les missions disponibles et postule !
+      - button "Voir les missions disponibles"
+- region "Notifications alt+T"
+- region "Notifications"

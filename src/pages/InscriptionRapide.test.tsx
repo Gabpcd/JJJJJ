@@ -50,13 +50,13 @@ it("indique les champs manquants et place le focus, sans requête", () => {
 });
 it("garde les trois champs après une panne puis permet de réessayer", async () => {
   m.creer
-    .mockRejectedValueOnce(new Error("Réseau indisponible"))
+    .mockRejectedValueOnce(new TypeError("Failed to fetch"))
     .mockResolvedValueOnce("cree");
   ouvrir();
   remplir();
   fireEvent.click(screen.getByRole("button", { name: "Créer mon compte" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Réseau indisponible",
+    "Connexion internet instable. Vérifiez votre connexion et réessayez.",
   );
   expect(screen.getByLabelText("Email")).toHaveValue("test@example.org");
   expect(screen.getByLabelText("Profession")).toHaveValue("IDE");
@@ -99,4 +99,13 @@ it("exige les CGV établissement et crée le compte sans SIRET", async () => {
     }),
     false,
   );
+});
+
+it('traduit le refus Supabase de mot de passe divulgué, sans perdre les champs', async () => {
+  m.creer.mockRejectedValue({code:'weak_password',message:'Password is known to be weak and easy to guess, please choose a different one.'});
+  ouvrir(); remplir();
+  fireEvent.click(screen.getByRole('button',{name:'Créer mon compte'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Ce mot de passe est trop facile à deviner ou a déjà été divulgué. Choisissez un autre mot de passe.');
+  expect(screen.getByLabelText('Email')).toHaveValue('test@example.org');
+  expect(screen.queryByText(/Password is known/)).not.toBeInTheDocument();
 });

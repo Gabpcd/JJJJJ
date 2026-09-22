@@ -1,0 +1,37 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- navigation "Sidebar":
+  - text: Jolene
+  - button "Notifications"
+  - button "Passer en mode sombre":
+    - img
+  - button "Se déconnecter":
+    - img
+  - navigation "Menu principal":
+    - button "Accueil":
+      - img
+      - text: Accueil
+    - button "Publier une mission":
+      - img
+      - text: Publier une mission
+    - button "Missions":
+      - img
+      - text: Missions
+    - button "Soignants":
+      - img
+      - text: Soignants
+    - button "Gestion":
+      - img
+      - text: Gestion
+    - button "Pilotage":
+      - img
+      - text: Pilotage
+    - button "Messagerie":
+      - img
+      - text: Messagerie
+    - button "Paramètres":
+      - img
+      - text: Paramètres
+- main
+- region "Notifications alt+T"
+- region "Notifications"
