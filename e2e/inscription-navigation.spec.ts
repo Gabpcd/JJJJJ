@@ -179,3 +179,24 @@ test('une panne de recherche se distingue d’une absence de missions et permet 
   await page.getByRole('button',{name:'Réessayer',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Aucune mission trouvée'})).toBeVisible();
 });
+
+test('la carte reste utilisable après une panne et après une visite de la liste', async ({page})=>{
+  await compteNeuf(page,'SOIGNANT');
+  await inscrire(page,'SOIGNANT');
+  await page.getByRole('tab',{name:'Carte',exact:true}).click();
+  await expect(page.locator('.leaflet-map-pane')).toHaveCount(1);
+  await page.route('**/rest/v1/rpc/fn_explorer_missions_inscription',route=>route.fulfill({status:503,json:{message:'Service unavailable'}}));
+  await page.getByRole('button',{name:'🔥 Urgentes',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('Les missions n’ont pas pu être chargées.');
+  await expect(page.getByText('Aucune mission à afficher sur la carte.',{exact:true})).toHaveCount(0);
+  await page.unroute('**/rest/v1/rpc/fn_explorer_missions_inscription');
+  await page.getByRole('button',{name:'Réessayer',exact:true}).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.leaflet-map-pane')).toHaveCount(1);
+  await expect(page.getByText('Aucune mission à afficher sur la carte.',{exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'Liste',exact:true}).click();
+  await expect(page.locator('.leaflet-map-pane')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Carte',exact:true}).click();
+  await expect(page.locator('.leaflet-map-pane')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'Zoom avant'})).toBeVisible();
+});

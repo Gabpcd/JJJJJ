@@ -228,10 +228,17 @@ async function createQuickAccount(page: Page, role: FreshAccountRole, testInfo: 
       throw new Error(description);
     }
 
-    await expect(page).toHaveURL(/\/inscription\/reprendre$/, { timeout: 30_000 });
-    await expect(page.getByRole('heading', {
-      name: role === 'soignant' ? 'Découvrez vos missions.' : 'Préparez votre première mission.',
-    })).toBeVisible();
+    await expect(page).toHaveURL(role === 'soignant'
+      ? /\/soignant\/recherche-missions$/
+      : /\/etablissement\/tableau-de-bord$/, { timeout: 30_000 });
+    const navigation = page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+    await expect(navigation).toBeVisible();
+    for (const label of role === 'soignant'
+      ? ['Accueil', 'Explorer', 'Mes missions', 'Revenus', 'Profil']
+      : ['Accueil', 'Missions', 'Publier', 'Messages', 'Menu']) {
+      await expect(navigation.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('heading', { name: /Vos informations professionnelles|Identifier votre établissement/ })).toHaveCount(0);
     const roleRaw = await roleResponse;
     expect(roleRaw, 'le compte rapide doit faire vérifier son rôle serveur').not.toBeNull();
     expect(roleRaw!.ok(), 'la vérification du rôle doit réussir').toBe(true);
@@ -566,7 +573,7 @@ test.describe('inscriptions mobile Série C', () => {
     expect(signupRequests, 'la matrice de viewports ne crée aucun compte Auth').toEqual([]);
   });
 
-  test('inscription soignant réelle : compte rapide → espace privé → profil → tous les écrans', async ({ page }, testInfo) => {
+  test('inscription soignant réelle : compte rapide → vraie app → profil volontaire → tous les écrans', async ({ page }, testInfo) => {
     test.setTimeout(360_000);
     const [signupViewport] = freshAccountViewports(testInfo);
     await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
@@ -576,7 +583,10 @@ test.describe('inscriptions mobile Série C', () => {
       await fillQuickAccount(page, uniqueEmail('soignant'), 'soignant');
       if (!await createQuickAccount(page, 'soignant', testInfo)) return;
 
-      await page.getByRole('link', { name: /Compléter mon profil/ }).click();
+      await page.getByRole('navigation', { name: 'Navigation mobile', exact: true })
+        .getByRole('button', { name: 'Profil', exact: true }).click();
+      await expect(page).toHaveURL(/\/soignant\/mon-compte$/);
+      await page.getByRole('button', { name: 'Mon profil', exact: true }).click();
       await expect(page).toHaveURL(/\/inscription\/completer$/);
       await fillSoignantProfile(page);
       await expectMobileFormIntegrity(page, '/inscription/soignant-profil', testInfo);
@@ -605,7 +615,7 @@ test.describe('inscriptions mobile Série C', () => {
     }
   });
 
-  test('inscription établissement réelle : compte rapide → brouillon privé → profil → tous les écrans', async ({ page }, testInfo) => {
+  test('inscription établissement réelle : compte rapide → vraie app → publier un brouillon → profil → tous les écrans', async ({ page }, testInfo) => {
     test.setTimeout(360_000);
     const [signupViewport] = freshAccountViewports(testInfo);
     await page.setViewportSize({ width: signupViewport.width, height: signupViewport.height });
@@ -616,24 +626,35 @@ test.describe('inscriptions mobile Série C', () => {
       if (!await createQuickAccount(page, 'etab', testInfo)) return;
 
       const missionDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-      await page.getByLabel('Profession recherchée', { exact: true }).selectOption('IDE');
-      await page.getByLabel('Ville de la mission', { exact: true }).fill('Paris');
-      await page.getByLabel('Date de début', { exact: true }).fill(missionDate);
-      await page.getByLabel('Heure de début (facultatif)', { exact: true }).fill('07:00');
-      await page.getByLabel('Heure de fin (facultatif)', { exact: true }).fill('19:00');
+      const publier = () => page.getByRole('navigation', { name: 'Navigation mobile', exact: true })
+        .getByRole('button', { name: 'Publier', exact: true }).click();
+      await publier();
+      await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
+      await page.getByLabel('Intitulé *', { exact: true }).fill('Renfort IDE — audit inscription');
+      await page.locator('#mission-profession').click();
+      await page.getByRole('option', { name: /Infirmier.*IDE/ }).click();
+      await page.getByLabel(/Première date affichée/).fill(missionDate);
+      await page.getByLabel(/Dernière date affichée/).fill(missionDate);
+      await page.getByRole('button', { name: 'Toutes les dates', exact: true }).click();
+      await page.getByLabel(`Début du créneau 1 du ${missionDate}`, { exact: true }).fill('07:00');
+      await page.getByLabel(`Fin du créneau 1 du ${missionDate}`, { exact: true }).fill('19:00');
+      await expect(page.getByText(/Veuillez compléter votre SIRET/)).toHaveCount(0);
       await expectMobileFormIntegrity(page, '/inscription/etablissement-brouillon', testInfo);
       const savedDraftResponse = page.waitForResponse(
         (response) => new URL(response.url()).pathname.endsWith('/rpc/fn_enregistrer_parcours_inscription'),
       );
-      await page.getByRole('button', { name: 'Enregistrer le brouillon', exact: true }).click();
+      await page.getByRole('button', { name: /^Publier la mission/ }).click();
       expect((await savedDraftResponse).ok(), 'le brouillon doit être enregistré en SQL').toBe(true);
-      await expect(page.getByRole('heading', { name: 'Votre brouillon est enregistré.' })).toBeVisible();
+      await expect(page).toHaveURL(/\/inscription\/completer$/);
+      await page.getByRole('button', { name: 'Retour', exact: true }).click();
+      await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
+      await publier();
+      await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue('Renfort IDE — audit inscription');
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'Votre brouillon est enregistré.' })).toBeVisible();
-      await expect(page.getByText('Brouillon · non publié', { exact: true })).toBeVisible();
-      await expect(page.getByText('07:00–19:00', { exact: true })).toBeVisible();
-
-      await page.getByRole('link', { name: 'Activer mon établissement', exact: true }).click();
+      await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue('Renfort IDE — audit inscription');
+      await expect(page.getByLabel(`Début du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('07:00');
+      await expect(page.getByLabel(`Fin du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('19:00');
+      await page.getByRole('button', { name: /^Publier la mission/ }).click();
       await expect(page).toHaveURL(/\/inscription\/completer$/);
       await fillEtablissementProfile(page, uniqueValidSiret());
       await expectMobileFormIntegrity(page, '/inscription/etablissement-profil', testInfo);
@@ -654,8 +675,8 @@ test.describe('inscriptions mobile Série C', () => {
       expect(register, 'register-etablissement crée un profil restant à vérifier').toMatchObject({
         status: 200, ok: true, businessOk: true, canPublish: false, verificationRequired: true,
       });
-      await expect(page).toHaveURL(/\/inscription\/reprendre$/, { timeout: 30_000 });
-      await expect(page.getByRole('link', { name: 'Reprendre ce brouillon dans mon espace', exact: true })).toBeVisible();
+      await expect(page).toHaveURL(/\/etablissement\/missions\/creer\?inscription=1$/, { timeout: 30_000 });
+      await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue('Renfort IDE — audit inscription');
 
       // L'entrée normale de création retrouve aussi le brouillon après inscription.
       await page.goto('/etablissement/missions/creer');

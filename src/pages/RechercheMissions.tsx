@@ -432,7 +432,8 @@ export default function RechercheMissions() {
         : [48.8566, 2.3522]; // Paris default
 
       if (!leafletMap.current) {
-        leafletMap.current = L.map(mapRef.current).setView(center, 11);
+        leafletMap.current = L.map(mapRef.current, { zoomControl: false }).setView(center, 11);
+        L.control.zoom({ zoomInTitle: 'Zoom avant', zoomOutTitle: 'Zoom arrière' }).addTo(leafletMap.current);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 18,
@@ -525,6 +526,12 @@ export default function RechercheMissions() {
     if (vue === 'carte') initMap('carte');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue, filtered]);
+
+  useEffect(() => () => {
+    leafletMap.current?.remove();
+    leafletMap.current = null;
+    markersLayer.current = null;
+  }, [vue]);
 
   // No blocking guard — render even without soignant profile
 
@@ -660,13 +667,14 @@ export default function RechercheMissions() {
           </div>
         )}
 
-        {erreurChargement ? (
+        {erreurChargement && (
           <div role="alert" className="card-base space-y-3">
             <p>Les missions n’ont pas pu être chargées. Vérifiez votre connexion et réessayez.</p>
             <button className="btn-primary" onClick={() => setRefreshTick(v => v + 1)}>Réessayer</button>
           </div>
-        ) : vue !== 'carte' ? (
-          loading ? <ChargementPage /> : filtered.length > 0 ? (
+        )}
+        {vue !== 'carte' ? (
+          erreurChargement ? null : loading ? <ChargementPage /> : filtered.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filtered.slice(0, nbAffiche).map(m => (
@@ -722,7 +730,7 @@ export default function RechercheMissions() {
               className="w-full rounded-xl border border-border overflow-hidden"
               style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
             />
-            {filtered.length === 0 && !loading && (
+            {filtered.length === 0 && !loading && !erreurChargement && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
             )}
           </>
