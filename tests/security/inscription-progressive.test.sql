@@ -28,6 +28,12 @@ BEGIN
   BEGIN PERFORM public.fn_enregistrer_parcours_inscription('{"rpps_verifie":true}');
   EXCEPTION WHEN invalid_parameter_value THEN refuse := true; END;
   IF NOT refuse THEN RAISE EXCEPTION 'État de vérification accepté depuis le client'; END IF;
+  r := public.fn_explorer_missions_inscription(NULL, 0, 100);
+  IF jsonb_typeof(r) <> 'array' OR jsonb_array_length(r) > 100 THEN RAISE EXCEPTION 'Exploration non bornée'; END IF;
+  IF NOT has_function_privilege('authenticated','public.fn_explorer_missions_inscription(uuid,integer,integer)','EXECUTE')
+    OR has_function_privilege('anon','public.fn_explorer_missions_inscription(uuid,integer,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'ACL exploration incorrectes';
+  END IF;
   -- La consultation ne crée ni candidature ni identité professionnelle.
   r := public.fn_missions_decouverte_inscription(NULL);
   IF jsonb_typeof(r) <> 'array' OR jsonb_array_length(r) > 20 THEN RAISE EXCEPTION 'Aperçu non borné'; END IF;
@@ -47,6 +53,16 @@ BEGIN
   IF r->>'type_compte' <> 'ETABLISSEMENT' THEN RAISE EXCEPTION 'Création minimale établissement échouée'; END IF;
   r := public.fn_enregistrer_parcours_inscription('{"missionProfession":"IDE","missionVille":"Lyon","missionDate":"2027-01-12","brouillonMission":true}');
   IF r->'donnees'->>'missionVille' <> 'Lyon' THEN RAISE EXCEPTION 'Brouillon mission non enregistré'; END IF;
+  r := public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"intitule":"Renfort de nuit","description":"À reprendre","creneaux":[{"debut":"2027-01-12T07:00:00Z","fin":"2027-01-12T15:00:00Z"}]}}');
+  IF r#>>'{donnees,missionFormulaire,intitule}' <> 'Renfort de nuit' THEN RAISE EXCEPTION 'Brouillon complet perdu'; END IF;
+  refuse := false;
+  BEGIN PERFORM public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"peut_publier_missions":true}}');
+  EXCEPTION WHEN invalid_parameter_value THEN refuse := true; END;
+  IF NOT refuse THEN RAISE EXCEPTION 'Champ sensible accepté dans la mission'; END IF;
+  refuse := false;
+  BEGIN PERFORM public.fn_explorer_missions_inscription(NULL,0,100);
+  EXCEPTION WHEN insufficient_privilege THEN refuse := true; END;
+  IF NOT refuse THEN RAISE EXCEPTION 'Exploration soignant accessible à établissement'; END IF;
   IF (public.fn_get_my_role()->>'role') <> 'INCONNU' THEN RAISE EXCEPTION 'Brouillon promu en établissement'; END IF;
   refuse := false;
   BEGIN PERFORM public.fn_missions_decouverte_inscription(NULL);
