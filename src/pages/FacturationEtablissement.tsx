@@ -48,6 +48,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { relancerLectureReseau } from '@/lib/relancerLectureReseau';
 import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
@@ -288,6 +289,8 @@ export default function FacturationEtablissement() {
     }
     setLoading(true);
     setErreurChargement(null);
+    const lire = <T extends ReponseChargement>(requete: () => PromiseLike<T>) =>
+      relancerLectureReseau(requete, () => version === chargementVersionRef.current);
     try {
       const [
         resEtab,
@@ -301,38 +304,38 @@ export default function FacturationEtablissement() {
         resLitigesActifs,
         resPaiementsContestes,
       ] = await Promise.all([
-        supabase.rpc('fn_mon_etablissement_complet' as any),
-        supabase.rpc('fn_obligations_financieres' as any),
-        supabase.rpc('fn_paiements_etablissement' as any),
-        supabase.rpc('fn_mes_factures' as any),
-        supabase.from('missions')
+        lire(() => supabase.rpc('fn_mon_etablissement_complet' as any)),
+        lire(() => supabase.rpc('fn_obligations_financieres' as any)),
+        lire(() => supabase.rpc('fn_paiements_etablissement' as any)),
+        lire(() => supabase.rpc('fn_mes_factures' as any)),
+        lire(() => supabase.from('missions')
           .select('id, intitule, fin_le, montant_commission_ht, montant_commission_ttc')
           .eq('etablissement_id', etablissementId)
           .eq('statut', 'TERMINEE')
           .eq('commission_facturee', false)
-          .order('fin_le', { ascending: false }),
-        supabase.from('stripe_transfers')
+          .order('fin_le', { ascending: false })),
+        lire(() => supabase.from('stripe_transfers')
           .select('mission_id, statut')
           .eq('etablissement_id', etablissementId)
-          .in('statut', ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE']),
-        supabase.from('paiements_mission')
+          .in('statut', ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'])),
+        lire(() => supabase.from('paiements_mission')
           .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
           .eq('etablissement_id', etablissementId)
           .order('capture_le', { ascending: false })
-          .limit(20),
-        supabase.from('factures_honoraires')
+          .limit(20)),
+        lire(() => supabase.from('factures_honoraires')
           .select('id, numero_facture, nature_correction, type_document, facture_precedente_id')
           .eq('etablissement_id', etablissementId)
           .eq('type_document', 'FACTURE')
-          .in('statut', ['EMISE', 'EN_RETARD', 'VIREMENT_DECLARE']),
-        supabase.from('litiges')
+          .in('statut', ['EMISE', 'EN_RETARD', 'VIREMENT_DECLARE'])),
+        lire(() => supabase.from('litiges')
           .select('mission_id, facture_id')
           .eq('etablissement_id', etablissementId)
-          .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN']),
-        supabase.from('paiements_soignant')
+          .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN'])),
+        lire(() => supabase.from('paiements_soignant')
           .select('mission_id, facture_honoraire_id')
           .eq('etablissement_id', etablissementId)
-          .eq('statut', 'CONTESTE'),
+          .eq('statut', 'CONTESTE')),
       ]);
 
       if (version !== chargementVersionRef.current) return;

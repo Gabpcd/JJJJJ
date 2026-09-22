@@ -182,6 +182,33 @@ describe('FacturationEtablissement — périmètre des membres', () => {
     } finally { erreur.mockRestore(); }
   });
 
+  it.each([false, true])('reprend la lecture interrompue sans afficher de finances partielles (échec persistant : %s)', async persistant => {
+    activerScope();
+    configurerChargement();
+    const implementation = mocks.rpc.getMockImplementation()!;
+    let lecturesPaiements = 0;
+    mocks.rpc.mockImplementation((fn: string) => {
+      if (fn === 'fn_paiements_etablissement' && (++lecturesPaiements === 1 || persistant)) {
+        return Promise.resolve({ data: null, status: 0, error: { message: 'TypeError: Load failed' } });
+      }
+      return implementation(fn);
+    });
+    const erreur = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    try {
+      render(<MemoryRouter><FacturationEtablissement /></MemoryRouter>);
+      expect(screen.queryByText('Paiements soignants, commissions Jolene et exports comptables')).not.toBeInTheDocument();
+      if (persistant) {
+        expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger les données de facturation');
+        expect(screen.queryByText('Paiements soignants, commissions Jolene et exports comptables')).not.toBeInTheDocument();
+      } else {
+        expect(await screen.findByText('Paiements soignants, commissions Jolene et exports comptables')).toBeInTheDocument();
+        expect(erreur).not.toHaveBeenCalled();
+      }
+      expect(lecturesPaiements).toBe(2);
+      expect(mocks.rpc.mock.calls.filter(([fn]) => fn === 'fn_obligations_financieres')).toHaveLength(1);
+    } finally { erreur.mockRestore(); }
+  });
+
   it('attend le scope puis filtre historique, transferts et prélèvements avec l’établissement partagé', async () => {
     const vue = render(
       <MemoryRouter>
