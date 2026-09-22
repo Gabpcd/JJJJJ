@@ -573,6 +573,36 @@ test.describe('inscriptions mobile Série C', () => {
     expect(signupRequests, 'la matrice de viewports ne crée aucun compte Auth').toEqual([]);
   });
 
+  test('compte minimal réel : explorer et naviguer sans créer de profil métier', async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/inscription/soignant');
+    const email = uniqueEmail('soignant');
+    await fillQuickAccount(page, email, 'soignant');
+    const exploration = page.waitForResponse(response =>
+      new URL(response.url()).pathname.endsWith('/rpc/fn_explorer_missions_inscription'),
+    ).catch(() => null);
+    expect(await createQuickAccount(page, 'soignant', testInfo), 'un vrai compte minimal est requis pour cette recette').toBe(true);
+    const offres = await exploration;
+    expect(offres, 'l’exploration doit appeler le serveur').not.toBeNull();
+    expect(offres!.ok(), 'la vraie API doit autoriser l’exploration sans profil').toBe(true);
+    await testInfo.attach('compte-minimal-recette.json', {
+      body: JSON.stringify({ email }), contentType: 'application/json',
+    });
+    const navigation = page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+    for (const [label, route] of [
+      ['Accueil', 'tableau-de-bord'], ['Mes missions', 'missions'],
+      ['Revenus', 'mes-gains'], ['Profil', 'mon-compte'], ['Explorer', 'recherche-missions'],
+    ]) {
+      await navigation.getByRole('button', { name: label, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/soignant/${route}$`));
+      await expect(page.getByRole('heading', { name: 'Vos informations professionnelles' })).toHaveCount(0);
+    }
+    await page.reload();
+    await expect(page).toHaveURL(/\/soignant\/recherche-missions$/);
+    await expect(navigation).toBeVisible();
+  });
+
   test('inscription soignant réelle : compte rapide → vraie app → profil volontaire → tous les écrans', async ({ page }, testInfo) => {
     test.setTimeout(360_000);
     const [signupViewport] = freshAccountViewports(testInfo);
