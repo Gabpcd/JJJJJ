@@ -448,11 +448,14 @@ export default function DetailMissionSoignant() {
         // facultatives partent ensuite en arrière-plan.
         setMission(resultat.mission);
         setSoignant(resultat.soignant as any);
-        setLoading(false);
         if (parcours) {
           setEtablissement(resultat.mission.etablissements);
           setCreneauxPlanifies(resultat.mission.creneaux ?? []);
-        } else chargerDonneesFacultatives(resultat.mission);
+          setLoading(false);
+          return;
+        }
+        setLoading(false);
+        chargerDonneesFacultatives(resultat.mission);
       } catch (error) {
         if (annule) return;
         clearTimeout(minuteurChargementProlonge);
