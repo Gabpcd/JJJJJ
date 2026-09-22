@@ -1,3 +1,4 @@
+import { useRole } from '@/hooks/useRole';
 import { chargerParcours, enregistrerParcours } from '@/lib/inscriptionProgressive';
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
@@ -90,6 +91,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { parcours, loading: roleLoading } = useRole();
   const { afficherNotification } = useNotification();
 
   const [intitule, setIntitule] = useState('');
@@ -162,7 +164,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     modeExerciceMission,
   ]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || roleLoading || parcours) return;
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
       if (error) {
         console.warn('FormulaireMission: fn_mon_etablissement_complet error', error);
@@ -192,7 +194,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         );
       }
     });
-  }, [user]);
+  }, [user, parcours, roleLoading]);
 
   useEffect(() => {
     if (!reprendreInscription) return;
@@ -202,6 +204,20 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       const d = parcours.donnees;
       setBrouillonInscription(d);
       if (typeof d.missionProfession === 'string') setProfession(d.missionProfession);
+      const f = d.missionFormulaire as Record<string, any> | undefined;
+      if (f && typeof f === 'object') {
+        if (typeof f.intitule === 'string') setIntitule(f.intitule);
+        if (typeof f.description === 'string') setDescription(f.description);
+        if (typeof f.profession === 'string') setProfession(f.profession);
+        if (typeof f.specialite === 'string') setSpecialiteMedicaleRequise(f.specialite);
+        if (typeof f.service === 'string') setService(f.service);
+        if (typeof f.tauxHoraire === 'string') setTauxHoraire(f.tauxHoraire);
+        setEstUrgente(f.estUrgente === true);
+        if ([1, 2, 3].includes(f.niveauUrgence)) setNiveauUrgence(f.niveauUrgence);
+        if (['PREMIER_ARRIVE', 'CANDIDATURE'].includes(f.modeAttribution)) setModeAttribution(f.modeAttribution);
+        if (['TOUS', 'SALARIE', 'LIBERAL'].includes(f.contratPreference)) setContratPreference(f.contratPreference);
+        // Les conditions réglementaires sont recalculées avec le vrai établissement.
+      }
     }).catch(() => { if (active) setErreurBrouillonInscription('Votre brouillon n’a pas pu être chargé. Revenez à votre espace pour réessayer.'); }).finally(() => { if (active) setBrouillonCharge(true); });
     return () => { active = false; };
   }, [reprendreInscription]);
@@ -344,8 +360,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     if (missionSource?.debut_le && missionSource?.fin_le) {
       return [{ debut: missionSource.debut_le, fin: missionSource.fin_le }];
     }
+    const f = brouillonInscription?.missionFormulaire as Record<string, unknown> | undefined;
+    if (Array.isArray(f?.creneaux)) return f.creneaux.filter(c => c && typeof c.debut === 'string' && typeof c.fin === 'string');
     return [];
-  }, [missionSource, planningSourceRepublication, republicationDemandee, searchParams]);
+  }, [missionSource, planningSourceRepublication, republicationDemandee, searchParams, brouillonInscription]);
 
   const taux = parseFloat(tauxHoraire) || 0;
   const tauxCreation = taux;
@@ -448,9 +466,23 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   };
 
   // Création et édition passent toutes les deux par le même récapitulatif exact.
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (parcours) {
+      setLoading(true);
+      try {
+        await enregistrerParcours({ brouillonMission: true, missionFormulaire: {
+          intitule, description, profession, specialite: specialiteMedicaleRequise, service,
+          tauxHoraire, estUrgente, niveauUrgence, modeAttribution, contratPreference,
+          creneaux: creneaux.map(({ debut, fin }) => ({ debut, fin })),
+        } });
+        navigate('/inscription/completer');
+      } catch {
+        afficherNotification({ type: 'erreur', message: 'Votre brouillon n’a pas pu être enregistré. Réessayez.' });
+      } finally { setLoading(false); }
+      return;
+    }
     if (recurrenceBlocante || creneaux.length === 0 || !recurrenceValide) return;
     setModalRecapOuvert(true);
   };
@@ -505,7 +537,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   };
 
   const officineNonProposee = etablissementType === 'PHARMACIE_OFFICINE';
-  const canSubmit = !officineNonProposee
+  const canSubmit = parcours ? !loading : !officineNonProposee
     && !siretInvalide
     && contratNonValide === false
     && !blocageVerification
@@ -549,21 +581,22 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   return (
     <>
-      {siretInvalide && (
+      {parcours && <p className="bg-primary/5 p-4 rounded-xl mb-4 text-sm">Préparez votre mission librement. Les informations de l’établissement seront demandées au moment de la publication.</p>}
+      {!parcours && siretInvalide && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span>Veuillez compléter votre SIRET dans votre profil avant de publier une mission. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
         </div>
       )}
 
-      {contratNonValide === true && (
+      {!parcours && contratNonValide === true && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span>Votre contrat de service n'est pas encore signé. <Link to="/etablissement/activer" className="text-primary hover:underline font-medium">Signer le contrat →</Link></span>
         </div>
       )}
 
-      {blocageVerification && (
+      {!parcours && blocageVerification && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span>
@@ -616,7 +649,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} noValidate={Boolean(parcours)} className="space-y-5">
         {/* Intitulé */}
         <div>
           <label htmlFor="mission-intitule" className="text-sm font-medium text-foreground mb-1 block">Intitulé *</label>

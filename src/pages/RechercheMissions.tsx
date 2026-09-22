@@ -1,3 +1,5 @@
+import { useRole } from '@/hooks/useRole';
+import { chargerMissionsInscription, missionCorrespondProfessionInscription } from '@/lib/explorationInscription';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -83,6 +85,7 @@ export default function RechercheMissions() {
   usePageTitle('Trouver une mission');
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { parcours } = useRole();
   // 6c.1 : UN SEUL switcher segmenté Swipe · Liste · Carte (les deux anciens
   // toggles — Swipe/Liste en haut + Liste/Carte flottant — coexistaient et se
   // contredisaient). Explorer = deck de swipe DIRECT par défaut ; la préférence
@@ -105,6 +108,7 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
   const sequenceChargementMissions = useRef(0);
   // Pull-to-refresh (Lot 6b.3) : tirer en haut de page relance le fetch.
   const [refreshTick, setRefreshTick] = useState(0);
@@ -151,7 +155,7 @@ export default function RechercheMissions() {
   // ses préférences sont déjà apprises).
   const [quizOpen, setQuizOpen] = useState(false);
   useEffect(() => {
-    if (localStorage.getItem(CLE_QUIZ_PREFS) || !user) return;
+    if (parcours || localStorage.getItem(CLE_QUIZ_PREFS) || !user) return;
     // Comptes E2E : jamais de quiz (même pattern que le filtre missions test).
     if (user.email?.startsWith('playwright-')) return;
     let annule = false;
@@ -164,7 +168,7 @@ export default function RechercheMissions() {
         else localStorage.setItem(CLE_QUIZ_PREFS, '1');
       });
     return () => { annule = true; };
-  }, [user]);
+  }, [user, parcours]);
   const appliquerQuiz = (r: ReponsesQuiz) => {
     setRayonKm(r.rayonKm);
     setTauxMin(r.tauxMin);
@@ -310,8 +314,19 @@ export default function RechercheMissions() {
       !controller.signal.aborted && sequence === sequenceChargementMissions.current
     );
     setLoading(true);
+    setErreurChargement(false);
     const fetchMissions = async () => {
       try {
+        if (parcours) {
+          const offres = await chargerMissionsInscription(undefined, controller.signal);
+          const prof = String(parcours.donnees.profession || '');
+          const selection = offres.filter(m => missionCorrespondProfessionInscription(m.profession_requise, profession, prof)
+            && (!tauxMin || Number(m.taux_horaire_base) >= tauxMin)
+            && (!urgentesOnly || m.est_urgente)
+            && (!etablissementId || m.etablissement_id === etablissementId));
+          if (estChargementCourant()) setMissions(selection);
+          return;
+        }
         let query = supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           specialite_medicale_requise, accepte_non_specialises,
@@ -359,14 +374,14 @@ export default function RechercheMissions() {
         if (!estChargementCourant() || error?.name === 'AbortError') return;
         logger.warn('[RechercheMissions] Chargement incomplet:', error?.message ?? error);
         setMissions([]);
-        toast.error('Impossible de charger tous les plannings. Vérifie ta connexion puis réessaie.');
+        setErreurChargement(true);
       } finally {
         if (estChargementCourant()) setLoading(false);
       }
     };
     void fetchMissions();
     return () => controller.abort();
-  }, [user, soignant, profession, tauxMin, urgentesOnly, etablissementId, refreshTick]);
+  }, [user, soignant, profession, tauxMin, urgentesOnly, etablissementId, refreshTick, parcours]);
 
   const filtered = useMemo(() => {
     const villeSearch = debouncedVille.trim().toLowerCase();
@@ -417,7 +432,8 @@ export default function RechercheMissions() {
         : [48.8566, 2.3522]; // Paris default
 
       if (!leafletMap.current) {
-        leafletMap.current = L.map(mapRef.current).setView(center, 11);
+        leafletMap.current = L.map(mapRef.current, { zoomControl: false }).setView(center, 11);
+        L.control.zoom({ zoomInTitle: 'Zoom avant', zoomOutTitle: 'Zoom arrière' }).addTo(leafletMap.current);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 18,
@@ -511,6 +527,12 @@ export default function RechercheMissions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vue, filtered]);
 
+  useEffect(() => () => {
+    leafletMap.current?.remove();
+    leafletMap.current = null;
+    markersLayer.current = null;
+  }, [vue]);
+
   // No blocking guard — render even without soignant profile
 
   const professionAlerteLabel = (profession || soignant?.profession)
@@ -529,7 +551,7 @@ export default function RechercheMissions() {
   return (
     <LayoutApp role="SOIGNANT" pleinEcran={vue === 'swipe'}>
       {vue !== 'swipe' && <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />}
-      {!loading && (!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
+      {!parcours && !loading && (!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-bold text-foreground">Explorer</h1>
@@ -607,7 +629,7 @@ export default function RechercheMissions() {
         {/* La bannière documents ne s'affiche pas au-dessus du swipe (la carte doit
             vendre, sans bannière) — uniquement en vue Liste. Le rappel « documents »
             est porté par le parcours d'activation sur l'Accueil. */}
-        {vue === 'liste' && (
+        {!parcours && vue === 'liste' && (
           <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
         )}
 
@@ -645,8 +667,14 @@ export default function RechercheMissions() {
           </div>
         )}
 
+        {erreurChargement && (
+          <div role="alert" className="card-base space-y-3">
+            <p>Les missions n’ont pas pu être chargées. Vérifiez votre connexion et réessayez.</p>
+            <button className="btn-primary" onClick={() => setRefreshTick(v => v + 1)}>Réessayer</button>
+          </div>
+        )}
         {vue !== 'carte' ? (
-          loading ? <ChargementPage /> : filtered.length > 0 ? (
+          erreurChargement ? null : loading ? <ChargementPage /> : filtered.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filtered.slice(0, nbAffiche).map(m => (
@@ -702,7 +730,7 @@ export default function RechercheMissions() {
               className="w-full rounded-xl border border-border overflow-hidden"
               style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
             />
-            {filtered.length === 0 && !loading && (
+            {filtered.length === 0 && !loading && !erreurChargement && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
             )}
           </>

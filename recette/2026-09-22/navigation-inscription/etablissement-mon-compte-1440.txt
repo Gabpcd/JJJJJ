@@ -1,0 +1,152 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- navigation "Sidebar":
+  - text: Jolene
+  - button "Notifications"
+  - button "Passer en mode sombre":
+    - img
+  - button "Se déconnecter":
+    - img
+  - navigation "Menu principal":
+    - button "Accueil":
+      - img
+      - text: Accueil
+    - button "Publier une mission":
+      - img
+      - text: Publier une mission
+    - button "Missions":
+      - img
+      - text: Missions
+    - button "Soignants":
+      - img
+      - text: Soignants
+    - button "Gestion":
+      - img
+      - text: Gestion
+    - button "Pilotage":
+      - img
+      - text: Pilotage
+    - button "Messagerie":
+      - img
+      - text: Messagerie
+    - button "Paramètres":
+      - img
+      - text: Paramètres
+- main:
+  - img
+  - heading "Mon établissement" [level=1]
+  - heading "Activité" [level=2]
+  - button "Présences à valider":
+    - img
+    - text: Présences à valider
+    - img
+  - button "Contrats":
+    - img
+    - text: Contrats
+    - img
+  - button "Annuaire des soignants":
+    - img
+    - text: Annuaire des soignants
+    - img
+  - button "Soignants favoris":
+    - img
+    - text: Soignants favoris
+    - img
+  - button "Pool urgence":
+    - img
+    - text: Pool urgence
+    - img
+  - button "Messagerie":
+    - img
+    - text: Messagerie
+    - img
+  - heading "Équipe & pilotage" [level=2]
+  - button "Gérer mon équipe":
+    - img
+    - text: Gérer mon équipe
+    - img
+  - button "Pilotage RH & statistiques":
+    - img
+    - text: Pilotage RH & statistiques
+    - img
+  - button "Export paie":
+    - img
+    - text: Export paie
+    - img
+  - button "Score qualité":
+    - img
+    - text: Score qualité
+    - img
+  - button "Parrainage":
+    - img
+    - text: Parrainage
+    - img
+  - button "Offre Premium":
+    - img
+    - text: Offre Premium
+    - img
+  - button "Mon établissement":
+    - img
+    - text: Mon établissement
+    - img
+  - button "Facturation & contrat":
+    - img
+    - text: Facturation & contrat
+    - img
+  - button "Mes factures":
+    - img
+    - text: Mes factures
+    - img
+  - button "Litiges & contestations":
+    - img
+    - text: Litiges & contestations
+    - img
+  - button "Opérations":
+    - img
+    - text: Opérations
+    - img
+  - button "Notifications":
+    - img
+    - text: Notifications
+    - img
+  - button "Sécurité & RGPD":
+    - img
+    - text: Sécurité & RGPD
+    - img
+  - button "Passer en thème sombre":
+    - img
+    - text: Passer en thème sombre
+  - button "Se déconnecter":
+    - img
+    - text: Se déconnecter
+  - heading "Aide & légal" [level=2]
+  - button "Centre d'aide":
+    - img
+    - text: Centre d'aide
+    - img
+  - button "Contacter Jolene":
+    - img
+    - text: Contacter Jolene
+  - button "Confidentialité":
+    - img
+    - text: Confidentialité
+    - img
+  - button "CGU":
+    - img
+    - text: CGU
+    - img
+  - button "CGV":
+    - img
+    - text: CGV
+    - img
+  - button "Mentions légales":
+    - img
+    - text: Mentions légales
+    - img
+  - button "Supprimer mon compte":
+    - img
+    - text: Supprimer mon compte
+    - img
+  - paragraph: Jolene · build dev-2026-09-22
+- region "Notifications alt+T"
+- region "Notifications"

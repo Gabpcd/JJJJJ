@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -10,9 +10,11 @@ interface RouteProtegeeProps {
 }
 
 export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) {
+  const location = useLocation();
   const { user, session, loading: authLoading, deconnexion } = useAuth();
   const {
     role: roleServeur,
+    parcours,
     loading: roleLoading,
     error: erreurRole,
     retry: reessayerRole,
@@ -57,5 +59,11 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
     }
   }
 
+  const onglet = new URLSearchParams(location.search).get('tab');
+  const ouvreProfil = ['/soignant/profil', '/etablissement/profil', '/etablissement/activer'].includes(location.pathname)
+    || (location.pathname === '/etablissement/parametres' && (!onglet || onglet === 'profil'));
+  if (parcours && ouvreProfil && onglet !== 'confidentialite') {
+    return <Navigate to="/inscription/completer" replace />;
+  }
   return <>{children}</>;
 }

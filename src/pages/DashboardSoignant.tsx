@@ -1,3 +1,4 @@
+import { useRole } from '@/hooks/useRole';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -70,6 +71,7 @@ export default function DashboardSoignant() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { parcours } = useRole();
   // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
   useAppliquerParrainage(user?.id);
   const [propositions, setPropositions] = useState<PropositionMission[]>([]);
@@ -87,8 +89,9 @@ export default function DashboardSoignant() {
     error: erreurDashboard,
     refetch: rechargerDashboard,
   } = useQuery({
-    queryKey: ['dashboard-soignant', user?.id],
+    queryKey: ['dashboard-soignant', user?.id, !!parcours],
     queryFn: async () => {
+      if (parcours) return null;
       const maintenantRequete = new Date();
       const debutMois = new Date(
         maintenantRequete.getFullYear(),
@@ -241,7 +244,7 @@ export default function DashboardSoignant() {
   const relancerDashboard = () => {
     reinitialiserChargement();
     void queryClient.resetQueries({
-      queryKey: ['dashboard-soignant', user?.id],
+      queryKey: ['dashboard-soignant', user?.id, !!parcours],
       exact: true,
     });
   };
@@ -447,7 +450,7 @@ export default function DashboardSoignant() {
       {/* Checklist d'activation EN PREMIER pour un profil incomplet (elle se
           masque seule — return null — quand le profil est complet, donc aucun
           coût pour un soignant activé qui voit alors directement le CTA). */}
-      <ChecklistActivation state={activation} className="mb-4" />
+      {!parcours && <ChecklistActivation state={activation} className="mb-4" />}
 
       {/* ═══ ZONE 1 : HERO + CTA (ce que le soignant voit en premier) ═══ */}
 
@@ -459,11 +462,11 @@ export default function DashboardSoignant() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-foreground">
-              {salutationHeure()}, <span className="text-gradient-hero">{soignantWithCounts.prenom}</span>
+              {salutationHeure()}, <span className="text-gradient-hero">{parcours ? 'bienvenue' : soignantWithCounts.prenom}</span>
             </h1>
             <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
           </div>
-          {!soignantWithCounts.tous_documents_valides ? (
+          {parcours ? <p className="text-sm text-muted-foreground mt-1">Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.</p> : !soignantWithCounts.tous_documents_valides ? (
             <p className="text-sm text-muted-foreground mt-1">
               {missionsOuvertes.length > 0
                 ? `${missionsOuvertes.length} mission${missionsOuvertes.length > 1 ? 's' : ''} près de chez toi — tu peux déjà postuler.`
@@ -706,7 +709,7 @@ export default function DashboardSoignant() {
           />
         </div>
       )}
-      {!activation.visible && (
+      {!parcours && !activation.visible && (
         <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
       )}
       {/* Lot 6b.4 : la carte évaluation remplace la checklist quand celle-ci a

@@ -1,0 +1,40 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Missions":
+    - img
+    - text: Missions
+  - button "Publier":
+    - img
+    - text: Publier
+  - button "Messages":
+    - img
+    - text: Messages
+  - button "Menu":
+    - img
+    - text: Menu
+- main:
+  - heading "Mes missions" [level=1]
+  - button "Toutes (0)"
+  - button "Ouvertes (0)"
+  - button "Assignées (0)"
+  - button "Actives (0)"
+  - button "Terminées (0)"
+  - button "Expirées (0)"
+  - button "Annulées (0)"
+  - button "Litiges (0)"
+  - textbox "Rechercher une mission":
+    - /placeholder: Rechercher par intitulé, profession, ville...
+  - paragraph: 0 missions trouvées
+  - status:
+    - heading "Publiez votre première mission" [level=3]
+    - paragraph: Trouvez un soignant qualifié en quelques heures.
+    - button "Créer une mission →"
+- region "Notifications alt+T"
+- region "Notifications"

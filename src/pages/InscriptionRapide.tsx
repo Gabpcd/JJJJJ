@@ -15,6 +15,7 @@ import {
   type TypeCompteInscription,
 } from "@/lib/inscriptionProgressive";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { mapperErreurInscription } from "@/lib/erreurs";
 
 export default function InscriptionRapide({
   type,
@@ -95,8 +96,9 @@ export default function InscriptionRapide({
             ? "Votre email n’est pas encore confirmé. Ouvrez le lien reçu, puis réessayez."
             : /invalid.*credentials/i.test(message)
               ? "Vérifiez vos identifiants ou utilisez « Se connecter »."
-              : message ||
-                "La connexion a été interrompue. Votre saisie est conservée ; réessayez.",
+              : (error as { code?: string })?.code === "SIGN_IN_REQUIRED"
+                ? "Ce compte existe déjà. Connectez-vous pour le reprendre."
+                : mapperErreurInscription(error).message,
       );
     } finally {
       setBusy(false);

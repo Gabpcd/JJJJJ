@@ -89,6 +89,9 @@ if (SENTRY_DSN) {
         maskAllText: true,
         maskAllInputs: true,
         blockAllMedia: true,
+        // Les fenêtres tierces (dont Stripe) restent hors de l’enregistrement :
+        // WebKit interdit leur inspection et les données de paiement sont privées.
+        block: ['iframe'],
       }),
     ],
     // Sample adaptatif : pages publiques 5 %, pages auth 20 %, erreurs 100 %.

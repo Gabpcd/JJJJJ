@@ -1,0 +1,37 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - img "Logo Jolene, succès"
+  - heading "Bonjour, bienvenue" [level=1]
+  - paragraph: Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.
+  - heading "Missions pour toi" [level=2]:
+    - img
+    - text: Missions pour toi
+  - button "Tout voir →"
+  - button "De nouvelles missions arrivent 🔔 Active les alertes pour être prévenu·e dès qu'une mission près de chez toi correspond à ton profil.":
+    - paragraph: De nouvelles missions arrivent 🔔
+    - paragraph: Active les alertes pour être prévenu·e dès qu'une mission près de chez toi correspond à ton profil.
+  - button "🎁 Parraine un collègue — une prime pour chacun"
+- region "Notifications alt+T"
+- region "Notifications"

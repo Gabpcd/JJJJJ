@@ -1,3 +1,5 @@
+import { useRole } from '@/hooks/useRole';
+import { chargerOffresSauvegardeesInscription, sauvegarderFavoriInscription, chargerFavorisInscription } from '@/lib/explorationInscription';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, Building2, ArrowRight, ChevronRight } from 'lucide-react';
@@ -22,6 +24,7 @@ interface FavoriEtab {
 
 export default function MesFavorisSoignant() {
   usePageTitle('Mes favoris');
+  const { parcours } = useRole();
   const navigate = useNavigate();
   const [items, setItems] = useState<FavoriEtab[]>([]);
   const [missionsSauvegardees, setMissionsSauvegardees] = useState<any[]>([]);
@@ -29,19 +32,25 @@ export default function MesFavorisSoignant() {
 
   const charger = async () => {
     setLoading(true);
+    if (parcours) {
+      try { setMissionsSauvegardees(await chargerOffresSauvegardeesInscription()); }
+      catch { toast.error('Vos favoris n’ont pas pu être chargés. Réessayez.'); }
+      finally { setLoading(false); }
+      return;
+    }
     // D1 (Lot 6c) : la page regroupe les 2 types de favoris — les MISSIONS
     // sauvegardées (⭐ du swipe / étoile des cartes) et les ÉTABLISSEMENTS suivis.
-    const [{ data, error }, { data: ms }] = await Promise.all([
+    const [{ data, error }, { data: ms }, favorisInscription] = await Promise.all([
       supabase.rpc('fn_mes_favoris_etablissements' as any),
       supabase
         .from('missions_sauvegardees' as any)
         .select('mission_id, missions(id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, statut, net_estime, taux_horaire_base)')
         .order('cree_le', { ascending: false }),
+      chargerOffresSauvegardeesInscription(),
     ]);
     setMissionsSauvegardees(
-      ((ms ?? []) as any[])
-        .map((r) => r.missions)
-        .filter((m) => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date()),
+      [...new Map([...favorisInscription, ...((ms ?? []) as any[]).map(r => r.missions)]
+        .filter(m => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date()).map(m => [m.id,m])).values()],
     );
     if (error) { toast.error(error.message); setLoading(false); return; }
     const payload = data as any;
@@ -54,6 +63,12 @@ export default function MesFavorisSoignant() {
   };
 
   const retirerMission = async (missionId: string) => {
+    if (parcours) {
+      try { await sauvegarderFavoriInscription(missionId, false); await charger(); }
+      catch { toast.error('Votre favori n’a pas pu être retiré. Réessayez.'); }
+      return;
+    }
+    if ((await chargerFavorisInscription()).includes(missionId)) await sauvegarderFavoriInscription(missionId, false);
     const { error } = await supabase
       .from('missions_sauvegardees' as any)
       .delete()
@@ -63,7 +78,7 @@ export default function MesFavorisSoignant() {
     charger();
   };
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { void charger(); }, [parcours]);
 
   const retirer = async (etab_id: string) => {
     if (!confirm('Retirer cet établissement de tes favoris ?')) return;

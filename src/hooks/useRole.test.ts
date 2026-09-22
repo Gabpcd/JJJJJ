@@ -5,6 +5,7 @@ import { ROLE_RESOLUTION_TIMEOUT_MS, reinitialiserCacheRole, useRole } from './u
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   rpc: vi.fn(),
+  from: vi.fn(),
   onAuthStateChange: vi.fn(),
   unsubscribe: vi.fn(),
   authCallback: null as null | ((event: string, session: any) => void),
@@ -17,12 +18,16 @@ vi.mock('@/integrations/supabase/client', () => ({
       onAuthStateChange: mocks.onAuthStateChange,
     },
     rpc: mocks.rpc,
+    from: mocks.from,
   },
 }));
 
 function requeteRpc(response: unknown) {
   const promise = Promise.resolve(response);
   const builder: any = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    maybeSingle: vi.fn(() => builder),
     abortSignal: vi.fn(() => builder),
     then: promise.then.bind(promise),
   };
@@ -32,6 +37,9 @@ function requeteRpc(response: unknown) {
 function requeteRpcSuspendue() {
   const promise = new Promise<never>(() => {});
   const builder: any = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    maybeSingle: vi.fn(() => builder),
     abortSignal: vi.fn(() => builder),
     then: promise.then.bind(promise),
   };
@@ -224,4 +232,38 @@ describe('useRole — résolution fail-closed', () => {
       error: null,
     });
   });
+  it.each([['SOIGNANT', 'SOIGNANT'], ['ETABLISSEMENT', 'ADMIN_ETABLISSEMENT']])('ouvre la navigation %s sans créer de scope métier', async (famille, role) => {
+    mocks.rpc.mockReturnValue(requeteRpc({ data: {role:'INCONNU', etablissement_id:null}, error:null }));
+    const parcours = {user_id:'utilisateur-id',type_compte:famille,donnees:{},modifie_le:'2026-09-22'};
+    mocks.from.mockReturnValue(requeteRpc({data:parcours,error:null}));
+    const {result}=renderHook(()=>useRole());
+    await waitFor(()=>expect(result.current.resolved).toBe(true));
+    expect(result.current).toMatchObject({role,parcours,etablissement_id:null,error:null});
+    expect(mocks.from).toHaveBeenCalledWith('parcours_inscription');
+  });
+
+  it('ne tire aucun accès des métadonnées modifiables par le compte', async () => {
+    mocks.getSession.mockResolvedValue({data:{session:{user:{id:'utilisateur-id',user_metadata:{role:'ADMIN_PLATEFORME',inscription_progressive:{type:'ETABLISSEMENT'}}}}},error:null});
+    mocks.rpc.mockReturnValue(requeteRpc({data:{role:'INCONNU'},error:null}));
+    mocks.from.mockReturnValue(requeteRpc({data:null,error:null}));
+    const {result}=renderHook(()=>useRole());
+    await waitFor(()=>expect(result.current.resolved).toBe(true));
+    expect(result.current.role).toBe('INCONNU');
+    expect(result.current.parcours).toBeNull();
+  });
+
+  it('borne aussi la lecture du parcours suspendue et autorise une relance', async () => {
+    vi.useFakeTimers();
+    mocks.rpc.mockReturnValue(requeteRpc({data:{role:'INCONNU'},error:null}));
+    const suspendue = requeteRpcSuspendue();
+    mocks.from.mockReturnValueOnce(suspendue).mockReturnValueOnce(requeteRpc({data:{user_id:'utilisateur-id',type_compte:'SOIGNANT',donnees:{}},error:null}));
+    const {result}=renderHook(()=>useRole());
+    await act(async()=> { await vi.advanceTimersByTimeAsync(ROLE_RESOLUTION_TIMEOUT_MS+1); });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error?.message).toContain('expiré');
+    expect(suspendue.abortSignal.mock.calls[0][0].aborted).toBe(true);
+    await act(async()=> {result.current.retry(); await vi.advanceTimersByTimeAsync(1);});
+    expect(result.current).toMatchObject({role:'SOIGNANT',resolved:true,error:null});
+  });
+
 });

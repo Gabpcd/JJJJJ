@@ -144,6 +144,8 @@ export default function RacineApp() {
     );
   }
 
-  // Natif sans session, ou RPC réussie sans rôle réel → écran de connexion.
+  if (session) return <Navigate to="/inscription/reprendre" replace />;
+
+  // Natif sans session → écran de connexion.
   return <PageConnexion />;
 }

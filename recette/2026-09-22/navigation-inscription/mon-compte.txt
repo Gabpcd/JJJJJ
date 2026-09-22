@@ -1,0 +1,120 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - img "Logo Jolene, succès"
+  - heading "Mon compte" [level=1]
+  - button "Mon profil":
+    - img
+    - text: Mon profil
+    - img
+  - heading "Paiements & facturation" [level=2]
+  - button "Coordonnées bancaires":
+    - img
+    - text: Coordonnées bancaires
+  - heading "Documents & protection" [level=2]
+  - button "Prévoyance":
+    - img
+    - text: Prévoyance
+    - img
+  - heading "Recherche & disponibilité" [level=2]
+  - button "Recherches sauvegardées":
+    - img
+    - text: Recherches sauvegardées
+    - img
+  - button "Établissements exclus":
+    - img
+    - text: Établissements exclus
+    - img
+  - button "Parrainage":
+    - img
+    - text: Parrainage
+    - img
+  - heading "Suivi" [level=2]
+  - button "Litiges & contestations":
+    - img
+    - text: Litiges & contestations
+    - img
+  - heading "Réglages" [level=2]
+  - button "Notifications":
+    - img
+    - text: Notifications
+    - img
+  - button "Passer en thème sombre":
+    - img
+    - text: Passer en thème sombre
+  - heading "Aide & légal" [level=2]
+  - button "Centre d'aide":
+    - img
+    - text: Centre d'aide
+    - img
+  - button "Contacter Jolene":
+    - img
+    - text: Contacter Jolene
+  - button "Confidentialité":
+    - img
+    - text: Confidentialité
+    - img
+  - button "Conditions générales":
+    - img
+    - text: Conditions générales
+    - img
+  - button "Mentions légales":
+    - img
+    - text: Mentions légales
+    - img
+  - button "Supprimer mon compte":
+    - img
+    - text: Supprimer mon compte
+    - img
+  - button "Se déconnecter":
+    - img
+    - text: Se déconnecter
+  - region "Paiements & coordonnées bancaires":
+    - heading "Paiements & coordonnées bancaires" [level=2]
+    - img
+    - heading "Type d'exercice à définir" [level=2]
+    - paragraph:
+      - text: Définis d'abord ton type d'exercice dans l'onglet
+      - strong: Profil principal
+      - text: .
+  - heading "Connexion & sécurité" [level=2]
+  - text: E-mail recette-navigation@example.invalid Téléphone
+  - button "Modifier depuis le profil"
+  - heading "Changer mon mot de passe" [level=3]:
+    - img
+    - text: Changer mon mot de passe
+  - text: Mot de passe actuel
+  - textbox "Mot de passe actuel Afficher"
+  - button "Afficher":
+    - img
+  - text: Nouveau mot de passe
+  - textbox "Nouveau mot de passe Afficher"
+  - button "Afficher":
+    - img
+  - text: Confirmer le nouveau mot de passe
+  - textbox "Confirmer le nouveau mot de passe"
+  - button "Modifier mon mot de passe" [disabled]
+  - paragraph: Jolene · build dev-2026-09-22
+- region "Notifications alt+T"
+- region "Notifications"

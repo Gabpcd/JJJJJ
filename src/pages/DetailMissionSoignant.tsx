@@ -1,3 +1,5 @@
+import { useRole } from '@/hooks/useRole';
+import { chargerMissionsInscription, preparerCandidatureInscription } from '@/lib/explorationInscription';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { ouvrirNavigation } from '@/lib/platform';
@@ -181,6 +183,7 @@ export default function DetailMissionSoignant() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { parcours } = useRole();
   const [mission, setMission] = useState<any>(null);
   const [etablissement, setEtablissement] = useState<any>(null);
   // 7c : données safe de l'étab (capacité ⚡ paiement rapide + jour de paie).
@@ -238,6 +241,13 @@ export default function DetailMissionSoignant() {
     setLitigeMission(null);
 
     const chargerDonneesCritiques = async () => {
+      if (parcours) {
+        const [offre] = await chargerMissionsInscription(id);
+        return { mission: offre ?? null, introuvable: !offre, soignant: {
+          id: user.id, prenom: '', nom: '', profession: parcours.donnees.profession,
+          adresse_lat: null, adresse_lng: null, tous_documents_valides: false,
+        } };
+      }
       let derniereErreur: unknown;
 
       // Une reprise automatique absorbe les rares coupures de session/réseau.
@@ -438,6 +448,12 @@ export default function DetailMissionSoignant() {
         // facultatives partent ensuite en arrière-plan.
         setMission(resultat.mission);
         setSoignant(resultat.soignant as any);
+        if (parcours) {
+          setEtablissement(resultat.mission.etablissements);
+          setCreneauxPlanifies(resultat.mission.creneaux ?? []);
+          setLoading(false);
+          return;
+        }
         setLoading(false);
         chargerDonneesFacultatives(resultat.mission);
       } catch (error) {
@@ -454,7 +470,7 @@ export default function DetailMissionSoignant() {
       annule = true;
       clearTimeout(minuteurChargementProlonge);
     };
-  }, [user, id, tentativeChargement]);
+  }, [user, id, tentativeChargement, parcours]);
 
   // Fetch average rating for the establishment
   useEffect(() => {
@@ -525,6 +541,11 @@ export default function DetailMissionSoignant() {
   // Soft-gating documents : la candidature est toujours possible — le contrôle
   // documents n'intervient qu'à l'acceptation (missions < 7 jours, côté backend).
   const peutPostuler = resumeCompletion.peut_candidater;
+  const completerPourCandidater = () => {
+    if (!parcours) { navigate('/soignant/profil'); return; }
+    void preparerCandidatureInscription(id!).then(navigate).catch(() =>
+      toast.error('Votre choix n’a pas pu être enregistré. Réessayez.'));
+  };
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
@@ -598,6 +619,10 @@ export default function DetailMissionSoignant() {
     }
     // Session E-6 : profil incomplet = la complétion EST l'action n°1 de l'écran
     // (jamais de dead-end — standard onboarding Uber).
+    if (estOuverte && parcours && !candidatureEnvoyee) {
+      return { titre: 'Cette mission vous intéresse ?', cta: 'Candidater',
+        onClick: completerPourCandidater, variante: 'primary' };
+    }
     if (estOuverte && !peutPostuler && !candidatureEnvoyee) {
       const n = champsManquants.length;
       return {
@@ -606,7 +631,7 @@ export default function DetailMissionSoignant() {
           : 'Complète ton profil pour postuler',
         description: getMotifProfilIncomplet(resumeCompletion) ?? undefined,
         cta: 'Compléter mon profil',
-        onClick: () => navigate('/soignant/profil'),
+        onClick: completerPourCandidater,
         variante: 'warning',
       };
     }
@@ -1180,12 +1205,12 @@ export default function DetailMissionSoignant() {
           <div id="bloc-actions" className="card-base">
             {estOuverte && (
               <>
-                <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} champsManquants={champsManquants.map((i) => i.label)} />
+                {!parcours && <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} champsManquants={champsManquants.map((i) => i.label)} />}
                 {/* Session E-6 : profil incomplet → la complétion devient l'action
                     primaire de l'écran (pas de dead-end), avec les champs nommés. */}
                 {!peutPostuler && !candidatureEnvoyee && (
                   <div className="space-y-3">
-                    {champsManquants.length > 0 && (
+                    {!parcours && champsManquants.length > 0 && (
                       <div className="bg-muted/40 rounded-xl p-3">
                         <p className="text-xs font-semibold text-foreground mb-1.5">
                           Il manque {champsManquants.length} information{champsManquants.length > 1 ? 's' : ''} pour pouvoir postuler :
@@ -1199,8 +1224,8 @@ export default function DetailMissionSoignant() {
                         </ul>
                       </div>
                     )}
-                    <BoutonY2K size="lg" className="w-full" onClick={() => navigate('/soignant/profil')}>
-                      Compléter mon profil pour postuler
+                    <BoutonY2K size="lg" className="w-full" onClick={completerPourCandidater}>
+                      {parcours ? 'Candidater' : 'Compléter mon profil pour postuler'}
                     </BoutonY2K>
                   </div>
                 )}

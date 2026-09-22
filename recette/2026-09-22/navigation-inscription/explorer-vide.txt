@@ -1,0 +1,43 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Accueil": Jolene
+  - button "Messages":
+    - img
+  - button "Notifications"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Explorer":
+    - img
+    - text: Explorer
+  - button "Mes missions":
+    - img
+    - text: Mes missions
+  - button "Revenus":
+    - img
+    - text: Revenus
+  - button "Profil":
+    - img
+    - text: Profil
+- main:
+  - heading "Explorer" [level=1]
+  - tablist "Vue Swipe, Liste ou Carte":
+    - tab "Swipe"
+    - tab "Liste" [selected]
+    - tab "Carte"
+  - button "Mes disponibilités"
+  - button "Filtres"
+  - button "🔥 Urgentes"
+  - button "📅 Week-end"
+  - button "🌙 Nuit"
+  - button "☀️ Jour"
+  - status:
+    - img "Logo Jolene, traitement en cours"
+    - heading "Aucune mission trouvée" [level=3]
+    - paragraph: "Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
+    - button "🔔 Me prévenir des prochaines missions"
+    - button "Élargir le rayon (+20 km)"
+- region "Notifications alt+T"
+- region "Notifications"

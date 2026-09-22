@@ -608,7 +608,7 @@ export default function DashboardEtablissement() {
       <span data-testid="dashboard-etablissement-ready" className="sr-only" aria-hidden="true" />
       {/* Lot 11 : bannière évaluations retirée — les évaluations en attente
           convergent dans « À faire maintenant » (actionsTop). */}
-      <CardScoreQualiteEtab />
+      {etablissementId && <CardScoreQualiteEtab />}
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
           <AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Certaines données n'ont pas pu être chargées.

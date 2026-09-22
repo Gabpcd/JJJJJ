@@ -1,3 +1,5 @@
+import { useRole } from '@/hooks/useRole';
+import { missionCorrespondProfessionInscription, chargerMissionsInscription, preparerCandidatureInscription, sauvegarderFavoriInscription, chargerOffresSauvegardeesInscription } from '@/lib/explorationInscription';
 /**
  * VueSwipeMissions — Session G1, sémantique D1/D2 (Lot 6c)
  *
@@ -83,6 +85,7 @@ interface VueSwipeMissionsProps {
 }
 
 export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayon, filtreDeck }: VueSwipeMissionsProps) {
+  const { parcours } = useRole();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
@@ -108,8 +111,9 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
 
   // Fetch missions swipe
   const { data, isLoading, isError: missionsEnErreur, refetch: rechargerMissions } = useQuery({
-    queryKey: ['swipe-missions'],
+    queryKey: ['swipe-missions', parcours?.user_id ?? 'profil'],
     queryFn: async () => {
+      if (parcours) return await chargerMissionsInscription() as MissionSwipePayload[];
       const { data, error } = await supabase.rpc('fn_obtenir_missions_swipe' as any, { p_limit: 20 });
       if (error) throw error;
       const missions = ((data as any)?.missions ?? []) as MissionSwipePayload[];
@@ -129,16 +133,18 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
 
   // Missions sauvegardées (⭐) — re-surfacées en fin de deck (anti-fuite du favori)
   const { data: sauvegardees } = useQuery({
-    queryKey: ['missions-sauvegardees'],
+    queryKey: ['missions-sauvegardees', parcours?.user_id ?? 'profil'],
     queryFn: async () => {
+      if (parcours) return chargerOffresSauvegardeesInscription();
       const { data, error } = await supabase
         .from('missions_sauvegardees' as any)
         .select('mission_id, missions(id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_estime, statut)')
         .order('cree_le', { ascending: false })
         .limit(10);
       if (error) throw error;
-      const missions = ((data ?? []) as any[])
-        .map((r) => r.missions)
+      const favorisInscription = await chargerOffresSauvegardeesInscription();
+      const missions = [...new Map([...favorisInscription, ...((data ?? []) as any[]).map(r => r.missions)]
+        .filter(Boolean).map(m => [m.id,m])).values()]
         .filter((m) => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date());
       if (missions.length === 0) return missions;
       const creneaux = await chargerCreneauxMissionsPagines(
@@ -291,21 +297,39 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   }, []);
 
   const envoyerCandidature = useCallback((mission: MissionSwipePayload) => {
+    if (parcours) {
+      void preparerCandidatureInscription(mission.mission_id).then(navigate).catch(() =>
+        toast.error('Votre choix n’a pas pu être enregistré. Réessayez.'));
+      return;
+    }
     swipeMut.mutate({ missionId: mission.mission_id, direction: 'LIKE', mission });
-  }, [swipeMut]);
+  }, [swipeMut, parcours, navigate]);
 
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
     const mission = localStack.find((m) => m.mission_id === missionId);
     if (!mission) return;
 
+    if (dir === 'LIKE' && parcours) {
+      void preparerCandidatureInscription(missionId).then(navigate).catch(() =>
+        toast.error('Votre choix n’a pas pu être enregistré. Réessayez.'));
+      return;
+    }
     if (dir === 'LIKE') {
       setRecapCandidature(mission);
       return;
     }
 
+    if (dir === 'FAVORI' && parcours) {
+      void sauvegarderFavoriInscription(missionId, true).then(() => {
+        setLocalStack(prev => prev.filter(m => m.mission_id !== missionId));
+        void qc.invalidateQueries({queryKey:['missions-sauvegardees']});
+        toast.success('Mission sauvegardée ⭐');
+      }).catch(() => toast.error('Sauvegarde impossible pour le moment'));
+      return;
+    }
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
-    swipeMut.mutate({ missionId, direction: dir, mission });
-  }, [swipeMut, localStack]);
+    if (!parcours) swipeMut.mutate({ missionId, direction: dir, mission });
+  }, [swipeMut, localStack, parcours, navigate, qc]);
 
   const confirmerRecapitulatif = useCallback(() => {
     const mission = recapCandidature;
@@ -349,7 +373,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   const stackFiltre = useMemo(() => {
     if (!filtreDeck) return localStack;
     return localStack.filter((m) => {
-      if (filtreDeck.profession && m.profession_requise !== filtreDeck.profession) return false;
+      if (parcours ? !missionCorrespondProfessionInscription(m.profession_requise, filtreDeck.profession, String(parcours.donnees.profession || ''))
+        : filtreDeck.profession && m.profession_requise !== filtreDeck.profession) return false;
       const ville = filtreDeck.ville.trim().toLowerCase();
       if (ville) {
         const missionVille = (m.etablissement_ville || '').toLowerCase();
@@ -364,7 +389,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
       if (!planningCorrespondAuFiltre(m, filtreDeck.horaire)) return false;
       return true;
     });
-  }, [localStack, filtreDeck]);
+  }, [localStack, filtreDeck, parcours]);
 
   const stackItems = useMemo(
     () =>
@@ -512,7 +537,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
         onOpenChange={setDetailOpen}
         onPostuler={() => {
           setDetailOpen(false);
-          if (detailMission) setRecapCandidature(detailMission);
+          if (detailMission) handleSwipe('LIKE', detailMission.mission_id);
         }}
         onSuivant={() => {
           setDetailOpen(false);
