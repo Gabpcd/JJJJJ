@@ -403,5 +403,10 @@
     "fichier": "natif/etablissement-formulaire-mission-clavier-accessibilite.txt",
     "source": "/private/tmp/jolene-fluidite-preuves/ios-native/etablissement-formulaire-mission-clavier-accessibilite.txt",
     "sha256": "fd5de3303e0c9e99d064b5e8fdcfd10b8eeafa6c3b120640bc5d7444db529914"
+  },
+  {
+    "fichier": "resultats/inscription-navigation.json",
+    "source": "/private/tmp/jolene-ci-six-tests-results/results.json",
+    "sha256": "e9d34b35e061ed79b82943302101a2bcf497105820dfc6499a7bcbe212b52e69"
   }
 ]

@@ -96,3 +96,13 @@ Complément natif communiqué par la tâche principale, sur iPhone 16 Pro Max si
 ## Preuves finales rattachées par la tâche principale
 
 Après la revue indépendante ci-dessus, reconstruction native réussie et smoke `testExplorerMisAJour` vert (1 test, zéro échec, 45,92 s) : aucun score fictif, ouverture et fermeture du détail par tap. Les trois scénarios Swipe Chromium/Pixel/WebKit iPhone sont également verts après ce complément (23,4 s), ainsi que TypeScript. Les captures finales et arbres sont archivés dans [natif](../../recette/2026-09-23-fluidite/natif/). Cela complète la limite native signalée ci-dessus ; le nouveau passage CI reste distinct du résultat de `020ffac`.
+
+
+## Relecture indépendante des six attentes E2E obsolètes
+
+Après l’échec du run `35882619216` (310 réussis, 6 échoués, 14 ignorés), les deux fichiers `e2e/inscription-navigation.spec.ts` et `e2e/flows/swipe-matching-ui.spec.ts` ont été actualisés. Un autre agent, qui n’a pas écrit ce complément, a relu le diff : **CLÔTURABLE côté code**. La préférence est dérivée du compte réellement connecté, sa valeur écrite et sa restauration après reload sont vérifiées ; la clé globale volontairement contradictoire reste inchangée. Chaque capture d’inscription attend un main unique et le contenu propre à l’écran, sans dépendre d’une classe d’animation supprimée. Les assertions de routes, erreurs JS, absence de mutation, candidature au clic et brouillon conservé restent intactes. Aucun délai, skip ou filtre d’erreur ajouté. Le passage complet CI du nouveau commit reste requis.
+
+La CI du code produit final `9e3d495` confirme **1 506/1 506 tests unitaires réussis**, en 89,47 s, avec TypeScript et build verts (run `35885515748`). Le complément ci-dessus ne modifie que les tests E2E et cette documentation.
+
+
+Complément CI : les quatre scénarios Chromium simulés de `inscription-navigation.spec.ts` réussissent après remplacement de l’attente de transition par le contenu sémantique propre à chaque écran (23,0 s, zéro échec/skip/flaky ; [résultat](../../recette/2026-09-23-fluidite/resultats/inscription-navigation.json)). Les deux cas Toggle utilisant les comptes réels sont réservés au passage CI complet, pour éviter la concurrence sur ces comptes. Les assertions métier et délais existants sont conservés.
