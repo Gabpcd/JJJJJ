@@ -1,0 +1,149 @@
+Attributes: Application, 0x1037397b0, pid: 75555, label: 'Jolene'
+Element subtree:
+ →Application, 0x1037397b0, pid: 75555, label: 'Jolene'
+    Window (Main), 0x103716ba0, {{0.0, 0.0}, {440.0, 956.0}}
+      Other, 0x103132180, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x103136fd0, {{0.0, 0.0}, {440.0, 956.0}}
+          WebView, 0x10313cdc0, {{0.0, 0.0}, {440.0, 655.0}}
+            WebView, 0x103127b90, {{0.0, 0.0}, {440.0, 655.0}}
+              WebView, 0x1031435c0, {{0.0, 0.0}, {440.0, 655.0}}
+                Other, 0x10312b8e0, {{0.0, 0.0}, {440.0, 655.0}}
+                  Other, 0x1031343c0, {{0.0, 0.0}, {440.0, 655.0}}
+                    Other, 0x103124ca0, {{0.0, 0.0}, {440.0, 655.0}}
+                      Other, 0x103125540, {{0.0, 0.0}, {440.0, 1752.0}}, label: 'Publier une mission — Jolene'
+                        Link, 0x103144a00, {{24.0, -30.0}, {193.0, 20.0}}, label: 'Aller au contenu principal'
+                          StaticText, 0x103144b20, {{24.0, -30.0}, {193.0, 20.0}}, label: 'Aller au contenu principal', value: Aller au contenu p...
+                        Other, 0x103144c40, {{0.0, 0.0}, {440.0, 1752.0}}
+                          Other, 0x103144d60, {{0.0, 0.0}, {440.0, 118.0}}, label: 'bannière'
+                            Button, 0x103144e80, {{16.0, 67.0}, {89.0, 45.0}}, label: 'Accueil'
+                            Other, 0x103144fa0, {{380.0, 67.0}, {44.0, 45.0}}, label: 'Notifications'
+                          Other, 0x1031450c0, {{0.0, 118.0}, {440.0, 1634.0}}, label: 'principal'
+                            Other, 0x1031451e0, {{16.0, 134.0}, {408.0, 28.0}}, label: 'Publier une mission', value: 1
+                              StaticText, 0x103145300, {{16.0, 135.0}, {179.0, 25.0}}, label: 'Publier une mission', value: Publier une mission
+                            Other, 0x103145420, {{45.0, 205.0}, {350.0, 40.0}}
+                              StaticText, 0x103145540, {{45.0, 206.0}, {307.0, 38.0}}, label: 'Préparez votre mission. Votre dossier vous sera demandé pour la publier.', value: Préparez votre mis...
+                            Other, 0x103145660, {{33.0, 271.0}, {374.0, 20.0}}, label: 'Intitulé *'
+                              StaticText, 0x103145780, {{33.0, 272.0}, {56.0, 18.0}}, label: 'Intitulé *', value: Intitulé *
+                            TextField, 0x1031458a0, {{33.0, 295.0}, {374.0, 50.0}}, label: 'Intitulé *', placeholderValue: 'Ex: IDE de nuit — Service Urgences', value: Préparation native..., Keyboard Focused, Focused
+                            Other, 0x1031459c0, {{33.0, 349.0}, {374.0, 14.0}}
+                              StaticText, 0x103145ae0, {{372.0, 349.0}, {13.0, 14.0}}, label: '31', value: 31
+                              StaticText, 0x103145c00, {{384.0, 349.0}, {23.0, 14.0}}, label: '/120', value: /120
+                            Other, 0x103145d20, {{33.0, 383.0}, {374.0, 20.0}}, label: 'Description'
+                              StaticText, 0x10332eb80, {{33.0, 384.0}, {76.0, 18.0}}, label: 'Description', value: Description
+                            TextView, 0x10332e100, {{33.0, 407.0}, {374.0, 98.0}}, label: 'Description', placeholderValue: 'Informations complémentaires pour le soignant...', value: Informations compl...
+                              Other, 0x10332dce0, {{50.0, 420.0}, {340.0, 48.0}}
+                                StaticText, 0x10332f1c0, {{50.0, 422.0}, {279.0, 44.0}}, label: 'Informations complémentaires pour le soignant...', value: Informations compl...
+                              StaticText, 0x10332f2e0, {{50.0, 422.0}, {279.0, 44.0}}, label: 'Informations complémentaires pour le soignant...', value: Informations compl...
+                            Other, 0x10332f400, {{33.0, 531.0}, {374.0, 20.0}}, label: 'Profession requise *'
+                              StaticText, 0x10332f520, {{33.0, 532.0}, {133.0, 18.0}}, label: 'Profession requise *', value: Profession requise *
+                            Other, 0x10332f640, {{33.0, 555.0}, {374.0, 48.0}}, value: Sélectionnez la pr...
+                            Other, 0x10332f760, {{33.0, 623.0}, {374.0, 20.0}}, label: 'Service'
+                              StaticText, 0x10332f880, {{33.0, 624.0}, {50.0, 18.0}}, label: 'Service', value: Service
+                            TextField, 0x10332f9a0, {{33.0, 647.0}, {374.0, 50.0}}, label: 'Service', placeholderValue: 'Choisissez ou saisissez le service', value: Choisissez ou sais...
+                            Other, 0x10332fac0, {{33.0, 717.0}, {374.0, 20.0}}, label: 'Type de contrat proposé'
+                              StaticText, 0x10332fbe0, {{33.0, 718.0}, {163.0, 18.0}}, label: 'Type de contrat proposé', value: Type de contrat pr...
+                            Other, 0x10332fd00, {{33.0, 745.0}, {374.0, 66.0}}
+                              StaticText, 0x10332fe20, {{46.0, 759.0}, {318.0, 38.0}}, label: 'Choisissez d’abord la profession pour afficher les contrats réellement disponibles.', value: Choisissez d’abord...
+                            StaticText, 0x10332ff40, {{55.0, 832.0}, {191.0, 18.0}}, label: 'Planning exact de la mission', value: Planning exact de ...
+                            Other, 0x103330060, {{33.0, 855.0}, {374.0, 32.0}}
+                              StaticText, 0x103330180, {{33.0, 855.0}, {349.0, 31.0}}, label: 'Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés.', value: Vérifiez chaque da...
+                            Other, 0x1033304e0, {{54.0, 920.0}, {332.0, 20.0}}
+                              StaticText, 0x103330600, {{54.0, 921.0}, {176.0, 18.0}}, label: '📅 Dates et horaires réels', value: 📅 Dates et horair...
+                            Other, 0x103330720, {{54.0, 944.0}, {332.0, 48.0}}
+                              StaticText, 0x103330840, {{54.0, 944.0}, {320.0, 47.0}}, label: 'Chaque date est indépendante. Vous pouvez prévoir des jours non travaillés, plusieurs créneaux et des gardes de nuit.', value: Chaque date est in...
+                            Other, 0x103330b80, {{54.0, 1008.0}, {350.0, 51.0}}
+                              StaticText, 0x103716f40, {{54.0, 1008.0}, {138.0, 15.0}}, label: 'Première date affichée *', value: Première date affi...
+                              Other, 0x1037133f0, {{54.0, 1028.0}, {350.0, 31.0}}, label: 'Première date affichée *'
+                            Other, 0x103715a90, {{54.0, 1071.0}, {350.0, 51.0}}
+                              StaticText, 0x103729fd0, {{54.0, 1071.0}, {135.0, 15.0}}, label: 'Dernière date affichée *', value: Dernière date affi...
+                              Other, 0x1037279b0, {{54.0, 1091.0}, {350.0, 31.0}}, label: 'Dernière date affichée *'
+                            Other, 0x103714960, {{33.0, 1163.0}, {374.0, 20.0}}, label: 'Taux horaire proposé * (brut salarié ou honoraires HT)'
+                              StaticText, 0x103713e50, {{33.0, 1164.0}, {356.0, 18.0}}, label: 'Taux horaire proposé * (brut salarié ou honoraires HT)', value: Taux horaire propo...
+                            Other, 0x103728080, {{33.0, 1187.0}, {374.0, 50.0}}
+                              TextField, 0x103729c40, {{33.0, 1187.0}, {374.0, 50.0}}, label: 'Taux horaire proposé * (brut salarié ou honoraires HT)', placeholderValue: '25.00', value: 25.00
+                            Other, 0x103716850, {{33.0, 1261.0}, {117.0, 18.0}}, label: 'Mission urgente ?'
+                              StaticText, 0x103729580, {{33.0, 1261.0}, {117.0, 18.0}}, label: 'Mission urgente ?', value: Mission urgente ?
+                            Other, 0x103712d40, {{33.0, 1281.0}, {314.0, 32.0}}
+                              StaticText, 0x103715050, {{33.0, 1281.0}, {278.0, 31.0}}, label: 'Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité.', value: Mise en avant dans...
+                            Button, 0x103711ff0, {{359.0, 1261.0}, {48.0, 48.0}}, label: 'Mission urgente'
+                            Other, 0x103713090, {{50.0, 1350.0}, {340.0, 20.0}}
+                              StaticText, 0x103714ce0, {{50.0, 1351.0}, {122.0, 18.0}}, label: 'Mode de sélection', value: Mode de sélection
+                            Other, 0x1037164e0, {{50.0, 1382.0}, {340.0, 44.0}}
+                              Other, 0x103715e10, {{50.0, 1382.0}, {340.0, 44.0}}, label: 'Premier arrivé Le premier soignant qui accepte remporte la mission.', value: 1
+                              StaticText, 0x103728ea0, {{100.0, 1383.0}, {93.0, 18.0}}, label: 'Premier arrivé', value: Premier arrivé
+                              Other, 0x103716190, {{78.0, 1406.0}, {300.0, 16.0}}
+                                StaticText, 0x103717290, {{78.0, 1406.0}, {300.0, 15.0}}, label: 'Le premier soignant qui accepte remporte la mission.', value: Le premier soignan...
+                            Other, 0x10372a340, {{50.0, 1434.0}, {340.0, 56.0}}
+                              Other, 0x1037298f0, {{50.0, 1434.0}, {340.0, 56.0}}, label: 'Je choisis Les soignants postulent, vous consultez les profils et choisissez.', value: 0
+                              StaticText, 0x103713b00, {{100.0, 1435.0}, {66.0, 18.0}}, label: 'Je choisis', value: Je choisis
+                              Other, 0x10372a6d0, {{78.0, 1458.0}, {312.0, 32.0}}
+                                StaticText, 0x10372b730, {{78.0, 1458.0}, {300.0, 31.0}}, label: 'Les soignants postulent, vous consultez les profils et choisissez.', value: Les soignants post...
+                            Other, 0x103736400, {{33.0, 1527.0}, {374.0, 28.0}}
+                              StaticText, 0x103735bc0, {{37.0, 1527.0}, {142.0, 14.0}}, label: 'Simulation à titre indicatif.', value: Simulation à titre...
+                              StaticText, 0x10372eee0, {{58.0, 1527.0}, {345.0, 28.0}}, label: 'Le régime retenu détermine ensuite la paie employeur ou les deux factures distinctes du parcours libéral.', value: Le régime retenu d...
+                            Button, 0x10352bef0, {{33.0, 1575.0}, {374.0, 48.0}}, label: 'Publier la mission'
+                        Other, 0x103146040, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications alt+T, région'
+                        Other, 0x103146160, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications, région'
+    Window, 0x10352bad0, {{0.0, 0.0}, {440.0, 956.0}}
+      Other, 0x103707fe0, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x103735fe0, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x103146280, {{0.0, 655.0}, {440.0, 301.0}}
+          Other, 0x103525e80, {{0.0, 655.0}, {440.0, 243.0}}
+    Window, 0x103526b20, {{0.0, 0.0}, {440.0, 956.0}}
+      Other, 0x10352c310, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x103330ca0, {{0.0, 655.0}, {440.0, 301.0}}
+          Other, 0x103330dc0, {{0.0, 655.0}, {440.0, 243.0}}
+            Other, 0x103330ee0, {{0.0, 655.0}, {440.0, 301.0}}
+              Other, 0x103331000, {{0.0, 655.0}, {440.0, 301.0}}
+                Other, 0x103331120, {{0.0, 655.0}, {440.0, 301.0}}
+          Other, 0x103436dd0, {{0.0, 655.0}, {440.0, 243.0}}
+            Keyboard, 0x103423d10, {{0.0, 655.0}, {440.0, 243.0}}
+              Other, 0x10345a140, {{0.0, 655.0}, {440.0, 243.0}}
+                Other, 0x10345a260, {{0.0, 655.0}, {440.0, 243.0}}, identifier: 'UIKeyboardLayoutStar Preview'
+                  Key, 0x10345a380, {{2.0, 662.0}, {43.7, 49.0}}, label: 'A'
+                  Key, 0x10345a4a0, {{45.7, 662.0}, {43.7, 49.0}}, label: 'Z'
+                  Key, 0x1031463a0, {{89.3, 662.0}, {43.7, 49.0}}, label: 'E'
+                  Key, 0x1031464c0, {{133.0, 662.0}, {43.3, 49.0}}, label: 'R'
+                  Key, 0x1031465e0, {{176.3, 662.0}, {43.7, 49.0}}, label: 'T'
+                  Key, 0x103146700, {{220.0, 662.0}, {43.7, 49.0}}, label: 'Y'
+                  Key, 0x103146820, {{263.7, 662.0}, {43.3, 49.0}}, label: 'U'
+                  Key, 0x103146940, {{307.0, 662.0}, {43.7, 49.0}}, label: 'I'
+                  Key, 0x103146a60, {{350.7, 662.0}, {43.7, 49.0}}, label: 'O'
+                  Key, 0x10373a580, {{394.3, 662.0}, {43.7, 49.0}}, label: 'P'
+                  Key, 0x10373a6a0, {{2.0, 718.0}, {43.7, 49.0}}, label: 'Q'
+                  Key, 0x10373a7c0, {{45.7, 718.0}, {43.7, 49.0}}, label: 'S'
+                  Key, 0x10373a8e0, {{89.3, 718.0}, {43.7, 49.0}}, label: 'D'
+                  Key, 0x10373aa00, {{133.0, 718.0}, {43.3, 49.0}}, label: 'F'
+                  Key, 0x103146b80, {{176.3, 718.0}, {43.7, 49.0}}, label: 'G'
+                  Key, 0x10373ab20, {{220.0, 718.0}, {43.7, 49.0}}, label: 'H'
+                  Key, 0x10373ac40, {{263.7, 718.0}, {43.3, 49.0}}, label: 'J'
+                  Key, 0x10373ad60, {{307.0, 718.0}, {43.7, 49.0}}, label: 'K'
+                  Key, 0x10373ae80, {{350.7, 718.0}, {43.7, 49.0}}, label: 'L'
+                  Key, 0x10373afa0, {{394.3, 718.0}, {43.7, 49.0}}, label: 'M'
+                  Button, 0x10373b0c0, {{2.0, 774.0}, {53.3, 49.0}}, identifier: 'shift', label: 'majuscule', Selected
+                  Key, 0x10373b1e0, {{68.0, 774.0}, {43.7, 49.0}}, label: 'W'
+                  Key, 0x10373b300, {{111.7, 774.0}, {43.7, 49.0}}, label: 'X'
+                  Key, 0x10345a5c0, {{155.3, 774.0}, {43.3, 49.0}}, label: 'C'
+                  Key, 0x10373b420, {{198.7, 774.0}, {43.7, 49.0}}, label: 'V'
+                  Key, 0x10373b540, {{242.3, 774.0}, {43.7, 49.0}}, label: 'B'
+                  Key, 0x10345a6e0, {{286.0, 774.0}, {43.3, 49.0}}, label: 'N'
+                  Key, 0x10345a950, {{329.3, 774.0}, {43.7, 49.0}}, label: '´'
+                  Key, 0x10345c870, {{384.8, 774.0}, {53.3, 49.0}}, identifier: 'delete', label: 'supprimer'
+                  Key, 0x103146ca0, {{2.0, 830.0}, {54.3, 49.0}}, identifier: 'more', label: 'nombres'
+                  Button, 0x103146dc0, {{56.3, 830.0}, {55.3, 49.0}}, identifier: 'emoji', label: 'Emoji'
+                  Key, 0x103331240, {{111.3, 830.0}, {218.0, 49.0}}, identifier: 'space', label: 'espace'
+                  Button, 0x103331360, {{329.3, 830.0}, {108.7, 49.0}}, identifier: 'Return', label: 'retour'
+          Other, 0x103331680, {{0.0, 655.0}, {440.0, 301.0}}
+            Button, 0x1033317a0, {{2.5, 887.7}, {80.1, 68.7}}, label: 'Clavier suivant', value: English (US)
+              StaticText, 0x1033318c0, {{2.5, 887.7}, {0.0, 0.0}}
+            Button, 0x1033319e0, {{357.4, 887.4}, {80.1, 68.7}}, identifier: 'dictation', label: 'Dicter'
+              StaticText, 0x103331b00, {{357.4, 887.4}, {0.0, 0.0}}
+            Button, 0x103331c20, {{357.4, 887.4}, {80.1, 68.7}}, identifier: 'dictation', label: 'Dicter'
+              StaticText, 0x103331d40, {{357.4, 887.4}, {0.0, 0.0}}
+Path to element:
+ →Application, 0x1037397b0, pid: 75555, label: 'Jolene'
+Query chain:
+ →Find: Target Application 'app.jolene.recette'
+  Output: {
+    Application, 0x10345e7a0, pid: 75555, label: 'Jolene'
+  }

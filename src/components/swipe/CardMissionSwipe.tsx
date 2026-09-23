@@ -3,7 +3,7 @@
  *
  * Règle : tout ce qui donne envie de postuler est AU-DESSUS de la ligne de
  * flottaison. Le hook (€ net · durée · moment · date) est l'élément le plus gros.
- * Le score est TOUJOURS justifié (« Pourquoi 85 ? … »). Visuel réel (logo) plutôt
+ * Un score connu est justifié (« Pourquoi 85 ? … »). Visuel réel (logo) plutôt
  * qu'un dégradé + cœur générique. Quartier précis + distance.
  *
  *   <CardMissionSwipe mission={mission} onTap={() => setDetailOpen(true)} />
@@ -53,7 +53,7 @@ export interface MissionSwipePayload {
   est_urgente: boolean;
   service: string | null;
   distance_km: number | null;
-  score: number;
+  score: number | null;
   breakdown: Record<string, unknown>;
   /** 7c — ⚡ Paiement rapide, gating 100 % serveur (feature flag + mission
    *  LIBERAL + étab SEPA actif). Absent/false = pas de badge. */
@@ -130,7 +130,8 @@ function raisonsScore(breakdown: Record<string, unknown>): string {
 }
 
 export function CardMissionSwipe({ mission, onTap, className }: Props) {
-  const scoreEleve = mission.score >= 80;
+  const scoreConnu = mission.score != null;
+  const scoreEleve = mission.score != null && mission.score >= 80;
   const quartier = formatQuartier(mission.etablissement_ville, mission.etablissement_code_postal);
   const moment = momentLabel(mission);
   const planning = construirePlanningCandidat(mission);
@@ -161,7 +162,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
         financeAffichee
           ? `, ${financeAffichee.approximatif ? 'environ ' : ''}${Math.round(financeAffichee.montant)} euros ${financeAffichee.libelleCourt}`
           : ''
-      }, score ${mission.score} sur 100. Toucher pour le détail.`}
+      }${scoreConnu ? `, score ${mission.score} sur 100` : ''}. Toucher pour le détail.`}
     >
       {/* ── Visuel établissement (haut) ─────────────────────────────────── */}
       {/* pb-14 : le visuel central (logo ou initiale) est centré dans la PARTIE
@@ -196,6 +197,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
 
         {/* Badges overlay */}
         <div className="absolute top-4 left-4 right-4 flex items-start justify-between gap-2 z-10">
+          {scoreConnu && (
           <BadgeY2K
             variant={scoreEleve ? 'premium' : 'info'}
             size="md"
@@ -204,7 +206,8 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
           >
             {mission.score}/100
           </BadgeY2K>
-          <div className="flex flex-col items-end gap-1.5">
+          )}
+          <div className="ml-auto flex flex-col items-end gap-1.5">
             {/* 7c : ⚡ est réservé au paiement rapide — l'urgence passe à 🔥
                 (aligné sur le 🔥 URGENT de DetailMissionSoignant). */}
             {mission.est_urgente && (
@@ -294,7 +297,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
         </div>
 
         {/* Score expliqué */}
-        {raisons && (
+        {scoreConnu && raisons && (
           <div className="mt-auto pt-3">
             <p className="text-xs text-jolene-bubblegum">
               <span className="font-semibold text-jolene-midnight">Pourquoi {mission.score} ?</span>{' '}

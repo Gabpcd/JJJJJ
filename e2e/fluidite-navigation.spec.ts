@@ -101,9 +101,14 @@ test('Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le dé
   await expect(page).toHaveURL(/soignant\/recherche-missions/);
   const titre = page.getByRole('button', { name: /^Mission IDE à Résidence Camille/ });
   await expect(titre).toBeVisible();
+  await expect(titre).not.toContainText('0/100');
+  await expect(titre).not.toHaveAccessibleName(/score/i);
   if (isMobile) await titre.tap(); else await titre.click();
   const detail = page.getByRole('dialog', { name: 'Remplacement infirmier de jour', exact: true });
   await expect(detail).toBeVisible();
+  await expect(detail).not.toContainText('0/100');
+  await expect(detail).not.toHaveAccessibleDescription(/score|Match.*\/100/i);
+  await expect(detail.getByRole('heading', { name: 'Pourquoi ce match', exact: true })).toHaveCount(0);
   await detail.getByRole('button', { name: 'Fermer', exact: true }).click();
   await expect(detail).toHaveCount(0);
   const box = await titre.boundingBox();

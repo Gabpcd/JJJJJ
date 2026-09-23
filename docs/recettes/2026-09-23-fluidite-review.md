@@ -77,3 +77,22 @@ Les cinq derniers changements demandés ont été relus, sans modification des f
 - `DocumentsSoignant.tsx` : un mode d’exercice absent n’est plus assimilé à salarié. Les justificatifs communs restent affichés, une notice mène au profil et le texte de succès ne prétend plus que tous les documents obligatoires sont à jour. Aucune modification des gates serveur ni des permissions.
 
 Cette dernière passe est une lecture de code. Aucune nouvelle exécution de tests n’a été lancée pendant la CI locale et la recette iOS menées en parallèle par l’agent principal. Les exécutions indépendantes précédentes sont celles détaillées plus haut.
+
+## Complément — score inconnu en exploration, après `020ffac`
+
+Revue ciblée du diff non commité sur `src/lib/explorationInscription.ts`, `src/components/swipe/CardMissionSwipe.tsx` et `src/components/swipe/ModalDetailMissionSwipe.tsx`, ainsi que de leurs tests. **CLÔTURABLE côté code**, aucun P1/P2 relevé.
+
+Le mapper d’inscription ne fabrique plus un score de matching de zéro lorsqu’aucun calcul n’a eu lieu : il renvoie `null`. Le type de payload admet cette absence. Les deux rendus vérifient `score != null`, de sorte que zéro reste une valeur connue. Pour un score inconnu, le badge, la phrase de score dans le nom accessible de la carte et les sections « Pourquoi » sont absents. Les scores calculés 0 et 85 conservent leur badge, leur libellé accessible et leur explication. Les routes des profils complets conservent les scores renvoyés par leur RPC ; les autres usages du payload ne font pas d’arithmétique sur le score.
+
+Les badges urgence/paiement rapide restent présents avec leurs conditions existantes ; ouverture du détail et candidature ne changent pas. Aucun contrôle d’accès, tarif ou calcul financier n’est modifié. Le déplacement visuel des badges vers la droite n’introduit pas de défaut démontré à la lecture.
+
+Vérification indépendante exécutée à 17:46:56 : `npx vitest run src/lib/explorationInscription.test.ts src/components/swipe/MissionScore.test.tsx --maxWorkers=1 --minWorkers=1` : **2 fichiers, 9/9 tests réussis, 3,54 s**. Les tests incluent le mapper paginé, les cas null/0/85 sur carte et détail, le nom accessible, l’ouverture de carte et les badges conservés.
+
+La tâche principale rapporte une CI **1 500/1 500 verte sur `020ffac159c76d32fbde603126d322469a78ed1b`**, antérieure à ce complément. Ce résultat n’est pas attribué au prochain commit. Son nouveau passage CI et le smoke natif après reconstruction restent à attendre.
+
+Complément natif communiqué par la tâche principale, sur iPhone 16 Pro Max simulé / iOS 18.6, bundle isolé `app.jolene.recette`, API locale 8781 : probe signup XCTest vert (18 s), inscription soignant avec clavier/sélecteur puis Explorer verte (26,55 s), cinq onglets et Parrainage observés par taps/captures ; inscription établissement minimale, cinq onglets et saisie du titre mission sans dossier : un XCTest vert (114,21 s). Aucun total de tests natifs non confirmé n’est déduit de ces observations. **Documents n’a pas été testé nativement** : aucun lien dans le menu du compte minimal et aucune association deeplink du bundle temporaire. Cette rubrique dispose de sa couverture WebKit/Chromium 390/1440. Les observations sur simulateur ne valent ni recette sur appareil physique, ni preuve du backend live, ni validation native du nouveau correctif de score.
+
+
+## Preuves finales rattachées par la tâche principale
+
+Après la revue indépendante ci-dessus, reconstruction native réussie et smoke `testExplorerMisAJour` vert (1 test, zéro échec, 45,92 s) : aucun score fictif, ouverture et fermeture du détail par tap. Les trois scénarios Swipe Chromium/Pixel/WebKit iPhone sont également verts après ce complément (23,4 s), ainsi que TypeScript. Les captures finales et arbres sont archivés dans [natif](../../recette/2026-09-23-fluidite/natif/). Cela complète la limite native signalée ci-dessus ; le nouveau passage CI reste distinct du résultat de `020ffac`.

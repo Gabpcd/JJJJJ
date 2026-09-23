@@ -358,5 +358,50 @@
     "fichier": "resultats/detail-mission.json",
     "source": "/private/tmp/jolene-fluidite-preuves/detail-mission/results-final.json",
     "sha256": "13e29c0202a085f163e5178df5b0cbb71aac88cc727eacfc292d43d7dc807eaa"
+  },
+  {
+    "fichier": "resultats/score-inconnu.json",
+    "source": "/private/tmp/jolene-fluidite-score-e2e/results.json",
+    "sha256": "c29f3f62ceffee86724c3c5cff89a946929c2eb4cb62764cdd02e14bf5547a3b"
+  },
+  {
+    "fichier": "natif/README.md",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/README.md",
+    "sha256": "788b82a33b3c174c1517de68bf0c2d597b92b79e8973039934f104bbea03e39b"
+  },
+  {
+    "fichier": "natif/NavigationTests.swift",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/NavigationTests.swift",
+    "sha256": "73e3128dedecd81948c7a28202e94f90e5d51173d1610ac8e810df3fff934fe7"
+  },
+  {
+    "fichier": "natif/soignant-explorer-sans-score-fictif.png",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/soignant-explorer-sans-score-fictif.png",
+    "sha256": "32206fc717b309756f1710e19a5c90a558dc144d56550954eedab478d4931612"
+  },
+  {
+    "fichier": "natif/soignant-explorer-sans-score-fictif-accessibilite.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/soignant-explorer-sans-score-fictif-accessibilite.txt",
+    "sha256": "96a6f7bc09d25139766763439726999586e4c851a929e256f7b7e9cae0a46f1d"
+  },
+  {
+    "fichier": "natif/soignant-detail-swipe.png",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/soignant-detail-swipe.png",
+    "sha256": "604c5795d6d1798eae180633ee3be774ca6a3ca6dda98ae4d6df9c3b682992a5"
+  },
+  {
+    "fichier": "natif/soignant-detail-swipe-accessibilite.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/soignant-detail-swipe-accessibilite.txt",
+    "sha256": "ea01dda8f6012b7b27769bd2f23719e7a44ca982d34c7a1e0c5a58ef503dd239"
+  },
+  {
+    "fichier": "natif/etablissement-formulaire-mission-clavier.png",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/etablissement-formulaire-mission-clavier.png",
+    "sha256": "aa816e89691e92b241c49a011b27f437aad7a8bde31009e0587ac15090be1214"
+  },
+  {
+    "fichier": "natif/etablissement-formulaire-mission-clavier-accessibilite.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/ios-native/etablissement-formulaire-mission-clavier-accessibilite.txt",
+    "sha256": "fd5de3303e0c9e99d064b5e8fdcfd10b8eeafa6c3b120640bc5d7444db529914"
   }
 ]

@@ -1,0 +1,214 @@
+{
+  "config": {
+    "configFile": "/private/tmp/jolene-fluidite-20260923/e2e/playwright.fluidite.config.ts",
+    "rootDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-score-e2e",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-score-e2e",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "android-pixel",
+        "name": "android-pixel",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-score-e2e",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit-iphone",
+        "name": "webkit-iphone",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/private/tmp/jolene-fluidite-score-e2e/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fluidite-navigation.spec.ts",
+      "file": "fluidite-navigation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4279,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:49:39.102Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-5e3e8cb29c49b9585b1a",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 98,
+          "column": 1
+        },
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3564,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:49:46.850Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-2c4d5d62c248331866e0",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 98,
+          "column": 1
+        },
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6146,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:49:52.960Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-0f2dbc03df7e3792f7f4",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 98,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-23T15:49:37.104Z",
+    "duration": 23421.049000000003,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

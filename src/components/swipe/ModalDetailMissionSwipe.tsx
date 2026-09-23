@@ -42,7 +42,8 @@ function formatMontant(v: number | null | undefined): string {
 export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostuler, onSuivant }: Props) {
   if (!mission) return null;
 
-  const scoreEleve = mission.score >= 80;
+  const scoreConnu = mission.score != null;
+  const scoreEleve = mission.score != null && mission.score >= 80;
   const planning = construirePlanningCandidat(mission);
   const breakdown = mission.breakdown as Record<string, number | undefined> | undefined;
   const totalMajorations =
@@ -66,7 +67,8 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
             {mission.intitule}
           </DialogResponsiveTitle>
           <DialogResponsiveDescription>
-            <span className="inline-flex items-center gap-2">
+            <span className="flex w-full items-center gap-2">
+              {scoreConnu && (
               <BadgeY2K
                 variant={scoreEleve ? 'premium' : 'info'}
                 size="sm"
@@ -74,6 +76,8 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
               >
                 Match {mission.score}/100
               </BadgeY2K>
+              )}
+              <span className="ml-auto inline-flex flex-wrap justify-end gap-2">
               {/* 7c : ⚡ réservé au paiement rapide, urgence en 🔥. */}
               {mission.est_urgente && (
                 <BadgeY2K variant="warning" size="sm">🔥 Urgent</BadgeY2K>
@@ -83,6 +87,7 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                   ⚡ Paiement rapide
                 </BadgeY2K>
               )}
+              </span>
             </span>
           </DialogResponsiveDescription>
         </DialogResponsiveHeader>
@@ -235,7 +240,7 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
           </section>
 
           {/* Détail score matching */}
-          {breakdown && Object.keys(breakdown).length > 0 && (
+          {scoreConnu && breakdown && Object.keys(breakdown).length > 0 && (
             <section className="space-y-3 mt-5">
               <h3 className="text-sm font-semibold text-jolene-bubblegum uppercase tracking-wider">
                 Pourquoi ce match

@@ -1,0 +1,99 @@
+Attributes: Application, 0x1057160d0, pid: 76330, label: 'Jolene'
+Element subtree:
+ →Application, 0x1057160d0, pid: 76330, label: 'Jolene'
+    Window (Main), 0x10570c110, {{0.0, 0.0}, {440.0, 956.0}}
+      Other, 0x1057159a0, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x105713370, {{0.0, 0.0}, {440.0, 956.0}}
+          WebView, 0x10570d0a0, {{0.0, 0.0}, {440.0, 956.0}}
+            WebView, 0x10570f640, {{0.0, 0.0}, {440.0, 956.0}}
+              WebView, 0x105710080, {{0.0, 0.0}, {440.0, 956.0}}
+                Other, 0x10570c480, {{0.0, 0.0}, {440.0, 956.0}}
+                  Other, 0x10570e530, {{0.0, 0.0}, {440.0, 956.0}}
+                    Other, 0x10570cd30, {{0.0, 0.0}, {440.0, 956.0}}
+                      Other, 0x10570d770, {{0.0, 0.0}, {440.0, 956.0}}, label: 'Trouver une mission — Jolene'
+                        Other, 0x10570c9c0, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications alt+T, région'
+                        Other, 0x1057144d0, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications, région'
+                        Other, 0x105716760, {{0.0, 0.0}, {440.0, 956.0}}, label: 'Remplacement infirmier de jour — simulation, boîte de dialogue web'
+                          Other, 0x10570dae0, {{16.0, 74.0}, {348.0, 24.0}}, label: 'Remplacement infirmier de jour — simulation', value: 2
+                            StaticText, 0x105708d40, {{16.0, 76.0}, {339.0, 20.0}}, label: 'Remplacement infirmier de jour — simulation', value: Remplacement infir...
+                          Button, 0x105714bc0, {{380.0, 74.0}, {44.0, 48.0}}, label: 'Fermer', Focused
+                          Other, 0x10570e880, {{16.0, 151.0}, {408.0, 20.0}}, label: 'ÉTABLISSEMENT', value: 3
+                            StaticText, 0x10570de60, {{16.0, 152.0}, {124.0, 18.0}}, label: 'ÉTABLISSEMENT', value: ÉTABLISSEMENT
+                          Other, 0x105715d10, {{64.0, 199.0}, {344.0, 24.0}}
+                            StaticText, 0x105204080, {{64.0, 201.0}, {240.0, 20.0}}, label: 'Résidence Camille — simulation', value: Résidence Camille ...
+                          Other, 0x105212f60, {{64.0, 223.0}, {344.0, 20.0}}
+                            StaticText, 0x105212b40, {{64.0, 224.0}, {32.0, 18.0}}, label: 'Paris', value: Paris
+                          Other, 0x10520b8f0, {{16.0, 279.0}, {408.0, 20.0}}, label: 'CONDITIONS', value: 3
+                            StaticText, 0x105212300, {{16.0, 280.0}, {97.0, 18.0}}, label: 'CONDITIONS', value: CONDITIONS
+                          Other, 0x105213380, {{16.0, 311.0}, {408.0, 140.0}}
+                            Other, 0x1052134a0, {{28.0, 323.0}, {174.0, 16.0}}
+                              StaticText, 0x1052135c0, {{48.0, 323.0}, {60.0, 15.0}}, label: 'Profession', value: Profession
+                            Other, 0x105213bc0, {{28.0, 343.0}, {174.0, 20.0}}
+                              StaticText, 0x105213ce0, {{28.0, 344.0}, {23.0, 18.0}}, label: 'IDE', value: IDE
+                            Other, 0x105213e00, {{238.0, 323.0}, {174.0, 16.0}}
+                              StaticText, 0x105213f20, {{258.0, 323.0}, {43.0, 15.0}}, label: 'Service', value: Service
+                            Other, 0x105214040, {{238.0, 343.0}, {174.0, 20.0}}
+                              StaticText, 0x105214160, {{238.0, 344.0}, {13.0, 18.0}}, label: '—', value: —
+                            Other, 0x105214280, {{28.0, 399.0}, {174.0, 16.0}}
+                              StaticText, 0x1052143a0, {{48.0, 399.0}, {68.0, 15.0}}, label: 'Tarif horaire', value: Tarif horaire
+                            Other, 0x1052144c0, {{28.0, 419.0}, {174.0, 20.0}}
+                              StaticText, 0x1052145e0, {{28.0, 420.0}, {44.0, 18.0}}, label: '30 €/h', value: 30 €/h
+                            Other, 0x105214700, {{238.0, 399.0}, {174.0, 16.0}}
+                              StaticText, 0x105214820, {{258.0, 399.0}, {34.0, 15.0}}, label: 'Durée', value: Durée
+                            Other, 0x105214940, {{238.0, 419.0}, {174.0, 20.0}}
+                              StaticText, 0x105214a60, {{238.0, 420.0}, {18.0, 18.0}}, label: '8h', value: 8h
+                          Other, 0x105214b80, {{33.0, 488.0}, {144.0, 16.0}}
+                            StaticText, 0x105214ca0, {{33.0, 488.0}, {144.0, 15.0}}, label: 'NET SALARIÉ ESTIMÉ*', value: NET SALARIÉ ESTIMÉ*
+                          Other, 0x105214dc0, {{322.0, 480.0}, {86.0, 32.0}}
+                            StaticText, 0x104b2d2f0, {{322.0, 481.0}, {17.0, 29.0}}, label: '~', value: ~
+                            StaticText, 0x104b2c850, {{338.0, 481.0}, {69.0, 29.0}}, label: '240 €', value: 240 €
+                          Other, 0x104b2c500, {{33.0, 520.0}, {374.0, 138.0}}
+                            Other, 0x104b29fc0, {{33.0, 520.0}, {82.0, 20.0}}
+                              StaticText, 0x104b2b0f0, {{33.0, 521.0}, {83.0, 18.0}}, label: 'Brut de base', value: Brut de base
+                            Other, 0x104b2aa00, {{367.0, 520.0}, {41.0, 20.0}}
+                              StaticText, 0x109012ed0, {{367.0, 521.0}, {40.0, 18.0}}, label: '240 €', value: 240 €
+                            Other, 0x1090135d0, {{33.0, 546.0}, {204.0, 20.0}}
+                              StaticText, 0x109013cb0, {{33.0, 547.0}, {204.0, 18.0}}, label: 'Majorations nuit/dimanche/férié', value: Majorations nuit/d...
+                            Other, 0x1057152d0, {{384.0, 546.0}, {23.0, 20.0}}
+                              StaticText, 0x105715630, {{384.0, 547.0}, {23.0, 18.0}}, label: '0 €', value: 0 €
+                            Other, 0x10553d7a0, {{33.0, 579.0}, {62.0, 20.0}}
+                              StaticText, 0x10553d8c0, {{33.0, 580.0}, {62.0, 18.0}}, label: 'Total brut', value: Total brut
+                            Other, 0x10553d9e0, {{367.0, 579.0}, {41.0, 20.0}}
+                              StaticText, 0x10531aa80, {{367.0, 580.0}, {40.0, 18.0}}, label: '240 €', value: 240 €
+                            Other, 0x1053259b0, {{33.0, 605.0}, {62.0, 20.0}}
+                              StaticText, 0x104b2ad50, {{33.0, 606.0}, {62.0, 18.0}}, label: 'IFM + ICP', value: IFM + ICP
+                            Other, 0x104b2a690, {{384.0, 605.0}, {23.0, 20.0}}
+                              StaticText, 0x10900c4f0, {{384.0, 606.0}, {23.0, 18.0}}, label: '0 €', value: 0 €
+                            Other, 0x109012b70, {{33.0, 638.0}, {145.0, 20.0}}
+                              StaticText, 0x105714f40, {{33.0, 639.0}, {145.0, 18.0}}, label: 'Total avant cotisations', value: Total avant cotisa...
+                            Other, 0x105714820, {{366.0, 638.0}, {41.0, 20.0}}
+                              StaticText, 0x105714140, {{366.0, 639.0}, {41.0, 18.0}}, label: '240 €', value: 240 €
+                          Other, 0x105406850, {{33.0, 666.0}, {374.0, 32.0}}
+                            StaticText, 0x105408a20, {{33.0, 667.0}, {366.0, 30.0}}, label: 'Le net salarié est une estimation du moteur de paie. Le montant exact figurera sur le bulletin de l'employeur.', value: Le net salarié est...
+                          Other, 0x1054081d0, {{16.0, 735.0}, {408.0, 20.0}}, label: 'DATES ET HORAIRES TRAVAILLÉS', value: 3
+                            StaticText, 0x1054093c0, {{16.0, 736.0}, {249.0, 18.0}}, label: 'DATES ET HORAIRES TRAVAILLÉS', value: DATES ET HORAIRES ...
+                          Other, 0x10540a330, {{32.0, 783.0}, {376.0, 92.0}}, label: 'Planning exact de la mission, région'
+                            StaticText, 0x10540b600, {{54.0, 784.0}, {7.0, 18.0}}, label: '1', value: 1
+                            StaticText, 0x105214ee0, {{60.0, 784.0}, {59.0, 18.0}}, label: 'créneau', value:  créneau
+                            StaticText, 0x105215000, {{152.0, 784.0}, {11.0, 18.0}}, label: '8', value: 8
+                            StaticText, 0x105411010, {{162.0, 784.0}, {67.0, 18.0}}, label: 'h au total', value:  h au total
+                            Other, 0x105410760, {{32.0, 811.0}, {376.0, 64.0}}, label: 'Jours et horaires travaillés'
+                              Other, 0x105409c20, {{32.0, 811.0}, {376.0, 64.0}}, label: 'Mercredi 30 Septembre 2026 09h00 → 17h00 · 8 h'
+                                StaticText, 0x105409d40, {{44.0, 821.0}, {220.0, 20.0}}, label: 'Mercredi 30 Septembre 2026', value: Mercredi 30 Septem...
+                                StaticText, 0x105412380, {{44.0, 845.0}, {49.0, 20.0}}, label: '09h00', value: 09h00
+                                StaticText, 0x1054124a0, {{92.0, 845.0}, {23.0, 20.0}}, label: '→', value:  → 
+                                StaticText, 0x1054125c0, {{114.0, 845.0}, {46.0, 20.0}}, label: '17h00', value: 17h00
+                                StaticText, 0x1054126e0, {{159.0, 845.0}, {37.0, 20.0}}, label: '· 8 h', value:  · 8 h
+                          Button, 0x105412800, {{16.0, 862.0}, {408.0, 48.0}}, label: 'Suivant'
+                          Button, 0x105412920, {{16.0, 806.0}, {408.0, 48.0}}, label: 'Vérifier et postuler'
+    Window, 0x105412a40, {{0.0, 0.0}, {440.0, 956.0}}
+      Other, 0x105412b60, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x105412c80, {{0.0, 0.0}, {440.0, 956.0}}
+        Other, 0x105412da0, {{0.0, 956.0}, {440.0, 243.0}}
+Path to element:
+ →Application, 0x1057160d0, pid: 76330, label: 'Jolene'
+Query chain:
+ →Find: Target Application 'app.jolene.recette'
+  Output: {
+    Application, 0x10553dd20, pid: 76330, label: 'Jolene'
+  }
