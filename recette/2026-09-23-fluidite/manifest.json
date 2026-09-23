@@ -408,5 +408,30 @@
     "fichier": "resultats/inscription-navigation.json",
     "source": "/private/tmp/jolene-ci-six-tests-results/results.json",
     "sha256": "e9d34b35e061ed79b82943302101a2bcf497105820dfc6499a7bcbe212b52e69"
+  },
+  {
+    "fichier": "resultats/brouillon-apres-profil.json",
+    "source": "/private/tmp/jolene-fluidite-preuves/brouillon/results.json",
+    "sha256": "d5eefb39d736a9e8f88f7544cffc7357bd6b8239370cda1a6169df8fe62fa7d5"
+  },
+  {
+    "fichier": "apres/brouillon/rapport.md",
+    "source": "/private/tmp/jolene-fluidite-preuves/brouillon/rapport.md",
+    "sha256": "9be2b1a3175dffc13deb182c411b28b585bb7fe50718113cc7098b54c50cd0eb"
+  },
+  {
+    "fichier": "apres/brouillon/iphone-webkit.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/brouillon/iphone-webkit/etablissement-brouillon-apres-profil.txt",
+    "sha256": "742ff0245029a31c7deb913e44fd7c31aeeb87e146a9150ab41d71c53ad67a03"
+  },
+  {
+    "fichier": "apres/brouillon/android-pixel.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/brouillon/android-pixel/etablissement-brouillon-apres-profil.txt",
+    "sha256": "742ff0245029a31c7deb913e44fd7c31aeeb87e146a9150ab41d71c53ad67a03"
+  },
+  {
+    "fichier": "apres/brouillon/desktop-1440.txt",
+    "source": "/private/tmp/jolene-fluidite-preuves/brouillon/desktop-1440/etablissement-brouillon-apres-profil.txt",
+    "sha256": "3cf5747a4453e4e3777e3d9e6e54e73c3e0f7f4cdb6a2ba40edfd1ce4d82746b"
   }
 ]

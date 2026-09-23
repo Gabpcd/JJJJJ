@@ -156,3 +156,40 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     expect(errors).toEqual([]);
   });
 }
+
+// La reprise reste disponible après création du profil et via l'entrée normale,
+// sans le paramètre ?inscription=1. Le backend est intégralement simulé ici.
+test('brouillon établissement : titre et horaires conservés après création du profil', async ({page}, testInfo) => {
+  const {roleCompte, mutations, errors} = await compteNeuf(page, 'ETABLISSEMENT');
+  await inscrire(page, 'ETABLISSEMENT');
+  await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+  await page.goto('/etablissement/missions/creer');
+  const titre = 'Renfort IDE — audit inscription';
+  const date = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  await page.getByLabel('Intitulé *', {exact:true}).fill(titre);
+  await page.locator('#mission-profession').click();
+  await page.getByRole('option', {name:/Infirmier.*IDE/}).click();
+  await page.getByLabel(/Première date affichée/).fill(date);
+  await page.getByLabel(/Dernière date affichée/).fill(date);
+  await page.getByRole('button', {name:'Toutes les dates', exact:true}).click();
+  await page.getByLabel(`Début du créneau 1 du ${date}`, {exact:true}).fill('07:00');
+  await page.getByLabel(`Fin du créneau 1 du ${date}`, {exact:true}).fill('19:00');
+  await page.getByRole('button', {name:/^Publier la mission/}).click();
+  await expect(page).toHaveURL(/inscription\/completer/);
+
+  // La réponse serveur indique désormais un véritable rattachement, donc le
+  // formulaire ne dépend plus du parcours incomplet pour rendre son introduction.
+  roleCompte.role = 'ADMIN_ETABLISSEMENT';
+  roleCompte.etablissement_id = '69000000-0000-4000-8000-000000000073';
+  await page.goto('/etablissement/missions/creer');
+  await expect(page.getByText(`Brouillon repris — ${titre}`, {exact:true})).toBeVisible();
+  await expect(page.getByTestId('introduction-mission')).toContainText('Vérifiez les horaires et les conditions avant publication.');
+  await expect(page.getByLabel('Intitulé *', {exact:true})).toHaveValue(titre);
+  await expect(page.getByLabel(/Première date affichée/)).toHaveValue(date);
+  await expect(page.getByLabel(/Dernière date affichée/)).toHaveValue(date);
+  await expect(page.getByLabel(`Début du créneau 1 du ${date}`, {exact:true})).toHaveValue('07:00');
+  await expect(page.getByLabel(`Fin du créneau 1 du ${date}`, {exact:true})).toHaveValue('19:00');
+  await conserverPreuve(page, 'etablissement-brouillon-apres-profil', testInfo);
+  expect(mutations).toEqual([]);
+  expect(errors).toEqual([]);
+});

@@ -106,3 +106,15 @@ La CI du code produit final `9e3d495` confirme **1 506/1 506 tests unitaires ré
 
 
 Complément CI : les quatre scénarios Chromium simulés de `inscription-navigation.spec.ts` réussissent après remplacement de l’attente de transition par le contenu sémantique propre à chaque écran (23,0 s, zéro échec/skip/flaky ; [résultat](../../recette/2026-09-23-fluidite/resultats/inscription-navigation.json)). Les deux cas Toggle utilisant les comptes réels sont réservés au passage CI complet, pour éviter la concurrence sur ces comptes. Les assertions métier et délais existants sont conservés.
+
+
+## Dernière attente mobile — résumé de brouillon
+
+Le run `35886377878` sur `eaf006a` confirme 316 scénarios Chromium réussis (14 ignorés par la configuration existante), puis 10 scénarios WebKit réussis et un échec déterministe. Android n’a pas démarré après cet échec. L’attente `getByText('Brouillon repris', { exact: true })` ne correspondait plus au paragraphe compact qui contient aussi le titre.
+
+La revue indépendante a lu le snapshot du rapport CI (artefact `10763678052`, entrée `data/0a9d0096c25f1fe3e30c1ca7fdbb0a52e7cbf1ea.md`) : « Brouillon repris — Renfort IDE — audit inscription », intitulé restauré, date 2026-09-30, horaires 07:00–19:00 et durée 12 h. Aucune perte de brouillon constatée dans cette preuve réelle.
+
+Le complément modifie seulement le texte attendu au libellé complet et ajoute une assertion sur l’intitulé après ce second retour. Les contrôles de date et d’horaires sont conservés. Relecture indépendante : **CLÔTURABLE**, aucune assertion affaiblie, aucun délai ajouté. Aucun code produit modifié ; un nouveau passage CI complet est requis.
+
+
+Le scénario isolé ajouté vérifie ensuite le passage d’un compte incomplet à un rattachement complet simulé, puis l’entrée normale du formulaire sans `?inscription=1` : titre, première et dernière dates, créneau 07:00–19:00, aucune mutation métier ni erreur JavaScript. **3/3 verts** sur iPhone WebKit 390×844, Pixel et ordinateur 1440×900 ([résultats](../../recette/2026-09-23-fluidite/resultats/brouillon-apres-profil.json), [arbres accessibles](../../recette/2026-09-23-fluidite/apres/brouillon/)). TypeScript, ESLint et diff-check verts. Une autre relecture indépendante du nouveau scénario conclut **CLÔTURABLE** ; mocks propres à la page et à sa fixture, assertions précises conservées.
