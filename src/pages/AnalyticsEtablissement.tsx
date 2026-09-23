@@ -1,12 +1,10 @@
-import { useState, useEffect, Suspense } from 'react';
-import { lazyRetry as lazy } from '@/lib/lazyRetry';
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { BarChart3, TrendingUp, Users, Clock, DollarSign, RefreshCw, Star } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -32,31 +30,40 @@ export default function AnalyticsEtablissement() {
  * DashboardRH (fusion B.2).
  */
 export function AnalyticsContent() {
-  const { user } = useAuth();
-  const { afficherNotification } = useNotification();
+  return <AccesEtablissement sansLayout titre="Indicateurs de performance" description="Les indicateurs de vos premières missions seront regroupés ici."><AnalyticsDonnees /></AccesEtablissement>;
+}
+
+function AnalyticsDonnees() {
+  const { etablissementId } = useEtablissementScope();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [erreurChargement, setErreurChargement] = useState(false);
   const [periode, setPeriode] = useState(6);
 
   const charger = async () => {
+    if (!etablissementId) return;
     setLoading(true);
-    const { data: result, error } = await supabase.rpc('fn_analytics_etablissement' as any, {
-      p_etablissement_id: user!.id,
-      p_mois: periode,
-    });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-    } else {
+    setErreurChargement(false);
+    try {
+      const { data: result, error } = await supabase.rpc('fn_analytics_etablissement' as any, {
+        p_etablissement_id: etablissementId,
+        p_mois: periode,
+      });
+      if (error || !result || (result as any).error) throw error || new Error('Indicateurs indisponibles');
       setData(result);
+    } catch {
+      setErreurChargement(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
-    if (user) charger();
-  }, [user, periode]);
+    void charger();
+  }, [etablissementId, periode]);
 
   if (loading) return <ChargementPage />;
+  if (erreurChargement) return <ErreurRubriqueEtablissement titre="Indicateurs indisponibles" reessayer={() => void charger()} />;
 
   const mpm = data?.missions_par_mois || [];
   const professions = data?.top_professions || [];

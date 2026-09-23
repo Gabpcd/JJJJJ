@@ -37,7 +37,11 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [exitDirection, setExitDirection] = useState<SwipeDirection | null>(null);
-  const dragStartRef = useRef<{ x: number; pointerId: number | null }>({ x: 0, pointerId: null });
+  const dragStartRef = useRef<{ x: number; y: number; pointerId: number; active: boolean } | null>(null);
+  const dragXRef = useRef(0);
+  const frameRef = useRef<number>();
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const suppressClickRef = useRef(false);
 
   const topCard = items[0];
   const bgCards = items.slice(1, 3); // 2 cards en background
@@ -46,46 +50,75 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
     setDragX(0);
     setIsDragging(false);
     setExitDirection(null);
-    dragStartRef.current = { x: 0, pointerId: null };
+    dragStartRef.current = null;
+    dragXRef.current = 0;
+    if (frameRef.current !== undefined) cancelAnimationFrame(frameRef.current);
+    if (exitTimerRef.current !== undefined) clearTimeout(exitTimerRef.current);
   }, []);
 
   useEffect(() => {
     // Reset quand la card top change (nouveau swipe en attente)
     reset();
+    return () => {
+      if (frameRef.current !== undefined) cancelAnimationFrame(frameRef.current);
+      if (exitTimerRef.current !== undefined) clearTimeout(exitTimerRef.current);
+    };
   }, [topCard?.key, reset]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!topCard || exitDirection) return;
-    dragStartRef.current = { x: e.clientX, pointerId: e.pointerId };
-    setIsDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (!topCard || exitDirection || e.button !== 0 || e.isPrimary === false) return;
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+    // Laisser le clic natif atteindre la carte tant qu'un drag n'est pas établi.
+    suppressClickRef.current = false;
+    dragStartRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, active: false };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || dragStartRef.current.pointerId !== e.pointerId) return;
-    setDragX(e.clientX - dragStartRef.current.x);
+    const start = dragStartRef.current;
+    if (!start || start.pointerId !== e.pointerId) return;
+    const x = e.clientX - start.x;
+    const y = e.clientY - start.y;
+    if (!start.active) {
+      if (Math.max(Math.abs(x), Math.abs(y)) < 8) return;
+      if (Math.abs(y) >= Math.abs(x)) { dragStartRef.current = null; return; }
+      start.active = true;
+      suppressClickRef.current = true;
+      setIsDragging(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    dragXRef.current = x;
+    if (frameRef.current !== undefined) cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => setDragX(dragXRef.current));
+  };
+
+  const releasePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
   const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || dragStartRef.current.pointerId !== e.pointerId) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-
-    const width = containerRef.current?.offsetWidth ?? 320;
-    const threshold = width * thresholdRatio;
-
-    if (Math.abs(dragX) >= threshold && topCard) {
-      const direction: SwipeDirection = dragX > 0 ? 'right' : 'left';
+    const start = dragStartRef.current;
+    if (!start || start.pointerId !== e.pointerId) return;
+    dragStartRef.current = null;
+    releasePointer(e);
+    if (!start.active) return;
+    if (frameRef.current !== undefined) cancelAnimationFrame(frameRef.current);
+    const x = e.clientX - start.x;
+    const threshold = (containerRef.current?.offsetWidth || 320) * thresholdRatio;
+    setIsDragging(false);
+    if (Math.abs(x) >= threshold && topCard) {
+      const direction: SwipeDirection = x > 0 ? 'right' : 'left';
       setExitDirection(direction);
-      setIsDragging(false);
-      // Animation exit puis trigger onSwipe
-      setTimeout(() => {
-        onSwipe(direction, topCard.key);
-      }, 280);
+      const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 280;
+      exitTimerRef.current = setTimeout(() => onSwipe(direction, topCard.key), delay);
     } else {
-      // Bounce back
       setDragX(0);
-      setIsDragging(false);
     }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartRef.current?.pointerId !== e.pointerId) return;
+    releasePointer(e);
+    reset(); // Une interruption système ne valide jamais une mission.
   };
 
   // Calculer transform pour la card top
@@ -130,7 +163,7 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
       {/* Card top : drag-enabled */}
       <div
         className={cn(
-          'relative h-full touch-none select-none',
+          'relative h-full touch-pan-y select-none',
           !isDragging && 'transition-bouncy',
         )}
         style={{
@@ -140,7 +173,15 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerCancel}
+        onClickCapture={(event) => {
+          if (suppressClickRef.current && event.detail !== 0) {
+            event.preventDefault();
+            event.stopPropagation();
+            suppressClickRef.current = false;
+          }
+        }}
       >
         {topCard.content}
 

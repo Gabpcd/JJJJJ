@@ -1,0 +1,10 @@
+- main:
+  - region "Contrats":
+    - heading "Contrats" [level=1]
+    - heading "Votre établissement se prépare à votre rythme" [level=2]
+    - paragraph: Les contrats apparaîtront ici après l’acceptation de vos premières missions.
+    - paragraph: Vous pouvez continuer à explorer Jolene et préparer une mission sans compléter votre dossier maintenant.
+    - link "Préparer une mission":
+      - /url: /etablissement/missions/creer
+    - link "Compléter mon établissement":
+      - /url: /inscription/completer

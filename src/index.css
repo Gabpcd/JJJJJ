@@ -398,6 +398,7 @@
 
   /* ── iOS-specific fixes (Capacitor native wrapper only) ── */
   body.platform-ios {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
     -webkit-touch-callout: none; /* Prevent long-press context menu on links/images */
   }
   body.platform-ios .user-selectable {
@@ -616,7 +617,9 @@
     }
 
     body.platform-ios .auth-scroll > .card-base,
-    body.platform-android .auth-scroll > .card-base {
+    body.platform-android .auth-scroll > .card-base,
+    body.platform-ios .auth-scroll > .auth-card,
+    body.platform-android .auth-scroll > .auth-card {
       /* Un enfant flex peut sinon se contracter à la hauteur du WebView :
          son contenu dépasse visuellement sans augmenter le scrollHeight,
          ce qui laisse le dernier CTA sous l'indicateur d'accueil iOS. */

@@ -1,3 +1,4 @@
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck, MessageSquare, AlertCircle, CheckCircle2, TrendingDown } from 'lucide-react';
@@ -23,23 +24,39 @@ interface ScoreEtab {
 }
 
 export default function PageScoreEtablissement() {
+  return <AccesEtablissement titre="Score qualité" description="Votre score reflétera les évaluations et le suivi de vos premières missions."><PageScoreEtablissementContent /></AccesEtablissement>;
+}
+
+function PageScoreEtablissementContent() {
   usePageTitle('Score qualité');
   const navigate = useNavigate();
   const { etablissementId } = useEtablissementScope();
   const [loading, setLoading] = useState(true);
   const [score, setScore] = useState<ScoreEtab | null>(null);
+  const [essai, setEssai] = useState(0);
 
   useEffect(() => {
     if (!etablissementId) return;
-    supabase.rpc('fn_mon_score_etab' as any).then(({ data }) => {
-      setScore(data as ScoreEtab);
-      setLoading(false);
-    });
-  }, [etablissementId]);
+    let actif = true;
+    setLoading(true);
+    setScore(null);
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('fn_mon_score_etab' as any);
+        const resultat = data as unknown as ScoreEtab;
+        if (error || !resultat?.composantes || (data as any)?.error) throw error || new Error('Score indisponible');
+        if (actif) setScore(resultat);
+      } catch {
+        // Une panne ou un refus ne doivent pas devenir un score vierge.
+      } finally {
+        if (actif) setLoading(false);
+      }
+    })();
+    return () => { actif = false; };
+  }, [etablissementId, essai]);
 
-  if (loading || !score) {
-    return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-  }
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (!score) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ErreurRubriqueEtablissement titre="Score indisponible" reessayer={() => setEssai(v => v + 1)} /></LayoutApp>;
 
   const scoreNum = score.score_qualite != null ? Math.round(Number(score.score_qualite)) : null;
   const niveau = score.niveau;

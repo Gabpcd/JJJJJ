@@ -1,3 +1,4 @@
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -36,29 +37,50 @@ export default function ListeContrats({ role }: { role: UserRole }) {
 }
 
 export function ListeContratsContent({ role }: { role: UserRole }) {
+  return role === 'SOIGNANT' ? <ContratsContent role={role} /> : (
+    <AccesEtablissement sansLayout titre="Contrats" description="Les contrats apparaîtront ici après l’acceptation de vos premières missions.">
+      <ContratsContent role={role} />
+    </AccesEtablissement>
+  );
+}
+
+function ContratsContent({ role }: { role: UserRole }) {
   const { user, etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [contrats, setContrats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState(false);
+  const [essai, setEssai] = useState(0);
   const statutParam = searchParams.get('statut');
   const [filtre, setFiltre] = useState(FILTRES_STATUT.includes((statutParam as any)) ? statutParam! : 'Tous');
 
   useEffect(() => {
     if (!user || (role === 'ADMIN_ETABLISSEMENT' && !etablissementId)) return;
+    let actif = true;
     const load = async () => {
-      const col = role === 'SOIGNANT' ? 'soignant_id' : 'etablissement_id';
-      const valeur = role === 'SOIGNANT' ? user.id : etablissementId;
-      const { data } = await supabase
-        .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, soignant_id, etablissement_id, signature_soignant, signature_etablissement, cree_le, missions(intitule, debut_le, fin_le)')
-        .eq(col, valeur)
-        .order('cree_le', { ascending: false });
-      setContrats(data || []);
-      setLoading(false);
+      setLoading(true);
+      setErreur(false);
+      try {
+        const col = role === 'SOIGNANT' ? 'soignant_id' : 'etablissement_id';
+        const valeur = role === 'SOIGNANT' ? user.id : etablissementId;
+        const { data, error } = await supabase
+          .from('contrats_mission')
+          .select('id, mission_id, numero_contrat, type_contrat, statut, soignant_id, etablissement_id, signature_soignant, signature_etablissement, cree_le, missions(intitule, debut_le, fin_le)')
+          .eq(col, valeur)
+          .order('cree_le', { ascending: false });
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('Réponse contrats invalide');
+        if (actif) setContrats(data);
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        if (actif) setLoading(false);
+      }
     };
-    load();
-  }, [user, role, etablissementId]);
+    void load();
+    return () => { actif = false; };
+  }, [user, role, etablissementId, essai]);
 
   useEffect(() => {
     if (statutParam && FILTRES_STATUT.includes(statutParam as any)) {
@@ -71,6 +93,7 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
   const filtered = contrats.filter(c => contratCorrespondAuFiltre(c.statut, filtre));
 
   if (loading) return <ChargementPage />;
+  if (erreur) return <ErreurRubriqueEtablissement titre="Contrats indisponibles" reessayer={() => setEssai(v => v + 1)} />;
 
   return (
     <>

@@ -1,3 +1,4 @@
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { telechargerOuPartagerPdf } from '@/lib/telechargement';
 import { useState, useEffect } from 'react';
@@ -24,6 +25,10 @@ const COUT_MOYEN_SECTEUR = 28;
 const fmtEur = (v: number, decimals = 0) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: decimals }).format(v);
 
 export default function DashboardRH() {
+  return <AccesEtablissement titre="Tableau RH" description="Retrouvez ici les coûts, les missions et le suivi de vos soignants une fois votre établissement renseigné."><DashboardRHContent /></AccesEtablissement>;
+}
+
+function DashboardRHContent() {
   usePageTitle('Tableau RH');
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
@@ -34,22 +39,28 @@ export default function DashboardRH() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [essai, setEssai] = useState(0);
   const [detailMois, setDetailMois] = useState<'prec' | 'courant' | 'previsionnel' | null>(null);
 
   useEffect(() => {
     if (!user || !etablissementId) return;
+    let actif = true;
     const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase.rpc('fn_stats_rh_etablissement' as any);
-      if (error) {
-        logger.warn('[DashboardRH] RPC error', error);
-      } else {
-        setStats(data);
+      setStats(null);
+      try {
+        const { data, error } = await supabase.rpc('fn_stats_rh_etablissement' as any);
+        if (error || !data || (data as any).error) throw error || new Error('Statistiques indisponibles');
+        if (actif) setStats(data);
+      } catch (error) {
+        if (actif) logger.warn('[DashboardRH] RPC error', error);
+      } finally {
+        if (actif) setLoading(false);
       }
-      setLoading(false);
     };
-    load();
-  }, [user, etablissementId]);
+    void load();
+    return () => { actif = false; };
+  }, [user, etablissementId, essai]);
 
   useEffect(() => {
     if (loading || !stats) return;
@@ -121,7 +132,7 @@ export default function DashboardRH() {
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
   if (!stats) return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <EmptyState icone={<BarChart3 />} mascotte="empty" titre="Données indisponibles" description="Impossible de charger les statistiques RH." />
+      <ErreurRubriqueEtablissement titre="Statistiques RH indisponibles" reessayer={() => setEssai(v => v + 1)} />
     </LayoutApp>
   );
 

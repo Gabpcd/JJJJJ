@@ -2,7 +2,8 @@ import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2, Landmark } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2, Landmark, FolderOpen } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
@@ -144,6 +145,7 @@ export default function DocumentsSoignant() {
 
 export function DocumentsSoignantContent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
   const [soignant, setSoignant] = useState<any>(null);
@@ -172,29 +174,41 @@ export function DocumentsSoignantContent() {
       return;
     }
 
+    let chargementReussi = false;
     try {
-      const [profilResultat, reglesResultat, documentsResultat] = await Promise.all([
-        supabase.from('soignants').select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie').eq('id', userId).maybeSingle(),
+      const profilResultat = await supabase.from('soignants')
+        .select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie')
+        .eq('id', userId).maybeSingle();
+      if (profilResultat.error) throw profilResultat.error;
+
+      const sg = profilResultat.data;
+      setSoignant(sg);
+      // L'inscription rapide crée une identité avant le dossier professionnel.
+      // Sans dossier, il n'y a pas encore de pièces à charger ou à demander.
+      if (!sg) {
+        setDocumentsRequis([]);
+        setMesDocuments([]);
+        chargementReussi = true;
+        return;
+      }
+
+      const [reglesResultat, documentsResultat] = await Promise.all([
         supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
         supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', userId).is('supprime_le', null).order('televerse_le', { ascending: false }),
       ]);
 
-      if (profilResultat.error || reglesResultat.error || documentsResultat.error) {
-        throw profilResultat.error || reglesResultat.error || documentsResultat.error;
+      if (reglesResultat.error || documentsResultat.error) {
+        throw reglesResultat.error || documentsResultat.error;
       }
 
-      const sg = profilResultat.data;
       const dr = reglesResultat.data;
       const md = documentsResultat.data;
-      if (!sg) throw new Error('Profil soignant introuvable');
-
-      setSoignant(sg);
       // Filtrage par profession ET type_exercice :
       // LIBERAL/MIXTE → inclut les documents LIBERAL_ONLY (RCP/RIB/URSSAF)
-      // SALARIE/MIXTE/CDD/autre → inclut les documents SALARIE_ONLY
+      // Un régime salarié renseigné ou MIXTE → inclut SALARIE_ONLY
       // → un MIXTE cumule LES DEUX (obligations salariées + libérales).
       const estLiberal = (sg as any).type_exercice === 'LIBERAL' || (sg as any).type_exercice === 'MIXTE';
-      const estSalarie = (sg as any).type_exercice !== 'LIBERAL'; // SALARIE + MIXTE + null/CDD
+      const estSalarie = !!(sg as any).type_exercice && (sg as any).type_exercice !== 'LIBERAL';
       const professionAvecRpps = !PROFESSIONS_SANS_RPPS.includes((sg as any).profession);
       const rppsVerifie = professionAvecRpps && !!(sg as any).rpps_verifie;
       const adeliVerifie = !!(sg as any).adeli_verifie;
@@ -217,16 +231,23 @@ export function DocumentsSoignantContent() {
         })
       );
       setMesDocuments(md || []);
+      chargementReussi = true;
     } catch (error) {
       handleErrorSilent(error, 'DocumentsSoignant.chargement');
       setErreurChargement('Vos documents sont temporairement indisponibles. Vérifiez votre connexion puis réessayez.');
     } finally {
+      if (chargementReussi) {
+        // Une pièce peut avoir été supprimée, remplacée ou vérifiée pendant
+        // ce parcours. Explorer doit relire les droits avant de la réutiliser.
+        void queryClient.invalidateQueries({ queryKey: ['explorer-profil', userId], exact: true });
+        void queryClient.invalidateQueries({ queryKey: ['explorer-rcp', userId], exact: true });
+      }
       setLoading(false);
     }
   // Dépendre de l'identifiant, pas de l'objet utilisateur. Supabase renouvelle
   // l'objet de session au retour du sélecteur photo iOS ; l'id reste stable et
   // la modale ne doit surtout pas être démontée pendant ce retour natif.
-  }, [userId]);
+  }, [userId, queryClient]);
 
   useEffect(() => { void charger(true); }, [charger]);
 
@@ -505,6 +526,22 @@ export function DocumentsSoignantContent() {
     );
   }
 
+  if (!soignant) {
+    return (
+      <section className="rounded-2xl border border-border bg-card p-5 sm:p-6" aria-labelledby="dossier-a-preparer">
+        <FolderOpen className="h-8 w-8 text-primary" aria-hidden="true" />
+        <h2 id="dossier-a-preparer" className="mt-3 text-lg font-bold text-foreground">Votre dossier, quand vous en aurez besoin</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Vous pouvez découvrir les missions sans ajouter de document. Vous préparerez votre dossier professionnel lorsque vous souhaiterez candidater.
+        </p>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <BoutonY2K onClick={() => navigate('/soignant/recherche-missions')}>Explorer les missions</BoutonY2K>
+          <BoutonY2K variant="secondary" onClick={() => navigate('/soignant/profil')}>Préparer mon dossier</BoutonY2K>
+        </div>
+      </section>
+    );
+  }
+
   // Organize: critiques first, then optionnels
   const typesOrdonnes = [
     ...documentsRequis.filter(d => d.est_critique),
@@ -520,13 +557,25 @@ export function DocumentsSoignantContent() {
           <div>
             <p className="text-sm font-medium text-foreground">Profession non définie</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Vérifie ton RPPS dans ton profil pour voir les documents requis pour ta profession.
+              Renseigne ta profession dans ton profil pour voir les documents qui te concernent.
             </p>
             <BoutonY2K variant="secondary" size="sm" className="mt-2" onClick={() => navigate('/soignant/profil')}>
-              Vérifier mon RPPS →
+              Renseigner ma profession →
             </BoutonY2K>
           </div>
         </div>
+      )}
+
+      {soignant?.profession && !soignant.type_exercice && (
+        <section className="rounded-2xl border border-border bg-card p-4 mb-4" aria-labelledby="regime-documentaire-manquant">
+          <h2 id="regime-documentaire-manquant" className="text-sm font-semibold">Mode d’exercice à préciser</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Les justificatifs communs sont affichés ici. Les pièces propres au salariat ou au libéral seront précisées quand tu renseigneras ton mode d’exercice. Tu peux continuer à explorer les missions.
+          </p>
+          <BoutonY2K variant="secondary" size="sm" className="mt-2" onClick={() => navigate('/soignant/profil')}>
+            Préciser mon mode d’exercice
+          </BoutonY2K>
+        </section>
       )}
 
       {/* Hero checklist — l'action suivante d'abord (Session E activation) */}
@@ -558,12 +607,17 @@ export function DocumentsSoignantContent() {
             Tu peux postuler dès maintenant — valide tes documents pour être accepté par les établissements.
           </p>
         </div>
-      ) : (
+      ) : docsRequis.length > 0 ? (
         <div className="relative overflow-hidden rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
           <ConfettiMini active={confettiActif} count={14} />
           <Mascotte etat="celebrating" taille="sm" className="mx-auto" />
-          <p className="text-sm font-semibold text-emerald-700 mt-1">Tous tes documents obligatoires sont à jour 🎉</p>
-          <p className="text-xs text-emerald-700/80 mt-1">Tu peux postuler et être accepté sur toutes les missions.</p>
+          <p className="text-sm font-semibold text-emerald-700 mt-1">{soignant.type_exercice ? 'Tous tes documents obligatoires sont à jour 🎉' : 'Les justificatifs affichés sont à jour'}</p>
+          <p className="text-xs text-emerald-700/80 mt-1">Retrouve ici tes justificatifs et leurs dates de validité.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-4 mb-4">
+          <h2 className="text-base font-bold text-foreground">Vos justificatifs</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Aucun document obligatoire n’est affiché pour votre profil actuellement.</p>
         </div>
       ))}
 

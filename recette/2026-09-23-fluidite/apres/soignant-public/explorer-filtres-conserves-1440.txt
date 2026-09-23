@@ -1,0 +1,30 @@
+- region "Notifications alt+T"
+- region "Notifications"
+- dialog "Filtres":
+  - heading "Filtres" [level=2]
+  - paragraph: 1 mission avec les critères actuels
+  - button "Fermer"
+  - img
+  - text: Recherches sauvegardées
+  - button "Sauvegarder cette recherche":
+    - img
+    - text: Sauvegarder cette recherche
+  - text: 📍 Ville ou code postal
+  - textbox "📍 Ville ou code postal":
+    - /placeholder: "Ex : Paris, 75001..."
+    - text: Paris
+  - paragraph: Laisse vide pour utiliser ta position
+  - text: Profession
+  - combobox: Infirmier(ère) Diplômé(e) d'État (IDE)
+  - text: "Rayon : 50 km"
+  - slider
+  - text: Taux horaire minimum (€/h)
+  - spinbutton "Taux horaire minimum (€/h)"
+  - text: Type de contrat
+  - combobox: Tous
+  - text: Horaires
+  - combobox: Tous
+  - switch "Urgentes uniquement"
+  - text: Urgentes uniquement 1 mission
+  - button "Réinitialiser"
+  - button "Voir 1 mission"

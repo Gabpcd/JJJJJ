@@ -1,3 +1,4 @@
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { useState, useEffect, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -32,6 +33,10 @@ import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
 import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
 
 export default function LitigesEtablissement() {
+  return <AccesEtablissement titre="Litiges et contestations" description="Les échanges et contestations concernant vos missions seront regroupés ici."><LitigesEtablissementContent /></AccesEtablissement>;
+}
+
+function LitigesEtablissementContent() {
   usePageTitle('Litiges & contestations');
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,6 +46,7 @@ export default function LitigesEtablissement() {
   const { user, etablissementId } = useEtablissementScope();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const litigeCible = searchParams.get('litige')
     || location.hash.replace(/^#/, '')
@@ -55,17 +61,20 @@ export default function LitigesEtablissement() {
 
   const charger = useCallback(async () => {
     if (!user || !etablissementId) return;
-    const { data, error } = await supabase.rpc(
-      'fn_litiges_etablissement' as any,
-      { p_etablissement_id: etablissementId } as any,
-    );
-    if (error) {
-      toast.error('Erreur lors du chargement des litiges.');
+    setLoading(true);
+    setErreurChargement(false);
+    try {
+      const { data, error } = await supabase.rpc(
+        'fn_litiges_etablissement' as any,
+        { p_etablissement_id: etablissementId } as any,
+      );
+      if (error || !Array.isArray(data)) throw error || new Error('Litiges indisponibles');
+      setLitiges(data);
+    } catch {
+      setErreurChargement(true);
+    } finally {
       setLoading(false);
-      return;
     }
-    setLitiges(Array.isArray(data) ? data : []);
-    setLoading(false);
   }, [user, etablissementId]);
 
   useEffect(() => { void charger(); }, [charger]);
@@ -176,7 +185,7 @@ export default function LitigesEtablissement() {
         </TabsList>
 
         <TabsContent value="litiges">
-      {loading ? <ChargementPage /> : (<>
+      {loading ? <ChargementPage /> : erreurChargement ? <ErreurRubriqueEtablissement titre="Litiges indisponibles" reessayer={() => void charger()} /> : (<>
       <div className="mb-6">
         <p className="text-sm text-muted-foreground">
           Suivi des contestations sur vos missions (pointage, paiement, qualité).

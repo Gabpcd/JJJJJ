@@ -1,7 +1,7 @@
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import React, { useState, useEffect } from 'react';
 import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Building2, Award, AlertCircle, Loader2, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { LayoutApp } from '@/components/LayoutApp';
 import { SEOHead } from '@/components/SEOHead';
@@ -44,14 +44,18 @@ const CAP_PARRAINAGES = PARRAINAGE_ETAB_CAP;
 const SEUIL_AMBASSADEUR = PARRAINAGE_ETAB_SEUIL_AMBASSADEUR;
 
 export default function PageParrainageEtab() {
+  return <AccesEtablissement titre="Parrainage entre établissements" description="Votre code de parrainage sera disponible une fois votre établissement renseigné."><PageParrainageEtabContent /></AccesEtablissement>;
+}
+
+function PageParrainageEtabContent() {
   usePageTitle('Parrainage — Établissement');
-  const { user } = useAuth();
   const { etablissementId } = useEtablissementScope();
   const [code, setCode] = useState('');
   const [filleuls, setFilleuls] = useState<Filleul[]>([]);
   const [credits, setCredits] = useState<CreditsState | null>(null);
   const [copied, setCopied] = useState<'lien' | 'code' | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
   // Application code reçu (filleul)
   const [codeRecu, setCodeRecu] = useState(() => {
     try {
@@ -62,7 +66,7 @@ export default function PageParrainageEtab() {
   const [appliying, setAppliying] = useState(false);
   const [parrainApplique, setParrainApplique] = useState<string | null>(null);
 
-  const lienRef = `https://jolene.app/inscription/etablissement?ref=${code}`;
+  const lienRef = code ? `https://jolene.app/inscription/etablissement?ref=${encodeURIComponent(code)}` : '';
   const filleulsValides = filleuls.filter(f => f.statut === 'VALIDATED').length;
   const badgeAmbassadeur = filleulsValides >= SEUIL_AMBASSADEUR;
   const capAtteint = filleulsValides >= CAP_PARRAINAGES;
@@ -70,21 +74,26 @@ export default function PageParrainageEtab() {
   const charger = async () => {
     if (!etablissementId) return;
     setLoading(true);
-
-    const [etabRes, filleulsRes, creditsRes] = await Promise.all([
-      supabase.from('etablissements').select('code_parrainage').eq('id', etablissementId).maybeSingle(),
-      supabase.rpc('fn_mes_filleuls_etab' as any),
-      supabase.rpc('fn_mes_credits_etab' as any),
-    ]);
-
-    if (etabRes.error) toast.error('Erreur chargement code parrainage');
-    if (filleulsRes.error) toast.error('Erreur chargement filleuls');
-    if (creditsRes.error) toast.error('Erreur chargement crédits');
-
-    if (etabRes.data?.code_parrainage) setCode(etabRes.data.code_parrainage);
-    if (Array.isArray(filleulsRes.data)) setFilleuls(filleulsRes.data as Filleul[]);
-    if (creditsRes.data && !(creditsRes.data as any)?.error) setCredits(creditsRes.data as CreditsState);
-    setLoading(false);
+    setErreurChargement(false);
+    setCode('');
+    try {
+      const [etabRes, filleulsRes, creditsRes] = await Promise.all([
+        supabase.from('etablissements').select('code_parrainage').eq('id', etablissementId).maybeSingle(),
+        supabase.rpc('fn_mes_filleuls_etab' as any),
+        supabase.rpc('fn_mes_credits_etab' as any),
+      ]);
+      if (etabRes.error || filleulsRes.error || creditsRes.error || (filleulsRes.data as any)?.error || (creditsRes.data as any)?.error) {
+        throw new Error('Parrainage indisponible');
+      }
+      if (!Array.isArray(filleulsRes.data) || !creditsRes.data || !Array.isArray((creditsRes.data as any).credits)) throw new Error('Parrainage incomplet');
+      setCode(typeof etabRes.data?.code_parrainage === 'string' ? etabRes.data.code_parrainage.trim() : '');
+      setFilleuls(filleulsRes.data as Filleul[]);
+      setCredits(creditsRes.data as unknown as CreditsState);
+    } catch {
+      setErreurChargement(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { charger(); }, [etablissementId]);
@@ -121,15 +130,22 @@ export default function PageParrainageEtab() {
       .then(({ data }: any) => setDejaFilleul(!!data));
   }, [etablissementId, parrainApplique]);
 
-  const copier = (type: 'lien' | 'code', text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
+  const copier = async (type: 'lien' | 'code', text: string) => {
+    if (!code || !text || loading || erreurChargement) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error('Le lien n’a pas pu être copié. Réessayez.');
+    }
   };
 
   const messagePartage = encodeURIComponent(
     `Recommandation Jolene : la plateforme de staffing médical conforme et transparente. Inscrivez votre établissement avec mon code parrainage et nous gagnons tous les deux : ${lienRef}`
   );
+
+  if (erreurChargement) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ErreurRubriqueEtablissement titre="Parrainage indisponible" reessayer={() => void charger()} /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -220,12 +236,18 @@ export default function PageParrainageEtab() {
               </div>
             )}
 
-            {/* Code & Lien */}
-            <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-6 space-y-5">
+            {/* Aucun partage sans code attribué par le serveur. */}
+            {!code ? (
+              <div className="card-base space-y-3" role="status">
+                <h2 className="font-semibold">Votre code de parrainage n’est pas encore disponible</h2>
+                <p className="text-sm text-muted-foreground">Vous pourrez partager une invitation dès que votre code aura été attribué.</p>
+                <button type="button" className="btn-secondary" onClick={() => void charger()}>Actualiser</button>
+              </div>
+            ) : <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-6 space-y-5">
               <div className="text-center">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Votre code parrainage établissement</p>
                 <div className="flex items-center justify-center gap-3">
-                  <span className="text-xl sm:text-3xl font-extrabold text-primary tracking-widest">{code || '...'}</span>
+                  <span className="text-xl sm:text-3xl font-extrabold text-primary tracking-widest">{code}</span>
                   <button
                     onClick={() => copier('code', code)}
                     className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors"
@@ -268,7 +290,7 @@ export default function PageParrainageEtab() {
                   <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                 </a>
               </div>
-            </div>
+            </div>}
 
             {/* Comment ça marche */}
             <div className="rounded-xl border border-border bg-card p-5">

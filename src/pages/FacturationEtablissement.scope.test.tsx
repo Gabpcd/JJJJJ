@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   scope: {
     user: { id: 'membre-utilisateur-id' },
     etablissementId: 'membre-utilisateur-id' as string | null,
+    parcours: null as { type_compte: string } | null,
     loading: true,
     resolved: false,
     error: null as Error | null,
@@ -154,6 +155,7 @@ describe('FacturationEtablissement — périmètre des membres', () => {
     vi.clearAllMocks();
     mocks.filtres.length = 0;
     mocks.scope.user = { id: 'membre-utilisateur-id' };
+    mocks.scope.parcours = null;
     mocks.scope.etablissementId = 'membre-utilisateur-id';
     mocks.scope.loading = true;
     mocks.scope.resolved = false;
@@ -163,6 +165,19 @@ describe('FacturationEtablissement — périmètre des membres', () => {
     mocks.permissions.error = null;
     mocks.rpc.mockImplementation(() => new Promise<never>(() => {}));
     mocks.from.mockImplementation((table: string) => requeteEnAttente(table));
+  });
+
+  it('un compte minimal peut préparer une mission sans solliciter les finances', () => {
+    mocks.scope.loading = false;
+    mocks.scope.resolved = true;
+    mocks.scope.etablissementId = null;
+    mocks.scope.parcours = { type_compte: 'ETABLISSEMENT' };
+    render(<MemoryRouter><FacturationEtablissement /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Facturation' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Préparer une mission' })).toHaveAttribute('href', '/etablissement/missions/creer');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 
   it('ignore une erreur de transport arrivée après avoir quitté la facturation', async () => {

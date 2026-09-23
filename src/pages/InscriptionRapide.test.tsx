@@ -12,9 +12,9 @@ vi.mock("@/components/CaptchaTurnstile", () => ({
   CaptchaTurnstile: () => null,
   TURNSTILE_REQUIRED: false,
 }));
-function ouvrir(type: "SOIGNANT" | "ETABLISSEMENT" = "SOIGNANT") {
+function ouvrir(type: "SOIGNANT" | "ETABLISSEMENT" = "SOIGNANT", recherche = '') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[`/${recherche}`]}>
       <Routes>
         <Route path="/" element={<InscriptionRapide type={type} />} />
         <Route path="/inscription/reprendre" element={<p>Espace créé</p>} />
@@ -39,7 +39,25 @@ function remplir(type = "SOIGNANT") {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  sessionStorage.clear();
   HTMLElement.prototype.scrollTo = vi.fn();
+});
+
+it('reprend la profession et la ville de la recherche publique sans saisir de dossier', () => {
+  ouvrir('SOIGNANT', '?profession=IDE&ville=Saint-%C3%89tienne');
+  expect(screen.getByLabelText('Profession')).toHaveValue('IDE');
+  expect(JSON.parse(sessionStorage.getItem('jolene.filtres_a_appliquer')!)).toEqual({
+    audience: 'SOIGNANT_RECHERCHE_MISSIONS',
+    filtres: { profession: 'IDE', villeRecherche: 'Saint-Étienne' },
+  });
+  expect(screen.getByLabelText('Email')).toHaveValue('');
+  expect(m.creer).not.toHaveBeenCalled();
+});
+
+it('ignore une profession inconnue dans le lien public', () => {
+  ouvrir('SOIGNANT', '?profession=profession-inconnue&ville=Paris');
+  expect(screen.getByLabelText('Profession')).toHaveValue('');
+  expect(JSON.parse(sessionStorage.getItem('jolene.filtres_a_appliquer')!).filtres.profession).toBe('');
 });
 it("indique les champs manquants et place le focus, sans requête", () => {
   ouvrir();

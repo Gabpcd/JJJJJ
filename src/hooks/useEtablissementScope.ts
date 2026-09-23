@@ -3,7 +3,7 @@ import { useRole } from '@/hooks/useRole';
 
 export function useEtablissementScope() {
   const { user } = useAuth();
-  const { role, etablissement_id, loading, resolved, error, retry } = useRole();
+  const { role, parcours, etablissement_id, loading, resolved, error, retry } = useRole();
 
   // Les anciens comptes mono-établissement utilisaient leur user.id comme
   // établissement et un rôle signé ETABLISSEMENT, sans métadonnée de scope.
@@ -20,6 +20,7 @@ export function useEtablissementScope() {
 
   return {
     user,
+    parcours,
     loading,
     resolved,
     error,

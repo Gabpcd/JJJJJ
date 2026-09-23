@@ -1,0 +1,33 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Retour":
+  - button "Accueil":
+    - generic: Jolene
+  - button "Notifications":
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - generic: Accueil
+  - button "Missions":
+    - generic: Missions
+  - button "Publier":
+    - generic: Publier
+  - button "Messages":
+    - generic: Messages
+  - button "Menu":
+    - generic: Menu
+- main:
+  - heading "Annuaire soignants" [level=1]
+  - paragraph: Recherchez des soignants pour vos missions
+  - button "Recherches sauvegardées":
+    - text: Recherches sauvegardées
+  - region "Résultats de recherche":
+    - button "Filtres":
+      - text: Filtres
+    - paragraph: "Accès refusé : étab requis"
+    - button "Réessayer"
+- region "Notifications alt+T":
+  - list:
+    - button "Close toast":
+    - generic: "Accès refusé : étab requis"
+- region "Notifications"

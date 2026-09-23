@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/AuthLayout";
 import { LogoJolene } from "@/components/LogoJolene";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/inscriptionProgressive";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { mapperErreurInscription } from "@/lib/erreurs";
+import { lireCriteresInscription, memoriserRecherchePublique } from "@/lib/recherchePubliqueInscription";
 
 export default function InscriptionRapide({
   type,
@@ -23,18 +24,24 @@ export default function InscriptionRapide({
   type: TypeCompteInscription;
 }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const soignant = type === "SOIGNANT";
   usePageTitle(
     soignant ? "Créer mon compte soignant" : "Créer mon compte établissement",
   );
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     email: "",
     password: "",
-    profession: "",
+    profession: soignant ? lireCriteresInscription(searchParams).profession : "",
     nom: "",
     cgu: false,
     cgv: false,
-  });
+  }));
+  useEffect(() => {
+    if (soignant && (searchParams.has('profession') || searchParams.has('ville'))) {
+      memoriserRecherchePublique(lireCriteresInscription(searchParams));
+    }
+  }, [soignant, searchParams]);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState(false);

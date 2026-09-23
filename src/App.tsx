@@ -9,7 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { RouteAdminProtegee } from "@/components/RouteAdminProtegee";
-import { PageTransition } from "@/components/PageTransition";
+const AppShell = lazy(() => import("@/components/LayoutApp").then(module => ({ default: module.AppShell })));
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { captureAttribution } from "@/lib/attribution";
@@ -253,13 +253,12 @@ function RouteMeta() {
 // « Trouver une mission ». On force la préférence de vue sur « swipe » pour que
 // la page s'ouvre directement sur le mode swipe (préserve les deep links).
 function RedirectionSwipeMissions() {
-  try { localStorage.setItem('jolene_missions_view_pref', 'swipe'); } catch { /* ignore */ }
-  return <Navigate to="/soignant/recherche-missions" replace />;
+  return <Navigate to="/soignant/recherche-missions?vue=swipe" replace />;
 }
 
 function AppRoutes() {
   return (
-    <PageTransition>
+    <>
       <CaptureAttribution />
       <RouteMeta />
       <ScrollToTop />
@@ -305,69 +304,105 @@ function AppRoutes() {
           <Route path="/faq" element={<Navigate to="/aide" replace />} />
           <Route path="/help" element={<Navigate to="/aide" replace />} />
 
+          {/* Cadre persistant des espaces connectés. */}
+          <Route element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AppShell role="SOIGNANT" /></RouteProtegee>}>
+            <Route path="/soignant/tableau-de-bord" element={<DashboardSoignant />} />
+            <Route path="/soignant/profil" element={<ProfilSoignant />} />
+            <Route path="/soignant/mon-compte" element={<MonCompteSoignant />} />
+            <Route path="/soignant/missions" element={<MissionsSoignant />} />
+            <Route path="/soignant/recherche-missions" element={<RechercheMissions />} />
+            <Route path="/soignant/swipe-missions" element={<RedirectionSwipeMissions />} />
+            <Route path="/soignant/missions/serie/:serieId" element={<DetailSerieSoignant />} />
+            <Route path="/soignant/missions/:id" element={<DetailMissionSoignant />} />
+            <Route path="/soignant/mes-documents" element={<MesDocuments />} />
+            <Route path="/soignant/disponibilites" element={<MesDisponibilites />} />
+            <Route path="/soignant/conformite" element={<ConformiteSoignant />} />
+            <Route path="/soignant/presences" element={<PresencesSoignant />} />
+            <Route path="/soignant/presences/mission/:id" element={<DetailPresencesMission role="SOIGNANT" />} />
+            <Route path="/soignant/mes-gains" element={<MesGains />} />
+            <Route path="/soignant/mandat-facturation" element={<MandatFacturation />} />
+            <Route path="/soignant/score" element={<PageScoreSoignant />} />
+            <Route path="/soignant/evaluations" element={<EvaluationsSoignant />} />
+            <Route path="/soignant/prevoyance" element={<PrevoyanceSoignant />} />
+            <Route path="/soignant/attestation-heures" element={<AttestationHeures />} />
+            <Route path="/soignant/passer-en-liberal" element={<PasserEnLiberal />} />
+            <Route path="/soignant/exclusions" element={<ExclusionsSoignant />} />
+            <Route path="/soignant/premium" element={<PremiumSoignant />} />
+            <Route path="/soignant/charges" element={<ChargesSociales />} />
+            <Route path="/soignant/notifications" element={<PageNotifications role="SOIGNANT" />} />
+            <Route path="/soignant/parrainage" element={<PageParrainage />} />
+            <Route path="/soignant/messagerie" element={<PageMessagerie role="SOIGNANT" />} />
+            <Route path="/soignant/litiges" element={<LitigesContestationsSoignant />} />
+            <Route path="/soignant/stripe-connect" element={<PageStripeConnect />} />
+            <Route path="/soignant/classement" element={<ClassementSoignants />} />
+            <Route path="/soignant/parametres/notifications" element={<PageParametresNotifications />} />
+            <Route path="/soignant/parametres/recherches-sauvegardees" element={<PageRecherchesSauvegardees role="SOIGNANT" />} />
+            <Route path="/soignant/pool-urgence" element={<PoolUrgenceSoignant />} />
+            <Route path="/soignant/mes-favoris" element={<MesFavorisSoignant />} />
+          </Route>
+          <Route element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AppShell role="ADMIN_ETABLISSEMENT" /></RouteProtegee>}>
+            <Route path="/etablissement/score" element={<PageScoreEtablissement />} />
+            <Route path="/etablissement/mes-reclamations" element={<MesReclamationsEtab />} />
+            <Route path="/etablissement/tableau-de-bord" element={<DashboardEtablissement />} />
+            <Route path="/etablissement/mon-compte" element={<MonCompteEtablissement />} />
+            <Route path="/etablissement/activer" element={<ActiverEtablissement />} />
+            <Route path="/etablissement/parametres/notifications" element={<PageParametresNotifications />} />
+            <Route path="/etablissement/parametres/recherches-sauvegardees" element={<PageRecherchesSauvegardees role="ADMIN_ETABLISSEMENT" />} />
+            <Route path="/etablissement/parametres" element={<Parametres />} />
+            <Route path="/etablissement/soignants" element={<RechercheSoignantsEtab />} />
+            <Route path="/etablissement/soignants/:id" element={<ProfilSoignantEtablissement />} />
+            <Route path="/etablissement/missions" element={<ListeMissions />} />
+            <Route path="/etablissement/missions/creer" element={<CreerMission />} />
+            <Route path="/etablissement/missions/:id" element={<DetailMission />} />
+            <Route path="/etablissement/missions/:id/modifier" element={<ModifierMission />} />
+            <Route path="/etablissement/presences" element={<PresencesEtablissement />} />
+            <Route path="/etablissement/contrats" element={<ListeContrats role="ADMIN_ETABLISSEMENT" />} />
+            <Route path="/etablissement/facturation" element={<FacturationEtablissement />} />
+            <Route path="/etablissement/facturation/:id" element={<DetailFacture />} />
+            <Route path="/etablissement/export-paie" element={<ExportPaie />} />
+            <Route path="/etablissement/rh" element={<DashboardRH />} />
+            <Route path="/etablissement/notifications" element={<PageNotifications role="ADMIN_ETABLISSEMENT" />} />
+            <Route path="/etablissement/premium" element={<PremiumEtablissement />} />
+            <Route path="/etablissement/chorus-config" element={<ChorusConfig />} />
+            <Route path="/etablissement/pool-urgence" element={<PoolUrgenceEtablissement />} />
+            <Route path="/etablissement/mes-favoris" element={<MesFavorisEtablissement />} />
+            <Route path="/etablissement/parrainage" element={<PageParrainageEtablissement />} />
+            <Route path="/etablissement/equipe" element={<EquipeEtablissement />} />
+            <Route path="/etablissement/evaluations-a-faire" element={<EvaluationsAFaireEtab />} />
+            <Route path="/etablissement/messagerie" element={<PageMessagerie role="ADMIN_ETABLISSEMENT" />} />
+            <Route path="/etablissement/litiges" element={<LitigesEtablissement />} />
+            <Route path="/etablissement/presences/mission/:id" element={<DetailPresencesMission />} />
+          </Route>
+
           {/* Soignant */}
-          <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
-          <Route path="/soignant/profil" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ProfilSoignant /></RouteProtegee>} />
-          <Route path="/soignant/mon-compte" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MonCompteSoignant /></RouteProtegee>} />
-          <Route path="/soignant/missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MissionsSoignant /></RouteProtegee>} />
-          <Route path="/soignant/recherche-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RechercheMissions /></RouteProtegee>} />
           {/* Session G1 : la découverte par swipe est consolidée dans la page canonique
               « Trouver une mission » (vue Swipe via toggle). On force la préférence puis on
               redirige pour que la page s'ouvre directement sur la vue swipe. */}
-          <Route path="/soignant/swipe-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RedirectionSwipeMissions /></RouteProtegee>} />
           {/* Refonte nav : « Matchs » absorbé par « Mes missions › À venir ». */}
           <Route path="/soignant/mes-matches" element={<Navigate to="/soignant/missions" replace />} />
-          <Route path="/soignant/missions/serie/:serieId" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailSerieSoignant /></RouteProtegee>} />
-          <Route path="/soignant/missions/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailMissionSoignant /></RouteProtegee>} />
-          <Route path="/soignant/mes-documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDocuments /></RouteProtegee>} />
           <Route path="/soignant/documents" element={<Navigate to="/soignant/mes-documents?tab=justificatifs" replace />} />
           {/* Refonte nav : le planning devient l'onglet « À venir » de Mes missions.
               La vue calendrier (mois) sera réintégrée comme toggle de cet onglet
               (PR dédiée) en réutilisant PlanningSoignant. */}
           {/* Lot 17 (F5) : calendrier de disponibilités (matching inversé). */}
-          <Route path="/soignant/disponibilites" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDisponibilites /></RouteProtegee>} />
           <Route path="/soignant/planning" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
-          <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
           {/* Hub Réputation dissous (modèle Uber) : le score simple vit sur le Profil. */}
           <Route path="/soignant/reputation" element={<Navigate to="/soignant/profil" replace />} />
-          <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
-          <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
-          <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />
-          <Route path="/soignant/mandat-facturation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MandatFacturation /></RouteProtegee>} />
           {/* Session G2 : pages argent consolidées dans le hub « Mes finances » (/soignant/mes-gains). */}
           <Route path="/soignant/mes-factures-honoraires" element={<Navigate to="/soignant/mes-gains?tab=factures" replace />} />
           <Route path="/soignant/mes-avances" element={<Navigate to="/soignant/mes-gains?tab=avances" replace />} />
           <Route path="/soignant/bulletins-paie" element={<Navigate to="/soignant/mes-gains?tab=bulletins" replace />} />
           <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/missions?tab=passees" replace />} />
           <Route path="/soignant/fiabilite" element={<Navigate to="/soignant/score" replace />} />
-          <Route path="/soignant/score" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageScoreSoignant /></RouteProtegee>} />
-          <Route path="/soignant/evaluations" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><EvaluationsSoignant /></RouteProtegee>} />
-          <Route path="/etablissement/score" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageScoreEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/mes-reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesReclamationsEtab /></RouteProtegee>} />
           <Route path="/soignant/fiabilite-legacy" element={<Navigate to="/soignant/score" replace />} />
           <Route path="/soignant/parcours-3200h" element={<Navigate to="/soignant/passer-en-liberal" replace />} />
-          <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
-          <Route path="/soignant/attestation-heures" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AttestationHeures /></RouteProtegee>} />
           <Route path="/soignant/dpae" element={<Navigate to="/soignant/mes-documents?tab=dpae" replace />} />
           <Route path="/soignant/reclamations" element={<Navigate to="/soignant/litiges?tab=reclamations" replace />} />
-          <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
-          <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
           <Route path="/soignant/contrats" element={<Navigate to="/soignant/mes-documents?tab=contrats" replace />} />
-          <Route path="/soignant/premium" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PremiumSoignant /></RouteProtegee>} />
-          <Route path="/soignant/charges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ChargesSociales /></RouteProtegee>} />
-          <Route path="/soignant/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageNotifications role="SOIGNANT" /></RouteProtegee>} />
-          <Route path="/soignant/parrainage" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParrainage /></RouteProtegee>} />
-          <Route path="/soignant/messagerie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageMessagerie role="SOIGNANT" /></RouteProtegee>} />
-          <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesContestationsSoignant /></RouteProtegee>} />
-          <Route path="/soignant/stripe-connect" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageStripeConnect /></RouteProtegee>} />
-          <Route path="/soignant/classement" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ClassementSoignants /></RouteProtegee>} />
 
           {/* Établissement */}
-          <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/mon-compte" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonCompteEtablissement /></RouteProtegee>} />
           {/* Session F (F2) — page unique « Activer mon établissement » (fusion contrat + vérification + RIB différé) */}
-          <Route path="/etablissement/activer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ActiverEtablissement /></RouteProtegee>} />
           {/* Anciennes routes conservées en redirections pour ne pas casser les deep links (e-mails, articles d'aide, gates DB). */}
           <Route path="/etablissement/finaliser-inscription" element={<Navigate to="/etablissement/activer" replace />} />
           <Route path="/etablissement/verification" element={<Navigate to="/etablissement/activer" replace />} />
@@ -379,52 +414,22 @@ function AppRoutes() {
               (Recherches sauvegardées, Exclusions) sont remontées dans Compte. */}
           <Route path="/soignant/parametres-complet" element={<Navigate to="/soignant/mon-compte" replace />} />
           <Route path="/soignant/parametres" element={<Navigate to="/soignant/mon-compte" replace />} />
-          <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
-          <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
-          <Route path="/soignant/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageRecherchesSauvegardees role="SOIGNANT" /></RouteProtegee>} />
-          <Route path="/etablissement/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageRecherchesSauvegardees role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
-          <Route path="/etablissement/parametres" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><Parametres /></RouteProtegee>} />
           <Route path="/etablissement/profil" element={<Navigate to="/etablissement/parametres?tab=profil" replace />} />
-          <Route path="/etablissement/soignants" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><RechercheSoignantsEtab /></RouteProtegee>} />
-          <Route path="/etablissement/soignants/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilSoignantEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
-          <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
-          <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
-          <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
-          <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeContrats role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
-          <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
           <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
           <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/contrats" replace />} />
-          <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
-          <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
           <Route path="/etablissement/mon-groupe" element={<Navigate to="/etablissement/parametres?tab=groupe" replace />} />
           {/* Lot 12 : centre de notifications étab plein écran (liste mutualisée,
               chaque item deep-linke via n.lien) — plus un renvoi vers un onglet. */}
-          <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/exclusions" element={<Navigate to="/etablissement/parametres?tab=exclusions" replace />} />
           <Route path="/etablissement/api" element={<Navigate to="/etablissement/parametres?tab=securite" replace />} />
-          <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
-          <Route path="/etablissement/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />
-          <Route path="/soignant/pool-urgence" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PoolUrgenceSoignant /></RouteProtegee>} />
-          <Route path="/soignant/mes-favoris" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFavorisSoignant /></RouteProtegee>} />
-          <Route path="/etablissement/mes-favoris" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesFavorisEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/parrainage" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParrainageEtablissement /></RouteProtegee>} />
           {/* Session G4 — déduplication : /etablissement/dashboard rendait le même
               DashboardEtablissement que /etablissement/tableau-de-bord (canonique).
               Redirection pour ne garder qu'une seule URL. */}
           <Route path="/etablissement/dashboard" element={<Navigate to="/etablissement/tableau-de-bord" replace />} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
-          <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/evaluations-a-faire" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EvaluationsAFaireEtab /></RouteProtegee>} />
           <Route path="/etab/invitation/:token" element={<AccepterInvitationEtab />} />
-          <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
-          <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/reclamations" element={<Navigate to="/etablissement/litiges?tab=reclamations" replace />} />
-          <Route path="/etablissement/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailPresencesMission /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}
           <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
@@ -497,7 +502,7 @@ function AppRoutes() {
         </Routes>
         <NativeUpdateReady />
       </Suspense>
-    </PageTransition>
+    </>
   );
 }
 

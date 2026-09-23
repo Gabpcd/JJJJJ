@@ -1,3 +1,5 @@
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { useQuery } from '@tanstack/react-query';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LucideIcon, Home, Search, FileText, User, PlusCircle, List, ClipboardCheck, Settings, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
@@ -183,7 +185,7 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
             return (
               <button
                 key={item.route}
-                onClick={() => navigate(item.route)}
+                onClick={() => { if (location.pathname !== item.route) navigate(item.route); }}
                 aria-current={actif ? 'page' : undefined}
                 className={`sidebar-item w-full text-left text-sm py-2 ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
               >
@@ -207,6 +209,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
+  const { etablissementId } = useEtablissementScope();
   const { permissions: etabPermissions } = useEtabPermissions(
     undefined,
     role === 'ADMIN_ETABLISSEMENT',
@@ -221,9 +224,36 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   // Interfaces dotées d'un onglet "Mon compte" (bottom nav) → plus de hamburger
   // ni de bouton déconnexion dans le header (tout est dans Mon compte).
   const aMonCompte = role === 'SOIGNANT' || role === 'ADMIN_ETABLISSEMENT';
-  const [isLiberal, setIsLiberal] = useState(false);
-  const [showLiberalPath, setShowLiberalPath] = useState(false);
-  const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
+  const { data: profilNavigation } = useQuery({
+    queryKey: ['navigation-profil', user?.id, role, etablissementId],
+    enabled: !!user && (role === 'SOIGNANT' || role === 'ADMIN_ETABLISSEMENT' && !!etablissementId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (role === 'SOIGNANT') {
+        const { data, error } = await supabase.from('soignants')
+          .select('profession, statut_liberal, type_exercice, prenom, nom, avatar_url')
+          .eq('id', user!.id).maybeSingle();
+        if (error) throw error;
+        return data ? { ...data, avatarUrl: data.avatar_url ?? undefined } : null;
+      }
+      const { data, error } = await supabase.from('etablissements')
+        .select('nom, logo_url').eq('id', etablissementId!).maybeSingle();
+      if (error) throw error;
+      return data ? {
+        prenom: data.nom, nom: '', avatarUrl: data.logo_url ?? undefined,
+        profession: null, statut_liberal: null, type_exercice: null,
+      } : null;
+    },
+  });
+  const isLiberal = profilNavigation?.statut_liberal === 'ACTIF'
+    || profilNavigation?.type_exercice === 'LIBERAL' || profilNavigation?.type_exercice === 'MIXTE';
+  const showLiberalPath = !!profilNavigation?.profession
+    && estEligibleLiberal(profilNavigation.profession) && profilNavigation.statut_liberal !== 'ACTIF';
+  const userInfo = profilNavigation ? {
+    prenom: profilNavigation.prenom ?? undefined,
+    nom: profilNavigation.nom ?? undefined,
+    avatarUrl: profilNavigation.avatarUrl,
+  } : null;
   const { count: messagesNonLus } = useMessagesNonLus();
   // 6c.4 : badge « X nouvelles missions » sur l'onglet Explorer (soignant)
   const nouvellesMissions = useNouvellesMissionsExplorer(role === 'SOIGNANT');
@@ -304,28 +334,6 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       return next;
     });
   };
-
-  useEffect(() => {
-    if (!user) return;
-    if (role === 'SOIGNANT') {
-      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, type_exercice, prenom, nom, avatar_url').eq('id', user.id).maybeSingle()
-        .then(({ data }) => {
-          if (!data) return;
-          setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
-          if (data.statut_liberal === 'ACTIF' || (data as any).type_exercice === 'LIBERAL' || (data as any).type_exercice === 'MIXTE') setIsLiberal(true);
-          if (estEligibleLiberal(data.profession) && data.statut_liberal !== 'ACTIF') {
-            setShowLiberalPath(true);
-          }
-        });
-    } else if (role === 'ADMIN_ETABLISSEMENT') {
-      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
-        .then(({ data }) => {
-          if (data) {
-            setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
-          }
-        });
-    }
-  }, [role, user]);
 
   const mobileItems = getMobileNavItems(role);
   // Messages dans le header (mobile) quand la messagerie n'est PAS dans la barre
@@ -515,7 +523,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           return (
             <button
               key={item.route}
-              onClick={() => navigate(item.route)}
+              onClick={() => { if (location.pathname !== item.route) navigate(item.route); }}
               aria-label={item.label}
               aria-current={actif ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative ${actif ? 'text-primary' : 'text-muted-foreground'}`}
@@ -581,7 +589,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             return (
               <button
                 key={item.route}
-                onClick={() => navigate(item.route)}
+                onClick={() => { if (location.pathname !== item.route) navigate(item.route); }}
                 aria-label={item.label}
                 aria-current={actif ? 'page' : undefined}
                 className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}

@@ -1,3 +1,5 @@
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, UserPlus, Mail, Crown, Briefcase, ClipboardCheck, Eye, Trash2, Loader2, AlertCircle } from 'lucide-react';
@@ -60,9 +62,15 @@ const ROLES_MODIFIABLES: Role[] = ['PROPRIETAIRE', 'ADMIN_GROUPE', 'RH', 'POINTA
  *  - Bouton "Inviter un membre" PROPRIETAIRE-only
  */
 export default function EquipeEtablissement() {
+  return <AccesEtablissement titre="Mon équipe" description="Vous pourrez inviter vos collaborateurs et gérer leurs accès une fois votre établissement renseigné."><EquipeEtablissementContent /></AccesEtablissement>;
+}
+
+function EquipeEtablissementContent() {
   usePageTitle('Équipe');
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
+  const { etablissementId } = useEtablissementScope();
+  const [erreurChargement, setErreurChargement] = useState(false);
   const [loading, setLoading] = useState(true);
   const [roleCourant, setRoleCourant] = useState<Role | null>(null);
   const [membres, setMembres] = useState<Membre[]>([]);
@@ -74,28 +82,34 @@ export default function EquipeEtablissement() {
   const estProprietaire = roleCourant === 'PROPRIETAIRE';
 
   const recharger = useCallback(async () => {
+    if (!etablissementId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_lister_membres_etab' as any);
-    if (error) {
-      afficherNotification({ type: 'erreur', message: error.message });
+    setErreurChargement(false);
+    setRoleCourant(null);
+    try {
+      const { data, error } = await supabase.rpc('fn_lister_membres_etab' as any, { p_etablissement_id: etablissementId });
+      if (error) throw error;
+      const result = data as any;
+      if (!result?.success) {
+        if (result?.error_code === 'NON_AUTORISE' || result?.error_code === 'NON_AUTHENTIFIE') return;
+        throw new Error('Équipe indisponible');
+      }
+      if (!ROLE_INFO[result.role_courant as Role] || !Array.isArray(result.membres) || !Array.isArray(result.invitations)) throw new Error('Équipe incomplète');
+      setRoleCourant(result.role_courant as Role);
+      setMembres(result.membres as Membre[]);
+      setInvitations(result.invitations as Invitation[]);
+    } catch {
+      setErreurChargement(true);
+    } finally {
       setLoading(false);
-      return;
     }
-    const result = data as any;
-    if (!result?.success) {
-      afficherNotification({ type: 'erreur', message: result?.error || 'Erreur chargement équipe.' });
-      setLoading(false);
-      return;
-    }
-    setRoleCourant(result.role_courant as Role);
-    setMembres(result.membres as Membre[]);
-    setInvitations(result.invitations as Invitation[]);
-    setLoading(false);
-  }, [afficherNotification]);
+  }, [etablissementId]);
 
   useEffect(() => { void recharger(); }, [recharger]);
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+
+  if (erreurChargement) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ErreurRubriqueEtablissement titre="Équipe indisponible" reessayer={() => void recharger()} /></LayoutApp>;
 
   if (!roleCourant) {
     return (

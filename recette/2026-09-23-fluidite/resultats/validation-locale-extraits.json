@@ -1,0 +1,52 @@
+{
+  "note": "Extraits de logs, séquences ANSI retirées uniquement. Le code de sortie TSC 0 est rapporté par la tâche principale ; son log est vide.",
+  "logs": [
+    {
+      "source": "/private/tmp/jolene-unit-final.log",
+      "sha256": "f0715e95e76feb8b66b3ecc096bb0986b366bc9c9dc12bf0d1a5c5deec7a1957",
+      "extraits_exacts": [
+        "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯",
+        " Test Files  3 failed | 239 passed (242)",
+        "      Tests  6 failed | 1494 passed (1500)",
+        "   Duration  464.68s (transform 33.35s, setup 45.20s, collect 200.11s, tests 242.93s, environment 272.21s, prepare 50.32s)"
+      ]
+    },
+    {
+      "source": "/private/tmp/jolene-unit-final-rerun.log",
+      "sha256": "90ef7f5702daff6c718e03892d358159ea6d6ac483023a5a5d2512d5ac643ead",
+      "extraits_exacts": [
+        " Test Files  3 passed (3)",
+        "      Tests  19 passed (19)",
+        "   Duration  17.78s (transform 1.61s, setup 375ms, collect 4.47s, tests 8.28s, environment 2.87s, prepare 315ms)"
+      ]
+    },
+    {
+      "source": "/private/tmp/jolene-web-final-build.log",
+      "sha256": "ced8c56502f1c30054ce02b426eaa046b69a8fa843308b679bc3229cbf193ad7",
+      "extraits_exacts": [
+        "✓ built in 13.88s"
+      ]
+    },
+    {
+      "source": "/private/tmp/jolene-native-recette-build.log",
+      "sha256": "b98164f776132b8b2d04baabc65c68471ee4e9decf1f052a9bb9507e37ebc59b",
+      "extraits_exacts": [
+        "✓ built in 5.11s"
+      ]
+    },
+    {
+      "source": "/private/tmp/jolene-xcode-final.log",
+      "sha256": "8a8b3d5cec6f3405d82df27fe63d9c2b8baa191caeebc298baa589404b03f7b8",
+      "extraits_exacts": [
+        "** BUILD SUCCEEDED **"
+      ]
+    },
+    {
+      "source": "/private/tmp/jolene-lint-final.log",
+      "sha256": "4e152d7265ed4ac44867c31a6382f81f4b43323719df06a8039056fe207f0fda",
+      "extraits_exacts": [
+        "✖ 7 problems (0 errors, 7 warnings)"
+      ]
+    }
+  ]
+}

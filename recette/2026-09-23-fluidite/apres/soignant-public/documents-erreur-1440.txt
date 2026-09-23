@@ -1,0 +1,20 @@
+- main:
+  - heading "Mes documents" [level=1]
+  - tablist:
+    - tab "Justificatifs" [selected]:
+      - img
+      - text: Justificatifs
+    - tab "Contrats":
+      - img
+      - text: Contrats
+    - tab "DPAE":
+      - img
+      - text: DPAE
+  - tabpanel "Justificatifs":
+    - alert:
+      - img
+      - heading "Documents indisponibles" [level=2]
+      - paragraph: Vos documents sont temporairement indisponibles. Vérifiez votre connexion puis réessayez.
+      - button "Réessayer":
+        - img
+        - text: Réessayer

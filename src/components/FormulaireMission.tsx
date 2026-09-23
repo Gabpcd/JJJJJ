@@ -1,3 +1,4 @@
+import { IntroductionMission } from '@/components/mission/IntroductionMission';
 import { useRole } from '@/hooks/useRole';
 import { chargerParcours, enregistrerParcours } from '@/lib/inscriptionProgressive';
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
@@ -581,7 +582,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   return (
     <>
-      {parcours && <p className="bg-primary/5 p-4 rounded-xl mb-4 text-sm">Préparez votre mission librement. Les informations de l’établissement seront demandées au moment de la publication.</p>}
+      <IntroductionMission enPreparation={Boolean(parcours)} brouillon={brouillonInscription} />
       {!parcours && siretInvalide && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
@@ -609,7 +610,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       )}
 
       {erreurBrouillonInscription && <p role="alert" className="text-destructive p-3">{erreurBrouillonInscription}</p>}
-      {brouillonInscription && <div className="bg-primary/5 p-4 rounded-xl mb-4 text-sm"><strong>Brouillon repris</strong><p>{String(brouillonInscription.missionVille || '')} · {String(brouillonInscription.missionDate || '')}</p><p>Complétez les horaires et les conditions avant publication. La mission utilisera l’adresse vérifiée de votre établissement.</p></div>}
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
           <ClipboardList aria-hidden="true" className="inline-block h-4 w-4 mr-1 -mt-0.5" />Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.

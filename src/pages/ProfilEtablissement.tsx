@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { invaliderProfilNavigation } from '@/lib/invaliderProfilNavigation';
 import React, { useState, useEffect } from 'react';
 import { telechargerOuPartager } from '@/lib/telechargement';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -318,6 +320,7 @@ export default function ProfilEtablissement() {
 export type SectionProfilEtab = 'profil' | 'facturation' | 'geoloc' | 'securite';
 
 export function ProfilEtablissementContent({ sections }: { sections?: SectionProfilEtab[] } = {}) {
+  const queryClient = useQueryClient();
   const { user, deconnexion } = useAuth();
   // Défaut (prop absente) : tout est visible — rétro-compatibilité totale.
   const visible = (s: SectionProfilEtab) => !sections || sections.includes(s);
@@ -592,6 +595,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         p_ip: null, p_navigateur: navigator.userAgent,
       });
       if (auditError) handleErrorSilent(auditError, 'Audit modification établissement');
+      invaliderProfilNavigation(queryClient, user?.id);
       afficherNotification({ type: 'succes', message: 'Informations mises à jour avec succès !' });
     }
     setSaving(false);

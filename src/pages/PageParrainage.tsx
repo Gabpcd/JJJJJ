@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Users, Shield, Landmark } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Users, Shield, Landmark, AlertCircle, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { LayoutApp } from '@/components/LayoutApp';
 import { SEOHead } from '@/components/SEOHead';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { handleErrorSilent } from '@/lib/handleError';
+import { toast } from 'sonner';
 
 interface Filleul {
   id: string;
@@ -18,59 +21,87 @@ interface Filleul {
   gmv_cumule_filleul?: number;
   reste_gmv_avant_prime?: number;
   seuil_gmv?: number;
+  seuil_atteint?: boolean;
 }
 
 export default function PageParrainage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const [codeParrainage, setCodeParrainage] = useState('');
   const [filleuls, setFilleuls] = useState<Filleul[]>([]);
   const [copied, setCopied] = useState<'lien' | 'code' | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [profilPresent, setProfilPresent] = useState(false);
   const [badgeAmbassadeur, setBadgeAmbassadeur] = useState(false);
-  const [prioriteMissionsUrgentes, setPrioriteMissionsUrgentes] = useState(false);
+  const requeteCourante = useRef(0);
 
-  const lienRef = `https://jolene.app/inscription/soignant?ref=${codeParrainage}`;
+  const partageDisponible = !loading && !erreurChargement && !!codeParrainage;
+  const lienRef = partageDisponible
+    ? `https://jolene.app/inscription/soignant?ref=${encodeURIComponent(codeParrainage)}`
+    : '';
 
-  useEffect(() => {
-    if (!user) return;
-    loadData();
-  }, [user]);
-
-  const loadData = async () => {
-    if (!user) return;
+  const loadData = useCallback(async () => {
+    const requete = ++requeteCourante.current;
     setLoading(true);
+    setErreurChargement(null);
+    setCodeParrainage('');
+    setCopied(null);
+    setFilleuls([]);
+    setBadgeAmbassadeur(false);
+    setProfilPresent(false);
+    try {
+      if (!userId) throw new Error('Session absente');
+      const [profilResultat, filleulsResultat] = await Promise.all([
+        supabase.from('soignants')
+          .select('code_parrainage, badge_ambassadeur')
+          .eq('id', userId).maybeSingle(),
+        supabase.rpc('fn_obtenir_mes_parrainages' as any),
+      ]);
+      if (requete !== requeteCourante.current) return;
+      if (profilResultat.error || filleulsResultat.error) throw profilResultat.error || filleulsResultat.error;
+      const result = filleulsResultat.data as any;
+      if (result?.error || !Array.isArray(result?.filleuls)) throw new Error('Réponse parrainage indisponible');
 
-    const { data: soignant } = await supabase
-      .from('soignants')
-      .select('code_parrainage, badge_ambassadeur, priorite_missions_urgentes')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (soignant) {
-      setCodeParrainage(soignant.code_parrainage || '');
-      setBadgeAmbassadeur(!!(soignant as any).badge_ambassadeur);
-      setPrioriteMissionsUrgentes(!!(soignant as any).priorite_missions_urgentes);
-    }
-
-    const { data: rpcData } = await supabase.rpc('fn_obtenir_mes_parrainages' as any);
-    const result = rpcData as any;
-    if (result && !result.error && Array.isArray(result.filleuls)) {
+      const soignant = profilResultat.data;
+      setProfilPresent(!!soignant);
+      setCodeParrainage(soignant?.code_parrainage?.trim() || '');
+      setBadgeAmbassadeur(!!soignant?.badge_ambassadeur);
       setFilleuls(result.filleuls.map((f: any) => ({
         id: f.filleul_id,
         prenom: f.prenom || 'Soignant',
         cree_le: f.cree_le || '',
         premiere_mission_le: f.premiere_mission_le || null,
         statut: f.statut || 'INSCRIT',
+        prime_versee_le: f.prime_versee_le ?? null,
+        gmv_cumule_filleul: f.gmv_cumule_filleul,
+        reste_gmv_avant_prime: f.reste_gmv_avant_prime,
+        seuil_gmv: f.seuil_gmv,
+        seuil_atteint: f.seuil_atteint,
       })));
+    } catch (error) {
+      if (requete !== requeteCourante.current) return;
+      handleErrorSilent(error, 'PageParrainage.chargement');
+      setErreurChargement('Le parrainage est temporairement indisponible. Réessayez dans un instant.');
+    } finally {
+      if (requete === requeteCourante.current) setLoading(false);
     }
+  }, [userId]);
 
-    setLoading(false);
-  };
+  useEffect(() => {
+    void loadData();
+    return () => { requeteCourante.current++; };
+  }, [loadData]);
 
-  const copier = (type: 'lien' | 'code', text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
+  const copier = async (type: 'lien' | 'code', text: string) => {
+    if (!partageDisponible || !text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error('La copie n’a pas fonctionné. Vous pouvez sélectionner le lien pour le copier.');
+    }
   };
 
   const messagePartage = encodeURIComponent(
@@ -91,6 +122,36 @@ export default function PageParrainage() {
           </h1>
           <p className="text-muted-foreground mt-1">Recommande Jolene à tes collègues et débloque des avantages exclusifs.</p>
         </div>
+
+        {loading ? (
+          <div role="status" className="rounded-2xl border border-border bg-card p-6 flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+            Chargement de votre parrainage…
+          </div>
+        ) : erreurChargement ? (
+          <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
+            <h2 className="font-semibold flex items-center gap-2"><AlertCircle className="h-5 w-5" aria-hidden="true" />Parrainage indisponible</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{erreurChargement}</p>
+            <button type="button" className="btn-secondary mt-4 min-h-[44px]" onClick={() => void loadData()}>Réessayer</button>
+          </div>
+        ) : (
+        <>
+        {!partageDisponible && (
+          <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="parrainage-a-preparer">
+            <h2 id="parrainage-a-preparer" className="font-semibold">Votre lien de parrainage n’est pas encore disponible</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {profilPresent
+                ? 'Aucun code personnel n’est disponible pour le moment. Réessayez pour actualiser votre parrainage.'
+                : 'Votre code personnel sera disponible après la création de votre dossier professionnel. Vous pouvez continuer à explorer les missions sans le préparer maintenant.'}
+            </p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <Link to="/soignant/recherche-missions" className="btn-primary min-h-[44px] inline-flex items-center justify-center">Explorer les missions</Link>
+              {profilPresent
+                ? <button type="button" className="btn-secondary min-h-[44px]" onClick={() => void loadData()}>Réessayer</button>
+                : <Link to="/soignant/profil" className="btn-secondary min-h-[44px] inline-flex items-center justify-center">Préparer mon dossier</Link>}
+            </div>
+          </section>
+        )}
 
         {/* Badge Ambassadeur */}
         <div className={`rounded-2xl border-2 p-6 ${badgeAmbassadeur ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
@@ -136,6 +197,7 @@ export default function PageParrainage() {
         </div>
 
         {/* Code & Lien */}
+        {partageDisponible && (
         <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-6 space-y-5">
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Ton code parrainage</p>
@@ -188,6 +250,7 @@ export default function PageParrainage() {
             </a>
           </div>
         </div>
+        )}
 
         {/* 7f-3 — CTA « recommande ton cadre de santé » : le soignant fait
             découvrir Jolene à l'établissement de son cadre. Growth prompt, sans
@@ -203,7 +266,7 @@ export default function PageParrainage() {
                 Fais découvrir Jolene à son établissement — plus d'étabs sur la plateforme, c'est plus de missions près de chez toi.
               </p>
               <a
-                href={`https://wa.me/?text=${encodeURIComponent('Je bosse avec Jolene pour trouver mes missions — ça pourrait bien aider ton établissement à trouver des remplaçants rapidement : https://jolene.app/inscription/etablissement')}`}
+                href={`https://wa.me/?text=${encodeURIComponent('Découvrez Jolene pour trouver des remplaçants : https://jolene.app/inscription/etablissement')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 rounded-lg text-xs font-semibold bg-jolene-mauve-500/10 text-jolene-mauve-600 hover:bg-jolene-mauve-500/20 transition-colors"
@@ -246,7 +309,7 @@ export default function PageParrainage() {
           </h3>
           {filleuls.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center">
-              <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partage ton lien !</p>
+              <p className="text-muted-foreground text-sm">{partageDisponible ? 'Aucun filleul pour le moment. Partage ton lien !' : 'Vos filleuls et leur progression apparaîtront ici.'}</p>
             </div>
           ) : (
             <div className="rounded-xl border border-border overflow-x-auto">
@@ -291,18 +354,20 @@ export default function PageParrainage() {
                         <TableCell className="min-w-[150px]">
                           {primeVersee ? (
                             <span className="text-xs font-semibold text-success whitespace-nowrap">💰 Primes versées</span>
-                          ) : aFaitMission && Number.isFinite(resteGmv) ? (
+                          ) : Number.isFinite(resteGmv) && Number.isFinite(gmv) && seuilGmv > 0 ? (
                             <div>
                               <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1" aria-hidden="true">
                                 <div
                                   className="h-full rounded-full bg-primary transition-all"
-                                  style={{ width: `${Math.min(100, Math.round((gmv / seuilGmv) * 100))}%` }}
+                                  style={{ width: `${Math.max(0, Math.min(100, Math.round((gmv / seuilGmv) * 100)))}%` }}
                                 />
                               </div>
                               <p className="text-[11px] text-muted-foreground whitespace-nowrap">
                                 {resteGmv > 0
                                   ? `Plus que ${Math.ceil(resteGmv)} € de missions avant vos primes`
-                                  : 'Seuil atteint — primes en cours de versement'}
+                                  : f.seuil_atteint
+                                    ? 'Seuil atteint — prime pas encore versée'
+                                    : 'Montant de missions atteint — prime non déclenchée'}
                               </p>
                             </div>
                           ) : (
@@ -317,6 +382,8 @@ export default function PageParrainage() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </LayoutApp>
   );

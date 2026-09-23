@@ -2,15 +2,14 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
-import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, ArrowRight, Search, Loader2 } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, ArrowRight, Search, Loader2, AlertCircle } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SelectProfession } from '@/components/SelectProfession';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { LogoJolene } from '@/components/LogoJolene';
 import { useDebounce } from '@/hooks/useDebounce';
-import { publicSupabase } from '@/integrations/supabase/public-client';
-import { supabase } from '@/integrations/supabase/client';
-import { logger } from '@/lib/logger';
+import { useMissionsPubliques } from '@/hooks/useMissionsPubliques';
+import { lienInscriptionRecherche, memoriserRecherchePublique } from '@/lib/recherchePubliqueInscription';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
@@ -99,72 +98,17 @@ const faqData = [
 ];
 
 /* ─── Public mission search section ─── */
-function normaliserResultatsMissionsPubliques(data: unknown): any[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === 'object') {
-    const maybeObject = data as { missions?: unknown; data?: unknown };
-    if (Array.isArray(maybeObject.missions)) return maybeObject.missions;
-    if (Array.isArray(maybeObject.data)) return maybeObject.data;
-  }
-  return [];
-}
-
-function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
+export function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
   const [profession, setProfession] = useState('');
   const [ville, setVille] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [searched, setSearched] = useState(false);
   const professionDebounced = useDebounce(profession, 250);
   const villeDebounced = useDebounce(ville, 250);
-
-  const handleSearch = async (nextProfession = professionDebounced, nextVille = villeDebounced) => {
-    setLoading(true);
-    setSearched(true);
-
-    const professionValue = nextProfession?.trim() || null;
-    const villeValue = nextVille?.trim() || null;
-
-    // RPC granté à anon ET authenticated. Sur la page d'accueil (publique, sans
-    // session active), le client `supabase` peut échouer avec AbortError quand le
-    // refresh token lock est volé entre onglets. On préfère donc le client public
-    // dédié (storageKey isolée, pas de refresh) — fallback vers `supabase` si
-    // session active pour profiter de l'éventuel cache.
-    const { data: { session } } = await supabase.auth.getSession();
-    const client = session ? supabase : publicSupabase;
-    const { data, error } = await client.rpc('fn_missions_publiques_recherche', {
-      p_profession: professionValue,
-      p_ville: villeValue,
-    } as any);
-
-    logger.debug('missions recherche raw:', { data, error, professionValue, villeValue });
-
-    if (error) {
-      // AbortError = annulation côté SDK (lock multi-tabs, navigation, etc.) —
-      // pas un vrai échec. Le user verra simplement "Pas de mission" temporairement.
-      const isAbort = error?.name === 'AbortError' || /Lock was stolen|aborted|AbortError/i.test(error?.message || '');
-      if (isAbort) {
-        logger.debug('missions recherche abandonnée (AbortError ignoré)');
-      } else {
-        logger.error('Erreur recherche missions publiques', error);
-      }
-      setResults([]);
-      setTotalCount(0);
-      setLoading(false);
-      return;
-    }
-
-    const parsedResults = normaliserResultatsMissionsPubliques(data);
-    logger.debug('missions recherche parsed:', parsedResults);
-    setResults(parsedResults);
-    setTotalCount(parsedResults[0]?.total_count ?? parsedResults.length ?? 0);
-    setLoading(false);
+  const { missions: results, total: totalCount, loading, erreur, rechercher } = useMissionsPubliques(professionDebounced, villeDebounced);
+  const handleSearch = () => void rechercher(profession, ville);
+  const ouvrirInscription = () => {
+    memoriserRecherchePublique({ profession, ville });
+    navigate(lienInscriptionRecherche({ profession, ville }));
   };
-
-  useEffect(() => {
-    handleSearch(professionDebounced, villeDebounced);
-  }, [professionDebounced, villeDebounced]);
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -194,11 +138,11 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
               placeholder="Ville ou code postal (optionnel)"
               value={ville}
               onChange={(e) => setVille(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch(profession, ville)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
-              onClick={() => handleSearch(profession, ville)}
+              onClick={handleSearch}
               disabled={loading}
               className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
             >
@@ -207,9 +151,21 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
             </button>
           </div>
 
-          {/* Results */}
-          {!loading && results && (
-            <div className="space-y-3">
+          {loading && (
+            <p role="status" className="mb-4 text-center text-sm text-muted-foreground">Recherche des missions…</p>
+          )}
+          {erreur && (
+            <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="flex items-center gap-2 font-semibold"><AlertCircle className="h-5 w-5 shrink-0" aria-hidden="true" />Recherche indisponible</p>
+              <p className="mt-1 text-sm text-muted-foreground">{erreur}</p>
+              <button type="button" onClick={handleSearch} className="btn-secondary mt-3 min-h-[44px]">Réessayer</button>
+            </div>
+          )}
+
+          {/* Une recherche interrompue conserve les derniers résultats, sans les présenter comme actualisés. */}
+          {results && (results.length > 0 || (!loading && !erreur)) && (
+            <div className="space-y-3" aria-busy={loading}>
+              {(loading || erreur) && results.length > 0 && <p className="text-sm text-muted-foreground">Résultats de la recherche précédente.</p>}
               {results.length > 0 ? (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -234,7 +190,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                   <p className="text-center text-sm text-muted-foreground mt-4">
                     <span className="font-semibold text-foreground">{totalCount} mission{totalCount > 1 ? 's' : ''} disponible{totalCount > 1 ? 's' : ''}</span>
                     {' — '}
-                    <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold hover:underline underline-offset-4">
+                    <button onClick={ouvrirInscription} className="text-primary font-semibold hover:underline underline-offset-4">
                       Créez votre compte pour postuler →
                     </button>
                   </p>
@@ -244,8 +200,8 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                   <p className="text-muted-foreground mb-2">
                     {ville.trim() ? 'Pas de mission pour le moment dans cette zone.' : 'Pas de mission pour le moment pour cette profession.'}
                   </p>
-                  <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold text-sm hover:underline underline-offset-4">
-                    Inscrivez-vous pour être alerté →
+                  <button onClick={ouvrirInscription} className="text-primary font-semibold text-sm hover:underline underline-offset-4">
+                    Créer mon compte et retrouver ma recherche →
                   </button>
                 </div>
               )}

@@ -1,3 +1,4 @@
+import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -35,6 +36,10 @@ import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
 
 export default function PresencesEtablissement() {
+  return <AccesEtablissement titre="Présences" description="Les présences de vos soignants apparaîtront ici après vos premières missions."><PresencesEtablissementContent /></AccesEtablissement>;
+}
+
+function PresencesEtablissementContent() {
   usePageTitle('Présences');
   const { user, etablissementId } = useEtablissementScope();
   const userId = user?.id;

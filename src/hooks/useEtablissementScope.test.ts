@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   },
   role: {
     role: 'INCONNU',
+    parcours: null as { type_compte: string } | null,
     etablissement_id: null as string | null,
     loading: false,
     resolved: false,
@@ -28,6 +29,7 @@ describe('useEtablissementScope — aucun fallback ambigu', () => {
     mocks.auth.user = { id: 'utilisateur-id', app_metadata: {} };
     Object.assign(mocks.role, {
       role: 'INCONNU',
+      parcours: null,
       etablissement_id: null,
       loading: false,
       resolved: false,
@@ -44,6 +46,13 @@ describe('useEtablissementScope — aucun fallback ambigu', () => {
     expect(result.current.etablissementId).toBeNull();
     expect(result.current.resolved).toBe(false);
     expect(result.current.error?.message).toBe('RPC indisponible');
+  });
+
+  it('expose le parcours serveur pour distinguer exploration et rattachement perdu', () => {
+    Object.assign(mocks.role, { role: 'ADMIN_ETABLISSEMENT', resolved: true, parcours: { type_compte: 'ETABLISSEMENT' } });
+    const { result } = renderHook(() => useEtablissementScope());
+    expect(result.current.parcours).toEqual({ type_compte: 'ETABLISSEMENT' });
+    expect(result.current.etablissementId).toBeNull();
   });
 
   it('exige etablissement_id pour un membre ADMIN_ETABLISSEMENT', () => {

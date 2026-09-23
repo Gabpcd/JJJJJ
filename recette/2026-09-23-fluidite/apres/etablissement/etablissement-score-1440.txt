@@ -1,0 +1,10 @@
+- main:
+  - region "Score qualité":
+    - heading "Score qualité" [level=1]
+    - heading "Votre établissement se prépare à votre rythme" [level=2]
+    - paragraph: Votre score reflétera les évaluations et le suivi de vos premières missions.
+    - paragraph: Vous pouvez continuer à explorer Jolene et préparer une mission sans compléter votre dossier maintenant.
+    - link "Préparer une mission":
+      - /url: /etablissement/missions/creer
+    - link "Compléter mon établissement":
+      - /url: /inscription/completer
