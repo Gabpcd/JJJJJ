@@ -1,0 +1,37 @@
+- main:
+  - heading "Mes documents" [level=1]
+  - tablist:
+    - tab "Justificatifs" [selected]:
+      - img
+      - text: Justificatifs
+    - tab "Contrats":
+      - img
+      - text: Contrats
+    - tab "DPAE":
+      - img
+      - text: DPAE
+  - tabpanel "Justificatifs":
+    - img "Logo Jolene, célébration"
+    - paragraph: Tous tes documents obligatoires sont à jour 🎉
+    - paragraph: Retrouve ici tes justificatifs et leurs dates de validité.
+    - text: ★ OBLIGATOIRE
+    - heading "Pièce d'identité" [level=3]
+    - paragraph: 📎 identite-test.pdf (téléversé le 1 sept. 2026)
+    - img
+    - text: Vérifié ✅
+    - button "Voir le document"
+    - button "Remplacer"
+    - button "Supprimer"
+    - img
+    - paragraph: À quoi sert ton RIB ?
+    - paragraph: Pour les missions salariées, ton RIB est transmis à l'établissement (ton employeur), qui établit ton bulletin de paie. Tes primes Jolene utilisent l'IBAN renseigné dans Mon compte → Coordonnées bancaires.
+    - paragraph: Dernière étape
+    - text: 📋
+    - heading "Attestation sur l'honneur" [level=2]
+    - checkbox "J'atteste sur l'honneur que mes vaccinations obligatoires sont à jour conformément aux recommandations du calendrier vaccinal en vigueur et aux obligations de mon établissement d'exercice."
+    - text: J'atteste sur l'honneur que mes vaccinations obligatoires sont à jour conformément aux recommandations du calendrier vaccinal en vigueur et aux obligations de mon établissement d'exercice.
+    - checkbox "J'atteste sur l'honneur avoir bénéficié d'une visite d'information et de prévention (médecine du travail) dans les délais réglementaires."
+    - text: J'atteste sur l'honneur avoir bénéficié d'une visite d'information et de prévention (médecine du travail) dans les délais réglementaires.
+    - paragraph: Je reconnais que toute fausse déclaration est passible de poursuites (Art. 441-7 du Code pénal).
+    - button "✅ Signer mon attestation" [disabled]
+    - paragraph: Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de ta première mission. Jolene enregistre uniquement ta déclaration et sa date de signature, avec un accès restreint.

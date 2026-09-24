@@ -1,10 +1,9 @@
 import { useRole } from '@/hooks/useRole';
-import { chargerMissionsInscription, missionCorrespondProfessionInscription } from '@/lib/explorationInscription';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useExplorationMissions } from '@/hooks/useExplorationMissions';
+import { useMemoireExploration, type HoraireExploration as Horaire, type VueExploration } from '@/hooks/useMemoireExploration';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
-import { logger } from '@/lib/logger';
-import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal, LayoutGrid, Sparkles, CalendarDays } from 'lucide-react';
@@ -21,10 +20,8 @@ import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquant
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
-import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -42,94 +39,38 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
 import { VueSwipeMissions } from '@/components/swipe/VueSwipeMissions';
-import {
-  associerCreneauxAuxMissions,
-  construirePlanningCandidat,
-  planningCorrespondAuFiltre,
-} from '@/components/planning/planning-candidat';
-import { formatParis } from '@/lib/date-heure-paris';
-import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
-import { filtrerMissionsPlaywright } from '@/lib/donnees-test';
+import { planningCorrespondAuFiltre } from '@/components/planning/planning-candidat';
 import type { Json } from '@/integrations/supabase/types';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { lazyRetry } from '@/lib/lazyRetry';
 
-// Fix default marker icon for Leaflet + bundlers
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-interface SoignantData {
-  profession: string;
-  adresse_lat: number | null;
-  adresse_lng: number | null;
-  rayon_deplacement_km: number;
-  tous_documents_valides: boolean;
-  type_contrat: string | null;
-  types_contrat_acceptes: string | null;
-  type_exercice?: string | null;
-}
-
-type Horaire = 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND';
-
-const VIEW_PREF_KEY = 'jolene_missions_view_pref'; // 'swipe' | 'liste'
+const CarteMissionsExploration = lazyRetry(() => import('@/components/CarteMissionsExploration'));
 
 export default function RechercheMissions() {
+  const { user } = useAuth();
+  // Un changement de compte ne doit jamais conserver les filtres du précédent.
+  return <RechercheMissionsCompte key={user?.id ?? 'anonyme'} />;
+}
+
+function RechercheMissionsCompte() {
   usePageTitle('Trouver une mission');
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { parcours } = useRole();
-  // 6c.1 : UN SEUL switcher segmenté Swipe · Liste · Carte (les deux anciens
-  // toggles — Swipe/Liste en haut + Liste/Carte flottant — coexistaient et se
-  // contredisaient). Explorer = deck de swipe DIRECT par défaut ; la préférence
-  // de vue est mémorisée par utilisateur.
-  const [vue, setVue] = useState<'swipe' | 'liste' | 'carte'>(() => {
-    try {
-      // Deep-link ?vue=swipe (ex. nudge streak du dashboard) prioritaire sur la préférence.
-      const urlVue = new URLSearchParams(window.location.search).get('vue');
-      if (urlVue === 'swipe' || urlVue === 'liste' || urlVue === 'carte') return urlVue;
-      const stored = localStorage.getItem(VIEW_PREF_KEY);
-      if (stored === 'swipe' || stored === 'liste' || stored === 'carte') return stored;
-      return 'swipe';
-    } catch { return 'swipe'; }
-  });
-  const basculerVue = (v: 'swipe' | 'liste' | 'carte') => {
-    try { localStorage.setItem(VIEW_PREF_KEY, v); } catch { /* ignore */ }
-    setVue(v);
-    if (v === 'carte') initMap('carte');
+  const { parcours, resolved: roleResolved } = useRole();
+  const { etat, setEtat, modifier } = useMemoireExploration(user?.id);
+  const { vue, profession, rayonKm, tauxMin, typeContrat, urgentesOnly, horaire, villeRecherche, nbAffiche } = etat;
+  const setProfession = (v: React.SetStateAction<string>) => modifier('profession', v);
+  const setRayonKm = (v: React.SetStateAction<number>) => modifier('rayonKm', v);
+  const setTauxMin = (v: React.SetStateAction<number>) => modifier('tauxMin', v);
+  const setTypeContrat = (v: React.SetStateAction<string>) => modifier('typeContrat', v);
+  const setUrgentesOnly = (v: React.SetStateAction<boolean>) => modifier('urgentesOnly', v);
+  const setHoraire = (v: React.SetStateAction<Horaire>) => modifier('horaire', v);
+  const setVilleRecherche = (v: React.SetStateAction<string>) => modifier('villeRecherche', v);
+  const setNbAffiche = (v: React.SetStateAction<number>) => modifier('nbAffiche', v);
+  const basculerVue = (v: VueExploration) => {
+    try { localStorage.setItem(`jolene_missions_view_pref:${user?.id}`, v); } catch { /* ignore */ }
+    modifier('vue', v);
   };
-  const [soignant, setSoignant] = useState<SoignantData | null>(null);
-  const [missions, setMissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erreurChargement, setErreurChargement] = useState(false);
-  const sequenceChargementMissions = useRef(0);
-  // Pull-to-refresh (Lot 6b.3) : tirer en haut de page relance le fetch.
-  const [refreshTick, setRefreshTick] = useState(0);
-  const { pullDistance, refreshing } = usePullToRefresh(async () => {
-    setRefreshTick(t => t + 1);
-    await new Promise(r => setTimeout(r, 700));
-  });
-  const [nbAffiche, setNbAffiche] = useState(20);
-  const [rcpExpiree, setRcpExpiree] = useState(false);
-  const [rcpExpireLe, setRcpExpireLe] = useState<string | null>(null);
-  // Filtres
-  const [profession, setProfession] = useState<string>('');
-  const [rayonKm, setRayonKm] = useState(50);
-  const [tauxMin, setTauxMin] = useState(0);
-  const [typeContrat, setTypeContrat] = useState<string>('TOUS');
-  const [urgentesOnly, setUrgentesOnly] = useState(false);
-  const [horaire, setHoraire] = useState<Horaire>('TOUS');
-  // 6c.1 : les filtres vivent dans une bottom sheet (le formulaire pleine page
-  // a disparu), ouverte par une icône avec badge du nombre de filtres actifs.
   const [filtresOpen, setFiltresOpen] = useState(false);
-  const [villeRecherche, setVilleRecherche] = useState('');
   const debouncedVille = useDebounce(villeRecherche, 300);
   // Alerte 1-tap (Session E-5) : flux « créer une alerte » ouvert via ?alerte=1
   // (deep link depuis SwipeMissions) ou via le CTA de l'état vide.
@@ -141,10 +82,23 @@ export default function RechercheMissions() {
   const [alerteOpen, setAlerteOpen] = useState(false);
   const [alerteEnCours, setAlerteEnCours] = useState(false);
   const [filtresVersion, setFiltresVersion] = useState(0);
-  // Map
-  const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<L.Map | null>(null);
-  const markersLayer = useRef<L.LayerGroup | null>(null);
+  const { soignant, missions, loading, actualisation, erreurChargement, rcpExpiree, rcpExpireLe, recharger } = useExplorationMissions({
+    userId: user?.id, email: user?.email, parcours, roleResolved,
+    enabled: vue !== 'swipe' || filtresOpen,
+    preferencesInitialisees: etat.profilApplique,
+    profession, tauxMin, urgentesOnly, etablissementId,
+  });
+  const { pullDistance, refreshing } = usePullToRefresh(recharger);
+
+  useEffect(() => {
+    if (!soignant || etat.profilApplique) return;
+    setEtat((precedent) => ({
+      ...precedent,
+      rayonKm: precedent.rayonKm === 50 ? soignant.rayon_deplacement_km || 50 : precedent.rayonKm,
+      tauxMin: precedent.tauxMin > 0 ? precedent.tauxMin : Number(soignant.taux_horaire_minimum) || 0,
+      profilApplique: true,
+    }));
+  }, [soignant, etat.profilApplique, setEtat]);
 
   // 6c.4 : visiter Explorer remet à zéro le badge « X nouvelles missions »
   useEffect(() => { marquerExplorerVisite(); }, []);
@@ -155,7 +109,7 @@ export default function RechercheMissions() {
   // ses préférences sont déjà apprises).
   const [quizOpen, setQuizOpen] = useState(false);
   useEffect(() => {
-    if (parcours || localStorage.getItem(CLE_QUIZ_PREFS) || !user) return;
+    if (!roleResolved || parcours || localStorage.getItem(CLE_QUIZ_PREFS) || !user) return;
     // Comptes E2E : jamais de quiz (même pattern que le filtre missions test).
     if (user.email?.startsWith('playwright-')) return;
     let annule = false;
@@ -168,7 +122,7 @@ export default function RechercheMissions() {
         else localStorage.setItem(CLE_QUIZ_PREFS, '1');
       });
     return () => { annule = true; };
-  }, [user, parcours]);
+  }, [user, parcours, roleResolved]);
   const appliquerQuiz = (r: ReponsesQuiz) => {
     setRayonKm(r.rayonKm);
     setTauxMin(r.tauxMin);
@@ -189,16 +143,19 @@ export default function RechercheMissions() {
       sessionStorage.removeItem('jolene.filtres_a_appliquer');
       if (parsed?.audience !== 'SOIGNANT_RECHERCHE_MISSIONS') return;
       const f = parsed.filtres || {};
-      if (typeof f.profession === 'string') setProfession(f.profession);
-      if (typeof f.rayonKm === 'number') setRayonKm(f.rayonKm);
-      if (typeof f.tauxMin === 'number') setTauxMin(f.tauxMin);
-      if (typeof f.typeContrat === 'string') setTypeContrat(f.typeContrat);
-      if (typeof f.urgentesOnly === 'boolean') setUrgentesOnly(f.urgentesOnly);
-      if (typeof f.horaire === 'string') setHoraire(f.horaire as Horaire);
-      if (typeof f.villeRecherche === 'string') setVilleRecherche(f.villeRecherche);
+      setEtat((precedent) => ({
+        ...precedent,
+        profession: typeof f.profession === 'string' ? f.profession : precedent.profession,
+        rayonKm: typeof f.rayonKm === 'number' ? f.rayonKm : precedent.rayonKm,
+        tauxMin: typeof f.tauxMin === 'number' ? f.tauxMin : precedent.tauxMin,
+        typeContrat: typeof f.typeContrat === 'string' ? f.typeContrat : precedent.typeContrat,
+        urgentesOnly: typeof f.urgentesOnly === 'boolean' ? f.urgentesOnly : precedent.urgentesOnly,
+        horaire: typeof f.horaire === 'string' ? f.horaire as Horaire : precedent.horaire,
+        villeRecherche: typeof f.villeRecherche === 'string' ? f.villeRecherche : precedent.villeRecherche,
+      }));
       if (parsed.nom_source) toast.success(`Filtres « ${parsed.nom_source} » appliqués`);
     } catch (_e) { /* ignore */ }
-  }, []);
+  }, [setEtat]);
 
   // ?alerte=1 → ouvre directement le flux « créer une alerte » (1 confirmation)
   useEffect(() => {
@@ -259,130 +216,6 @@ export default function RechercheMissions() {
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('soignants')
-      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice, taux_horaire_minimum')
-      .eq('id', user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          const s = data as any;
-          setSoignant(s);
-          setRayonKm(s.rayon_deplacement_km || 50);
-          // Plancher tarif horaire = préférence de profil persistante. On l'applique
-          // par défaut, sans écraser un filtre déjà appliqué (filtre sauvegardé).
-          if (s.taux_horaire_minimum != null) {
-            setTauxMin((cur) => (cur > 0 ? cur : Number(s.taux_horaire_minimum)));
-          }
-        }
-      }).then(undefined, (err) => handleErrorSilent(err, 'RechercheMissions.soignant'));
-
-    // RCP check only for LIBERAL/MIXTE
-    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
-      .then(({ data: sg }) => {
-        const isLiberalOrMixte = sg?.type_exercice === 'LIBERAL' || sg?.type_exercice === 'MIXTE';
-        if (!isLiberalOrMixte) { setRcpExpiree(false); return; }
-        supabase.from('documents_soignants')
-          .select('statut_verification, valide_jusqua')
-          .eq('soignant_id', user.id)
-          .eq('type_document', 'RCP_ASSURANCE')
-          .order('televerse_le', { ascending: false })
-          .limit(1)
-          .then(({ data }) => {
-            if (!data || data.length === 0) {
-              setRcpExpiree(true);
-            } else {
-              const doc = data[0];
-              const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-              const invalide = doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire;
-              setRcpExpiree(invalide);
-              // Alerte préventive J-30 : RCP encore valide mais expirant sous 30 jours
-              if (!invalide && doc.valide_jusqua) {
-                const joursRestants = (new Date(doc.valide_jusqua).getTime() - Date.now()) / 86400000;
-                setRcpExpireLe(joursRestants <= 30 ? doc.valide_jusqua : null);
-              }
-            }
-          });
-      });
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    const controller = new AbortController();
-    const sequence = ++sequenceChargementMissions.current;
-    const estChargementCourant = () => (
-      !controller.signal.aborted && sequence === sequenceChargementMissions.current
-    );
-    setLoading(true);
-    setErreurChargement(false);
-    const fetchMissions = async () => {
-      try {
-        if (parcours) {
-          const offres = await chargerMissionsInscription(undefined, controller.signal);
-          const prof = String(parcours.donnees.profession || '');
-          const selection = offres.filter(m => missionCorrespondProfessionInscription(m.profession_requise, profession, prof)
-            && (!tauxMin || Number(m.taux_horaire_base) >= tauxMin)
-            && (!urgentesOnly || m.est_urgente)
-            && (!etablissementId || m.etablissement_id === etablissementId));
-          if (estChargementCourant()) setMissions(selection);
-          return;
-        }
-        let query = supabase.from('missions').select(`
-          id, intitule, description, service, profession_requise,
-          specialite_medicale_requise, accepte_non_specialises,
-          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-          total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-          soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le, mode_remuneration, retrocession_pct
-        `)
-          .eq('statut', 'OUVERTE')
-          .gte('debut_le', new Date().toISOString())
-          .order('boostee_le', { ascending: false, nullsFirst: false })
-          .order('est_urgente', { ascending: false })
-          .order('debut_le', { ascending: true })
-          .limit(500);
-
-        const professionFiltre = profession || soignant?.profession;
-        if (professionFiltre) {
-          // Si l'utilisateur n'a pas explicitement choisi une profession dans le
-          // filtre (utilise sa propre profession), on élargit la recherche aux
-          // missions hiérarchiquement compatibles : IBODE/IADE peuvent voir les
-          // missions IDE. Le sens inverse reste interdit car la mission exige la
-          // profession spécialisée qu'elle annonce.
-          const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
-          if (orFiltre) {
-            query = query.or(orFiltre);
-          } else {
-            query = query.eq('profession_requise', professionFiltre as any);
-          }
-        }
-
-        if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
-        if (urgentesOnly) query = query.eq('est_urgente', true);
-        if (etablissementId) query = query.eq('etablissement_id', etablissementId);
-
-        const { data, error } = await query.abortSignal(controller.signal);
-        if (error) throw error;
-        const missionsChargees = filtrerMissionsPlaywright(data ?? [], user.email);
-        const creneaux = await chargerCreneauxMissionsPagines(
-          missionsChargees.map((mission) => mission.id),
-          { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal: controller.signal },
-        );
-        const avecPlanning = associerCreneauxAuxMissions(missionsChargees as any[], creneaux, false);
-        const enriched = await enrichirEtablissements(avecPlanning as any);
-        if (estChargementCourant()) setMissions(enriched);
-      } catch (error: any) {
-        if (!estChargementCourant() || error?.name === 'AbortError') return;
-        logger.warn('[RechercheMissions] Chargement incomplet:', error?.message ?? error);
-        setMissions([]);
-        setErreurChargement(true);
-      } finally {
-        if (estChargementCourant()) setLoading(false);
-      }
-    };
-    void fetchMissions();
-    return () => controller.abort();
-  }, [user, soignant, profession, tauxMin, urgentesOnly, etablissementId, refreshTick, parcours]);
-
   const filtered = useMemo(() => {
     const villeSearch = debouncedVille.trim().toLowerCase();
 
@@ -420,118 +253,6 @@ export default function RechercheMissions() {
       })
       .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
   }, [missions, soignant, rayonKm, typeContrat, horaire, debouncedVille]);
-
-  // Initialize / update map
-  const initMap = (tab: string) => {
-    if (tab !== 'carte') return;
-    setTimeout(() => {
-      if (!mapRef.current) return;
-
-      const center: [number, number] = soignant?.adresse_lat && soignant?.adresse_lng
-        ? [soignant.adresse_lat, soignant.adresse_lng]
-        : [48.8566, 2.3522]; // Paris default
-
-      if (!leafletMap.current) {
-        leafletMap.current = L.map(mapRef.current, { zoomControl: false }).setView(center, 11);
-        L.control.zoom({ zoomInTitle: 'Zoom avant', zoomOutTitle: 'Zoom arrière' }).addTo(leafletMap.current);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 18,
-        }).addTo(leafletMap.current);
-        markersLayer.current = L.layerGroup().addTo(leafletMap.current);
-
-        // Soignant position marker
-        if (soignant?.adresse_lat && soignant?.adresse_lng) {
-          const homeIcon = L.divIcon({
-            html: '<div class="jolene-map-marker-dot"></div>',
-            iconSize: [44, 44],
-            iconAnchor: [22, 22],
-            className: 'jolene-map-marker-hit',
-          });
-          L.marker([soignant.adresse_lat, soignant.adresse_lng], { icon: homeIcon })
-            .addTo(leafletMap.current)
-            .bindPopup('<strong>Ta position</strong>');
-        }
-      } else {
-        leafletMap.current.invalidateSize();
-      }
-
-      // Update markers
-      if (markersLayer.current) {
-        markersLayer.current.clearLayers();
-        filtered.forEach(m => {
-          const lat = m.etablissements?.adresse_lat;
-          const lng = m.etablissements?.adresse_lng;
-          if (!lat || !lng) return;
-
-          const missionIcon = L.divIcon({
-            html: `<img src="${markerIcon}" width="25" height="41" alt="" draggable="false" />`,
-            iconSize: [44, 44],
-            iconAnchor: [22, 41],
-            popupAnchor: [0, -41],
-            className: 'jolene-map-marker-hit jolene-map-mission-marker',
-          });
-          const marker = L.marker([lat, lng], {
-            icon: missionIcon,
-            title: String(m.intitule ?? 'Mission'),
-            alt: String(m.intitule ?? 'Mission'),
-          }).addTo(markersLayer.current!);
-          // Leaflet accepte un HTMLElement : textContent évite toute injection
-          // HTML depuis l'intitulé de mission ou le nom de l'établissement.
-          const popup = document.createElement('div');
-          popup.style.cssText = 'min-width:200px;font-family:Inter,sans-serif;';
-
-          const titre = document.createElement('p');
-          titre.style.cssText = 'font-weight:600;font-size:13px;margin:0 0 4px;';
-          titre.textContent = String(m.intitule ?? 'Mission');
-          popup.appendChild(titre);
-
-          const etablissement = document.createElement('p');
-          etablissement.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;';
-          etablissement.textContent = `🏥 ${String(m.etablissements?.nom ?? '—')}`;
-          popup.appendChild(etablissement);
-
-          const planning = construirePlanningCandidat(m);
-          const date = document.createElement('p');
-          date.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;white-space:pre-line;';
-          const creneauxVisibles = planning.creneaux.slice(0, 3);
-          const restants = planning.creneaux.length - creneauxVisibles.length;
-          date.textContent = planning.exact
-            ? `📅 ${creneauxVisibles.map((creneau) => (
-                `${formatParis(creneau.debut, 'EEE d MMM')} · ${formatParis(creneau.debut, "HH'h'mm")}→${creneau.fin ? formatParis(creneau.fin, "EEE d MMM HH'h'mm") : '—'}`
-              )).join('\n')}${restants > 0 ? `\n+ ${restants} autre${restants > 1 ? 's' : ''} créneau${restants > 1 ? 'x' : ''}` : ''}`
-            : '⚠️ Planning exact à confirmer';
-          popup.appendChild(date);
-
-          const taux = document.createElement('p');
-          taux.style.cssText = 'font-size:13px;font-weight:700;color:#E04590;margin:4px 0;';
-          taux.textContent = `💰 ${Number(m.taux_horaire_base ?? 0).toFixed(2)} €/h`;
-          popup.appendChild(taux);
-
-          const lien = document.createElement('a');
-          lien.href = `/soignant/missions/${encodeURIComponent(String(m.id))}`;
-          lien.style.cssText = 'display:inline-block;margin-top:6px;padding:4px 12px;background:#E04590;color:white;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;';
-          lien.textContent = 'Voir la mission';
-          popup.appendChild(lien);
-
-          marker.bindPopup(popup);
-        });
-      }
-    }, 100);
-  };
-
-  // Vue carte : resynchronise les marqueurs quand les résultats filtrés changent
-  // (avant, seule la bascule vers la carte redessinait les marqueurs).
-  useEffect(() => {
-    if (vue === 'carte') initMap('carte');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vue, filtered]);
-
-  useEffect(() => () => {
-    leafletMap.current?.remove();
-    leafletMap.current = null;
-    markersLayer.current = null;
-  }, [vue]);
 
   // No blocking guard — render even without soignant profile
 
@@ -669,12 +390,15 @@ export default function RechercheMissions() {
 
         {erreurChargement && (
           <div role="alert" className="card-base space-y-3">
-            <p>Les missions n’ont pas pu être chargées. Vérifiez votre connexion et réessayez.</p>
-            <button className="btn-primary" onClick={() => setRefreshTick(v => v + 1)}>Réessayer</button>
+            <p>{missions.length > 0
+              ? 'Les missions n’ont pas pu être actualisées. Les derniers résultats restent affichés. Réessayez pour vérifier leur disponibilité.'
+              : 'Les missions n’ont pas pu être chargées. Vérifiez votre connexion et réessayez.'}</p>
+            <button className="btn-primary" disabled={actualisation} onClick={() => { void recharger(); }}>Réessayer</button>
           </div>
         )}
+        {actualisation && <p role="status" className="text-sm text-muted-foreground">Actualisation des missions…</p>}
         {vue !== 'carte' ? (
-          erreurChargement ? null : loading ? <ChargementPage /> : filtered.length > 0 ? (
+          erreurChargement && missions.length === 0 ? null : loading ? <ChargementPage /> : filtered.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filtered.slice(0, nbAffiche).map(m => (
@@ -725,11 +449,9 @@ export default function RechercheMissions() {
             )
         ) : (
           <>
-            <div
-              ref={mapRef}
-              className="w-full rounded-xl border border-border overflow-hidden"
-              style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
-            />
+            <Suspense fallback={<ChargementPage />}>
+              <CarteMissionsExploration missions={filtered} soignant={soignant} />
+            </Suspense>
             {filtered.length === 0 && !loading && !erreurChargement && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
             )}

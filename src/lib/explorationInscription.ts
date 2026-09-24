@@ -25,7 +25,7 @@ export async function chargerMissionsInscription(missionId?: string, signal?: Ab
       etablissement_ville: m.etablissements?.adresse_ville,
       etablissement_code_postal: m.etablissements?.adresse_code_postal,
       etablissement_logo_url: m.etablissements?.logo_url,
-      distance_km: null, score: 0, breakdown: {} }));
+      distance_km: null, score: null, breakdown: {} }));
 }
 
 /** Mémorise l'intention sans envoyer de candidature avant confirmation finale. */

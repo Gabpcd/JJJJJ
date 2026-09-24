@@ -1,0 +1,3 @@
+- main:
+  - paragraph: Accès refusé
+  - paragraph: Vous n'êtes pas membre de cette équipe.

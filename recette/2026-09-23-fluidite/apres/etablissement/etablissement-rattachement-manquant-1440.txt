@@ -1,0 +1,7 @@
+- main:
+  - alert:
+    - heading "Établissement non rattaché" [level=1]
+    - paragraph: Votre accès n’est associé à aucun établissement. Réessayez ou vérifiez votre rattachement auprès du responsable de votre équipe.
+    - button "Réessayer"
+    - link "Retour à mon compte":
+      - /url: /etablissement/mon-compte

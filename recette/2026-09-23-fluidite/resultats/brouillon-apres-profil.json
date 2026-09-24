@@ -1,0 +1,247 @@
+{
+  "config": {
+    "configFile": "/private/tmp/jolene-draft-playwright.config.ts",
+    "rootDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-preuves/brouillon/results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "iphone-webkit",
+        "name": "iphone-webkit",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "etablissement-exploration.spec.ts"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-preuves/brouillon/results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "android-pixel",
+        "name": "android-pixel",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "etablissement-exploration.spec.ts"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-preuves/brouillon/results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop-1440",
+        "name": "desktop-1440",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "etablissement-exploration.spec.ts"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/private/tmp/jolene-fluidite-preuves/brouillon/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "etablissement-exploration.spec.ts",
+      "file": "etablissement-exploration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "brouillon établissement : titre et horaires conservés après création du profil",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "iphone-webkit",
+              "projectName": "iphone-webkit",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 31028,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T16:33:36.226Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "etablissement-brouillon-apres-profil-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gaGVhZGluZyAiUHVibGllciB1bmUgbWlzc2lvbiIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IEJyb3VpbGxvbiByZXByaXMg4oCUIFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiBWw6lyaWZpZXogbGVzIGhvcmFpcmVzIGV0IGxlcyBjb25kaXRpb25zIGF2YW50IHB1YmxpY2F0aW9uLgogIC0gaW1nCiAgLSB0ZXh0OiBWZXVpbGxleiBjb21wbMOpdGVyIHZvdHJlIFNJUkVUIGRhbnMgdm90cmUgcHJvZmlsIGF2YW50IGRlIHB1YmxpZXIgdW5lIG1pc3Npb24uCiAgLSBsaW5rICJBbGxlciBhdSBwcm9maWwg4oaSIjoKICAgIC0gL3VybDogL2V0YWJsaXNzZW1lbnQvcHJvZmlsCiAgLSBpbWcKICAtIHRleHQ6IFZvdHJlIGNvbnRyYXQgZGUgc2VydmljZSBuJ2VzdCBwYXMgZW5jb3JlIHNpZ27DqS4KICAtIGxpbmsgIlNpZ25lciBsZSBjb250cmF0IOKGkiI6CiAgICAtIC91cmw6IC9ldGFibGlzc2VtZW50L2FjdGl2ZXIKICAtIGFsZXJ0OgogICAgLSBpbWcKICAgIC0gdGV4dDogTGEgdsOpcmlmaWNhdGlvbiBkZSB2b3RyZSDDqXRhYmxpc3NlbWVudCBuJ2VzdCBwYXMgdGVybWluw6llLiBDb21wbMOpdGV6IGwnaGFiaWxpdGF0aW9uIGR1IHJlcHLDqXNlbnRhbnQgb3UgZGVtYW5kZXogdW5lIHZhbGlkYXRpb24gw6AgbCdhZG1pbmlzdHJhdGV1ciBKb2xlbmUuCiAgICAtIGxpbmsgIlRlcm1pbmVyIGxhIHbDqXJpZmljYXRpb24g4oaSIjoKICAgICAgLSAvdXJsOiAvZXRhYmxpc3NlbWVudC9hY3RpdmVyCiAgLSB0ZXh0OiBJbnRpdHVsw6kgKgogIC0gdGV4dGJveCAiSW50aXR1bMOpICoiOgogICAgLSAvcGxhY2Vob2xkZXI6ICJFeDogSURFIGRlIG51aXQg4oCUIFNlcnZpY2UgVXJnZW5jZXMiCiAgICAtIHRleHQ6IFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiAzMS8xMjAKICAtIHRleHQ6IERlc2NyaXB0aW9uCiAgLSB0ZXh0Ym94ICJEZXNjcmlwdGlvbiI6CiAgICAtIC9wbGFjZWhvbGRlcjogSW5mb3JtYXRpb25zIGNvbXBsw6ltZW50YWlyZXMgcG91ciBsZSBzb2lnbmFudC4uLgogIC0gdGV4dDogUHJvZmVzc2lvbiByZXF1aXNlICoKICAtIGNvbWJvYm94OgogICAgLSB0ZXh0OiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAgIC0gaW1nCiAgLSB0ZXh0OiBTZXJ2aWNlCiAgLSBjb21ib2JveCAiU2VydmljZSIKICAtIHRleHQ6IFR5cGUgZGUgY29udHJhdCBwcm9wb3PDqQogIC0gJ3JhZGlvICJTYWxhcmnDqSBWb3VzIMOqdGVzIGzigJllbXBsb3lldXIgOiBDREQsIGJ1bGxldGluIGRlIHBhaWUsIHBsYWZvbmQgbMOpZ2FsIDQ4IGgvc2VtYWluZSInCiAgLSB0ZXh0OiBTYWxhcmnDqQogIC0gcGFyYWdyYXBoOiAiVm91cyDDqnRlcyBs4oCZZW1wbG95ZXVyIDogQ0RELCBidWxsZXRpbiBkZSBwYWllLCBwbGFmb25kIGzDqWdhbCA0OCBoL3NlbWFpbmUiCiAgLSBwYXJhZ3JhcGg6IFBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24KICAtIHBhcmFncmFwaDogVsOpcmlmaWV6IGNoYXF1ZSBkYXRlIHRyYXZhaWxsw6llIGV0IGNoYXF1ZSBob3JhaXJlLiBMZXMgam91cnMgZGUgcmVwb3MgZXQgbGVzIGdhcmRlcyBkZSBudWl0IHNvbnQgZW5yZWdpc3Ryw6lzIHRlbHMgcXXigJlhZmZpY2jDqXMuCiAgLSBwYXJhZ3JhcGg6IPCfk4UgRGF0ZXMgZXQgaG9yYWlyZXMgcsOpZWxzCiAgLSBwYXJhZ3JhcGg6IENoYXF1ZSBkYXRlIGVzdCBpbmTDqXBlbmRhbnRlLiBWb3VzIHBvdXZleiBwcsOpdm9pciBkZXMgam91cnMgbm9uIHRyYXZhaWxsw6lzLCBwbHVzaWV1cnMgY3LDqW5lYXV4IGV0IGRlcyBnYXJkZXMgZGUgbnVpdC4KICAtIHRleHQ6IFByZW1pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJQcmVtacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHRleHQ6IERlcm5pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJEZXJuacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHBhcmFncmFwaDogU8OpbGVjdGlvbiByYXBpZGUKICAtIGJ1dHRvbiAiVG91dGVzIGxlcyBkYXRlcyIKICAtIGJ1dHRvbiAiTHVuZGnigJN2ZW5kcmVkaSIKICAtIGJ1dHRvbiAiMSBzZW1haW5lIGNpdmlsZSBzdXIgMiIKICAtIGJ1dHRvbiAiQXVjdW5lIgogIC0gYnV0dG9uICJBcHBsaXF1ZXIgbGUgMWVyIGhvcmFpcmUgYXV4IGpvdXJzIHPDqWxlY3Rpb25uw6lzIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEFwcGxpcXVlciBsZSAxZXIgaG9yYWlyZSBhdXggam91cnMgc8OpbGVjdGlvbm7DqXMKICAtIGNoZWNrYm94ICJtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiB0cmF2YWlsbMOpIiBbY2hlY2tlZF0KICAtIHRleHQ6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IFRyYXZhaWxsw6kgRMOpYnV0CiAgLSB0ZXh0Ym94ICJEw6lidXQgZHUgY3LDqW5lYXUgMSBkdSAyMDI2LTA5LTMwIjogMDc6MDAKICAtIHRleHQ6IEZpbgogIC0gdGV4dGJveCAiRmluIGR1IGNyw6luZWF1IDEgZHUgMjAyNi0wOS0zMCI6IDE5OjAwCiAgLSB0ZXh0OiBEYXRlIGRlIGZpbgogIC0gY29tYm9ib3ggIkRhdGUgZGUgZmluIGR1IGNyw6luZWF1IDEgZHUgMjAyNi0wOS0zMCI6CiAgICAtIG9wdGlvbiAiTcOqbWUgam91ciDCtyBtZXIuIDMwIHNlcHQuIiBbc2VsZWN0ZWRdCiAgICAtIG9wdGlvbiAiTGVuZGVtYWluIMK3IGpldS4gMSBvY3QuIgogIC0gYnV0dG9uICJTdXBwcmltZXIgbGUgY3LDqW5lYXUgMSBkdSAyMDI2LTA5LTMwIjoKICAgIC0gaW1nCiAgLSBwYXJhZ3JhcGg6IG1lci4gMzAgc2VwdC4gMDc6MDAg4oaSIG1lci4gMzAgc2VwdC4gMTk6MDAgwrcgMTIgaAogIC0gYnV0dG9uICJBam91dGVyIHVuIGNyw6luZWF1IGNlIGpvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQWpvdXRlciB1biBjcsOpbmVhdSBjZSBqb3VyCiAgLSBwYXJhZ3JhcGg6IENvbnRyw7RsZSBwYXIgc2VtYWluZSBjaXZpbGUKICAtIHRleHQ6IFNlbWFpbmUgZHUgMjgvMDkgMTIgaAogIC0gaW1nCiAgLSBwYXJhZ3JhcGg6ICJNYXhpbXVtIGzDqWdhbCA6IDQ4IGggcGFyIHNlbWFpbmUgY2l2aWxlIChsdW5kaeKAk2RpbWFuY2hlKS4iCiAgLSBwYXJhZ3JhcGg6IEFwZXLDp3UgZXhhY3QgwrcgMSBjcsOpbmVhdQogIC0gaW1nCiAgLSBzdHJvbmc6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2CiAgLSB0ZXh0OiDCtyAwNzowMCDihpIKICAtIHN0cm9uZzogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYKICAtIHRleHQ6IMK3IDE5OjAwICgxMiBoIDAwKQogIC0gcGFyYWdyYXBoOgogICAgLSB0ZXh0OiAiVG90YWwgOiIKICAgIC0gc3Ryb25nOiAxMiBoIDAwCiAgICAtIHRleHQ6IHN1ciAxIHNlbWFpbmUgY2l2aWxlLgogIC0gdGV4dDogVGF1eCBob3JhaXJlIHByb3Bvc8OpICogKGJydXQgc2FsYXJpw6kgb3UgaG9ub3JhaXJlcyBIVCkKICAtIHNwaW5idXR0b24gIlRhdXggaG9yYWlyZSBwcm9wb3PDqSAqIChicnV0IHNhbGFyacOpIG91IGhvbm9yYWlyZXMgSFQpIgogIC0gcGFyYWdyYXBoOiAiVGF1eCBjb25zZWlsbMOpIHBvdXIgSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpIDogMjXigJMzOCDigqwvaCBicnV0IHNpIHNhbGFyacOpLCBIVCBk4oCZaG9ub3JhaXJlcyBzaSBsaWLDqXJhbCIKICAtIHRleHQ6IE1pc3Npb24gdXJnZW50ZSA/CiAgLSBwYXJhZ3JhcGg6IE1pc2UgZW4gYXZhbnQgZGFucyBsZXMgcmVjaGVyY2hlcyArIG5vdGlmaWNhdGlvbiBpbW3DqWRpYXRlIGF1eCBzb2lnbmFudHMgZGlzcG9uaWJsZXMgw6AgcHJveGltaXTDqS4KICAtIGJ1dHRvbiAiTWlzc2lvbiB1cmdlbnRlIgogIC0gcGFyYWdyYXBoOiBNb2RlIGRlIHPDqWxlY3Rpb24KICAtIHJhZGlvICJQcmVtaWVyIGFycml2w6kgTGUgcHJlbWllciBzb2lnbmFudCBxdWkgYWNjZXB0ZSByZW1wb3J0ZSBsYSBtaXNzaW9uLiIgW2NoZWNrZWRdCiAgLSB0ZXh0OiBQcmVtaWVyIGFycml2w6kKICAtIHBhcmFncmFwaDogTGUgcHJlbWllciBzb2lnbmFudCBxdWkgYWNjZXB0ZSByZW1wb3J0ZSBsYSBtaXNzaW9uLgogIC0gcmFkaW8gIkplIGNob2lzaXMgTGVzIHNvaWduYW50cyBwb3N0dWxlbnQsIHZvdXMgY29uc3VsdGV6IGxlcyBwcm9maWxzIGV0IGNob2lzaXNzZXouIgogIC0gdGV4dDogSmUgY2hvaXNpcwogIC0gcGFyYWdyYXBoOiBMZXMgc29pZ25hbnRzIHBvc3R1bGVudCwgdm91cyBjb25zdWx0ZXogbGVzIHByb2ZpbHMgZXQgY2hvaXNpc3Nlei4KICAtIHBhcmFncmFwaDogU2ltdWxhdGlvbiDDoCB0aXRyZSBpbmRpY2F0aWYuIExlIHLDqWdpbWUgcmV0ZW51IGTDqXRlcm1pbmUgZW5zdWl0ZSBsYSBwYWllIGVtcGxveWV1ciBvdSBsZXMgZGV1eCBmYWN0dXJlcyBkaXN0aW5jdGVzIGR1IHBhcmNvdXJzIGxpYsOpcmFsLgogIC0gYnV0dG9uICJQdWJsaWVyIGxhIG1pc3Npb24iIFtkaXNhYmxlZF0="
+                    },
+                    {
+                      "name": "etablissement-brouillon-apres-profil-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/brouillon/results/etablissement-exploration--df21f-és-après-création-du-profil-iphone-webkit/attachments/etablissement-brouillon-apres-profil-capture-db4e0bc4434c867ec8b8536cf7d0d6d47ca44e0b.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d35363b57f2e82617d26-9284fbe348ef0557bf35",
+          "file": "etablissement-exploration.spec.ts",
+          "line": 162,
+          "column": 1
+        },
+        {
+          "title": "brouillon établissement : titre et horaires conservés après création du profil",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12365,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T16:34:10.327Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "etablissement-brouillon-apres-profil-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gaGVhZGluZyAiUHVibGllciB1bmUgbWlzc2lvbiIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IEJyb3VpbGxvbiByZXByaXMg4oCUIFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiBWw6lyaWZpZXogbGVzIGhvcmFpcmVzIGV0IGxlcyBjb25kaXRpb25zIGF2YW50IHB1YmxpY2F0aW9uLgogIC0gaW1nCiAgLSB0ZXh0OiBWZXVpbGxleiBjb21wbMOpdGVyIHZvdHJlIFNJUkVUIGRhbnMgdm90cmUgcHJvZmlsIGF2YW50IGRlIHB1YmxpZXIgdW5lIG1pc3Npb24uCiAgLSBsaW5rICJBbGxlciBhdSBwcm9maWwg4oaSIjoKICAgIC0gL3VybDogL2V0YWJsaXNzZW1lbnQvcHJvZmlsCiAgLSBpbWcKICAtIHRleHQ6IFZvdHJlIGNvbnRyYXQgZGUgc2VydmljZSBuJ2VzdCBwYXMgZW5jb3JlIHNpZ27DqS4KICAtIGxpbmsgIlNpZ25lciBsZSBjb250cmF0IOKGkiI6CiAgICAtIC91cmw6IC9ldGFibGlzc2VtZW50L2FjdGl2ZXIKICAtIGFsZXJ0OgogICAgLSBpbWcKICAgIC0gdGV4dDogTGEgdsOpcmlmaWNhdGlvbiBkZSB2b3RyZSDDqXRhYmxpc3NlbWVudCBuJ2VzdCBwYXMgdGVybWluw6llLiBDb21wbMOpdGV6IGwnaGFiaWxpdGF0aW9uIGR1IHJlcHLDqXNlbnRhbnQgb3UgZGVtYW5kZXogdW5lIHZhbGlkYXRpb24gw6AgbCdhZG1pbmlzdHJhdGV1ciBKb2xlbmUuCiAgICAtIGxpbmsgIlRlcm1pbmVyIGxhIHbDqXJpZmljYXRpb24g4oaSIjoKICAgICAgLSAvdXJsOiAvZXRhYmxpc3NlbWVudC9hY3RpdmVyCiAgLSB0ZXh0OiBJbnRpdHVsw6kgKgogIC0gdGV4dGJveCAiSW50aXR1bMOpICoiOgogICAgLSAvcGxhY2Vob2xkZXI6ICJFeDogSURFIGRlIG51aXQg4oCUIFNlcnZpY2UgVXJnZW5jZXMiCiAgICAtIHRleHQ6IFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiAzMS8xMjAKICAtIHRleHQ6IERlc2NyaXB0aW9uCiAgLSB0ZXh0Ym94ICJEZXNjcmlwdGlvbiI6CiAgICAtIC9wbGFjZWhvbGRlcjogSW5mb3JtYXRpb25zIGNvbXBsw6ltZW50YWlyZXMgcG91ciBsZSBzb2lnbmFudC4uLgogIC0gdGV4dDogUHJvZmVzc2lvbiByZXF1aXNlICoKICAtIGNvbWJvYm94OgogICAgLSB0ZXh0OiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAgIC0gaW1nCiAgLSB0ZXh0OiBTZXJ2aWNlCiAgLSBjb21ib2JveCAiU2VydmljZSIKICAtIHRleHQ6IFR5cGUgZGUgY29udHJhdCBwcm9wb3PDqQogIC0gJ3JhZGlvICJTYWxhcmnDqSBWb3VzIMOqdGVzIGzigJllbXBsb3lldXIgOiBDREQsIGJ1bGxldGluIGRlIHBhaWUsIHBsYWZvbmQgbMOpZ2FsIDQ4IGgvc2VtYWluZSInCiAgLSB0ZXh0OiBTYWxhcmnDqQogIC0gcGFyYWdyYXBoOiAiVm91cyDDqnRlcyBs4oCZZW1wbG95ZXVyIDogQ0RELCBidWxsZXRpbiBkZSBwYWllLCBwbGFmb25kIGzDqWdhbCA0OCBoL3NlbWFpbmUiCiAgLSBwYXJhZ3JhcGg6IFBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24KICAtIHBhcmFncmFwaDogVsOpcmlmaWV6IGNoYXF1ZSBkYXRlIHRyYXZhaWxsw6llIGV0IGNoYXF1ZSBob3JhaXJlLiBMZXMgam91cnMgZGUgcmVwb3MgZXQgbGVzIGdhcmRlcyBkZSBudWl0IHNvbnQgZW5yZWdpc3Ryw6lzIHRlbHMgcXXigJlhZmZpY2jDqXMuCiAgLSBwYXJhZ3JhcGg6IPCfk4UgRGF0ZXMgZXQgaG9yYWlyZXMgcsOpZWxzCiAgLSBwYXJhZ3JhcGg6IENoYXF1ZSBkYXRlIGVzdCBpbmTDqXBlbmRhbnRlLiBWb3VzIHBvdXZleiBwcsOpdm9pciBkZXMgam91cnMgbm9uIHRyYXZhaWxsw6lzLCBwbHVzaWV1cnMgY3LDqW5lYXV4IGV0IGRlcyBnYXJkZXMgZGUgbnVpdC4KICAtIHRleHQ6IFByZW1pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJQcmVtacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHRleHQ6IERlcm5pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJEZXJuacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHBhcmFncmFwaDogU8OpbGVjdGlvbiByYXBpZGUKICAtIGJ1dHRvbiAiVG91dGVzIGxlcyBkYXRlcyIKICAtIGJ1dHRvbiAiTHVuZGnigJN2ZW5kcmVkaSIKICAtIGJ1dHRvbiAiMSBzZW1haW5lIGNpdmlsZSBzdXIgMiIKICAtIGJ1dHRvbiAiQXVjdW5lIgogIC0gYnV0dG9uICJBcHBsaXF1ZXIgbGUgMWVyIGhvcmFpcmUgYXV4IGpvdXJzIHPDqWxlY3Rpb25uw6lzIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEFwcGxpcXVlciBsZSAxZXIgaG9yYWlyZSBhdXggam91cnMgc8OpbGVjdGlvbm7DqXMKICAtIGNoZWNrYm94ICJtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiB0cmF2YWlsbMOpIiBbY2hlY2tlZF0KICAtIHRleHQ6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IFRyYXZhaWxsw6kgRMOpYnV0CiAgLSB0ZXh0Ym94ICJEw6lidXQgZHUgY3LDqW5lYXUgMSBkdSAyMDI2LTA5LTMwIjogMDc6MDAKICAtIHRleHQ6IEZpbgogIC0gdGV4dGJveCAiRmluIGR1IGNyw6luZWF1IDEgZHUgMjAyNi0wOS0zMCI6IDE5OjAwCiAgLSB0ZXh0OiBEYXRlIGRlIGZpbgogIC0gY29tYm9ib3ggIkRhdGUgZGUgZmluIGR1IGNyw6luZWF1IDEgZHUgMjAyNi0wOS0zMCI6CiAgICAtIG9wdGlvbiAiTcOqbWUgam91ciDCtyBtZXIuIDMwIHNlcHQuIiBbc2VsZWN0ZWRdCiAgICAtIG9wdGlvbiAiTGVuZGVtYWluIMK3IGpldS4gMSBvY3QuIgogIC0gYnV0dG9uICJTdXBwcmltZXIgbGUgY3LDqW5lYXUgMSBkdSAyMDI2LTA5LTMwIjoKICAgIC0gaW1nCiAgLSBwYXJhZ3JhcGg6IG1lci4gMzAgc2VwdC4gMDc6MDAg4oaSIG1lci4gMzAgc2VwdC4gMTk6MDAgwrcgMTIgaAogIC0gYnV0dG9uICJBam91dGVyIHVuIGNyw6luZWF1IGNlIGpvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQWpvdXRlciB1biBjcsOpbmVhdSBjZSBqb3VyCiAgLSBwYXJhZ3JhcGg6IENvbnRyw7RsZSBwYXIgc2VtYWluZSBjaXZpbGUKICAtIHRleHQ6IFNlbWFpbmUgZHUgMjgvMDkgMTIgaAogIC0gaW1nCiAgLSBwYXJhZ3JhcGg6ICJNYXhpbXVtIGzDqWdhbCA6IDQ4IGggcGFyIHNlbWFpbmUgY2l2aWxlIChsdW5kaeKAk2RpbWFuY2hlKS4iCiAgLSBwYXJhZ3JhcGg6IEFwZXLDp3UgZXhhY3QgwrcgMSBjcsOpbmVhdQogIC0gaW1nCiAgLSBzdHJvbmc6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2CiAgLSB0ZXh0OiDCtyAwNzowMCDihpIKICAtIHN0cm9uZzogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYKICAtIHRleHQ6IMK3IDE5OjAwICgxMiBoIDAwKQogIC0gcGFyYWdyYXBoOgogICAgLSB0ZXh0OiAiVG90YWwgOiIKICAgIC0gc3Ryb25nOiAxMiBoIDAwCiAgICAtIHRleHQ6IHN1ciAxIHNlbWFpbmUgY2l2aWxlLgogIC0gdGV4dDogVGF1eCBob3JhaXJlIHByb3Bvc8OpICogKGJydXQgc2FsYXJpw6kgb3UgaG9ub3JhaXJlcyBIVCkKICAtIHNwaW5idXR0b24gIlRhdXggaG9yYWlyZSBwcm9wb3PDqSAqIChicnV0IHNhbGFyacOpIG91IGhvbm9yYWlyZXMgSFQpIgogIC0gcGFyYWdyYXBoOiAiVGF1eCBjb25zZWlsbMOpIHBvdXIgSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpIDogMjXigJMzOCDigqwvaCBicnV0IHNpIHNhbGFyacOpLCBIVCBk4oCZaG9ub3JhaXJlcyBzaSBsaWLDqXJhbCIKICAtIHRleHQ6IE1pc3Npb24gdXJnZW50ZSA/CiAgLSBwYXJhZ3JhcGg6IE1pc2UgZW4gYXZhbnQgZGFucyBsZXMgcmVjaGVyY2hlcyArIG5vdGlmaWNhdGlvbiBpbW3DqWRpYXRlIGF1eCBzb2lnbmFudHMgZGlzcG9uaWJsZXMgw6AgcHJveGltaXTDqS4KICAtIGJ1dHRvbiAiTWlzc2lvbiB1cmdlbnRlIgogIC0gcGFyYWdyYXBoOiBNb2RlIGRlIHPDqWxlY3Rpb24KICAtIHJhZGlvICJQcmVtaWVyIGFycml2w6kgTGUgcHJlbWllciBzb2lnbmFudCBxdWkgYWNjZXB0ZSByZW1wb3J0ZSBsYSBtaXNzaW9uLiIgW2NoZWNrZWRdCiAgLSB0ZXh0OiBQcmVtaWVyIGFycml2w6kKICAtIHBhcmFncmFwaDogTGUgcHJlbWllciBzb2lnbmFudCBxdWkgYWNjZXB0ZSByZW1wb3J0ZSBsYSBtaXNzaW9uLgogIC0gcmFkaW8gIkplIGNob2lzaXMgTGVzIHNvaWduYW50cyBwb3N0dWxlbnQsIHZvdXMgY29uc3VsdGV6IGxlcyBwcm9maWxzIGV0IGNob2lzaXNzZXouIgogIC0gdGV4dDogSmUgY2hvaXNpcwogIC0gcGFyYWdyYXBoOiBMZXMgc29pZ25hbnRzIHBvc3R1bGVudCwgdm91cyBjb25zdWx0ZXogbGVzIHByb2ZpbHMgZXQgY2hvaXNpc3Nlei4KICAtIHBhcmFncmFwaDogU2ltdWxhdGlvbiDDoCB0aXRyZSBpbmRpY2F0aWYuIExlIHLDqWdpbWUgcmV0ZW51IGTDqXRlcm1pbmUgZW5zdWl0ZSBsYSBwYWllIGVtcGxveWV1ciBvdSBsZXMgZGV1eCBmYWN0dXJlcyBkaXN0aW5jdGVzIGR1IHBhcmNvdXJzIGxpYsOpcmFsLgogIC0gYnV0dG9uICJQdWJsaWVyIGxhIG1pc3Npb24iIFtkaXNhYmxlZF0="
+                    },
+                    {
+                      "name": "etablissement-brouillon-apres-profil-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/brouillon/results/etablissement-exploration--df21f-és-après-création-du-profil-android-pixel/attachments/etablissement-brouillon-apres-profil-capture-46ce74340aa4cbcb8e285accf258581e573f733a.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d35363b57f2e82617d26-70aed294ee2f209981d0",
+          "file": "etablissement-exploration.spec.ts",
+          "line": 162,
+          "column": 1
+        },
+        {
+          "title": "brouillon établissement : titre et horaires conservés après création du profil",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-1440",
+              "projectName": "desktop-1440",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8561,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T16:34:26.584Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "etablissement-brouillon-apres-profil-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gaGVhZGluZyAiUHVibGllciB1bmUgbWlzc2lvbiIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IEJyb3VpbGxvbiByZXByaXMg4oCUIFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiBWw6lyaWZpZXogbGVzIGhvcmFpcmVzIGV0IGxlcyBjb25kaXRpb25zIGF2YW50IHB1YmxpY2F0aW9uLgogIC0gaW1nCiAgLSB0ZXh0OiBWZXVpbGxleiBjb21wbMOpdGVyIHZvdHJlIFNJUkVUIGRhbnMgdm90cmUgcHJvZmlsIGF2YW50IGRlIHB1YmxpZXIgdW5lIG1pc3Npb24uCiAgLSBsaW5rICJBbGxlciBhdSBwcm9maWwg4oaSIjoKICAgIC0gL3VybDogL2V0YWJsaXNzZW1lbnQvcHJvZmlsCiAgLSBpbWcKICAtIHRleHQ6IFZvdHJlIGNvbnRyYXQgZGUgc2VydmljZSBuJ2VzdCBwYXMgZW5jb3JlIHNpZ27DqS4KICAtIGxpbmsgIlNpZ25lciBsZSBjb250cmF0IOKGkiI6CiAgICAtIC91cmw6IC9ldGFibGlzc2VtZW50L2FjdGl2ZXIKICAtIGFsZXJ0OgogICAgLSBpbWcKICAgIC0gdGV4dDogTGEgdsOpcmlmaWNhdGlvbiBkZSB2b3RyZSDDqXRhYmxpc3NlbWVudCBuJ2VzdCBwYXMgdGVybWluw6llLiBDb21wbMOpdGV6IGwnaGFiaWxpdGF0aW9uIGR1IHJlcHLDqXNlbnRhbnQgb3UgZGVtYW5kZXogdW5lIHZhbGlkYXRpb24gw6AgbCdhZG1pbmlzdHJhdGV1ciBKb2xlbmUuCiAgICAtIGxpbmsgIlRlcm1pbmVyIGxhIHbDqXJpZmljYXRpb24g4oaSIjoKICAgICAgLSAvdXJsOiAvZXRhYmxpc3NlbWVudC9hY3RpdmVyCiAgLSB0ZXh0OiBJbnRpdHVsw6kgKgogIC0gdGV4dGJveCAiSW50aXR1bMOpICoiOgogICAgLSAvcGxhY2Vob2xkZXI6ICJFeDogSURFIGRlIG51aXQg4oCUIFNlcnZpY2UgVXJnZW5jZXMiCiAgICAtIHRleHQ6IFJlbmZvcnQgSURFIOKAlCBhdWRpdCBpbnNjcmlwdGlvbgogIC0gcGFyYWdyYXBoOiAzMS8xMjAKICAtIHRleHQ6IERlc2NyaXB0aW9uCiAgLSB0ZXh0Ym94ICJEZXNjcmlwdGlvbiI6CiAgICAtIC9wbGFjZWhvbGRlcjogSW5mb3JtYXRpb25zIGNvbXBsw6ltZW50YWlyZXMgcG91ciBsZSBzb2lnbmFudC4uLgogIC0gdGV4dDogUHJvZmVzc2lvbiByZXF1aXNlICoKICAtIGNvbWJvYm94OgogICAgLSB0ZXh0OiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAgIC0gaW1nCiAgLSB0ZXh0OiBTZXJ2aWNlCiAgLSBjb21ib2JveCAiU2VydmljZSIKICAtIHRleHQ6IFR5cGUgZGUgY29udHJhdCBwcm9wb3PDqQogIC0gJ3JhZGlvICJTYWxhcmnDqSBWb3VzIMOqdGVzIGzigJllbXBsb3lldXIgOiBDREQsIGJ1bGxldGluIGRlIHBhaWUsIHBsYWZvbmQgbMOpZ2FsIDQ4IGgvc2VtYWluZSInCiAgLSB0ZXh0OiBTYWxhcmnDqQogIC0gcGFyYWdyYXBoOiAiVm91cyDDqnRlcyBs4oCZZW1wbG95ZXVyIDogQ0RELCBidWxsZXRpbiBkZSBwYWllLCBwbGFmb25kIGzDqWdhbCA0OCBoL3NlbWFpbmUiCiAgLSBwYXJhZ3JhcGg6IFBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24KICAtIHBhcmFncmFwaDogVsOpcmlmaWV6IGNoYXF1ZSBkYXRlIHRyYXZhaWxsw6llIGV0IGNoYXF1ZSBob3JhaXJlLiBMZXMgam91cnMgZGUgcmVwb3MgZXQgbGVzIGdhcmRlcyBkZSBudWl0IHNvbnQgZW5yZWdpc3Ryw6lzIHRlbHMgcXXigJlhZmZpY2jDqXMuCiAgLSBwYXJhZ3JhcGg6IPCfk4UgRGF0ZXMgZXQgaG9yYWlyZXMgcsOpZWxzCiAgLSBwYXJhZ3JhcGg6IENoYXF1ZSBkYXRlIGVzdCBpbmTDqXBlbmRhbnRlLiBWb3VzIHBvdXZleiBwcsOpdm9pciBkZXMgam91cnMgbm9uIHRyYXZhaWxsw6lzLCBwbHVzaWV1cnMgY3LDqW5lYXV4IGV0IGRlcyBnYXJkZXMgZGUgbnVpdC4KICAtIHRleHQ6IFByZW1pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJQcmVtacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHRleHQ6IERlcm5pw6hyZSBkYXRlIGFmZmljaMOpZSAqCiAgLSB0ZXh0Ym94ICJEZXJuacOocmUgZGF0ZSBhZmZpY2jDqWUgKiI6IDIwMjYtMDktMzAKICAtIHBhcmFncmFwaDogU8OpbGVjdGlvbiByYXBpZGUKICAtIGJ1dHRvbiAiVG91dGVzIGxlcyBkYXRlcyIKICAtIGJ1dHRvbiAiTHVuZGnigJN2ZW5kcmVkaSIKICAtIGJ1dHRvbiAiMSBzZW1haW5lIGNpdmlsZSBzdXIgMiIKICAtIGJ1dHRvbiAiQXVjdW5lIgogIC0gYnV0dG9uICJBcHBsaXF1ZXIgbGUgMWVyIGhvcmFpcmUgYXV4IGpvdXJzIHPDqWxlY3Rpb25uw6lzIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEFwcGxpcXVlciBsZSAxZXIgaG9yYWlyZSBhdXggam91cnMgc8OpbGVjdGlvbm7DqXMKICAtIGNoZWNrYm94ICJtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiB0cmF2YWlsbMOpIiBbY2hlY2tlZF0KICAtIHRleHQ6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IFRyYXZhaWxsw6kgRMOpYnV0CiAgLSB0ZXh0Ym94ICJEw6lidXQgZHUgY3LDqW5lYXUgMSBkdSAyMDI2LTA5LTMwIjogMDc6MDAKICAtIHRleHQ6IOKGkiBGaW4KICAtIHRleHRib3ggIkZpbiBkdSBjcsOpbmVhdSAxIGR1IDIwMjYtMDktMzAiOiAxOTowMAogIC0gdGV4dDogRGF0ZSBkZSBmaW4KICAtIGNvbWJvYm94ICJEYXRlIGRlIGZpbiBkdSBjcsOpbmVhdSAxIGR1IDIwMjYtMDktMzAiOgogICAgLSBvcHRpb24gIk3Dqm1lIGpvdXIgwrcgbWVyLiAzMCBzZXB0LiIgW3NlbGVjdGVkXQogICAgLSBvcHRpb24gIkxlbmRlbWFpbiDCtyBqZXUuIDEgb2N0LiIKICAtIGJ1dHRvbiAiU3VwcHJpbWVyIGxlIGNyw6luZWF1IDEgZHUgMjAyNi0wOS0zMCI6CiAgICAtIGltZwogIC0gcGFyYWdyYXBoOiBtZXIuIDMwIHNlcHQuIDA3OjAwIOKGkiBtZXIuIDMwIHNlcHQuIDE5OjAwIMK3IDEyIGgKICAtIGJ1dHRvbiAiQWpvdXRlciB1biBjcsOpbmVhdSBjZSBqb3VyIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEFqb3V0ZXIgdW4gY3LDqW5lYXUgY2Ugam91cgogIC0gcGFyYWdyYXBoOiBDb250csO0bGUgcGFyIHNlbWFpbmUgY2l2aWxlCiAgLSB0ZXh0OiBTZW1haW5lIGR1IDI4LzA5IDEyIGgKICAtIGltZwogIC0gcGFyYWdyYXBoOiAiTWF4aW11bSBsw6lnYWwgOiA0OCBoIHBhciBzZW1haW5lIGNpdmlsZSAobHVuZGnigJNkaW1hbmNoZSkuIgogIC0gcGFyYWdyYXBoOiBBcGVyw6d1IGV4YWN0IMK3IDEgY3LDqW5lYXUKICAtIGltZwogIC0gc3Ryb25nOiBtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNgogIC0gdGV4dDogwrcgMDc6MDAg4oaSCiAgLSBzdHJvbmc6IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2CiAgLSB0ZXh0OiDCtyAxOTowMCAoMTIgaCAwMCkKICAtIHBhcmFncmFwaDoKICAgIC0gdGV4dDogIlRvdGFsIDoiCiAgICAtIHN0cm9uZzogMTIgaCAwMAogICAgLSB0ZXh0OiBzdXIgMSBzZW1haW5lIGNpdmlsZS4KICAtIHRleHQ6IFRhdXggaG9yYWlyZSBwcm9wb3PDqSAqIChicnV0IHNhbGFyacOpIG91IGhvbm9yYWlyZXMgSFQpCiAgLSBzcGluYnV0dG9uICJUYXV4IGhvcmFpcmUgcHJvcG9zw6kgKiAoYnJ1dCBzYWxhcmnDqSBvdSBob25vcmFpcmVzIEhUKSIKICAtIHBhcmFncmFwaDogIlRhdXggY29uc2VpbGzDqSBwb3VyIEluZmlybWllcijDqHJlKSBEaXBsw7Rtw6koZSkgZCfDiXRhdCAoSURFKSA6IDI14oCTMzgg4oKsL2ggYnJ1dCBzaSBzYWxhcmnDqSwgSFQgZOKAmWhvbm9yYWlyZXMgc2kgbGliw6lyYWwiCiAgLSB0ZXh0OiBNaXNzaW9uIHVyZ2VudGUgPwogIC0gcGFyYWdyYXBoOiBNaXNlIGVuIGF2YW50IGRhbnMgbGVzIHJlY2hlcmNoZXMgKyBub3RpZmljYXRpb24gaW1tw6lkaWF0ZSBhdXggc29pZ25hbnRzIGRpc3BvbmlibGVzIMOgIHByb3hpbWl0w6kuCiAgLSBidXR0b24gIk1pc3Npb24gdXJnZW50ZSIKICAtIHBhcmFncmFwaDogTW9kZSBkZSBzw6lsZWN0aW9uCiAgLSByYWRpbyAiUHJlbWllciBhcnJpdsOpIExlIHByZW1pZXIgc29pZ25hbnQgcXVpIGFjY2VwdGUgcmVtcG9ydGUgbGEgbWlzc2lvbi4iIFtjaGVja2VkXQogIC0gdGV4dDogUHJlbWllciBhcnJpdsOpCiAgLSBwYXJhZ3JhcGg6IExlIHByZW1pZXIgc29pZ25hbnQgcXVpIGFjY2VwdGUgcmVtcG9ydGUgbGEgbWlzc2lvbi4KICAtIHJhZGlvICJKZSBjaG9pc2lzIExlcyBzb2lnbmFudHMgcG9zdHVsZW50LCB2b3VzIGNvbnN1bHRleiBsZXMgcHJvZmlscyBldCBjaG9pc2lzc2V6LiIKICAtIHRleHQ6IEplIGNob2lzaXMKICAtIHBhcmFncmFwaDogTGVzIHNvaWduYW50cyBwb3N0dWxlbnQsIHZvdXMgY29uc3VsdGV6IGxlcyBwcm9maWxzIGV0IGNob2lzaXNzZXouCiAgLSBwYXJhZ3JhcGg6IFNpbXVsYXRpb24gw6AgdGl0cmUgaW5kaWNhdGlmLiBMZSByw6lnaW1lIHJldGVudSBkw6l0ZXJtaW5lIGVuc3VpdGUgbGEgcGFpZSBlbXBsb3lldXIgb3UgbGVzIGRldXggZmFjdHVyZXMgZGlzdGluY3RlcyBkdSBwYXJjb3VycyBsaWLDqXJhbC4KICAtIGJ1dHRvbiAiUHVibGllciBsYSBtaXNzaW9uIiBbZGlzYWJsZWRd"
+                    },
+                    {
+                      "name": "etablissement-brouillon-apres-profil-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/brouillon/results/etablissement-exploration--df21f-és-après-création-du-profil-desktop-1440/attachments/etablissement-brouillon-apres-profil-capture-62824348e6a23c50febc1a88899b2527f8ba11a6.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d35363b57f2e82617d26-73087784ee0b40c7522c",
+          "file": "etablissement-exploration.spec.ts",
+          "line": 162,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-23T16:33:34.146Z",
+    "duration": 62346.793,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

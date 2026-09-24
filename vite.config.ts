@@ -36,6 +36,12 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    {
+      name: 'native-system-fonts',
+      transformIndexHtml: (html: string) => process.env.VITE_NATIVE_BUILD === 'true'
+        ? html.replace(/<link\b[^>]*href="https:\/\/fonts\.(?:googleapis|gstatic)\.com[^">]*"[^>]*>/g, '')
+        : html,
+    },
     // Active l'upload des source maps Sentry à chaque build prod si le token
     // est présent. Sans token (dev local, preview Vercel sans secret) le
     // plugin est omis, le build reste rapide.

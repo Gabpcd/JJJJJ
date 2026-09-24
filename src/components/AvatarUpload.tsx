@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { invaliderProfilNavigation } from '@/lib/invaliderProfilNavigation';
 import React, { useRef, useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -104,6 +106,7 @@ interface AvatarUploadProps {
 export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: AvatarUploadProps) {
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
 
@@ -155,6 +158,7 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
         if (error) throw error;
       }
 
+      invaliderProfilNavigation(queryClient, user.id);
       setCurrentSrc(signedUrl);
       onUploaded?.(signedUrl);
       toast.success('Photo mise à jour !');

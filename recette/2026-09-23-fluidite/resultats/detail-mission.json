@@ -1,0 +1,356 @@
+{
+  "config": {
+    "configFile": "/private/tmp/jolene-detail-final-playwright.config.ts",
+    "rootDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-preuves/detail-mission/results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "detail-mission-lisibilite.spec.ts"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-preuves/detail-mission/results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "detail-mission-lisibilite.spec.ts"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/private/tmp/jolene-fluidite-preuves/detail-mission/results-final.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "detail-mission-lisibilite.spec.ts",
+      "file": "detail-mission-lisibilite.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "détail mission : rémunération prioritaire et montants préservés 390",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14026,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:26:14.389Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "detail-salarie-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBoZWFkaW5nICLwn5KwIETDqWNvbXBvc2l0aW9uIGZpbmFuY2nDqHJlIiBbbGV2ZWw9M10KICAgIC0gdGV4dDogQ29udHJhdCBzYWxhcmnDqSAoQ0REKSBOZXQgc2FsYXJpw6kgZXN0aW3DqSBhdmFudCBQQVMqIDI0MCwwMCDigqwKICAgIC0gcGFyYWdyYXBoOiBFc3RpbWF0aW9uIGluZGljYXRpdmUgYXZhbnQgcHLDqWzDqHZlbWVudCDDoCBsYSBzb3VyY2UuIExlIG1vbnRhbnQgbmV0IGV4YWN0IMOgIHBheWVyIGZpZ3VyZSBzdXIgbGUgYnVsbGV0aW4gb2ZmaWNpZWwgw6l0YWJsaSBwYXIgbCfDqXRhYmxpc3NlbWVudCBlbXBsb3lldXIuCiAgICAtIGJ1dHRvbiAiRMOpdGFpbCBjb21wdGFibGUgKGJydXQsIElGTSwgSUNQLCBjb3Rpc2F0aW9ucykiOgogICAgICAtIHRleHQ6IETDqXRhaWwgY29tcHRhYmxlIChicnV0LCBJRk0sIElDUCwgY290aXNhdGlvbnMpCiAgICAgIC0gaW1nCiAgICAtIHBhcmFncmFwaDogRXN0aW1hdGlvbiBub24gY29udHJhY3R1ZWxsZS4gTGUgYnVsbGV0aW4gZGUgcGFpZSBvZmZpY2llbCBlc3Qgw6l0YWJsaSBldCBmb3VybmkgcGFyIMKrIFLDqXNpZGVuY2UgQ2FtaWxsZSDCuy4KICAgIC0gcGFyYWdyYXBoOiBTaW11bGF0aW9uIMOgIHRpdHJlIGluZGljYXRpZi4gU2V1bHMgbGVzIG1vbnRhbnRzIGNhbGN1bMOpcyBwYXIgbGUgbW90ZXVyIGRlIHBhaWUgZm9udCBmb2kuCiAgLSBpbWcKICAtIGhlYWRpbmcgIlLDqXNpZGVuY2UgQ2FtaWxsZSIgW2xldmVsPTNdCiAgLSBwYXJhZ3JhcGg6IEVIUEFECiAgLSBwYXJhZ3JhcGg6IDc1MDAxIFBhcmlzCiAgLSBpbWcKICAtIHRleHQ6IERpc3RhbmNlIG5vbiBkaXNwb25pYmxlCiAgLSBwYXJhZ3JhcGg6IENldCDDqXRhYmxpc3NlbWVudCBhIHB1Ymxpw6kgMCBtaXNzaW9uIHN1ciBKb2xlbmUKICAtIGJ1dHRvbiAiQXV0cmVzIGFjdGlvbnMiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQXV0cmVzIGFjdGlvbnMKICAtIGhlYWRpbmcgIvCflZAgSG9yYWlyZXMiIFtsZXZlbD0zXQogIC0gcmVnaW9uICJQbGFubmluZyBleGFjdCBkZSBsYSBtaXNzaW9uIjoKICAgIC0gdGV4dDogMSBjcsOpbmVhdSA4IGggYXUgdG90YWwKICAgIC0gbGlzdCAiSm91cnMgZXQgaG9yYWlyZXMgdHJhdmFpbGzDqXMiOgogICAgICAtIGxpc3RpdGVtOiBtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiAxN2gyNiDihpIgamV1ZGkgMSBvY3RvYnJlIDIwMjYgwrcgMDFoMjYgKGxlbmRlbWFpbikgwrcgOCBoCiAgICAtIHBhcmFncmFwaDogU2V1bHMgbGVzIGNyw6luZWF1eCBsaXN0w6lzIHNvbnQgdHJhdmFpbGzDqXMuIExlcyBhdXRyZXMgam91cnMgZGUgbGEgcMOpcmlvZGUgbmUgc29udCBwYXMgdHJhdmFpbGzDqXMuCiAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUKICAtIHRleHQ6IFNlbWFpbmUgZHUgMjggc2VwdC4gOGggLyA0OGgKICAtIHBhcmFncmFwaDogIlBsYW5pZmnDqWVzIDogMGggKyBtaXNzaW9uIDogOGgiCiAgLSBwYXJhZ3JhcGg6IOKchSBJbCB2b3VzIHJlc3RlIDQwaCBkZSBkaXNwb25pYmlsaXTDqSBzdXIgY2V0dGUgc2VtYWluZQogIC0gYnV0dG9uICLwn5OFIFZvaXIgZGFucyBtb24gcGxhbm5pbmciCiAgLSBidXR0b24gIkNhbmRpZGF0ZXIi"
+                    },
+                    {
+                      "name": "detail-salarie-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-chromium/attachments/detail-salarie-390-capture-d16f60976cdd62c2ae0bf02053d1086db4850fe5.png"
+                    },
+                    {
+                      "name": "detail-liberal-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBoZWFkaW5nICLwn5KwIETDqWNvbXBvc2l0aW9uIGZpbmFuY2nDqHJlIiBbbGV2ZWw9M10KICAgIC0gdGV4dDogQ29udHJhdCBsaWLDqXJhbCBUYXV4IGhvcmFpcmUgMzAuMDAg4oKsL2gKICAgIC0gcGFyYWdyYXBoOiBIZXVyZXMKICAgIC0gdGV4dDogSGV1cmVzIHRvdGFsZXMgOC4waAogICAgLSBwYXJhZ3JhcGg6IENhbGN1bAogICAgLSB0ZXh0OiBCcnV0IGRlIGJhc2UgKDguMGggw5cgMzAuMDDigqwpIDI0MCwwMCDigqwgQnJ1dCBob25vcmFpcmVzIHNvaWduYW50IDI0MCwwMCDigqwKICAgIC0gcGFyYWdyYXBoOiBNb250YW50IMOgIHZlcnNlciBhdSBzb2lnbmFudCAoMTAwICUgZHUgYnJ1dCBob25vcmFpcmVzLCBhdWN1bmUgcmV0ZW51ZSBwYXIgSm9sZW5lKQogICAgLSBwYXJhZ3JhcGg6ICJDb250cmF0IGxpYsOpcmFsIDogbGUgc29pZ25hbnQgZMOpY2xhcmUgc2VzIHJldmVudXMgZXQgY290aXNlIGF1cHLDqHMgZGUgbCdVUlNTQUYgbGliw6lyYWxlIC8gQ0FSUElNS08gb3UgQ0lQQVYuIgogICAgLSBwYXJhZ3JhcGg6IFNpbXVsYXRpb24gw6AgdGl0cmUgaW5kaWNhdGlmLiBTZXVscyBsZXMgbW9udGFudHMgY2FsY3Vsw6lzIHBhciBsZSBtb3RldXIgZGUgcGFpZSBmb250IGZvaS4KICAgIC0gcGFyYWdyYXBoOiBQYXnDqWUgYXByw6hzIHLDqGdsZW1lbnQgZGUgbCfDqXRhYmxpc3NlbWVudCAofjMwIMOgIDYwIGpvdXJzKS4KICAtIGltZwogIC0gaGVhZGluZyAiUsOpc2lkZW5jZSBDYW1pbGxlIiBbbGV2ZWw9M10KICAtIHBhcmFncmFwaDogRUhQQUQKICAtIHBhcmFncmFwaDogNzUwMDEgUGFyaXMKICAtIGltZwogIC0gdGV4dDogRGlzdGFuY2Ugbm9uIGRpc3BvbmlibGUKICAtIHBhcmFncmFwaDogQ2V0IMOpdGFibGlzc2VtZW50IGEgcHVibGnDqSAwIG1pc3Npb24gc3VyIEpvbGVuZQogIC0gYnV0dG9uICJBdXRyZXMgYWN0aW9ucyI6CiAgICAtIGltZwogICAgLSB0ZXh0OiBBdXRyZXMgYWN0aW9ucwogIC0gaGVhZGluZyAi8J+VkCBIb3JhaXJlcyIgW2xldmVsPTNdCiAgLSByZWdpb24gIlBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24iOgogICAgLSB0ZXh0OiAxIGNyw6luZWF1IDggaCBhdSB0b3RhbAogICAgLSBsaXN0ICJKb3VycyBldCBob3JhaXJlcyB0cmF2YWlsbMOpcyI6CiAgICAgIC0gbGlzdGl0ZW06IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IDE3aDI2IOKGkiBqZXVkaSAxIG9jdG9icmUgMjAyNiDCtyAwMWgyNiAobGVuZGVtYWluKSDCtyA4IGgKICAgIC0gcGFyYWdyYXBoOiBTZXVscyBsZXMgY3LDqW5lYXV4IGxpc3TDqXMgc29udCB0cmF2YWlsbMOpcy4gTGVzIGF1dHJlcyBqb3VycyBkZSBsYSBww6lyaW9kZSBuZSBzb250IHBhcyB0cmF2YWlsbMOpcy4KICAtIHN0YXR1czoKICAgIC0gcGFyYWdyYXBoOiDwn5OKIFBsYWZvbmQgaGViZG9tYWRhaXJlIHNhbGFyacOpCiAgICAtIHBhcmFncmFwaDogQ2V0dGUgbWlzc2lvbiBsaWLDqXJhbGUgbidlbnRyZSBwYXMgZGFucyBsZSBjYWxjdWwgZHUgcGxhZm9uZCBzYWxhcmnDqSBkZSA0OCBoLgogIC0gYnV0dG9uICLwn5OFIFZvaXIgZGFucyBtb24gcGxhbm5pbmciCiAgLSBidXR0b24gIkNhbmRpZGF0ZXIi"
+                    },
+                    {
+                      "name": "detail-liberal-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-chromium/attachments/detail-liberal-390-capture-382217c4bfc98755f17c060cf6c8a99a23bc9251.png"
+                    },
+                    {
+                      "name": "detail-retrocession-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBwYXJhZ3JhcGg6IPCfpJ0gUmVtcGxhY2VtZW50IGRlIGNhYmluZXQg4oCUIHLDqXRyb2Nlc3Npb24gZCdob25vcmFpcmVzCiAgICAtIHBhcmFncmFwaDogODAlCiAgICAtIHBhcmFncmFwaDogIlR1IGV4ZXJjZXMgc291cyBsZXMgZmV1aWxsZXMgZGUgc29pbnMgZHUgdGl0dWxhaXJlIDogaWwgZW5jYWlzc2UgbGVzIGhvbm9yYWlyZXMgcHVpcyB0ZSByw6l0cm9jw6hkZSA4MCUgZGVzIGFjdGVzIHLDqWFsaXPDqXMgKGNvbnRyYXQgZGUgcmVtcGxhY2VtZW50IGNvbmZvcm1lIGF1IG1vZMOobGUgZGUgbCdPcmRyZSwgZ8OpbsOpcsOpIMOgIGwnYWNjZXB0YXRpb24pLiBSQ1Agb2JsaWdhdG9pcmUuIgogIC0gaW1nCiAgLSBoZWFkaW5nICJSw6lzaWRlbmNlIENhbWlsbGUiIFtsZXZlbD0zXQogIC0gcGFyYWdyYXBoOiBFSFBBRAogIC0gcGFyYWdyYXBoOiA3NTAwMSBQYXJpcwogIC0gaW1nCiAgLSB0ZXh0OiBEaXN0YW5jZSBub24gZGlzcG9uaWJsZQogIC0gcGFyYWdyYXBoOiBDZXQgw6l0YWJsaXNzZW1lbnQgYSBwdWJsacOpIDAgbWlzc2lvbiBzdXIgSm9sZW5lCiAgLSBidXR0b24gIkF1dHJlcyBhY3Rpb25zIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEF1dHJlcyBhY3Rpb25zCiAgLSBoZWFkaW5nICLwn5WQIEhvcmFpcmVzIiBbbGV2ZWw9M10KICAtIHJlZ2lvbiAiUGxhbm5pbmcgZXhhY3QgZGUgbGEgbWlzc2lvbiI6CiAgICAtIHRleHQ6IDEgY3LDqW5lYXUgOCBoIGF1IHRvdGFsCiAgICAtIGxpc3QgIkpvdXJzIGV0IGhvcmFpcmVzIHRyYXZhaWxsw6lzIjoKICAgICAgLSBsaXN0aXRlbTogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYgMTdoMjYg4oaSIGpldWRpIDEgb2N0b2JyZSAyMDI2IMK3IDAxaDI2IChsZW5kZW1haW4pIMK3IDggaAogICAgLSBwYXJhZ3JhcGg6IFNldWxzIGxlcyBjcsOpbmVhdXggbGlzdMOpcyBzb250IHRyYXZhaWxsw6lzLiBMZXMgYXV0cmVzIGpvdXJzIGRlIGxhIHDDqXJpb2RlIG5lIHNvbnQgcGFzIHRyYXZhaWxsw6lzLgogIC0gc3RhdHVzOgogICAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUgc2FsYXJpw6kKICAgIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIGxpYsOpcmFsZSBuJ2VudHJlIHBhcyBkYW5zIGxlIGNhbGN1bCBkdSBwbGFmb25kIHNhbGFyacOpIGRlIDQ4IGguCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-retrocession-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-chromium/attachments/detail-retrocession-390-capture-26a1ed8932bd27faff33746851e8aa6e8e795731.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4bc67af9a2830181b710-22333d6ddfd4290d65da",
+          "file": "detail-mission-lisibilite.spec.ts",
+          "line": 96,
+          "column": 3
+        },
+        {
+          "title": "détail mission : rémunération prioritaire et montants préservés 1440",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13661,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:26:30.026Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "detail-salarie-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIGhlYWRpbmcgIvCfkrAgRMOpY29tcG9zaXRpb24gZmluYW5jacOocmUiIFtsZXZlbD0zXQogICAgLSB0ZXh0OiBDb250cmF0IHNhbGFyacOpIChDREQpIE5ldCBzYWxhcmnDqSBlc3RpbcOpIGF2YW50IFBBUyogMjQwLDAwIOKCrAogICAgLSBwYXJhZ3JhcGg6IEVzdGltYXRpb24gaW5kaWNhdGl2ZSBhdmFudCBwcsOpbMOodmVtZW50IMOgIGxhIHNvdXJjZS4gTGUgbW9udGFudCBuZXQgZXhhY3Qgw6AgcGF5ZXIgZmlndXJlIHN1ciBsZSBidWxsZXRpbiBvZmZpY2llbCDDqXRhYmxpIHBhciBsJ8OpdGFibGlzc2VtZW50IGVtcGxveWV1ci4KICAgIC0gYnV0dG9uICJEw6l0YWlsIGNvbXB0YWJsZSAoYnJ1dCwgSUZNLCBJQ1AsIGNvdGlzYXRpb25zKSI6CiAgICAgIC0gdGV4dDogRMOpdGFpbCBjb21wdGFibGUgKGJydXQsIElGTSwgSUNQLCBjb3Rpc2F0aW9ucykKICAgICAgLSBpbWcKICAgIC0gcGFyYWdyYXBoOiBFc3RpbWF0aW9uIG5vbiBjb250cmFjdHVlbGxlLiBMZSBidWxsZXRpbiBkZSBwYWllIG9mZmljaWVsIGVzdCDDqXRhYmxpIGV0IGZvdXJuaSBwYXIgwqsgUsOpc2lkZW5jZSBDYW1pbGxlIMK7LgogICAgLSBwYXJhZ3JhcGg6IFNpbXVsYXRpb24gw6AgdGl0cmUgaW5kaWNhdGlmLiBTZXVscyBsZXMgbW9udGFudHMgY2FsY3Vsw6lzIHBhciBsZSBtb3RldXIgZGUgcGFpZSBmb250IGZvaS4KICAtIGltZwogIC0gaGVhZGluZyAiUsOpc2lkZW5jZSBDYW1pbGxlIiBbbGV2ZWw9M10KICAtIHBhcmFncmFwaDogRUhQQUQKICAtIHBhcmFncmFwaDogNzUwMDEgUGFyaXMKICAtIGltZwogIC0gdGV4dDogRGlzdGFuY2Ugbm9uIGRpc3BvbmlibGUKICAtIHBhcmFncmFwaDogQ2V0IMOpdGFibGlzc2VtZW50IGEgcHVibGnDqSAwIG1pc3Npb24gc3VyIEpvbGVuZQogIC0gYnV0dG9uICJBdXRyZXMgYWN0aW9ucyI6CiAgICAtIGltZwogICAgLSB0ZXh0OiBBdXRyZXMgYWN0aW9ucwogIC0gaGVhZGluZyAi8J+VkCBIb3JhaXJlcyIgW2xldmVsPTNdCiAgLSByZWdpb24gIlBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24iOgogICAgLSB0ZXh0OiAxIGNyw6luZWF1IDggaCBhdSB0b3RhbAogICAgLSBsaXN0ICJKb3VycyBldCBob3JhaXJlcyB0cmF2YWlsbMOpcyI6CiAgICAgIC0gbGlzdGl0ZW06IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IDE3aDI2IOKGkiBqZXVkaSAxIG9jdG9icmUgMjAyNiDCtyAwMWgyNiAobGVuZGVtYWluKSDCtyA4IGgKICAgIC0gcGFyYWdyYXBoOiBTZXVscyBsZXMgY3LDqW5lYXV4IGxpc3TDqXMgc29udCB0cmF2YWlsbMOpcy4gTGVzIGF1dHJlcyBqb3VycyBkZSBsYSBww6lyaW9kZSBuZSBzb250IHBhcyB0cmF2YWlsbMOpcy4KICAtIHBhcmFncmFwaDog8J+TiiBQbGFmb25kIGhlYmRvbWFkYWlyZQogIC0gdGV4dDogU2VtYWluZSBkdSAyOCBzZXB0LiA4aCAvIDQ4aAogIC0gcGFyYWdyYXBoOiAiUGxhbmlmacOpZXMgOiAwaCArIG1pc3Npb24gOiA4aCIKICAtIHBhcmFncmFwaDog4pyFIElsIHZvdXMgcmVzdGUgNDBoIGRlIGRpc3BvbmliaWxpdMOpIHN1ciBjZXR0ZSBzZW1haW5lCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-salarie-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-chromium/attachments/detail-salarie-1440-capture-724dfe93fb581713578a07911a85d2a870e77313.png"
+                    },
+                    {
+                      "name": "detail-liberal-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIGhlYWRpbmcgIvCfkrAgRMOpY29tcG9zaXRpb24gZmluYW5jacOocmUiIFtsZXZlbD0zXQogICAgLSB0ZXh0OiBDb250cmF0IGxpYsOpcmFsIFRhdXggaG9yYWlyZSAzMC4wMCDigqwvaAogICAgLSBwYXJhZ3JhcGg6IEhldXJlcwogICAgLSB0ZXh0OiBIZXVyZXMgdG90YWxlcyA4LjBoCiAgICAtIHBhcmFncmFwaDogQ2FsY3VsCiAgICAtIHRleHQ6IEJydXQgZGUgYmFzZSAoOC4waCDDlyAzMC4wMOKCrCkgMjQwLDAwIOKCrCBCcnV0IGhvbm9yYWlyZXMgc29pZ25hbnQgMjQwLDAwIOKCrAogICAgLSBwYXJhZ3JhcGg6IE1vbnRhbnQgw6AgdmVyc2VyIGF1IHNvaWduYW50ICgxMDAgJSBkdSBicnV0IGhvbm9yYWlyZXMsIGF1Y3VuZSByZXRlbnVlIHBhciBKb2xlbmUpCiAgICAtIHBhcmFncmFwaDogIkNvbnRyYXQgbGliw6lyYWwgOiBsZSBzb2lnbmFudCBkw6ljbGFyZSBzZXMgcmV2ZW51cyBldCBjb3Rpc2UgYXVwcsOocyBkZSBsJ1VSU1NBRiBsaWLDqXJhbGUgLyBDQVJQSU1LTyBvdSBDSVBBVi4iCiAgICAtIHBhcmFncmFwaDogU2ltdWxhdGlvbiDDoCB0aXRyZSBpbmRpY2F0aWYuIFNldWxzIGxlcyBtb250YW50cyBjYWxjdWzDqXMgcGFyIGxlIG1vdGV1ciBkZSBwYWllIGZvbnQgZm9pLgogICAgLSBwYXJhZ3JhcGg6IFBhecOpZSBhcHLDqHMgcsOoZ2xlbWVudCBkZSBsJ8OpdGFibGlzc2VtZW50ICh+MzAgw6AgNjAgam91cnMpLgogIC0gaW1nCiAgLSBoZWFkaW5nICJSw6lzaWRlbmNlIENhbWlsbGUiIFtsZXZlbD0zXQogIC0gcGFyYWdyYXBoOiBFSFBBRAogIC0gcGFyYWdyYXBoOiA3NTAwMSBQYXJpcwogIC0gaW1nCiAgLSB0ZXh0OiBEaXN0YW5jZSBub24gZGlzcG9uaWJsZQogIC0gcGFyYWdyYXBoOiBDZXQgw6l0YWJsaXNzZW1lbnQgYSBwdWJsacOpIDAgbWlzc2lvbiBzdXIgSm9sZW5lCiAgLSBidXR0b24gIkF1dHJlcyBhY3Rpb25zIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEF1dHJlcyBhY3Rpb25zCiAgLSBoZWFkaW5nICLwn5WQIEhvcmFpcmVzIiBbbGV2ZWw9M10KICAtIHJlZ2lvbiAiUGxhbm5pbmcgZXhhY3QgZGUgbGEgbWlzc2lvbiI6CiAgICAtIHRleHQ6IDEgY3LDqW5lYXUgOCBoIGF1IHRvdGFsCiAgICAtIGxpc3QgIkpvdXJzIGV0IGhvcmFpcmVzIHRyYXZhaWxsw6lzIjoKICAgICAgLSBsaXN0aXRlbTogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYgMTdoMjYg4oaSIGpldWRpIDEgb2N0b2JyZSAyMDI2IMK3IDAxaDI2IChsZW5kZW1haW4pIMK3IDggaAogICAgLSBwYXJhZ3JhcGg6IFNldWxzIGxlcyBjcsOpbmVhdXggbGlzdMOpcyBzb250IHRyYXZhaWxsw6lzLiBMZXMgYXV0cmVzIGpvdXJzIGRlIGxhIHDDqXJpb2RlIG5lIHNvbnQgcGFzIHRyYXZhaWxsw6lzLgogIC0gc3RhdHVzOgogICAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUgc2FsYXJpw6kKICAgIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIGxpYsOpcmFsZSBuJ2VudHJlIHBhcyBkYW5zIGxlIGNhbGN1bCBkdSBwbGFmb25kIHNhbGFyacOpIGRlIDQ4IGguCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-liberal-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-chromium/attachments/detail-liberal-1440-capture-c815bb6138133fd7ae20d5f9cace47769555c9a0.png"
+                    },
+                    {
+                      "name": "detail-retrocession-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIHBhcmFncmFwaDog8J+knSBSZW1wbGFjZW1lbnQgZGUgY2FiaW5ldCDigJQgcsOpdHJvY2Vzc2lvbiBkJ2hvbm9yYWlyZXMKICAgIC0gcGFyYWdyYXBoOiA4MCUKICAgIC0gcGFyYWdyYXBoOiAiVHUgZXhlcmNlcyBzb3VzIGxlcyBmZXVpbGxlcyBkZSBzb2lucyBkdSB0aXR1bGFpcmUgOiBpbCBlbmNhaXNzZSBsZXMgaG9ub3JhaXJlcyBwdWlzIHRlIHLDqXRyb2PDqGRlIDgwJSBkZXMgYWN0ZXMgcsOpYWxpc8OpcyAoY29udHJhdCBkZSByZW1wbGFjZW1lbnQgY29uZm9ybWUgYXUgbW9kw6hsZSBkZSBsJ09yZHJlLCBnw6luw6lyw6kgw6AgbCdhY2NlcHRhdGlvbikuIFJDUCBvYmxpZ2F0b2lyZS4iCiAgLSBpbWcKICAtIGhlYWRpbmcgIlLDqXNpZGVuY2UgQ2FtaWxsZSIgW2xldmVsPTNdCiAgLSBwYXJhZ3JhcGg6IEVIUEFECiAgLSBwYXJhZ3JhcGg6IDc1MDAxIFBhcmlzCiAgLSBpbWcKICAtIHRleHQ6IERpc3RhbmNlIG5vbiBkaXNwb25pYmxlCiAgLSBwYXJhZ3JhcGg6IENldCDDqXRhYmxpc3NlbWVudCBhIHB1Ymxpw6kgMCBtaXNzaW9uIHN1ciBKb2xlbmUKICAtIGJ1dHRvbiAiQXV0cmVzIGFjdGlvbnMiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQXV0cmVzIGFjdGlvbnMKICAtIGhlYWRpbmcgIvCflZAgSG9yYWlyZXMiIFtsZXZlbD0zXQogIC0gcmVnaW9uICJQbGFubmluZyBleGFjdCBkZSBsYSBtaXNzaW9uIjoKICAgIC0gdGV4dDogMSBjcsOpbmVhdSA4IGggYXUgdG90YWwKICAgIC0gbGlzdCAiSm91cnMgZXQgaG9yYWlyZXMgdHJhdmFpbGzDqXMiOgogICAgICAtIGxpc3RpdGVtOiBtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiAxN2gyNiDihpIgamV1ZGkgMSBvY3RvYnJlIDIwMjYgwrcgMDFoMjYgKGxlbmRlbWFpbikgwrcgOCBoCiAgICAtIHBhcmFncmFwaDogU2V1bHMgbGVzIGNyw6luZWF1eCBsaXN0w6lzIHNvbnQgdHJhdmFpbGzDqXMuIExlcyBhdXRyZXMgam91cnMgZGUgbGEgcMOpcmlvZGUgbmUgc29udCBwYXMgdHJhdmFpbGzDqXMuCiAgLSBzdGF0dXM6CiAgICAtIHBhcmFncmFwaDog8J+TiiBQbGFmb25kIGhlYmRvbWFkYWlyZSBzYWxhcmnDqQogICAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gbGliw6lyYWxlIG4nZW50cmUgcGFzIGRhbnMgbGUgY2FsY3VsIGR1IHBsYWZvbmQgc2FsYXJpw6kgZGUgNDggaC4KICAtIGJ1dHRvbiAi8J+ThSBWb2lyIGRhbnMgbW9uIHBsYW5uaW5nIgogIC0gYnV0dG9uICJDYW5kaWRhdGVyIg=="
+                    },
+                    {
+                      "name": "detail-retrocession-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-chromium/attachments/detail-retrocession-1440-capture-04dcce462430439bcf536fda4f82f5209b85d88a.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4bc67af9a2830181b710-50a05dba1353afc25bb8",
+          "file": "detail-mission-lisibilite.spec.ts",
+          "line": 96,
+          "column": 3
+        },
+        {
+          "title": "détail mission : rémunération prioritaire et montants préservés 390",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit",
+              "projectName": "webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 20124,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:26:50.252Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "detail-salarie-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBoZWFkaW5nICLwn5KwIETDqWNvbXBvc2l0aW9uIGZpbmFuY2nDqHJlIiBbbGV2ZWw9M10KICAgIC0gdGV4dDogQ29udHJhdCBzYWxhcmnDqSAoQ0REKSBOZXQgc2FsYXJpw6kgZXN0aW3DqSBhdmFudCBQQVMqIDI0MCwwMCDigqwKICAgIC0gcGFyYWdyYXBoOiBFc3RpbWF0aW9uIGluZGljYXRpdmUgYXZhbnQgcHLDqWzDqHZlbWVudCDDoCBsYSBzb3VyY2UuIExlIG1vbnRhbnQgbmV0IGV4YWN0IMOgIHBheWVyIGZpZ3VyZSBzdXIgbGUgYnVsbGV0aW4gb2ZmaWNpZWwgw6l0YWJsaSBwYXIgbCfDqXRhYmxpc3NlbWVudCBlbXBsb3lldXIuCiAgICAtIGJ1dHRvbiAiRMOpdGFpbCBjb21wdGFibGUgKGJydXQsIElGTSwgSUNQLCBjb3Rpc2F0aW9ucykiOgogICAgICAtIHRleHQ6IETDqXRhaWwgY29tcHRhYmxlIChicnV0LCBJRk0sIElDUCwgY290aXNhdGlvbnMpCiAgICAgIC0gaW1nCiAgICAtIHBhcmFncmFwaDogRXN0aW1hdGlvbiBub24gY29udHJhY3R1ZWxsZS4gTGUgYnVsbGV0aW4gZGUgcGFpZSBvZmZpY2llbCBlc3Qgw6l0YWJsaSBldCBmb3VybmkgcGFyIMKrIFLDqXNpZGVuY2UgQ2FtaWxsZSDCuy4KICAgIC0gcGFyYWdyYXBoOiBTaW11bGF0aW9uIMOgIHRpdHJlIGluZGljYXRpZi4gU2V1bHMgbGVzIG1vbnRhbnRzIGNhbGN1bMOpcyBwYXIgbGUgbW90ZXVyIGRlIHBhaWUgZm9udCBmb2kuCiAgLSBpbWcKICAtIGhlYWRpbmcgIlLDqXNpZGVuY2UgQ2FtaWxsZSIgW2xldmVsPTNdCiAgLSBwYXJhZ3JhcGg6IEVIUEFECiAgLSBwYXJhZ3JhcGg6IDc1MDAxIFBhcmlzCiAgLSBpbWcKICAtIHRleHQ6IERpc3RhbmNlIG5vbiBkaXNwb25pYmxlCiAgLSBwYXJhZ3JhcGg6IENldCDDqXRhYmxpc3NlbWVudCBhIHB1Ymxpw6kgMCBtaXNzaW9uIHN1ciBKb2xlbmUKICAtIGJ1dHRvbiAiQXV0cmVzIGFjdGlvbnMiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQXV0cmVzIGFjdGlvbnMKICAtIGhlYWRpbmcgIvCflZAgSG9yYWlyZXMiIFtsZXZlbD0zXQogIC0gcmVnaW9uICJQbGFubmluZyBleGFjdCBkZSBsYSBtaXNzaW9uIjoKICAgIC0gdGV4dDogMSBjcsOpbmVhdSA4IGggYXUgdG90YWwKICAgIC0gbGlzdCAiSm91cnMgZXQgaG9yYWlyZXMgdHJhdmFpbGzDqXMiOgogICAgICAtIGxpc3RpdGVtOiBtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiAxN2gyNiDihpIgamV1ZGkgMSBvY3RvYnJlIDIwMjYgwrcgMDFoMjYgKGxlbmRlbWFpbikgwrcgOCBoCiAgICAtIHBhcmFncmFwaDogU2V1bHMgbGVzIGNyw6luZWF1eCBsaXN0w6lzIHNvbnQgdHJhdmFpbGzDqXMuIExlcyBhdXRyZXMgam91cnMgZGUgbGEgcMOpcmlvZGUgbmUgc29udCBwYXMgdHJhdmFpbGzDqXMuCiAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUKICAtIHRleHQ6IFNlbWFpbmUgZHUgMjggc2VwdC4gOGggLyA0OGgKICAtIHBhcmFncmFwaDogIlBsYW5pZmnDqWVzIDogMGggKyBtaXNzaW9uIDogOGgiCiAgLSBwYXJhZ3JhcGg6IOKchSBJbCB2b3VzIHJlc3RlIDQwaCBkZSBkaXNwb25pYmlsaXTDqSBzdXIgY2V0dGUgc2VtYWluZQogIC0gYnV0dG9uICLwn5OFIFZvaXIgZGFucyBtb24gcGxhbm5pbmciCiAgLSBidXR0b24gIkNhbmRpZGF0ZXIi"
+                    },
+                    {
+                      "name": "detail-salarie-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-webkit/attachments/detail-salarie-390-capture-3d7bdce790bb18772ae6352484aba0ef329bd42e.png"
+                    },
+                    {
+                      "name": "detail-liberal-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBoZWFkaW5nICLwn5KwIETDqWNvbXBvc2l0aW9uIGZpbmFuY2nDqHJlIiBbbGV2ZWw9M10KICAgIC0gdGV4dDogQ29udHJhdCBsaWLDqXJhbCBUYXV4IGhvcmFpcmUgMzAuMDAg4oKsL2gKICAgIC0gcGFyYWdyYXBoOiBIZXVyZXMKICAgIC0gdGV4dDogSGV1cmVzIHRvdGFsZXMgOC4waAogICAgLSBwYXJhZ3JhcGg6IENhbGN1bAogICAgLSB0ZXh0OiBCcnV0IGRlIGJhc2UgKDguMGggw5cgMzAuMDDigqwpIDI0MCwwMCDigqwgQnJ1dCBob25vcmFpcmVzIHNvaWduYW50IDI0MCwwMCDigqwKICAgIC0gcGFyYWdyYXBoOiBNb250YW50IMOgIHZlcnNlciBhdSBzb2lnbmFudCAoMTAwICUgZHUgYnJ1dCBob25vcmFpcmVzLCBhdWN1bmUgcmV0ZW51ZSBwYXIgSm9sZW5lKQogICAgLSBwYXJhZ3JhcGg6ICJDb250cmF0IGxpYsOpcmFsIDogbGUgc29pZ25hbnQgZMOpY2xhcmUgc2VzIHJldmVudXMgZXQgY290aXNlIGF1cHLDqHMgZGUgbCdVUlNTQUYgbGliw6lyYWxlIC8gQ0FSUElNS08gb3UgQ0lQQVYuIgogICAgLSBwYXJhZ3JhcGg6IFNpbXVsYXRpb24gw6AgdGl0cmUgaW5kaWNhdGlmLiBTZXVscyBsZXMgbW9udGFudHMgY2FsY3Vsw6lzIHBhciBsZSBtb3RldXIgZGUgcGFpZSBmb250IGZvaS4KICAgIC0gcGFyYWdyYXBoOiBQYXnDqWUgYXByw6hzIHLDqGdsZW1lbnQgZGUgbCfDqXRhYmxpc3NlbWVudCAofjMwIMOgIDYwIGpvdXJzKS4KICAtIGltZwogIC0gaGVhZGluZyAiUsOpc2lkZW5jZSBDYW1pbGxlIiBbbGV2ZWw9M10KICAtIHBhcmFncmFwaDogRUhQQUQKICAtIHBhcmFncmFwaDogNzUwMDEgUGFyaXMKICAtIGltZwogIC0gdGV4dDogRGlzdGFuY2Ugbm9uIGRpc3BvbmlibGUKICAtIHBhcmFncmFwaDogQ2V0IMOpdGFibGlzc2VtZW50IGEgcHVibGnDqSAwIG1pc3Npb24gc3VyIEpvbGVuZQogIC0gYnV0dG9uICJBdXRyZXMgYWN0aW9ucyI6CiAgICAtIGltZwogICAgLSB0ZXh0OiBBdXRyZXMgYWN0aW9ucwogIC0gaGVhZGluZyAi8J+VkCBIb3JhaXJlcyIgW2xldmVsPTNdCiAgLSByZWdpb24gIlBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24iOgogICAgLSB0ZXh0OiAxIGNyw6luZWF1IDggaCBhdSB0b3RhbAogICAgLSBsaXN0ICJKb3VycyBldCBob3JhaXJlcyB0cmF2YWlsbMOpcyI6CiAgICAgIC0gbGlzdGl0ZW06IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IDE3aDI2IOKGkiBqZXVkaSAxIG9jdG9icmUgMjAyNiDCtyAwMWgyNiAobGVuZGVtYWluKSDCtyA4IGgKICAgIC0gcGFyYWdyYXBoOiBTZXVscyBsZXMgY3LDqW5lYXV4IGxpc3TDqXMgc29udCB0cmF2YWlsbMOpcy4gTGVzIGF1dHJlcyBqb3VycyBkZSBsYSBww6lyaW9kZSBuZSBzb250IHBhcyB0cmF2YWlsbMOpcy4KICAtIHN0YXR1czoKICAgIC0gcGFyYWdyYXBoOiDwn5OKIFBsYWZvbmQgaGViZG9tYWRhaXJlIHNhbGFyacOpCiAgICAtIHBhcmFncmFwaDogQ2V0dGUgbWlzc2lvbiBsaWLDqXJhbGUgbidlbnRyZSBwYXMgZGFucyBsZSBjYWxjdWwgZHUgcGxhZm9uZCBzYWxhcmnDqSBkZSA0OCBoLgogIC0gYnV0dG9uICLwn5OFIFZvaXIgZGFucyBtb24gcGxhbm5pbmciCiAgLSBidXR0b24gIkNhbmRpZGF0ZXIi"
+                    },
+                    {
+                      "name": "detail-liberal-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-webkit/attachments/detail-liberal-390-capture-66221a5cf485414f9702c3f6aa4df42b99f6d70d.png"
+                    },
+                    {
+                      "name": "detail-retrocession-390-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gcGFyYWdyYXBoOiDihpIgw4AgZmFpcmUgbWFpbnRlbmFudAogIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIHZvdXMgaW50w6lyZXNzZSA/CiAgLSBidXR0b24gIkNhbmRpZGF0ZXIiCiAgLSB0ZXh0OiBPdXZlcnRlCiAgLSBoZWFkaW5nICJSZW1wbGFjZW1lbnQgaW5maXJtaWVyIGRlIGpvdXIiIFtsZXZlbD0xXQogIC0gcGFyYWdyYXBoOiBSZW5mb3J0IMOpcXVpcGUgZGUgam91ci4KICAtIHBhcmFncmFwaDogSW5maXJtaWVyKMOocmUpIERpcGzDtG3DqShlKSBkJ8OJdGF0IChJREUpCiAgLSByZWdpb24gIlLDqW11bsOpcmF0aW9uIGRlIGxhIG1pc3Npb24iOgogICAgLSBwYXJhZ3JhcGg6IPCfpJ0gUmVtcGxhY2VtZW50IGRlIGNhYmluZXQg4oCUIHLDqXRyb2Nlc3Npb24gZCdob25vcmFpcmVzCiAgICAtIHBhcmFncmFwaDogODAlCiAgICAtIHBhcmFncmFwaDogIlR1IGV4ZXJjZXMgc291cyBsZXMgZmV1aWxsZXMgZGUgc29pbnMgZHUgdGl0dWxhaXJlIDogaWwgZW5jYWlzc2UgbGVzIGhvbm9yYWlyZXMgcHVpcyB0ZSByw6l0cm9jw6hkZSA4MCUgZGVzIGFjdGVzIHLDqWFsaXPDqXMgKGNvbnRyYXQgZGUgcmVtcGxhY2VtZW50IGNvbmZvcm1lIGF1IG1vZMOobGUgZGUgbCdPcmRyZSwgZ8OpbsOpcsOpIMOgIGwnYWNjZXB0YXRpb24pLiBSQ1Agb2JsaWdhdG9pcmUuIgogIC0gaW1nCiAgLSBoZWFkaW5nICJSw6lzaWRlbmNlIENhbWlsbGUiIFtsZXZlbD0zXQogIC0gcGFyYWdyYXBoOiBFSFBBRAogIC0gcGFyYWdyYXBoOiA3NTAwMSBQYXJpcwogIC0gaW1nCiAgLSB0ZXh0OiBEaXN0YW5jZSBub24gZGlzcG9uaWJsZQogIC0gcGFyYWdyYXBoOiBDZXQgw6l0YWJsaXNzZW1lbnQgYSBwdWJsacOpIDAgbWlzc2lvbiBzdXIgSm9sZW5lCiAgLSBidXR0b24gIkF1dHJlcyBhY3Rpb25zIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEF1dHJlcyBhY3Rpb25zCiAgLSBoZWFkaW5nICLwn5WQIEhvcmFpcmVzIiBbbGV2ZWw9M10KICAtIHJlZ2lvbiAiUGxhbm5pbmcgZXhhY3QgZGUgbGEgbWlzc2lvbiI6CiAgICAtIHRleHQ6IDEgY3LDqW5lYXUgOCBoIGF1IHRvdGFsCiAgICAtIGxpc3QgIkpvdXJzIGV0IGhvcmFpcmVzIHRyYXZhaWxsw6lzIjoKICAgICAgLSBsaXN0aXRlbTogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYgMTdoMjYg4oaSIGpldWRpIDEgb2N0b2JyZSAyMDI2IMK3IDAxaDI2IChsZW5kZW1haW4pIMK3IDggaAogICAgLSBwYXJhZ3JhcGg6IFNldWxzIGxlcyBjcsOpbmVhdXggbGlzdMOpcyBzb250IHRyYXZhaWxsw6lzLiBMZXMgYXV0cmVzIGpvdXJzIGRlIGxhIHDDqXJpb2RlIG5lIHNvbnQgcGFzIHRyYXZhaWxsw6lzLgogIC0gc3RhdHVzOgogICAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUgc2FsYXJpw6kKICAgIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIGxpYsOpcmFsZSBuJ2VudHJlIHBhcyBkYW5zIGxlIGNhbGN1bCBkdSBwbGFmb25kIHNhbGFyacOpIGRlIDQ4IGguCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-retrocession-390-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--0512a-e-et-montants-préservés-390-webkit/attachments/detail-retrocession-390-capture-4403e8739e217e10ca6e15362c1b8517f5dec315.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4bc67af9a2830181b710-4adeda431b1e93bcd2c9",
+          "file": "detail-mission-lisibilite.spec.ts",
+          "line": 96,
+          "column": 3
+        },
+        {
+          "title": "détail mission : rémunération prioritaire et montants préservés 1440",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit",
+              "projectName": "webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 34809,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:27:12.419Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "detail-salarie-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIGhlYWRpbmcgIvCfkrAgRMOpY29tcG9zaXRpb24gZmluYW5jacOocmUiIFtsZXZlbD0zXQogICAgLSB0ZXh0OiBDb250cmF0IHNhbGFyacOpIChDREQpIE5ldCBzYWxhcmnDqSBlc3RpbcOpIGF2YW50IFBBUyogMjQwLDAwIOKCrAogICAgLSBwYXJhZ3JhcGg6IEVzdGltYXRpb24gaW5kaWNhdGl2ZSBhdmFudCBwcsOpbMOodmVtZW50IMOgIGxhIHNvdXJjZS4gTGUgbW9udGFudCBuZXQgZXhhY3Qgw6AgcGF5ZXIgZmlndXJlIHN1ciBsZSBidWxsZXRpbiBvZmZpY2llbCDDqXRhYmxpIHBhciBsJ8OpdGFibGlzc2VtZW50IGVtcGxveWV1ci4KICAgIC0gYnV0dG9uICJEw6l0YWlsIGNvbXB0YWJsZSAoYnJ1dCwgSUZNLCBJQ1AsIGNvdGlzYXRpb25zKSI6CiAgICAgIC0gdGV4dDogRMOpdGFpbCBjb21wdGFibGUgKGJydXQsIElGTSwgSUNQLCBjb3Rpc2F0aW9ucykKICAgICAgLSBpbWcKICAgIC0gcGFyYWdyYXBoOiBFc3RpbWF0aW9uIG5vbiBjb250cmFjdHVlbGxlLiBMZSBidWxsZXRpbiBkZSBwYWllIG9mZmljaWVsIGVzdCDDqXRhYmxpIGV0IGZvdXJuaSBwYXIgwqsgUsOpc2lkZW5jZSBDYW1pbGxlIMK7LgogICAgLSBwYXJhZ3JhcGg6IFNpbXVsYXRpb24gw6AgdGl0cmUgaW5kaWNhdGlmLiBTZXVscyBsZXMgbW9udGFudHMgY2FsY3Vsw6lzIHBhciBsZSBtb3RldXIgZGUgcGFpZSBmb250IGZvaS4KICAtIGltZwogIC0gaGVhZGluZyAiUsOpc2lkZW5jZSBDYW1pbGxlIiBbbGV2ZWw9M10KICAtIHBhcmFncmFwaDogRUhQQUQKICAtIHBhcmFncmFwaDogNzUwMDEgUGFyaXMKICAtIGltZwogIC0gdGV4dDogRGlzdGFuY2Ugbm9uIGRpc3BvbmlibGUKICAtIHBhcmFncmFwaDogQ2V0IMOpdGFibGlzc2VtZW50IGEgcHVibGnDqSAwIG1pc3Npb24gc3VyIEpvbGVuZQogIC0gYnV0dG9uICJBdXRyZXMgYWN0aW9ucyI6CiAgICAtIGltZwogICAgLSB0ZXh0OiBBdXRyZXMgYWN0aW9ucwogIC0gaGVhZGluZyAi8J+VkCBIb3JhaXJlcyIgW2xldmVsPTNdCiAgLSByZWdpb24gIlBsYW5uaW5nIGV4YWN0IGRlIGxhIG1pc3Npb24iOgogICAgLSB0ZXh0OiAxIGNyw6luZWF1IDggaCBhdSB0b3RhbAogICAgLSBsaXN0ICJKb3VycyBldCBob3JhaXJlcyB0cmF2YWlsbMOpcyI6CiAgICAgIC0gbGlzdGl0ZW06IG1lcmNyZWRpIDMwIHNlcHRlbWJyZSAyMDI2IDE3aDI3IOKGkiBqZXVkaSAxIG9jdG9icmUgMjAyNiDCtyAwMWgyNyAobGVuZGVtYWluKSDCtyA4IGgKICAgIC0gcGFyYWdyYXBoOiBTZXVscyBsZXMgY3LDqW5lYXV4IGxpc3TDqXMgc29udCB0cmF2YWlsbMOpcy4gTGVzIGF1dHJlcyBqb3VycyBkZSBsYSBww6lyaW9kZSBuZSBzb250IHBhcyB0cmF2YWlsbMOpcy4KICAtIHBhcmFncmFwaDog8J+TiiBQbGFmb25kIGhlYmRvbWFkYWlyZQogIC0gdGV4dDogU2VtYWluZSBkdSAyOCBzZXB0LiA4aCAvIDQ4aAogIC0gcGFyYWdyYXBoOiAiUGxhbmlmacOpZXMgOiAwaCArIG1pc3Npb24gOiA4aCIKICAtIHBhcmFncmFwaDog4pyFIElsIHZvdXMgcmVzdGUgNDBoIGRlIGRpc3BvbmliaWxpdMOpIHN1ciBjZXR0ZSBzZW1haW5lCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-salarie-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-webkit/attachments/detail-salarie-1440-capture-a83d60a071bbf0b54656cd548cec346d1084bb62.png"
+                    },
+                    {
+                      "name": "detail-liberal-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIGhlYWRpbmcgIvCfkrAgRMOpY29tcG9zaXRpb24gZmluYW5jacOocmUiIFtsZXZlbD0zXQogICAgLSB0ZXh0OiBDb250cmF0IGxpYsOpcmFsIFRhdXggaG9yYWlyZSAzMC4wMCDigqwvaAogICAgLSBwYXJhZ3JhcGg6IEhldXJlcwogICAgLSB0ZXh0OiBIZXVyZXMgdG90YWxlcyA4LjBoCiAgICAtIHBhcmFncmFwaDogQ2FsY3VsCiAgICAtIHRleHQ6IEJydXQgZGUgYmFzZSAoOC4waCDDlyAzMC4wMOKCrCkgMjQwLDAwIOKCrCBCcnV0IGhvbm9yYWlyZXMgc29pZ25hbnQgMjQwLDAwIOKCrAogICAgLSBwYXJhZ3JhcGg6IE1vbnRhbnQgw6AgdmVyc2VyIGF1IHNvaWduYW50ICgxMDAgJSBkdSBicnV0IGhvbm9yYWlyZXMsIGF1Y3VuZSByZXRlbnVlIHBhciBKb2xlbmUpCiAgICAtIHBhcmFncmFwaDogIkNvbnRyYXQgbGliw6lyYWwgOiBsZSBzb2lnbmFudCBkw6ljbGFyZSBzZXMgcmV2ZW51cyBldCBjb3Rpc2UgYXVwcsOocyBkZSBsJ1VSU1NBRiBsaWLDqXJhbGUgLyBDQVJQSU1LTyBvdSBDSVBBVi4iCiAgICAtIHBhcmFncmFwaDogU2ltdWxhdGlvbiDDoCB0aXRyZSBpbmRpY2F0aWYuIFNldWxzIGxlcyBtb250YW50cyBjYWxjdWzDqXMgcGFyIGxlIG1vdGV1ciBkZSBwYWllIGZvbnQgZm9pLgogICAgLSBwYXJhZ3JhcGg6IFBhecOpZSBhcHLDqHMgcsOoZ2xlbWVudCBkZSBsJ8OpdGFibGlzc2VtZW50ICh+MzAgw6AgNjAgam91cnMpLgogIC0gaW1nCiAgLSBoZWFkaW5nICJSw6lzaWRlbmNlIENhbWlsbGUiIFtsZXZlbD0zXQogIC0gcGFyYWdyYXBoOiBFSFBBRAogIC0gcGFyYWdyYXBoOiA3NTAwMSBQYXJpcwogIC0gaW1nCiAgLSB0ZXh0OiBEaXN0YW5jZSBub24gZGlzcG9uaWJsZQogIC0gcGFyYWdyYXBoOiBDZXQgw6l0YWJsaXNzZW1lbnQgYSBwdWJsacOpIDAgbWlzc2lvbiBzdXIgSm9sZW5lCiAgLSBidXR0b24gIkF1dHJlcyBhY3Rpb25zIjoKICAgIC0gaW1nCiAgICAtIHRleHQ6IEF1dHJlcyBhY3Rpb25zCiAgLSBoZWFkaW5nICLwn5WQIEhvcmFpcmVzIiBbbGV2ZWw9M10KICAtIHJlZ2lvbiAiUGxhbm5pbmcgZXhhY3QgZGUgbGEgbWlzc2lvbiI6CiAgICAtIHRleHQ6IDEgY3LDqW5lYXUgOCBoIGF1IHRvdGFsCiAgICAtIGxpc3QgIkpvdXJzIGV0IGhvcmFpcmVzIHRyYXZhaWxsw6lzIjoKICAgICAgLSBsaXN0aXRlbTogbWVyY3JlZGkgMzAgc2VwdGVtYnJlIDIwMjYgMTdoMjcg4oaSIGpldWRpIDEgb2N0b2JyZSAyMDI2IMK3IDAxaDI3IChsZW5kZW1haW4pIMK3IDggaAogICAgLSBwYXJhZ3JhcGg6IFNldWxzIGxlcyBjcsOpbmVhdXggbGlzdMOpcyBzb250IHRyYXZhaWxsw6lzLiBMZXMgYXV0cmVzIGpvdXJzIGRlIGxhIHDDqXJpb2RlIG5lIHNvbnQgcGFzIHRyYXZhaWxsw6lzLgogIC0gc3RhdHVzOgogICAgLSBwYXJhZ3JhcGg6IPCfk4ogUGxhZm9uZCBoZWJkb21hZGFpcmUgc2FsYXJpw6kKICAgIC0gcGFyYWdyYXBoOiBDZXR0ZSBtaXNzaW9uIGxpYsOpcmFsZSBuJ2VudHJlIHBhcyBkYW5zIGxlIGNhbGN1bCBkdSBwbGFmb25kIHNhbGFyacOpIGRlIDQ4IGguCiAgLSBidXR0b24gIvCfk4UgVm9pciBkYW5zIG1vbiBwbGFubmluZyIKICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciI="
+                    },
+                    {
+                      "name": "detail-liberal-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-webkit/attachments/detail-liberal-1440-capture-076b9506f488098e07515755bf1ce77b9c0ba9eb.png"
+                    },
+                    {
+                      "name": "detail-retrocession-1440-aria",
+                      "contentType": "text/plain",
+                      "body": "LSBtYWluOgogIC0gYnV0dG9uICJSZXRvdXIiOgogICAgLSBpbWcKICAgIC0gdGV4dDogUmV0b3VyCiAgLSBwYXJhZ3JhcGg6IOKGkiDDgCBmYWlyZSBtYWludGVuYW50CiAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gdm91cyBpbnTDqXJlc3NlID8KICAtIGJ1dHRvbiAiQ2FuZGlkYXRlciIKICAtIHRleHQ6IE91dmVydGUKICAtIGhlYWRpbmcgIlJlbXBsYWNlbWVudCBpbmZpcm1pZXIgZGUgam91ciIgW2xldmVsPTFdCiAgLSBwYXJhZ3JhcGg6IFJlbmZvcnQgw6lxdWlwZSBkZSBqb3VyLgogIC0gcGFyYWdyYXBoOiBJbmZpcm1pZXIow6hyZSkgRGlwbMO0bcOpKGUpIGQnw4l0YXQgKElERSkKICAtIHJlZ2lvbiAiUsOpbXVuw6lyYXRpb24gZGUgbGEgbWlzc2lvbiI6CiAgICAtIHBhcmFncmFwaDog8J+knSBSZW1wbGFjZW1lbnQgZGUgY2FiaW5ldCDigJQgcsOpdHJvY2Vzc2lvbiBkJ2hvbm9yYWlyZXMKICAgIC0gcGFyYWdyYXBoOiA4MCUKICAgIC0gcGFyYWdyYXBoOiAiVHUgZXhlcmNlcyBzb3VzIGxlcyBmZXVpbGxlcyBkZSBzb2lucyBkdSB0aXR1bGFpcmUgOiBpbCBlbmNhaXNzZSBsZXMgaG9ub3JhaXJlcyBwdWlzIHRlIHLDqXRyb2PDqGRlIDgwJSBkZXMgYWN0ZXMgcsOpYWxpc8OpcyAoY29udHJhdCBkZSByZW1wbGFjZW1lbnQgY29uZm9ybWUgYXUgbW9kw6hsZSBkZSBsJ09yZHJlLCBnw6luw6lyw6kgw6AgbCdhY2NlcHRhdGlvbikuIFJDUCBvYmxpZ2F0b2lyZS4iCiAgLSBpbWcKICAtIGhlYWRpbmcgIlLDqXNpZGVuY2UgQ2FtaWxsZSIgW2xldmVsPTNdCiAgLSBwYXJhZ3JhcGg6IEVIUEFECiAgLSBwYXJhZ3JhcGg6IDc1MDAxIFBhcmlzCiAgLSBpbWcKICAtIHRleHQ6IERpc3RhbmNlIG5vbiBkaXNwb25pYmxlCiAgLSBwYXJhZ3JhcGg6IENldCDDqXRhYmxpc3NlbWVudCBhIHB1Ymxpw6kgMCBtaXNzaW9uIHN1ciBKb2xlbmUKICAtIGJ1dHRvbiAiQXV0cmVzIGFjdGlvbnMiOgogICAgLSBpbWcKICAgIC0gdGV4dDogQXV0cmVzIGFjdGlvbnMKICAtIGhlYWRpbmcgIvCflZAgSG9yYWlyZXMiIFtsZXZlbD0zXQogIC0gcmVnaW9uICJQbGFubmluZyBleGFjdCBkZSBsYSBtaXNzaW9uIjoKICAgIC0gdGV4dDogMSBjcsOpbmVhdSA4IGggYXUgdG90YWwKICAgIC0gbGlzdCAiSm91cnMgZXQgaG9yYWlyZXMgdHJhdmFpbGzDqXMiOgogICAgICAtIGxpc3RpdGVtOiBtZXJjcmVkaSAzMCBzZXB0ZW1icmUgMjAyNiAxN2gyNyDihpIgamV1ZGkgMSBvY3RvYnJlIDIwMjYgwrcgMDFoMjcgKGxlbmRlbWFpbikgwrcgOCBoCiAgICAtIHBhcmFncmFwaDogU2V1bHMgbGVzIGNyw6luZWF1eCBsaXN0w6lzIHNvbnQgdHJhdmFpbGzDqXMuIExlcyBhdXRyZXMgam91cnMgZGUgbGEgcMOpcmlvZGUgbmUgc29udCBwYXMgdHJhdmFpbGzDqXMuCiAgLSBzdGF0dXM6CiAgICAtIHBhcmFncmFwaDog8J+TiiBQbGFmb25kIGhlYmRvbWFkYWlyZSBzYWxhcmnDqQogICAgLSBwYXJhZ3JhcGg6IENldHRlIG1pc3Npb24gbGliw6lyYWxlIG4nZW50cmUgcGFzIGRhbnMgbGUgY2FsY3VsIGR1IHBsYWZvbmQgc2FsYXJpw6kgZGUgNDggaC4KICAtIGJ1dHRvbiAi8J+ThSBWb2lyIGRhbnMgbW9uIHBsYW5uaW5nIgogIC0gYnV0dG9uICJDYW5kaWRhdGVyIg=="
+                    },
+                    {
+                      "name": "detail-retrocession-1440-capture",
+                      "contentType": "image/png",
+                      "path": "/private/tmp/jolene-fluidite-preuves/detail-mission/results/detail-mission-lisibilite--918aa--et-montants-préservés-1440-webkit/attachments/detail-retrocession-1440-capture-648828644289a211bad8f4a2bf465b9ae4fd260a.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4bc67af9a2830181b710-4263fcef61a98ed58b81",
+          "file": "detail-mission-lisibilite.spec.ts",
+          "line": 96,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-23T15:26:11.240Z",
+    "duration": 96943.877,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

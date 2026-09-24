@@ -1,0 +1,9 @@
+- main:
+  - heading "Contrats" [level=1]
+  - button "Tous"
+  - button "En attente"
+  - button "Signés"
+  - button "Annulés"
+  - status:
+    - heading "Aucun contrat" [level=3]
+    - paragraph: Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions.

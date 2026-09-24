@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { invaliderProfilNavigation } from '@/lib/invaliderProfilNavigation';
 import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, Building2, Loader2, Lock, Receipt } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +30,7 @@ interface ProfilLiberal {
 // pas facturer correctement (les fonctions backend existaient mais n'étaient
 // branchées nulle part côté app).
 export function FinaliserInstallationLiberal() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [profil, setProfil] = useState<ProfilLiberal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,6 +145,7 @@ export function FinaliserInstallationLiberal() {
       toast.error(res?.error || error?.message || "Activation impossible");
       return;
     }
+    invaliderProfilNavigation(queryClient, user?.id);
     toast.success('Ton statut libéral est activé sur Jolene 🎉');
     await charger();
   };

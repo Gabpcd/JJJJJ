@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { PROFESSIONS } from '@/lib/constantes';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,16 @@ function normalize(s: string): string {
 
 export function SelectProfession({ value, onChange, disabled, filtresProfessions, placeholder, triggerId }: SelectProfessionProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [largeurListe, setLargeurListe] = useState<number>();
+  const changerOuverture = (ouvert: boolean) => {
+    if (ouvert && triggerRef.current) {
+      // Mesurer avant l'ouverture évite la boucle Safari entre la largeur du
+      // Popper et sa variable de mesure pendant le redimensionnement du bouton.
+      setLargeurListe(Math.ceil(triggerRef.current.getBoundingClientRect().width));
+    }
+    setOpen(ouvert);
+  };
   const isMobile = useIsMobile();
 
   const options = useMemo(
@@ -35,6 +45,7 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
   const trigger = (
     <Button
       type="button"
+      ref={triggerRef}
       variant="outline"
       role="combobox"
       id={triggerId}
@@ -95,7 +106,7 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
 
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false}>
+      <Drawer open={open} onOpenChange={changerOuverture} shouldScaleBackground={false}>
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
         <DrawerContent
           className="max-h-[82dvh] rounded-t-[24px] border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)]"
@@ -114,10 +125,11 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changerOuverture}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
-        className="p-0 w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)]"
+        className="p-0 max-w-[calc(100vw-2rem)]"
+        style={{ width: largeurListe }}
         align="start"
       >
         {choices()}

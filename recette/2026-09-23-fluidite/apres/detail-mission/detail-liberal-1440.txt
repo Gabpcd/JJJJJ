@@ -1,0 +1,43 @@
+- main:
+  - button "Retour":
+    - img
+    - text: Retour
+  - paragraph: → À faire maintenant
+  - paragraph: Cette mission vous intéresse ?
+  - button "Candidater"
+  - text: Ouverte
+  - heading "Remplacement infirmier de jour" [level=1]
+  - paragraph: Renfort équipe de jour.
+  - paragraph: Infirmier(ère) Diplômé(e) d'État (IDE)
+  - region "Rémunération de la mission":
+    - heading "💰 Décomposition financière" [level=3]
+    - text: Contrat libéral Taux horaire 30.00 €/h
+    - paragraph: Heures
+    - text: Heures totales 8.0h
+    - paragraph: Calcul
+    - text: Brut de base (8.0h × 30.00€) 240,00 € Brut honoraires soignant 240,00 €
+    - paragraph: Montant à verser au soignant (100 % du brut honoraires, aucune retenue par Jolene)
+    - paragraph: "Contrat libéral : le soignant déclare ses revenus et cotise auprès de l'URSSAF libérale / CARPIMKO ou CIPAV."
+    - paragraph: Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+    - paragraph: Payée après règlement de l'établissement (~30 à 60 jours).
+  - img
+  - heading "Résidence Camille" [level=3]
+  - paragraph: EHPAD
+  - paragraph: 75001 Paris
+  - img
+  - text: Distance non disponible
+  - paragraph: Cet établissement a publié 0 mission sur Jolene
+  - button "Autres actions":
+    - img
+    - text: Autres actions
+  - heading "🕐 Horaires" [level=3]
+  - region "Planning exact de la mission":
+    - text: 1 créneau 8 h au total
+    - list "Jours et horaires travaillés":
+      - listitem: mercredi 30 septembre 2026 17h27 → jeudi 1 octobre 2026 · 01h27 (lendemain) · 8 h
+    - paragraph: Seuls les créneaux listés sont travaillés. Les autres jours de la période ne sont pas travaillés.
+  - status:
+    - paragraph: 📊 Plafond hebdomadaire salarié
+    - paragraph: Cette mission libérale n'entre pas dans le calcul du plafond salarié de 48 h.
+  - button "📅 Voir dans mon planning"
+  - button "Candidater"

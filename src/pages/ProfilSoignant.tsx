@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { invaliderProfilNavigation } from '@/lib/invaliderProfilNavigation';
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -29,6 +31,7 @@ import { SectionEvenementsScore } from '@/components/score/SectionEvenementsScor
 type SoignantRow = Database['public']['Tables']['soignants']['Row'];
 
 export default function ProfilSoignant() {
+  const queryClient = useQueryClient();
   usePageTitle('Profil');
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
@@ -87,7 +90,10 @@ export default function ProfilSoignant() {
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [nbEvenementsScore, setNbEvenementsScore] = useState(0);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const refresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    invaliderProfilNavigation(queryClient, user?.id);
+  }, [queryClient, user?.id]);
 
   // Les liens du hub compte peuvent ouvrir directement le dernier onglet.
   // Sur un iPhone compact, garder l'onglet actif entièrement visible évite

@@ -11,8 +11,19 @@
  * cross-browser CI à cause de setPointerCapture + transform inline).
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
+
+async function connecterEtLireClePreference(page: Page) {
+  const reponseSession = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/auth/v1/token'
+    && response.request().method() === 'POST',
+  );
+  await loginAs(page, 'soignant');
+  const session = await (await reponseSession).json();
+  expect(session.user?.id).toMatch(/^[0-9a-f-]{36}$/i);
+  return `jolene_missions_view_pref:${session.user.id}`;
+}
 
 test.describe('Sprint 14 — UI swipe matching (réels)', () => {
   // Session G1 : le swipe est consolidé DANS /soignant/recherche-missions via un
@@ -30,32 +41,50 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
   });
 
   test('Toggle Liste : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
-    await loginAs(page, 'soignant');
-    await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'swipe'));
+    const clePreference = await connecterEtLireClePreference(page);
+    await page.evaluate(cle => {
+      localStorage.setItem(cle, 'swipe');
+      localStorage.setItem('jolene_missions_view_pref', 'swipe');
+    }, clePreference);
     await page.goto('/soignant/recherche-missions', { waitUntil: 'domcontentloaded' });
 
     const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
     await expect(toggle).toBeVisible();
+    await expect(toggle.getByRole('tab', { name: 'Swipe', exact: true })).toHaveAttribute('aria-selected', 'true');
     await toggle.getByRole('tab', { name: 'Liste', exact: true }).click();
 
     // Toggle in-page : l'URL ne change pas, seule la préférence est mémorisée.
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
-    const pref = await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'));
+    await expect(toggle.getByRole('tab', { name: 'Liste', exact: true })).toHaveAttribute('aria-selected', 'true');
+    const pref = await page.evaluate(cle => localStorage.getItem(cle), clePreference);
     expect(pref).toBe('liste');
+    expect(await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'))).toBe('swipe');
+    await page.reload();
+    await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
+    await expect(toggle.getByRole('tab', { name: 'Liste', exact: true })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('Toggle Swipe : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
-    await loginAs(page, 'soignant');
-    await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'liste'));
+    const clePreference = await connecterEtLireClePreference(page);
+    await page.evaluate(cle => {
+      localStorage.setItem(cle, 'liste');
+      localStorage.setItem('jolene_missions_view_pref', 'liste');
+    }, clePreference);
     await page.goto('/soignant/recherche-missions', { waitUntil: 'domcontentloaded' });
 
     const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
     await expect(toggle).toBeVisible();
+    await expect(toggle.getByRole('tab', { name: 'Liste', exact: true })).toHaveAttribute('aria-selected', 'true');
     await toggle.getByRole('tab', { name: 'Swipe', exact: true }).click();
 
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
-    const pref = await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'));
+    await expect(toggle.getByRole('tab', { name: 'Swipe', exact: true })).toHaveAttribute('aria-selected', 'true');
+    const pref = await page.evaluate(cle => localStorage.getItem(cle), clePreference);
     expect(pref).toBe('swipe');
+    expect(await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'))).toBe('liste');
+    await page.reload();
+    await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
+    await expect(toggle.getByRole('tab', { name: 'Swipe', exact: true })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('Préférence localStorage=liste redirige depuis /swipe-missions vers /recherche-missions', async ({ page }) => {

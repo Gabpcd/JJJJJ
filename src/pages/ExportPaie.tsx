@@ -1,3 +1,4 @@
+import { AccesEtablissement } from '@/components/AccesEtablissement';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -89,6 +90,10 @@ function fmt(v: number) {
 }
 
 export default function ExportPaie() {
+  return <AccesEtablissement titre="Export paie" description="Les heures validées de vos missions salariées pourront être exportées ici pour préparer la paie."><ExportPaieContent /></AccesEtablissement>;
+}
+
+function ExportPaieContent() {
   usePageTitle('Export Paie');
   const navigate = useNavigate();
   const { user, etablissementId } = useEtablissementScope();

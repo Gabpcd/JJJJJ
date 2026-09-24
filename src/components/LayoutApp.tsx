@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { createContext, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import { ChargementPage } from '@/components/ChargementPage';
 import { BarreNavigation } from '@/components/BarreNavigation';
 import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
@@ -20,34 +21,40 @@ interface LayoutAppProps {
   pleinEcran?: boolean;
 }
 
-// Direction de navigation (Lot 6b.1 — transitions entre écrans, pas de
-// « rechargement sec ») : react-router incrémente un idx dans
-// window.history.state à chaque push. idx qui recule = retour arrière.
-// Module-level : survit aux remounts de LayoutApp (chaque page l'instancie).
-let dernierIdxHistorique = -1;
+// Le cadre reste monté entre deux routes ; les LayoutApp des pages ne rendent
+// que leur contenu. Ainsi navigation, notifications et abonnements sont stables.
+const CadreContext = createContext<{ setPleinEcran: (value: boolean) => void } | null>(null);
 
-function useDirectionNavigation(): 'forward' | 'back' | 'none' {
-  const location = useLocation();
-  return useMemo(() => {
-    const idx = typeof (window.history.state as any)?.idx === 'number'
-      ? (window.history.state as any).idx : 0;
-    const precedent = dernierIdxHistorique;
-    dernierIdxHistorique = idx;
-    if (precedent === -1) return 'none'; // premier écran : pas d'animation
-    return idx < precedent ? 'back' : 'forward';
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key]);
+export function AppShell({ role }: { role: UserRole }) {
+  const [pleinEcran, setPleinEcran] = useState(false);
+  const contexte = useMemo(() => ({ setPleinEcran }), []);
+  return (
+    <CadreContext.Provider value={contexte}>
+      <CadreApplication role={role} pleinEcran={pleinEcran}>
+        <Suspense fallback={<ChargementPage />}><Outlet /></Suspense>
+      </CadreApplication>
+    </CadreContext.Provider>
+  );
 }
 
-/**
- * Unified layout for Capacitor native app AND mobile Safari web.
- * Same structure, same safe-area insets, same height handling.
- * The only difference is the presence of Safari's browser chrome on web.
- */
 export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps) {
-  const direction = useDirectionNavigation();
-  const classeTransition =
-    direction === 'forward' ? 'route-slide-forward' : direction === 'back' ? 'route-slide-back' : '';
+  const cadre = useContext(CadreContext);
+  useLayoutEffect(() => {
+    if (!cadre) return;
+    cadre.setPleinEcran(pleinEcran);
+    return () => cadre.setPleinEcran(false);
+  }, [cadre, pleinEcran]);
+  const contenu = (
+    <div className={pleinEcran
+      ? 'flex-1 min-h-0 min-w-0 flex flex-col px-3 pt-2'
+      : 'max-w-6xl mx-auto w-full px-4 py-4 md:py-6 md:pb-6 min-w-0'}>
+      {children}
+    </div>
+  );
+  return cadre ? contenu : <CadreApplication role={role} pleinEcran={pleinEcran}>{contenu}</CadreApplication>;
+}
+
+function CadreApplication({ role, children, pleinEcran = false }: LayoutAppProps) {
   useEffect(() => {
     let mounted = true;
     let cleanup: (() => void) | undefined;
@@ -88,15 +95,7 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
               : 'calc(6rem + env(safe-area-inset-bottom))',
           }}
         >
-          {pleinEcran ? (
-            <div className={`flex-1 min-h-0 min-w-0 flex flex-col px-3 pt-2 ${classeTransition}`}>
-              {children}
-            </div>
-          ) : (
-            <div className={`max-w-6xl mx-auto px-4 py-4 md:py-6 md:pb-6 min-w-0 ${classeTransition}`}>
-              {children}
-            </div>
-          )}
+          {children}
           {/* Footer légal retiré des écrans authentifiés (Lot 6b.1) : les liens
               CGU/CGV/Mentions vivent dans Profil > Aide & légal. Le footer complet
               reste sur les pages publiques/SEO. */}

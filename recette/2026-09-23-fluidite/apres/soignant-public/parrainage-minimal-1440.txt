@@ -1,0 +1,58 @@
+- main:
+  - heading "Parrainage" [level=1]:
+    - img
+    - text: Parrainage
+  - paragraph: Recommande Jolene à tes collègues et débloque des avantages exclusifs.
+  - region "Votre lien de parrainage n’est pas encore disponible":
+    - heading "Votre lien de parrainage n’est pas encore disponible" [level=2]
+    - paragraph: Votre code personnel sera disponible après la création de votre dossier professionnel. Vous pouvez continuer à explorer les missions sans le préparer maintenant.
+    - link "Explorer les missions":
+      - /url: /soignant/recherche-missions
+    - link "Préparer mon dossier":
+      - /url: /soignant/profil
+  - img
+  - heading "Badge Ambassadeur" [level=2]
+  - paragraph: 0/3 filleuls validés
+  - paragraph: Parraine 3 collègues qui terminent leur 1ère mission pour obtenir le badge.
+  - img
+  - paragraph: Prime de 25€ pour toi + 25€ pour ton filleul
+  - paragraph:
+    - text: Versée par virement quand ton filleul atteint 500€ de missions encaissées (1 à 2 missions en général). Renseigne ton IBAN dans
+    - strong: Mon compte → Coordonnées bancaires
+    - text: .
+  - img
+  - paragraph: Badge Ambassadeur visible
+  - paragraph: Une fois débloqué, le badge Ambassadeur apparaît sur ton profil côté établissements (annuaire, recherches, candidatures).
+  - img
+  - paragraph: Tu connais un bon cadre de santé ?
+  - paragraph: Fais découvrir Jolene à son établissement — plus d'étabs sur la plateforme, c'est plus de missions près de chez toi.
+  - link "Recommander à mon cadre":
+    - /url: https://wa.me/?text=D%C3%A9couvrez%20Jolene%20pour%20trouver%20des%20rempla%C3%A7ants%20%3A%20https%3A%2F%2Fjolene.app%2Finscription%2Fetablissement
+    - img
+    - text: Recommander à mon cadre
+  - paragraph: "0"
+  - paragraph: filleul inscrit
+  - paragraph: "0"
+  - paragraph: mission terminée
+  - heading "Comment ça marche ?" [level=3]:
+    - img
+    - text: Comment ça marche ?
+  - list:
+    - listitem: Partage ton code ou lien avec tes collègues soignants
+    - listitem: Ton filleul applique ton code à l'inscription
+    - listitem:
+      - text: Quand il atteint
+      - strong: 500€ de missions encaissées
+      - text: ":"
+      - strong: 25€ versés
+      - text: pour toi +
+      - strong: 25€ pour lui
+      - text: (par virement sur ton IBAN)
+    - listitem:
+      - text: Après
+      - strong: 3 filleuls validés
+      - text: ", tu obtiens le badge Ambassadeur"
+  - heading "Mes filleuls" [level=3]:
+    - img
+    - text: Mes filleuls
+  - paragraph: Vos filleuls et leur progression apparaîtront ici.

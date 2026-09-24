@@ -11,6 +11,7 @@ it('ne perd pas les offres après la première page et conserve la rétrocession
     .mockResolvedValueOnce({data:[mission('derniere')],error:null});
   const offres=await chargerMissionsInscription();
   expect(offres).toHaveLength(101);
+  expect(offres.every(offre => offre.score === null)).toBe(true);
   expect(offres[100]).toMatchObject({id:'derniere',mode_remuneration:'RETROCESSION',retrocession_pct:70,creneaux:[expect.objectContaining({mission_id:'derniere'})]});
   expect(mocks.rpc).toHaveBeenLastCalledWith('fn_explorer_missions_inscription',{p_mission_id:null,p_offset:100,p_limit:100});
 });

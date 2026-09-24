@@ -1,1 +1,1 @@
-Inscription simplifiée pour les soignants et les établissements : créez votre compte plus rapidement et complétez votre profil au bon moment. Améliorations de la navigation mobile, de la stabilité et de l'installation des correctifs compatibles.
+Navigation plus fluide : retrouvez vos filtres et votre position dans les missions. Les comptes nouvellement créés peuvent explorer toutes les rubriques avant de compléter leur dossier. Meilleure lisibilité des rémunérations, formulaires mobiles améliorés et correction des états de chargement et d’erreur.

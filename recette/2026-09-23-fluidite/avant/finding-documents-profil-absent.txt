@@ -1,0 +1,68 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- navigation "Sidebar":
+  - text: Jolene
+  - button "Notifications"
+  - button "Passer en mode sombre":
+    - img
+  - button "Se déconnecter":
+    - img
+  - navigation "Menu principal":
+    - button "Accueil":
+      - img
+      - text: Accueil
+    - button "Missions":
+      - img
+      - text: Missions
+    - button "Activité" [expanded]:
+      - img
+      - text: Activité
+    - button "Présences":
+      - img
+      - text: Présences
+    - button "Documents":
+      - img
+      - text: Documents
+    - button "Mon score":
+      - img
+      - text: Mon score
+    - button "Litiges & contestations":
+      - img
+      - text: Litiges & contestations
+    - button "Revenus":
+      - img
+      - text: Revenus
+    - button "Messagerie":
+      - img
+      - text: Messagerie
+    - button "Parrainage":
+      - img
+      - text: Parrainage
+    - button "Mon compte":
+      - img
+      - text: Mon compte
+    - button "Mon profil":
+      - img
+      - text: Mon profil
+- main:
+  - heading "Mes documents" [level=1]
+  - tablist:
+    - tab "Justificatifs" [selected]:
+      - img
+      - text: Justificatifs
+    - tab "Contrats":
+      - img
+      - text: Contrats
+    - tab "DPAE":
+      - img
+      - text: DPAE
+  - tabpanel "Justificatifs":
+    - alert:
+      - img
+      - heading "Documents indisponibles" [level=2]
+      - paragraph: Vos documents sont temporairement indisponibles. Vérifiez votre connexion puis réessayez.
+      - button "Réessayer":
+        - img
+        - text: Réessayer
+- region "Notifications alt+T"
+- region "Notifications"

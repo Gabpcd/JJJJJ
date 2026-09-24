@@ -64,14 +64,12 @@ describe('garde-fous de l’expérience iOS native', () => {
     expect(platform).not.toContain('source: CameraSource.Prompt');
   });
 
-  it('conserve la modale documentaire au retour de la photothèque native', () => {
+  it('conserve un utilisateur stable au retour de la photothèque native', () => {
     const authContext = lire('src/contexts/AuthContext.tsx');
-    const documents = lire('src/pages/DocumentsSoignant.tsx');
 
     expect(authContext).toContain('conserverUtilisateurStable');
     expect(authContext).toContain('setUser((precedent) => conserverUtilisateurStable');
-    expect(documents).toContain('const userId = user?.id');
-    expect(documents).toContain('}, [userId]);');
+    // La conservation réelle de la modale est couverte par DocumentsSoignant.load-error.test.tsx.
   });
 
   it('retire immédiatement un verdict FINESS devenu obsolète', () => {

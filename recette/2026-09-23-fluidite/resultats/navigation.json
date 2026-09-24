@@ -1,0 +1,724 @@
+{
+  "config": {
+    "configFile": "/private/tmp/jolene-fluidite-20260923/e2e/playwright.fluidite.config.ts",
+    "rootDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-e2e-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-e2e-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "android-pixel",
+        "name": "android-pixel",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/private/tmp/jolene-fluidite-e2e-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit-iphone",
+        "name": "webkit-iphone",
+        "testDir": "/private/tmp/jolene-fluidite-20260923/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "fluidite-navigation.spec.ts"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/private/tmp/jolene-fluidite-e2e-results/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "fluidite-navigation.spec.ts",
+      "file": "fluidite-navigation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "SOIGNANT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7118,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:18.881Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-3c8271a6cd069d4f09cd",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "ETABLISSEMENT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6684,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:26.973Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-2db370dd61aed61a7212",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "Explorer conserve ses filtres et sa liste après détail puis après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9541,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:33.670Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-f47076b9a6df4225be2f",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7210,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:43.264Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-5e3e8cb29c49b9585b1a",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 95,
+          "column": 1
+        },
+        {
+          "title": "Carte chargée à la demande : popup sans rechargement et retours successifs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9125,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:50.531Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-72be54daffe1bd57251b",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 119,
+          "column": 1
+        },
+        {
+          "title": "Explorer retrouve sa position après un détail et après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13205,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:15:59.707Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-683e9cea3d49b5f33731",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 150,
+          "column": 1
+        },
+        {
+          "title": "SOIGNANT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 22947,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:16:21.314Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-932d01833539c941e999",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "ETABLISSEMENT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 17338,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:16:47.854Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-8c4052de64f87aa76618",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "Explorer conserve ses filtres et sa liste après détail puis après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14514,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:17:05.324Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-c03a18836c4c1cc8cfe3",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10407,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:17:19.904Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-2c4d5d62c248331866e0",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 95,
+          "column": 1
+        },
+        {
+          "title": "Carte chargée à la demande : popup sans rechargement et retours successifs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14064,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:17:30.406Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-bd13077380a5bc176577",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 119,
+          "column": 1
+        },
+        {
+          "title": "Explorer retrouve sa position après un détail et après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "android-pixel",
+              "projectName": "android-pixel",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18930,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:17:44.523Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-4a266de10aabb2baf4c3",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 150,
+          "column": 1
+        },
+        {
+          "title": "SOIGNANT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19537,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:18:16.348Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-0bf9670e988dcbae405b",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "ETABLISSEMENT : navigation persistante par les cinq entrées principales",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 17706,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:18:37.541Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-801a5d96bda99ed9cea5",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 45,
+          "column": 3
+        },
+        {
+          "title": "Explorer conserve ses filtres et sa liste après détail puis après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 27498,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:18:55.274Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-70b2d5609b4570397a75",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "Swipe : clic ou tap ouvre le détail, un déplacement horizontal ne le déclenche pas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10916,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:19:22.922Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-0f2dbc03df7e3792f7f4",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 95,
+          "column": 1
+        },
+        {
+          "title": "Carte chargée à la demande : popup sans rechargement et retours successifs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14458,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:19:33.874Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-03ca0562a4e081f8cf38",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 119,
+          "column": 1
+        },
+        {
+          "title": "Explorer retrouve sa position après un détail et après un autre onglet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "webkit-iphone",
+              "projectName": "webkit-iphone",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14252,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T15:19:48.399Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "63fda2bf0cc04c84eb5c-c446a4b90d1e23fbdc9a",
+          "file": "fluidite-navigation.spec.ts",
+          "line": 150,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-23T15:15:17.294Z",
+    "duration": 286074.222,
+    "expected": 18,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

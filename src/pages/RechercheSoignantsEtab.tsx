@@ -1,3 +1,4 @@
+import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, MapPin, Star, ShieldCheck, Award, Briefcase, X, Loader2, ChevronRight } from 'lucide-react';
@@ -7,7 +8,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { BoutonFavori } from '@/components/BoutonFavori';
 
 interface SoignantResultat {
@@ -63,8 +64,12 @@ const FILTRES_VIDES: Filtres = {
 const PAGE_SIZE = 20;
 
 export default function RechercheSoignantsEtab() {
+  return <AccesEtablissement titre="Annuaire des soignants" description="L’annuaire professionnel sera accessible une fois votre établissement renseigné et vos accès vérifiés."><RechercheSoignantsEtabContent /></AccesEtablissement>;
+}
+
+function RechercheSoignantsEtabContent() {
   usePageTitle('Recherche soignants');
-  const { user } = useAuth();
+  const { etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -348,7 +353,7 @@ export default function RechercheSoignantsEtab() {
           {loading ? (
             <ChargementPage />
           ) : error ? (
-            <div className="card-base text-center py-10">
+            <div className="card-base text-center py-10" role="alert">
               <p className="text-sm text-destructive">{error}</p>
               <button onClick={() => fetchSoignants(0, false)} className="text-xs text-primary hover:underline mt-2">Réessayer</button>
             </div>
@@ -363,7 +368,7 @@ export default function RechercheSoignantsEtab() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {soignants.map((s) => (
-                  <CarteSoignant key={s.id} soignant={s} etablissementId={user?.id} onClick={() => navigate(`/etablissement/soignants/${s.id}`)} />
+                  <CarteSoignant key={s.id} soignant={s} etablissementId={etablissementId ?? undefined} onClick={() => navigate(`/etablissement/soignants/${s.id}`)} />
                 ))}
               </div>
 

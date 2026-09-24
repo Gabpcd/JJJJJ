@@ -1,0 +1,95 @@
+- main:
+  - heading "Publier une mission" [level=1]
+  - paragraph: Brouillon repris — Renfort IDE — audit inscription
+  - paragraph: Vérifiez les horaires et les conditions avant publication.
+  - img
+  - text: Veuillez compléter votre SIRET dans votre profil avant de publier une mission.
+  - link "Aller au profil →":
+    - /url: /etablissement/profil
+  - img
+  - text: Votre contrat de service n'est pas encore signé.
+  - link "Signer le contrat →":
+    - /url: /etablissement/activer
+  - alert:
+    - img
+    - text: La vérification de votre établissement n'est pas terminée. Complétez l'habilitation du représentant ou demandez une validation à l'administrateur Jolene.
+    - link "Terminer la vérification →":
+      - /url: /etablissement/activer
+  - text: Intitulé *
+  - textbox "Intitulé *":
+    - /placeholder: "Ex: IDE de nuit — Service Urgences"
+    - text: Renfort IDE — audit inscription
+  - paragraph: 31/120
+  - text: Description
+  - textbox "Description":
+    - /placeholder: Informations complémentaires pour le soignant...
+  - text: Profession requise *
+  - combobox:
+    - text: Infirmier(ère) Diplômé(e) d'État (IDE)
+    - img
+  - text: Service
+  - combobox "Service"
+  - text: Type de contrat proposé
+  - 'radio "Salarié Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"'
+  - text: Salarié
+  - paragraph: "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
+  - paragraph: Planning exact de la mission
+  - paragraph: Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés.
+  - paragraph: 📅 Dates et horaires réels
+  - paragraph: Chaque date est indépendante. Vous pouvez prévoir des jours non travaillés, plusieurs créneaux et des gardes de nuit.
+  - text: Première date affichée *
+  - textbox "Première date affichée *": 2026-09-30
+  - text: Dernière date affichée *
+  - textbox "Dernière date affichée *": 2026-09-30
+  - paragraph: Sélection rapide
+  - button "Toutes les dates"
+  - button "Lundi–vendredi"
+  - button "1 semaine civile sur 2"
+  - button "Aucune"
+  - button "Appliquer le 1er horaire aux jours sélectionnés":
+    - img
+    - text: Appliquer le 1er horaire aux jours sélectionnés
+  - checkbox "mercredi 30 septembre 2026 travaillé" [checked]
+  - text: mercredi 30 septembre 2026 Travaillé Début
+  - textbox "Début du créneau 1 du 2026-09-30": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2026-09-30": 19:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2026-09-30":
+    - option "Même jour · mer. 30 sept." [selected]
+    - option "Lendemain · jeu. 1 oct."
+  - button "Supprimer le créneau 1 du 2026-09-30":
+    - img
+  - paragraph: mer. 30 sept. 07:00 → mer. 30 sept. 19:00 · 12 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - paragraph: Contrôle par semaine civile
+  - text: Semaine du 28/09 12 h
+  - img
+  - paragraph: "Maximum légal : 48 h par semaine civile (lundi–dimanche)."
+  - paragraph: Aperçu exact · 1 créneau
+  - img
+  - strong: mercredi 30 septembre 2026
+  - text: · 07:00 →
+  - strong: mercredi 30 septembre 2026
+  - text: · 19:00 (12 h 00)
+  - paragraph:
+    - text: "Total :"
+    - strong: 12 h 00
+    - text: sur 1 semaine civile.
+  - text: Taux horaire proposé * (brut salarié ou honoraires HT)
+  - spinbutton "Taux horaire proposé * (brut salarié ou honoraires HT)"
+  - paragraph: "Taux conseillé pour Infirmier(ère) Diplômé(e) d'État (IDE) : 25–38 €/h brut si salarié, HT d’honoraires si libéral"
+  - text: Mission urgente ?
+  - paragraph: Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité.
+  - button "Mission urgente"
+  - paragraph: Mode de sélection
+  - radio "Premier arrivé Le premier soignant qui accepte remporte la mission." [checked]
+  - text: Premier arrivé
+  - paragraph: Le premier soignant qui accepte remporte la mission.
+  - radio "Je choisis Les soignants postulent, vous consultez les profils et choisissez."
+  - text: Je choisis
+  - paragraph: Les soignants postulent, vous consultez les profils et choisissez.
+  - paragraph: Simulation à titre indicatif. Le régime retenu détermine ensuite la paie employeur ou les deux factures distinctes du parcours libéral.
+  - button "Publier la mission" [disabled]

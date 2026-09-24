@@ -5,7 +5,6 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
-import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, ChevronRight, AlertTriangle, Timer, Scale, MessageCircle, Clock, Star, type LucideIcon } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -493,7 +492,7 @@ export default function DashboardEtablissement() {
           </div>
         )}
 
-        <FadeInView delay={0}>
+        <div>
           <CardY2K variant="default" className="mb-6">
             <div className="flex flex-col items-center text-center gap-4 py-4">
               <Mascotte etat="thinking" taille="lg" />
@@ -540,7 +539,7 @@ export default function DashboardEtablissement() {
               </BoutonY2K>
             </div>
           </CardY2K>
-        </FadeInView>
+        </div>
       </LayoutApp>
     );
   }
@@ -648,7 +647,7 @@ export default function DashboardEtablissement() {
 
       {/* F6 — « À faire maintenant » : carte unique consolidant les bannières concurrentes */}
       {actionsTop.length > 0 && (
-        <FadeInView delay={0}>
+        <div>
           <CardY2K className="mb-4">
             <p className="text-sm font-bold text-foreground mb-3">À faire maintenant</p>
             <div className="space-y-2">
@@ -674,7 +673,7 @@ export default function DashboardEtablissement() {
               ))}
             </div>
           </CardY2K>
-        </FadeInView>
+        </div>
       )}
 
       {/* Action principale : publier une mission, toujours accessible en haut */}
@@ -694,7 +693,7 @@ export default function DashboardEtablissement() {
 
       {/* KPI row 1 — All from RPC */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
-        <FadeInView delay={0}>
+        <div>
           <CarteKPIY2K
             icone={<Briefcase className="h-4 w-4" />}
             valeur={stats.missions_ouvertes}
@@ -702,8 +701,8 @@ export default function DashboardEtablissement() {
             variant="default"
             onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}
           />
-        </FadeInView>
-        <FadeInView delay={50}>
+        </div>
+        <div>
           <CarteKPIY2K
             icone={<ClipboardCheck className="h-4 w-4" />}
             valeur={stats.missions_assignees}
@@ -711,8 +710,8 @@ export default function DashboardEtablissement() {
             variant="default"
             onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}
           />
-        </FadeInView>
-        <FadeInView delay={100}>
+        </div>
+        <div>
           <CarteKPIY2K
             icone={<PlayCircle className="h-4 w-4" />}
             valeur={stats.missions_en_cours}
@@ -720,8 +719,8 @@ export default function DashboardEtablissement() {
             variant="default"
             onClick={() => navigate('/etablissement/missions?statut=EN_COURS')}
           />
-        </FadeInView>
-        <FadeInView delay={150}>
+        </div>
+        <div>
           <CarteKPIY2K
             icone={<CheckCircle className="h-4 w-4" />}
             valeur={stats.missions_terminees}
@@ -729,14 +728,14 @@ export default function DashboardEtablissement() {
             variant="default"
             onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}
           />
-        </FadeInView>
+        </div>
       </div>
 
       {/* KPI row 2 — Soignants ce mois + règlements à effectuer. « Candidatures en attente »
           retirée : doublon (même destination que « Missions ouvertes » et déjà
           surfacée dans la carte « À faire maintenant »). */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <FadeInView delay={250}>
+        <div>
           <CarteKPIY2K
             icone={<Users className="h-4 w-4" />}
             valeur={stats.soignants_ce_mois}
@@ -745,8 +744,8 @@ export default function DashboardEtablissement() {
             variant="default"
             onClick={() => navigate('/etablissement/pool-urgence')}
           />
-        </FadeInView>
-        <FadeInView delay={300}>
+        </div>
+        <div>
           {(() => {
             const totalARegler = stats.missions_a_payer + stats.nb_factures_impayees;
             const aDesReglements = totalARegler > 0;
@@ -765,11 +764,11 @@ export default function DashboardEtablissement() {
               />
             );
           })()}
-        </FadeInView>
+        </div>
       </div>
 
       {/* Planning missions à venir (30j) */}
-      <FadeInView delay={600}>
+      <div>
         <SectionPlanning
           missions={prochaines}
           missionsSansPlanning={missionsSansPlanning}
@@ -778,7 +777,7 @@ export default function DashboardEtablissement() {
           finFenetre={finFenetrePlanning}
           onRetry={() => queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] })}
         />
-      </FadeInView>
+      </div>
 
       {/* Statistiques détaillées — repliées par défaut (densité). Le manager
           voit d'abord action + pipeline + planning ; il déplie les analytics
@@ -862,8 +861,8 @@ export default function DashboardEtablissement() {
           </div>
         ) : missions.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {missions.map((m, i) => (
-              <FadeInView key={m.id} delay={i * 100}>
+            {missions.map((m) => (
+              <div key={m.id}>
                 <CarteMission mission={m}
                   onDupliquer={(m) => setModalDupliquer(m)}
                   onAnnuler={(m) => setModalAnnuler(m)}
@@ -875,7 +874,7 @@ export default function DashboardEtablissement() {
                     navigate(`/etablissement/missions/creer?${params.toString()}`);
                   }}
                 />
-              </FadeInView>
+              </div>
             ))}
           </div>
         ) : (

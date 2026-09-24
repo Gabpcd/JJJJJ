@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 const userId = '69000000-0000-4000-8000-000000000071';
 const missionId = '69000000-0000-4000-8000-000000000072';
@@ -55,9 +55,9 @@ async function inscrire(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT') {
   if (type === 'ETABLISSEMENT') await page.getByRole('checkbox',{name:/conditions générales de vente/}).check();
   await page.getByRole('button',{name:'Créer mon compte',exact:true}).click();
 }
-async function preuve(page: Page, nom: string, testInfo: any) {
-  await expect(page.locator('.page-transition')).toHaveClass(/page-enter/);
-  await expect(page.locator('.page-transition')).toHaveCSS('opacity', '1');
+async function preuve(page: Page, nom: string, testInfo: any, contenu: Locator) {
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(contenu).toBeVisible();
   if (process.env.RECETTE_DIR) {
     await mkdir(process.env.RECETTE_DIR, {recursive:true});
     await writeFile(`${process.env.RECETTE_DIR}/${nom}.txt`, await page.locator('body').ariaSnapshot());
@@ -77,14 +77,19 @@ test('compte soignant neuf : vraie navigation même sans mission, profil faculta
   await expect(page.getByRole('button',{name:'Liste',exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Liste',exact:true}).click();
   await expect(page.getByText(/Aucune mission/).first()).toBeVisible();
-  await preuve(page,'explorer-vide',testInfo);
-  for (const [label, url] of [['Accueil','tableau-de-bord'],['Mes missions','missions'],['Revenus','mes-gains'],['Profil','mon-compte']] as const) {
+  await preuve(page,'explorer-vide',testInfo,page.getByRole('heading',{name:'Aucune mission trouvée',exact:true}));
+  for (const [label, url, contenu] of [
+    ['Accueil','tableau-de-bord',page.getByText('Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.',{exact:true})],
+    ['Mes missions','missions',page.getByRole('heading',{name:'Mes missions',exact:true})],
+    ['Revenus','mes-gains',page.getByRole('heading',{name:'💰 Revenus',exact:true})],
+    ['Profil','mon-compte',page.getByRole('heading',{name:'Mon compte',exact:true})],
+  ] as const) {
     await page.getByRole('button',{name:label,exact:true}).last().click();
     await expect(page).toHaveURL(new RegExp(`/soignant/${url}`));
     await expect(page.locator('main')).toBeVisible();
     await expect(page.getByText('Compléter mes informations',{exact:true})).toHaveCount(0);
     await expect(page.getByRole('button',{name:'Finaliser mon inscription'})).toHaveCount(0);
-    await preuve(page,url,testInfo);
+    await preuve(page,url,testInfo,contenu);
   }
   await page.reload();
   await expect(page).toHaveURL(/soignant\/mon-compte/);
@@ -106,7 +111,7 @@ test('consultation libre puis candidature : dossier demandé seulement au clic, 
   await page.getByText('Remplacement infirmier de jour',{exact:true}).first().click();
   await expect(page).toHaveURL(new RegExp(`/soignant/missions/${missionId}`));
   await expect(page.getByRole('heading',{name:'Remplacement infirmier de jour'})).toBeVisible();
-  await preuve(page,'detail-libre',testInfo);
+  await preuve(page,'detail-libre',testInfo,page.getByRole('heading',{name:'Remplacement infirmier de jour',exact:true}));
   await page.getByRole('button',{name:'Candidater',exact:true}).first().click();
   await expect(page).toHaveURL(/inscription\/completer/);
   await expect(page.getByRole('textbox',{name:'Prénom *',exact:true})).toBeVisible();
@@ -123,12 +128,12 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     await inscrire(page,'ETABLISSEMENT');
     await expect(page).toHaveURL(/etablissement\/tableau-de-bord/);
     await expect(page.locator('main')).toBeVisible();
-    await preuve(page,`etablissement-accueil-${viewport.width}`,testInfo);
-    for (const route of ['missions','messagerie','mon-compte']) {
+    await preuve(page,`etablissement-accueil-${viewport.width}`,testInfo,page.getByRole('heading',{name:'Tableau de bord',exact:true}));
+    for (const [route,titre] of [['missions','Mes missions'],['messagerie','Messagerie'],['mon-compte','Mon établissement']] as const) {
       await page.goto(`/etablissement/${route}`);
       await expect(page.locator('main')).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`/etablissement/${route}$`));
-      await preuve(page,`etablissement-${route}-${viewport.width}`,testInfo);
+      await preuve(page,`etablissement-${route}-${viewport.width}`,testInfo,page.getByRole('heading',{name:titre,exact:true}));
     }
     await page.goto('/etablissement/parametres?tab=profil');
     await expect(page).toHaveURL(/inscription\/completer/);
@@ -139,7 +144,7 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     await page.getByLabel(/Intitulé/).fill('Renfort de nuit');
     await expect(page.getByText(/Veuillez compléter votre SIRET/)).toHaveCount(0);
     await expect(page.getByText(/Votre contrat de service n.est pas encore signé/)).toHaveCount(0);
-    await preuve(page,`etablissement-brouillon-${viewport.width}`,testInfo);
+    await preuve(page,`etablissement-brouillon-${viewport.width}`,testInfo,page.getByRole('heading',{name:'Publier une mission',exact:true}));
     await page.getByRole('button',{name:/^Publier la mission/}).click();
     await expect(page).toHaveURL(/inscription\/completer/);
     expect((parcours.donnees.missionFormulaire as any)?.intitule).toBe('Renfort de nuit');

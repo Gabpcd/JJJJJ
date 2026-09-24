@@ -1,0 +1,168 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - text: Jolene
+  - link "À propos":
+    - /url: /a-propos
+  - link "Tarifs":
+    - /url: /tarifs
+  - button "Se connecter"
+- main:
+  - img "Logo Jolene, succès"
+  - text: "✨ Missions, contrats, paie : tout-en-un"
+  - heading "Le remplacement santé, enfin simple." [level=1]
+  - paragraph: Établissements et soignants connectés en direct. Contrat signé en ligne, pointage GPS, paiement suivi — zéro paperasse.
+  - button "🩺 Je suis soignant":
+    - text: 🩺 Je suis soignant
+    - img
+  - button "🏥 Je suis un établissement":
+    - text: 🏥 Je suis un établissement
+    - img
+  - img
+  - text: 0 € pour les soignants
+  - img
+  - text: Diplômes vérifiés par IA
+  - img
+  - text: Contrats signés en ligne
+  - img
+  - text: Professions prises en charge, salariat ou libéral selon le cadre applicable
+  - heading "Découvrez les missions disponibles" [level=2]
+  - paragraph: Cherchez par profession et localisation — sans inscription. Laissez la ville vide pour tout voir.
+  - text: Profession à rechercher
+  - combobox "Profession à rechercher":
+    - text: Toutes les professions
+    - img
+  - text: Ville ou code postal
+  - textbox "Ville ou code postal":
+    - /placeholder: Ville ou code postal (optionnel)
+  - button "Voir les missions":
+    - img
+    - text: Voir les missions
+  - paragraph: Pas de mission pour le moment pour cette profession.
+  - button "Inscrivez-vous pour être alerté →"
+  - heading "Une plateforme, deux expériences 🤝" [level=2]
+  - heading "🩺 Pour les soignants" [level=3]
+  - list:
+    - listitem: 📍 Missions près de chez vous, en liste ou en swipe
+    - listitem: 💶 Rémunération affichée avant de postuler, paiement suivi
+    - listitem: 📄 Contrats générés et signés en ligne
+    - listitem: 🚀 Parcours vers le libéral adapté à votre profession
+  - button "Créer mon profil gratuit ✨":
+    - text: Créer mon profil gratuit ✨
+    - img
+  - heading "🏥 Pour les établissements" [level=3]
+  - list:
+    - listitem: ✅ Identité professionnelle et pièces adaptées à la mission vérifiées
+    - listitem: ⚡ Plan de secours activé en cas de désistement ou non-présentation
+    - listitem: ⚖️ DPAE préparée, plafonds et contrôles de conformité visibles
+    - listitem: 🧾 Documents de facturation par période et suivi Chorus Pro
+  - button "Publier ma première mission 🎯":
+    - text: Publier ma première mission 🎯
+    - img
+  - heading "Comment ça marche 🚀" [level=2]
+  - paragraph: Trois étapes, côté soignant comme côté établissement
+  - text: 📝 Étape 1
+  - heading "Publiez ou postulez" [level=3]
+  - paragraph: L'établissement publie sa mission avec horaires et taux. Le soignant postule ou accepte en 1 clic.
+  - text: ✍️ Étape 2
+  - heading "Le contrat se signe en ligne" [level=3]
+  - paragraph: Contrat prérempli à partir de la mission, puis signé électroniquement par les deux parties, dans l’ordre de leur choix.
+  - text: 🎉 Étape 3
+  - heading "Le suivi est centralisé" [level=3]
+  - paragraph: Pointage, facturation et paiement sont suivis au même endroit. Pour une mission salariée, l’établissement transmet lui-même la DPAE à l’URSSAF.
+  - heading "En chiffres 📊" [level=2]
+  - img "15+"
+  - paragraph: 👩‍⚕️ professions
+  - img "24/7"
+  - paragraph: 🌙 missions jour et nuit
+  - img "48 h"
+  - paragraph: ⚖️ plafond hebdomadaire contrôlé
+  - img "0€"
+  - paragraph: 💸 d'abonnement
+  - img
+  - text: Conforme RGPD
+  - img
+  - text: Conforme Code du Travail
+  - img
+  - text: Signature électronique eIDAS
+  - heading "Questions fréquentes" [level=2]
+  - heading "Comment fonctionne la commission ?" [level=3]:
+    - button "Comment fonctionne la commission ?":
+      - text: Comment fonctionne la commission ?
+      - img
+  - heading "Jolene est-il une agence d'intérim ?" [level=3]:
+    - button "Jolene est-il une agence d'intérim ?":
+      - text: Jolene est-il une agence d'intérim ?
+      - img
+  - heading "Comment sont vérifiés les soignants ?" [level=3]:
+    - button "Comment sont vérifiés les soignants ?":
+      - text: Comment sont vérifiés les soignants ?
+      - img
+  - heading "Quels types de contrats sont générés ?" [level=3]:
+    - button "Quels types de contrats sont générés ?":
+      - text: Quels types de contrats sont générés ?
+      - img
+  - heading "Comment fonctionne le pointage ?" [level=3]:
+    - button "Comment fonctionne le pointage ?":
+      - text: Comment fonctionne le pointage ?
+      - img
+  - heading "Puis-je passer en libéral via Jolene ?" [level=3]:
+    - button "Puis-je passer en libéral via Jolene ?":
+      - text: Puis-je passer en libéral via Jolene ?
+      - img
+  - heading "Prêt à simplifier vos remplacements ? 🎉" [level=2]
+  - paragraph: Inscription gratuite en 2 minutes — première mission possible dès aujourd'hui 🩷
+  - button "🩺 Je suis soignant":
+    - text: 🩺 Je suis soignant
+    - img
+  - button "🏥 Je suis un établissement":
+    - text: 🏥 Je suis un établissement
+    - img
+- contentinfo:
+  - text: Jolene
+  - paragraph: La plateforme de confiance pour le remplacement et le staffing en santé.
+  - heading "Plateforme" [level=4]
+  - list:
+    - listitem:
+      - link "Soignants":
+        - /url: /inscription/soignant
+    - listitem:
+      - link "Établissements":
+        - /url: /inscription/etablissement
+    - listitem:
+      - link "Tarifs":
+        - /url: /tarifs
+    - listitem:
+      - link "À propos":
+        - /url: /a-propos
+    - listitem:
+      - link "Télécharger":
+        - /url: /telecharger
+  - heading "Ressources" [level=4]
+  - list:
+    - listitem:
+      - link "Devenir soignant":
+        - /url: /devenir-soignant
+    - listitem:
+      - link "Recruter des soignants":
+        - /url: /recruter-soignants
+    - listitem:
+      - link "Passer en libéral":
+        - /url: /infirmiere-liberale
+  - heading "Légal" [level=4]
+  - list:
+    - listitem:
+      - link "CGU":
+        - /url: /cgu
+    - listitem:
+      - link "CGV":
+        - /url: /cgv
+    - listitem:
+      - link "Confidentialité":
+        - /url: /confidentialite
+    - listitem:
+      - link "Mentions légales":
+        - /url: /mentions-legales
+  - paragraph: © 2026 Jolene SASU — Tous droits réservés
+- region "Notifications alt+T"
+- region "Notifications"

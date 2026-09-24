@@ -1,3 +1,4 @@
+import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
@@ -150,6 +151,10 @@ function scrollTo(id: string) {
 }
 
 export default function FacturationEtablissement() {
+  return <AccesEtablissement titre="Facturation" description="Vos factures et le suivi des paiements apparaîtront ici après vos premières missions."><FacturationEtablissementContent /></AccesEtablissement>;
+}
+
+function FacturationEtablissementContent() {
   usePageTitle('Facturation');
   const {
     user,

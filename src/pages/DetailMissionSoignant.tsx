@@ -842,10 +842,10 @@ export default function DetailMissionSoignant() {
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Col 1 — Infos */}
-        <div className="space-y-4">
+        {/* Mission et rémunération avant les informations secondaires, y compris sur mobile. */}
+        <div className="contents">
           {/* Mission info */}
-          <div className="card-base">
+          <div className="card-base self-start">
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <BadgeStatut statut={mission.statut} />
               {mission.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
@@ -869,6 +869,94 @@ export default function DetailMissionSoignant() {
             )}
           </div>
 
+          <section aria-label="Rémunération de la mission" className="space-y-4">
+          {/* Rémunération — la décomposition explique le contrat. Les pièces
+              officielles sont exclusivement celles chargées plus bas depuis
+              factures_honoraires : aucun faux PDF local ne doit les doubler. */}
+          {(mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
+            <div id="bloc-retro-confirm" className="card-base border-warning/40 bg-warning/5 space-y-2">
+              <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
+              <p className="text-xs text-muted-foreground">
+                Le cabinet déclare <strong>{Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} €</strong> d'honoraires
+                (justificatif joint à la mission) — ta rétrocession ({(mission as any).retrocession_pct}%) :
+                <strong> {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} €</strong>.
+                Sans action de ta part, validation automatique sous 48h.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    const { data, error } = await supabase.rpc('fn_confirmer_honoraires_retrocession' as any, { p_mission_id: mission.id });
+                    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Confirmation impossible.'); return; }
+                    toast.success('Relevé confirmé — ta note d\'honoraires est générée, le cabinet est notifié.');
+                    setMission((prev: any) => ({ ...prev, honoraires_confirmes_le: new Date().toISOString() }));
+                  }}
+                  className="btn-primary flex-1 text-sm py-2.5"
+                >
+                  ✓ Je confirme le relevé
+                </button>
+                <button
+                  onClick={() => navigate('/soignant/litiges')}
+                  className="flex-1 text-sm py-2.5 rounded-xl border border-destructive/40 text-destructive hover:bg-destructive/5"
+                >
+                  Contester (litige)
+                </button>
+              </div>
+            </div>
+          ) : (mission as any).mode_remuneration === 'RETROCESSION' ? (
+            <div className="card-base border-primary/20">
+              <p className="text-sm font-semibold text-foreground mb-1">🤝 Remplacement de cabinet — rétrocession d'honoraires</p>
+              <p className="text-3xl font-extrabold text-primary mb-2">{(mission as any).retrocession_pct ?? '—'}%</p>
+              <p className="text-xs text-muted-foreground">
+                Tu exerces sous les feuilles de soins du titulaire : il encaisse les honoraires
+                puis te rétrocède {(mission as any).retrocession_pct ?? '—'}% des actes réalisés
+                (contrat de remplacement conforme au modèle de l'Ordre, généré à l'acceptation).
+                RCP obligatoire.
+              </p>
+              {(mission as any).honoraires_confirmes_le && (
+                <p className="text-xs text-success mt-2">✓ Relevé confirmé — rétrocession de {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} € validée</p>
+              )}
+            </div>
+          ) : (
+            <DecompositionFinanciere
+              mission={mission}
+              etablissement={etablissementAffiche}
+              role="SOIGNANT"
+            />
+          )}
+          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
+          <p className="text-xs text-muted-foreground/60 italic text-center">
+            {missionEstLiberale && estTerminee
+              ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
+              : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
+          </p>
+          )}
+
+          {/* 7c : quand est-on payé ? Copy différenciée par régime — jamais de
+              promesse que Jolene ne contrôle pas (⚡ gated serveur, escrow requis). */}
+          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
+            missionEstLiberale && etabSafe?.paiement_rapide ? (
+              <div className="text-center">
+                <p className="text-xs font-semibold text-success">
+                  ⚡ Versement normalement lancé sous 24 à 72 h après validation des présences.
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  L'arrivée sur ton compte dépend ensuite du délai bancaire et des contrôles éventuels.
+                </p>
+              </div>
+            ) : missionEstLiberale ? (
+              <p className="text-xs text-muted-foreground text-center">
+                Payée après règlement de l'établissement (~30 à 60 jours).
+              </p>
+            ) : etabSafe?.jour_paie_habituel != null ? (
+              <p className="text-xs text-muted-foreground text-center">
+                💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
+              </p>
+            ) : null
+          )}
+
+          </section>
+
+          <div className="space-y-4">
           {/* Établissement */}
           <div className="card-base bg-muted/30">
             <div className="flex items-start gap-3">
@@ -1026,9 +1114,10 @@ export default function DetailMissionSoignant() {
               {(mission.heures_ferie || 0) > 0 && <span className="badge-base bg-red-100 text-red-700">🎌 {mission.heures_ferie}h de jour férié</span>}
             </div>
           </div>
+          </div>
         </div>
 
-        {/* Col 2 — Finance + Actions */}
+        {/* Col 2 — Actions et suivi */}
         <div className="space-y-4">
           {/* Compteur hebdomadaire compact */}
           {estOuverte && (
@@ -1036,90 +1125,6 @@ export default function DetailMissionSoignant() {
               compact
               missionCandidate={missionCandidateHebdo}
             />
-          )}
-
-          {/* Rémunération — la décomposition explique le contrat. Les pièces
-              officielles sont exclusivement celles chargées plus bas depuis
-              factures_honoraires : aucun faux PDF local ne doit les doubler. */}
-          {(mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
-            <div id="bloc-retro-confirm" className="card-base border-warning/40 bg-warning/5 space-y-2">
-              <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
-              <p className="text-xs text-muted-foreground">
-                Le cabinet déclare <strong>{Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} €</strong> d'honoraires
-                (justificatif joint à la mission) — ta rétrocession ({(mission as any).retrocession_pct}%) :
-                <strong> {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} €</strong>.
-                Sans action de ta part, validation automatique sous 48h.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    const { data, error } = await supabase.rpc('fn_confirmer_honoraires_retrocession' as any, { p_mission_id: mission.id });
-                    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Confirmation impossible.'); return; }
-                    toast.success('Relevé confirmé — ta note d\'honoraires est générée, le cabinet est notifié.');
-                    setMission((prev: any) => ({ ...prev, honoraires_confirmes_le: new Date().toISOString() }));
-                  }}
-                  className="btn-primary flex-1 text-sm py-2.5"
-                >
-                  ✓ Je confirme le relevé
-                </button>
-                <button
-                  onClick={() => navigate('/soignant/litiges')}
-                  className="flex-1 text-sm py-2.5 rounded-xl border border-destructive/40 text-destructive hover:bg-destructive/5"
-                >
-                  Contester (litige)
-                </button>
-              </div>
-            </div>
-          ) : (mission as any).mode_remuneration === 'RETROCESSION' ? (
-            <div className="card-base border-primary/20">
-              <p className="text-sm font-semibold text-foreground mb-1">🤝 Remplacement de cabinet — rétrocession d'honoraires</p>
-              <p className="text-3xl font-extrabold text-primary mb-2">{(mission as any).retrocession_pct ?? '—'}%</p>
-              <p className="text-xs text-muted-foreground">
-                Tu exerces sous les feuilles de soins du titulaire : il encaisse les honoraires
-                puis te rétrocède {(mission as any).retrocession_pct ?? '—'}% des actes réalisés
-                (contrat de remplacement conforme au modèle de l'Ordre, généré à l'acceptation).
-                RCP obligatoire.
-              </p>
-              {(mission as any).honoraires_confirmes_le && (
-                <p className="text-xs text-success mt-2">✓ Relevé confirmé — rétrocession de {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} € validée</p>
-              )}
-            </div>
-          ) : (
-            <DecompositionFinanciere
-              mission={mission}
-              etablissement={etablissementAffiche}
-              role="SOIGNANT"
-            />
-          )}
-          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
-          <p className="text-xs text-muted-foreground/60 italic text-center">
-            {missionEstLiberale && estTerminee
-              ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
-              : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
-          </p>
-          )}
-
-          {/* 7c : quand est-on payé ? Copy différenciée par régime — jamais de
-              promesse que Jolene ne contrôle pas (⚡ gated serveur, escrow requis). */}
-          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
-            missionEstLiberale && etabSafe?.paiement_rapide ? (
-              <div className="text-center">
-                <p className="text-xs font-semibold text-success">
-                  ⚡ Versement normalement lancé sous 24 à 72 h après validation des présences.
-                </p>
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  L'arrivée sur ton compte dépend ensuite du délai bancaire et des contrôles éventuels.
-                </p>
-              </div>
-            ) : missionEstLiberale ? (
-              <p className="text-xs text-muted-foreground text-center">
-                Payée après règlement de l'établissement (~30 à 60 jours).
-              </p>
-            ) : etabSafe?.jour_paie_habituel != null ? (
-              <p className="text-xs text-muted-foreground text-center">
-                💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
-              </p>
-            ) : null
           )}
 
           {estAssigne && missionEstLiberale && (

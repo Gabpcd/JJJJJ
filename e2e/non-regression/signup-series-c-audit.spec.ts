@@ -710,7 +710,8 @@ test.describe('inscriptions mobile Série C', () => {
 
       // L'entrée normale de création retrouve aussi le brouillon après inscription.
       await page.goto('/etablissement/missions/creer');
-      await expect(page.getByText('Brouillon repris', { exact: true })).toBeVisible();
+      await expect(page.getByText('Brouillon repris — Renfort IDE — audit inscription', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue('Renfort IDE — audit inscription');
       await expect(page.getByLabel(/Première date affichée/)).toHaveValue(missionDate);
       await expect(page.getByLabel(`Début du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('07:00');
       await expect(page.getByLabel(`Fin du créneau 1 du ${missionDate}`, { exact: true })).toHaveValue('19:00');

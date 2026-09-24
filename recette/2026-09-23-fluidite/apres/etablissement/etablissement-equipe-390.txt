@@ -1,0 +1,10 @@
+- main:
+  - region "Mon équipe":
+    - heading "Mon équipe" [level=1]
+    - heading "Votre établissement se prépare à votre rythme" [level=2]
+    - paragraph: Vous pourrez inviter vos collaborateurs et gérer leurs accès une fois votre établissement renseigné.
+    - paragraph: Vous pouvez continuer à explorer Jolene et préparer une mission sans compléter votre dossier maintenant.
+    - link "Préparer une mission":
+      - /url: /etablissement/missions/creer
+    - link "Compléter mon établissement":
+      - /url: /inscription/completer

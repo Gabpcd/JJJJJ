@@ -22,6 +22,7 @@ vi.mock('@/hooks/useEtablissementScope', () => ({
   useEtablissementScope: () => ({
     user: { id: 'admin-1' },
     etablissementId: 'etablissement-1',
+    loading: false, resolved: true, error: null, retry: vi.fn(),
   }),
 }));
 

@@ -1,0 +1,27 @@
+{
+  "pointerOpened": 0,
+  "keyboardOpened": 1,
+  "events": [
+    {
+      "type": "pointerdown",
+      "tag": "P",
+      "role": null,
+      "label": null,
+      "cls": "text-base font-bold text-jolene-rose-700 mt-1"
+    },
+    {
+      "type": "pointerup",
+      "tag": "DIV",
+      "role": null,
+      "label": null,
+      "cls": "relative h-full touch-none select-none"
+    },
+    {
+      "type": "click",
+      "tag": "DIV",
+      "role": null,
+      "label": null,
+      "cls": "relative h-full touch-none select-none transition-bouncy"
+    }
+  ]
+}

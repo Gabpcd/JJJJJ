@@ -1,0 +1,41 @@
+- main:
+  - heading "Publier une mission" [level=1]
+  - paragraph: Brouillon repris — Mission conservée après exploration
+  - paragraph: Préparez votre mission. Votre dossier vous sera demandé pour la publier.
+  - text: Intitulé *
+  - textbox "Intitulé *":
+    - /placeholder: "Ex: IDE de nuit — Service Urgences"
+    - text: Mission conservée après exploration
+  - paragraph: 35/120
+  - text: Description
+  - textbox "Description":
+    - /placeholder: Informations complémentaires pour le soignant...
+  - text: Profession requise *
+  - combobox:
+    - text: Sélectionnez la profession recherchée
+    - img
+  - text: Service
+  - combobox "Service"
+  - text: Type de contrat proposé Choisissez d’abord la profession pour afficher les contrats réellement disponibles.
+  - paragraph: Planning exact de la mission
+  - paragraph: Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés.
+  - paragraph: 📅 Dates et horaires réels
+  - paragraph: Chaque date est indépendante. Vous pouvez prévoir des jours non travaillés, plusieurs créneaux et des gardes de nuit.
+  - text: Première date affichée *
+  - textbox "Première date affichée *"
+  - text: Dernière date affichée *
+  - textbox "Dernière date affichée *"
+  - text: Taux horaire proposé * (brut salarié ou honoraires HT)
+  - spinbutton "Taux horaire proposé * (brut salarié ou honoraires HT)"
+  - text: Mission urgente ?
+  - paragraph: Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité.
+  - button "Mission urgente"
+  - paragraph: Mode de sélection
+  - radio "Premier arrivé Le premier soignant qui accepte remporte la mission." [checked]
+  - text: Premier arrivé
+  - paragraph: Le premier soignant qui accepte remporte la mission.
+  - radio "Je choisis Les soignants postulent, vous consultez les profils et choisissez."
+  - text: Je choisis
+  - paragraph: Les soignants postulent, vous consultez les profils et choisissez.
+  - paragraph: Simulation à titre indicatif. Le régime retenu détermine ensuite la paie employeur ou les deux factures distinctes du parcours libéral.
+  - button "Publier la mission"
