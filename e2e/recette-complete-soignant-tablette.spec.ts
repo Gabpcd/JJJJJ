@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { simulerSoignant, entrer, preuve, sansDebordement } from './helpers/recette-complete-soignant';
+import { simulerSoignant, entrer, preuve, sansDebordement, mission, ids } from './helpers/recette-complete-soignant';
 
 test('SOIGNANT — carte Swipe proportionnée, contenu entier et actions accessibles', async ({ page }, info) => {
   const state = await simulerSoignant(page, 'minimal');
@@ -29,6 +29,41 @@ test('SOIGNANT — carte Swipe proportionnée, contenu entier et actions accessi
     await page.getByRole('button', { name: 'Fermer', exact: true }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
   }
+  expect(state.calls.some(c => /confirmer_action|creer_candidature|enregistrer_swipe/.test(c.name))).toBe(false);
+  expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+});
+
+test('SOIGNANT — Explorer Carte, popup, retour et filtres ville réinitialisés', async ({ page }, info) => {
+  const state = await simulerSoignant(page, 'minimal');
+  state.offers = true;
+  await entrer(page, 'inscription');
+  await page.getByRole('tab', { name: 'Carte', exact: true }).click();
+  await expect(page.locator('.leaflet-container')).toBeVisible();
+  await page.getByTitle(mission.intitule, { exact: true }).click();
+  await expect(page.locator('.leaflet-popup')).toContainText(mission.intitule);
+  await preuve(page, 'explorer-carte-popup', info);
+  await page.getByRole('link', { name: 'Voir la mission', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/soignant/missions/${ids.mission}$`));
+  await expect(page.getByRole('heading', { name: mission.intitule, exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('tab', { name: 'Carte', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.leaflet-container')).toHaveCount(1);
+  await page.getByRole('tab', { name: 'Liste', exact: true }).click();
+  await expect(page.getByText(mission.intitule, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  const filtres = page.getByRole('dialog', { name: 'Filtres', exact: true });
+  await filtres.getByLabel('📍 Ville ou code postal', { exact: true }).fill('Lyon');
+  await expect(filtres.getByRole('button', { name: 'Voir 0 mission', exact: true })).toBeVisible();
+  await preuve(page, 'explorer-filtres-ville', info);
+  await filtres.getByRole('button', { name: 'Voir 0 mission', exact: true }).click();
+  await expect(page.getByText(mission.intitule, { exact: true })).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aucune mission trouvée', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^Filtres/ }).click();
+  await filtres.getByRole('button', { name: 'Réinitialiser', exact: true }).click();
+  await expect(filtres.getByLabel('📍 Ville ou code postal', { exact: true })).toHaveValue('');
+  await filtres.getByRole('button', { name: 'Voir 1 mission', exact: true }).click();
+  await expect(page.getByText(mission.intitule, { exact: true })).toBeVisible();
+  await preuve(page, 'explorer-filtres-reinitialises', info);
   expect(state.calls.some(c => /confirmer_action|creer_candidature|enregistrer_swipe/.test(c.name))).toBe(false);
   expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
 });

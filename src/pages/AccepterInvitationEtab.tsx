@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, CheckCircle, AlertCircle, Users } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -6,6 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import { avecDelai } from '@/lib/avecDelai';
+import { reinitialiserCacheRole } from '@/hooks/useRole';
 
 type Etape = 'verification' | 'connecter' | 'confirmer' | 'succes' | 'erreur';
 
@@ -25,13 +28,30 @@ export default function AccepterInvitationEtab() {
   usePageTitle('Invitation équipe');
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { afficherNotification } = useNotification();
   const [etape, setEtape] = useState<Etape>('verification');
   const [erreurMessage, setErreurMessage] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [reessayable, setReessayable] = useState(false);
+  const demandeEnCours = useRef(false);
+  const redirection = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generation = useRef(0);
 
   useEffect(() => {
+    generation.current += 1;
+    demandeEnCours.current = false;
+    setLoading(false);
+    setReessayable(false);
+    setEtape('verification');
+    return () => {
+      generation.current += 1;
+      if (redirection.current) clearTimeout(redirection.current);
+    };
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (authLoading) return;
     if (!token) {
       setEtape('erreur');
       setErreurMessage('Token d\'invitation manquant.');
@@ -44,27 +64,46 @@ export default function AccepterInvitationEtab() {
       return;
     }
     setEtape('confirmer');
-  }, [token, user, navigate]);
+  }, [token, user, authLoading, navigate]);
 
   async function accepter() {
-    if (!token) return;
+    if (!token || demandeEnCours.current) return;
+    const requeteGeneration = generation.current;
+    demandeEnCours.current = true;
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_accepter_invitation_membre' as any, { p_token: token });
-    setLoading(false);
-    if (error) {
+    setReessayable(false);
+    try {
+      const { data, error } = await avecDelai(
+        supabase.rpc('fn_accepter_invitation_membre' as any, { p_token: token }),
+        15_000,
+        'La demande a pris trop de temps. Veuillez réessayer.',
+      );
+      if (requeteGeneration !== generation.current) return;
+      if (error) throw error;
+      const result = data as { success?: boolean; error_code?: string } | null;
+      if (!result?.success) {
+        setEtape('erreur');
+        setErreurMessage(codeErreurFr(result?.error_code) || 'Cette invitation ne peut pas être acceptée. Contactez l’établissement.');
+        return;
+      }
+      afficherNotification({ type: 'succes', message: 'Invitation acceptée. Bienvenue dans l\'équipe !' });
+      setEtape('succes');
+      redirection.current = setTimeout(() => {
+        if (requeteGeneration !== generation.current) return;
+        reinitialiserCacheRole();
+        navigate('/etablissement/tableau-de-bord');
+      }, 1500);
+    } catch (error) {
+      if (requeteGeneration !== generation.current) return;
       setEtape('erreur');
-      setErreurMessage(error.message);
-      return;
+      setErreurMessage(extraireMessageErreur(error));
+      setReessayable(true);
+    } finally {
+      if (requeteGeneration === generation.current) {
+        demandeEnCours.current = false;
+        setLoading(false);
+      }
     }
-    const result = data as any;
-    if (!result?.success) {
-      setEtape('erreur');
-      setErreurMessage(codeErreurFr(result?.error_code) || result?.error || 'Erreur acceptation.');
-      return;
-    }
-    afficherNotification({ type: 'succes', message: 'Invitation acceptée. Bienvenue dans l\'équipe !' });
-    setEtape('succes');
-    setTimeout(() => navigate('/etablissement/tableau-de-bord'), 1500);
   }
 
   return (
@@ -113,10 +152,15 @@ export default function AccepterInvitationEtab() {
         )}
 
         {etape === 'erreur' && (
-          <div className="card-base text-center py-8 border-destructive/30 bg-destructive/5">
+          <div role="alert" className="card-base text-center py-8 border-destructive/30 bg-destructive/5">
             <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-3" />
             <p className="text-base font-semibold text-destructive mb-2">Impossible d'accepter l'invitation</p>
             <p className="text-xs text-muted-foreground">{erreurMessage}</p>
+            {reessayable && (
+              <button onClick={accepter} disabled={loading} className="btn-primary text-sm mt-4 w-full disabled:opacity-50">
+                {loading ? 'Vérification…' : 'Réessayer'}
+              </button>
+            )}
             <button onClick={() => navigate('/')} className="btn-secondary text-sm mt-4">
               Retour à l'accueil
             </button>

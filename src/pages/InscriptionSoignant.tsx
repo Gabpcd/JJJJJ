@@ -48,6 +48,7 @@ function JaugeForce({ motDePasse }: { motDePasse: string }) {
 }
 
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
+export const RPPS_VERIFICATION_TIMEOUT_MS = 10_000;
 
 function ExerciceTypeSection({ profession, uniqueType, loading, indisponible, estSalarieEtablissement, onChangeSalarie }: {
   profession: string;
@@ -231,11 +232,24 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
       setRppsResultat(null);
       setRppsPreRempli(false);
       setRppsVerifManuelle(false);
+      setRppsVerifiant(false);
       return;
     }
+    // Le résultat précédent ne décrit plus le numéro ou la profession saisis.
+    // L'attente commence dès la modification, avant le délai de saisie.
+    setRppsResultat(null);
+    setRppsPreRempli(false);
+    setRppsVerifManuelle(false);
+    setRppsVerifiant(true);
     const controller = new AbortController();
+    let active = true;
+    let verificationExpiree = false;
+    let limiteRequete: ReturnType<typeof setTimeout> | undefined;
     const timeout = setTimeout(async () => {
-      setRppsVerifiant(true);
+      limiteRequete = setTimeout(() => {
+        verificationExpiree = true;
+        controller.abort();
+      }, RPPS_VERIFICATION_TIMEOUT_MS);
       try {
         const rppsValue = form.rpps;
         const response = await fetch(
@@ -260,7 +274,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
         );
 
         const data = await response.json();
-        if (controller.signal.aborted) return;
+        if (!active || controller.signal.aborted) return;
         logger.debug('RPPS response:', data);
 
         if (!response.ok) {
@@ -304,22 +318,33 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
           setRppsResultat({ trouve: false });
         }
       } catch (err: any) {
+        if (!active) return;
+        if (verificationExpiree) {
+          setRppsResultat({ trouve: false, fhir_indisponible: true });
+          return;
+        }
         if (err?.name === 'AbortError') return; // re-render cancellation, normal
+        if (controller.signal.aborted) return;
         Sentry.captureException(err, {
           tags: { type: 'verify_rpps_temps_reel', code: 'NETWORK_ERROR' },
         });
         setRppsResultat(null);
+      } finally {
+        clearTimeout(limiteRequete);
+        if (active) setRppsVerifiant(false);
       }
-      if (!controller.signal.aborted) setRppsVerifiant(false);
     }, 500);
     return () => {
+      active = false;
       clearTimeout(timeout);
+      clearTimeout(limiteRequete);
       controller.abort();
     };
   }, [form.rpps, form.prenom, form.nom, form.profession, turnstileToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (rppsVerifiant) return;
     if (!etape2Valide) {
       const manque = [!form.prenom && 'prénom', !form.nom && 'nom', !telephoneValide && 'téléphone valide', !dateNaissanceMajeur && 'date de naissance (18 ans minimum)', !form.profession && 'profession', !form.typesContrat.length && 'type de contrat', rppsObligatoireInscription && form.rpps.length !== 11 && 'numéro RPPS à 11 chiffres', rppsBloquant && 'cohérence du RPPS'].filter(Boolean);
       setErreurInscription({ code: 'MISSING_REQUIRED_FIELDS', message: `Vérifiez les informations suivantes : ${manque.join(', ')}.` }); return;
@@ -604,11 +629,11 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
                   {rppsVerifiant && <p id="rpps-status" className="text-xs text-primary mt-1" role="status">Vérification en cours...</p>}
                   {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                     <div className="mt-1.5 space-y-1.5">
-                      <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
+                      {rppsResultat.profession_correspond === true && !rppsResultat.fhir_indisponible && <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                         <ShieldCheck className="h-3.5 w-3.5" />
                         ✅ RPPS vérifié dans l’Annuaire Santé — {rppsResultat.nom_affiche}
-                      </div>
-                      {rppsResultat.specialite_label && (
+                      </div>}
+                      {rppsResultat.profession_correspond === true && !rppsResultat.fhir_indisponible && rppsResultat.specialite_label && (
                         <div className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-lg px-2 py-1.5">
                           <ShieldCheck className="h-3.5 w-3.5" />
                           Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
@@ -690,7 +715,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
               )}
               <div className="flex gap-3 pt-2">
                 <button type="button" disabled={submitting} onClick={() => void enregistrerEtQuitter()} className="btn-secondary flex-1">{parcours ? "Enregistrer et continuer plus tard" : "Retour"}</button>
-                <button type="submit" disabled={submitting || (!parcours && !etape2Valide)} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting}>
+                <button type="submit" disabled={submitting || rppsVerifiant || (!parcours && !etape2Valide)} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting || rppsVerifiant}>
                   {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
                   {submitting ? 'Enregistrement…' : parcours ? 'Enregistrer mon profil' : 'Créer mon compte'}
                 </button>

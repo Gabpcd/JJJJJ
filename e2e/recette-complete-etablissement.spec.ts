@@ -1,5 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
-import {simulerEtablissement,entrer,preuve,ids,mission,allerA,stabiliserLectures} from './helpers/recette-complete-etablissement';
+import {simulerEtablissement,entrer,preuve,ids,mission,etablissement,allerA,stabiliserLectures} from './helpers/recette-complete-etablissement';
 
 test.setTimeout(480_000);
 const baseURL=process.env.PLAYWRIGHT_BASE_URL||'http://127.0.0.1:8890';
@@ -46,6 +46,29 @@ export const aliasesEtablissement = [
 async function pasDeDebordement(page:Page){
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'aucun débordement horizontal').toBe(true);
 }
+
+test('dashboard établissement : vérification cohérente pour autorisation absente, refusée et accordée',async({page},info)=>{
+ const {etat}=await simulerEtablissement(page);
+ await entrer(page,'connexion');
+ for(const publication of [false,null,true]){
+  etat.overrides.set('fn_mon_etablissement_complet',{...etablissement,peut_publier_missions:publication});
+  await allerA(page,'/etablissement/tableau-de-bord');
+  await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+  const main=page.locator('main');
+  if(publication===true){
+   await expect(main.getByText('Validé',{exact:true})).toBeVisible();
+   await expect(main.getByText('Votre compte est en cours de vérification',{exact:true})).toHaveCount(0);
+  }else{
+   await expect(main.getByText('Votre compte est en cours de vérification',{exact:true})).toBeVisible();
+   await expect(main.getByText('Vérification en cours',{exact:true})).toBeVisible();
+   await expect(main.getByText('Validé',{exact:true})).toHaveCount(0);
+  }
+  await expect(main.getByRole('button',{name:'Publier une mission',exact:true})).toBeEnabled();
+  await pasDeDebordement(page);await stabiliserLectures(page);
+  await preuve(page,`dashboard-verification-${String(publication)}`,info);
+ }
+ expect(etat.inconnues).toEqual([]);expect(etat.erreurs).toEqual([]);expect(etat.ecritures).toEqual([]);
+});
 
 for(const entree of ['connexion','inscription'] as const){
  for(const mode of ['minimal','complet'] as const){

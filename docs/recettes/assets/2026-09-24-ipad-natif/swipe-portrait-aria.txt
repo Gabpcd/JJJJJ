@@ -1,0 +1,73 @@
+Attributes: Application, 0x10483f440, pid: 19476, label: 'Jolene'
+Element subtree:
+ →Application, 0x10483f440, pid: 19476, label: 'Jolene'
+    Window (Main), 0x10483f560, {{0.0, 0.0}, {1032.0, 1376.0}}
+      Other, 0x10483f920, {{0.0, 0.0}, {1032.0, 1376.0}}
+        Other, 0x10483fa40, {{0.0, 0.0}, {1032.0, 1376.0}}
+          Other, 0x10483f680, {{0.0, 0.0}, {1032.0, 1376.0}}
+            WebView, 0x10483f7a0, {{0.0, 0.0}, {1032.0, 1376.0}}
+              WebView, 0x10483ffe0, {{0.0, 0.0}, {1032.0, 1376.0}}
+                WebView, 0x10483fb60, {{0.0, 0.0}, {1032.0, 1376.0}}
+                  Other, 0x10483fc80, {{0.0, 0.0}, {1032.0, 1376.0}}
+                    Other, 0x10483fda0, {{0.0, 0.0}, {1032.0, 1376.0}}
+                      Other, 0x104a26960, {{0.0, 0.0}, {1032.0, 1376.0}}
+                        Other, 0x104b1ae10, {{0.0, 0.0}, {1032.0, 1376.0}}, label: 'Trouver une mission — Jolene'
+                          Link, 0x104b18ee0, {{24.0, -30.0}, {193.0, 20.0}}, label: 'Aller au contenu principal'
+                            StaticText, 0x104a24350, {{24.0, -30.0}, {193.0, 20.0}}, label: 'Aller au contenu principal', value: Aller au contenu p...
+                          Other, 0x10483fec0, {{0.0, 0.0}, {1032.0, 1376.0}}, Focused
+                            Other, 0x104840100, {{0.0, 0.0}, {260.0, 1376.0}}, label: 'Sidebar, navigation', Focused
+                              StaticText, 0x104840220, {{48.0, 42.0}, {58.0, 23.0}}, label: 'Jolene', value: Jolene, Focused
+                              Other, 0x104a1a240, {{132.0, 36.0}, {36.0, 36.0}}, label: 'Notifications', Focused
+                              Button, 0x104a13520, {{172.0, 36.0}, {36.0, 36.0}}, label: 'Passer en mode sombre', Focused
+                              Button, 0x104a22810, {{212.0, 36.0}, {36.0, 36.0}}, label: 'Se déconnecter', Focused
+                              Other, 0x104a246a0, {{0.0, 84.0}, {260.0, 1292.0}}, label: 'Menu principal, navigation', Focused
+                                Button, 0x104a21050, {{12.0, 84.0}, {236.0, 44.0}}, label: 'Accueil', Focused
+                                Button, 0x104a1e050, {{12.0, 130.0}, {236.0, 46.0}}, label: 'Missions', Focused
+                                Button, 0x104a23940, {{45.0, 176.0}, {203.0, 44.0}}, label: 'Trouver une mission', Focused
+                                Button, 0x104919390, {{45.0, 222.0}, {203.0, 44.0}}, label: 'Mes missions', Focused
+                                Button, 0x10492a940, {{45.0, 268.0}, {203.0, 44.0}}, label: 'Pool urgence', Focused
+                                Button, 0x104927500, {{45.0, 314.0}, {203.0, 44.0}}, label: 'Mes favoris', Focused
+                                Button, 0x104929eb0, {{12.0, 360.0}, {236.0, 44.0}}, label: 'Activité', Focused
+                                Button, 0x104b19c90, {{12.0, 406.0}, {236.0, 44.0}}, label: 'Revenus', Focused
+                                Button, 0x104a235c0, {{12.0, 452.0}, {236.0, 44.0}}, label: 'Messagerie', Focused
+                                Button, 0x10492a230, {{12.0, 498.0}, {236.0, 44.0}}, label: 'Parrainage', Focused
+                                Button, 0x10491b270, {{12.0, 544.0}, {236.0, 44.0}}, label: 'Mon compte', Focused
+                                Button, 0x104840340, {{12.0, 590.0}, {236.0, 44.0}}, label: 'Mon profil', Focused
+                            Other, 0x10491e9f0, {{260.0, 0.0}, {772.0, 1376.0}}, label: 'principal', Focused
+                              Other, 0x101f36c80, {{272.0, 14.0}, {79.0, 28.0}}, label: 'Explorer', value: 1, Focused
+                                StaticText, 0x101f38240, {{272.0, 15.0}, {79.0, 25.0}}, label: 'Explorer', value: Explorer, Focused
+                              Other, 0x101f36220, {{706.0, 9.0}, {222.0, 38.0}}, label: 'Vue Swipe, Liste ou Carte', Focused
+                                Button, 0x101f3a750, {{711.0, 14.0}, {75.0, 28.0}}, label: 'Swipe', Focused, Selected
+                                Button, 0x101f3aed0, {{785.0, 14.0}, {68.0, 28.0}}, label: 'Liste', Focused
+                                Button, 0x101f3b510, {{852.0, 14.0}, {71.0, 28.0}}, label: 'Carte', Focused
+                              Button, 0x101f3b630, {{934.0, 8.0}, {40.0, 40.0}}, label: 'Mes disponibilités', Focused
+                              Button, 0x101f3b750, {{980.0, 8.0}, {40.0, 40.0}}, label: 'Filtres', Focused
+                              Switch, 0x101f3b870, {{272.0, 56.0}, {101.0, 30.0}}, label: '🔥 Urgentes', value: 0, Focused
+                              Switch, 0x101f3b990, {{378.0, 56.0}, {107.0, 30.0}}, label: '📅 Week-end', value: 0, Focused
+                              Switch, 0x101f3bab0, {{490.0, 56.0}, {72.0, 30.0}}, label: '🌙 Nuit', value: 0, Focused
+                              Switch, 0x101f3bbd0, {{567.0, 56.0}, {73.0, 30.0}}, label: '☀️ Jour', value: 0, Focused
+                              Button, 0x101f3bcf0, {{422.0, 106.0}, {448.0, 600.0}}, label: 'Mission IDE à Résidence Camille — simulation, environ 240 euros net estimé*. Toucher pour le détail.', Focused
+                              Button, 0x101f3be10, {{518.0, 734.0}, {64.0, 64.0}}, label: 'Passer cette mission', Focused
+                              Button, 0x101f3bf30, {{606.0, 734.0}, {64.0, 64.0}}, label: 'Sauvegarder cette mission pour y revenir', Focused
+                              Button, 0x101f3c050, {{694.0, 726.0}, {80.0, 80.0}}, label: 'Vérifier le planning avant de postuler à cette mission', Focused
+                          Other, 0x101f3c170, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications alt+T, région'
+                          Other, 0x101f3c290, {{0.0, 0.0}, {0.0, 0.0}}, label: 'Notifications, région'
+                Other, 0x101f3c3b0, {{999.0, 24.0}, {30.0, 1329.0}}, label: 'Barre de défilement verticale, 1 page', value: 0 %
+                  Other, 0x101f3c4d0, {{1026.0, 432.0}, {3.0, 918.0}}
+                Other, 0x101f3c5f0, {{22.0, 1343.0}, {987.5, 30.0}}, label: 'Barre de défilement horizontale, 1 page', value: 0 %
+                  Other, 0x101f3c710, {{25.0, 1370.0}, {981.5, 3.0}}
+                Other, 0x101f3c830, {{999.0, 24.0}, {30.0, 1329.0}}, label: 'Barre de défilement verticale, 1 page', value: 0 %
+                  Other, 0x101f3c950, {{1026.0, 432.0}, {3.0, 918.0}}
+                Other, 0x101f3ca70, {{22.0, 1343.0}, {987.5, 30.0}}, label: 'Barre de défilement horizontale, 1 page', value: 0 %
+                  Other, 0x101f3cb90, {{25.0, 1370.0}, {981.5, 3.0}}
+    Window, 0x101f3ccb0, {{0.0, 0.0}, {1032.0, 1376.0}}
+      Other, 0x101f3cdd0, {{0.0, 0.0}, {1032.0, 1376.0}}
+        Other, 0x101f3cef0, {{0.0, 0.0}, {1032.0, 1376.0}}
+        Other, 0x101f3d010, {{0.0, 1376.0}, {1032.0, 347.5}}
+Path to element:
+ →Application, 0x10483f440, pid: 19476, label: 'Jolene'
+Query chain:
+ →Find: Target Application 'app.jolene.recette'
+  Output: {
+    Application, 0x104b10f10, pid: 19476, label: 'Jolene'
+  }

@@ -87,6 +87,15 @@ export default function PageConnexion() {
     // Cela évite qu'une base momentanément chargée bloque une authentification
     // déjà réussie, comme lors de la review Apple du 27/07/2026.
     const { data: sessionData } = await supabase.auth.getSession();
+    // Le lien d'équipe doit survivre à la connexion, y compris pour un compte
+    // sans rôle métier. Seule cette route interne précise est acceptée : aucun
+    // redirect arbitraire, et l'acceptation reste explicite et contrôlée par RPC.
+    const retourInvitation = searchParams.get('return');
+    if (sessionData.session && retourInvitation && /^\/etab\/invitation\/[a-zA-Z0-9_-]+$/.test(retourInvitation)) {
+      sessionStorage.removeItem('post_login_redirect');
+      navigate(retourInvitation);
+      return true;
+    }
     const roleSigne = sessionData.session?.user.app_metadata?.role;
     let destination = destinationPourRole(roleSigne);
     let roleData: unknown = roleSigne;

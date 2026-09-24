@@ -74,7 +74,14 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
    else if(name==='fn_demarrer_inscription')data=parcours;
    else if(name==='fn_enregistrer_parcours_inscription'){Object.assign(parcours.donnees,body.p_donnees);data=parcours;}
    else if(name==='fn_mon_profil_soignant_complet')data=state.mode==='minimal'?{error:'Profil introuvable'}:state.profile;
-   else if(name==='fn_explorer_missions_inscription'||name==='fn_obtenir_missions_swipe')data=state.offers?[mission]:[];
+   else if(name==='fn_explorer_missions_inscription')data=state.offers?[mission]:[];
+   else if(name==='fn_obtenir_missions_swipe')data={missions:state.offers?[{
+    ...mission,mission_id:mission.id,etablissement_nom:etablissement.nom,
+    etablissement_ville:etablissement.adresse_ville,etablissement_code_postal:etablissement.adresse_code_postal,
+    etablissement_logo_url:null,etablissement_score:null,montant_ifm:null,montant_icp:null,
+    montant_majoration_nuit:null,montant_majoration_dimanche:null,montant_majoration_ferie:null,
+    est_urgente:false,service:null,distance_km:null,score:null,breakdown:{},
+   }]:[]};
    else if(name==='fn_dashboard_soignant_complet')data={profil:state.profile,missions_ouvertes:[],mes_missions:[],documents:[],heures_semaine:0,gains_mois:{net_total:0,brut_total:0,nb_missions:0},gains_6mois:[],missions_semaine_cal:[],propositions:[],heures_totales_terminees:0,missions_oubliees_count:0,notifs_non_lues:0};
    else if(name==='fn_apercu_marche_profession')data={nb_missions:0,taux_max:null,zone:'France'};
    else if(name==='fn_note_moyenne')data={moyenne:null,total:0};

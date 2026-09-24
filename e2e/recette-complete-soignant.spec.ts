@@ -106,7 +106,7 @@ test('SOIGNANT — profil complet, préférences, confidentialité et coordonné
  for(const name of ['Profil principal','Préférences','Confidentialité']){
   const tab=page.getByRole('tab',{name,exact:true});await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();await preuve(page,`complet-profil-${name}`,info);
  }
- await aller(page,'/soignant/mon-compte');await page.getByRole('button',{name:'Coordonnées bancaires',exact:true}).click();await expect(page.getByRole('heading',{name:/Paiements & facturation/})).toBeInViewport();
+ await aller(page,'/soignant/mon-compte');await page.getByRole('button',{name:'Coordonnées bancaires',exact:true}).click();await expect(page.getByRole('heading',{name:'Paiements & coordonnées bancaires',exact:true})).toBeInViewport();
  await page.getByRole('button',{name:'Contacter Jolene',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByRole('dialog')).toContainText(/Contacter|support|aide/i);await preuve(page,'compte-contact',info);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
@@ -178,7 +178,7 @@ test('SOIGNANT — série de missions et détail des présences : sélection loc
  await expect(page.locator('main')).toContainText('1 mission disponible sur 1');const selection=page.locator('main').getByRole('checkbox');await expect(selection).toBeChecked();await selection.uncheck();await expect(selection).not.toBeChecked();await preuve(page,'serie-selection-locale',info);
  expect(state.calls.some(c=>/confirmer_action|accepter_mission/.test(c.name))).toBe(false);
  state.tables.set('missions',[{...mission,statut:'ASSIGNEE',soignant_assigne_id:ids.user}]);await aller(page,`/soignant/presences/mission/${ids.mission}`);await expect(page.getByRole('heading',{name:mission.intitule,exact:true})).toBeVisible();await expect(page.locator('main')).toContainText(/Aucun créneau de travail effectif/);await preuve(page,'detail-presences-planifiees',info);
- await page.locator('main').getByRole('button',{name:'Retour',exact:true}).click();await expect(page).toHaveURL(new RegExp(`/soignant/missions/serie/${ids.serie}$`));await expect(page.getByRole('heading',{name:'Pack introuvable',exact:true})).toBeVisible();await preuve(page,'serie-devenue-vide',info);
+ const retour=(page.viewportSize()?.width??1440)<768?page.getByRole('banner').getByRole('button',{name:'Retour',exact:true}):page.locator('main').getByRole('button',{name:'Retour',exact:true});await retour.click();await expect(page).toHaveURL(new RegExp(`/soignant/missions/serie/${ids.serie}$`));await expect(page.getByRole('heading',{name:'Pack introuvable',exact:true})).toBeVisible();await preuve(page,'serie-devenue-vide',info);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
 

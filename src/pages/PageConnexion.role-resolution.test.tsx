@@ -53,14 +53,15 @@ vi.mock('@/components/CaptchaTurnstile', () => ({
   TURNSTILE_REQUIRED: false,
 }));
 
-function renderConnexion() {
+function renderConnexion(entree = '/connexion') {
   return render(
-    <MemoryRouter initialEntries={['/connexion']}>
+    <MemoryRouter initialEntries={[entree]}>
       <Routes>
         <Route path="/connexion" element={<PageConnexion />} />
         <Route path="/inscription/reprendre" element={<div>Reprise inscription</div>} />
         <Route path="/inscription/soignant" element={<div>Inscription soignant</div>} />
         <Route path="/soignant/tableau-de-bord" element={<div>Tableau de bord soignant</div>} />
+        <Route path="/etab/invitation/:token" element={<div>Invitation à confirmer</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -126,6 +127,21 @@ describe('PageConnexion — résolution sûre du rôle', () => {
 
     expect(await screen.findByText('Reprise inscription')).toBeInTheDocument();
     expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('retrouve une invitation après connexion même sans rôle métier', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: {} } } } });
+    renderConnexion('/connexion?return=%2Fetab%2Finvitation%2Fjeton-recette');
+    await soumettreConnexion();
+    expect(await screen.findByText('Invitation à confirmer')).toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('fn_get_my_role');
+  });
+
+  it.each(['https://example.invalid', '//example.invalid', '/etab/invitation/../../admin', '/admin'])('ignore le retour non autorisé %s', async (retour) => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: { role: 'SOIGNANT' } } } } });
+    renderConnexion(`/connexion?return=${encodeURIComponent(retour)}`);
+    await soumettreConnexion();
+    expect(await screen.findByText('Tableau de bord soignant')).toBeInTheDocument();
   });
 
   it('n’annonce un envoi qu’après la vraie demande et normalise l’adresse', async () => {

@@ -1,0 +1,122 @@
+import { test, expect } from '@playwright/test';
+import { ids, mission, preuve, sansDebordement, aller } from './helpers/recette-complete-soignant';
+import { simulerCompletionSoignant, ouvrirDossierDepuisMission, remplirIdentite, verifierRppsSimule } from './helpers/recette-complete-completion-soignant';
+
+// La réponse Annuaire Santé et la création serveur sont simulées ; les formulaires sont réellement manipulés.
+test('SOIGNANT — inscription minimale puis dossier : validations, refus et finalisation vers la mission choisie', async ({ page }, info) => {
+  const { state, completion } = await simulerCompletionSoignant(page);
+  await ouvrirDossierDepuisMission(page);
+  const enregistrer = page.getByRole('button', { name: 'Enregistrer mon profil', exact: true });
+  await enregistrer.click();
+  await expect(page.getByRole('alert')).toContainText('Vérifiez les informations suivantes');
+  expect(completion.soumissions).toHaveLength(0);
+  await remplirIdentite(page);
+  await page.getByLabel(/^Téléphone \*/).fill('123');
+  await page.getByLabel(/^Date de naissance \*/).fill('2015-01-01');
+  await enregistrer.click();
+  await expect(page.getByText('Numéro de téléphone invalide', { exact: true })).toBeVisible();
+  await expect(page.getByText("Tu dois avoir 18 ans révolus pour t'inscrire", { exact: true })).toBeVisible();
+  expect(completion.soumissions).toHaveLength(0);
+  await page.getByLabel(/^Téléphone \*/).fill('0100000000');
+  await page.getByLabel(/^Date de naissance \*/).fill('1990-01-01');
+  completion.professionRppsCorrespond = false;
+  await page.getByPlaceholder(/^11 chiffres/).fill('10000000000');
+  await expect(page.getByRole('alert').filter({ hasText: 'Ce RPPS correspond à la profession' })).toBeVisible();
+  await expect(page.getByText(/RPPS vérifié dans l’Annuaire Santé/)).not.toBeVisible();
+  await preuve(page, 'completion-soignant-profession-incompatible', info, true);
+  await enregistrer.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Vérifiez les informations suivantes' })).toContainText('cohérence du RPPS');
+  expect(completion.soumissions).toHaveLength(0);
+  completion.professionRppsCorrespond = true;
+  await verifierRppsSimule(page);
+  completion.refusFinalisation = true;
+  await enregistrer.click();
+  await expect(page.locator('[data-error-code="RPPS_API_UNAVAILABLE"]')).toBeVisible();
+  await expect(page).toHaveURL(/\/inscription\/completer$/);
+  expect(state.mode).toBe('minimal');
+  await expect(page.getByLabel(/^Prénom \*/)).toHaveValue('Camille');
+  await expect(page.getByLabel(/^Téléphone \*/)).toHaveValue('0100000000');
+  await expect(page.getByRole('checkbox', { name: 'Salarié', exact: true })).toBeChecked();
+  await preuve(page, 'completion-soignant-refus-conserve', info, true);
+  await sansDebordement(page);
+  completion.refusFinalisation = false;
+  await page.getByRole('button', { name: 'Réessayer', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/soignant/missions/${ids.mission}$`));
+  await expect(page.getByRole('heading', { name: mission.intitule, exact: true })).toBeVisible();
+  expect(completion.soumissions).toHaveLength(2);
+  expect(state.mode).toBe('complet');
+  expect(state.profile).toMatchObject({ prenom: 'Camille', nom: 'Recette', telephone: '0100000000', date_naissance: '1990-01-01', numero_rpps: '10000000001', tous_documents_valides: false });
+  expect(state.calls.some(c => /confirmer_action|creer_candidature|enregistrer_swipe/.test(c.name))).toBe(false);
+  await preuve(page, 'completion-soignant-retour-mission', info, true);
+  await sansDebordement(page);
+  await aller(page, '/soignant/profil');
+  await expect(page.getByRole('tab', { name: 'Profil principal', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: /^Prénom/ })).toHaveValue('Camille');
+  await aller(page, '/soignant/recherche-missions');
+  const preferences = page.getByRole('dialog', { name: '5 questions pour un deck qui te ressemble', exact: true });
+  await expect(preferences).toBeVisible();
+  await preferences.getByRole('button', { name: 'Plus tard', exact: true }).click();
+  await expect(preferences).not.toBeVisible();
+  await page.getByRole('tab', { name: 'Carte', exact: true }).click();
+  await expect(page.locator('.leaflet-container')).toBeVisible();
+  for (const precedent of ['Carte', 'Liste']) {
+    if (precedent === 'Liste') {
+      await page.getByRole('tab', { name: 'Liste', exact: true }).click();
+      await expect(page.getByText(mission.intitule, { exact: true })).toBeVisible();
+    }
+    await page.getByRole('tab', { name: 'Swipe', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Swipe', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: /Mission IDE.*Toucher pour le détail/ })).toBeVisible();
+  }
+  await aller(page, '/soignant/messagerie');
+  await page.getByRole('tab', { name: 'Archivées', exact: true }).click();
+  await expect(page.getByText('Aucune conversation archivée', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Actives', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Actives', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Aucune conversation', { exact: true })).toBeVisible();
+  await preuve(page, 'completion-soignant-retour-conversations-actives', info);
+  expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+});
+
+test('SOIGNANT — brouillon professionnel enregistré, retour à Explorer et reprise avant finalisation', async ({ page }, info) => {
+  const { state, completion } = await simulerCompletionSoignant(page);
+  await ouvrirDossierDepuisMission(page);
+  await page.getByLabel(/^Prénom \*/).fill('Camille');
+  await page.getByLabel(/^Nom \*/).fill('Recette');
+  await page.getByLabel(/^Téléphone \*/).fill('0100000000');
+  await page.getByRole('button', { name: 'Enregistrer et continuer plus tard', exact: true }).click();
+  await expect(page).toHaveURL(/\/soignant\/recherche-missions$/);
+  expect(state.mode).toBe('minimal'); expect(completion.soumissions).toHaveLength(0);
+  await ouvrirDossierDepuisMission(page, false);
+  await expect(page.getByLabel(/^Prénom \*/)).toHaveValue('Camille');
+  await expect(page.getByLabel(/^Nom \*/)).toHaveValue('Recette');
+  await expect(page.getByLabel(/^Téléphone \*/)).toHaveValue('0100000000');
+  await expect(page.getByLabel(/^Date de naissance \*/)).toHaveValue('');
+  await page.getByLabel(/^Date de naissance \*/).fill('1990-01-01');
+  await page.getByRole('checkbox', { name: 'Salarié', exact: true }).check();
+  await verifierRppsSimule(page);
+  state.failures.add('fn_enregistrer_parcours_inscription');
+  await page.getByRole('button', { name: 'Enregistrer mon profil', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page).toHaveURL(/\/inscription\/completer$/);
+  expect(completion.soumissions).toHaveLength(0);
+  await expect(page.getByLabel(/^Date de naissance \*/)).toHaveValue('1990-01-01');
+  await preuve(page, 'completion-soignant-brouillon-repris', info, true);
+  state.failures.clear();
+  await page.getByRole('button', { name: 'Enregistrer mon profil', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/soignant/missions/${ids.mission}$`));
+  await expect(page.getByRole('heading', { name: mission.intitule, exact: true })).toBeVisible();
+  expect(completion.soumissions).toHaveLength(1);
+  expect(state.profile.tous_documents_valides).toBe(false);
+  await aller(page, '/soignant/mes-documents?tab=dpae');
+  await expect(page.getByRole('tab', { name: 'DPAE', exact: true })).toHaveAttribute('aria-selected', 'true');
+  for (const nom of ['Validées (0)', 'En attente (0)', 'Tous (0)']) {
+    const segment = page.getByRole('button', { name: nom, exact: true });
+    await segment.click();
+    await expect(segment).toHaveClass(/\bbg-primary\b/);
+    await expect(page.getByRole('heading', { name: 'Aucun contrat salarié signé', exact: true })).toBeVisible();
+  }
+  await preuve(page, 'completion-soignant-segments-dpae', info);
+  expect(state.calls.some(c => /confirmer_action|creer_candidature|enregistrer_swipe/.test(c.name))).toBe(false);
+  expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+});

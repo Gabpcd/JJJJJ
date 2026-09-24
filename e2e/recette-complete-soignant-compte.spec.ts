@@ -61,7 +61,8 @@ test('SOIGNANT — suppression compte annulée, refusée puis simulée avec déc
   await page.getByPlaceholder('Tape SUPPRIMER', { exact: true }).fill('SUPPRIMER');
   state.failures.add('delete-account');
   await page.getByRole('button', { name: 'Supprimer définitivement', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText(/erreur|impossible|status code/i);
+  await expect(page.getByRole('alert')).toContainText('Une erreur est survenue. Veuillez réessayer.');
+  await expect(page.getByRole('alert')).not.toContainText(/non-2xx|status code/i);
   await expect(page).toHaveURL(/soignant\/profil/);
   await preuve(page, 'compte-suppression-refusee', info);
   state.failures.clear();
