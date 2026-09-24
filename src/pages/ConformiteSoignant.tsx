@@ -26,16 +26,23 @@ export function ConformiteContent() {
   const { user } = useAuth();
   const [controles, setControles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const [essai, setEssai] = useState(0);
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    let actif = true;
+    setLoading(true);
+    setErreurChargement(false);
+    Promise.resolve(supabase
       .from('conformite_travail')
       .select('id, type_controle, resultat, controle_le, motif_derogation, missions(intitule, debut_le, fin_le, etablissement_id)')
       .eq('soignant_id', user.id)
       .order('controle_le', { ascending: false })
-      .limit(50)
-      .then(async ({ data }) => {
+      .limit(50))
+      .then(async ({ data, error }) => {
+        if (!actif) return;
+        if (error) { setErreurChargement(true); setLoading(false); return; }
         const items = data || [];
         if (items.length > 0) {
           const etabIds = items.map((c: any) => c.missions?.etablissement_id).filter(Boolean);
@@ -46,6 +53,7 @@ export function ConformiteContent() {
             }
           });
         }
+        if (!actif) return;
         setControles(items);
         setLoading(false);
 
@@ -57,10 +65,22 @@ export function ConformiteContent() {
           p_cle_s3: null, p_details: { page: 'conformite_soignant' },
           p_ip: null, p_navigateur: navigator.userAgent,
         }).then(undefined, (err) => handleErrorSilent(err, 'ConformiteSoignant.audit'));
-      }, (err) => handleErrorSilent(err, 'ConformiteSoignant.controles'));
-  }, [user]);
+      }).catch((err) => {
+        if (actif) { setErreurChargement(true); setLoading(false); }
+        handleErrorSilent(err, 'ConformiteSoignant.controles');
+      });
+    return () => { actif = false; };
+  }, [user, essai]);
 
   if (loading) return <ChargementPage />;
+
+  if (erreurChargement) return (
+    <div role="alert" className="card-base space-y-3">
+      <h1 className="text-xl font-bold text-foreground">Conformité indisponible</h1>
+      <p className="text-sm text-muted-foreground">Votre historique de conformité n’a pas pu être chargé. Réessayez pour consulter vos contrôles.</p>
+      <button type="button" className="btn-primary min-h-[44px]" onClick={() => setEssai((valeur) => valeur + 1)}>Réessayer</button>
+    </div>
+  );
 
   const total = controles.length;
   const conformes = controles.filter(c => c.resultat === 'CONFORME').length;
@@ -79,15 +99,19 @@ export function ConformiteContent() {
     return acc;
   }, {} as Record<string, any[]>);
 
-  const exporterHistorique = () => {
+  const exporterHistorique = async () => {
     const lignes = controles.map(c => {
       const date = format(new Date(c.controle_le), 'dd/MM/yyyy HH:mm', { locale: fr });
       const mission = c.missions?.intitule || '—';
       return `${date} | ${c.type_controle} | ${c.resultat} | ${mission}`;
     });
     const texte = `Historique de conformité — Jolene\n${'='.repeat(50)}\n\n${lignes.join('\n')}`;
-    navigator.clipboard.writeText(texte);
-    toast.success('Historique copié dans le presse-papier');
+    try {
+      await navigator.clipboard.writeText(texte);
+      toast.success('Historique copié dans le presse-papier');
+    } catch {
+      toast.error('Impossible de copier l’historique. Réessayez.');
+    }
   };
 
   return (

@@ -39,22 +39,35 @@ export function NotificationsContent({ headingLevel = 'h1' }: { headingLevel?: '
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const [rechargement, setRechargement] = useState(0);
   const [filtre, setFiltre] = useState<Filtre>('Toutes');
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     const load = async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('id, titre, corps, type, lien, lue, cree_le, type_ressource, id_ressource')
-        .eq('destinataire_id', user.id)
-        .order('cree_le', { ascending: false })
-        .limit(200);
-      setNotifications(data || []);
-      setLoading(false);
+      setLoading(true);
+      setErreurChargement(false);
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('id, titre, corps, type, lien, lue, cree_le, type_ressource, id_ressource')
+          .eq('destinataire_id', user.id)
+          .order('cree_le', { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('Réponse notifications incomplète');
+        if (!cancelled) setNotifications(data);
+      } catch {
+        if (!cancelled) setErreurChargement(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    load();
-  }, [user]);
+    void load();
+    return () => { cancelled = true; };
+  }, [user, rechargement]);
 
   // Realtime
   useEffect(() => {
@@ -75,7 +88,11 @@ export function NotificationsContent({ headingLevel = 'h1' }: { headingLevel?: '
 
   const handleClick = async (n: any) => {
     if (!n.lue) {
-      await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
+      const { error } = await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
+      if (error) {
+        toast.error('Impossible de marquer cette notification comme lue.');
+        return;
+      }
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
     if (n.lien) {
@@ -105,7 +122,7 @@ export function NotificationsContent({ headingLevel = 'h1' }: { headingLevel?: '
     <>
       <div className="flex items-center justify-between mb-4">
         <Heading className="text-lg font-bold text-foreground">Notifications</Heading>
-        <button onClick={supprimerLues} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1">
+        <button onClick={supprimerLues} disabled={erreurChargement} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 disabled:opacity-50">
           <Trash2 className="h-3.5 w-3.5" /> Supprimer les lues
         </button>
       </div>
@@ -118,7 +135,14 @@ export function NotificationsContent({ headingLevel = 'h1' }: { headingLevel?: '
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {erreurChargement ? (
+        <div role="alert" className="card-base space-y-3 text-sm">
+          <p>Impossible de charger vos notifications.</p>
+          <button type="button" onClick={() => setRechargement(v => v + 1)} className="btn-secondary">
+            Réessayer
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState illustration={<IllustrationCloche />} titre="Tout est lu !" description="Vous n'avez aucune notification." variant="success" />
       ) : (
         <div className="space-y-2">

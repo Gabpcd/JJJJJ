@@ -1,3 +1,4 @@
+import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Phone, RotateCcw, ShieldAlert, ShieldCheck, Star } from 'lucide-react';
@@ -13,6 +14,10 @@ import { getLabelProfession } from '@/lib/constantes';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 export default function ProfilSoignantEtablissement() {
+  return <AccesEtablissement titre="Profil soignant" description="Les profils professionnels seront accessibles une fois votre établissement renseigné et vos accès vérifiés."><ProfilSoignantEtablissementContent /></AccesEtablissement>;
+}
+
+function ProfilSoignantEtablissementContent() {
   usePageTitle('Profil soignant');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -21,47 +26,62 @@ export default function ProfilSoignantEtablissement() {
   const [soignant, setSoignant] = useState<any>(null);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  const [erreur, setErreur] = useState(false);
+  const [tentative, setTentative] = useState(0);
   // 7e-2 (F2) : re-booking 2 taps depuis le profil (modal pré-remplie).
   const [rebookOpen, setRebookOpen] = useState(false);
 
   useEffect(() => {
     if (!id || !etablissementId) return;
+    let actif = true;
 
     const charger = async () => {
       setLoading(true);
-      const [{ data: soignantData }, { data: noteData }, { data: missionsData }] = await Promise.all([
-        supabase.rpc('fn_soignant_pour_etablissement' as any, { p_soignant_id: id }),
-        supabase.rpc('fn_note_moyenne' as any, { p_user_id: id }),
-        supabase
-          .from('missions')
-          .select('id, intitule, debut_le, fin_le, statut, service')
-          .eq('etablissement_id', etablissementId)
-          .eq('soignant_assigne_id', id)
-          .order('debut_le', { ascending: false })
-          .limit(20),
-      ]);
+      setErreur(false);
+      try {
+        const [profil, notes, historique] = await Promise.all([
+          supabase.rpc('fn_soignant_pour_etablissement' as any, { p_soignant_id: id }),
+          supabase.rpc('fn_note_moyenne' as any, { p_user_id: id }),
+          supabase
+            .from('missions')
+            .select('id, intitule, debut_le, fin_le, statut, service')
+            .eq('etablissement_id', etablissementId)
+            .eq('soignant_assigne_id', id)
+            .order('debut_le', { ascending: false })
+            .limit(20),
+        ]);
+        if (!actif) return;
+        if (profil.error || notes.error || historique.error) throw new Error('Lecture du profil indisponible');
+        const soignantData = profil.data;
+        const noteData = notes.data;
+        const missionsData = historique.data;
 
-      if (soignantData && !(soignantData as any).error) {
-        setSoignant(soignantData);
-      } else {
-        setSoignant(null);
+        if (soignantData && !(soignantData as any).error) {
+          setSoignant(soignantData);
+        } else {
+          setSoignant(null);
+        }
+
+        if (noteData && typeof noteData === 'object' && !Array.isArray(noteData)) {
+          setNoteMoyenne(noteData as { moyenne: number; total: number });
+        } else if (Array.isArray(noteData) && noteData[0]) {
+          setNoteMoyenne(noteData[0]);
+        } else {
+          setNoteMoyenne(null);
+        }
+
+        setMissions(missionsData || []);
+
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        if (actif) setLoading(false);
       }
-
-      if (noteData && typeof noteData === 'object' && !Array.isArray(noteData)) {
-        setNoteMoyenne(noteData as { moyenne: number; total: number });
-      } else if (Array.isArray(noteData) && noteData[0]) {
-        setNoteMoyenne(noteData[0]);
-      } else {
-        setNoteMoyenne(null);
-      }
-
-      setMissions(missionsData || []);
-
-      setLoading(false);
     };
 
     charger();
-  }, [id, etablissementId]);
+    return () => { actif = false; };
+  }, [id, etablissementId, tentative]);
 
   const initiales = useMemo(() => {
     if (!soignant) return 'SD';
@@ -82,7 +102,13 @@ export default function ProfilSoignantEtablissement() {
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 
-      {!soignant ? (
+      {erreur ? (
+        <div className="card-base text-center py-10" role="alert">
+          <h1 className="font-semibold text-foreground">Impossible de charger ce profil</h1>
+          <p className="text-sm text-muted-foreground mt-2">Une erreur est survenue lors de la lecture du profil ou de son historique. Veuillez réessayer.</p>
+          <button type="button" className="btn-secondary mt-4" onClick={() => setTentative((n) => n + 1)}>Réessayer</button>
+        </div>
+      ) : !soignant ? (
         <div className="card-base text-center py-10">
           <p className="text-sm text-muted-foreground">Profil soignant indisponible.</p>
         </div>

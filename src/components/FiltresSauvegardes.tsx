@@ -45,6 +45,8 @@ interface Props {
   filtresCourants: Record<string, unknown>;
   /** Callback déclenché lorsqu'un filtre est cliqué dans la liste (réapplique). */
   onCharger: (filtres: Record<string, unknown>) => void;
+  /** Masque la création/modification d'alertes lorsque leur moteur ne couvre pas tous les critères. */
+  alertesDisponibles?: boolean;
 }
 
 const FREQUENCE_LABELS: Record<FrequenceAlerte, string> = {
@@ -53,7 +55,7 @@ const FREQUENCE_LABELS: Record<FrequenceAlerte, string> = {
   HEBDOMADAIRE: 'Hebdomadaire (résumé chaque lundi)',
 };
 
-export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Props) {
+export function FiltresSauvegardes({ audience, filtresCourants, onCharger, alertesDisponibles = true }: Props) {
   const [list, setList] = useState<FiltreSauvegarde[]>([]);
   const [loading, setLoading] = useState(true);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -101,7 +103,7 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
   if (!loading && list.length === 0) {
     return (
       <>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
             <Search className="h-3.5 w-3.5 shrink-0" /> Recherches sauvegardées
           </span>
@@ -115,6 +117,7 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
           audience={audience}
           filtres={filtresCourants}
           onSaved={reload}
+          alertesDisponibles={alertesDisponibles}
         />
       </>
     );
@@ -151,13 +154,13 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
                 </div>
               </button>
               <div className="flex items-center gap-1 shrink-0">
-                <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
+                {alertesDisponibles && <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
                   title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}
                   aria-label={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
                   {f.alerte_active
                     ? <Bell className="h-4 w-4 text-blue-600" />
                     : <BellOff className="h-4 w-4 text-gray-400" />}
-                </BoutonY2K>
+                </BoutonY2K>}
                 <BoutonY2K size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier" aria-label="Modifier">
                   <Edit2 className="h-4 w-4" />
                 </BoutonY2K>
@@ -177,6 +180,7 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
         audience={audience}
         filtres={filtresCourants}
         onSaved={reload}
+        alertesDisponibles={alertesDisponibles}
       />
 
       {/* Modal Modifier */}
@@ -184,35 +188,37 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
         filtre={editing}
         onOpenChange={(o) => { if (!o) setEditing(null); }}
         onSaved={() => { reload(); setEditing(null); }}
+        alertesDisponibles={alertesDisponibles}
       />
     </div>
   );
 }
 
 function ModalSave({
-  open, onOpenChange, audience, filtres, onSaved,
+  open, onOpenChange, audience, filtres, onSaved, alertesDisponibles,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   audience: FiltreAudience;
   filtres: Record<string, unknown>;
   onSaved: () => void;
+  alertesDisponibles: boolean;
 }) {
   const [nom, setNom] = useState('');
-  const [alerteActive, setAlerteActive] = useState(true);
+  const [alerteActive, setAlerteActive] = useState(alertesDisponibles);
   const [frequence, setFrequence] = useState<FrequenceAlerte>('QUOTIDIENNE');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (open) { setNom(''); setAlerteActive(true); setFrequence('QUOTIDIENNE'); }
-  }, [open]);
+    if (open) { setNom(''); setAlerteActive(alertesDisponibles); setFrequence('QUOTIDIENNE'); }
+  }, [open, alertesDisponibles]);
 
   const submit = async () => {
     if (nom.trim().length === 0) { toast.error('Donnez un nom à votre recherche'); return; }
     setSubmitting(true);
     const { data, error } = await supabase.rpc('fn_creer_filtre_sauvegarde', {
       p_nom: nom.trim(), p_audience: audience, p_filtres: filtres as Json,
-      p_alerte_active: alerteActive, p_frequence_alerte: frequence,
+      p_alerte_active: alertesDisponibles && alerteActive, p_frequence_alerte: frequence,
     });
     setSubmitting(false);
     if (error || (data as any)?.error) {
@@ -230,8 +236,9 @@ function ModalSave({
         <DialogHeader>
           <DialogTitle>Sauvegarder cette recherche</DialogTitle>
           <DialogDescription>
-            Vous pourrez réappliquer ces filtres plus tard et recevoir des alertes
-            email automatiques quand de nouveaux résultats matchent vos critères.
+            {alertesDisponibles
+              ? 'Vous pourrez réappliquer ces filtres plus tard et recevoir des alertes email automatiques quand de nouveaux résultats matchent vos critères.'
+              : 'Cette sauvegarde vous permet de retrouver et réappliquer vos filtres. Elle ne crée pas d’alerte email.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -245,14 +252,14 @@ function ModalSave({
             <p className="text-xs text-gray-500 mt-1">{nom.length}/100 caractères</p>
           </div>
 
-          <div className="flex items-center justify-between">
+          {alertesDisponibles && <div className="flex items-center justify-between">
             <Label htmlFor="alerte-toggle" className="cursor-pointer">
               Recevoir des alertes email
             </Label>
             <Switch id="alerte-toggle" checked={alerteActive} onCheckedChange={setAlerteActive} />
-          </div>
+          </div>}
 
-          {alerteActive && (
+          {alertesDisponibles && alerteActive && (
             <div>
               <Label htmlFor="freq-select">Fréquence des alertes</Label>
               <Select value={frequence} onValueChange={(v) => setFrequence(v as FrequenceAlerte)}>
@@ -282,11 +289,12 @@ function ModalSave({
 }
 
 function ModalEdit({
-  filtre, onOpenChange, onSaved,
+  filtre, onOpenChange, onSaved, alertesDisponibles,
 }: {
   filtre: FiltreSauvegarde | null;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  alertesDisponibles: boolean;
 }) {
   const [nom, setNom] = useState('');
   const [alerteActive, setAlerteActive] = useState(false);
@@ -308,7 +316,7 @@ function ModalEdit({
     setSubmitting(true);
     const { data, error } = await supabase.rpc('fn_modifier_filtre_sauvegarde', {
       p_id: filtre.id, p_nom: nom.trim(),
-      p_alerte_active: alerteActive, p_frequence_alerte: frequence,
+      ...(alertesDisponibles ? { p_alerte_active: alerteActive, p_frequence_alerte: frequence } : {}),
     });
     setSubmitting(false);
     if (error || (data as any)?.error) {
@@ -325,8 +333,9 @@ function ModalEdit({
         <DialogHeader>
           <DialogTitle>Modifier la recherche</DialogTitle>
           <DialogDescription>
-            Vous pouvez renommer et changer les préférences d'alertes. Pour modifier
-            les critères de recherche, supprimez celle-ci et créez-en une nouvelle.
+            {alertesDisponibles
+              ? "Vous pouvez renommer et changer les préférences d'alertes. Pour modifier les critères de recherche, supprimez celle-ci et créez-en une nouvelle."
+              : 'Vous pouvez renommer cette recherche. Ses critères et ses éventuelles alertes existantes sont conservés.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -334,11 +343,11 @@ function ModalEdit({
             <Label htmlFor="edit-nom">Nom</Label>
             <Input id="edit-nom" maxLength={100} value={nom} onChange={(e) => setNom(e.target.value)} />
           </div>
-          <div className="flex items-center justify-between">
+          {alertesDisponibles && <div className="flex items-center justify-between">
             <Label htmlFor="edit-alerte">Alertes email</Label>
             <Switch id="edit-alerte" checked={alerteActive} onCheckedChange={setAlerteActive} />
-          </div>
-          {alerteActive && (
+          </div>}
+          {alertesDisponibles && alerteActive && (
             <div>
               <Label htmlFor="edit-freq">Fréquence</Label>
               <Select value={frequence} onValueChange={(v) => setFrequence(v as FrequenceAlerte)}>

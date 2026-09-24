@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, HelpCircle, Loader2, ChevronRight, ArrowLeft, Mail } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -7,7 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
-import { toast } from 'sonner';
 
 interface ArticleResume {
   id: string;
@@ -27,43 +26,57 @@ export default function PageAide() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [audience, setAudience] = useState<'TOUS' | 'SOIGNANT' | 'ETABLISSEMENT'>(
-    (searchParams.get('aud') as any) || 'TOUS',
+    searchParams.get('aud') === 'SOIGNANT' ? 'SOIGNANT' : searchParams.get('aud') === 'ETABLISSEMENT' ? 'ETABLISSEMENT' : 'TOUS',
   );
+  const audienceChoisie = useRef(searchParams.has('aud'));
   const [articles, setArticles] = useState<ArticleResume[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState(false);
+  const [tentative, setTentative] = useState(0);
   const [contactOpen, setContactOpen] = useState(false);
 
-  // Audience par défaut selon rôle utilisateur
+  // L'URL suit les filtres sans attendre une réponse réseau.
   useEffect(() => {
-    if (!searchParams.get('aud') && role) {
-      if (role === 'SOIGNANT') setAudience('SOIGNANT');
-      else if (role === 'ADMIN_ETABLISSEMENT') setAudience('ETABLISSEMENT');
-    }
-  }, [role, searchParams]);
+    const sp = new URLSearchParams();
+    if (query.trim()) sp.set('q', query.trim());
+    if (audience !== 'TOUS') sp.set('aud', audience);
+    if (sp.toString() !== searchParams.toString()) setSearchParams(sp, { replace: true });
+  }, [query, audience, searchParams, setSearchParams]);
 
   useEffect(() => {
+    // Le défaut s'applique une fois ; « Tous » choisi volontairement reste actif.
+    if (!audienceChoisie.current && (role === 'SOIGNANT' || role === 'ADMIN_ETABLISSEMENT')) {
+      audienceChoisie.current = true;
+      setAudience(role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT');
+    }
+  }, [role]);
+
+  useEffect(() => {
+    let actif = true;
+    const controller = new AbortController();
+    let delai: ReturnType<typeof setTimeout> | undefined;
+    setLoading(true);
+    setErreur(false);
     const t = setTimeout(async () => {
-      setLoading(true);
-      const audParam = audience === 'TOUS' ? null : audience;
-      const { data, error } = await supabase.rpc('fn_rechercher_aide' as any, {
-        p_query: query.trim() || null,
-        p_audience: audParam,
-      });
-      if (error) {
-        toast.error('Erreur lors de la recherche. Réessayez.');
-        setArticles([]);
-      } else {
+      delai = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const audParam = audience === 'TOUS' ? null : audience;
+        const { data, error } = await supabase.rpc('fn_rechercher_aide' as any, {
+          p_query: query.trim() || null,
+          p_audience: audParam,
+        }).abortSignal(controller.signal);
+        if (!actif) return;
+        if (error) throw error;
         setArticles((data as any)?.articles || []);
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        clearTimeout(delai);
+        if (actif) setLoading(false);
       }
-      setLoading(false);
-      // Sync URL
-      const sp = new URLSearchParams();
-      if (query.trim()) sp.set('q', query.trim());
-      if (audience !== 'TOUS') sp.set('aud', audience);
-      setSearchParams(sp, { replace: true });
     }, 250);
-    return () => clearTimeout(t);
-  }, [query, audience, setSearchParams]);
+    return () => { actif = false; clearTimeout(t); clearTimeout(delai); controller.abort(); };
+  }, [query, audience, tentative]);
 
   // Group by category
   const grouped = useMemo(() => {
@@ -119,7 +132,8 @@ export default function PageAide() {
             {(['TOUS', 'SOIGNANT', 'ETABLISSEMENT'] as const).map(a => (
               <button
                 key={a}
-                onClick={() => setAudience(a)}
+                onClick={() => { audienceChoisie.current = true; setAudience(a); }}
+                aria-pressed={audience === a}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${audience === a ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
               >
                 {a === 'TOUS' ? 'Tous' : audienceLabel(a)}
@@ -131,6 +145,11 @@ export default function PageAide() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : erreur ? (
+          <div role="alert" className="text-center py-12 space-y-3">
+            <p className="text-foreground">Impossible de charger les articles. Vérifiez votre connexion et réessayez.</p>
+            <button type="button" onClick={() => setTentative(value => value + 1)} className="btn-primary">Réessayer</button>
           </div>
         ) : articles.length === 0 ? (
           <div className="text-center py-12">

@@ -26,6 +26,9 @@ export default defineConfig({
   // (workflow_dispatch) qui génère les baselines puis crée une PR auto.
   // Pour run en local manuellement : `npx playwright test e2e/visual --project=chromium`.
   testIgnore: [
+    // Les scénarios entièrement simulés ont leur propre build sans secrets
+    // et matrice cinq formats : e2e/playwright.recette-complete.config.ts.
+    '**/recette-complete-*.spec.ts',
     ...(process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts']),
     // e2e/non-regression/ appartient exclusivement au projet
     // mobile-non-regression ci-dessous — chromium & co l'ignorent.

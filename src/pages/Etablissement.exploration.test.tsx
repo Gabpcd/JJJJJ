@@ -1,12 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PresencesEtablissement from './PresencesEtablissement';
 import ListeContrats from './ListeContrats';
 import DashboardRH from './DashboardRH';
 import ExportPaie from './ExportPaie';
 import RechercheSoignantsEtab from './RechercheSoignantsEtab';
+import ProfilSoignantEtablissement from './ProfilSoignantEtablissement';
 import EquipeEtablissement from './EquipeEtablissement';
 import ParrainageEtablissement from './PageParrainageEtablissement';
 import PageScoreEtablissement from './PageScoreEtablissement';
@@ -64,6 +65,7 @@ describe('Exploration des rubriques établissement sans dossier', () => {
     ['Tableau RH', <DashboardRH />],
     ['Export paie', <ExportPaie />],
     ['Annuaire des soignants', <RechercheSoignantsEtab />],
+    ['Profil soignant', <ProfilSoignantEtablissement />],
     ['Mon équipe', <EquipeEtablissement />],
     ['Parrainage entre établissements', <ParrainageEtablissement />],
     ['Score qualité', <PageScoreEtablissement />],
@@ -117,6 +119,21 @@ describe('Exploration des rubriques établissement sans dossier', () => {
 
 describe('Données et permissions après résolution du périmètre', () => {
   beforeEach(() => { mocks.scope.etablissementId = 'etablissement-partage'; });
+
+  it('distingue une panne du profil soignant puis retrouve la fiche au réessai', async () => {
+    let panne = true;
+    mocks.rpc.mockImplementation((nom:string) => Promise.resolve(nom === 'fn_soignant_pour_etablissement'
+      ? panne ? {data:null,error:{message:'503'}} : {data:{id:'soignant-1',prenom:'Camille',nom:'Recette',profession:'IDE',type_exercice:'SALARIE',total_missions_terminees:4,score_fiabilite:92},error:null}
+      : {data:{moyenne:4.5,total:2},error:null}));
+    render(<MemoryRouter initialEntries={['/etablissement/soignants/soignant-1']}><Routes><Route path="/etablissement/soignants/:id" element={<ProfilSoignantEtablissement />} /></Routes></MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger ce profil');
+    expect(screen.queryByText('Profil soignant indisponible.')).not.toBeInTheDocument();
+    panne = false;
+    fireEvent.click(screen.getByRole('button',{name:'Réessayer'}));
+    expect(await screen.findByRole('heading',{name:'Camille Recette'})).toBeInTheDocument();
+    expect(screen.getByText('4.5/5 (2)')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 
   it('conserve un refus de membership sans créer de membre', async () => {
     mocks.rpc.mockResolvedValue({ data: { success: false, error_code: 'NON_AUTORISE' }, error: null });

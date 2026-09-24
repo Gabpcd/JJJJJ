@@ -164,10 +164,11 @@ export default function PageResetPassword() {
                 Choisissez un nouveau mot de passe (minimum 8 caractères).
               </p>
 
-              <label className="block">
-                <span className="text-sm font-medium text-foreground mb-1.5 block">Nouveau mot de passe *</span>
+              <div className="block">
+                <label htmlFor="reset-nouveau-mot-de-passe" className="text-sm font-medium text-foreground mb-1.5 block">Nouveau mot de passe *</label>
                 <div className="relative">
                   <input
+                    id="reset-nouveau-mot-de-passe"
                     type={afficherMdp ? 'text' : 'password'}
                     autoComplete="new-password"
                     value={motDePasse}
@@ -186,11 +187,12 @@ export default function PageResetPassword() {
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </label>
+              </div>
 
-              <label className="block">
-                <span className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</span>
+              <div className="block">
+                <label htmlFor="reset-confirmation-mot-de-passe" className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</label>
                 <input
+                  id="reset-confirmation-mot-de-passe"
                   type="password"
                   autoComplete="new-password"
                   value={confirmMdp}
@@ -198,11 +200,13 @@ export default function PageResetPassword() {
                   className="input-base"
                   required
                   minLength={8}
+                  aria-invalid={!!confirmMdp && confirmMdp !== motDePasse}
+                  aria-describedby={confirmMdp && confirmMdp !== motDePasse ? 'reset-confirmation-erreur' : undefined}
                 />
                 {confirmMdp && confirmMdp !== motDePasse && (
-                  <p className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>
+                  <p id="reset-confirmation-erreur" className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>
                 )}
-              </label>
+              </div>
 
               <button
                 type="submit"
