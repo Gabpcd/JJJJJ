@@ -185,7 +185,7 @@ test('établissement : suppression confirmée dans l’interface, anonymisation 
   } finally { await fixture.cleanup(); }
 });
 
-test('compte suspendu : le service réel anonymise avant de supprimer l’identité Auth', async ({ request }) => {
+test('compte suspendu : le refus Data API conserve l’identité Auth et ne prétend pas anonymiser', async ({ request }) => {
   const fixture = await compteJetable();
   try {
     const { data: session, error: loginError } = await client().auth.signInWithPassword({ email: fixture.email, password: fixture.password });
@@ -197,14 +197,21 @@ test('compte suspendu : le service réel anonymise avant de supprimer l’identi
     const response = await request.post(`${url}/functions/v1/delete-account`, {
       headers: { Authorization: `Bearer ${session.session!.access_token}`, apikey: anon! }, data: {},
     });
-    expect(response.status()).toBe(200);
-    expect(await response.json()).toMatchObject({ success: true, auth_deleted: true });
+    // Le pre-request PostgREST interdit les RPC aux comptes suspendus, même
+    // avec un JWT antérieur valide. L’Edge doit respecter ce refus et ne pas
+    // confondre supprime_le (suspension) avec une anonymisation déjà terminée.
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Compte suspendu, supprimé ou désactivé' });
     const { data: profile, error: readError } = await admin.from('soignants').select('nom,email').eq('id', fixture.id).single();
-    expect(readError).toBeNull(); expect(profile?.nom).toBe('Supprimé');
-    expect(profile?.email).toMatch(/@supprime\.jolene\.app$/);
+    expect(readError).toBeNull(); expect(profile?.nom).toBe('Jetable');
+    expect(profile?.email).toBe(fixture.email);
     const confirmation = await admin.rpc('fn_anonymisation_compte_confirmee', { p_utilisateur_id: fixture.id, p_type_profil: 'SOIGNANT' });
-    expect(confirmation.error).toBeNull(); expect(confirmation.data).toBe(true);
-    const login = await client().auth.signInWithPassword({ email: fixture.email, password: fixture.password });
-    expect(login.error).not.toBeNull(); expect(login.data.session).toBeNull();
+    expect(confirmation.error).toBeNull(); expect(confirmation.data).toBe(false);
+    const identity = await admin.auth.admin.getUserById(fixture.id);
+    expect(identity.error).toBeNull(); expect(identity.data.user?.email).toBe(fixture.email);
+    const blockedRead = await request.get(`${url}/rest/v1/soignants?select=id&id=eq.${fixture.id}`, {
+      headers: { Authorization: `Bearer ${session.session!.access_token}`, apikey: anon! },
+    });
+    expect(blockedRead.status()).toBe(403);
   } finally { await fixture.cleanup(); }
 });

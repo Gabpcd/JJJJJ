@@ -47,7 +47,7 @@ jobs:
         run: npx tsc -b
 
       - name: Contrats des scénarios de charge
-        run: node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/wait-staging-schema.node.mjs
+        run: node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/diagnose-load-fixtures.node.mjs tests/node/wait-staging-schema.node.mjs
 
       - name: Tests unitaires
         run: npm test -- --reporter=dot
