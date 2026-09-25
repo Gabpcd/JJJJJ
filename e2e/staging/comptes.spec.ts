@@ -8,8 +8,11 @@ const service = process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
 if (url !== 'https://mejpriaetwgtcstbgfid.supabase.co' || !anon || !service) {
   throw new Error('Recette comptes réservée au staging, accès réels obligatoires.');
 }
-const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
-const client = () => createClient(url!, anon!, { auth: { persistSession: false, autoRefreshToken: false } });
+const options = { auth: { persistSession: false, autoRefreshToken: false }, global: {
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal: AbortSignal.timeout(20_000) }),
+} };
+const admin = createClient(url, service, options);
+const client = () => createClient(url!, anon!, options);
 
 async function compteJetable() {
   const email = `playwright-test-national-${randomUUID()}@example.invalid`;
@@ -84,13 +87,13 @@ test('suppression : confirmation UI → delete-account réel → profil anonymis
   expect(count, 'Aucune authentification PSC indépendante ne peut être interrompue').toBe(0);
   const fixture = await compteJetable();
   try {
-    await connexion(page, fixture.email, fixture.password);
-    await page.goto('/soignant/profil?tab=confidentialite#suppression-compte');
+    await test.step('Connexion du compte jetable', () => connexion(page, fixture.email, fixture.password));
+    await test.step('Accès à la confidentialité', () => page.goto('/soignant/profil?tab=confidentialite#suppression-compte'));
     await expect(page.getByRole('heading', { name: 'Suppression de compte', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Supprimer mon compte', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Supprimer définitivement' })).toBeDisabled();
     await page.getByPlaceholder('Tape SUPPRIMER').fill('SUPPRIMER');
-    const reponse = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST');
+    const reponse = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST', { timeout: 30_000 });
     await page.getByRole('button', { name: 'Supprimer définitivement' }).click();
     const resultat = await reponse;
     expect(resultat.status()).toBe(200);

@@ -432,7 +432,7 @@ function RechercheMissionsCompte() {
                 icone={<SearchX />}
                 mascotte="thinking"
                 titre="Aucune mission trouvée"
-                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
+                description="Crée une alerte : les nouvelles missions seront vérifiées toutes les heures. Tu recevras un email si elles correspondent à tes critères."
                 cta={{
                   label: '🔔 Me prévenir des prochaines missions',
                   onClick: () => setAlerteOpen(true),

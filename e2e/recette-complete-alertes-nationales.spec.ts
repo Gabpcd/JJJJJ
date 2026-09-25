@@ -89,6 +89,7 @@ test('alerte rapide soignant : sept critères réels, lecture en panne, nouvel e
  await expect(page.getByRole('button',{name:'🌙 Nuit',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.getByRole('button',{name:'🔥 Urgentes',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.getByRole('heading',{name:'Aucune mission trouvée',exact:true})).toBeVisible();
+ await expect(page.getByText('Crée une alerte : les nouvelles missions seront vérifiées toutes les heures. Tu recevras un email si elles correspondent à tes critères.',{exact:true})).toBeVisible();
  recherches.splice(0,1);
  const ouvrir=()=>page.getByRole('button',{name:'🔔 Me prévenir des prochaines missions',exact:true}).click();
  await ouvrir();

@@ -99,6 +99,6 @@ BEGIN
             'messages_litige','stripe_transfers','paiements_soignant']));
     RETURN jsonb_build_object('success', true, 'message', 'Votre compte a été supprimé et vos données anonymisées.');
 END;
-$function$
+$function$;
 
 NOTIFY pgrst, 'reload schema';
