@@ -449,7 +449,7 @@ export function MesGainsApercuContent() {
       {/* KPIs — séparés par régime (jamais de sous-bloc à zéro). Honoraires libéraux
           et net salarié ne sont pas le même concept : on ne les fusionne pas. */}
       {!periodeMissions.erreur && <>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className={`grid grid-cols-2 gap-3 mb-4 ${libMissions.length > 0 && salMissions.length > 0 ? 'xl:grid-cols-4' : libMissions.length > 0 || salMissions.length > 0 ? 'xl:grid-cols-3' : ''}`}>
         {libMissions.length > 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}

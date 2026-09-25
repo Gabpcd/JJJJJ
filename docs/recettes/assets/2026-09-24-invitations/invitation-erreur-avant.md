@@ -1,0 +1,69 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Aller au contenu principal" [ref=e3] [cursor=pointer]:
+    - /url: "#app-route-content"
+  - generic [ref=e5]:
+    - navigation "Sidebar" [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - img [ref=e9]
+          - generic [ref=e10]: Jolene
+        - generic [ref=e11]:
+          - button "Notifications" [ref=e12] [cursor=pointer]:
+            - img [ref=e13]
+          - button "Passer en mode sombre" [ref=e16] [cursor=pointer]:
+            - img [ref=e17]
+          - button "Se déconnecter" [ref=e19] [cursor=pointer]:
+            - img [ref=e20]
+      - navigation "Menu principal" [ref=e23]:
+        - button "Accueil" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+          - generic [ref=e28]: Accueil
+        - button "Publier une mission" [ref=e29] [cursor=pointer]:
+          - img [ref=e30]
+          - generic [ref=e32]: Publier une mission
+        - button "Missions" [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+          - generic [ref=e37]: Missions
+        - button "Soignants" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]:
+            - img [ref=e41]
+            - generic [ref=e46]: Soignants
+          - img [ref=e47]
+        - button "Gestion" [ref=e50] [cursor=pointer]:
+          - generic [ref=e51]:
+            - img [ref=e52]
+            - generic [ref=e56]: Gestion
+          - img [ref=e57]
+        - button "Facturation" [ref=e59] [cursor=pointer]:
+          - img [ref=e60]
+          - generic [ref=e62]: Facturation
+        - button "Pilotage" [ref=e64] [cursor=pointer]:
+          - generic [ref=e65]:
+            - img [ref=e66]
+            - generic [ref=e68]: Pilotage
+          - img [ref=e69]
+        - button "Messagerie" [ref=e71] [cursor=pointer]:
+          - img [ref=e72]
+          - generic [ref=e74]: Messagerie
+        - button "Paramètres" [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+          - generic [ref=e79]: Paramètres
+      - generic [ref=e81]:
+        - generic [ref=e83]: R
+        - generic [ref=e84]: Résidence Camille — recette
+    - main [ref=e86]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - img [ref=e90]
+          - heading "Invitation à rejoindre une équipe" [level=1] [ref=e95]
+        - generic [ref=e96]:
+          - img [ref=e97]
+          - paragraph [ref=e99]: Impossible d'accepter l'invitation
+          - paragraph [ref=e100]: Service Unavailable
+          - button "Retour à l'accueil" [ref=e101] [cursor=pointer]
+  - region "Notifications alt+T"
+  - region "Notifications"
+```

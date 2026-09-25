@@ -129,11 +129,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurConversations, setErreurConversations] = useState(false);
   // La sélection est dérivée de l'URL : le bouton Retour Android/iOS et les
   // liens de notification restent ainsi synchronisés avec l'interface.
   const selectedConvId = convParam;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [erreurMessages, setErreurMessages] = useState(false);
+  const [rechargementMessages, setRechargementMessages] = useState(0);
   const [conversationCibleIntrouvable, setConversationCibleIntrouvable] = useState<string | null>(null);
   const [filtre, setFiltre] = useState('');
   const [tab, setTab] = useState<'ACTIVES' | 'ARCHIVEES'>('ACTIVES');
@@ -151,6 +154,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
   const chargerConversations = useCallback(async () => {
     if (!user) return;
     const numeroChargement = ++chargementConversationsRef.current;
+    setLoading(true);
+    setErreurConversations(false);
 
     type ApercuConversation = {
       id: string;
@@ -191,6 +196,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         erreurChargement = error;
         break;
       }
+      if (!Array.isArray(data)) {
+        erreurChargement = new Error('Réponse conversations incomplète');
+        break;
+      }
 
       const lot = ((data || []) as unknown) as ApercuConversation[];
       lot.forEach((conversation) => {
@@ -210,6 +219,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
     if (erreurChargement) {
       logger.error('PageMessagerie.chargerConversations error', erreurChargement);
+      setErreurConversations(true);
       setLoading(false);
       return;
     }
@@ -230,6 +240,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       interlocuteurs = await chargerInterlocuteursConversations(convIds);
     } catch (error) {
       logger.error('fn_interlocuteurs_conversations error', error);
+      if (numeroChargement !== chargementConversationsRef.current) return;
+      setErreurConversations(true);
+      setLoading(false);
+      return;
     }
 
     const resolveUserName = (conversationId: string, uid: string) => {
@@ -327,11 +341,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     if (!selectedConvId) {
       setMessages([]);
       setLoadingMessages(false);
+      setErreurMessages(false);
       return;
     }
     let cancelled = false;
     setMessages([]);
     setLoadingMessages(true);
+    setErreurMessages(false);
 
     const load = async () => {
       const { data, error } = await supabase
@@ -342,9 +358,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         .limit(500);
 
       if (cancelled) return;
-      if (error) {
+      if (error || !Array.isArray(data)) {
         logger.error('PageMessagerie.chargerMessages error', error);
         setMessages([]);
+        setErreurMessages(true);
         setLoadingMessages(false);
         return;
       }
@@ -399,7 +416,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, user]);
+  }, [selectedConvId, user, rechargementMessages]);
 
   const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
     if (!selectedConvId) return;
@@ -520,7 +537,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     <div className="flex flex-col h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)]">
         <div className="flex flex-1 rounded-2xl border border-jolene-rose-200/40 overflow-hidden bg-card min-h-0 shadow-sm">
           {/* ── Conversation list ── */}
-          <div className={`w-full md:w-[380px] md:border-r border-border flex flex-col bg-jolene-lavender-50/30 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`w-full lg:w-[320px] xl:w-[380px] lg:shrink-0 lg:border-r border-border flex flex-col bg-jolene-lavender-50/30 ${showMobileChat ? 'hidden lg:flex' : 'flex'}`}>
             <div className="px-4 pt-4 pb-2 border-b border-border bg-card/85 backdrop-blur-sm sticky top-0 z-10">
               <div className="flex items-center justify-between mb-3">
                 <h1 className="font-bold text-foreground flex items-center gap-2 text-base">
@@ -567,6 +584,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
             <div className="flex-1 overflow-y-auto">
               {loading ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">Chargement…</div>
+              ) : erreurConversations ? (
+                <div role="alert" className="p-6 space-y-3 text-sm">
+                  <p>Impossible de charger vos conversations.</p>
+                  <button type="button" onClick={() => { void chargerConversations(); }} className="btn-secondary">
+                    Réessayer les conversations
+                  </button>
+                </div>
               ) : filteredConvs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-6 text-center gap-3">
                   <Mascotte etat="empty" taille="lg" />
@@ -634,14 +658,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
           </div>
 
           {/* ── Chat area ── */}
-          <div className={`flex-1 flex flex-col ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`min-w-0 flex-1 flex flex-col ${!showMobileChat ? 'hidden lg:flex' : 'flex'}`}>
             {selectedConv ? (
               <>
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/85 backdrop-blur-sm">
                   <button
                     type="button"
                     onClick={() => setSearchParams({}, { replace: true })}
-                    className="md:hidden text-muted-foreground hover:text-foreground p-1 -ml-1"
+                    className="lg:hidden text-muted-foreground hover:text-foreground p-1 -ml-1"
                     aria-label="Retour aux conversations"
                   >
                     <ArrowLeft className="h-5 w-5" />
@@ -692,6 +716,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                 <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 min-h-0 bg-jolene-lavender-50/30">
                   {loadingMessages ? (
                     <div className="text-center text-sm text-muted-foreground py-8">Chargement…</div>
+                  ) : erreurMessages ? (
+                    <div role="alert" className="p-4 space-y-3 text-sm">
+                      <p>Impossible de charger les messages.</p>
+                      <button type="button" onClick={() => setRechargementMessages(v => v + 1)} className="btn-secondary">
+                        Réessayer les messages
+                      </button>
+                    </div>
                   ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-muted-foreground">
                       <MessageCircle className="h-8 w-8 opacity-40" />

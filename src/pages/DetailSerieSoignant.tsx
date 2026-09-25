@@ -65,6 +65,8 @@ export default function DetailSerieSoignant() {
   const [soignant, setSoignant] = useState<any>(null);
   const [missionsExistantes, setMissionsExistantes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const [essai, setEssai] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [conflits, setConflits] = useState<Conflit[]>([]);
   const [detailsOuverts, setDetailsOuverts] = useState<Record<string, boolean>>({});
@@ -79,7 +81,10 @@ export default function DetailSerieSoignant() {
 
   useEffect(() => {
     if (!user || !serieId) return;
+    let actif = true;
     const load = async () => {
+      setLoading(true);
+      setErreurChargement(false);
       const decoded = decodeURIComponent(serieId);
       const [missionsResult, soignantResult, existantesResult] = await Promise.all([
         supabase.from('missions').select(`
@@ -92,6 +97,12 @@ export default function DetailSerieSoignant() {
         supabase.from('missions').select('id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, statut, type_contrat_applique, choix_contrat_soignant, type_contrat_recherche')
           .eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).order('debut_le'),
       ]);
+      if (!actif) return;
+      if (missionsResult.error || soignantResult.error) {
+        setErreurChargement(true);
+        setLoading(false);
+        return;
+      }
       const allMissions = missionsResult.data;
       const s = soignantResult.data;
       const existantes = existantesResult.data;
@@ -106,8 +117,10 @@ export default function DetailSerieSoignant() {
       } catch {
         planningEnErreur = true;
       }
+      if (!actif) return;
 
       const enriched = allMissions ? await enrichirEtablissements(allMissions as any) : [];
+      if (!actif) return;
       const mWithDist = enriched.map((m: any) => ({
         ...m,
         distance_km: calculerDistanceKm(s?.adresse_lat, s?.adresse_lng, m.etablissements?.adresse_lat, m.etablissements?.adresse_lng),
@@ -124,8 +137,13 @@ export default function DetailSerieSoignant() {
 
       setLoading(false);
     };
-    load();
-  }, [user, serieId]);
+    void load().catch(() => {
+      if (!actif) return;
+      setErreurChargement(true);
+      setLoading(false);
+    });
+    return () => { actif = false; };
+  }, [user, serieId, essai]);
 
   // Compute conflicts
   useEffect(() => {
@@ -203,7 +221,25 @@ export default function DetailSerieSoignant() {
     setConflits(unique);
   }, [missions, missionsExistantes, selectedIds]);
 
-  if (loading || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (erreurChargement) return (
+    <LayoutApp role="SOIGNANT">
+      <div role="alert" className="card-base space-y-3">
+        <h1 className="text-xl font-bold text-foreground">Pack indisponible</h1>
+        <p className="text-sm text-muted-foreground">Les missions de ce pack n’ont pas pu être chargées. Réessayez pour vérifier les créneaux disponibles.</p>
+        <button type="button" className="btn-primary min-h-[44px]" onClick={() => setEssai((valeur) => valeur + 1)}>Réessayer</button>
+      </div>
+    </LayoutApp>
+  );
+  if (missions.length === 0) return (
+    <LayoutApp role="SOIGNANT">
+      <div className="card-base space-y-3">
+        <h1 className="text-xl font-bold text-foreground">Pack introuvable</h1>
+        <p className="text-sm text-muted-foreground">Ce pack ne contient plus de mission accessible. Vous pouvez poursuivre votre recherche.</p>
+        <button type="button" className="btn-primary min-h-[44px]" onClick={() => navigate('/soignant/recherche-missions')}>Explorer les missions</button>
+      </div>
+    </LayoutApp>
+  );
 
   const ouvertes = missions.filter(m => m.statut === 'OUVERTE');
   const first = missions[0];
@@ -237,6 +273,7 @@ export default function DetailSerieSoignant() {
   };
 
   const accepterSerie = async () => {
+    if (!soignant) { navigate('/soignant/profil'); return; }
     if (!analyseSelection.peutAccepter || !planningEngagementsDisponibles) {
       toast.error('Corrige la sélection : aucune mission en conflit ou au planning incomplet ne sera omise automatiquement.');
       return;
@@ -410,6 +447,7 @@ export default function DetailSerieSoignant() {
                 {isOpen && planningExact && (
                   <input
                     type="checkbox"
+                    aria-label={`Sélectionner la mission du ${formatParis(m.debut_le, 'd MMMM yyyy')}`}
                     checked={isSelected}
                     onChange={() => toggleSelect(m.id)}
                     className="h-4 w-4 rounded border-border text-primary"
@@ -470,7 +508,12 @@ export default function DetailSerieSoignant() {
 
       {/* Action buttons */}
       <div className="space-y-3">
-        {ouvertes.length > 0 ? (
+        {!soignant ? (
+          <div className="card-base space-y-3">
+            <p className="text-sm text-muted-foreground">Vous pouvez consulter les créneaux librement. Votre profil professionnel sera nécessaire pour accepter une mission.</p>
+            <button type="button" className="btn-primary w-full min-h-[44px]" onClick={() => navigate('/soignant/profil')}>Préparer mon profil pour candidater</button>
+          </div>
+        ) : ouvertes.length > 0 ? (
           <button
             onClick={() => setModalConfirm(true)}
             disabled={acceptationEnCours || !planningEngagementsDisponibles || !analyseSelection.peutAccepter}

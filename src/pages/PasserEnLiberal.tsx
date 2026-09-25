@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { supabase } from '@/integrations/supabase/client';
 import { useParcoursLiberal } from '@/hooks/useParcoursLiberal';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
@@ -16,6 +17,29 @@ import { CategorieSansHeuresCIPAV } from '@/components/parcours-liberal/Categori
 import { FinaliserInstallationLiberal } from '@/components/parcours-liberal/FinaliserInstallationLiberal';
 
 export default function PasserEnLiberal() {
+  const { parcours, loading } = useRole();
+  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (parcours?.type_compte === 'SOIGNANT') {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base max-w-xl mx-auto space-y-4">
+          <h1 className="text-xl font-bold text-foreground">Votre parcours libéral, à votre rythme</h1>
+          <p className="text-sm text-muted-foreground">
+            Votre profession et votre expérience permettront de personnaliser les démarches
+            d’installation. Vous pouvez préparer votre profil professionnel quand vous le souhaitez.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link to="/soignant/profil" className="btn-primary inline-flex min-h-[44px] items-center justify-center px-4 py-2">Préparer mon profil</Link>
+            <Link to="/soignant/recherche-missions" className="inline-flex min-h-[44px] items-center justify-center px-4 py-2 text-primary underline">Explorer les missions</Link>
+          </div>
+        </div>
+      </LayoutApp>
+    );
+  }
+  return <ParcoursLiberalProfil />;
+}
+
+function ParcoursLiberalProfil() {
   usePageTitle('Passer en libéral');
   const navigate = useNavigate();
   const { user } = useAuth();

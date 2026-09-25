@@ -1,0 +1,9 @@
+- main:
+  - img
+  - heading "Invitation à rejoindre une équipe" [level=1]
+  - alert:
+    - img
+    - paragraph: Impossible d'accepter l'invitation
+    - paragraph: Une erreur est survenue. Veuillez réessayer.
+    - button "Réessayer"
+    - button "Retour à l'accueil"

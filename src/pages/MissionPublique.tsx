@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/public-client';
 import { SEOHead } from '@/components/SEOHead';
 import { FooterLegal } from '@/components/FooterLegal';
 import { getLabelProfession } from '@/lib/constantes';
@@ -23,15 +23,32 @@ export default function MissionPublique() {
   const navigate = useNavigate();
   const [mission, setMission] = useState<any | null>(null);
   const [charge, setCharge] = useState(false);
+  const [erreur, setErreur] = useState(false);
+  const [tentative, setTentative] = useState(0);
 
   useEffect(() => {
-    if (!id) return;
+    let actif = true;
+    const controller = new AbortController();
+    const delai = setTimeout(() => controller.abort(), 15_000);
+    setCharge(false);
+    setErreur(false);
+    setMission(null);
     (async () => {
-      const { data } = await supabase.rpc('fn_mission_publique' as any, { p_id: id });
-      setMission(data || null);
-      setCharge(true);
+      try {
+        if (!id) throw new Error('Mission manquante');
+        const { data, error } = await publicSupabase.rpc('fn_mission_publique' as any, { p_id: id }).abortSignal(controller.signal);
+        if (!actif) return;
+        if (error) throw error;
+        setMission(data || null);
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        clearTimeout(delai);
+        if (actif) setCharge(true);
+      }
     })();
-  }, [id]);
+    return () => { actif = false; clearTimeout(delai); controller.abort(); };
+  }, [id, tentative]);
 
   const jsonLd = useMemo(() => {
     if (!mission) return undefined;
@@ -78,7 +95,7 @@ export default function MissionPublique() {
         title={mission ? `${mission.intitule} — ${mission.ville} | Jolene Santé` : 'Mission indisponible — Jolene Santé'}
         description={mission
           ? `Mission ${getLabelProfession(mission.profession_requise) || ''} à ${mission.ville} : ${Number(mission.taux_horaire_base).toFixed(0)} €/h. Consultez les conditions et créez votre compte pour candidater.`
-          : 'Cette mission n’est plus disponible.'}
+          : erreur ? 'Les informations de cette mission sont temporairement indisponibles.' : 'Consultez les informations de cette mission.'}
         url={`https://jolene.app/mission/${id}`}
         jsonLd={jsonLd}
         noIndex={charge && !mission}
@@ -101,6 +118,12 @@ export default function MissionPublique() {
       <main className="flex-1">
         {!charge ? (
           <div className="max-w-3xl mx-auto px-4 py-24 text-center text-muted-foreground">Chargement…</div>
+        ) : erreur ? (
+          <div className="max-w-3xl mx-auto px-4 py-24 text-center space-y-4" role="alert">
+            <h1 className="text-2xl font-bold text-foreground">Mission temporairement indisponible</h1>
+            <p className="text-muted-foreground">Impossible de charger cette mission. Vérifiez votre connexion et réessayez.</p>
+            <button type="button" onClick={() => setTentative(value => value + 1)} className="btn-primary px-6 py-3">Réessayer</button>
+          </div>
         ) : !mission ? (
           <div className="max-w-3xl mx-auto px-4 py-24 text-center space-y-4">
             <h1 className="text-2xl font-bold text-foreground">Cette mission n'est plus disponible</h1>

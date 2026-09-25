@@ -1,0 +1,11 @@
+- main:
+  - img
+  - heading "Invitation à rejoindre une équipe" [level=1]
+  - paragraph:
+    - text: Vous êtes connecté(e) en tant que
+    - strong: recette-etablissement@example.invalid
+    - text: .
+  - paragraph: En acceptant cette invitation, vous rejoindrez l'équipe de l'établissement avec le rôle qui vous a été proposé.
+  - img
+  - paragraph: L'invitation doit correspondre à votre adresse e-mail. Si ce n'est pas le cas, déconnectez-vous et reconnectez-vous avec le bon compte.
+  - button "Accepter l'invitation"

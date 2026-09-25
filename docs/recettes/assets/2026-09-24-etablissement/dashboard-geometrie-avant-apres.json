@@ -1,0 +1,193 @@
+{
+  "avant": {
+    "ipad-portrait": {
+      "largeur": 820,
+      "contenu": 820,
+      "debordements": [
+        {
+          "texte": "Terminées0",
+          "gauche": 681,
+          "droite": 824.8125,
+          "largeur": 143.8125
+        }
+      ]
+    }
+  },
+  "apres": {
+    "ipad-portrait": {
+      "largeur": 820,
+      "contenu": 820,
+      "cartes": [
+        {
+          "texte": "Missions ouvertes1",
+          "gauche": 276,
+          "droite": 534,
+          "celluleGauche": 276,
+          "celluleDroite": 534
+        },
+        {
+          "texte": "Assignées0",
+          "gauche": 546,
+          "droite": 804,
+          "celluleGauche": 546,
+          "celluleDroite": 804
+        },
+        {
+          "texte": "En cours0",
+          "gauche": 276,
+          "droite": 534,
+          "celluleGauche": 276,
+          "celluleDroite": 534
+        },
+        {
+          "texte": "Terminées0",
+          "gauche": 546,
+          "droite": 804,
+          "celluleGauche": 546,
+          "celluleDroite": 804
+        }
+      ],
+      "debordements": []
+    },
+    "ipad-paysage": {
+      "largeur": 1180,
+      "contenu": 1180,
+      "cartes": [
+        {
+          "texte": "Missions ouvertes1",
+          "gauche": 276,
+          "droite": 714,
+          "celluleGauche": 276,
+          "celluleDroite": 714
+        },
+        {
+          "texte": "Assignées0",
+          "gauche": 726,
+          "droite": 1164,
+          "celluleGauche": 726,
+          "celluleDroite": 1164
+        },
+        {
+          "texte": "En cours0",
+          "gauche": 276,
+          "droite": 714,
+          "celluleGauche": 276,
+          "celluleDroite": 714
+        },
+        {
+          "texte": "Terminées0",
+          "gauche": 726,
+          "droite": 1164,
+          "celluleGauche": 726,
+          "celluleDroite": 1164
+        }
+      ],
+      "debordements": []
+    },
+    "iphone": {
+      "largeur": 390,
+      "contenu": 390,
+      "cartes": [
+        {
+          "texte": "Missions ouvertes1",
+          "gauche": 16,
+          "droite": 189,
+          "celluleGauche": 16,
+          "celluleDroite": 189
+        },
+        {
+          "texte": "Assignées0",
+          "gauche": 201,
+          "droite": 374,
+          "celluleGauche": 201,
+          "celluleDroite": 374
+        },
+        {
+          "texte": "En cours0",
+          "gauche": 16,
+          "droite": 189,
+          "celluleGauche": 16,
+          "celluleDroite": 189
+        },
+        {
+          "texte": "Terminées0",
+          "gauche": 201,
+          "droite": 374,
+          "celluleGauche": 201,
+          "celluleDroite": 374
+        }
+      ],
+      "debordements": []
+    },
+    "android": {
+      "largeur": 412,
+      "contenu": 412,
+      "cartes": [
+        {
+          "texte": "Missions ouvertes1",
+          "gauche": 16,
+          "droite": 200,
+          "celluleGauche": 16,
+          "celluleDroite": 200
+        },
+        {
+          "texte": "Assignées0",
+          "gauche": 212,
+          "droite": 396,
+          "celluleGauche": 212,
+          "celluleDroite": 396
+        },
+        {
+          "texte": "En cours0",
+          "gauche": 16,
+          "droite": 200,
+          "celluleGauche": 16,
+          "celluleDroite": 200
+        },
+        {
+          "texte": "Terminées0",
+          "gauche": 212,
+          "droite": 396,
+          "celluleGauche": 212,
+          "celluleDroite": 396
+        }
+      ],
+      "debordements": []
+    },
+    "ordinateur": {
+      "largeur": 1440,
+      "contenu": 1440,
+      "cartes": [
+        {
+          "texte": "Missions ouvertes1",
+          "gauche": 290,
+          "droite": 561,
+          "celluleGauche": 290,
+          "celluleDroite": 561
+        },
+        {
+          "texte": "Assignées0",
+          "gauche": 573,
+          "droite": 844,
+          "celluleGauche": 573,
+          "celluleDroite": 844
+        },
+        {
+          "texte": "En cours0",
+          "gauche": 856,
+          "droite": 1127,
+          "celluleGauche": 856,
+          "celluleDroite": 1127
+        },
+        {
+          "texte": "Terminées0",
+          "gauche": 1139,
+          "droite": 1410,
+          "celluleGauche": 1139,
+          "celluleDroite": 1410
+        }
+      ],
+      "debordements": []
+    }
+  }
+}

@@ -480,7 +480,7 @@ export default function DashboardEtablissement() {
 
   // F1 — Mode « première mission » : une seule section hero focalisée.
   if (premiereMission) {
-    const etabVerifie = !!etab && etab.peut_publier_missions !== false && !etab.bloque_auto_le;
+    const etabVerifie = !!etab && etab.peut_publier_missions === true && !etab.bloque_auto_le;
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
         <span data-testid="dashboard-etablissement-ready" className="sr-only" aria-hidden="true" />
@@ -692,9 +692,10 @@ export default function DashboardEtablissement() {
       </div>
 
       {/* KPI row 1 — All from RPC */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
         <div>
           <CarteKPIY2K
+            className="h-full w-full min-w-0"
             icone={<Briefcase className="h-4 w-4" />}
             valeur={stats.missions_ouvertes}
             label="Missions ouvertes"
@@ -704,6 +705,7 @@ export default function DashboardEtablissement() {
         </div>
         <div>
           <CarteKPIY2K
+            className="h-full w-full min-w-0"
             icone={<ClipboardCheck className="h-4 w-4" />}
             valeur={stats.missions_assignees}
             label="Assignées"
@@ -713,6 +715,7 @@ export default function DashboardEtablissement() {
         </div>
         <div>
           <CarteKPIY2K
+            className="h-full w-full min-w-0"
             icone={<PlayCircle className="h-4 w-4" />}
             valeur={stats.missions_en_cours}
             label="En cours"
@@ -722,6 +725,7 @@ export default function DashboardEtablissement() {
         </div>
         <div>
           <CarteKPIY2K
+            className="h-full w-full min-w-0"
             icone={<CheckCircle className="h-4 w-4" />}
             valeur={stats.missions_terminees}
             label="Terminées"
@@ -737,6 +741,7 @@ export default function DashboardEtablissement() {
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div>
           <CarteKPIY2K
+            className="h-full w-full min-w-0"
             icone={<Users className="h-4 w-4" />}
             valeur={stats.soignants_ce_mois}
             label="Soignants ce mois"
@@ -755,6 +760,7 @@ export default function DashboardEtablissement() {
             const IconeReglements = aDesReglements ? CreditCard : CheckCircle;
             return (
               <CarteKPIY2K
+                className="h-full w-full min-w-0"
                 icone={<IconeReglements className="h-4 w-4" />}
                 valeur={aDesReglements ? totalARegler : 0}
                 label={aDesReglements ? 'Règlements à effectuer' : 'Paiements à jour'}

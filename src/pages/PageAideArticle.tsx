@@ -88,32 +88,62 @@ export default function PageAideArticle() {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [erreur, setErreur] = useState(false);
+  const [tentative, setTentative] = useState(0);
 
   usePageTitle(article?.titre ? `${article.titre} — Aide` : 'Aide');
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+    const controller = new AbortController();
+    const delai = setTimeout(() => controller.abort(), 15_000);
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('articles_aide' as any)
-        .select('id, slug, titre, contenu, audience, categorie, mis_a_jour_le')
-        .eq('slug', slug)
-        .eq('publie', true)
-        .maybeSingle();
-      if (cancelled) return;
-      if (error || !data) { setNotFound(true); }
-      else { setArticle(data as any); }
-      setLoading(false);
+      setNotFound(false);
+      setErreur(false);
+      setArticle(null);
+      try {
+        const { data, error } = await supabase
+          .from('articles_aide' as any)
+          .select('id, slug, titre, contenu, audience, categorie, mis_a_jour_le')
+          .eq('slug', slug)
+          .eq('publie', true)
+          .abortSignal(controller.signal)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+        if (!data) setNotFound(true);
+        else setArticle(data as any);
+      } catch {
+        if (!cancelled) setErreur(true);
+      } finally {
+        clearTimeout(delai);
+        if (!cancelled) setLoading(false);
+      }
     })();
-    return () => { cancelled = true; };
-  }, [slug]);
+    return () => { cancelled = true; clearTimeout(delai); controller.abort(); };
+  }, [slug, tentative]);
 
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (erreur) {
+    return (
+      <div className="min-h-[100dvh] bg-background">
+        <main className="max-w-3xl mx-auto px-4 py-12 text-center space-y-4">
+          <div role="alert">
+            <h1 className="text-lg font-semibold text-foreground">Impossible de charger cet article</h1>
+            <p className="text-sm text-muted-foreground mt-2">Vérifiez votre connexion et réessayez.</p>
+          </div>
+          <button type="button" onClick={() => setTentative(value => value + 1)} className="btn-primary">Réessayer</button>
+          <Link to="/aide" className="block text-primary hover:underline">← Retour au centre d'aide</Link>
+        </main>
       </div>
     );
   }

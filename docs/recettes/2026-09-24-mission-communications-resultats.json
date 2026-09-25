@@ -1,0 +1,406 @@
+{
+  "build_local": "http://127.0.0.1:8892",
+  "source_resultat": "/private/tmp/jolene-recette-mission-communications-final8892/results.json",
+  "statistiques": {
+    "startTime": "2026-09-24T04:57:31.995Z",
+    "duration": 549861.509,
+    "expected": 55,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "journaux_inspectes": 55,
+  "apis_inconnues": [],
+  "erreurs_javascript": [],
+  "origines_externes_bloquees": [
+    "https://fonts.googleapis.com",
+    "https://js.stripe.com"
+  ],
+  "cas": [
+    {
+      "format": "ipad-portrait",
+      "scenario": "SOIGNANT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 4766,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "SOIGNANT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 4428,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "SOIGNANT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 3300,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "SOIGNANT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 6445,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "ADMIN_ETABLISSEMENT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 6177,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "ADMIN_ETABLISSEMENT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 5947,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "ADMIN_ETABLISSEMENT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 7232,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "ADMIN_ETABLISSEMENT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 5958,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "SOIGNANT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 9402,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "SOIGNANT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 6971,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "SOIGNANT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 5345,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "SOIGNANT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 8183,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "ADMIN_ETABLISSEMENT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 6031,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "ADMIN_ETABLISSEMENT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 6279,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "ADMIN_ETABLISSEMENT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 6858,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "ADMIN_ETABLISSEMENT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 9252,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "SOIGNANT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 5213,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "SOIGNANT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 4351,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "SOIGNANT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 3772,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "SOIGNANT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 5492,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "ADMIN_ETABLISSEMENT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 4312,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "ADMIN_ETABLISSEMENT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 3576,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "ADMIN_ETABLISSEMENT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2727,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "ADMIN_ETABLISSEMENT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 4288,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "SOIGNANT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 4071,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "SOIGNANT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2800,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "SOIGNANT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 3116,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "SOIGNANT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 3619,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "ADMIN_ETABLISSEMENT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 2464,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "ADMIN_ETABLISSEMENT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2913,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "ADMIN_ETABLISSEMENT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 3035,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "ADMIN_ETABLISSEMENT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 2983,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "SOIGNANT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 2492,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "SOIGNANT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2834,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "SOIGNANT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2430,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "SOIGNANT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 2325,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "ADMIN_ETABLISSEMENT : notifications indisponibles, reprise et mutations fiables",
+      "statut": "passed",
+      "duree_ms": 2593,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "ADMIN_ETABLISSEMENT : liste des conversations et identités en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2577,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "ADMIN_ETABLISSEMENT : historique des messages en erreur puis reprise",
+      "statut": "passed",
+      "duree_ms": 2148,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "ADMIN_ETABLISSEMENT : conversation peuplée, recherche, retour et archives en lecture seule",
+      "statut": "passed",
+      "duree_ms": 2505,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "mission libérale : candidature, deux signatures, pauses, validation et facture simulée",
+      "statut": "passed",
+      "duree_ms": 71672,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "signature OTP : session expirée, code incorrect, code expiré et reprise sans double signature",
+      "statut": "passed",
+      "duree_ms": 8135,
+      "retry": 0
+    },
+    {
+      "format": "ipad-portrait",
+      "scenario": "mission salariée : DPAE fictive, deux signatures et certificat",
+      "statut": "passed",
+      "duree_ms": 19647,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "mission libérale : candidature, deux signatures, pauses, validation et facture simulée",
+      "statut": "passed",
+      "duree_ms": 64078,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "signature OTP : session expirée, code incorrect, code expiré et reprise sans double signature",
+      "statut": "passed",
+      "duree_ms": 14519,
+      "retry": 0
+    },
+    {
+      "format": "ipad-paysage",
+      "scenario": "mission salariée : DPAE fictive, deux signatures et certificat",
+      "statut": "passed",
+      "duree_ms": 13406,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "mission libérale : candidature, deux signatures, pauses, validation et facture simulée",
+      "statut": "passed",
+      "duree_ms": 33493,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "signature OTP : session expirée, code incorrect, code expiré et reprise sans double signature",
+      "statut": "passed",
+      "duree_ms": 6482,
+      "retry": 0
+    },
+    {
+      "format": "iphone",
+      "scenario": "mission salariée : DPAE fictive, deux signatures et certificat",
+      "statut": "passed",
+      "duree_ms": 14303,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "mission libérale : candidature, deux signatures, pauses, validation et facture simulée",
+      "statut": "passed",
+      "duree_ms": 31242,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "signature OTP : session expirée, code incorrect, code expiré et reprise sans double signature",
+      "statut": "passed",
+      "duree_ms": 11385,
+      "retry": 0
+    },
+    {
+      "format": "android",
+      "scenario": "mission salariée : DPAE fictive, deux signatures et certificat",
+      "statut": "passed",
+      "duree_ms": 7885,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "mission libérale : candidature, deux signatures, pauses, validation et facture simulée",
+      "statut": "passed",
+      "duree_ms": 29224,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "signature OTP : session expirée, code incorrect, code expiré et reprise sans double signature",
+      "statut": "passed",
+      "duree_ms": 3845,
+      "retry": 0
+    },
+    {
+      "format": "ordinateur",
+      "scenario": "mission salariée : DPAE fictive, deux signatures et certificat",
+      "statut": "passed",
+      "duree_ms": 6006,
+      "retry": 0
+    }
+  ]
+}

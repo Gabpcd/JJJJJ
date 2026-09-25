@@ -1,5 +1,5 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,7 @@ export default function MesDisponibilites() {
   const { afficherNotification } = useNotification();
   const [dispos, setDispos] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
 
   // 4 semaines complètes à partir de la semaine courante (lundi).
@@ -41,19 +42,25 @@ export default function MesDisponibilites() {
     );
   }, []);
 
-  useEffect(() => {
+  const charger = useCallback(async () => {
     if (!user) return;
-    (async () => {
+    setLoading(true);
+    setErreurChargement(false);
+    try {
       const { data, error } = await supabase
         .from('disponibilites_soignant' as any)
         .select('jour, creneau')
         .gte('jour', format(new Date(), 'yyyy-MM-dd'));
-      if (!error && data) {
-        setDispos(new Set((data as any[]).map((d) => cleDispo(d.jour, d.creneau))));
-      }
+      if (error) throw error;
+      setDispos(new Set(((data ?? []) as any[]).map((d) => cleDispo(d.jour, d.creneau))));
+    } catch {
+      setErreurChargement(true);
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [user]);
+
+  useEffect(() => { void charger(); }, [charger]);
 
   const basculer = async (jourDate: Date, creneau: Creneau) => {
     const jour = format(jourDate, 'yyyy-MM-dd');
@@ -96,6 +103,18 @@ export default function MesDisponibilites() {
     return (
       <LayoutApp role="SOIGNANT">
         <ChargementPage />
+      </LayoutApp>
+    );
+  }
+
+  if (erreurChargement) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div role="alert" className="card-base max-w-xl mx-auto space-y-3">
+          <h1 className="text-xl font-bold text-foreground">Disponibilités indisponibles</h1>
+          <p className="text-sm text-muted-foreground">Vos disponibilités n’ont pas pu être chargées. Réessayez avant de les modifier.</p>
+          <button type="button" className="btn-primary min-h-[44px]" onClick={() => { void charger(); }}>Réessayer</button>
+        </div>
       </LayoutApp>
     );
   }

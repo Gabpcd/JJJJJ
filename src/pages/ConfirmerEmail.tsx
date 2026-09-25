@@ -3,10 +3,12 @@ import React from 'react';
 import { Mail } from 'lucide-react';
 import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function ConfirmerEmail() {
   usePageTitle('Confirmer Email');
   const { deconnexion } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-[100dvh] gradient-hero flex items-center justify-center px-4">
@@ -32,7 +34,7 @@ export default function ConfirmerEmail() {
         </div>
 
         <button
-          onClick={() => deconnexion()}
+          onClick={async () => { await deconnexion(); navigate('/connexion', { replace: true }); }}
           className="btn-secondary w-full text-sm"
         >
           Retour à la connexion

@@ -112,7 +112,9 @@ export function PointageRotatifSoignant({
     const { data: res, error } = await supabase.rpc('fn_scanner_code_pointage' as any, { p_code: c, p_metadata: meta });
     setSubmitting(false);
     if (error) {
-      toast.error(extraireMessageErreur(error));
+      toast.error(error.message === 'Code de pointage invalide ou expiré.'
+        ? 'Code de pointage invalide ou expiré. Demande le code actuel à l’établissement.'
+        : extraireMessageErreur(error));
       return;
     }
     const type = (res as any)?.type_scan_effectue;

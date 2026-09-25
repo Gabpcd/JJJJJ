@@ -57,6 +57,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const audience = role === 'SOIGNANT' ? 'SOIGNANT_RECHERCHE_MISSIONS' : 'ETAB_RECHERCHE_SOIGNANTS';
+  const alertesDisponibles = role === 'SOIGNANT';
   const [list, setList] = useState<FiltreSauvegarde[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<FiltreSauvegarde | null>(null);
@@ -87,6 +88,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
   };
 
   const handleToggleAlerte = async (f: FiltreSauvegarde) => {
+    if (!alertesDisponibles && !f.alerte_active) return;
     const { data, error } = await supabase.rpc('fn_modifier_filtre_sauvegarde', {
       p_id: f.id, p_alerte_active: !f.alerte_active,
     });
@@ -109,7 +111,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
       }));
     } catch (_e) { /* ignore */ }
     if (role === 'SOIGNANT') navigate('/soignant/recherche-missions');
-    else navigate('/etablissement/tableau-de-bord'); // Pas de page recherche soignants étab — fallback dashboard
+    else navigate('/etablissement/soignants');
   };
 
   if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
@@ -125,7 +127,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
             <p className="text-sm text-gray-600 mt-1">
               {role === 'SOIGNANT'
                 ? 'Sauvegardez vos critères de recherche missions et activez des alertes email.'
-                : 'Sauvegardez vos critères de recherche soignants et activez des alertes email.'}
+                : 'Retrouvez vos critères de recherche soignants et réappliquez-les dans l’annuaire.'}
             </p>
           </div>
         </div>
@@ -136,7 +138,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
             <p className="text-gray-500 mb-4">Aucune recherche sauvegardée pour l'instant.</p>
             <BoutonY2K onClick={() => {
               if (role === 'SOIGNANT') navigate('/soignant/recherche-missions');
-              else navigate('/etablissement/tableau-de-bord');
+              else navigate('/etablissement/soignants');
             }}>
               Créer une recherche
             </BoutonY2K>
@@ -165,16 +167,17 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
-                      title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
+                    {(alertesDisponibles || f.alerte_active) && <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
+                      title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}
+                      aria-label={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
                       {f.alerte_active
                         ? <Bell className="h-4 w-4 text-blue-600" />
                         : <BellOff className="h-4 w-4 text-gray-400" />}
-                    </BoutonY2K>
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier">
+                    </BoutonY2K>}
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier" aria-label="Modifier">
                       <Edit2 className="h-4 w-4" />
                     </BoutonY2K>
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer">
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer" aria-label="Supprimer">
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </BoutonY2K>
                   </div>
@@ -188,6 +191,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
         )}
 
         <div className="card-base p-4 bg-blue-50 text-sm text-blue-900">
+          {alertesDisponibles ? <>
           <strong>Comment fonctionnent les alertes ?</strong><br />
           Les alertes sont envoyées par email selon la fréquence choisie :
           <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -201,6 +205,10 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
               Paramètres → Notifications
             </a>.
           </p>
+          </> : <>
+            <strong>Retrouvez vos filtres sans nouvelle alerte email</strong>
+            <p className="mt-2">Les nouvelles alertes établissement ne sont pas disponibles. Les alertes déjà actives sont conservées et peuvent être désactivées. Elles reposent sur la profession, sans prendre en compte tous vos autres filtres.</p>
+          </>}
         </div>
       </div>
 
@@ -209,17 +217,19 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
         filtre={editing}
         onOpenChange={(o) => { if (!o) setEditing(null); }}
         onSaved={() => { reload(); setEditing(null); }}
+        alertesDisponibles={alertesDisponibles}
       />
     </LayoutApp>
   );
 }
 
 function ModalEditPage({
-  filtre, onOpenChange, onSaved,
+  filtre, onOpenChange, onSaved, alertesDisponibles,
 }: {
   filtre: FiltreSauvegarde | null;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  alertesDisponibles: boolean;
 }) {
   const [nom, setNom] = useState('');
   const [alerteActive, setAlerteActive] = useState(false);
@@ -241,7 +251,9 @@ function ModalEditPage({
     setSubmitting(true);
     const { data, error } = await supabase.rpc('fn_modifier_filtre_sauvegarde', {
       p_id: filtre.id, p_nom: nom.trim(),
-      p_alerte_active: alerteActive, p_frequence_alerte: frequence,
+      ...(alertesDisponibles
+        ? { p_alerte_active: alerteActive, p_frequence_alerte: frequence }
+        : filtre.alerte_active && !alerteActive ? { p_alerte_active: false } : {}),
     });
     setSubmitting(false);
     if (error || (data as any)?.error) {
@@ -258,9 +270,9 @@ function ModalEditPage({
         <DialogResponsiveHeader>
           <DialogResponsiveTitle>Modifier la recherche</DialogResponsiveTitle>
           <DialogResponsiveDescription>
-            Renommer + changer les préférences d'alertes. Pour modifier les
-            critères de recherche, supprimez celle-ci et créez-en une nouvelle
-            depuis la page de recherche.
+            {alertesDisponibles
+              ? 'Renommez votre recherche et changez ses préférences d’alertes. Pour modifier les critères, créez une nouvelle sauvegarde depuis la page de recherche.'
+              : 'Renommez votre recherche sans modifier ses filtres. Vous pouvez désactiver une alerte existante ; aucune nouvelle alerte ne sera activée.'}
           </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-4">
@@ -268,11 +280,11 @@ function ModalEditPage({
             <Label htmlFor="nom-edit">Nom</Label>
             <Input id="nom-edit" maxLength={100} value={nom} onChange={(e) => setNom(e.target.value)} />
           </div>
-          <div className="flex items-center justify-between">
+          {(alertesDisponibles || filtre.alerte_active) && <div className="flex items-center justify-between">
             <Label htmlFor="alerte-edit">Alertes email</Label>
             <Switch id="alerte-edit" checked={alerteActive} onCheckedChange={setAlerteActive} />
-          </div>
-          {alerteActive && (
+          </div>}
+          {alertesDisponibles && alerteActive && (
             <div>
               <Label htmlFor="freq-edit">Fréquence</Label>
               <Select value={frequence} onValueChange={(v) => setFrequence(v as FrequenceAlerte)}>

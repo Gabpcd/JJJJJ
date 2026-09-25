@@ -36,6 +36,46 @@ env:
   SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz'
 
 jobs:
+  simulation-interfaces:
+    name: Simulation interfaces (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ipad-portrait, ipad-paysage, iphone, android, ordinateur]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build isolé, sans accès aux services réels
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:8890
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_jolene_simulation
+          VITE_SUPABASE_ANON_KEY: sb_publishable_jolene_simulation
+          VITE_SENTRY_DSN: ''
+          VITE_TURNSTILE_SITE_KEY: ''
+          VITE_ENV: test
+      - name: Parcours publics, inscription, connexion et espaces métier
+        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }}
+        env:
+          RECETTE_START_SERVER: '1'
+          CI: 'true'
+      - name: Preuves de simulation
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: recette-complete-${{ matrix.project }}
+          path: test-results/recette-complete/
+          retention-days: 7
+
   # PR — chromium only (job rapide pour feedback)
   e2e-pr:
     name: Playwright E2E (PR — Chromium)

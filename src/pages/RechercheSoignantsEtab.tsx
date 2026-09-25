@@ -10,6 +10,8 @@ import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { BoutonFavori } from '@/components/BoutonFavori';
+import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
+import { normaliserFiltresRechercheSoignants, type FiltresRechercheSoignants as Filtres } from '@/lib/filtresRechercheSoignants';
 
 interface SoignantResultat {
   id: string;
@@ -33,19 +35,6 @@ interface SoignantResultat {
   distance_km: number | null;
   priorite_missions_urgentes: boolean;
   badge_ambassadeur: boolean;
-}
-
-interface Filtres {
-  profession: string;
-  type_exercice: string;
-  ville: string;
-  distance_max_km: string;
-  note_min: string;
-  score_min: string;
-  experience_min: string;
-  disponible_urgence: boolean;
-  documents_valides: boolean;
-  recherche_texte: string;
 }
 
 const FILTRES_VIDES: Filtres = {
@@ -73,7 +62,7 @@ function RechercheSoignantsEtabContent() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [filtres, setFiltres] = useState<Filtres>(() => ({
+  const [filtres, setFiltres] = useState<Filtres>(() => normaliserFiltresRechercheSoignants({
     profession: searchParams.get('profession') ?? '',
     type_exercice: searchParams.get('type_exercice') ?? '',
     ville: searchParams.get('ville') ?? '',
@@ -93,6 +82,18 @@ function RechercheSoignantsEtabContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtresOuverts, setFiltresOuverts] = useState(false);
+
+  useEffect(() => {
+    try {
+      const sauvegarde = sessionStorage.getItem('jolene.filtres_a_appliquer');
+      if (!sauvegarde) return;
+      const contenu = JSON.parse(sauvegarde);
+      if (contenu?.audience !== 'ETAB_RECHERCHE_SOIGNANTS') return;
+      sessionStorage.removeItem('jolene.filtres_a_appliquer');
+      setFiltres(normaliserFiltresRechercheSoignants(contenu.filtres));
+      setFiltresOuverts(true);
+    } catch { /* Une recherche stockée illisible ne bloque pas l'annuaire. */ }
+  }, []);
 
   const filtresActifs = useMemo(() => {
     const f = filtres;
@@ -193,6 +194,15 @@ function RechercheSoignantsEtabContent() {
         >
           <Star className="h-3.5 w-3.5" /> Recherches sauvegardées
         </button>
+      </div>
+
+      <div className="mb-6">
+        <FiltresSauvegardes
+          audience="ETAB_RECHERCHE_SOIGNANTS"
+          filtresCourants={{ ...filtres }}
+          onCharger={(valeurs) => { setFiltres(normaliserFiltresRechercheSoignants(valeurs)); setFiltresOuverts(true); }}
+          alertesDisponibles={false}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">

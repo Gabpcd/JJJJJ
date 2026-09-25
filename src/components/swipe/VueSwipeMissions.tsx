@@ -404,7 +404,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   const missionsSauvegardees = sauvegardees ?? [];
 
   return (
-    <div className="max-w-md mx-auto w-full flex flex-col flex-1 min-h-0">
+    <div className="max-w-md mx-auto w-full flex flex-col flex-1 min-h-0 md:max-h-[720px]">
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex-1 min-h-0 flex flex-col py-2 overflow-y-auto">
           {isLoading ? (
