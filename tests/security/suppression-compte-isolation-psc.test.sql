@@ -32,8 +32,13 @@ BEGIN
     RAISE EXCEPTION 'Le contexte interne a fui après suppression';
   END IF;
   -- La protection des champs reste active après la RPC.
-  UPDATE public.soignants SET supprime_le=NULL, identite_verifiee=true,
-    stripe_account_id='acct_interdit' WHERE id='69400000-0000-4000-8000-000000000001';
+  BEGIN
+    UPDATE public.soignants SET supprime_le=NULL, identite_verifiee=true,
+      stripe_account_id='acct_interdit' WHERE id='69400000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN insufficient_privilege THEN
+    -- Les GRANT de colonne peuvent refuser la requête avant même le trigger.
+    NULL;
+  END;
 END;
 $anonymisation$;
 RESET ROLE;

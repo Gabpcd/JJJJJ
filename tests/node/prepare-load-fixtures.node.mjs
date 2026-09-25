@@ -37,18 +37,21 @@ test('1000 missions stables, 10 villes et 100 combinaisons profession-ville', ()
   assert.deepEqual(m, creerManifeste({ runId: '500-2', count: 1000 }));
   assert.notEqual(m.missions[0].id, creerManifeste({ runId: '500-3', count: 1000 }).missions[0].id);
 });
-test('préparation SQL locale à la transaction, aucun trigger global ni compte Auth', () => {
+test('préparation SQL transactionnelle, FK préservées et aucun compte Auth', () => {
   const sql = sqlPreparation(creerManifeste({ runId: '500-1', count: 100 }));
-  assert.match(sql, /^BEGIN;/); assert.match(sql, /SET LOCAL session_replication_role = replica/);
-  assert.ok(sql.indexOf('session_replication_role = replica') < sql.indexOf('INSERT INTO public.etablissements'));
-  assert.ok(sql.indexOf('INSERT INTO public.missions') < sql.indexOf('session_replication_role = origin'));
+  assert.match(sql, /^BEGIN;/);
+  assert.match(sql, /LOCK TABLE public.etablissements, public.missions IN ACCESS EXCLUSIVE MODE/);
+  assert.match(sql, /NOT tgisinternal AND tgenabled='O'/);
+  assert.ok(sql.indexOf('DISABLE TRIGGER %I') < sql.indexOf('INSERT INTO public.etablissements'));
+  assert.ok(sql.indexOf('INSERT INTO public.missions') < sql.indexOf('ENABLE TRIGGER %I'));
+  assert.ok(sql.indexOf('ENABLE TRIGGER %I') < sql.indexOf('COMMIT;'));
   assert.match(sql, /cron\.job WHERE active/); assert.match(sql, /tgenabled IN \('R', 'A'\)/);
   assert.match(sql, /Parent de mission absent ou hors fixture/); assert.match(sql, /fn_missions_publiques_recherche\(NULL, NULL\)/);
-  assert.doesNotMatch(sql, /INSERT INTO auth\.|DISABLE TRIGGER|cron\.(schedule|alter)|net\.http|send-email|stripe/i);
+  assert.doesNotMatch(sql, /INSERT INTO auth\.|DISABLE TRIGGER ALL|session_replication_role|cron\.(schedule|alter)|net\.http|send-email|stripe/i);
 });
 test('nettoyage par UUID exacts, FK conservées et dépendances tierces refusées', () => {
   const sql = sqlNettoyage(creerManifeste({ runId: '500-1', count: 100 }));
-  assert.match(sql, /session_replication_role = origin/); assert.doesNotMatch(sql, /session_replication_role = replica/);
+  assert.doesNotMatch(sql, /session_replication_role|DISABLE TRIGGER/);
   assert.match(sql, /DELETE FROM public\.missions WHERE id = ANY\(v_ids\)/);
   assert.match(sql, /DELETE FROM public\.etablissements WHERE id = ANY\(v_ids\)/);
   assert.doesNotMatch(sql, /DELETE[^;]*LIKE|\bCASCADE\b/);

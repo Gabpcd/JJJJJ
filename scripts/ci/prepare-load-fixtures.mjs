@@ -98,9 +98,21 @@ ${garde}
     RAISE EXCEPTION 'IDs du run déjà présents : nettoyer le manifeste avant toute nouvelle préparation';
   END IF;
 END $load_guard$;
--- Strictement local à cette transaction staging : aucun email/notification, aucune génération ni réseau.
--- Les CHECK restent actifs ; les seuls liens non nuls fournis sont vérifiés explicitement ci-dessous.
-SET LOCAL session_replication_role = replica;
+-- Verrou DDL transactionnel sur les deux tables : aucun autre écrivain ne peut
+-- traverser cette fenêtre. Les FK restent actives. Restaurer seulement les
+-- triggers utilisateur qui étaient activés, sans modifier ceux déjà désactivés.
+DO $load_seed$
+DECLARE v_triggers jsonb; v_trigger record;
+BEGIN
+  LOCK TABLE public.etablissements, public.missions IN ACCESS EXCLUSIVE MODE;
+  SELECT jsonb_agg(jsonb_build_object('table_name',tgrelid::regclass::text,'trigger_name',tgname))
+    INTO v_triggers FROM pg_trigger
+    WHERE tgrelid IN ('public.etablissements'::regclass,'public.missions'::regclass)
+      AND NOT tgisinternal AND tgenabled='O';
+  FOR v_trigger IN SELECT * FROM jsonb_to_recordset(COALESCE(v_triggers,'[]'::jsonb))
+    AS t(table_name text,trigger_name text) LOOP
+    EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I', v_trigger.table_name,v_trigger.trigger_name);
+  END LOOP;
 INSERT INTO public.etablissements
   (id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal, email_contact,
    est_compte_test, statut_verification, peut_publier_missions, sms_actif, chorus_pro_actif, source_acquisition)
@@ -109,7 +121,11 @@ INSERT INTO public.missions
   (id, etablissement_id, intitule, description, profession_requise, service, debut_le, fin_le,
    duree_heures, taux_horaire_base, statut, soignant_assigne_id, est_urgente, mode_attribution, type_contrat_recherche)
 VALUES ${missions};
-SET LOCAL session_replication_role = origin;
+  FOR v_trigger IN SELECT * FROM jsonb_to_recordset(COALESCE(v_triggers,'[]'::jsonb))
+    AS t(table_name text,trigger_name text) LOOP
+    EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I', v_trigger.table_name,v_trigger.trigger_name);
+  END LOOP;
+END $load_seed$;
 DO $load_verify$
 DECLARE v_count integer;
 BEGIN
@@ -133,7 +149,6 @@ SET LOCAL statement_timeout = '25s';
 SET LOCAL lock_timeout = '5s';
 ${verrouRun(manifest)}
 -- Le nettoyage garde les contraintes FK actives et refuse toute donnée métier dépendante.
-SET LOCAL session_replication_role = origin;
 DO $load_cleanup$
 DECLARE v_fk record; v_count bigint; v_ids uuid[]; v_parent regclass;
 BEGIN
@@ -212,10 +227,11 @@ export async function executerFixtures({ action, env = process.env, fetchImpl = 
       throw new ErreurRequeteSQL('Réponse SQL staging interrompue ou expirée. Le manifeste est conservé.', true);
     }
     if (!response.ok) {
-      // Le corps sert uniquement à reconnaître les timeouts PostgreSQL. Jamais journalisé.
+      // Seul le SQLSTATE est affiché, jamais les données ni le corps serveur.
       const corps = await response.text?.().catch(() => '') ?? '';
       const timeoutSQL = /\b55P03\b|\b57014\b|\b(?:lock|statement) timeout\b/i.test(corps);
-      throw new ErreurRequeteSQL(`SQL staging impossible (HTTP ${response.status}). Le manifeste est conservé pour le nettoyage.`,
+      const sqlstate = corps.match(/\bERROR:\s+([0-9A-Z]{5}):/)?.[1] || 'inconnu';
+      throw new ErreurRequeteSQL(`SQL staging impossible (HTTP ${response.status}, SQLSTATE ${sqlstate}). Le manifeste est conservé pour le nettoyage.`,
         timeoutSQL || [408, 429, 500, 502, 503, 504].includes(response.status));
     }
     let rows;

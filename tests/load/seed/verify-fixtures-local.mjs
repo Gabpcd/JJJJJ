@@ -29,6 +29,8 @@ CREATE TRIGGER audit_immuable BEFORE UPDATE OR DELETE ON public.journaux_audit F
 CREATE FUNCTION public.spy_outbound() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN INSERT INTO public.audit_outbox VALUES (TG_TABLE_NAME);RETURN NEW;END$$;
 CREATE TRIGGER spy_etab AFTER INSERT ON public.etablissements FOR EACH ROW EXECUTE FUNCTION public.spy_outbound();
 CREATE TRIGGER spy_mission AFTER INSERT ON public.missions FOR EACH ROW EXECUTE FUNCTION public.spy_outbound();
+CREATE TRIGGER spy_disabled AFTER INSERT ON public.missions FOR EACH ROW EXECUTE FUNCTION public.spy_outbound();
+ALTER TABLE public.missions DISABLE TRIGGER spy_disabled;
 CREATE TABLE public.candidatures(id uuid PRIMARY KEY,mission_id uuid REFERENCES public.missions(id) ON DELETE CASCADE);
 `);
 const migration=readFileSync(new URL('../../../supabase/migrations/20260712163000_lot21_finaliser_cascade_profession_mission.sql',import.meta.url),'utf8');
@@ -54,7 +56,9 @@ assert.equal((await db.query('SELECT count(*)::int AS n FROM public.missions')).
 assert.equal((await db.query('SELECT count(*)::int AS n FROM public.audit_outbox')).rows[0].n,0);
 assert.equal((await db.query("SELECT count(*)::int AS n FROM public.fn_missions_publiques_recherche(NULL,NULL)")).rows[0].n,500);
 assert.equal((await db.query('SHOW session_replication_role')).rows[0].session_replication_role,'origin');
-console.log('SQL local : 500 missions visibles, 10 établissements, zéro trigger externe, rôle origin restauré.');
+assert.deepEqual((await db.query("SELECT tgname,tgenabled FROM pg_trigger WHERE tgname IN ('spy_etab','spy_mission','spy_disabled') ORDER BY tgname")).rows,
+  [{tgname:'spy_disabled',tgenabled:'D'},{tgname:'spy_etab',tgenabled:'O'},{tgname:'spy_mission',tgenabled:'O'}]);
+console.log('SQL local : 500 missions visibles, 10 établissements, zéro trigger externe, état initial exact des triggers restauré.');
 await assert.rejects(db.exec(sqlPreparation(m)),/IDs du run déjà présents/);await db.exec('ROLLBACK;');
 await db.query('INSERT INTO public.candidatures VALUES ($1,$2)',['ffffffff-ffff-4fff-afff-ffffffffffff',m.missions[0].id]);
 await assert.rejects(db.exec(sqlNettoyage(m)),/Dépendance métier/);await db.exec('ROLLBACK;');
