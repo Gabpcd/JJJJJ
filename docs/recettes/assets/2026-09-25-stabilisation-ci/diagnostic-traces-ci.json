@@ -1,0 +1,209 @@
+[
+  {
+    "trace": "soignant-paysage-trace.zip",
+    "errors": [
+      {
+        "t": 719959.623,
+        "error": "/127.0.0.1:8890/rest/v1/parcours_inscription?select=user_id%2Ctype_compte%2Cdonnees%2Cmodifie_le&user_id=eq.69000000-0000-4000-8000-000000000071 due to access control checks."
+      }
+    ],
+    "navigation": [
+      {
+        "t": 719776.952,
+        "title": "Navigate to \"/soignant/presences\"",
+        "params": {
+          "url": "/soignant/presences",
+          "waitUntil": "load",
+          "timeout": "0"
+        }
+      },
+      {
+        "t": 719878.096,
+        "title": "Query count getByRole('tab')",
+        "params": {
+          "selector": "internal:role=tab"
+        }
+      },
+      {
+        "t": 719907.398,
+        "title": "Navigate to \"/soignant/litiges\"",
+        "params": {
+          "url": "/soignant/litiges",
+          "waitUntil": "load",
+          "timeout": "0"
+        }
+      },
+      {
+        "t": 720109.29,
+        "title": "Query count getByRole('tab')",
+        "params": {
+          "selector": "internal:role=tab"
+        }
+      }
+    ],
+    "requests": [
+      {
+        "t": 718636.497,
+        "url": "/rest/v1/notifications?select=id&destinataire_id=eq.69000000-0000-4000-8000-000000000071&lue=eq.false",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 3.417,
+        "failure": null
+      },
+      {
+        "t": 718638.997,
+        "url": "/rest/v1/notifications?select=id&destinataire_id=eq.69000000-0000-4000-8000-000000000071&lue=eq.false",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 7.571,
+        "failure": null
+      },
+      {
+        "t": 718641.221,
+        "url": "/rest/v1/soignants?select=profession%2Cstatut_liberal%2Ctype_exercice%2Cprenom%2Cnom%2Cavatar_url&id=eq.69000000-0000-4000-8000-000000000071",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 5.326,
+        "failure": null
+      },
+      {
+        "t": 718644.761,
+        "url": "/rest/v1/rpc/fn_messages_non_lus",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 4.462,
+        "failure": null
+      },
+      {
+        "t": 718648.698,
+        "url": "/rest/v1/missions?select=id&statut=eq.OUVERTE&cree_le=gt.2026-09-25T14%3A31%3A39.710Z",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 3.345,
+        "failure": null
+      },
+      {
+        "t": 718663.608,
+        "url": "/rest/v1/soignants?select=profession%2Cadresse_lat%2Cadresse_lng%2Crayon_deplacement_km%2Ctous_documents_valides%2Ctype_contrat%2Ctypes_contrat_acceptes%2Ctype_exercice&id=eq.69000000-0000-4000-8000-000000000071",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 4.348,
+        "failure": null
+      },
+      {
+        "t": 718665.912,
+        "url": "/rest/v1/missions?select=id%2Cdebut_le%2Cfin_le%2Cduree_heures&soignant_assigne_id=eq.69000000-0000-4000-8000-000000000071&statut=in.%28ASSIGNEE%2CEN_COURS%2CTERMINEE%29&fin_le=gt.2026-09-20T22%3A00%3A00.000Z&debut_le=lt.2026-09-27T22%3A00%3A00.000Z",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 3.103,
+        "failure": null
+      },
+      {
+        "t": 718667.148,
+        "url": "/rest/v1/missions?select=id%2Cintitule%2Cdescription%2Cservice%2Cprofession_requise%2Cspecialite_medicale_requise%2Caccepte_non_specialises%2Cdebut_le%2Cfin_le%2Cduree_heures%2Ctaux_horaire_base%2Ctaux_rist_plafonne%2Crist_plafond_applique%2Cnb_creneaux%2Ctotal_brut%2Cnet_a_payer%2Cnet_estime%2Cest_urgente%2Cniveau_urgence%2Cstatut%2Csoignant_assigne_id%2Ccree_le%2Cetablissement_id%2Ctype_contrat_recherche%2Ctype_contrat_applique%2Cchoix_contrat_soignant&soignant_assigne_id=eq.69000000-0000-4000-8000-000000000071&statut=in.%28ASSIGNEE%2CEN_COURS%29&fin_le=gte.2026-09-25T14%3A31%3A42.293Z&order=debut_le.asc&offset=0&limit=50",
+        "referrer": "http://127.0.0.1:8890/soignant/missions",
+        "status": 200,
+        "duration": 9.335,
+        "failure": null
+      },
+      {
+        "t": 719923.69,
+        "url": "/rest/v1/rpc/fn_get_my_role",
+        "referrer": "http://127.0.0.1:8890/soignant/presences",
+        "status": 200,
+        "duration": 18.966,
+        "failure": null
+      }
+    ]
+  },
+  {
+    "trace": "etab-portrait-trace.zip",
+    "errors": [
+      {
+        "t": 226467.227,
+        "error": "/127.0.0.1:8890/rest/v1/rpc/fn_mes_permissions_etab due to access control checks."
+      },
+      {
+        "t": 226471.274,
+        "error": "/127.0.0.1:8890/rest/v1/rpc/fn_messages_non_lus due to access control checks."
+      }
+    ],
+    "navigation": [
+      {
+        "t": 226434.303,
+        "title": "Navigate to \"/etablissement/tableau-de-bord\"",
+        "params": {
+          "url": "/etablissement/tableau-de-bord",
+          "waitUntil": "load",
+          "timeout": "0"
+        }
+      }
+    ],
+    "requests": [
+      {
+        "t": 225633.067,
+        "url": "/rest/v1/rpc/fn_audit_connexion",
+        "referrer": "http://127.0.0.1:8890/connexion",
+        "status": 200,
+        "duration": 9.46,
+        "failure": null
+      },
+      {
+        "t": 225641.412,
+        "url": "/rest/v1/rpc/fn_get_my_role",
+        "referrer": "http://127.0.0.1:8890/connexion",
+        "status": 200,
+        "duration": 11.14,
+        "failure": null
+      },
+      {
+        "t": 225696.903,
+        "url": "/rest/v1/parcours_inscription?select=user_id%2Ctype_compte%2Cdonnees%2Cmodifie_le&user_id=eq.79000000-0000-4000-8000-000000000071",
+        "referrer": "http://127.0.0.1:8890/inscription/reprendre",
+        "status": 200,
+        "duration": 7.674,
+        "failure": null
+      },
+      {
+        "t": 225702.556,
+        "url": "/rest/v1/rpc/fn_get_my_role",
+        "referrer": "http://127.0.0.1:8890/inscription/reprendre",
+        "status": 200,
+        "duration": 4.82,
+        "failure": null
+      },
+      {
+        "t": 225733.876,
+        "url": "/rest/v1/rpc/fn_get_my_role",
+        "referrer": "http://127.0.0.1:8890/etablissement/tableau-de-bord",
+        "status": 200,
+        "duration": 7.544,
+        "failure": null
+      },
+      {
+        "t": 225744.329,
+        "url": "/rest/v1/parcours_inscription?select=user_id%2Ctype_compte%2Cdonnees%2Cmodifie_le&user_id=eq.79000000-0000-4000-8000-000000000071",
+        "referrer": "http://127.0.0.1:8890/etablissement/tableau-de-bord",
+        "status": 200,
+        "duration": 5.367,
+        "failure": null
+      },
+      {
+        "t": 226460.575,
+        "url": "/rest/v1/notifications?select=id&destinataire_id=eq.79000000-0000-4000-8000-000000000071&lue=eq.false",
+        "referrer": "http://127.0.0.1:8890/etablissement/tableau-de-bord",
+        "status": -1,
+        "duration": -1,
+        "failure": null
+      },
+      {
+        "t": 226444.698,
+        "url": "/rest/v1/notifications?select=id&destinataire_id=eq.79000000-0000-4000-8000-000000000071&lue=eq.false",
+        "referrer": "http://127.0.0.1:8890/etablissement/tableau-de-bord",
+        "status": 200,
+        "duration": 17.114,
+        "failure": null
+      }
+    ]
+  }
+]

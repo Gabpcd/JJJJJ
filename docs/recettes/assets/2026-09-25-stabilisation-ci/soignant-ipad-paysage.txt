@@ -1,0 +1,25 @@
+- main:
+  - heading "Explorer" [level=1]
+  - tablist "Vue Swipe, Liste ou Carte":
+    - tab "Swipe"
+    - tab "Liste" [selected]
+    - tab "Carte"
+  - button "Mes disponibilités"
+  - button "Filtres (2 actifs)"
+  - button "🔥 Urgentes"
+  - button "📅 Week-end"
+  - button "🌙 Nuit"
+  - button "☀️ Jour" [pressed]
+  - text: il y a moins d’une minute
+  - heading "Renfort infirmier — simulation" [level=3]
+  - button "Sauvegarder cette mission":
+    - img
+  - paragraph: 🏥 Résidence Camille — simulation · Paris
+  - img
+  - text: à 0m · Tout près ! 💼 Salarié
+  - region "Planning exact de la mission":
+    - text: 1 créneau 8 h au total
+    - list "Jours et horaires travaillés":
+      - listitem: vendredi 2 octobre 2026 10h00 → 18h00 · 8 h
+  - text: "💰 30.00 €/h Net salarié estimé* : ~240,00 € ✅ Dossier complet Voir le détail et postuler →"
+  - paragraph: "* Pour une mission salariée, le net est estimé après cotisations sociales. Tant que le régime n'est pas choisi, le montant affiché reste une rémunération brute indicative. Le montant définitif est confirmé après validation des présences."

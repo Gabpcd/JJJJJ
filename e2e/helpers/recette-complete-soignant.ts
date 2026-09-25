@@ -15,8 +15,12 @@ export const profil = {
  regime_fiscal: null, regime_fiscal_confirme: false, avatar_url: null, est_compte_test: true, psc_sub: null,
 };
 export const etablissement = { id: ids.etab, nom: 'Résidence Camille — simulation', type: 'EHPAD', adresse_ville: 'Paris', adresse_code_postal: '75001', adresse_lat: 48.8566, adresse_lng: 2.3522 };
-const debut = new Date(Date.now() + 7 * 86400000).toISOString();
-const fin = new Date(Date.now() + 7 * 86400000 + 8 * 3600000).toISOString();
+// Une mission « de jour » ne doit pas devenir nocturne selon l'heure de la CI.
+// 08–16 h UTC reste intégralement de jour à Paris, été comme hiver.
+const dateMission = new Date(Date.now() + 7 * 86400000);
+dateMission.setUTCHours(8, 0, 0, 0);
+const debut = dateMission.toISOString();
+const fin = new Date(dateMission.getTime() + 8 * 3600000).toISOString();
 export const mission = { id: ids.mission, cree_le: new Date().toISOString(), intitule: 'Renfort infirmier — simulation', description: 'Mission fictive pour contrôler les écrans.', profession_requise: 'IDE', debut_le: debut, fin_le: fin, duree_heures: 8, nb_creneaux: 1, taux_horaire_base: 30, total_brut: 240, net_estime: 240, net_a_payer: 240, mode_remuneration: 'TAUX_HORAIRE', statut: 'OUVERTE', mode_attribution: 'CANDIDATURE', type_contrat_recherche: 'SALARIE', type_contrat_applique: 'SALARIE', etablissement_id: ids.etab, etablissements: etablissement, serie_id: ids.serie, soignant_assigne_id: null, creneaux: [{ id: '69000000-0000-4000-8000-000000000075', mission_id: ids.mission, debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL' }] };
 
 type Row = Record<string, any>;
@@ -26,7 +30,12 @@ const reseaux = new WeakMap<Page, { enCours:Set<unknown>; dernierMouvement:numbe
 export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
  const reseau = { enCours:new Set<unknown>(), dernierMouvement:Date.now() };
  reseaux.set(page,reseau);
- page.on('request',request=>{if(/\/(auth|rest|functions|storage)\/v1\//.test(request.url())){reseau.enCours.add(request);reseau.dernierMouvement=Date.now();}});
+ page.on('request',request=>{
+  // Une navigation remet la fenêtre de calme à zéro : les lectures de son
+  // nouveau document n'ont pas forcément démarré à l'événement load.
+  if(request.isNavigationRequest()&&request.resourceType()==='document')reseau.dernierMouvement=Date.now();
+  if(/\/(auth|rest|functions|storage)\/v1\//.test(request.url())){reseau.enCours.add(request);reseau.dernierMouvement=Date.now();}
+ });
  for(const event of ['requestfinished','requestfailed'] as const) page.on(event,request=>{if(reseau.enCours.delete(request))reseau.dernierMouvement=Date.now();});
  const state = { mode, authExpired:false, offers: false, profile: { ...profil } as Row, unknown: [] as string[], errors: [] as string[], calls: [] as {name:string;method:string;body:any;url:string}[], failures: new Set<string>(), overrides: new Map<string,unknown>(), tables: new Map<string,Row[]>(), preferences: {global:{canal_email:true,canal_push:true,canal_sms:false,canal_in_app:true},par_evenement:[] as any[]} };
  const parcours = { user_id: ids.user, type_compte: 'SOIGNANT', donnees: { profession: 'IDE' } as Row, modifie_le: new Date().toISOString() };

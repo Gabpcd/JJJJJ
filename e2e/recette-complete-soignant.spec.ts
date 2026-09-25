@@ -64,11 +64,14 @@ test('SOIGNANT — navigation réelle des cinq onglets et sous-onglets après in
  await page.getByRole('button',{name:'Retour',exact:true}).click();
  await expect(page).not.toHaveURL(/inscription\/soignant\/informations/);
  await aller(page,'/soignant/missions');
- for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
+ await expect(page.getByRole('tab')).toHaveCount(3);
+ for(const [name,vide] of [['Candidatures','Pas encore de candidature en attente'],['À venir',"Tu n'as pas encore de mission en cours"],['Passées',"Aucune mission dans l'historique"]]){const tab=page.getByRole('tab',{name,exact:true});await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel').getByRole('heading',{name:vide,exact:true})).toBeVisible();}
  await aller(page,'/soignant/presences');
- for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
+ await expect(page.getByRole('tab')).toHaveCount(4);
+ for(const [name,vide] of [['À venir','Aucune mission à venir'],['Actives','Aucune mission active'],["Aujourd'hui","Aucune mission aujourd'hui"],['Historique','Aucune présence enregistrée']]){const tab=page.getByRole('tab',{name,exact:true});await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel').getByRole('heading',{name:vide,exact:true})).toBeVisible();}
  await aller(page,'/soignant/litiges');
- for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();}
+ await expect(page.getByRole('tab')).toHaveCount(2);
+ for(const name of ['Litiges mission','Réclamations']){const tab=page.getByRole('tab',{name,exact:true});await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();}
  await attendreAPI(page);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
@@ -144,6 +147,19 @@ test('SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtr
  await page.getByRole('button',{name:'Modifier',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await preuve(page,'recherche-modale',info);
  await page.getByRole('dialog').getByLabel('Nom').fill('Paris IDE — matin');await page.getByRole('dialog').getByRole('button',{name:/Enregistrer/}).click();await expect(page.getByRole('heading',{name:'Paris IDE — matin'})).toBeVisible();
  await page.getByRole('button',{name:'Aller à la recherche',exact:true}).click();await expect(page).toHaveURL(/soignant\/recherche-missions$/);const questionnaire=page.getByRole('dialog',{name:'5 questions pour un deck qui te ressemble'});await expect(questionnaire).toBeVisible();await questionnaire.getByRole('button',{name:'Plus tard',exact:true}).click();await expect(questionnaire).not.toBeVisible();await page.getByRole('tab',{name:'Liste',exact:true}).click();await expect(page.getByText(mission.intitule,{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'☀️ Jour',exact:true})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('button',{name:/^Filtres/}).click();
+ const filtres=page.getByRole('dialog',{name:'Filtres',exact:true});
+ await expect(filtres.getByLabel('📍 Ville ou code postal',{exact:true})).toHaveValue('Paris');
+ await filtres.getByRole('button',{name:'Voir 1 mission',exact:true}).click();
+ expect(state.calls.some(c=>c.name==='missions'&&new URL(c.url,'http://recette.invalid').searchParams.get('profession_requise')==='eq.IDE')).toBe(true);
+ await preuve(page,'recherche-sauvegardee-jour-appliquee',info);
+ // Le contre-exemple conserve le vrai filtrage : le créneau de jour est exclu
+ // pour Nuit, puis revient lorsque les critères sauvegardés sont rétablis.
+ await page.getByRole('button',{name:'🌙 Nuit',exact:true}).click();
+ await expect(page.getByText(mission.intitule,{exact:true})).not.toBeVisible();
+ await page.getByRole('button',{name:'☀️ Jour',exact:true}).click();
+ await expect(page.getByText(mission.intitule,{exact:true})).toBeVisible();
  const mutation=state.calls.find(c=>c.name==='fn_modifier_filtre_sauvegarde'&&c.body.p_nom);expect(mutation?.body.p_nom).toBe('Paris IDE — matin');
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });

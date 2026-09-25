@@ -39,6 +39,10 @@ INSERT INTO public.missions(id,etablissement_id,intitule,profession_requise,debu
 SELECT ('69500000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'69500000-0000-4000-8000-000000000001','Recette daily '||n,'IDE',
  CURRENT_DATE+interval '1 day 9 hours',CURRENT_DATE+interval '1 day 17 hours',8,30,'ASSIGNEE','69500000-0000-4000-8000-000000000002','SALARIE'
 FROM generate_series(101,130) n;
+ -- Exécuter les contraintes différées avant tout ALTER de restauration :
+ -- PostgreSQL refuse le DDL sur une table avec événements FK encore en attente.
+ -- Ce passage renforce le contrôle des fixtures ; aucune contrainte n'est retirée.
+ SET CONSTRAINTS ALL IMMEDIATE;
  -- Restauration exacte avant d'appeler les vraies fonctions testées. Un échec
  -- SQL annule ensemble ce DDL et les fixtures ; aucun état durable ne change.
  FOR t IN SELECT a.* FROM recette_daily_triggers_avant a JOIN pg_trigger p
