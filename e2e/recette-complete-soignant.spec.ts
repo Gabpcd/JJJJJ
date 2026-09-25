@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { simulerSoignant, entrer, aller, recharger, preuve, sansDebordement, ids, mission, simulations } from './helpers/recette-complete-soignant';
+import { simulerSoignant, entrer, aller, recharger, preuve, sansDebordement, attendreAPI, ids, mission, simulations } from './helpers/recette-complete-soignant';
 
 test.use({actionTimeout:15_000});
 
@@ -34,6 +34,7 @@ test('SOIGNANT — navigation réelle des cinq onglets et sous-onglets après in
  const state=await simulerSoignant(page,'minimal');await entrer(page,'inscription');
  const items=[['Explorer','recherche-missions'],['Mes missions','missions'],['Revenus','mes-gains'],['Profil','mon-compte'],['Accueil','tableau-de-bord']];
  for(const [name,path]of items){
+  await attendreAPI(page);
   const nav=page.getByRole('navigation',{name:'Navigation mobile'});
   const button=nav.getByRole('button',{name,exact:true});
   if(await button.isVisible())await button.click();else {
@@ -47,16 +48,28 @@ test('SOIGNANT — navigation réelle des cinq onglets et sous-onglets après in
  }
  await aller(page,'/soignant/mes-documents');
  for(const name of ['Justificatifs','Contrats','DPAE']){await page.getByRole('tab',{name,exact:true}).click();await expect(page.getByRole('tab',{name,exact:true})).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();await preuve(page,`minimal-documents-${name}`,info);}
+ let lecturesParcoursRetardees=0;
+ await page.route('**/rest/v1/parcours_inscription?**',async route=>{
+  lecturesParcoursRetardees++;
+  // Reproduit la lecture encore en vol observée en CI, sans filtrer son erreur.
+  await new Promise(resolve=>setTimeout(resolve,600));
+  await route.fallback();
+ });
  await aller(page,'/soignant/profil');
  await expect(page.getByRole('heading',{name:'Vos informations professionnelles'})).toBeVisible();
+ // Le titre est monté avant la lecture du parcours. Un Retour immédiat annule
+ // cette requête sous WebKit et produit une vraie erreur d'accès réseau.
+ await attendreAPI(page);
+ expect(lecturesParcoursRetardees).toBeGreaterThan(0);
  await page.getByRole('button',{name:'Retour',exact:true}).click();
  await expect(page).not.toHaveURL(/inscription\/soignant\/informations/);
  await aller(page,'/soignant/missions');
- for(const tab of await page.getByRole('tab').all()){await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
+ for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
  await aller(page,'/soignant/presences');
- for(const tab of await page.getByRole('tab').all()){await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
+ for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toContainText(/Aucune|Aucun/);}
  await aller(page,'/soignant/litiges');
- for(const tab of await page.getByRole('tab').all()){await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();}
+ for(const tab of await page.getByRole('tab').all()){await attendreAPI(page);await tab.click();await expect(tab).toHaveAttribute('aria-selected','true');await expect(page.getByRole('tabpanel')).toBeVisible();}
+ await attendreAPI(page);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
 
@@ -125,7 +138,7 @@ test('SOIGNANT — justificatif présent, onglets de documents et simulations de
 
 test('SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres',async({page},info)=>{
  const state=await simulerSoignant(page);state.offers=true;
- state.overrides.set('fn_lister_mes_filtres_sauvegardes',[{id:'recherche-recette',nom:'Paris de jour',audience:'SOIGNANT_RECHERCHE_MISSIONS',filtres:{ville:'Paris',profession:'IDE'},alerte_active:false,frequence_alerte:'QUOTIDIENNE',dernier_check_le:'2026-09-23T12:00:00Z',nb_resultats_dernier_check:1}]);
+ state.overrides.set('fn_lister_mes_filtres_sauvegardes',[{id:'recherche-recette',nom:'Paris de jour',audience:'SOIGNANT_RECHERCHE_MISSIONS',filtres:{villeRecherche:'Paris',profession:'IDE',horaire:'JOUR'},alerte_active:false,frequence_alerte:'QUOTIDIENNE',dernier_check_le:'2026-09-23T12:00:00Z',nb_resultats_dernier_check:1}]);
  await entrer(page,'connexion');await aller(page,'/soignant/parametres/recherches-sauvegardees');await expect(page.getByRole('heading',{name:'Paris de jour'})).toBeVisible();
  await page.getByRole('button',{name:'Activer alertes',exact:true}).click();await expect(page.getByRole('button',{name:'Désactiver alertes',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Modifier',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await preuve(page,'recherche-modale',info);

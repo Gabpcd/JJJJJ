@@ -221,6 +221,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
           </> : <>
             <strong>Retrouvez vos filtres sans nouvelle alerte email</strong>
             <p className="mt-2">L’activation des alertes email n’est pas disponible pour le moment. Vos recherches et les alertes déjà actives sont conservées ; vous pouvez les désactiver.</p>
+            {capaciteAlertes.erreur && <p role="alert" className="mt-2">{capaciteAlertes.erreur}</p>}
             <button className="mt-2 underline" disabled={capaciteAlertes.verificationEnCours} onClick={capaciteAlertes.reessayer}>Vérifier à nouveau</button>
           </>}
         </div>

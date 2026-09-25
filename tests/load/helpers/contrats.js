@@ -17,10 +17,12 @@ export function dashboardValide(value) {
     && objet(value.gains_mois) && ['net_total', 'brut_total', 'nb_missions'].every(k => nombre(value.gains_mois[k]));
 }
 
-export function exigerRecherchePeuplee(value) {
+export function exigerRecherchePeuplee(value, minimum = 1) {
+  if (!Number.isInteger(minimum) || minimum < 1 || minimum > 1000) throw new Error('Quantité de missions attendue invalide.');
   if (!rechercheValide(value) || value.length === 0) throw new Error(
     'Préflight C : au moins une mission publique staging valide et visible est requise ; une base vide ne prouve pas cette charge.',
   );
+  if (value.length < minimum) throw new Error(`Préflight C : ${value.length}/${minimum} missions attendues ; le catalogue quantifié est incomplet.`);
   return value.length;
 }
 

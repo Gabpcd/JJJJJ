@@ -120,3 +120,13 @@ test('un résumé sans mesure ne fabrique pas un taux d’erreur nul', () => {
   assert.match(resume, /Échecs HTTP mesurés \(%\) : non mesuré/);
   assert.doesNotMatch(resume, /Échecs HTTP mesurés \(%\) : 0/);
 });
+
+
+test('C vérifie le catalogue quantifié au préflight et pendant les recherches sans filtre', async () => {
+  const t = await charger('03-recherche-missions', { LOAD_TEST_EXPECTED_MISSIONS: '100' });
+  t.reponses.push({ body: [mission] }); assert.throws(() => t.module.setup(), /1\/100 missions attendues/);
+  const catalogue = Array.from({ length: 100 }, (_, i) => ({ ...mission, id: `fixture-${i}`, total_count: 100 }));
+  t.reponses.push({ body: catalogue }); t.module.setup();
+  t.reponses.push({ body: [mission] }); t.module.default();
+  assert.equal(t.verifications.find(c => c.nom === 'recherche sans filtre peuplee')?.ok, false);
+});

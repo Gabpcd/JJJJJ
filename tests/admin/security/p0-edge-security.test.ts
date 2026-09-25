@@ -51,7 +51,7 @@ describe('P0 Edge security guards', () => {
       cron.indexOf('async function invokeIdempotentSms'),
       cron.indexOf('Deno.serve(async (req) =>'),
     );
-    expect(cron).toContain('global: { headers: { Authorization: `Bearer ${KEY}` } }');
+    expect(cron).toMatch(/global:\s*\{\s*headers:\s*\{\s*Authorization:\s*`Bearer \$\{KEY\}`\s*\}/);
     expect(smsHelper).toContain('headers: { Authorization: `Bearer ${KEY}` }');
     expect(cron.match(/functions\.invoke\("send-sms"/g)).toHaveLength(1);
     expect(cron.match(/invokeIdempotentSms\(/g)).toHaveLength(3);

@@ -45,12 +45,24 @@ async function connexion(page: Page, email: string, password: string) {
   await expect(page).toHaveURL(/\/soignant\//);
 }
 
+test.beforeAll(async ({ request }) => {
+  const preflight = await request.fetch(`${url}/functions/v1/delete-account`, {
+    method: 'OPTIONS', headers: {
+      Origin: 'http://localhost:5173',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,apikey,content-type',
+    },
+  });
+  expect(preflight.status(), 'Le service réel doit autoriser cette origine de recette').toBe(204);
+  expect(preflight.headers()['access-control-allow-origin']).toBe('http://localhost:5173');
+});
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('cookie-consent', 'refused'));
   await page.route('**/*', route => {
     const host = new URL(route.request().url()).hostname;
     if (host === 'flripxtsyegjshnhzjkz.supabase.co') throw new Error('Bundle configuré contre production : recette refusée.');
-    return ['127.0.0.1', 'mejpriaetwgtcstbgfid.supabase.co'].includes(host) ? route.continue() : route.abort();
+    return ['localhost', 'mejpriaetwgtcstbgfid.supabase.co'].includes(host) ? route.continue() : route.abort();
   });
 });
 
@@ -98,7 +110,7 @@ test('suppression : confirmation UI → delete-account réel → profil anonymis
     const resultat = await reponse;
     expect(resultat.status()).toBe(200);
     expect(await resultat.json()).toMatchObject({ success: true, auth_deleted: true });
-    await expect(page).toHaveURL('http://127.0.0.1:8891/');
+    await expect(page).toHaveURL('http://localhost:5173/');
     const { data: profil, error } = await admin.from('soignants').select('nom,email,supprime_le').eq('id', fixture.id).single();
     expect(error).toBeNull(); expect(profil?.nom).toBe('Supprimé');
     expect(profil?.email).toMatch(/@supprime\.jolene\.app$/); expect(profil?.supprime_le).toBeTruthy();

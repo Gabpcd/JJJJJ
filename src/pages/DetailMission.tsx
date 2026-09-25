@@ -15,6 +15,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { SuiviMission } from '@/components/SuiviMission';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 import {
   CarteContratElectroniqueMission,
@@ -886,6 +887,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         {backLabel}
       </button>
 
+      <h1 className="text-2xl font-bold text-foreground mb-3">{m.intitule}</h1>
       {isAdmin && (
         <section
           className="mb-5 rounded-2xl border border-primary/30 bg-primary/5 p-4"
@@ -1012,6 +1014,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
+      {!isAdmin && <SuiviMission mission={m} role="ADMIN_ETABLISSEMENT" litigeActif={litigeActif} />}
+
       {!isAdmin && alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden="true" />
@@ -1052,7 +1056,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
               <div className="card-base">
-                <h1 className="text-2xl font-bold text-foreground mb-2">{m.intitule}</h1>
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <BadgeStatut statut={m.statut} />
                   {m.statut === 'EN_COURS' && (

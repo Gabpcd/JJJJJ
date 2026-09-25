@@ -1,3 +1,4 @@
+import { configurationDebitEmail, creerBudgetEnvoi, transportInterrompu, type BudgetEnvoi } from "../_shared/email-cron-budget.ts";
 import { TYPES_ALERTES_FILTRES, traiterAlerteFiltres, resultatEnvoiEmail } from "../_shared/alertes-filtres-queue.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import {
@@ -44,11 +45,16 @@ async function invokeIdempotentEmail(
   scope: string,
   identity: unknown,
   body: Record<string, unknown>,
+  budget?: BudgetEnvoi,
 ): Promise<"sent" | "skipped" | "pending"> {
   const idempotencyKey = await emailIdempotencyKey(scope, identity, body);
+  const timeout = budget ? await budget.reserver() : undefined;
+  if (timeout === null) return "pending";
   const { data, error } = await sb.functions.invoke("send-email", {
+    ...(timeout ? { timeout } : {}),
     body: { ...body, idempotency_key: idempotencyKey },
   });
+  if (transportInterrompu(error)) return "pending";
   if (error) throw new Error(`send-email ${scope}: ${error.message}`);
   return resultatEnvoiEmail(data);
 }
@@ -57,11 +63,16 @@ async function invokeIdempotentSms(
   sb: any,
   idempotencyKey: string,
   body: Record<string, unknown>,
+  budget?: BudgetEnvoi,
 ): Promise<"sent" | "skipped" | "pending"> {
+  const timeout = budget ? await budget.reserver() : undefined;
+  if (timeout === null) return "pending";
   const { data, error } = await sb.functions.invoke("send-sms", {
+    ...(timeout ? { timeout } : {}),
     body: { ...body, idempotency_key: idempotencyKey },
     headers: { Authorization: `Bearer ${KEY}` },
   });
+  if (transportInterrompu(error)) return "pending";
   if (error) throw new Error(`send-sms: ${error.message}`);
   if (data?.pending === true) return "pending";
   if (data?.success !== true) {
@@ -73,13 +84,22 @@ async function invokeIdempotentSms(
 Deno.serve(async (req) => {
   const requestId = crypto.randomUUID();
   const startedAt = Date.now();
+  let deadline = Infinity;
   try {
     // Les appels Edge -> Edge doivent toujours porter explicitement le secret
     // interne. Sans cet en-tete, functions.invoke peut n'envoyer que `apikey`
     // selon la version du client et send-sms rejette alors justement l'appel.
     const sb = createClient(URL, KEY, {
       auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${KEY}` } },
+      global: {
+        headers: { Authorization: `Bearer ${KEY}` },
+        fetch: (input, init) => {
+          if (!Number.isFinite(deadline)) return fetch(input, init);
+          const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+          const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+          return fetch(input, { ...init, signal });
+        },
+      },
     });
 
     const auth = await verifyCronServiceAuth(req, sb);
@@ -92,6 +112,10 @@ Deno.serve(async (req) => {
       : "all";
     const runHourly = mode !== "daily";
     const runDaily = mode !== "hourly";
+    const debit = configurationDebitEmail(cle => Deno.env.get(cle));
+    const budget = runHourly && !runDaily ? creerBudgetEnvoi(startedAt, debit.budgetMs) : undefined;
+    // Garde un délai pour enregistrer les acquittements avant le timeout pg_net.
+    if (budget) deadline = startedAt + 45_000;
     const results: Record<string, unknown> = {};
     if (runDaily) {
     const { data: r1, error: r1Error } = await sb.rpc("fn_email_rappels_j1");
@@ -279,9 +303,11 @@ Deno.serve(async (req) => {
         .lt('planifie_le', new Date().toISOString())
         .lt('tentatives', 3)
         .order('planifie_le', { ascending: true })
-        .limit(50);
+        .order('id')
+        .limit(debit.onboarding);
 
       for (const envoi of (aTraiter as any[]) || []) {
+        if (budget && !budget.peutCommencer()) break;
         try {
           // 1. Vérifier conditions de skip métier
           const { data: skipCheck } = await sb.rpc('fn_verifier_skip_serie_onboarding', { p_envoi_id: envoi.id });
@@ -338,6 +364,7 @@ Deno.serve(async (req) => {
             "serie_onboarding",
             { envoi_id: envoi.id },
             onboardingBody,
+            budget,
           );
           if (onboardingOutcome === "pending") continue;
 
@@ -430,18 +457,20 @@ Deno.serve(async (req) => {
     let emailQueueCount = 0;
     let smsQueueCount = 0;
     let queueErrors = 0;
-    const { data: pendingEmails, error: pendingEmailsError } = await sb
+    const { data: pendingEmails, error: pendingEmailsError, count: pendingCount } = await sb
       .from('email_queue')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('statut', 'EN_ATTENTE')
       .order('cree_le')
-      .limit(50);
+      .order('id')
+      .limit(debit.queue);
     if (pendingEmailsError) throw pendingEmailsError;
     for (const email of (pendingEmails || [])) {
+      if (budget && !budget.peutCommencer()) break;
       if (TYPES_ALERTES_FILTRES.includes(email.type)) {
         try {
           const outcome = await traiterAlerteFiltres(sb, email, (body) => invokeIdempotentEmail(
-            sb, 'email_queue', { email_queue_id: email.id }, body,
+            sb, 'email_queue', { email_queue_id: email.id }, body, budget,
           ));
           if (outcome === 'envoye') emailQueueCount++;
           if (outcome === 'erreur' || outcome === 'pending') queueErrors++;
@@ -475,6 +504,7 @@ Deno.serve(async (req) => {
               destinataire_id: email.destinataire_id,
               data: email.data,
             },
+            budget,
           );
           if (smsOutcome === 'pending') {
             queueErrors++;
@@ -497,6 +527,7 @@ Deno.serve(async (req) => {
             "email_queue",
             { email_queue_id: email.id },
             queueBody,
+            budget,
           );
           if (queueOutcome === "pending") continue;
         }
@@ -542,6 +573,12 @@ Deno.serve(async (req) => {
         }
       }
     }
+    results.email_queue_en_attente_initial = pendingCount;
+    results.email_queue_plus_ancien_secondes = pendingEmails?.[0]?.cree_le
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(pendingEmails[0].cree_le)) / 1000)) : 0;
+    results.email_queue_lot_max = debit.queue;
+    results.email_queue_budget_epuise = budget ? !budget.peutCommencer() : false;
+    results.appels_transport = budget?.appels ?? null;
     results.email_queue = emailQueueCount;
     results.sms_queue = smsQueueCount;
     results.email_queue_erreurs = queueErrors;

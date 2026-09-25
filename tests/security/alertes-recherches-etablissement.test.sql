@@ -137,6 +137,10 @@ BEGIN
  IF public.fn_capacite_alertes_recherches() THEN RAISE EXCEPTION 'Capacité active avant worker compatible'; END IF;
  PERFORM public.fn_reprendre_alertes_filtres();
  IF NOT public.fn_capacite_alertes_recherches() THEN RAISE EXCEPTION 'Capacité absente après worker compatible'; END IF;
+ UPDATE private.alertes_filtres_worker SET derniere_execution_le=now()-interval '3 hours';
+ IF public.fn_capacite_alertes_recherches() THEN RAISE EXCEPTION 'Capacité active avec worker périmé'; END IF;
+ UPDATE private.alertes_filtres_worker SET derniere_execution_le=now()-interval '2 hours 59 minutes';
+ IF NOT public.fn_capacite_alertes_recherches() THEN RAISE EXCEPTION 'Capacité absente malgré worker frais'; END IF;
  PERFORM set_config('request.jwt.claims','{"sub":"69300000-0000-4000-8000-000000000003","role":"authenticated"}',true);
  IF public.fn_capacite_alertes_recherches() THEN RAISE EXCEPTION 'Capacité ouverte à un compte sans rattachement'; END IF;
  PERFORM set_config('request.jwt.claims','{}',true);

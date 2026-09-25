@@ -34,12 +34,14 @@ export const options = creerOptionsCharge('recherche_missions', {
   'http_req_duration{name:rpc_recherche}': ['p(50)<400', 'p(95)<1000', 'p(99)<2000'],
 }, __ENV);
 
+const minimumMissions = Number(__ENV.LOAD_TEST_EXPECTED_MISSIONS || 1);
+
 export function setup() {
   const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_missions_publiques_recherche`, '{}', {
     headers: anonHeaders(), tags: { name: 'recherche_preflight' }, timeout: '15s',
   });
   if (res.status !== 200) throw new Error(`Préflight C : recherche indisponible (HTTP ${res.status}).`);
-  const nombreMissions = exigerRecherchePeuplee(res.json());
+  const nombreMissions = exigerRecherchePeuplee(res.json(), minimumMissions);
   console.log(`Préflight C : ${nombreMissions} mission(s) publique(s) visible(s). Aucune écriture.`);
 }
 
@@ -63,7 +65,7 @@ export default function () {
       try { return rechercheValide(r.json()); } catch { return false; }
     },
     'recherche sans filtre peuplee': (r) => {
-      try { return __ITER % 5 !== 0 || r.json().length > 0; } catch { return false; }
+      try { return __ITER % 5 !== 0 || r.json().length >= minimumMissions; } catch { return false; }
     },
   });
   sleep(0.3);

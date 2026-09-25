@@ -154,7 +154,7 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
  return state;
 }
 
-async function attendreAPI(page:Page) {
+export async function attendreAPI(page:Page) {
  const reseau=reseaux.get(page);
  if(reseau)await expect.poll(()=>reseau.enCours.size===0&&Date.now()-reseau.dernierMouvement>=500,{message:'Requêtes API terminées avant une nouvelle navigation'}).toBe(true);
 }

@@ -502,7 +502,7 @@ $function$;
 
 -- Une livraison durable est créée dans la même transaction que le watermark.
 -- email_queue conserve son transport et son identité idempotente existants.
-CREATE TABLE private.alertes_filtres_livraisons (
+CREATE TABLE IF NOT EXISTS private.alertes_filtres_livraisons (
  email_id uuid PRIMARY KEY REFERENCES public.email_queue(id) ON DELETE CASCADE,
  filtre_id uuid NOT NULL REFERENCES public.filtres_sauvegardes(id) ON DELETE CASCADE,
  fenetre_debut timestamptz NOT NULL,
@@ -516,7 +516,7 @@ CREATE TABLE private.alertes_filtres_livraisons (
 );
 ALTER TABLE private.alertes_filtres_livraisons ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON private.alertes_filtres_livraisons FROM PUBLIC,anon,authenticated,service_role;
-CREATE TABLE private.alertes_filtres_worker (
+CREATE TABLE IF NOT EXISTS private.alertes_filtres_worker (
  id boolean PRIMARY KEY DEFAULT true CHECK(id),
  derniere_execution_le timestamptz NOT NULL
 );

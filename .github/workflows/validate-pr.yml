@@ -47,7 +47,7 @@ jobs:
         run: npx tsc -b
 
       - name: Contrats des scénarios de charge
-        run: node --test tests/node/load-tests.node.mjs
+        run: node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs
 
       - name: Tests unitaires
         run: npm test -- --reporter=dot
@@ -361,6 +361,8 @@ jobs:
             tests/security/suppression-compte-isolation-psc.test.sql
             tests/security/exploration-sans-profil.test.sql
             tests/security/alertes-recherches-etablissement.test.sql
+            tests/security/debit-cron-alertes.test.sql
+            tests/security/decouverte-api-alertes.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 

@@ -205,8 +205,9 @@ function RechercheSoignantsEtabContent() {
           onCharger={(valeurs) => { setFiltres(normaliserFiltresRechercheSoignants(valeurs)); setFiltresOuverts(true); }}
           alertesDisponibles={capaciteAlertes.disponible}
         />
-        {!capaciteAlertes.disponible && <p className="mt-2 text-sm text-muted-foreground">
+        {!capaciteAlertes.disponible && <p role={capaciteAlertes.erreur ? 'alert' : undefined} className="mt-2 text-sm text-muted-foreground">
           La sauvegarde des filtres reste disponible. L’activation des alertes email n’est pas disponible pour le moment.
+          {capaciteAlertes.erreur && <span className="block">{capaciteAlertes.erreur}</span>}
           <button className="ml-2 underline" disabled={capaciteAlertes.verificationEnCours} onClick={capaciteAlertes.reessayer}>Vérifier à nouveau</button>
         </p>}
       </div>

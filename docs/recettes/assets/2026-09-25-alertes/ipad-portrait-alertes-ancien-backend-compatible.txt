@@ -1,0 +1,19 @@
+- main:
+  - heading "Mes recherches sauvegardées" [level=1]:
+    - img
+    - text: Mes recherches sauvegardées
+  - paragraph: Retrouvez vos critères de recherche soignants et réappliquez-les dans l’annuaire.
+  - list:
+    - listitem:
+      - heading "Sauvegarde sur ancien backend" [level=3]
+      - text: "🔕 Alertes désactivées • Dernier check : 25 sept. 14:17"
+      - button "Modifier":
+        - img
+      - button "Supprimer":
+        - img
+      - button "Aller à la recherche":
+        - text: Aller à la recherche
+        - img
+  - strong: Retrouvez vos filtres sans nouvelle alerte email
+  - paragraph: L’activation des alertes email n’est pas disponible pour le moment. Vos recherches et les alertes déjà actives sont conservées ; vous pouvez les désactiver.
+  - button "Vérifier à nouveau"

@@ -6,10 +6,9 @@ name: Load tests (k6)
 # Prérequis :
 # 1. Workflow `deploy-supabase-staging.yml` exécuté au moins 1× (schema + edge fns)
 # 2. Secrets GitHub :
-#    - STAGING_SUPABASE_URL              : https://mejpriaetwgtcstbgfid.supabase.co
-#    - STAGING_SUPABASE_ANON_KEY         : (anon JWT staging)
-#    - STAGING_SUPABASE_SERVICE_ROLE_KEY : (service_role JWT staging — requis pour D, F)
-#    - LOAD_TEST_PASSWORD                : password des comptes test fixes (réutilise PLAYWRIGHT_TEST_PASSWORD)
+#    - STAGING_SUPABASE_PROJECT_REF et STAGING_SUPABASE_ACCESS_TOKEN
+#      (URL et clés du staging résolues et masquées à chaque exécution)
+#    - PLAYWRIGHT_TEST_PASSWORD : mot de passe des comptes de recette fixes
 #
 # Voir docs/tests-charge.md pour les cibles de performance et l'interprétation des résultats.
 
@@ -84,10 +83,19 @@ jobs:
       - name: Prepare results directory
         run: mkdir -p tests/load/results
 
+      - name: Préparer le catalogue fictif de recherche sur staging
+        if: inputs.scenario == '03-recherche-missions' || inputs.scenario == 'all'
+        run: node scripts/ci/prepare-load-fixtures.mjs prepare
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_FIXTURE_COUNT: '500'
+
       - name: Run scenario
         env:
           LOAD_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
-          LOAD_TEST_RUN_ID: ${{ github.run_id }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           LOAD_TEST_SCENARIO: ${{ inputs.scenario }}
           LOAD_TEST_VUS: ${{ inputs.vus_override }}
           LOAD_TEST_DURATION: ${{ inputs.duration_override }}
@@ -121,6 +129,15 @@ jobs:
           else
             run_one "tests/load/scenarios/${LOAD_TEST_SCENARIO}.js"
           fi
+
+      - name: Nettoyer exclusivement les données du manifeste
+        if: always() && (inputs.scenario == '03-recherche-missions' || inputs.scenario == 'all')
+        run: node scripts/ci/prepare-load-fixtures.mjs cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_FIXTURE_COUNT: '500'
 
       - name: Upload k6 results
         if: always()

@@ -3,6 +3,11 @@ import { simulerEtablissement, entrer, allerA, preuve, stabiliserLectures } from
 
 test('alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central', async ({ page }, info) => {
  const { etat } = await simulerEtablissement(page);
+ await page.route('**/rest/v1/rpc/fn_param_bool',async route=>{
+  const req=route.request();
+  if(!['127.0.0.1','localhost'].includes(new URL(req.url()).hostname)||req.method()!=='POST'||req.postDataJSON().p_cle!=='api_alertes_recherches_v1')return route.fallback();
+  return route.fulfill({json:true});
+ });
  etat.overrides.set('fn_capacite_alertes_recherches', true);
  await entrer(page, 'connexion');
  etat.pannes.add('fn_lister_mes_filtres_sauvegardes');
@@ -58,12 +63,34 @@ test('alertes établissement : capacité, dix critères, panne, sauvegarde et co
  // Le frontend peut précéder le déploiement SQL/Edge ou perdre sa capacité.
  etat.pannes.add('fn_capacite_alertes_recherches');
  await allerA(page, '/etablissement/parametres/recherches-sauvegardees');
+ await expect(page.getByRole('alert').filter({hasText:'Le service d’alertes annoncé'})).toBeVisible();
  await page.getByRole('button', { name: 'Désactiver alertes', exact: true }).click();
  await expect(page.getByRole('button', { name: 'Activer alertes', exact: true })).toHaveCount(0);
  etat.pannes.delete('fn_capacite_alertes_recherches');
  await page.getByRole('button', { name: 'Vérifier à nouveau', exact: true }).click();
  await expect(page.getByRole('button', { name: 'Activer alertes', exact: true })).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+ expect(etat.erreurs).toEqual([]);expect(etat.inconnues).toEqual([]);expect(etat.ecritures).toEqual([]);
+});
+
+test('ancien backend : sauvegarde sans alerte et aucun appel à une API absente',async({page},info)=>{
+ const {etat}=await simulerEtablissement(page);
+ const appelsCapacite:string[]=[];
+ page.on('request',req=>{if(req.url().includes('/rpc/fn_capacite_alertes_recherches'))appelsCapacite.push(req.url());});
+ await entrer(page,'connexion');await allerA(page,'/etablissement/soignants');
+ await expect(page.getByText('La sauvegarde des filtres reste disponible.',{exact:false})).toBeVisible();
+ await page.getByRole('button',{name:'Sauvegarder cette recherche',exact:true}).click();
+ const dialogue=page.getByRole('dialog');
+ await dialogue.getByLabel('Nom de la recherche',{exact:true}).fill('Sauvegarde sur ancien backend');
+ await expect(dialogue.getByRole('switch')).toHaveCount(0);
+ await dialogue.getByRole('button',{name:'Enregistrer',exact:true}).click();
+ await expect(dialogue).toHaveCount(0);
+ expect(etat.operations.find(o=>o.nom==='fn_creer_filtre_sauvegarde')?.payload.p_alerte_active).toBe(false);
+ await page.getByRole('button',{name:'Recherches sauvegardées',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Sauvegarde sur ancien backend',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Activer alertes',exact:true})).toHaveCount(0);
+ expect(appelsCapacite).toEqual([]);
+ await preuve(page,'alertes-ancien-backend-compatible',info);
  expect(etat.erreurs).toEqual([]);expect(etat.inconnues).toEqual([]);expect(etat.ecritures).toEqual([]);
 });
 

@@ -9,7 +9,9 @@ export default defineConfig({
   forbidOnly: true,
   outputDir: sortie,
   reporter: [['list'], ['json', { outputFile: path.join(sortie, 'results.json') }]],
-  use: { baseURL: 'http://127.0.0.1:8891', locale: 'fr-FR', serviceWorkers: 'block', screenshot: 'only-on-failure', actionTimeout: 15_000, navigationTimeout: 20_000 },
-  webServer: { command: 'npm run preview -- --host 127.0.0.1 --port 8891 --strictPort', url: 'http://127.0.0.1:8891' },
+  // Origine de développement explicitement autorisée par les services existants.
+  // Ne pas contourner CORS dans le navigateur ni élargir la politique serveur.
+  use: { baseURL: 'http://localhost:5173', locale: 'fr-FR', serviceWorkers: 'block', screenshot: 'only-on-failure', actionTimeout: 15_000, navigationTimeout: 20_000 },
+  webServer: { command: 'npm run preview -- --host 0.0.0.0 --port 5173 --strictPort', url: 'http://localhost:5173' },
   projects: [{ name: 'staging-chromium', use: { ...devices['Desktop Chrome'] } }],
 });

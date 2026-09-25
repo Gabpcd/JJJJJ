@@ -16,6 +16,7 @@ beforeEach(()=>{
  mocks.rpc.mockReset().mockImplementation((nom:string,p:Record<string,unknown>)=>{
   if(nom==='fn_lister_mes_filtres_sauvegardes')return Promise.resolve({data:[{...mocks.filtre}],error:null});
   if(nom==='fn_capacite_alertes_recherches')return Promise.resolve({data:false,error:null});
+  if(nom==='fn_param_bool')return Promise.resolve({data:true,error:null});
   if(typeof p.p_nom==='string')mocks.filtre.nom=p.p_nom;
   if(typeof p.p_alerte_active==='boolean')mocks.filtre.alerte_active=p.p_alerte_active;
   return Promise.resolve({data:{success:true},error:null});
