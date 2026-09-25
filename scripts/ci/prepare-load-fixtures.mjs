@@ -74,7 +74,7 @@ const garde = `
 `;
 export function sqlPreparation(manifest) {
   verifierManifeste(manifest, { runId: manifest.runId, count: manifest.count });
-  const etabs = manifest.etabs.map(e => `(${literal(e.id)}::uuid, ${literal(e.nom)}, ${literal(e.siret)}, 'CLINIQUE'::public.type_etablissement,
+  const etabs = manifest.etabs.map(e => `(${literal(e.id)}::uuid, ${literal(e.nom)}, ${literal(e.siret)}, 'CLINIQUE_PRIVEE'::public.type_etablissement,
     'Adresse fictive de recette', ${literal(e.ville)}, ${literal(e.codePostal)}, ${literal(e.email)},
     false, 'VERIFIE', true, false, false, ${literal(manifest.marker)})`).join(',\n');
   const missions = manifest.missions.map(m => `(${literal(m.id)}::uuid, ${literal(m.etablissementId)}::uuid, ${literal(m.intitule)},
@@ -153,8 +153,16 @@ DO $load_cleanup$
 DECLARE v_fk record; v_count bigint; v_ids uuid[]; v_parent regclass;
 BEGIN
 ${garde}
+  IF auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Nettoyage Management sans identité métier requis'; END IF;
+  -- Définitions staging relues le 25/09/2026. Ces deux triggers ne font rien
+  -- pour une mission sans soignant et un appel serveur sans auth.uid(). Ils
+  -- restent activés. Toute autre définition ou tout nouveau trigger bloque.
   IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid IN ('public.missions'::regclass, 'public.etablissements'::regclass)
-      AND NOT tgisinternal AND tgenabled <> 'D' AND (tgtype & 8) <> 0) THEN
+      AND NOT tgisinternal AND tgenabled <> 'D' AND (tgtype & 8) <> 0
+      AND NOT (tgrelid='public.missions'::regclass AND (
+        (tgname='dec_maj_compteurs' AND md5(pg_get_functiondef(tgfoid))='3258b6d0ea86f5b558f52a8ec2a87f09')
+        OR (tgname='trg_p0_rbac_missions' AND md5(pg_get_functiondef(tgfoid))='694bd8f7e2fedbb48b66f3499fc39feb')
+      ))) THEN
     RAISE EXCEPTION 'Trigger de suppression non prévu : nettoyage abandonné';
   END IF;
   IF EXISTS (SELECT 1 FROM public.missions WHERE id = ANY(${tableauIds(manifest.missions)})

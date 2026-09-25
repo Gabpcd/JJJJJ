@@ -7,21 +7,43 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: jolene-supabase-staging-writes
-  cancel-in-progress: false
+  actions: read
 
 jobs:
-  comptes:
+  schema-staging:
+    name: Attendre le schéma staging du commit exact
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 17
+    # Aucun verrou ici : le job SQL attendu doit pouvoir prendre celui du staging.
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Attendre la réussite des migrations et tests SQL
+        run: node scripts/ci/wait-staging-schema.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SCHEMA_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          STAGING_SCHEMA_BRANCH: ${{ github.head_ref || github.ref_name }}
+  comptes:
+    needs: schema-staging
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    concurrency:
+      group: jolene-supabase-staging-writes
+      cancel-in-progress: false
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: '24'

@@ -1,0 +1,25 @@
+- dialog "📋 Récapitulatif avant publication":
+  - heading "📋 Récapitulatif avant publication" [level=2]
+  - paragraph: Vérifiez les informations et chaque créneau avant de publier la mission.
+  - button "Fermer"
+  - heading "1. Informations mission" [level=3]
+  - text: Intitulé Planning source — pause et nuit Profession IDE Début lun. 14 oct. à 07:00 Fin jeu. 17 oct. à 06:00 Durée estimée 17h00
+  - paragraph: Planning exact · 3 créneaux
+  - paragraph: lundi 14 octobre 2030 · 07:00 → lundi 14 octobre 2030 · 12:00
+  - paragraph: lundi 14 octobre 2030 · 13:00 → lundi 14 octobre 2030 · 17:00
+  - paragraph: mercredi 16 octobre 2030 · 22:00 → jeudi 17 octobre 2030 · 06:00
+  - text: Type de profil Salarié uniquement (CDD) Mode de sélection ⚡ Premier arrivé
+  - paragraph: Description
+  - paragraph: Mission de simulation sans publication réelle.
+  - heading "2. Coût estimé" [level=3]
+  - text: Base brute estimée (30.00 €/h × 17.0h) 510.00 € Frais Jolene (15% HT) +76.50 € TVA 20 % sur les frais Jolene +15.30 € Total estimé avant charges employeur 601.80 €
+  - paragraph: Estimation indicative. Le bulletin employeur fera foi et ajoutera les charges, majorations CCN, IFM 10 % et ICP 10 % applicables au CDD.
+  - heading "3. Configuration pointage" [level=3]
+  - text: Tolérance GPS 100 m (défaut) QR de pointage ✅ Généré à la signature du contrat
+  - paragraph: Majorations CCN potentielles
+  - list:
+    - listitem: Nuit (21h-6h) — ~8h estimées
+    - listitem: Dimanche et jours fériés (calculés au pointage)
+    - listitem: IFM 10% + ICP 10% (CDD salarié)
+  - button "← Modifier"
+  - button "📤 Publier"

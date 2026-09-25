@@ -1,3 +1,4 @@
+import { TYPES_RAPPELS_QUOTIDIENS, traiterRappelQuotidien } from "../_shared/rappels-quotidiens-queue.ts";
 import { configurationDebitEmail, creerBudgetEnvoi, transportInterrompu, type BudgetEnvoi } from "../_shared/email-cron-budget.ts";
 import { TYPES_ALERTES_FILTRES, traiterAlerteFiltres, resultatEnvoiEmail } from "../_shared/alertes-filtres-queue.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -78,7 +79,7 @@ async function invokeIdempotentSms(
   if (data?.success !== true) {
     throw new Error("send-sms: réponse invalide");
   }
-  return data?.skipped === true ? "skipped" : "sent";
+  return data?.skipped === true && data.reason !== "idempotency_already_sent" ? "skipped" : "sent";
 }
 
 Deno.serve(async (req) => {
@@ -113,91 +114,16 @@ Deno.serve(async (req) => {
     const runHourly = mode !== "daily";
     const runDaily = mode !== "hourly";
     const debit = configurationDebitEmail(cle => Deno.env.get(cle));
-    const budget = runHourly && !runDaily ? creerBudgetEnvoi(startedAt, debit.budgetMs) : undefined;
+    const budget = runHourly ? creerBudgetEnvoi(startedAt, debit.budgetMs) : undefined;
     // Garde un délai pour enregistrer les acquittements avant le timeout pg_net.
     if (budget) deadline = startedAt + 45_000;
     const results: Record<string, unknown> = {};
     if (runDaily) {
-    const { data: r1, error: r1Error } = await sb.rpc("fn_email_rappels_j1");
-    if (r1Error) throw new Error(`fn_email_rappels_j1: ${r1Error.message}`);
-    let c = 0;
-    let smsJ1 = 0;
-    let smsJ1Errors = 0;
-    for (const r of r1 || []) {
-      // Email rappel J-1 (existant)
-      const rappelBody = {
-        type: "RAPPEL_MISSION",
-        destinataire_id: r.soignant_id,
-        data: {
-          prenom: r.prenom,
-          mission: r.mission,
-          etablissement: r.etablissement,
-          heure_debut: r.heure_debut,
-        },
-      };
-      const emailOutcome = await invokeIdempotentEmail(
-        sb,
-        "rappel_mission_j1",
-        {
-          soignant_id: r.soignant_id,
-          jour: new Date().toISOString().slice(0, 10),
-        },
-        rappelBody,
-      );
-      if (emailOutcome !== "pending") c++;
-
-      // SMS rappel J-1 en parallèle, best-effort. send-sms vérifie sms_actif AND
-      // sms_alertes_actives côté serveur — on filtre déjà ici sur la présence
-      // du téléphone pour éviter un appel inutile.
-      try {
-        const { data: soignant } = await sb.from('soignants')
-          .select('telephone, sms_actif, sms_alertes_actives, est_compte_test')
-          .eq('id', r.soignant_id)
-          .maybeSingle();
-        const optedIn = !!soignant?.telephone
-          && soignant?.sms_actif !== false
-          && soignant?.sms_alertes_actives !== false
-          && soignant?.est_compte_test !== true;
-        if (optedIn) {
-          const intitule = (r.mission || '').toString().slice(0, 40);
-          const etab = (r.etablissement || '').toString().slice(0, 30);
-          const smsBody = `📅 Rappel : votre mission ${intitule} démarre demain à ${r.heure_debut} chez ${etab}. Bonne journée !`;
-          const smsPayload = {
-              type: 'RAPPEL_MISSION_J1',
-              destinataire_id: r.soignant_id,
-              telephone: soignant.telephone,
-              contenu: smsBody,
-              prefix_type: 'RAPPEL_MISSION_J1',
-          };
-          const smsIdempotencyKey = await emailIdempotencyKey(
-            'sms_rappel_mission_j1',
-            {
-              soignant_id: r.soignant_id,
-              jour: new Date().toISOString().slice(0, 10),
-              mission: r.mission,
-              etablissement: r.etablissement,
-              heure_debut: r.heure_debut,
-            },
-            smsPayload,
-          );
-          const smsOutcome = await invokeIdempotentSms(
-            sb,
-            smsIdempotencyKey,
-            smsPayload,
-          );
-          if (smsOutcome === 'pending') {
-            throw new Error('send-sms: acquittement indéterminé');
-          }
-          smsJ1++;
-        }
-      } catch (e) {
-        smsJ1Errors++;
-        console.warn('[email-cron] SMS rappel J-1 failed for', r.soignant_id, e);
-      }
-    }
-    results.rappels_j1 = c;
-    results.rappels_j1_sms = smsJ1;
-    results.rappels_j1_sms_erreurs = smsJ1Errors;
+    // Une transaction prépare tout le lot ; aucun appel Edge par destinataire.
+    // Les compteurs sont des mises en file, jamais des déclarations d'envoi.
+    const { data: rappels, error: rappelsError } = await sb.rpc("fn_preparer_rappels_quotidiens");
+    if (rappelsError) throw new Error(`fn_preparer_rappels_quotidiens: ${rappelsError.message}`);
+    results.rappels_quotidiens_mis_en_file = rappels;
     const { data: v2, error: v2Error } = await sb.rpc("fn_verifier_documents_expirants");
     if (v2Error) throw new Error(`fn_verifier_documents_expirants: ${v2Error.message}`);
     results.docs_expirants = v2 || 0;
@@ -211,85 +137,6 @@ Deno.serve(async (req) => {
     if (v5Error) throw new Error(`fn_nettoyer_tokens_push: ${v5Error.message}`);
     results.tokens_push = v5 || 0;
 
-    // [J2.1.B.2.3.B] Rappels J-1 contrat de travail SALARIE
-    let contratTravailRappels = 0;
-    let contratTravailErreurs = 0;
-    try {
-      const { data: missionsManquantes, error: missionsManquantesError } =
-        await sb.rpc("fn_lister_missions_contrat_travail_manquant");
-      if (missionsManquantesError) throw missionsManquantesError;
-      for (const mission of (missionsManquantes as any[]) || []) {
-        const dateDebut = mission.debut_le ? new Date(mission.debut_le).toLocaleDateString('fr-FR') : 'demain';
-        const intitule = mission.intitule || 'mission';
-        let etabEnvoye = false;
-        let soignantEnvoye = false;
-        // Email étab
-        try {
-          const etabBody = {
-            type: 'CONTRAT_TRAVAIL_RAPPEL_ETAB',
-            destinataire_id: mission.etablissement_id,
-            data: {
-              intitule_mission: intitule,
-              prenom_soignant: mission.prenom_soignant,
-              nom_soignant: mission.nom_soignant,
-              date_debut: dateDebut,
-              mission_id: mission.mission_id,
-            },
-          };
-          const etabOutcome = await invokeIdempotentEmail(
-            sb,
-            "contrat_travail_etab",
-            { mission_id: mission.mission_id, cible: "etablissement" },
-            etabBody,
-          );
-          etabEnvoye = etabOutcome !== "pending";
-        } catch (e) {
-          contratTravailErreurs++;
-          console.warn('email étab fail', e);
-        }
-        // Email soignant
-        try {
-          const soignantBody = {
-            type: 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
-            destinataire_id: mission.soignant_id,
-            data: {
-              prenom: mission.prenom_soignant,
-              nom_etablissement: mission.nom_etablissement,
-              intitule_mission: intitule,
-              date_debut: dateDebut,
-              mission_id: mission.mission_id,
-            },
-          };
-          const soignantOutcome = await invokeIdempotentEmail(
-            sb,
-            "contrat_travail_soignant",
-            { mission_id: mission.mission_id, cible: "soignant" },
-            soignantBody,
-          );
-          soignantEnvoye = soignantOutcome !== "pending";
-        } catch (e) {
-          contratTravailErreurs++;
-          console.warn('email soignant fail', e);
-        }
-        if (etabEnvoye || soignantEnvoye) {
-          const { error: marquageError } = await sb.rpc(
-            'fn_marquer_rappel_contrat_travail_envoye',
-            {
-              p_mission_id: mission.mission_id,
-              p_cible_etab: etabEnvoye,
-              p_cible_soignant: soignantEnvoye,
-            },
-          );
-          if (marquageError) throw marquageError;
-          contratTravailRappels++;
-        }
-      }
-    } catch (err) {
-      contratTravailErreurs++;
-      console.error('Erreur rappels contrat travail:', err);
-    }
-    results.contrat_travail_rappels = contratTravailRappels;
-    results.contrat_travail_erreurs = contratTravailErreurs;
     }
 
     // [J2.3.B.2] Cron envoi série email onboarding J0-J7
@@ -409,6 +256,15 @@ Deno.serve(async (req) => {
     results.serie_skipped = serieSkipped;
     results.serie_erreurs = serieErreurs;
 
+    try {
+      const { data: repris, error } = await sb.rpc('fn_reprendre_rappels_quotidiens');
+      if (error) throw error;
+      results.rappels_quotidiens_repris = repris;
+    } catch (error) {
+      results.rappels_quotidiens_erreurs = 1;
+      console.error('[email-cron] Reprise des rappels quotidiens impossible', error);
+    }
+
     // Évaluation atomique + file durable. Le worker confirme sa compatibilité
     // avant que l'interface puisse proposer de nouvelles alertes établissement.
     try {
@@ -467,6 +323,21 @@ Deno.serve(async (req) => {
     if (pendingEmailsError) throw pendingEmailsError;
     for (const email of (pendingEmails || [])) {
       if (budget && !budget.peutCommencer()) break;
+      if (TYPES_RAPPELS_QUOTIDIENS.includes(email.type)) {
+        try {
+          const outcome = await traiterRappelQuotidien(sb, email.id, async rappel =>
+            rappel.canal === 'SMS'
+              ? invokeIdempotentSms(sb, await emailIdempotencyKey(rappel.scope, rappel.identite, rappel.corps), rappel.corps, budget)
+              : invokeIdempotentEmail(sb, rappel.scope, rappel.identite, rappel.corps, budget));
+          if (outcome === 'email') emailQueueCount++;
+          if (outcome === 'sms') smsQueueCount++;
+          if (outcome === 'erreur' || outcome === 'pending') queueErrors++;
+        } catch (error) {
+          queueErrors++;
+          console.error('[email-cron] Rappel quotidien à reprendre', email.id, error);
+        }
+        continue;
+      }
       if (TYPES_ALERTES_FILTRES.includes(email.type)) {
         try {
           const outcome = await traiterAlerteFiltres(sb, email, (body) => invokeIdempotentEmail(

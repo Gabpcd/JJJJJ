@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import * as budgetHelpers from '../../../supabase/functions/_shared/email-cron-budget';
+import * as rappelsHelpers from '../../../supabase/functions/_shared/rappels-quotidiens-queue';
 import * as alertesHelpers from '../../../supabase/functions/_shared/alertes-filtres-queue';
 import { FunctionsFetchError } from '@supabase/functions-js';
 
@@ -46,7 +47,7 @@ function simulation(onboarding: number, emails: number) {
       if(nom==='fn_verifier_skip_serie_onboarding')return{data:{skip:false},error:null};
       if(nom==='fn_obtenir_donnees_template_serie')return{data:{prenom:'Recette'},error:null};
       if(['fn_doit_notifier','fn_verifier_livraison_alerte_filtre'].includes(nom))return{data:true,error:null};
-      if(['fn_reprendre_alertes_filtres','fn_evaluer_alertes_filtres','fn_reporter_echec_alerte_filtre'].includes(nom))return{data:0,error:null};
+      if(['fn_reprendre_rappels_quotidiens','fn_reprendre_alertes_filtres','fn_evaluer_alertes_filtres','fn_reporter_echec_alerte_filtre'].includes(nom))return{data:0,error:null};
       throw new Error(`RPC non simulée ${nom}`);
     },
     functions:{invoke:async(nom:string,options:any)=>{
@@ -58,6 +59,7 @@ function simulation(onboarding: number, emails: number) {
   const modules:Record<string,unknown>={
     'https://esm.sh/@supabase/supabase-js@2':{createClient:(_url: string, _key: string, options: unknown)=>{optionsClient=options;return sb;}},
     '../_shared/alertes-filtres-queue.ts':alertesHelpers,
+    '../_shared/rappels-quotidiens-queue.ts':rappelsHelpers,
     '../_shared/email-cron-budget.ts':{...budgetHelpers,creerBudgetEnvoi:(debut:number,ms:number)=>{
       now=debut;return budgetHelpers.creerBudgetEnvoi(debut,ms,()=>now,async delai=>{now+=delai;});
     }},

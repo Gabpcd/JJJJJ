@@ -7,7 +7,7 @@ const db = new PGlite();
 await db.exec(`
 CREATE SCHEMA cron; CREATE TABLE cron.job(active boolean);
 CREATE SCHEMA auth; CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT NULL::uuid$$;
-CREATE TYPE public.type_etablissement AS ENUM ('CLINIQUE','PHARMACIE_OFFICINE');
+CREATE TYPE public.type_etablissement AS ENUM ('CLINIQUE_PRIVEE','PHARMACIE_OFFICINE');
 CREATE TYPE public.type_profession AS ENUM ('IDE','AS','IADE','IBODE','AES','AUXILIAIRE_PUERICULTURE','KINE','SAGE_FEMME','MEDECIN','DENTISTE');
 CREATE TYPE public.statut_mission AS ENUM ('OUVERTE','ASSIGNEE','TERMINEE');
 CREATE TABLE public.etablissements(id uuid PRIMARY KEY, nom text NOT NULL,siret text UNIQUE NOT NULL,type public.type_etablissement,
@@ -42,6 +42,20 @@ const miroirBegin=miroir.indexOf('CREATE OR REPLACE FUNCTION public.fn_mirror_te
 const miroirEnd=miroir.indexOf('\n$$;',miroirBegin)+'\n$$;'.length;
 await db.exec(miroir.slice(miroirBegin,miroirEnd));
 await db.exec('CREATE TRIGGER trg_mirror_teleportation_alerte_systeme AFTER INSERT ON public.journaux_audit FOR EACH ROW EXECUTE FUNCTION public.fn_mirror_teleportation_alerte_systeme();');
+for (const [file,name] of [
+  ['20260714122337_corriger_compteurs_heures_canoniques.sql','dec_maj_compteurs_soignant'],
+  ['20260810173851_securiser_transition_candidature_transactionnelle.sql','fn_enforce_etablissement_rbac_trigger'],
+]) {
+  const source=readFileSync(new URL(`../../../supabase/migrations/${file}`,import.meta.url),'utf8');
+  const start=source.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  const declaration=source.slice(start).match(/AS (\$[a-zA-Z_]*\$)/);
+  assert.ok(start>=0&&declaration,`Définition canonique ${name} présente`);
+  const stop=source.indexOf(declaration[1]+';',start+declaration.index+declaration[0].length)+declaration[1].length+1;
+  await db.exec(source.slice(start,stop));
+}
+await db.exec(`CREATE FUNCTION public.est_admin() RETURNS boolean LANGUAGE sql AS $$SELECT false$$;
+ CREATE TRIGGER dec_maj_compteurs AFTER INSERT OR UPDATE OR DELETE ON public.missions FOR EACH ROW EXECUTE FUNCTION public.dec_maj_compteurs_soignant();
+ CREATE TRIGGER trg_p0_rbac_missions BEFORE INSERT OR UPDATE OR DELETE ON public.missions FOR EACH ROW EXECUTE FUNCTION public.fn_enforce_etablissement_rbac_trigger('missions');`);
 const m=creerManifeste({runId:'local-sql-20260925',count:500});
 // PGlite n’a qu’une session : prouve acquisition/libération réelle, pas la contention multi-session.
 async function avecVerrouVerifie(sql) {
@@ -64,6 +78,9 @@ await db.query('INSERT INTO public.candidatures VALUES ($1,$2)',['ffffffff-ffff-
 await assert.rejects(db.exec(sqlNettoyage(m)),/Dépendance métier/);await db.exec('ROLLBACK;');
 assert.equal((await db.query('SELECT count(*)::int AS n FROM public.missions')).rows[0].n,500);
 await db.exec('DELETE FROM public.candidatures;');
+await db.exec('CREATE TRIGGER nouveau_delete BEFORE DELETE ON public.missions FOR EACH ROW EXECUTE FUNCTION public.proteger_audit();');
+await assert.rejects(db.exec(sqlNettoyage(m)),/Trigger de suppression non prévu/);await db.exec('ROLLBACK;');
+await db.exec('DROP TRIGGER nouveau_delete ON public.missions;');
 await avecVerrouVerifie(sqlNettoyage(m));
 assert.equal((await db.query('SELECT count(*)::int AS n FROM public.missions')).rows[0].n,0);
 assert.equal((await db.query('SELECT count(*)::int AS n FROM public.etablissements')).rows[0].n,0);
