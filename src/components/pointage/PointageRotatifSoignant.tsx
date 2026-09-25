@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Loader2, Clock, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,16 +30,28 @@ interface Etat {
 
 const CLE_PROMPT_NOTE = (missionId: string) => `jolene_note_checkout_${missionId}`;
 
-export function PointageRotatifSoignant({
-  missionId,
-  consentementGPS,
-}: {
+interface Props {
   missionId: string;
   consentementGPS: boolean | null;
-}) {
+}
+
+export function PointageRotatifSoignant(props: Props) {
+  return <PointageMission key={props.missionId} {...props} />;
+}
+
+function PointageMission({
+  missionId,
+  consentementGPS,
+}: Props) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const envoiEnCours = useRef(false);
+  const actif = useRef(true);
+  useEffect(() => {
+    actif.current = true;
+    return () => { actif.current = false; };
+  }, []);
   const [scanning, setScanning] = useState(false);
   // F4 (Lot 7b) : notation au check-out — proposée UNE fois, au dernier départ
   // (fin prévue atteinte). Skippable : le bandeau évaluations rattrape.
@@ -97,46 +109,59 @@ export function PointageRotatifSoignant({
 
   const envoyer = async (codeSaisi: string) => {
     const c = codeSaisi.trim();
-    if (c.length !== 6 || submitting) return;
+    if (c.length !== 6 || envoiEnCours.current || !actif.current) return;
+    envoiEnCours.current = true;
     setSubmitting(true);
-    // Le GPS est strictement opt-in. Un refus n'empêche jamais le pointage :
-    // l'établissement peut alors le valider manuellement.
-    let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };
-    if (consentementGPS === true) {
-      try {
-        const pos = await obtenirPosition();
-        meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };
-      } catch { /* GPS indisponible — le scan reste valable, validation étab possible */ }
-    }
+    try {
+      // Le GPS est strictement opt-in. Un refus n'empêche jamais le pointage :
+      // l'établissement peut alors le valider manuellement.
+      let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };
+      if (consentementGPS === true) {
+        try {
+          const pos = await obtenirPosition();
+          meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };
+        } catch { /* GPS indisponible — le scan reste valable, validation étab possible */ }
+      }
 
-    const { data: res, error } = await supabase.rpc('fn_scanner_code_pointage' as any, { p_code: c, p_metadata: meta });
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message === 'Code de pointage invalide ou expiré.'
-        ? 'Code de pointage invalide ou expiré. Demande le code actuel à l’établissement.'
-        : extraireMessageErreur(error));
-      return;
-    }
-    const type = (res as any)?.type_scan_effectue;
-    if ('vibrate' in navigator) navigator.vibrate(type === 'OUVERTURE' ? 200 : [200, 100, 200]);
-    toast.success(type === 'OUVERTURE' ? '✅ Pointage enregistré — segment ouvert' : '✅ Pointage enregistré — segment fermé');
-    setCode('');
-    await Promise.all([
-      refetch(),
-      queryClient.invalidateQueries({ queryKey: ['presences-soignant'] }),
-      queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] }),
-    ]);
+      if (!actif.current) return;
 
-    // F4 : au check-out FINAL (fermeture alors que la fin prévue est atteinte),
-    // proposer la note 1-tap — une seule fois par mission.
-    if (type === 'FERMETURE' && !localStorage.getItem(CLE_PROMPT_NOTE(missionId))) {
-      try {
-        const { data: m } = await supabase.from('missions').select('fin_le').eq('id', missionId).maybeSingle();
-        if (m?.fin_le && Date.now() >= new Date(m.fin_le).getTime() - 30 * 60_000) {
-          localStorage.setItem(CLE_PROMPT_NOTE(missionId), '1');
-          setNotationOpen(true);
-        }
-      } catch { /* le prompt de note ne doit jamais gêner le pointage */ }
+      const { data: res, error } = await supabase.rpc('fn_scanner_code_pointage' as any, { p_code: c, p_metadata: meta });
+      if (!actif.current) return;
+      if (error) {
+        toast.error(error.message === 'Code de pointage invalide ou expiré.'
+          ? 'Code de pointage invalide ou expiré. Demande le code actuel à l’établissement.'
+          : extraireMessageErreur(error));
+        return;
+      }
+      const type = (res as any)?.type_scan_effectue;
+      if ('vibrate' in navigator) navigator.vibrate(type === 'OUVERTURE' ? 200 : [200, 100, 200]);
+      toast.success(type === 'OUVERTURE' ? '✅ Pointage enregistré — segment ouvert' : '✅ Pointage enregistré — segment fermé');
+      setCode('');
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ['presences-soignant'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] }),
+      ]);
+      if (!actif.current) return;
+
+      // F4 : au check-out FINAL (fermeture alors que la fin prévue est atteinte),
+      // proposer la note 1-tap — une seule fois par mission.
+      if (type === 'FERMETURE' && !localStorage.getItem(CLE_PROMPT_NOTE(missionId))) {
+        try {
+          const { data: m } = await supabase.from('missions').select('fin_le').eq('id', missionId).maybeSingle();
+          if (!actif.current) return;
+          if (m?.fin_le && Date.now() >= new Date(m.fin_le).getTime() - 30 * 60_000) {
+            localStorage.setItem(CLE_PROMPT_NOTE(missionId), '1');
+            setNotationOpen(true);
+          }
+        } catch { /* le prompt de note ne doit jamais gêner le pointage */ }
+      }
+    } catch (error) {
+      if (!actif.current) return;
+      toast.error(extraireMessageErreur(error));
+    } finally {
+      envoiEnCours.current = false;
+      if (actif.current) setSubmitting(false);
     }
   };
 
@@ -144,15 +169,17 @@ export function PointageRotatifSoignant({
     setScanning(true);
     try {
       const r = await scannerQr();
+      if (!actif.current) return;
       if (r?.text) {
         const digits = r.text.replace(/\D/g, '').slice(0, 6);
         if (digits.length === 6) { await envoyer(digits); return; }
         toast.error('QR non reconnu. Saisissez le code à 6 chiffres.');
       }
     } catch {
+      if (!actif.current) return;
       toast.error('Scan impossible. Saisissez le code manuellement.');
     } finally {
-      setScanning(false);
+      if (actif.current) setScanning(false);
     }
   };
 

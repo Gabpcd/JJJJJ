@@ -1,0 +1,36 @@
+- main:
+  - heading "Mes recherches sauvegardées" [level=1]:
+    - img
+    - text: Mes recherches sauvegardées
+  - paragraph: Retrouvez vos critères de recherche soignants et réappliquez-les dans l’annuaire.
+  - list:
+    - listitem:
+      - heading "Alerte IDE Paris" [level=3]
+      - text: "🔔 Alertes hebdomadaire • Dernier check : 25 sept. 12:55"
+      - button "Désactiver alertes":
+        - img
+      - button "Modifier":
+        - img
+      - button "Supprimer":
+        - img
+      - button "Aller à la recherche":
+        - text: Aller à la recherche
+        - img
+  - strong: Comment fonctionnent les alertes ?
+  - text: "Les alertes sont envoyées par email selon la fréquence choisie :"
+  - list:
+    - listitem:
+      - strong: Toutes les heures
+      - text: — recherche de nouveaux résultats au passage du traitement horaire.
+    - listitem:
+      - strong: Quotidien
+      - text: — au moins 24 h entre deux vérifications.
+    - listitem:
+      - strong: Hebdomadaire
+      - text: — au moins 7 jours entre deux vérifications.
+  - paragraph: Un email est envoyé uniquement si de nouveaux résultats correspondent à vos filtres. Un retard du service peut décaler son envoi.
+  - paragraph:
+    - text: Vous pouvez désactiver toutes les alertes email globalement dans
+    - link "Paramètres → Notifications":
+      - /url: /etablissement/parametres/notifications
+    - text: .

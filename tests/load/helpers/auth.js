@@ -23,6 +23,9 @@ export const SERVICE_ROLE_KEY = __ENV.STAGING_SUPABASE_SERVICE_ROLE_KEY || '';
 if (!SUPABASE_URL || !ANON_KEY) {
   throw new Error('STAGING_SUPABASE_URL et STAGING_SUPABASE_ANON_KEY requis dans env');
 }
+if (SUPABASE_URL !== 'https://mejpriaetwgtcstbgfid.supabase.co') {
+  throw new Error('Tests de charge réservés au staging Jolene ; production refusée.');
+}
 
 /** Headers anon (lectures publiques + auth flows). */
 export function anonHeaders() {

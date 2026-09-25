@@ -17,6 +17,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { SuiviMission } from '@/components/SuiviMission';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
@@ -839,6 +840,7 @@ export default function DetailMissionSoignant() {
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 
+      <h1 className="text-lg font-bold text-foreground mb-3">{mission.intitule}</h1>
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -856,7 +858,6 @@ export default function DetailMissionSoignant() {
                 </span>
               )}
             </div>
-            <h1 className="text-lg font-bold text-foreground mb-1">{mission.intitule}</h1>
             {mission.description && <p className="text-sm text-muted-foreground mb-2">{mission.description}</p>}
             <p className="text-xs text-muted-foreground">
               {getLabelProfession(mission.profession_requise)} {mission.service && `· ${mission.service}`}
@@ -955,6 +956,13 @@ export default function DetailMissionSoignant() {
           )}
 
           </section>
+
+          {/* Le suivi reste accessible après les informations nécessaires pour
+              choisir la mission, sans repousser sa rémunération hors écran. */}
+          <div className="lg:col-span-2">
+            <SuiviMission mission={mission} role="SOIGNANT" candidatureEnvoyee={candidatureEnvoyee}
+              litigeActif={Boolean(litigeMission?.litige_id && !litigeEstClos)} />
+          </div>
 
           <div className="space-y-4">
           {/* Établissement */}

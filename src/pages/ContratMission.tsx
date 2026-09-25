@@ -168,12 +168,20 @@ export default function ContratMission() {
 
   useEffect(() => {
     if (!id) return;
+    let actif = true;
+    setLoading(true);
+    setContrat(null);
+    setAccepte(false);
+    setSignatureData(null);
+    setShowConfirmSign(false);
+    setHashContratAffiche(null);
     const load = async () => {
       const { data: dataRaw } = await supabase
         .from('contrats_mission')
         .select('*' as any)
         .eq('id', id)
         .single();
+      if (!actif) return;
       const data = dataRaw as any;
 
       if (data) {
@@ -205,6 +213,7 @@ export default function ContratMission() {
             .maybeSingle(),
         ]);
 
+        if (!actif) return;
         setFallbackHtml(buildFallbackContractHtml({
           contrat: data,
           mission: missionRes.data,
@@ -228,7 +237,8 @@ export default function ContratMission() {
       setContrat(data);
       setLoading(false);
     };
-    load();
+    void load();
+    return () => { actif = false; };
   }, [id, user?.id]);
 
   // Calcul du hash SHA-256 réel du contenu HTML affiché (preuve d'intégrité
@@ -405,7 +415,7 @@ export default function ContratMission() {
     }
   };
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading || (contrat && contrat.id !== id)) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
   if (!contrat) return <LayoutApp role={role}><p className="text-center text-muted-foreground py-12">Contrat introuvable</p></LayoutApp>;
 
   const isSoignant = contrat.soignant_id === user?.id;
@@ -624,7 +634,7 @@ export default function ContratMission() {
                         .select('*' as any)
                         .eq('id', contrat.id)
                         .single();
-                      if (updated) setContrat(updated as any);
+                      if (updated) setContrat((courant: any) => courant?.id === contrat.id ? updated : courant);
                     }}
                   />
                 ) : (

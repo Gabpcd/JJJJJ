@@ -1,0 +1,19 @@
+- main:
+  - heading "Explorer" [level=1]
+  - tablist "Vue Swipe, Liste ou Carte":
+    - tab "Swipe"
+    - tab "Liste" [selected]
+    - tab "Carte"
+  - button "Mes disponibilités"
+  - button "Filtres (4 actifs)"
+  - button "🔥 Urgentes" [pressed]
+  - button "📅 Week-end"
+  - button "🌙 Nuit" [pressed]
+  - button "☀️ Jour"
+  - text: 0 résultat 📍 Paris ≥ 30 €/h 🔥 Urgentes 🌙 Nuit CDD
+  - status:
+    - img "Logo Jolene, traitement en cours"
+    - heading "Aucune mission trouvée" [level=3]
+    - paragraph: "Crée une alerte : les nouvelles missions seront vérifiées toutes les heures. Tu recevras un email si elles correspondent à tes critères."
+    - button "🔔 Me prévenir des prochaines missions"
+    - button "Effacer les filtres rapides"

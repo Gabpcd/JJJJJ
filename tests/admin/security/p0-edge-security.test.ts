@@ -51,7 +51,7 @@ describe('P0 Edge security guards', () => {
       cron.indexOf('async function invokeIdempotentSms'),
       cron.indexOf('Deno.serve(async (req) =>'),
     );
-    expect(cron).toContain('global: { headers: { Authorization: `Bearer ${KEY}` } }');
+    expect(cron).toMatch(/global:\s*\{\s*headers:\s*\{\s*Authorization:\s*`Bearer \$\{KEY\}`\s*\}/);
     expect(smsHelper).toContain('headers: { Authorization: `Bearer ${KEY}` }');
     expect(cron.match(/functions\.invoke\("send-sms"/g)).toHaveLength(1);
     expect(cron.match(/invokeIdempotentSms\(/g)).toHaveLength(3);
@@ -62,7 +62,11 @@ describe('P0 Edge security guards', () => {
     );
     expect(firstSmsCall).toBeGreaterThan(0);
     expect(cron.indexOf("if (smsOutcome === 'pending')", firstSmsCall))
-      .toBeLessThan(cron.indexOf('smsJ1++;', firstSmsCall));
+      .toBeLessThan(cron.indexOf('if (isSmsQueueItem) smsQueueCount++;', firstSmsCall));
+    const daily = read('supabase/functions/_shared/rappels-quotidiens-queue.ts');
+    expect(daily.indexOf("if (outcome === 'pending') return 'pending'"))
+      .toBeLessThan(daily.indexOf("await acquitter(outcome === 'sent' ? 'ENVOYE' : 'ANNULE')"));
+    expect(cron).not.toContain('smsJ1++'); // Daily prépare la file, aucun compteur d’envoi direct.
   });
 
   it('keeps public health probes shallow and detailed health admin-only', () => {

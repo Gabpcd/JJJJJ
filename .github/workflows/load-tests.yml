@@ -6,10 +6,9 @@ name: Load tests (k6)
 # Prérequis :
 # 1. Workflow `deploy-supabase-staging.yml` exécuté au moins 1× (schema + edge fns)
 # 2. Secrets GitHub :
-#    - STAGING_SUPABASE_URL              : https://mejpriaetwgtcstbgfid.supabase.co
-#    - STAGING_SUPABASE_ANON_KEY         : (anon JWT staging)
-#    - STAGING_SUPABASE_SERVICE_ROLE_KEY : (service_role JWT staging — requis pour D, F)
-#    - LOAD_TEST_PASSWORD                : password des comptes test fixes (réutilise PLAYWRIGHT_TEST_PASSWORD)
+#    - STAGING_SUPABASE_PROJECT_REF et STAGING_SUPABASE_ACCESS_TOKEN
+#      (URL et clés du staging résolues et masquées à chaque exécution)
+#    - PLAYWRIGHT_TEST_PASSWORD : mot de passe des comptes de recette fixes
 #
 # Voir docs/tests-charge.md pour les cibles de performance et l'interprétation des résultats.
 
@@ -39,9 +38,14 @@ on:
         type: string
         required: false
         default: ''
+      diagnostic_sql:
+        description: "Avant C/all : six sondes SQL staging en lecture seule sur le catalogue préparé"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
-  group: load-tests
+  group: jolene-supabase-staging-writes
   cancel-in-progress: false
 
 jobs:
@@ -56,6 +60,16 @@ jobs:
       - name: Install k6
         uses: grafana/setup-k6-action@v1
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Résoudre les accès du staging uniquement
+        run: node scripts/ci/prepare-staging-api-env.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+
       - name: Verify k6 installation
         run: k6 version
 
@@ -63,8 +77,8 @@ jobs:
         run: |
           set -e
           STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
-            "${{ secrets.STAGING_SUPABASE_URL }}/auth/v1/health" \
-            -H "apikey: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}" || echo "000")
+            "${STAGING_SUPABASE_URL}/auth/v1/health" \
+            -H "apikey: ${STAGING_SUPABASE_ANON_KEY}" || echo "000")
           if [ "$STATUS" != "200" ]; then
             echo "::error::Staging URL ne répond pas (status=$STATUS). Vérifier que deploy-supabase-staging.yml a été exécuté."
             exit 1
@@ -74,23 +88,38 @@ jobs:
       - name: Prepare results directory
         run: mkdir -p tests/load/results
 
+      - name: Préparer le catalogue fictif de recherche sur staging
+        if: inputs.scenario == '03-recherche-missions' || inputs.scenario == 'all'
+        run: node scripts/ci/prepare-load-fixtures.mjs prepare
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_FIXTURE_COUNT: '500'
+
+      - name: Diagnostiquer la recherche sur le catalogue préparé
+        if: inputs.diagnostic_sql && (inputs.scenario == '03-recherche-missions' || inputs.scenario == 'all')
+        run: node scripts/ci/diagnose-load-fixtures.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_FIXTURE_COUNT: '500'
+
       - name: Run scenario
         env:
-          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
-          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
-          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
-          LOAD_TEST_PASSWORD: ${{ secrets.LOAD_TEST_PASSWORD }}
-          LOAD_TEST_RUN_ID: ${{ github.run_id }}
+          LOAD_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_TEST_SCENARIO: ${{ inputs.scenario }}
+          LOAD_TEST_VUS: ${{ inputs.vus_override }}
+          LOAD_TEST_DURATION: ${{ inputs.duration_override }}
         run: |
           set -euo pipefail
 
-          K6_FLAGS=""
-          if [ -n "${{ inputs.vus_override }}" ]; then
-            K6_FLAGS="$K6_FLAGS --vus ${{ inputs.vus_override }}"
-          fi
-          if [ -n "${{ inputs.duration_override }}" ]; then
-            K6_FLAGS="$K6_FLAGS --duration ${{ inputs.duration_override }}"
-          fi
+          # Les paramètres restent des données, jamais du code shell.
+          [[ -z "$LOAD_TEST_VUS" || "$LOAD_TEST_VUS" =~ ^[1-9][0-9]{0,2}$ ]] || exit 1
+          [[ -z "$LOAD_TEST_DURATION" || "$LOAD_TEST_DURATION" =~ ^[1-9][0-9]{0,3}(s|m)$ ]] || exit 1
+          [[ "$LOAD_TEST_SCENARIO" =~ ^(all|0[1-6]-[a-z-]+)$ ]] || exit 1
 
           run_one() {
             local script="$1"
@@ -98,12 +127,13 @@ jobs:
             # `|| true` : on capture l'exit code mais on continue pour avoir
             # les résultats. La somme des thresholds échoués décide en step
             # final si on fail le job.
-            k6 run $K6_FLAGS "$script" || EXIT_CODE=$?
+            local EXIT_CODE=0
+            k6 run "$script" || EXIT_CODE=$?
             echo "::endgroup::"
             return ${EXIT_CODE:-0}
           }
 
-          if [ "${{ inputs.scenario }}" = "all" ]; then
+          if [ "$LOAD_TEST_SCENARIO" = "all" ]; then
             FAILED=0
             for s in tests/load/scenarios/*.js; do
               run_one "$s" || FAILED=$((FAILED + 1))
@@ -111,8 +141,17 @@ jobs:
             echo "Scenarios échoués (thresholds dépassés) : $FAILED"
             exit $FAILED
           else
-            run_one "tests/load/scenarios/${{ inputs.scenario }}.js"
+            run_one "tests/load/scenarios/${LOAD_TEST_SCENARIO}.js"
           fi
+
+      - name: Nettoyer exclusivement les données du manifeste
+        if: always() && (inputs.scenario == '03-recherche-missions' || inputs.scenario == 'all')
+        run: node scripts/ci/prepare-load-fixtures.mjs cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LOAD_FIXTURE_COUNT: '500'
 
       - name: Upload k6 results
         if: always()

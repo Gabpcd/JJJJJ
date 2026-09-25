@@ -5,7 +5,8 @@ import { Building2, MessageCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { avecDelai } from '@/lib/avecDelai';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { toast } from 'sonner';
@@ -20,7 +21,8 @@ export default function MonGroupe() {
 }
 
 export function MonGroupeContent({ headingLevel = 'h1' }: { headingLevel?: 'h1' | 'h2' }) {
-  const { user } = useAuth();
+  const scope = useEtablissementScope();
+  const { etablissementId } = scope;
   const navigate = useNavigate();
   const [etab, setEtab] = useState<any>(null);
   const [groupe, setGroupe] = useState<any>(null);
@@ -29,34 +31,48 @@ export function MonGroupeContent({ headingLevel = 'h1' }: { headingLevel?: 'h1' 
   const [filtreType, setFiltreType] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const [erreur, setErreur] = useState(false);
+  const [tentative, setTentative] = useState(0);
   useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const { data: e, error: errE } = await supabase
-        .from('etablissements')
-        .select('groupe_sante_id, groupes_sante(id, nom, siren, raison_sociale_facturation, remise_groupe_pourcent, formule_abonnement)')
-        .eq('id', user.id)
-        .single();
-      if (errE) { toast.error('Impossible de charger les informations du groupe.'); setLoading(false); return; }
-
-      setEtab(e);
-
-      if (e?.groupe_sante_id) {
-        setGroupe((e as any).groupes_sante);
-        const { data: etabs, error: errEtabs } = await supabase
-          .from('etablissements')
-          .select('id, nom, adresse_ville, adresse_departement, type, finess')
-          .eq('groupe_sante_id', e.groupe_sante_id)
-          .is('supprime_le', null)
-          .order('adresse_departement', { ascending: true });
-        if (errEtabs) toast.error('Erreur lors du chargement des établissements du groupe.');
-        setEtablissements(etabs || []);
+    let actif = true;
+    setLoading(true);
+    setErreur(false);
+    if (!etablissementId) return () => { actif = false; };
+    void (async () => {
+      try {
+        const { data: e, error } = await avecDelai(supabase.from('etablissements')
+          .select('groupe_sante_id, groupes_sante(id, nom, siren, raison_sociale_facturation, remise_groupe_pourcent, formule_abonnement)')
+          .eq('id', etablissementId).single(), 15_000);
+        if (error || !e) throw error || new Error('Établissement indisponible');
+        let liste: any[] = [];
+        if (e.groupe_sante_id) {
+          if (!e.groupes_sante) throw new Error('Groupe indisponible');
+          const resultat = await avecDelai(supabase.from('etablissements')
+            .select('id, nom, adresse_ville, adresse_departement, type, finess')
+            .eq('groupe_sante_id', e.groupe_sante_id).is('supprime_le', null)
+            .order('adresse_departement', { ascending: true }), 15_000);
+          if (resultat.error || !Array.isArray(resultat.data)) throw resultat.error || new Error('Liste indisponible');
+          liste = resultat.data;
+        }
+        if (!actif) return;
+        setEtab(e);
+        setGroupe(e.groupes_sante);
+        setEtablissements(liste);
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        if (actif) setLoading(false);
       }
-      setLoading(false);
-    };
-    load();
-  }, [user]);
+    })();
+    return () => { actif = false; };
+  }, [etablissementId, tentative]);
 
+  if (scope.error || erreur) return <div className="card-base space-y-3" role="alert">
+    <p>Impossible de charger les informations du groupe.</p>
+    <BoutonY2K onClick={() => { if (scope.error) scope.retry(); else setTentative(t => t + 1); }}>Réessayer</BoutonY2K>
+  </div>;
+  if (scope.loading || !scope.resolved) return <ChargementPage />;
+  if (!etablissementId) return <p>Complétez le dossier de votre établissement pour consulter son groupe.</p>;
   if (loading) return <ChargementPage />;
 
   if (!etab?.groupe_sante_id || !groupe) {
@@ -128,7 +144,7 @@ export function MonGroupeContent({ headingLevel = 'h1' }: { headingLevel?: 'h1' 
                 <p className="text-sm text-muted-foreground">{e.adresse_ville}{e.adresse_departement ? ` (${e.adresse_departement})` : ''}</p>
                 <p className="text-xs text-muted-foreground mt-1">{getLabelTypeEtablissement(e.type)}{e.finess ? ` · FINESS: ${e.finess}` : ''}</p>
               </div>
-              {e.id === user?.id && (
+              {e.id === etablissementId && (
                 <span className="badge-base bg-primary/10 text-primary text-[10px]">📍 Vous êtes ici</span>
               )}
             </div>

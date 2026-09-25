@@ -33,6 +33,7 @@ export default defineConfig({
     // e2e/non-regression/ appartient exclusivement au projet
     // mobile-non-regression ci-dessous — chromium & co l'ignorent.
     '**/non-regression/**',
+    '**/staging/**',
   ],
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',

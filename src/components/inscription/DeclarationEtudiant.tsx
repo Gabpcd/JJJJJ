@@ -126,7 +126,7 @@ export function DeclarationEtudiant({
 
           {incoherent && meilleure && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 p-2 text-xs text-amber-800 dark:text-amber-300">
-              <p>⚠️ Ce niveau ne justifie pas la profession {getLabelProfession(professionDeclaree)}. Tu peux demander une pré-éligibilité comme <strong>{getLabelProfession(meilleure)}</strong>, sous réserve des preuves réglementaires.</p>
+              <p>⚠️ Ce niveau ne justifie pas la profession {getLabelProfession(professionDeclaree)}. Vous pouvez demander une pré-éligibilité comme <strong>{getLabelProfession(meilleure)}</strong>, sous réserve des preuves réglementaires.</p>
               <button type="button" onClick={() => onSuggererProfession(meilleure)} className="mt-1 font-semibold text-primary underline">
                 Choisir le profil {getLabelProfession(meilleure)}
               </button>
@@ -135,7 +135,7 @@ export function DeclarationEtudiant({
 
           {niveauRenseigne && professionsAutorisees && professionsAutorisees.length === 0 && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              ⚠️ Ce niveau ne permet pas encore d'exercer « faisant fonction » selon nos règles. Tu pourras préciser via ton attestation de scolarité.
+              ⚠️ Ce niveau ne permet pas encore d'exercer « faisant fonction » selon nos règles. Vous pourrez préciser via votre attestation de scolarité.
             </p>
           )}
 

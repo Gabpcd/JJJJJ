@@ -1,0 +1,79 @@
+- main:
+  - text: Jolene
+  - heading "Vos informations professionnelles" [level=1]
+  - paragraph: Ces informations permettent de vérifier votre profil avant de candidater.
+  - text: Prénom *Vérifié via RPPS
+  - textbox "Prénom *Vérifié via RPPS": Camille
+  - text: Nom *Vérifié via RPPS
+  - textbox "Nom *Vérifié via RPPS": Recette
+  - text: Téléphone *
+  - textbox "Téléphone * Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).":
+    - /placeholder: +33 6 ...
+    - text: "0100000000"
+  - paragraph: Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).
+  - text: Date de naissance *
+  - textbox "Date de naissance *": 1990-01-01
+  - text: Profession *
+  - combobox "Profession *":
+    - text: Infirmier(ère) Diplômé(e) d'État (IDE)
+    - img
+  - paragraph: 🎓 Je suis étudiant(e) en santé
+  - paragraph: Pré-éligibilité à un emploi temporaire selon l'arrêté du 3 février 2022, sous contrôle des preuves.
+  - button "Je suis étudiant en santé"
+  - group "Types de contrat acceptés * (au moins 1)":
+    - text: Types de contrat acceptés * (au moins 1)
+    - group "Types de contrat acceptés":
+      - checkbox "Contrat à Durée Déterminée (CDD)"
+      - text: Contrat à Durée Déterminée (CDD)
+      - checkbox "Salarié" [checked]:
+        - img
+      - text: Salarié
+    - paragraph: Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
+  - text: Numéro RPPS
+  - paragraph: Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
+  - paragraph: "Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."
+  - 'textbox "Numéro RPPS Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là. Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active. ❌ Ce RPPS correspond à la profession « Médecin », pas à « Infirmier(ère) Diplômé(e) d''État (IDE) ». Vérifiez votre numéro ou votre profession."':
+    - /placeholder: 11 chiffres (optionnel)
+    - text: "10000000000"
+  - alert:
+    - img
+    - text: ❌ Ce RPPS correspond à la profession « Médecin », pas à « Infirmier(ère) Diplômé(e) d'État (IDE) ». Vérifiez votre numéro ou votre profession.
+  - text: Type d'exercice
+  - paragraph:
+    - text: En tant que
+    - strong: Infirmier(ère) Diplômé(e) d'État (IDE)
+    - text: ", votre type d'exercice est automatiquement défini comme"
+    - strong: salarié
+    - text: .
+  - alert:
+    - img
+    - heading "Champs manquants" [level=5]
+    - paragraph: "Vérifiez les informations suivantes : cohérence du RPPS."
+  - button "Enregistrer et continuer plus tard"
+  - button "Enregistrer mon profil"
+  - paragraph:
+    - text: Déjà un compte ?
+    - link "Se connecter":
+      - /url: /connexion
+  - link "❓ Centre d'aide":
+    - /url: /aide
+  - text: •
+  - link "🩺 Aide Pro Santé Connect":
+    - /url: /aide/pro-sante-connect
+  - text: •
+  - link "📋 CGU":
+    - /url: /cgu
+  - text: •
+  - link "💰 CGV":
+    - /url: /cgv
+  - text: •
+  - link "🔒 Confidentialité":
+    - /url: /confidentialite
+  - text: •
+  - link "📄 Mentions légales":
+    - /url: /mentions-legales
+  - link "♿ Accessibilité":
+    - /url: /accessibilite
+  - link "✉️ Contact":
+    - /url: /contact
+  - paragraph: © 2026 Jolene SASU — Tous droits réservés 🩷

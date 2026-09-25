@@ -453,6 +453,54 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      - name: Activer une seule fois les futures inscriptions publiques en production
+        # Étape normale (success() implicite), après le déploiement de toutes
+        # les Edge, Stripe et les sondes des crons. Jamais dans le workflow staging.
+        run: |
+          set -euo pipefail
+          if [ "$SUPABASE_PROJECT_REF" != 'flripxtsyegjshnhzjkz' ] \
+            || [ "$SUPABASE_URL" != 'https://flripxtsyegjshnhzjkz.supabase.co' ]; then
+            echo '::error::Activation refusée : référence ou URL différente de la production attendue.'
+            exit 1
+          fi
+
+          query=$(cat <<'SQL'
+          SELECT private.fn_activer_inscriptions_publiques_planifiees(
+            'flripxtsyegjshnhzjkz', 'EDGE_PROBES_OK'
+          ) AS activation;
+          SQL
+          )
+          payload=$(jq -cn --arg query "$query" '{query:$query}')
+          # La fonction verrouille les deux paramètres et consomme pending=1
+          # atomiquement. Une réponse réseau perdue peut être rejouée sans
+          # réactiver une fermeture ultérieure (active=0, pending=0).
+          code=$(curl -sS --retry 2 --retry-all-errors --retry-delay 3 \
+            --connect-timeout 10 --max-time 45 \
+            -o /tmp/inscriptions-activation.json -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H 'Content-Type: application/json' --data "$payload")
+          if [ "$code" != '200' ] || ! jq -e '
+            type == "array" and length == 1
+            and .[0].activation.success == true
+            and (.[0].activation.active | type == "boolean")
+            and (.[0].activation.activation_effectuee | type == "boolean")
+            and .[0].activation.planifiee == false
+          ' /tmp/inscriptions-activation.json >/dev/null; then
+            echo "::error::Activation des inscriptions non confirmée (HTTP $code)."
+            exit 1
+          fi
+          jq '.[0].activation' /tmp/inscriptions-activation.json
+          if jq -e '.[0].activation.active == true' /tmp/inscriptions-activation.json >/dev/null; then
+            echo '- Futures inscriptions publiques actives ; stock test conservé' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '- Fermeture volontaire conservée : activation initiale déjà consommée' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
       - name: Summary
         run: |
           echo "### Deploy Supabase ✅" >> "$GITHUB_STEP_SUMMARY"

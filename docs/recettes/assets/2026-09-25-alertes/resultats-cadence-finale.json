@@ -1,0 +1,49 @@
+{
+  "origine": "/private/tmp/jolene-alertes-cadence-finale-e2e-20260925/results.json",
+  "baseURL": "http://127.0.0.1:8902",
+  "stats": {
+    "startTime": "2026-09-25T11:02:56.789Z",
+    "duration": 29801.63,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cas": [
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 5079,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 5097,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 5138,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 5088,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 5367,
+      "essais": 1
+    }
+  ]
+}

@@ -1,216 +1,108 @@
-# Tests de charge — Jolene
+# Tests de charge API — état au 25 septembre 2026
 
-Date : 2026-05-04
+Les scripts ciblent exclusivement le staging `mejpriaetwgtcstbgfid`. La garde dans `tests/load/helpers/auth.js` refuse toute autre URL, sans repli vers la production. Ils ne mesurent pas le rendu de l’app, les images par seconde, les appareils physiques ni la capacité du frontend Vercel.
 
-## Objectif
+Le durcissement du 25 septembre est validé par des **tests des scripts avec un transport en mémoire**. Il ne constitue pas un résultat de charge : les mesures k6 effectives doivent être jointes après une campagne staging réussie.
 
-Valider que la stack Supabase de Jolene tient un **lancement public viral**
-post-LinkedIn : 100-500 visiteurs en quelques heures, pics 50-100 utilisateurs
-simultanés, 50 candidatures sur 1 mission populaire, cron weekly-invoicing
-sur 500-1000 missions.
+## Scénarios et état réel
 
-**Ce qu'on teste** : Supabase auth, RPCs PostgREST, edge functions sur le
-projet **staging** (`mejpriaetwgtcstbgfid`).
+| Scénario | Charge par défaut | Preuve recherchée | État |
+| --- | --- | --- | --- |
+| A — inscription Auth | Rampe vers 100 VUs, plateau 1 min | Réponses de `/auth/v1/signup` ; capacité Auth seulement | Disponible, crée des comptes ; vérifier l’isolation email avant exécution. Ne prouve ni le dossier métier ni RPPS. |
+| B — connexion | Rampe vers 50 VUs, plateau 1 min | Password grant sur les deux comptes fixes staging | Disponible ; deux identités répétées, pas 50 utilisateurs distincts. |
+| C — recherche publique | Rampe vers 200 VUs, plateau 90 s | Réponses JSON valides, HTTP et latence de la RPC publique | Lecture seule, préflight peuplé obligatoire. |
+| D — candidatures simultanées | Ancienne cible : 50 soignants sur une mission | Candidatures effectivement créées, unicité, refus justifiés | **Suspendu : échec explicite avant toute requête.** |
+| E — dashboard | Rampe vers 100 VUs, plateau 1 min | Profil et données métier valides, HTTP et latence de la RPC | Lecture métier seule après connexion, préflight profil obligatoire. |
+| F — facturation hebdomadaire | Ancienne cible : 500 missions | Factures exactes du lot après un traitement isolé | **Suspendu : échec explicite avant toute requête.** |
 
-**Ce qu'on ne teste pas** : Vercel frontend (scale auto), CDN assets,
-intégrations tiers (Stripe, Twilio, Resend) — out of scope load test.
+`all` inclut D et F et doit donc échouer tant que leur isolation n’est pas rétablie. Pour les premières mesures, lancer C puis E individuellement. Aucun faux résultat vert n’est substitué aux scénarios suspendus.
 
-## Outillage
+## C — recherche publique avec des données
 
-- **k6** (Grafana) — scripts JS, exécution Go performante
-- Workflow CI : `.github/workflows/load-tests.yml`
-- Scripts : `tests/load/scenarios/*.js`
+`03-recherche-missions.js` utilise `fn_missions_publiques_recherche(p_profession, p_ville)` avec la clé publique staging. Il ne crée aucune mission.
 
-## Procédure complète
+Le préflight doit obtenir au moins une mission publique valide sans filtre. Le schéma vérifié inclut identifiant, titre, profession, dates, taux numérique et `total_count`. Une réponse HTTP 200 contenant `null`, un objet erreur ou un tableau mal formé échoue. Ensuite, une requête sur cinq répète la recherche sans filtre et exige le volume attendu (`LOAD_TEST_EXPECTED_MISSIONS`, au moins 1 hors préparation CI) ; les autres utilisent des professions actuelles et villes variées, où un tableau vide est légitime.
 
-### 1. Pré-requis (1×)
+La fixture doit respecter les règles existantes de publication. Les missions dont le titre commence par `[` et les établissements `est_compte_test=true` sont exclus par la RPC : le seed historique `[loadtest]` ne satisfait pas ce préflight. Préparer des données **uniquement dans le staging isolé**, sans modifier les règles de visibilité du produit pour les tests. Le nombre de missions visibles est consigné dans le journal ; une petite fixture ne démontre pas le comportement d’un catalogue national.
 
-Voir `docs/staging.md` :
-- Secrets GitHub configurés
-- Workflow `deploy-supabase-staging.yml` exécuté avec `seed_load_test_data=true`
+### Préparer et nettoyer un catalogue quantifié
 
-### 2. Lancer un scénario
+`scripts/ci/prepare-load-fixtures.mjs` prépare **500 missions par défaut**, bornées entre 100 et 1000, réparties entre 10 établissements fictifs dans 10 villes et 10 professions (100 combinaisons). Les départs sont compris entre J+14 et J+27. Les établissements et titres portent `RECETTE CHARGE <run>` ; les contacts sont sous `example.invalid`. Aucun compte Auth, soignant assigné, pièce, signature, facture ou règlement n’est créé.
 
-GitHub Actions → **Load tests (k6)** → Run workflow → choisir scénario.
+Le script exige simultanément la ref et l’URL exactes du staging, un identifiant de run explicite, l’accès Management API déjà existant et la clé anonyme staging. Variables : `LOAD_TEST_RUN_ID` (run GitHub + tentative conseillés), `LOAD_FIXTURE_COUNT` (défaut 500), `LOAD_FIXTURE_MANIFEST` (défaut `tests/load/results/fixture-missions-manifest.json`). Les secrets ne sont jamais écrits dans le manifeste.
 
-### 3. Analyser le rapport
-
-- Logs du job : `k6 run` affiche un summary inline (passes/failures, p50/p95/p99)
-- Artifact `k6-results-<scenario>-<runId>.zip` : JSON détaillé par metric
-- Si threshold dépassé → job rouge → cf. plan d'action ci-dessous
-
-## Les 6 scénarios
-
-### A — Inscription en bloc (`01-inscription-bloc.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 100 (ramp 30s → plateau 1min → ramp-down) |
-| Endpoint | `POST /auth/v1/signup` |
-| Cible | 95%+ succès, p95 < 3s, p99 < 5s |
-| Mesure | Capacité brute auth Supabase (gotrue) |
-
-⚠️ **Note** : on test `/auth/v1/signup` direct, pas `register-soignant` edge fn
-(rate limit 5 req/IP/10min anti-abuse). Le wrapper edge fn est testé en E2E.
-
-### B — Login simultané (`02-login-simultane.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 50 sur pool 2 comptes test fixes |
-| Endpoint | `POST /auth/v1/token?grant_type=password` |
-| Cible | 100% succès, p95 < 1s, p99 < 2s |
-
-### C — Recherche missions massive (`03-recherche-missions.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 200 (ramp 30s → plateau 1.5min → ramp-down) |
-| Endpoint | `POST /rest/v1/rpc/fn_missions_publiques_recherche` |
-| Cible | 100% succès, p50 < 400ms, p95 < 1s, p99 < 2s |
-| Mesure | RPC PostgREST anon avec filtres variés (profession × ville) |
-
-### D — Candidatures simultanées (`04-candidatures-simultanees.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 50, 1 itération chacun |
-| Endpoint | `POST /rest/v1/rpc/fn_postuler_mission` |
-| Cible | Pas de 5xx, pas de doublon en DB |
-| Mesure | Race condition sur 1 mission populaire |
-
-Le `teardown()` vérifie que `count(distinct soignant_id) = count(*)` dans
-`candidatures` pour la mission test → fail si doublon (race non protégée).
-
-**Si fail** = la contrainte UNIQUE sur `(mission_id, soignant_id)` est manquante
-ou défaillante → fix CRITIQUE en migration repo.
-
-### E — Dashboard concurrent (`05-dashboard-concurrent.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 100 |
-| Endpoint | `POST /rest/v1/rpc/fn_dashboard_soignant_complet` |
-| Cible | 100% succès, p95 < 2s, p99 < 3.5s |
-| Mesure | RPC complexe (stats + missions disponibles + alertes + matching) |
-
-### F — Cron weekly invoicing (`06-cron-weekly-invoicing.js`)
-
-| Aspect | Valeur |
-|---|---|
-| VUs | 1, 1 itération (le cron est mono-instance par design) |
-| Endpoint | `POST /functions/v1/weekly-invoicing-cron` (auth service_role) |
-| Cible | < 10 min pour 500 missions, 0% échec |
-| Mesure | Edge fn + RPC `fn_lister_missions_a_facturer` + `generate-invoice` x500 |
-
-Pré-requis : `seed_load_test_data=true` dans deploy-staging (seed les 500 missions).
-
-## Métriques k6 — interprétation rapide
-
-| Metric | Sens | Cible "santé" |
-|---|---|---|
-| `http_reqs` (rate) | req/s soutenu | dépend du scénario |
-| `http_req_duration p(50)` | médiane | < 500ms idéal |
-| `http_req_duration p(95)` | 95% des reqs | < 1.5s idéal |
-| `http_req_duration p(99)` | 99% des reqs | < 3s idéal |
-| `http_req_failed` (rate) | % HTTP errors | < 1% pour usage normal |
-| `iteration_duration` | temps complet 1 itération VU | dépend du scénario |
-| `vus` | VUs actifs | doit suivre la rampe configurée |
-
-## Plan d'action si bottleneck
-
-### Recherche missions p95 > 1s (scenario C)
-
-**Cause probable** : `fn_missions_publiques_recherche` fait un seq scan sur
-la table `missions` faute d'index sur `(statut, profession_requise, ville)`.
-
-**Fix** : créer une migration `supabase/migrations/YYYYMMDDXXXXXX_idx_missions_recherche.sql` :
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_missions_recherche
-ON public.missions (statut, profession_requise, ville)
-WHERE statut = 'OUVERTE';
-
-NOTIFY pgrst, 'reload schema';
+```bash
+node scripts/ci/prepare-load-fixtures.mjs prepare
+# lancer ensuite le scénario C
+node scripts/ci/prepare-load-fixtures.mjs cleanup
 ```
 
-Puis re-deploy staging et re-run scenario C → comparer p95.
+L’intégration CI doit exécuter le nettoyage dans une étape `always()` après C, même si la préparation ou k6 a échoué. Le manifeste est écrit **avant** l’appel SQL et reste conservé si la réponse est ambiguë. Il contient tous les UUID déterministes du run ; un manifeste modifié ou remplacé est refusé. Les runs sont sérialisés par le groupe de concurrence staging existant.
 
-### Dashboard p95 > 2s (scenario E)
+Préparation et nettoyage prennent aussi le **même verrou SQL transactionnel par run**, avant toute lecture ou écriture. Le nettoyage attend donc une préparation encore en vol. Une réponse réseau perdue, un timeout de verrou ou un HTTP transitoire autorisent au maximum trois tentatives de nettoyage ; la préparation ambiguë n’est jamais rejouée automatiquement. Sans confirmation, le manifeste reste intact et l’étape échoue.
 
-**Cause probable** : RPC `fn_dashboard_soignant_complet` exécute 5-10 sous-requêtes
-agrégées séquentiellement (stats notations, missions disponibles, alertes…).
+Pour fermer également le cas d’une requête de préparation retardée avant son arrivée en base, le nettoyage écrit sous ce verrou un reçu dans `journaux_audit`, même si aucune fixture n’existe encore. Son UUID est déterministe par run ; toute préparation ultérieure du même run est refusée. Le reçu utilise les valeurs autorisées `action=SYSTEM`, `type_acteur=SYSTEME`, `acteur_id=NULL` et `details.evenement=RECETTE_CHARGE_NETTOYEE` avec le run et la ref staging. **Un reçu immuable reste volontairement après nettoyage**, sans donnée personnelle ni secret. Aucune modification ni suppression de journal n’est exécutée. Un nouveau lot exige un nouvel identifiant de run.
 
-**Options** :
-1. Indexes sur les tables filles (`notations.evaluateur_id`, `candidatures.soignant_id`)
-2. Materialized view `mv_dashboard_soignant` rafraîchie toutes les 5min via pg_cron
-3. Cache HTTP côté client (React Query staleTime: 60_000) — déjà en place ?
+La préparation exige qu’aucun cron ne soit actif sur staging. Le rôle PostgreSQL de Management API n’a pas le droit de modifier `session_replication_role`. La préparation prend donc un verrou exclusif sur les deux tables dans sa transaction, mémorise puis suspend uniquement leurs triggers utilisateur actifs, et restaure exactement ces triggers avant le commit. Ceux déjà désactivés restent désactivés. Les contraintes CHECK et FK restent actives ; une erreur annule les données et les modifications de triggers. Aucun changement durable de schéma ni de permission n’est effectué. Les critères de publication de la RPC restent inchangés : `est_compte_test=false`, établissement fictif `VERIFIE`, publication autorisée, titre sans crochet. Cela ne valide aucun établissement ni document réel.
 
-### Inscription rate-limited (scenario A)
+Après commit, une véritable requête HTTP **anonyme** doit retrouver tous les IDs du lot. Le script exporte alors le minimum attendu vers k6. Le cleanup conserve les FK actives, supprime uniquement les IDs et marqueurs du manifeste, refuse une mission assignée/modifiée ou une dépendance métier ajoutée, et doit constater **zéro mission et zéro établissement du run restants**. Il ne supprime jamais une cohorte par un `LIKE` global.
 
-**Cause** : Supabase auth `/signup` rate limit (~30 req/min/IP par défaut).
+Le rôle Management doit pouvoir lire le journal sans filtrage RLS (`BYPASSRLS` ou superuser) ; le script refuse autrement. L’inspection staging du 25 septembre confirme que l’unique trigger d’insertion du journal ignore cet événement ; tout autre trigger d’insertion fait échouer la préparation/nettoyage. La confirmation de suppression et l’écriture du reçu ont lieu dans la transaction verrouillée, avant commit.
 
-**Action** : si le rate limit kick au-delà de 50% des requêtes, demander à
-Supabase support d'augmenter le quota pour le projet prod (justifier par
-"campagne de lancement publique").
+Définition live lue sur production et staging le 25 septembre : recherche identique, sans paramètre de pagination ni `LIMIT` dans son corps. Aucun changement de pagination n’est introduit avant une mesure démontrant un problème. Le test porte donc explicitement sur le catalogue quantifié retourné par la RPC existante.
 
-### Candidatures avec doublons (scenario D — CRITIQUE)
+Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP échoué < 1 %, p50 < 400 ms, p95 < 1 s et p99 < 2 s.
 
-**Si le teardown échoue avec "doublons détectés"** : la contrainte UNIQUE
-sur `candidatures(mission_id, soignant_id)` est manquante ou désactivée.
+## E — dashboard avec profil métier
 
-**Fix immédiat** :
+`05-dashboard-concurrent.js` se connecte avec le compte soignant fixe staging, puis vérifie `fn_dashboard_soignant_complet()` avant la charge. Un compte `auth.users` sans profil `soignants`, un objet `{error: ...}`, `null` ou une structure incomplète échouent explicitement.
 
-```sql
-ALTER TABLE public.candidatures
-  ADD CONSTRAINT candidatures_mission_soignant_unique UNIQUE (mission_id, soignant_id);
+Le même JWT utilisateur est réutilisé par les VUs. Cela mesure des lectures concurrentes d’un seul profil avec son jeu de données ; cela **ne représente pas cent profils distincts**. Le login de setup crée une session d’authentification ; aucune mutation de mission, contrat, présence ou paiement n’est exécutée.
+
+Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP échoué < 1 %, p95 < 2 s et p99 < 3,5 s.
+
+## Paramètres du workflow
+
+Le workflow manuel `.github/workflows/load-tests.yml` fournit `LOAD_TEST_VUS` et `LOAD_TEST_DURATION`. Les scénarios A, B, C et E passent désormais par `helpers/options.js` et consomment réellement ces valeurs.
+
+- VUs : entier de 1 à 999. Si seule cette valeur est indiquée, elle remplace les cibles non nulles de la rampe.
+- Durée : entier positif suivi de `s` ou `m`, au maximum 15 minutes par scénario.
+- Si une durée est indiquée, le scénario utilise des VUs constants pendant **cette durée totale**, sans ajouter une rampe cachée. Sans override VUs, la cible maximale habituelle est utilisée.
+- Sans paramètres, les rampes historiques sont conservées.
+- Les contrôles `checks: rate==1` et `iterations: count>0` sont obligatoires. Un `check()` faux rend la campagne rouge même si la réponse HTTP est 200.
+
+Pour un smoke prudent de C ou E : 2 VUs pendant 10 s. Ce smoke vérifie le banc et les contrats API ; ce n’est pas une mesure de capacité nationale. Augmenter ensuite selon le volume autorisé et conserver le nombre de VUs, la durée et le volume de données avec chaque résultat.
+
+## Pourquoi D et F sont suspendus
+
+D créait des comptes Auth sans garantir de profils soignants éligibles, ignorait des logins échoués puis pouvait conclure à « zéro doublon » sur **zéro candidature**. Le script faisait aussi des créations/suppressions hors d’un lot identifié par run. Sa remise en service nécessite un lot de profils métier contrôlés, une mission isolée, des requêtes de candidature correspondant au frontend courant, et un contrôle du nombre exact de candidatures créé par rapport aux tentatives attendues. Un refus total ne peut pas prouver une course de candidatures réussie.
+
+F acceptait zéro mission, invoquait le cron global de facturation, puis lisait le nombre total de factures sans le relier au lot. Sa remise en service nécessite une sélection exacte des missions réellement facturables, un état avant/après par identifiant, et l’isolation des envois email/paiement des prestataires. Le script actuel échoue avant tout appel de cron, y compris si `setup` est désactivé. Aucun succès n’est annoncé et le JSON porte `preuve_metier: false`.
+
+Le seed SQL historique n’est pas une preuve de dossier éligible ou de mission facturable. Ne pas l’exécuter automatiquement pour lever cette suspension : il doit être revu séparément avec le schéma courant et les garde-fous métier.
+
+## Vérification locale sans réseau
+
+```bash
+node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs
 ```
 
-⚠️ Vérifier d'abord qu'aucun doublon n'existe en prod avant d'appliquer
-(migration : `DELETE FROM candidatures WHERE id NOT IN (SELECT MIN(id) FROM candidatures GROUP BY mission_id, soignant_id);`).
+Les 16 tests de charge et les 19 tests du préparateur (35 au total) vérifient les paramètres et les seuils, chargent les vrais scripts avec un transport HTTP en mémoire, et couvrent les réponses incorrectes, les préflights vides/incomplets, le refus de production ainsi que l’absence de requête de D/F. Les erreurs injectées couvrent un commit tardif après timeout, le réessai borné et la conservation du manifeste. Ils ne génèrent aucun compte ni mail et ne lancent aucune charge réelle.
 
-### Cron weekly > 10 min (scenario F)
+La probe PGlite vérifie l’acquisition et la libération réelle du verrou via `pg_locks`, ainsi que les deux ordres préparation→nettoyage et nettoyage→préparation tardive avec le reçu immuable. **PGlite utilise une seule session** : ce contrôle et l’injection réseau ne constituent pas une mesure de contention simultanée sur PostgreSQL staging.
 
-**Causes possibles** :
-1. Pas de batch — chaque mission = 1 INSERT facture sériel
-2. Génération PDF synchrone (lourd)
-3. RPC `fn_generer_facture_mensuelle` avec scan complet à chaque appel
+## Lecture des résultats d’une campagne réelle
 
-**Optimisations** :
-- Paralléliser dans l'edge fn (`Promise.all` par batch de 10)
-- Décaler la génération PDF en async post-cron
-- Batch INSERT factures + COMMIT par 50
+Les rapports JSON sont écrits sous `tests/load/results/` et joints par le workflow, y compris en cas d’échec. Pour C/E, le résumé indique la configuration effective et affiche **« non mesuré »** si une métrique n’existe pas ; une absence d’échantillon ne devient pas 0 % d’erreur.
 
-## Capacités estimées prod (extrapolation)
+Consigner : révision Git, projet staging, date, scénario, nombre de missions/profil représenté, VUs et durée effectifs, contrôles fonctionnels, HTTP, p50/p95/p99, code de sortie et lien d’artefact. Ne pas attribuer un succès à un scénario dont le préflight ou un seuil a échoué.
 
-⚠️ Compute tier staging vs prod peut différer. Si staging = `nano` et prod =
-`small`, les mesures staging sont une **borne basse pessimiste** de la prod.
-Vérifier le tier dans Dashboard → Project Settings → Compute and Disk.
+En cas de lenteur, examiner d’abord les requêtes et leur plan sur staging. Aucun index, quota ou facteur de capacité production ne peut être déduit du seul taux d’échec ou d’un volume vide. Les mesures staging ne sont pas automatiquement une borne basse de la production : jeu de données, cache, dimensionnement et prestataires diffèrent.
 
-| Scenario | Capacité staging mesurée (à remplir) | Capacité prod estimée (×N) |
-|---|---|---|
-| A — signup | TBD | TBD |
-| B — login | TBD | TBD |
-| C — recherche | TBD | TBD |
-| D — candidatures | TBD | TBD |
-| E — dashboard | TBD | TBD |
-| F — cron | TBD | TBD |
+## Campagnes constatées dans ce correctif
 
-## Plan d'action si dépassement seuil en prod
-
-1. **Monitoring temps réel** : dashboard Sentry + Supabase logs activés
-2. **Alertes** : `fn_check_crons_health()`, `fn_check_stripe_webhook_health()`
-   (déjà déployées en prod)
-3. **Scaling** : si CPU DB > 80% soutenu → Dashboard Supabase → Compute upgrade
-   `small` → `medium` (1 click, restart < 30s)
-4. **Read replicas** (si pic lecture lourd, ex. recherche missions) — feature
-   Supabase Pro+
-5. **Edge fn auto-scaling** : géré nativement par Deno Deploy (pas d'action)
-
-## Historique des runs
-
-| Date | Scénario | Résultat | Bottleneck identifié | Fix appliqué |
-|---|---|---|---|---|
-| TBD | TBD | TBD | TBD | TBD |
-
-À remplir après chaque campagne de tests.
+| Date | Vérification | Résultat |
+| --- | --- | --- |
+| 25 septembre 2026 | Tests Node des scripts avec HTTP en mémoire | 35/35 verts (16 charge + 19 préparateur) ; aucune charge réelle. |
+| 25 septembre 2026 | Probe SQL locale PGlite, schéma minimal et vraies fonctions de recherche/miroir d’audit | 500 missions visibles, zéro déclencheur de notification appelé, cleanup ciblé complet ; dépendance tierce et cron actif refusés. Verrou transactionnel et deux ordres d’arrivée vérifiés ; deux reçus conservés, zéro alerte. Ce n’est pas le schéma staging complet ni une contention multi-session. |
+| À consigner par le workflow | k6 staging C/E | Aucun résultat de capacité annoncé par ce document avant exécution réussie. |

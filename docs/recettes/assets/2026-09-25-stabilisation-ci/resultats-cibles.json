@@ -1,0 +1,208 @@
+[
+  {
+    "lot": "soignant",
+    "stats": {
+      "startTime": "2026-09-25T15:01:26.989Z",
+      "duration": 139687.02300000002,
+      "expected": 10,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "tests": [
+      {
+        "scenario": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+        "format": "ipad-portrait",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 22353,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres",
+        "format": "ipad-portrait",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 5129,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+        "format": "ipad-paysage",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 22508,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres",
+        "format": "ipad-paysage",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 5958,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+        "format": "iphone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 24108,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres",
+        "format": "iphone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 6129,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+        "format": "android",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 17045,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres",
+        "format": "android",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 5050,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+        "format": "ordinateur",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 21500,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "SOIGNANT — recherches présentes : modifier, alerte, appliquer les filtres",
+        "format": "ordinateur",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 4745,
+            "retry": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "lot": "etablissement",
+    "stats": {
+      "startTime": "2026-09-25T15:04:04.739Z",
+      "duration": 244136.84399999998,
+      "expected": 5,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "tests": [
+      {
+        "scenario": "connexion minimal : chaque rubrique et alias établissement",
+        "format": "ipad-portrait",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 48317,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "connexion minimal : chaque rubrique et alias établissement",
+        "format": "ipad-paysage",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 48123,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "connexion minimal : chaque rubrique et alias établissement",
+        "format": "iphone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 47629,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "connexion minimal : chaque rubrique et alias établissement",
+        "format": "android",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 48100,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "scenario": "connexion minimal : chaque rubrique et alias établissement",
+        "format": "ordinateur",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 47721,
+            "retry": 0
+          }
+        ]
+      }
+    ]
+  }
+]

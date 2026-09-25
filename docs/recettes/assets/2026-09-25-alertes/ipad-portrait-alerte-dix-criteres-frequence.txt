@@ -1,0 +1,21 @@
+- dialog "Sauvegarder cette recherche":
+  - heading "Sauvegarder cette recherche" [level=2]
+  - paragraph: Vous pourrez réappliquer ces filtres plus tard et recevoir des alertes email automatiques quand de nouveaux résultats matchent vos critères.
+  - text: Nom de la recherche
+  - textbox "Nom de la recherche":
+    - /placeholder: IDE expérimenté disponible week-end
+    - text: Alerte IDE Paris
+  - paragraph: 16/100 caractères
+  - text: Recevoir des alertes email
+  - switch "Recevoir des alertes email" [checked]
+  - text: Fréquence des alertes
+  - combobox "Fréquence des alertes": Toutes les heures
+  - paragraph:
+    - text: Vous pouvez modifier vos préférences globales d'emails dans
+    - emphasis: Paramètres → Notifications
+    - text: . Les emails d'urgence ne sont jamais désactivables.
+  - button "Annuler"
+  - button "Enregistrer"
+  - button "Close":
+    - img
+    - text: Close

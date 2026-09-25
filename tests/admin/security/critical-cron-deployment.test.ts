@@ -255,9 +255,11 @@ describe("déploiement fail-closed des crons critiques", () => {
       [...emailCron.matchAll(/functions\.invoke\(\s*["']send-email["']/g)]
         .length,
     ).toBe(1);
-    expect(
-      [...emailCron.matchAll(/invokeIdempotentEmail\(/g)].length,
-    ).toBeGreaterThanOrEqual(7);
+    // Les rappels daily sont maintenant préparés atomiquement en SQL, puis
+    // empruntent ce même transport idempotent au moment du drain.
+    expect(emailCron).toContain('fn_preparer_rappels_quotidiens');
+    expect(emailCron).toContain('traiterRappelQuotidien(sb, email.id');
+    expect(emailCron).toContain('invokeIdempotentEmail(sb, rappel.scope, rappel.identite, rappel.corps, budget)');
     expect(emailCron).toContain("results.email_queue_erreurs = queueErrors");
     expect(emailCron).toContain("status: success ? 200 : 500");
     expect(emailCron).toContain("Number(value) < 0");
@@ -292,7 +294,9 @@ describe("déploiement fail-closed des crons critiques", () => {
     );
 
     expect(emailCron).toContain("async function invokeIdempotentSms");
-    expect(emailCron).toContain("'sms_rappel_mission_j1'");
+    const dailyQueue = readFileSync(`${root}/supabase/migrations/20260925143000_file_rappels_quotidiens.sql`, 'utf8');
+    expect(dailyQueue).toContain("'MISSION_SMS','sms_rappel_mission_j1'");
+    expect(emailCron).toContain('invokeIdempotentSms(sb, await emailIdempotencyKey(rappel.scope, rappel.identite, rappel.corps), rappel.corps, budget)');
     expect(emailCron).toContain("`email-queue.sms.${email.id}`");
     expect(emailCron).toContain("markSentError || !markedSent");
     expect(emailCron).toContain(".eq('statut', 'EN_ATTENTE')");

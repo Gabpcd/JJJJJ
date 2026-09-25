@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send, Edit3, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { envoyerEmailConfirme } from '@/lib/envoiEmailConfirme';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 
@@ -83,6 +84,9 @@ export default function AdminGroupes() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const verrouEmail = useRef(false);
+  const campagneEmail = useRef<{ signature: string; cles: Map<string, string>; envoyes: Set<string> } | null>(null);
+  const [erreurEmail, setErreurEmail] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
@@ -258,30 +262,41 @@ export default function AdminGroupes() {
   };
 
   const envoyerEmail = async (destinataires: string[], groupeNom: string) => {
+    if (verrouEmail.current) return;
     if (!emailSubject.trim() || !emailBody.trim()) {
       toast.error('Sujet et contenu requis');
       return;
     }
+    const emails = [...new Set(destinataires.map(e => e?.trim()).filter(Boolean))].sort();
+    if (!emails.length) { toast.error('Aucune adresse email disponible.'); return; }
+    const contenu = { subject: emailSubject, body: emailBody, groupe: groupeNom };
+    const signature = JSON.stringify([emails, contenu]);
+    if (campagneEmail.current?.signature !== signature) {
+      campagneEmail.current = { signature, envoyes: new Set(), cles: new Map(emails.map(e => [e, `admin-broadcast:${crypto.randomUUID()}`])) };
+    }
+    const campagne = campagneEmail.current;
+    verrouEmail.current = true;
     setSendingEmail(true);
+    setErreurEmail(null);
     try {
-      for (const email of destinataires.filter(Boolean)) {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            type: 'ADMIN_BROADCAST',
-            data: { subject: emailSubject, body: emailBody, groupe: groupeNom },
-            destinataire_email: email,
-          },
-        });
+      for (const email of emails) {
+        if (campagne.envoyes.has(email)) continue;
+        await envoyerEmailConfirme({ type: 'ADMIN_BROADCAST', data: contenu, destinataire_email: email }, campagne.cles.get(email)!);
+        campagne.envoyes.add(email);
       }
-      toast.success(`Email envoyé à ${destinataires.filter(Boolean).length} destinataire(s)`);
+      toast.success(`Email envoyé à ${emails.length} destinataire(s)`);
       setEmailGroupeId(null);
       setEmailClinicId(null);
       setEmailSubject('');
       setEmailBody('');
+      campagneEmail.current = null;
     } catch {
-      toast.error('Erreur lors de l\'envoi');
+      setErreurEmail(`${campagne.envoyes.size} envoi(s) confirmé(s) sur ${emails.length}. Réessayez : les envois déjà confirmés ne seront pas répétés.`);
+      toast.error("L'envoi n'est pas terminé. Le message est conservé.");
+    } finally {
+      verrouEmail.current = false;
+      setSendingEmail(false);
     }
-    setSendingEmail(false);
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Groupes de santé" /></LayoutAdmin>;
@@ -306,6 +321,8 @@ export default function AdminGroupes() {
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <Building2 className="h-6 w-6 text-primary" /> Groupes de santé
         </h1>
+
+        {erreurEmail && <p role="alert" className="text-sm text-destructive">{erreurEmail}</p>}
 
         {groupes.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8">Aucun groupe de santé enregistré.</p>
@@ -370,7 +387,7 @@ export default function AdminGroupes() {
                       Modifier taux du groupe
                     </BoutonY2K>
                   )}
-                  <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => {
+                  <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" disabled={sendingEmail} onClick={() => {
                     setEmailGroupeId(g.id);
                     setEmailClinicId(null);
                   }} iconeGauche={<Mail className="h-3.5 w-3.5" />}>
@@ -453,10 +470,10 @@ export default function AdminGroupes() {
                   <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                     <Mail className="h-4 w-4 text-primary" /> Email à tout le groupe ({g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''})
                   </p>
-                  <Input aria-label={`Sujet de l’email au groupe ${g.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-sm" />
+                  <Input aria-label={`Sujet de l’email au groupe ${g.nom}`} disabled={sendingEmail} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-sm" />
                   <textarea
                     aria-label={`Contenu de l’email au groupe ${g.nom}`}
-                    value={emailBody} onChange={e => setEmailBody(e.target.value)}
+                    disabled={sendingEmail} value={emailBody} onChange={e => setEmailBody(e.target.value)}
                     placeholder="Contenu du message..."
                     rows={4}
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -468,7 +485,7 @@ export default function AdminGroupes() {
                     )} disabled={sendingEmail} loading={sendingEmail} className="gap-1" iconeGauche={sendingEmail ? undefined : <Send className="h-3.5 w-3.5" />}>
                       Envoyer
                     </BoutonY2K>
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailGroupeId(null)}>Annuler</BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" disabled={sendingEmail} onClick={() => setEmailGroupeId(null)}>Annuler</BoutonY2K>
                   </div>
                 </div>
               )}
@@ -544,7 +561,7 @@ export default function AdminGroupes() {
                             </td>
                             <td className="py-2.5 text-right">
                               <div className="flex gap-1 justify-end">
-                                <BoutonY2K size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => {
+                                <BoutonY2K size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={sendingEmail} onClick={() => {
                                   setEmailClinicId(c.id);
                                   setEmailGroupeId(g.id);
                                 }} aria-label="Envoyer un email">
@@ -559,10 +576,10 @@ export default function AdminGroupes() {
                               <td colSpan={9} className="py-2 px-2">
                                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                                   <p className="text-xs font-semibold">Email à {c.nom}</p>
-                                  <Input aria-label={`Sujet de l’email à ${c.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
+                                  <Input aria-label={`Sujet de l’email à ${c.nom}`} disabled={sendingEmail} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
                                   <textarea
                                     aria-label={`Contenu de l’email à ${c.nom}`}
-                                    value={emailBody} onChange={e => setEmailBody(e.target.value)}
+                                    disabled={sendingEmail} value={emailBody} onChange={e => setEmailBody(e.target.value)}
                                     placeholder="Contenu..." rows={3}
                                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                                   />
@@ -670,10 +687,10 @@ export default function AdminGroupes() {
                       {emailClinicId === c.id && emailGroupeId === g.id && (
                         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                           <p className="text-xs font-semibold">Email à {c.nom}</p>
-                          <Input aria-label={`Sujet de l’email à ${c.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
+                          <Input aria-label={`Sujet de l’email à ${c.nom}`} disabled={sendingEmail} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
                           <textarea
                             aria-label={`Contenu de l’email à ${c.nom}`}
-                            value={emailBody} onChange={e => setEmailBody(e.target.value)}
+                            disabled={sendingEmail} value={emailBody} onChange={e => setEmailBody(e.target.value)}
                             placeholder="Contenu..." rows={3}
                             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                           />
