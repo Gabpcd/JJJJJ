@@ -85,6 +85,8 @@ BEGIN
  OR has_table_privilege('service_role','private.suppressions_compte_confirmees','UPDATE')
  OR has_function_privilege('authenticated','public.fn_anonymisation_compte_confirmee(uuid,text)','execute')
  OR has_function_privilege('anon','public.fn_anonymisation_compte_confirmee(uuid,text)','execute')
+ OR has_table_privilege('authenticated','private.suppression_etablissement_context','INSERT')
+ OR has_table_privilege('service_role','private.suppression_etablissement_context','INSERT')
  THEN RAISE EXCEPTION 'Preuve privée exposée aux clients'; END IF;
 END $preuves_privees$;
 
@@ -155,5 +157,7 @@ BEGIN
  THEN RAISE EXCEPTION 'Anonymisation finale non prouvée pour les deux rôles'; END IF;
  IF (SELECT count(*) FROM public.psc_auth_sessions WHERE state IN ('recette-suppression-psc-active','recette-suppression-psc-expiree'))<>2
  THEN RAISE EXCEPTION 'Session PSC indépendante interrompue'; END IF;
+ IF EXISTS(SELECT 1 FROM private.suppression_etablissement_context WHERE backend_pid=pg_backend_pid())
+ THEN RAISE EXCEPTION 'Contexte de suppression établissement non nettoyé'; END IF;
 END $preuves_finales$;
 ROLLBACK;
