@@ -1,3 +1,4 @@
+import { useCapaciteAlertesRecherches } from '@/hooks/useCapaciteAlertesRecherches';
 import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -58,6 +59,7 @@ export default function RechercheSoignantsEtab() {
 
 function RechercheSoignantsEtabContent() {
   usePageTitle('Recherche soignants');
+  const capaciteAlertes = useCapaciteAlertesRecherches('ETAB_RECHERCHE_SOIGNANTS');
   const { etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -201,8 +203,12 @@ function RechercheSoignantsEtabContent() {
           audience="ETAB_RECHERCHE_SOIGNANTS"
           filtresCourants={{ ...filtres }}
           onCharger={(valeurs) => { setFiltres(normaliserFiltresRechercheSoignants(valeurs)); setFiltresOuverts(true); }}
-          alertesDisponibles={false}
+          alertesDisponibles={capaciteAlertes.disponible}
         />
+        {!capaciteAlertes.disponible && <p className="mt-2 text-sm text-muted-foreground">
+          La sauvegarde des filtres reste disponible. L’activation des alertes email n’est pas disponible pour le moment.
+          <button className="ml-2 underline" disabled={capaciteAlertes.verificationEnCours} onClick={capaciteAlertes.reessayer}>Vérifier à nouveau</button>
+        </p>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">

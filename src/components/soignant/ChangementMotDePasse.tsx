@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 /**
  * Formulaire changement mot de passe avec vérification ancien + force nouveau (Sprint 5.5 PR 6).
@@ -30,6 +31,7 @@ export function ChangementMotDePasse() {
   const [showAncien, setShowAncien] = useState(false);
   const [showNouveau, setShowNouveau] = useState(false);
   const [loading, setLoading] = useState(false);
+  const enCours = useRef(false);
 
   const force = useMemo(() => calculerForce(nouveauMdp), [nouveauMdp]);
   const motDePasseValide = force.score === 5;
@@ -38,8 +40,9 @@ export function ChangementMotDePasse() {
 
   async function soumettre(e: React.FormEvent) {
     e.preventDefault();
-    if (!formValide || !user?.email) return;
+    if (!formValide || !user?.email || enCours.current) return;
 
+    enCours.current = true;
     setLoading(true);
     try {
       // Étape 1 : Vérifier l'ancien mot de passe (signInWithPassword silencieux)
@@ -50,7 +53,9 @@ export function ChangementMotDePasse() {
       if (signInError) {
         afficherNotification({
           type: 'erreur',
-          message: 'Ancien mot de passe incorrect.',
+          message: signInError.code === 'invalid_credentials'
+            ? 'Ancien mot de passe incorrect.'
+            : extraireMessageErreur(signInError),
         });
         setLoading(false);
         return;
@@ -63,7 +68,7 @@ export function ChangementMotDePasse() {
       if (updateError) {
         afficherNotification({
           type: 'erreur',
-          message: updateError.message || 'Erreur lors de la mise à jour.',
+          message: extraireMessageErreur(updateError),
         });
         setLoading(false);
         return;
@@ -91,9 +96,10 @@ export function ChangementMotDePasse() {
     } catch (err: any) {
       afficherNotification({
         type: 'erreur',
-        message: err?.message || 'Erreur réseau.',
+        message: extraireMessageErreur(err),
       });
     } finally {
+      enCours.current = false;
       setLoading(false);
     }
   }

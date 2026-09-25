@@ -1,0 +1,52 @@
+name: Staging — comptes réels et isolation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  comptes:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Résoudre les accès du staging uniquement
+        run: node scripts/ci/prepare-staging-api-env.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      - name: Construire le frontend connecté au staging
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ env.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ''
+          VITE_TURNSTILE_SITE_KEY: ''
+          VITE_ENV: test
+      - name: Parcours de comptes jetables via les services existants du staging
+        run: npx playwright test --config=e2e/playwright.staging-comptes.config.ts
+      - name: Preuves sans sessions ni mots de passe
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: staging-comptes-${{ github.run_id }}
+          path: test-results/staging-comptes/
+          retention-days: 7

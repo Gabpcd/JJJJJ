@@ -43,8 +43,8 @@ export function etabMetadata() {
 
 /** Filtres recherche missions variés (cardinalité réaliste). */
 export const PROFESSIONS = [
-  'IDE', 'AS', 'IADE', 'IBODE', 'AES', 'PUER', 'KINE', 'SF',
-  'INFIRMIER', 'AIDE_SOIGNANT', null, // null = pas de filtre
+  'IDE', 'AS', 'IADE', 'IBODE', 'AES', 'AUXILIAIRE_PUERICULTURE', 'KINE', 'SAGE_FEMME',
+  'MEDECIN', 'DENTISTE', null, // null = pas de filtre
 ];
 
 export const VILLES = [

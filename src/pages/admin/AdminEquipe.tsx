@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { avecDelai } from '@/lib/avecDelai';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -54,19 +55,29 @@ function emptyMembre(): FormMembre {
 export default function AdminEquipe() {
   usePageTitle('Équipe');
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const generationChargement = useRef(0);
   const [membres, setMembres] = useState<Membre[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editMembre, setEditMembre] = useState<FormMembre | null>(null);
   const [saving, setSaving] = useState(false);
 
   const charger = async () => {
+    const generation = ++generationChargement.current;
     setLoading(true);
-    const { data } = await supabase.from('equipe_admin' as any).select('*').order('date_embauche', { ascending: true });
-    setMembres((data as any[]) || []);
-    setLoading(false);
+    setErreurChargement(false);
+    try {
+      const { data, error } = await avecDelai(supabase.from('equipe_admin' as any).select('*').order('date_embauche', { ascending: true }), 15_000);
+      if (error || !Array.isArray(data)) throw error || new Error('Réponse invalide');
+      if (generation !== generationChargement.current) return;
+      setMembres(data as unknown as Membre[]);
+    } catch {
+      if (generation === generationChargement.current) setErreurChargement(true);
+    } finally {
+      if (generation === generationChargement.current) setLoading(false);
+    }
   };
-
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { void charger(); return () => { generationChargement.current += 1; }; }, []);
 
   useEffect(() => {
     if (!showForm) return;
@@ -156,6 +167,12 @@ export default function AdminEquipe() {
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Gestion de l’équipe" /></LayoutAdmin>;
+
+  if (erreurChargement) return <LayoutAdmin><div className="card-base space-y-3" role="alert">
+    <h1 className="text-xl font-bold">Gestion de l’équipe</h1>
+    <p>Chargement impossible. Les données ne sont pas disponibles.</p>
+    <BoutonY2K onClick={charger}>Réessayer</BoutonY2K>
+  </div></LayoutAdmin>;
 
   return (
     <LayoutAdmin>

@@ -43,6 +43,16 @@ describe('extraireMessageErreur', () => {
       .toBe('Email ou mot de passe incorrect.');
   });
 
+  it.each([
+    { code: 'PGRST301', message: 'JWT expired' },
+    { code: 'PGRST301', message: 'JWSError JWSInvalidSignature' },
+    { message: 'jwt expired' },
+  ])('invite en français à se reconnecter après un refus JWT : %j', (error) => {
+    expect(extraireMessageErreur(error)).toBe(
+      'Votre session a expiré ou n’est plus valide. Reconnectez-vous puis réessayez.',
+    );
+  });
+
   it('should translate Email not confirmed', () => {
     expect(extraireMessageErreur({ message: 'Email not confirmed' }))
       .toBe('Veuillez confirmer votre adresse email avant de vous connecter.');
@@ -86,6 +96,10 @@ describe('extraireMessageErreur', () => {
   it('should handle network errors', () => {
     expect(extraireMessageErreur({ message: 'Failed to fetch' }))
       .toBe('Erreur de connexion. Vérifiez votre accès internet.');
+  });
+
+  it.each(['Load failed', 'TypeError: Load failed'])('explique une coupure réseau Safari : %s', (message) => {
+    expect(extraireMessageErreur({ message })).toBe('Erreur de connexion. Vérifiez votre accès internet.');
   });
 
   it('should surface French trigger messages directly', () => {

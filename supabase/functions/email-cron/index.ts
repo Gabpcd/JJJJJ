@@ -1,3 +1,4 @@
+import { TYPES_ALERTES_FILTRES, traiterAlerteFiltres, resultatEnvoiEmail } from "../_shared/alertes-filtres-queue.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import {
   cronAuthErrorResponse,
@@ -49,11 +50,7 @@ async function invokeIdempotentEmail(
     body: { ...body, idempotency_key: idempotencyKey },
   });
   if (error) throw new Error(`send-email ${scope}: ${error.message}`);
-  if (data?.pending === true) return "pending";
-  if (data?.success !== true) {
-    throw new Error(`send-email ${scope}: réponse invalide`);
-  }
-  return data?.skipped === true ? "skipped" : "sent";
+  return resultatEnvoiEmail(data);
 }
 
 async function invokeIdempotentSms(
@@ -385,78 +382,19 @@ Deno.serve(async (req) => {
     results.serie_skipped = serieSkipped;
     results.serie_erreurs = serieErreurs;
 
-    // [J2.3.C.2] Alertes filtres sauvegardés (QUOTIDIENNE/HEBDOMADAIRE/IMMEDIATE).
-    // Boucle sur les filtres éligibles, envoie un email par filtre avec
-    // les nouveaux résultats matchants. fn_evaluer_alertes_filtres met à
-    // jour dernier_check_le et nb_resultats_dernier_check côté DB.
-    let alertesEnvoyees = 0, alertesErreurs = 0;
+    // Évaluation atomique + file durable. Le worker confirme sa compatibilité
+    // avant que l'interface puisse proposer de nouvelles alertes établissement.
     try {
-      // Param p_frequence = NULL → toutes fréquences (la fenêtre de marge
-      // dans la fonction filtre par elle-même : QUOTIDIENNE>23h, etc.).
-      const { data: filtresMatchants, error: filtresError } =
-        await sb.rpc('fn_evaluer_alertes_filtres', { p_frequence: null });
-      if (filtresError) throw filtresError;
-      for (const fm of ((filtresMatchants as any[]) || [])) {
-        try {
-          // Récupérer aperçu top 5 résultats
-          const { data: apercu } = await sb.rpc('fn_obtenir_apercu_filtre', {
-            p_filtre_id: fm.filtre_id, p_since: '1970-01-01T00:00:00Z', p_limit: 5,
-          });
-          const items = (apercu as any[]) || [];
-
-          // Préparer payload selon audience
-          let emailType: string;
-          const payload: any = {
-            nom_filtre: fm.nom,
-            count: fm.nb_nouveaux,
-          };
-          if (fm.audience === 'SOIGNANT_RECHERCHE_MISSIONS') {
-            emailType = 'NOUVELLES_MISSIONS_FILTRE';
-            // Récupérer prénom soignant
-            const { data: s } = await sb.from('soignants').select('prenom').eq('id', fm.utilisateur_id).maybeSingle();
-            payload.prenom = (s as any)?.prenom || '';
-            payload.missions = items;
-          } else {
-            emailType = 'NOUVEAUX_SOIGNANTS_FILTRE';
-            const { data: e } = await sb.from('etablissements').select('nom').eq('id', fm.utilisateur_id).maybeSingle();
-            payload.nom_etab = (e as any)?.nom || '';
-            payload.soignants = items;
-          }
-
-          const filtreBody = {
-            type: emailType,
-            destinataire_id: fm.utilisateur_id,
-            data: payload,
-          };
-          const filtreOutcome = await invokeIdempotentEmail(
-            sb,
-            "alerte_filtre",
-            {
-              filtre_id: fm.filtre_id,
-              fenetre_heure: new Date().toISOString().slice(0, 13),
-            },
-            filtreBody,
-          );
-          if (filtreOutcome === "pending") continue;
-
-          await sb.from('journaux_audit').insert({
-            acteur_id: null, type_acteur: 'SYSTEME',
-            action: 'ALERTE_ENVOYEE', type_ressource: 'filtre_sauvegarde',
-            id_ressource: fm.filtre_id,
-            details: { audience: fm.audience, nb_nouveaux: fm.nb_nouveaux, nom: fm.nom },
-          });
-          alertesEnvoyees++;
-        } catch (err: any) {
-          alertesErreurs++;
-          console.error('[email-cron] Alerte filtre erreur:', err?.message || err);
-        }
-      }
-    } catch (err) {
-      alertesErreurs++;
-      console.error('[email-cron] Erreur globale alertes filtres:', err);
+      const { data: repris, error: repriseError } = await sb.rpc('fn_reprendre_alertes_filtres');
+      if (repriseError) throw repriseError;
+      const { error: evaluationError } = await sb.rpc('fn_evaluer_alertes_filtres', { p_frequence: null });
+      if (evaluationError) throw evaluationError;
+      results.alertes_filtres_reprises = repris;
+      results.alertes_filtres_erreurs = 0;
+    } catch (error) {
+      results.alertes_filtres_erreurs = 1;
+      console.error('[email-cron] Préparation des alertes impossible', error);
     }
-    results.alertes_filtres_envoyees = alertesEnvoyees;
-    results.alertes_filtres_erreurs = alertesErreurs;
     }
 
     // [Refonte.D.1] Médiation litiges : transition automatique MEDIATION_EN_COURS > 7j → REVUE_ADMIN
@@ -500,6 +438,20 @@ Deno.serve(async (req) => {
       .limit(50);
     if (pendingEmailsError) throw pendingEmailsError;
     for (const email of (pendingEmails || [])) {
+      if (TYPES_ALERTES_FILTRES.includes(email.type)) {
+        try {
+          const outcome = await traiterAlerteFiltres(sb, email, (body) => invokeIdempotentEmail(
+            sb, 'email_queue', { email_queue_id: email.id }, body,
+          ));
+          if (outcome === 'envoye') emailQueueCount++;
+          if (outcome === 'erreur' || outcome === 'pending') queueErrors++;
+        } catch (error) {
+          // Pas de marquage irréversible si la validation ou le stockage tombe.
+          queueErrors++;
+          console.error('[email-cron] Livraison alerte à reprendre', email.id, error);
+        }
+        continue;
+      }
       const isSmsQueueItem =
         email.type?.startsWith('SMS_') && Boolean(email.data?.telephone);
       try {

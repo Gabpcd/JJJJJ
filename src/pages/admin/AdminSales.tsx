@@ -1576,9 +1576,13 @@ function PostsGenerateur() {
     })();
   }, []);
 
-  const copier = (txt: string) => {
-    navigator.clipboard.writeText(txt);
-    toast.success('Post copié — collez-le dans le groupe.');
+  const copier = async (txt: string) => {
+    try {
+      await navigator.clipboard.writeText(txt);
+      toast.success('Post copié — collez-le dans le groupe.');
+    } catch {
+      toast.error('Impossible de copier le post. Réessayez ou sélectionnez le texte.');
+    }
   };
 
   const sauverLienAvis = async () => {

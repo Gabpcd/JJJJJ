@@ -8,12 +8,14 @@ import { SelecteurEtablissement } from '@/components/SelecteurEtablissement';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getLabelTypeEtablissement } from '@/lib/constantes';
+import { avecDelai } from '@/lib/avecDelai';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 export default function DashboardGroupe() {
   usePageTitle('Dashboard Groupe');
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id;
   const [etabSelectionne, setEtabSelectionne] = useState('tous');
   const [etablissements, setEtablissements] = useState<any[]>([]);
   const [groupeNom, setGroupeNom] = useState('Mon Groupe');
@@ -22,33 +24,37 @@ export default function DashboardGroupe() {
   const [filtreType, setFiltreType] = useState('');
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, actifs: 0 });
   const [perfParEtab, setPerfParEtab] = useState<any[]>([]);
+  const [erreur, setErreur] = useState(false);
+  const [erreurStats, setErreurStats] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [tentative, setTentative] = useState(0);
+  const [tentativeStats, setTentativeStats] = useState(0);
 
   useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const { data: adminData } = await supabase
-        .from('admins_groupe_sante')
-        .select('groupe_id, groupes_sante(nom)')
-        .eq('utilisateur_id', user.id)
-        .limit(1)
-        .single();
-
-      if (!adminData) { setLoading(false); return; }
-      const groupeId = adminData.groupe_id;
-      setGroupeNom((adminData as any).groupes_sante?.nom || 'Mon Groupe');
-
-      const { data: etabs } = await supabase
-        .from('etablissements')
-        .select('id, nom, adresse_ville, adresse_departement, type')
-        .eq('groupe_sante_id', groupeId)
-        .is('supprime_le', null)
-        .order('nom');
-
-      if (etabs) setEtablissements(etabs);
-      setLoading(false);
-    };
-    load();
-  }, [user]);
+    let actif = true;
+    setLoading(true);
+    setErreur(false);
+    if (!userId) return () => { actif = false; };
+    void (async () => {
+      try {
+        const { data: adminData, error } = await avecDelai(supabase.from('admins_groupe_sante')
+          .select('groupe_id, groupes_sante(nom)').eq('utilisateur_id', userId).limit(1).single(), 15_000);
+        if (error || !adminData?.groupe_id) throw error || new Error('Groupe indisponible');
+        const resultat = await avecDelai(supabase.from('etablissements')
+          .select('id, nom, adresse_ville, adresse_departement, type')
+          .eq('groupe_sante_id', adminData.groupe_id).is('supprime_le', null).order('nom'), 15_000);
+        if (resultat.error || !Array.isArray(resultat.data)) throw resultat.error || new Error('Liste indisponible');
+        if (!actif) return;
+        setGroupeNom((adminData as any).groupes_sante?.nom || 'Mon Groupe');
+        setEtablissements(resultat.data);
+      } catch {
+        if (actif) setErreur(true);
+      } finally {
+        if (actif) setLoading(false);
+      }
+    })();
+    return () => { actif = false; };
+  }, [userId, tentative]);
 
   // Compute filtered etabs
   const etabsFiltres = useMemo(() => etablissements.filter(e => {
@@ -57,56 +63,65 @@ export default function DashboardGroupe() {
     return true;
   }), [etablissements, filtreDepartement, filtreType]);
 
-  const etabIds = useMemo(() => etabSelectionne === 'tous'
-    ? etabsFiltres.map(e => e.id)
-    : etabsFiltres.filter(e => e.id === etabSelectionne).map(e => e.id),
-  [etabSelectionne, etabsFiltres]);
+  const etabsSelectionnes = useMemo(() => etabSelectionne === 'tous'
+    ? etabsFiltres : etabsFiltres.filter(e => e.id === etabSelectionne), [etabSelectionne, etabsFiltres]);
 
   useEffect(() => {
-    if (etabIds.length === 0) {
+    let actif = true;
+    setErreurStats(false);
+    setLoadingStats(true);
+    if (loading || erreur) return () => { actif = false; };
+    const etabIds = etabsSelectionnes.map(e => e.id);
+    if (!etabIds.length) {
       setKpi({ ouvertes: 0, enCours: 0, terminees: 0, actifs: 0 });
       setPerfParEtab([]);
-      return;
+      setLoadingStats(false);
+      return () => { actif = false; };
     }
-    const loadKpi = async () => {
-      const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-      const [{ count: o }, { count: ec }, { count: t }] = await Promise.all([
-        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'OUVERTE'),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
-      ]);
-      setKpi({ ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0, actifs: etabsFiltres.length });
-
-      // Performance par établissement — batch query (1 query instead of 4N)
-      const { data: allMissions } = await supabase
-        .from('missions')
-        .select('etablissement_id, statut')
-        .in('etablissement_id', etabIds);
-      const missionsByEtab: Record<string, any[]> = {};
-      for (const m of allMissions || []) {
-        (missionsByEtab[m.etablissement_id] ??= []).push(m);
+    void (async () => {
+      try {
+        const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+        const comptes = await avecDelai(Promise.all([
+          supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'OUVERTE'),
+          supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'EN_COURS'),
+          supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
+        ]), 15_000);
+        if (comptes.some(r => r.error || r.count === null)) throw new Error('Statistiques indisponibles');
+        // Paginer pour ne pas tronquer la performance au plafond PostgREST.
+        const missions: { etablissement_id: string; statut: string }[] = [];
+        for (let debut = 0; ; debut += 1000) {
+          const resultat = await avecDelai(supabase.from('missions').select('etablissement_id, statut')
+            .in('etablissement_id', etabIds).order('id').range(debut, debut + 999), 15_000);
+          if (!actif) return;
+          if (resultat.error || !Array.isArray(resultat.data)) throw resultat.error || new Error('Performance indisponible');
+          missions.push(...resultat.data);
+          if (resultat.data.length < 1000) break;
+        }
+        if (!actif) return;
+        setKpi({ ouvertes: comptes[0].count!, enCours: comptes[1].count!, terminees: comptes[2].count!, actifs: etabsSelectionnes.length });
+        setPerfParEtab(etabsSelectionnes.map(e => {
+          const ms = missions.filter(m => m.etablissement_id === e.id);
+          const ouvertes = ms.filter(m => m.statut === 'OUVERTE').length;
+          const assignees = ms.filter(m => m.statut === 'ASSIGNEE').length;
+          const terminees = ms.filter(m => m.statut === 'TERMINEE').length;
+          return { ...e, ouvertes, assignees, terminees, taux: ms.length ? Math.round((assignees + terminees) / ms.length * 100) : 0 };
+        }));
+      } catch {
+        if (actif) setErreurStats(true);
+      } finally {
+        if (actif) setLoadingStats(false);
       }
-      const perfs = etabsFiltres.map((e) => {
-        const ms = missionsByEtab[e.id] || [];
-        const ouv = ms.filter(m => m.statut === 'OUVERTE').length;
-        const ass = ms.filter(m => m.statut === 'ASSIGNEE').length;
-        const term = ms.filter(m => m.statut === 'TERMINEE').length;
-        const totalN = ms.length;
-        const assigned = ass + term;
-        return {
-          ...e,
-          ouvertes: ouv,
-          assignees: ass,
-          terminees: term,
-          taux: totalN > 0 ? Math.round((assigned / totalN) * 100) : 0,
-        };
-      });
-      setPerfParEtab(perfs);
-    };
-    loadKpi();
-  }, [etabIds, etabsFiltres]);
+    })();
+    return () => { actif = false; };
+  }, [etabsSelectionnes, loading, erreur, tentativeStats]);
 
   if (loading) return <LayoutApp role="ADMIN_GROUPE"><ChargementPage /></LayoutApp>;
+
+  if (erreur) return <LayoutApp role="ADMIN_GROUPE"><div className="card-base space-y-3" role="alert">
+    <h1 className="text-xl font-bold">Tableau de bord du groupe</h1>
+    <p>Impossible de charger les établissements du groupe.</p>
+    <BoutonY2K onClick={() => setTentative(t => t + 1)}>Réessayer</BoutonY2K>
+  </div></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_GROUPE">
@@ -128,29 +143,33 @@ export default function DashboardGroupe() {
         />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPIY2K
+      {loadingStats ? <ChargementPage /> : erreurStats ? <div className="card-base space-y-3" role="alert">
+        <p>Impossible de charger les statistiques du groupe.</p>
+        <BoutonY2K onClick={() => setTentativeStats(t => t + 1)}>Réessayer</BoutonY2K>
+      </div> : <>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+        <CarteKPIY2K className="w-full min-w-0 h-full"
           icone={<Briefcase className="h-4 w-4" />}
           valeur={kpi.ouvertes}
           label="Missions ouvertes"
           variant="holographic"
           onClick={() => navigate('/groupe/etablissements')}
         />
-        <CarteKPIY2K
+        <CarteKPIY2K className="w-full min-w-0 h-full"
           icone={<PlayCircle className="h-4 w-4" />}
           valeur={kpi.enCours}
           label="En cours"
           variant="default"
           onClick={() => navigate('/groupe/etablissements')}
         />
-        <CarteKPIY2K
+        <CarteKPIY2K className="w-full min-w-0 h-full"
           icone={<CheckCircle className="h-4 w-4" />}
           valeur={kpi.terminees}
           label="Terminées ce mois"
           variant="default"
           onClick={() => navigate('/groupe/etablissements')}
         />
-        <CarteKPIY2K
+        <CarteKPIY2K className="w-full min-w-0 h-full"
           icone={<Building2 className="h-4 w-4" />}
           valeur={kpi.actifs}
           label="Établissements actifs"
@@ -196,6 +215,7 @@ export default function DashboardGroupe() {
           </tbody>
         </table>
       </div>
+      </>}
     </LayoutApp>
   );
 }

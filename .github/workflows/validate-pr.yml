@@ -46,6 +46,9 @@ jobs:
         # getLabelProfession non importé).
         run: npx tsc -b
 
+      - name: Contrats des scénarios de charge
+        run: node --test tests/node/load-tests.node.mjs
+
       - name: Tests unitaires
         run: npm test -- --reporter=dot
 
@@ -355,7 +358,9 @@ jobs:
             tests/security/moyenne-44h-12-semaines.test.sql
             tests/security/p0-auth-rls.test.sql
             tests/security/inscription-progressive.test.sql
+            tests/security/suppression-compte-isolation-psc.test.sql
             tests/security/exploration-sans-profil.test.sql
+            tests/security/alertes-recherches-etablissement.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 

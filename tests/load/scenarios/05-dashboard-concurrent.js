@@ -1,3 +1,5 @@
+import { resumeCharge } from '../helpers/resume.js';
+import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario E — Dashboard concurrent.
  *
@@ -19,31 +21,33 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { SUPABASE_URL, authedHeaders, loginTestAccount } from '../helpers/auth.js';
+import { dashboardValide, exigerDashboardMetier } from '../helpers/contrats.js';
 
-export const options = {
-  scenarios: {
-    dashboard_concurrent: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '20s', target: 100 },
-        { duration: '1m', target: 100 },
-        { duration: '10s', target: 0 },
-      ],
-      gracefulRampDown: '15s',
-    },
-  },
-  thresholds: {
-    'http_req_failed{name:rpc_dashboard}': ['rate<0.01'],
-    'http_req_duration{name:rpc_dashboard}': ['p(95)<2000', 'p(99)<3500'],
-  },
-};
+export const options = creerOptionsCharge('dashboard_concurrent', {
+  executor: 'ramping-vus',
+  startVUs: 0,
+  stages: [
+    { duration: '20s', target: 100 },
+    { duration: '1m', target: 100 },
+    { duration: '10s', target: 0 },
+  ],
+  gracefulRampDown: '15s',
+}, {
+  'http_req_failed{name:rpc_dashboard}': ['rate<0.01'],
+  'http_req_duration{name:rpc_dashboard}': ['p(95)<2000', 'p(99)<3500'],
+}, __ENV);
 
 export function setup() {
   const session = loginTestAccount('SOIGNANT');
   if (!session?.access_token) {
     throw new Error('setup: login playwright-soignant échoué');
   }
+  const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`, '{}', {
+    headers: authedHeaders(session.access_token), tags: { name: 'dashboard_preflight' }, timeout: '15s',
+  });
+  if (res.status !== 200) throw new Error(`Préflight E : dashboard indisponible (HTTP ${res.status}).`);
+  exigerDashboardMetier(res.json());
+  console.log('Préflight E : profil soignant et structure métier présents ; charge sur un seul compte, aucune mutation métier.');
   return { jwt: session.access_token };
 }
 
@@ -52,11 +56,12 @@ export default function (data) {
   const res = http.post(url, '{}', {
     headers: authedHeaders(data.jwt),
     tags: { name: 'rpc_dashboard' },
+    timeout: '15s',
   });
   check(res, {
     'dashboard 200': (r) => r.status === 200,
-    'dashboard returns object': (r) => {
-      try { return typeof r.json() === 'object'; } catch { return false; }
+    'dashboard profil et contrat metier valides': (r) => {
+      try { return dashboardValide(r.json()); } catch { return false; }
     },
   });
   sleep(0.5);
@@ -70,16 +75,5 @@ export function handleSummary(data) {
 }
 
 function textSummary(data, label) {
-  const m = data.metrics;
-  const dur = m['http_req_duration{name:rpc_dashboard}'] || m.http_req_duration;
-  const fail = m['http_req_failed{name:rpc_dashboard}'] || m.http_req_failed;
-  return [
-    '',
-    `=== Scenario ${label} ===`,
-    `Iterations  : ${m.iterations?.values?.count ?? 'n/a'}`,
-    `Req/s       : ${m.http_reqs?.values?.rate?.toFixed(2) ?? 'n/a'}`,
-    `Failure %   : ${((fail?.values?.rate ?? 0) * 100).toFixed(2)}`,
-    `p50/p95/p99 : ${dur?.values?.['p(50)']?.toFixed(0)}/${dur?.values?.['p(95)']?.toFixed(0)}/${dur?.values?.['p(99)']?.toFixed(0)} ms`,
-    '',
-  ].join('\n');
+  return resumeCharge(data, label, 'rpc_dashboard', options);
 }

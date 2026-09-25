@@ -1,70 +1,22 @@
-# Tests de charge k6 — Jolene
+# Recettes de charge API staging
 
-Tests de charge **API pure** (pas de frontend) ciblant le projet **staging**
-(`mejpriaetwgtcstbgfid`). Vercel scale automatiquement, donc on cible
-uniquement les goulets d'étranglement potentiels : Supabase auth, RPCs PostgREST,
-edge functions.
+Destination unique : `https://mejpriaetwgtcstbgfid.supabase.co`. Les scripts refusent toute autre URL. Aucune charge de production n’est autorisée par cet outillage.
 
-## Structure
+Le document de référence est [docs/tests-charge.md](../../docs/tests-charge.md) : prérequis métier, paramètres, limites et état exact des scénarios.
 
-```
-tests/load/
-├── helpers/
-│   ├── auth.js     # login/signup Supabase API direct + headers
-│   └── data.js     # génération comptes, filtres, randoms
-├── scenarios/
-│   ├── 01-inscription-bloc.js          # 100 VUs signup
-│   ├── 02-login-simultane.js           # 50 VUs login
-│   ├── 03-recherche-missions.js        # 200 VUs RPC recherche
-│   ├── 04-candidatures-simultanees.js  # 50 VUs postuler 1 mission (race)
-│   ├── 05-dashboard-concurrent.js      # 100 VUs RPC dashboard
-│   └── 06-cron-weekly-invoicing.js     # 1 VU invoke cron (500 missions)
-├── seed/
-│   ├── seed-staging.sql       # 500 missions [loadtest] TERMINEE pour scenario F
-│   └── cleanup-staging.sql    # purge missions + comptes loadtest-*
-└── results/                    # JSON outputs k6 (gitignored)
-```
+- C (`03-recherche-missions`) : lecture publique ; exige une mission visible au préflight.
+- E (`05-dashboard-concurrent`) : lectures sur un profil soignant staging ; exige un vrai profil métier au préflight.
+- A/B : charge Auth ; A crée des comptes et nécessite une isolation préalable des envois email.
+- D/F : suspendus avec échec explicite avant toute requête, car les anciens scripts pouvaient annoncer un succès sans acte métier. `all` n’est donc pas une campagne verte attendue.
 
-## Lancement
+Le workflow manuel `Load tests (k6)` reçoit les overrides VUs et durée. Les scénarios actifs les appliquent via `helpers/options.js`. Pour une durée explicite, la charge utilise des VUs constants pendant cette durée totale (maximum 15 minutes), sans rampe supplémentaire.
 
-**Toujours via le workflow `load-tests.yml` — JAMAIS contre la prod.**
+Le dossier `seed/` contient des scripts historiques : leur présence ne prouve ni l’éligibilité des profils ni la facturabilité du lot. Ils ne doivent pas être lancés automatiquement pour contourner les préflights.
 
-1. Setup staging (1× au début) : Actions → "Deploy Supabase STAGING" → Run
-   workflow (avec `seed_load_test_data=true` si scenario F).
-2. Run scénario : Actions → "Load tests (k6)" → Run workflow → choisir scénario.
-3. Récupérer artifacts JSON.
-
-### Local (dev)
+Pour vérifier l’outillage localement **sans réseau**, sans k6, sans compte et sans secret :
 
 ```bash
-# Installer k6 : https://k6.io/docs/get-started/installation/
-brew install k6  # macOS
-# ou : curl -L https://github.com/grafana/k6/releases/latest/download/k6-linux-amd64.tar.gz | tar xz
-
-export STAGING_SUPABASE_URL=https://mejpriaetwgtcstbgfid.supabase.co
-export STAGING_SUPABASE_ANON_KEY=<anon staging>
-export STAGING_SUPABASE_SERVICE_ROLE_KEY=<service_role staging>
-export LOAD_TEST_PASSWORD=<password compte test>
-
-k6 run tests/load/scenarios/03-recherche-missions.js
+node --test tests/node/load-tests.node.mjs
 ```
 
-## Cibles de performance
-
-Voir `docs/tests-charge.md`.
-
-## Cleanup
-
-Après une session de tests :
-
-```sql
--- Via SQL Editor staging
-\i tests/load/seed/cleanup-staging.sql
-```
-
-## Convention de seeding
-
-- Missions test : `intitule LIKE '[loadtest]%'`
-- Comptes auth créés : `email LIKE 'loadtest-%@jolene.app'`
-- Comptes test fixes (PRESERVÉS) : `playwright-soignant@jolene.app`,
-  `playwright-etab@jolene.app`
+Les sorties d’une campagne k6 réelle sont stockées sous `tests/load/results/` puis jointes aux artefacts GitHub. Une recette de scripts en mémoire n’est pas une mesure de performance du service.

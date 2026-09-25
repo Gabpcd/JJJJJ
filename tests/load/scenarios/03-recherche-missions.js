@@ -1,3 +1,5 @@
+import { resumeCharge } from '../helpers/resume.js';
+import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario C — Recherche missions massive.
  *
@@ -16,29 +18,35 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { SUPABASE_URL, anonHeaders } from '../helpers/auth.js';
 import { randomFilters } from '../helpers/data.js';
+import { rechercheValide, exigerRecherchePeuplee } from '../helpers/contrats.js';
 
-export const options = {
-  scenarios: {
-    recherche_missions: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '30s', target: 200 },
-        { duration: '1m30s', target: 200 },
-        { duration: '15s', target: 0 },
-      ],
-      gracefulRampDown: '15s',
-    },
-  },
-  thresholds: {
-    'http_req_failed{name:rpc_recherche}': ['rate<0.01'],
-    'http_req_duration{name:rpc_recherche}': ['p(50)<400', 'p(95)<1000', 'p(99)<2000'],
-  },
-};
+export const options = creerOptionsCharge('recherche_missions', {
+  executor: 'ramping-vus',
+  startVUs: 0,
+  stages: [
+    { duration: '30s', target: 200 },
+    { duration: '1m30s', target: 200 },
+    { duration: '15s', target: 0 },
+  ],
+  gracefulRampDown: '15s',
+}, {
+  'http_req_failed{name:rpc_recherche}': ['rate<0.01'],
+  'http_req_duration{name:rpc_recherche}': ['p(50)<400', 'p(95)<1000', 'p(99)<2000'],
+}, __ENV);
+
+export function setup() {
+  const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_missions_publiques_recherche`, '{}', {
+    headers: anonHeaders(), tags: { name: 'recherche_preflight' }, timeout: '15s',
+  });
+  if (res.status !== 200) throw new Error(`Préflight C : recherche indisponible (HTTP ${res.status}).`);
+  const nombreMissions = exigerRecherchePeuplee(res.json());
+  console.log(`Préflight C : ${nombreMissions} mission(s) publique(s) visible(s). Aucune écriture.`);
+}
 
 export default function () {
   const url = `${SUPABASE_URL}/rest/v1/rpc/fn_missions_publiques_recherche`;
-  const filters = randomFilters();
+  // Inclure régulièrement la recherche peuplée du préflight ; les filtres sans résultat restent légitimes.
+  const filters = __ITER % 5 === 0 ? {} : randomFilters();
   // Nettoyer les null pour ne pas envoyer "p_profession":null si non utilisé
   const body = {};
   if (filters.p_profession) body.p_profession = filters.p_profession;
@@ -47,11 +55,15 @@ export default function () {
   const res = http.post(url, JSON.stringify(body), {
     headers: anonHeaders(),
     tags: { name: 'rpc_recherche' },
+    timeout: '15s',
   });
   check(res, {
     'recherche 200': (r) => r.status === 200,
-    'recherche array body': (r) => {
-      try { return Array.isArray(r.json()); } catch { return false; }
+    'recherche contrat public valide': (r) => {
+      try { return rechercheValide(r.json()); } catch { return false; }
+    },
+    'recherche sans filtre peuplee': (r) => {
+      try { return __ITER % 5 !== 0 || r.json().length > 0; } catch { return false; }
     },
   });
   sleep(0.3);
@@ -65,16 +77,5 @@ export function handleSummary(data) {
 }
 
 function textSummary(data, label) {
-  const m = data.metrics;
-  const dur = m['http_req_duration{name:rpc_recherche}'] || m.http_req_duration;
-  const fail = m['http_req_failed{name:rpc_recherche}'] || m.http_req_failed;
-  return [
-    '',
-    `=== Scenario ${label} ===`,
-    `Iterations  : ${m.iterations?.values?.count ?? 'n/a'}`,
-    `Req/s       : ${m.http_reqs?.values?.rate?.toFixed(2) ?? 'n/a'}`,
-    `Failure %   : ${((fail?.values?.rate ?? 0) * 100).toFixed(2)}`,
-    `p50/p95/p99 : ${dur?.values?.['p(50)']?.toFixed(0)}/${dur?.values?.['p(95)']?.toFixed(0)}/${dur?.values?.['p(99)']?.toFixed(0)} ms`,
-    '',
-  ].join('\n');
+  return resumeCharge(data, label, 'rpc_recherche', options);
 }

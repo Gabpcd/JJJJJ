@@ -97,6 +97,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    }
    else if(nom==='mission_creneaux')data=etat.donnees?[creneau]:[];
    else if(nom==='fn_compte_auth_actif')data=true;
+   else if(nom==='fn_capacite_alertes_recherches')data=false;
    else if(nom==='fn_messages_non_lus')data=0;
    else if(nom==='notifications'&&req.method()==='PATCH')data=null;
    else if(nom==='fn_bfa_info')data={eligible:false};
@@ -105,7 +106,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    else if(nom==='fn_lister_api_keys')data={success:true,keys:[]};
    else if(nom==='fn_lister_mes_filtres_sauvegardes')data=recherches.filter(r=>r.audience===req.postDataJSON().p_audience);
    else if(nom==='fn_creer_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});recherches.push({id:'recherche-recette',nom:p.p_nom,audience:p.p_audience,filtres:p.p_filtres,alerte_active:p.p_alerte_active,frequence_alerte:p.p_frequence_alerte,dernier_check_le:new Date().toISOString(),cree_le:new Date().toISOString(),mis_a_jour_le:new Date().toISOString(),nb_resultats_dernier_check:0});data={success:true,id:'recherche-recette'};}
-   else if(nom==='fn_modifier_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});const r=recherches.find(r=>r.id===p.p_id);if(r){if(p.p_nom)r.nom=p.p_nom;if(typeof p.p_alerte_active==='boolean')r.alerte_active=p.p_alerte_active;}data={success:!!r};}
+   else if(nom==='fn_modifier_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});const r=recherches.find(r=>r.id===p.p_id);if(r){if(p.p_nom)r.nom=p.p_nom;if(typeof p.p_alerte_active==='boolean')r.alerte_active=p.p_alerte_active;if(typeof p.p_frequence_alerte==='string')r.frequence_alerte=p.p_frequence_alerte;}data={success:!!r};}
    else if(nom==='fn_rechercher_soignants_etab'){etat.operations.push({nom,payload:req.postDataJSON()});data={soignants:[],count_total:0};}
    else if(nom==='fn_mode_exercice')data={niveau:'AUTORISE',categorie:'prive',source_libelle:'Configuration de recette',source_force:'CONFORMITE_JOLENE',source_url:null};
    else if(nom==='fn_note_moyenne')data={moyenne:null,total:0};
