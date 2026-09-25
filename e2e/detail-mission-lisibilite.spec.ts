@@ -131,6 +131,9 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
       else expect(finance!.x).toBeGreaterThan(titre!.x);
       expect(finance!.y).toBeLessThan(etablissement!.y);
       expect(finance!.y).toBeLessThan(viewport.height / 2);
+      const suivi = page.getByRole('region',{name:'Suivi de la mission',exact:true});
+      await expect(suivi.getByRole('button',{name:'Afficher le détail du suivi',exact:true})).toHaveAttribute('aria-expanded','false');
+      expect((await suivi.boundingBox())!.y).toBeGreaterThan(finance!.y + finance!.height);
       const montant = mode === 'RETROCESSION'
         ? remuneration.getByText('80%',{exact:true})
         : remuneration.getByText(/240,00\s*€/,{exact:true}).last();

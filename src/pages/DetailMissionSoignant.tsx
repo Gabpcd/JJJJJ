@@ -843,9 +843,6 @@ export default function DetailMissionSoignant() {
       <h1 className="text-lg font-bold text-foreground mb-3">{mission.intitule}</h1>
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
-      <SuiviMission mission={mission} role="SOIGNANT" candidatureEnvoyee={candidatureEnvoyee}
-        litigeActif={Boolean(litigeMission?.litige_id && !litigeEstClos)} />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Mission et rémunération avant les informations secondaires, y compris sur mobile. */}
         <div className="contents">
@@ -959,6 +956,13 @@ export default function DetailMissionSoignant() {
           )}
 
           </section>
+
+          {/* Le suivi reste accessible après les informations nécessaires pour
+              choisir la mission, sans repousser sa rémunération hors écran. */}
+          <div className="lg:col-span-2">
+            <SuiviMission mission={mission} role="SOIGNANT" candidatureEnvoyee={candidatureEnvoyee}
+              litigeActif={Boolean(litigeMission?.litige_id && !litigeEstClos)} />
+          </div>
 
           <div className="space-y-4">
           {/* Établissement */}

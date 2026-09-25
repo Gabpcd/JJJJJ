@@ -1,10 +1,36 @@
 -- Pas de transport : fixtures et toutes les assertions annulées en fin de test.
 BEGIN;
 SET LOCAL statement_timeout='90s';
-SET LOCAL session_replication_role=replica;
+SET LOCAL lock_timeout='5s';
+-- Management API ne permet pas de changer session_replication_role. Les FK
+-- et CHECK restent donc actifs. Les seules fenêtres de suspension concernent
+-- les triggers utilisateur du montage des fixtures, jamais les fonctions daily.
+LOCK TABLE public.etablissements,public.missions,public.soignants IN ACCESS EXCLUSIVE MODE;
+CREATE TEMP TABLE recette_daily_triggers_avant AS
+SELECT tgrelid,tgname,tgenabled FROM pg_trigger
+WHERE tgrelid IN ('public.etablissements'::regclass,'public.missions'::regclass,'public.soignants'::regclass)
+AND NOT tgisinternal;
+DO $garde$
+BEGIN
+ IF EXISTS(SELECT 1 FROM recette_daily_triggers_avant WHERE tgenabled IN('A','R'))
+ THEN RAISE EXCEPTION 'Trigger ALWAYS/REPLICA inattendu : recette daily refusée'; END IF;
+END $garde$;
+-- auth.users LIVE n'a aucun trigger INSERT : aucun droit ni DDL sur Auth.
 INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
 VALUES ('69500000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','daily-etab@example.invalid','authenticated','authenticated','{}',now()),
  ('69500000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','daily-soignant@example.invalid','authenticated','authenticated','{}',now());
+
+DO $fixtures$
+DECLARE t record;
+BEGIN
+ -- Deux profils non-test sont nécessaires pour exercer le rappel SMS. Seule
+ -- la garde pré-lancement est suspendue, les autres triggers profils restent actifs.
+ FOR t IN SELECT * FROM recette_daily_triggers_avant WHERE tgenabled='O'
+   AND (tgrelid='public.missions'::regclass AND EXISTS (
+     SELECT 1 FROM pg_trigger p WHERE p.tgrelid=recette_daily_triggers_avant.tgrelid
+       AND p.tgname=recette_daily_triggers_avant.tgname AND (p.tgtype & 4)<>0)
+     OR tgname='trg_forcer_compte_test_prelaunch' AND tgrelid IN ('public.soignants'::regclass,'public.etablissements'::regclass))
+ LOOP EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',t.tgrelid::regclass,t.tgname); END LOOP;
 INSERT INTO public.etablissements(id,nom,siret,type,adresse_rue,adresse_ville,adresse_code_postal,email_contact,est_compte_test)
 VALUES ('69500000-0000-4000-8000-000000000001','Recette daily','69500000000001','CLINIQUE_PRIVEE','1 rue Fictive','Paris','75001','daily-etab@example.invalid',false);
 INSERT INTO public.soignants(id,prenom,nom,email,profession,type_exercice,est_compte_test,telephone,sms_actif,sms_alertes_actives)
@@ -13,7 +39,15 @@ INSERT INTO public.missions(id,etablissement_id,intitule,profession_requise,debu
 SELECT ('69500000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'69500000-0000-4000-8000-000000000001','Recette daily '||n,'IDE',
  CURRENT_DATE+interval '1 day 9 hours',CURRENT_DATE+interval '1 day 17 hours',8,30,'ASSIGNEE','69500000-0000-4000-8000-000000000002','SALARIE'
 FROM generate_series(101,130) n;
-SET LOCAL session_replication_role=origin;
+ -- Restauration exacte avant d'appeler les vraies fonctions testées. Un échec
+ -- SQL annule ensemble ce DDL et les fixtures ; aucun état durable ne change.
+ FOR t IN SELECT a.* FROM recette_daily_triggers_avant a JOIN pg_trigger p
+   ON p.tgrelid=a.tgrelid AND p.tgname=a.tgname WHERE a.tgenabled='O' AND p.tgenabled='D'
+ LOOP EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I',t.tgrelid::regclass,t.tgname); END LOOP;
+ IF EXISTS(SELECT 1 FROM recette_daily_triggers_avant a JOIN pg_trigger p
+   ON p.tgrelid=a.tgrelid AND p.tgname=a.tgname WHERE p.tgenabled<>a.tgenabled)
+ THEN RAISE EXCEPTION 'Triggers non restaurés avant les assertions daily'; END IF;
+END $fixtures$;
 
 -- Une panne d'insertion ne peut laisser un reçu qui empêcherait la reprise.
 CREATE FUNCTION pg_temp.refuser_file_daily() RETURNS trigger LANGUAGE plpgsql AS $f$
@@ -33,7 +67,7 @@ END $preuve$;
 DROP TRIGGER recette_refus_daily ON public.email_queue;
 
 DO $preuve$
-DECLARE e uuid; sms uuid; c uuid; v jsonb; n integer; cle jsonb;
+DECLARE e uuid; sms uuid; c uuid; v jsonb; n integer; cle jsonb; t record;
 BEGIN
  FOR cle IN SELECT to_jsonb(p) FROM (VALUES
    ('public.fn_preparer_rappels_quotidiens()'),('public.fn_lire_rappel_quotidien(uuid)'),
@@ -86,10 +120,20 @@ BEGIN
  IF public.fn_lire_rappel_quotidien(sms)->>'valide'<>'false' THEN RAISE EXCEPTION 'SMS opt-out non respecté'; END IF;
  UPDATE public.soignants SET sms_alertes_actives=true,telephone='+33000000001' WHERE id='69500000-0000-4000-8000-000000000002';
  IF public.fn_lire_rappel_quotidien(sms)->>'valide'<>'false' THEN RAISE EXCEPTION 'Ancien téléphone encore notifié'; END IF;
- -- Évite tout trigger d'annulation sur la fixture : validation pure ensuite.
- PERFORM set_config('session_replication_role','replica',true);
+ -- Changement d'assignation artificiel pour tester la relecture du reçu,
+ -- sans déclencher d'acte d'annulation. FK actives, triggers UPDATE restaurés
+ -- avant fn_lire_rappel_quotidien ; aucune fonction daily n'est remplacée.
+ FOR t IN SELECT a.* FROM recette_daily_triggers_avant a JOIN pg_trigger p
+   ON p.tgrelid=a.tgrelid AND p.tgname=a.tgname
+   WHERE a.tgrelid='public.missions'::regclass AND a.tgenabled='O' AND (p.tgtype & 16)<>0
+ LOOP EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',t.tgrelid::regclass,t.tgname); END LOOP;
  UPDATE public.missions SET soignant_assigne_id=NULL WHERE id='69500000-0000-4000-8000-000000000101';
- PERFORM set_config('session_replication_role','origin',true);
+ FOR t IN SELECT a.* FROM recette_daily_triggers_avant a JOIN pg_trigger p
+   ON p.tgrelid=a.tgrelid AND p.tgname=a.tgname WHERE a.tgenabled='O' AND p.tgenabled='D'
+ LOOP EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I',t.tgrelid::regclass,t.tgname); END LOOP;
+ IF EXISTS(SELECT 1 FROM recette_daily_triggers_avant a JOIN pg_trigger p
+   ON p.tgrelid=a.tgrelid AND p.tgname=a.tgname WHERE p.tgenabled<>a.tgenabled)
+ THEN RAISE EXCEPTION 'Triggers non restaurés après la désassignation simulée'; END IF;
  IF public.fn_lire_rappel_quotidien(e)->>'valide'<>'false' THEN RAISE EXCEPTION 'Rappel envoyé après désassignation'; END IF;
 END $preuve$;
 SET CONSTRAINTS ALL IMMEDIATE;

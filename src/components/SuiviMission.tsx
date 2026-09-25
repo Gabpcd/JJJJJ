@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, Circle, Clock3, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronDown, Circle, Clock3, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { avecDelai } from '@/lib/avecDelai';
@@ -25,11 +25,13 @@ export function SuiviMission(props: Props) {
 
 function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif, userId }: Props & { userId: string }) {
   const titreId = useId();
+  const detailId = useId();
   const estEtab = role === 'ADMIN_ETABLISSEMENT';
   const peutLireMission = Boolean(mission.soignant_assigne_id) && (estEtab || mission.soignant_assigne_id === userId);
   const [financeAutorisee, setFinanceAutorisee] = useState(false);
   const [lectures, setLectures] = useState<LecturesSuivi>(initial);
   const [revision, setRevision] = useState(0);
+  const [detailOuvert, setDetailOuvert] = useState(false);
 
   useEffect(() => {
     if (!peutLireMission) {
@@ -95,6 +97,14 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
   const etapes = construireSuiviMission(mission, lectures, { candidatureEnvoyee, litigeActif });
   const charge = Object.values(lectures).some(l => l.etat === 'chargement');
   const enErreur = Object.values(lectures).some(l => l.etat === 'indisponible');
+  const accesLimite = Object.values(lectures).some(l => l.etat === 'restreint');
+  // Une synthèse d’état, jamais un pourcentage d’accomplissement ou un solde financier.
+  const prioritaire = etapes.find(e => e.id === 'mission' && e.etat === 'a_verifier')
+    ?? etapes.find(e => e.etat === 'a_verifier')
+    ?? etapes.find(e => e.etat === 'en_cours')
+    ?? etapes.find(e => e.etat === 'inconnu')
+    ?? etapes[etapes.length - 1];
+  const libellesCourts = { attribution: 'Attrib.', contrat: 'Contrat', mission: 'Mission', heures: 'Heures', document: 'Doc.', reglement: 'Règl.' };
   const contratId = lectures.contrat.etat === 'disponible' ? lectures.contrat.lignes[0]?.id : null;
   const base = estEtab ? '/etablissement' : '/soignant';
   const finances = estEtab ? '/etablissement/facturation' : '/soignant/mes-gains';
@@ -110,16 +120,39 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
   } : {};
 
   return <section aria-labelledby={titreId} className="card-base mb-4">
-    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <div className="flex items-center justify-between gap-2">
       <h2 id={titreId} className="font-semibold text-foreground">Suivi de la mission</h2>
-      {peutLireMission && <button type="button" className="inline-flex min-h-11 items-center gap-2 text-sm text-primary px-2 disabled:opacity-60"
+      {peutLireMission && <button type="button" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-primary/5 disabled:opacity-60"
+        aria-label="Actualiser le suivi" title="Actualiser le suivi"
         disabled={charge} onClick={() => setRevision(r => r + 1)}>
-        <RefreshCw aria-hidden="true" className={`h-4 w-4 ${charge ? 'animate-spin' : ''}`} />Actualiser le suivi
+        <RefreshCw aria-hidden="true" className={`h-4 w-4 ${charge ? 'animate-spin' : ''}`} />
       </button>}
     </div>
-    {litigeActif && <p className="mb-3 text-sm text-warning" role="status">Un litige est en cours sur cette mission.</p>}
-    {enErreur && <p role="alert" className="mb-3 text-sm text-destructive">Une partie du suivi n’a pas pu être chargée. Les étapes concernées restent à vérifier.</p>}
-    <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <p data-testid="suivi-resume" className="mt-1 text-sm text-muted-foreground">
+      {charge ? 'Vérification du suivi en cours…' : `${prioritaire.titre} · ${prioritaire.statut}`}
+    </p>
+    {litigeActif && <p className="mt-2 text-sm text-warning" role="status">Un litige est en cours sur cette mission.</p>}
+    {enErreur && <p role="alert" className="mt-2 text-sm text-destructive">Une partie du suivi n’a pas pu être chargée. Les étapes concernées restent à vérifier.</p>}
+    {accesLimite && <p className="mt-2 text-sm text-muted-foreground">Accès limité à certaines informations du suivi.</p>}
+    <ol aria-label="Repères du suivi" className="mt-3 grid grid-cols-6 gap-1">
+      {etapes.map(etape => {
+        const Icone = etape.etat === 'confirme' ? CheckCircle2 : etape.etat === 'a_verifier' ? TriangleAlert : etape.etat === 'en_cours' ? Clock3 : Circle;
+        const couleur = etape.etat === 'confirme' ? 'text-success' : etape.etat === 'a_verifier' ? 'text-warning' : 'text-muted-foreground';
+        return <li key={etape.id} title={`${etape.titre} : ${etape.statut}`} className="flex min-w-0 flex-col items-center gap-1">
+          <Icone aria-hidden="true" className={`h-4 w-4 ${couleur}`} />
+          <span aria-hidden="true" className="text-[10px] text-muted-foreground">{libellesCourts[etape.id]}</span>
+          <span className="sr-only">{etape.titre} : {etape.statut}</span>
+        </li>;
+      })}
+    </ol>
+    <button type="button" aria-expanded={detailOuvert} aria-controls={detailId}
+      className="mt-2 flex min-h-11 w-full items-center justify-between gap-2 rounded-lg text-left text-sm font-medium text-primary hover:underline"
+      onClick={() => setDetailOuvert(ouvert => !ouvert)}>
+      {detailOuvert ? 'Masquer le détail du suivi' : 'Afficher le détail du suivi'}
+      <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 ${detailOuvert ? 'rotate-180' : ''}`} />
+    </button>
+    <div id={detailId} hidden={!detailOuvert}>
+    <ol className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {etapes.map(etape => {
         const Icone = etape.etat === 'confirme' ? CheckCircle2 : etape.etat === 'a_verifier' ? TriangleAlert : etape.etat === 'en_cours' ? Clock3 : Circle;
         const couleur = etape.etat === 'confirme' ? 'text-success' : etape.etat === 'a_verifier' ? 'text-warning' : 'text-muted-foreground';
@@ -132,5 +165,6 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
         </li>;
       })}
     </ol>
+    </div>
   </section>;
 }

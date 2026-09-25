@@ -1,12 +1,32 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { creerSuiviSimule } from './helpers/recette-complete-suivi-mission';
 import { ids, now, preuveMission, type RoleRecette } from './helpers/recette-complete-mission';
 import { stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
 
 const roles: RoleRecette[] = ['SOIGNANT', 'ADMIN_ETABLISSEMENT'];
 const region = (page: Page) => page.getByRole('region', { name: 'Suivi de la mission', exact: true });
+async function ouvrirDetail(page: Page) {
+  const bouton = region(page).getByRole('button', { name: /^(Afficher|Masquer) le détail du suivi$/ });
+  await expect(bouton).toBeVisible();
+  if (await bouton.getAttribute('aria-expanded') === 'false') await bouton.click();
+  await expect(region(page).getByRole('button', { name: 'Masquer le détail du suivi', exact: true })).toHaveAttribute('aria-expanded', 'true');
+}
 async function etape(page: Page, id: string, statut: string) {
+  await ouvrirDetail(page);
   await expect(region(page).getByTestId(`suivi-${id}`).getByText(statut, { exact: true })).toBeVisible();
+}
+async function compact(page: Page, info: TestInfo, nom: string, hauteurMax = 260) {
+  const bouton = region(page).getByRole('button', { name: 'Afficher le détail du suivi', exact: true });
+  await expect(bouton).toHaveAttribute('aria-expanded', 'false');
+  await expect(region(page).getByRole('list', { name: 'Repères du suivi' }).getByRole('listitem')).toHaveCount(6);
+  await expect(region(page).getByRole('heading', { name: 'Contrat Jolene', exact: true })).toHaveCount(0);
+  const box = await region(page).boundingBox();
+  expect(box?.height).toBeLessThanOrEqual(hauteurMax);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach(`${nom}-geometrie`, { body: JSON.stringify(box), contentType: 'application/json' });
+  await region(page).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath(`${nom}.png`) });
+  await info.attach(nom, { path: info.outputPath(`${nom}.png`), contentType: 'image/png' });
 }
 async function recharger(page: Page) { await stabiliserActionsNationales(page); await page.reload(); await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled(); }
 async function actualiser(page: Page) { await region(page).getByRole('button', { name: 'Actualiser le suivi' }).click(); await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled(); }
@@ -19,6 +39,15 @@ for (const role of roles) {
     await installer(context, role); await page.clock.setFixedTime(new Date(now));
     try {
       await page.goto(chemin(role)); await expect(region(page)).toBeVisible();
+      if (role === 'SOIGNANT') {
+        const remuneration = page.getByRole('region', { name: 'Rémunération de la mission' });
+        await expect(remuneration).toBeInViewport();
+        const finance = await remuneration.boundingBox();
+        expect(finance!.y).toBeLessThan(page.viewportSize()!.height / 2);
+        expect((await region(page).boundingBox())!.y).toBeGreaterThan(finance!.y + finance!.height);
+      }
+      await compact(page, info, `suivi-${role}-compact-candidature`);
+      if (role === 'ADMIN_ETABLISSEMENT') await expect(page.getByRole('heading', { name: /^Candidatures/ })).toBeInViewport();
       await etape(page, 'attribution', role === 'SOIGNANT' ? 'Candidature envoyée' : 'En attente d’attribution');
       await etape(page, 'document', 'Régime à confirmer');
       expect(suivi.lectures).toEqual([]);
@@ -52,6 +81,10 @@ for (const role of roles) {
       suivi.paiements = [{ statut: 'DECLARE', confirme_par_soignant: false, conteste: false }];
       await actualiser(page); await etape(page, 'heures', 'Présences enregistrées validées'); await etape(page, 'document', 'Document disponible');
       await etape(page, 'reglement', 'Déclaré, à confirmer');
+      await region(page).getByRole('button', { name: 'Masquer le détail du suivi' }).click();
+      await expect(region(page).getByTestId('suivi-resume')).toHaveText('Règlement · Déclaré, à confirmer');
+      await compact(page, info, `suivi-${role}-compact-declare`);
+      await ouvrirDetail(page);
       await preuveMission(page, info, `suivi-${role}-declare-non-confirme`);
       suivi.paiements[0].statut = 'CONFIRME'; suivi.paiements[0].confirme_par_soignant = true;
       await actualiser(page); await etape(page, 'reglement', 'Réception enregistrée');
@@ -88,6 +121,9 @@ for (const role of roles) {
       await etape(page, 'document', 'Document à vérifier');
       await expect(region(page).getByRole('heading', { name: 'Bulletin de paie', exact: true })).toBeVisible();
       await expect(region(page).getByText(/contrat de travail de l’employeur se consulte séparément/)).toBeVisible();
+      await region(page).getByRole('button', { name: 'Masquer le détail du suivi' }).click();
+      await expect(region(page).getByRole('alert')).toBeVisible();
+      await compact(page, info, `suivi-${role}-compact-erreur`, 340);
       suivi.erreurs.clear(); suivi.bulletins[0].pdf_s3_key = 'simulation/bulletin.pdf';
       await actualiser(page); await etape(page, 'heures', 'Présences enregistrées validées'); await etape(page, 'document', 'Document disponible');
       await expect(region(page).getByRole('alert')).toHaveCount(0);
@@ -95,11 +131,19 @@ for (const role of roles) {
       state.mission.statut = 'ANNULEE_PAR_ETABLISSEMENT';
       await recharger(page); await etape(page, 'mission', 'Annulée'); await etape(page, 'heures', 'À vérifier — litige en cours');
       await etape(page, 'reglement', 'Règlement contesté');
+      await region(page).getByRole('button', { name: 'Masquer le détail du suivi' }).click();
+      await expect(region(page).getByRole('status')).toHaveText('Un litige est en cours sur cette mission.');
+      await expect(region(page).getByTestId('suivi-resume')).toHaveText('Mission · Annulée');
+      await compact(page, info, `suivi-${role}-compact-litige`, 300);
+      await ouvrirDetail(page);
       await preuveMission(page, info, `suivi-${role}-salarie-annule-litige`);
       if (role === 'ADMIN_ETABLISSEMENT') {
         suivi.financeAutorisee = false;
         const avant = suivi.lectures.filter(l => ['bulletins_paie', 'paiements_soignant'].includes(l.table)).length;
         await recharger(page); await etape(page, 'document', 'Accès limité'); await etape(page, 'reglement', 'Accès limité');
+        await region(page).getByRole('button', { name: 'Masquer le détail du suivi' }).click();
+        await expect(region(page).getByText('Accès limité à certaines informations du suivi.')).toBeVisible();
+        await compact(page, info, `suivi-${role}-compact-acces-limite`, 340);
         await expect(region(page).getByRole('link', { name: 'Consulter les finances' })).toHaveCount(0);
         expect(suivi.lectures.filter(l => ['bulletins_paie', 'paiements_soignant'].includes(l.table))).toHaveLength(avant);
       }

@@ -1,7 +1,8 @@
 -- Staging/local uniquement. Aucune activation ni donnée persistée, aucun transport.
 BEGIN;
 SET LOCAL statement_timeout='90s';
-SET LOCAL session_replication_role=replica;
+-- auth.users n’a aucun trigger INSERT LIVE ; aucun privilège de superuser
+-- ni désactivation globale de trigger n’est nécessaire pour ces comptes.
 INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,raw_user_meta_data,email_confirmed_at)
 SELECT ('69550000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  '00000000-0000-0000-0000-000000000000',
@@ -13,7 +14,6 @@ SELECT ('69550000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
       WHEN n=11 THEN '{"est_compte_test":"true","is_test_playwright":"true"}'::jsonb ELSE '{}'::jsonb END,
  CASE WHEN n=4 THEN '{"est_compte_test":true,"is_test_playwright":true}'::jsonb ELSE '{}'::jsonb END,now()
 FROM generate_series(1,11) n;
-SET LOCAL session_replication_role=origin;
 SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
 UPDATE public.parametres_systeme SET valeur=0 WHERE cle='inscriptions_publiques_actives';
 UPDATE public.parametres_systeme SET valeur=1 WHERE cle='activation_inscriptions_publiques_planifiee';

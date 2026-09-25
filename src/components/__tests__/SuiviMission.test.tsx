@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SuiviMission } from '../SuiviMission';
@@ -27,6 +27,7 @@ const reponse = (data: unknown[]) => Promise.resolve({ data, error: null });
 function vue(id = mission.id, role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' = 'SOIGNANT') {
   return <MemoryRouter><SuiviMission mission={{ ...mission, id }} role={role} /></MemoryRouter>;
 }
+function ouvrirDetail() { fireEvent.click(screen.getByRole('button', { name: 'Afficher le détail du suivi' })); }
 beforeEach(() => { banc.userId = 'soignant'; banc.lire.mockReset().mockImplementation(() => reponse([])); banc.permission.mockReset(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -40,6 +41,7 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     });
     const { rerender } = render(vue());
     rerender(vue('mission-b'));
+    ouvrirDetail();
     const contrat = await screen.findByRole('link', { name: 'Consulter le contrat' });
     expect(contrat).toHaveAttribute('href', '/contrat/contrat-mission-b');
     await act(async () => finirAncienne({ data: [], error: null }));
@@ -56,6 +58,7 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     expect(screen.getByRole('button', { name: 'Actualiser le suivi' })).toBeDisabled();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
     expect(screen.getByRole('alert')).toHaveTextContent('Une partie du suivi n’a pas pu être chargée.');
+    ouvrirDetail();
     expect(screen.getByTestId('suivi-heures')).toHaveTextContent('Information indisponible');
     expect(screen.getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
     expect((banc.lire.mock.calls[0][2] as AbortSignal).aborted).toBe(true);
@@ -74,11 +77,41 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     banc.lire.mockImplementation(table => table === 'contrats_mission'
       ? reponse([{ id: 'contrat-prive', statut: 'SIGNE_COMPLET', signature_soignant: true, signature_etablissement: true }]) : reponse([]));
     const { rerender } = render(vue());
+    ouvrirDetail();
     await screen.findByRole('link', { name: 'Consulter le contrat' });
     const avant = banc.lire.mock.calls.length;
     banc.userId = 'autre-soignant'; rerender(vue());
     expect(screen.queryByRole('link', { name: 'Consulter le contrat' })).not.toBeInTheDocument();
     expect(banc.lire).toHaveBeenCalledTimes(avant);
+    expect(screen.getByText('Accès limité à certaines informations du suivi.')).toBeVisible();
+    ouvrirDetail();
     expect(screen.getByTestId('suivi-contrat')).toHaveTextContent('Accès limité');
+  });
+
+  it('reste replié par défaut et ouvre/ferme les étapes sans relancer les lectures', async () => {
+    render(vue());
+    await act(async () => { await Promise.resolve(); });
+    const bouton = screen.getByRole('button', { name: 'Afficher le détail du suivi' });
+    expect(bouton).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(bouton.getAttribute('aria-controls')!)).not.toBeVisible();
+    expect(screen.getByRole('list', { name: 'Repères du suivi' }).children).toHaveLength(6);
+    expect(screen.queryByRole('link', { name: 'Voir les présences' })).not.toBeInTheDocument();
+    const appels = banc.lire.mock.calls.length;
+    fireEvent.click(bouton);
+    expect(bouton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Voir les présences' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer le détail du suivi' }));
+    expect(bouton).toHaveAttribute('aria-expanded', 'false');
+    expect(banc.lire).toHaveBeenCalledTimes(appels);
+  });
+
+  it('garde litige et erreur visibles dans le résumé replié sans confirmer le règlement', async () => {
+    banc.lire.mockResolvedValue({ data: null, error: new Error('panne simulée') });
+    render(<MemoryRouter><SuiviMission mission={mission} role="SOIGNANT" litigeActif /></MemoryRouter>);
+    await screen.findByRole('alert');
+    expect(screen.getByRole('status')).toHaveTextContent('Un litige est en cours');
+    expect(screen.getByRole('button', { name: 'Afficher le détail du suivi' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Réception enregistrée')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
   });
 });

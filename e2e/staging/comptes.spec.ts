@@ -184,3 +184,27 @@ test('établissement : suppression confirmée dans l’interface, anonymisation 
     await expect(page).toHaveURL(/\/connexion/);
   } finally { await fixture.cleanup(); }
 });
+
+test('compte suspendu : le service réel anonymise avant de supprimer l’identité Auth', async ({ request }) => {
+  const fixture = await compteJetable();
+  try {
+    const { data: session, error: loginError } = await client().auth.signInWithPassword({ email: fixture.email, password: fixture.password });
+    expect(loginError).toBeNull(); expect(session.session?.access_token).toBeTruthy();
+    // Reproduit la suspension sur cette fixture uniquement, après émission du
+    // jeton : un supprime_le présent ne prouve pas l’anonymisation des données.
+    const { error: suspendError } = await admin.from('soignants').update({ supprime_le: new Date().toISOString() }).eq('id', fixture.id);
+    expect(suspendError).toBeNull();
+    const response = await request.post(`${url}/functions/v1/delete-account`, {
+      headers: { Authorization: `Bearer ${session.session!.access_token}`, apikey: anon! }, data: {},
+    });
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, auth_deleted: true });
+    const { data: profile, error: readError } = await admin.from('soignants').select('nom,email').eq('id', fixture.id).single();
+    expect(readError).toBeNull(); expect(profile?.nom).toBe('Supprimé');
+    expect(profile?.email).toMatch(/@supprime\.jolene\.app$/);
+    const confirmation = await admin.rpc('fn_anonymisation_compte_confirmee', { p_utilisateur_id: fixture.id, p_type_profil: 'SOIGNANT' });
+    expect(confirmation.error).toBeNull(); expect(confirmation.data).toBe(true);
+    const login = await client().auth.signInWithPassword({ email: fixture.email, password: fixture.password });
+    expect(login.error).not.toBeNull(); expect(login.data.session).toBeNull();
+  } finally { await fixture.cleanup(); }
+});
