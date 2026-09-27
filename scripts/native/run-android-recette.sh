@@ -9,6 +9,7 @@ cleanup() {
   adb logcat -d >test-results/android-native/logcat.txt 2>&1 || true
   adb shell iptables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv4.txt 2>&1 || true
   adb shell ip6tables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv6.txt 2>&1 || true
+  adb shell dmesg >test-results/android-native/kernel-network.txt 2>&1 || true
   kill "$recette_api_pid" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -27,10 +28,14 @@ recette_uid=$(adb shell cmd package list packages -U app.jolene.recette | tr -d 
 # forwarded over adb is reachable by this app UID. Rules die with the emulator.
 adb shell iptables -N JOLENE_RECETTE
 adb shell iptables -A JOLENE_RECETTE -d 127.0.0.0/8 -j RETURN
+# Log destinations if the emulator kernel offers LOG; rejection is mandatory
+# even when this optional diagnostic target is unavailable.
+adb shell iptables -A JOLENE_RECETTE -j LOG --log-prefix JOLENE_NATIVE_BLOCK4 --log-uid || true
 adb shell iptables -A JOLENE_RECETTE -j REJECT
 adb shell iptables -I OUTPUT 1 -m owner --uid-owner "$recette_uid" -j JOLENE_RECETTE
 adb shell ip6tables -N JOLENE_RECETTE
 adb shell ip6tables -A JOLENE_RECETTE -d ::1/128 -j RETURN
+adb shell ip6tables -A JOLENE_RECETTE -j LOG --log-prefix JOLENE_NATIVE_BLOCK6 --log-uid || true
 adb shell ip6tables -A JOLENE_RECETTE -j REJECT
 adb shell ip6tables -I OUTPUT 1 -m owner --uid-owner "$recette_uid" -j JOLENE_RECETTE
 adb shell settings put secure show_ime_with_hard_keyboard 1

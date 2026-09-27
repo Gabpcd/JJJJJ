@@ -56,6 +56,7 @@ jobs:
           set -euo pipefail
           export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           python3 -m unittest discover -s tests/native/android -p 'test_*.py'
+          node --test tests/native/android/ime-state.test.mjs
           npm run build
           node scripts/native/prepare-android-recette.mjs
           npx cap sync android

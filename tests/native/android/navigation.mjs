@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { _android as android, expect } from '@playwright/test';
+import { currentImeShown } from './ime-state.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -19,6 +20,7 @@ const metric = (kind, data) => validations.push({ kind, ...data });
 async function capture(name) {
   await device.screenshot({ path: `${output}/${name}.png` });
   if (page) {
+    await save(`${name}.ime.txt`, await nativeShell('dumpsys input_method'));
     await save(`${name}.aria.txt`, await page.locator('body').ariaSnapshot());
     await save(`${name}.viewport.json`, JSON.stringify(await page.evaluate(() => ({
       width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
@@ -42,10 +44,10 @@ async function nav(name) {
 }
 async function keyboardVisible() {
   // Check the Android IME itself, not merely focus or a screenshot.
-  await expect.poll(async () => /(?:mInputShown|isInputViewShown|mIsInputViewShown)=true/.test(await nativeShell('dumpsys input_method')), { timeout: 10000 }).toBe(true);
+  await expect.poll(async () => currentImeShown(await nativeShell('dumpsys input_method')), { timeout: 10000 }).toBe(true);
 }
 async function keyboardHidden() {
-  await expect.poll(async () => /(?:mInputShown|isInputViewShown|mIsInputViewShown)=true/.test(await nativeShell('dumpsys input_method')), { timeout: 10000 }).toBe(false);
+  await expect.poll(async () => currentImeShown(await nativeShell('dumpsys input_method')), { timeout: 10000 }).toBe(false);
 }
 async function closeKeyboard() {
   const path = new URL(page.url()).pathname;
