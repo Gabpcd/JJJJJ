@@ -21,5 +21,33 @@ Préparation du profil et nettoyage partagent un verrou transactionnel. Le netto
 - **75/75 tests Node verts** sur le banc complet (charge, fixtures recherche/dashboard, diagnostic recherche et attente staging), dont **13 nouveaux tests du préparateur dashboard**. Transport en mémoire : création, préflight, mauvaise identité, réponse perdue aux trois étapes, marqueur altéré, dépendance et nettoyage vérifiés.
 - Une probe PGlite locale a exécuté le SQL réel avec les **10 définitions de triggers LIVE** concernées, sur un schéma minimal : profil AS non vérifié, transports désactivés, dépendance métier avec FK CASCADE refusée, nettoyage exact et rejet d’un seed SQL retardé. Le générateur aléatoire de code parrainage est simulé localement ; ce n’est pas le schéma staging complet ni une contention de plusieurs sessions.
 - Syntaxe Node et contrôle de diff : verts. [Journal Node](assets/2026-09-27-fixture-dashboard/node-resultats.txt), [résultat SQL local](assets/2026-09-27-fixture-dashboard/sql-local.txt).
+- Relecture indépendante finale : aucun finding bloquant démontré ; l’oracle d’identité et la garde des clés référencées ont été vérifiés après correction.
 
-**Reste à mesurer en CI :** E à 100 VUs pendant une minute, avec cleanup confirmé et rapport k6. Une seule identité partage son JWT entre les VUs ; aucun résultat ne doit être présenté comme 100 soignants distincts, comme un historique métier rempli ou comme une garantie de capacité nationale. Les seuils existants restent inchangés.
+## Première mesure réelle : fonctionnel vert, seuil p99 échoué
+
+Run [36324096829](https://github.com/Gabpcd/JJJJJ/actions/runs/36324096829), révision `746847dcf988cb57bcc27e4dedfdc45ebf3cc754`, staging seulement. La configuration demandée et la bannière k6 confirment **100 VUs constants dès le démarrage, pendant une minute** ; aucune période de démarrage n’est exclue. Préparation et nettoyage ont réussi ; le job est rouge parce que le seuil p99 a échoué.
+
+| Mesure | Résultat |
+|---|---:|
+| Itérations dashboard | 8 594 |
+| Requêtes HTTP (login + préflight inclus) | 8 596 |
+| Contrôles réussis | 17 190 / 17 190 |
+| Échecs HTTP | 0 |
+| RPC dashboard p50 | 111,08 ms |
+| RPC dashboard p95 | 153,07 ms — seuil < 2 000 ms réussi |
+| RPC dashboard p99 | Valeur exacte non exportée — seuil < 3 500 ms échoué |
+| RPC dashboard maximum | 6 163,47 ms |
+
+Le journal montre zéro itération terminée à 2,6 s, 58 à 6,6 s puis 214 à 7,6 s. Ce démarrage lent participe intégralement à l’échec du seuil. Le `pg_stat_statements` du statement PostgREST dashboard, relu après le run, compte 8 597 appels, une moyenne d’exécution SQL de 0,906 ms, un maximum de 1 039,614 ms et zéro bloc lu sur disque. Ces compteurs cumulatifs ne fournissent pas la chronologie de chaque requête : ils ne permettent pas d’attribuer précisément les 6,16 s HTTP au SQL, à l’attente de connexion ou à une autre couche. Aucun changement produit ni réglage de pool n’a été appliqué sur cette seule hypothèse. La signature LIVE reste `fn_dashboard_soignant_complet() → jsonb`, empreinte `dc2194c3bfdb61151578d8fc30e274ff`.
+
+Une lecture indépendante après nettoyage confirme **0 compte Auth, 0 profil, 0 préférence, 0 session et 0 identité technique** pour l’UUID exact du run. Le manifeste final est `cleaned`.
+
+## Correction du rapport de charge
+
+k6 inclut les données retournées par `setup()` dans son objet de résumé. Ces données peuvent contenir une session de test et ne doivent pas être sérialisées dans un rapport. Les preuves conservées ici ne comprennent que les mesures et contrôles nécessaires à la recette.
+
+Les six scénarios utilisent désormais une projection explicite des métriques, contrôles, état et options de présentation. `setup_data`, les options inconnues et tout futur champ racine sont exclus. Les quantiles p50/p95/p99 sont explicitement exportés ; les seuils et la charge restent identiques. **34/34 tests Node ciblés verts**, avec une session fictive injectée dans les six vrais `handleSummary` pour vérifier qu’aucune sortie ne la contient. Le moteur k6 n’est pas installé localement ; la prochaine mesure CI doit confirmer le rapport du moteur réel. La ligne historique « Configuration effective : {} » est une limite de reporting du premier run, pas une preuve de charge nulle : les VUs et la durée sont confirmés par la bannière et les métriques du moteur.
+
+Preuves assainies : [mesures k6](assets/2026-09-27-fixture-dashboard/mesure-36324096829-assainie.json), [nettoyage et relevé SQL](assets/2026-09-27-fixture-dashboard/controle-36324096829.json).
+
+**Reste à valider :** le seuil p99 avec sa valeur exacte exportée lors d’une nouvelle mesure, toujours avec 100 VUs dès le démarrage. Une seule identité partage son JWT entre les VUs ; aucun résultat ne doit être présenté comme 100 soignants distincts, comme un historique métier rempli ou comme une garantie de capacité nationale. Les seuils existants restent inchangés.

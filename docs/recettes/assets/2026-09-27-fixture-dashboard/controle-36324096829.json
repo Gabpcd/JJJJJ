@@ -1,0 +1,36 @@
+{
+  "run": "36324096829",
+  "head": "746847dcf988cb57bcc27e4dedfdc45ebf3cc754",
+  "environment": "staging",
+  "fixtureStatus": "cleaned",
+  "verification": "MCP read-only après le nettoyage CI",
+  "remaining": {
+    "auth": 0,
+    "profile": 0,
+    "preferences": 0,
+    "sessions": 0,
+    "identities": 0
+  },
+  "removedOriginalArtifact": {
+    "id": 10933682162,
+    "remainingArtifactsForRun": 0
+  },
+  "dashboard": {
+    "signature": "fn_dashboard_soignant_complet()",
+    "returns": "jsonb",
+    "definitionMd5": "dc2194c3bfdb61151578d8fc30e274ff",
+    "pgStatStatements": {
+      "queryId": "806800142746490677",
+      "calls": 8597,
+      "meanExecutionMs": 0.906,
+      "maxExecutionMs": 1039.614,
+      "sharedBlocksHit": 128596,
+      "sharedBlocksRead": 0
+    }
+  },
+  "limits": [
+    "Une identité minimale AS, pas 100 profils distincts",
+    "p99 exact absent du premier export, seuil p99<3500 échoué",
+    "Statistiques SQL cumulatives, sans corrélation temporelle requête par requête"
+  ]
+}

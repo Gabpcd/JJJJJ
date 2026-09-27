@@ -23,6 +23,9 @@ export function creerOptionsCharge(nom, scenario, thresholds, env = {}) {
   } else throw new Error(`Executor non pris en charge : ${execution.executor}`);
   return {
     scenarios: { [nom]: execution },
+    // Exporter les quantiles réellement soumis aux seuils, y compris la queue
+    // de distribution au démarrage. Aucun warmup n'est exclu de la mesure.
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(50)', 'p(90)', 'p(95)', 'p(99)'],
     thresholds: { ...thresholds, checks: ['rate==1'], iterations: ['count>0'] },
   };
 }

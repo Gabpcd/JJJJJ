@@ -157,15 +157,22 @@ export function ouvrirNavigation(lat: number, lng: number, label?: string) {
 export async function configurerClavier(): Promise<void> {
   if (!isNative()) return;
 
+  const listeners: Array<{ remove: () => Promise<void> }> = [];
+  let installationAnnulee = false;
   try {
-    const { Keyboard } = await import('@capacitor/keyboard');
+    const { Keyboard, KeyboardResize } = await import('@capacitor/keyboard');
     const platform = Capacitor.getPlatform();
 
-    // 'native' sur les 2 plateformes : la WebView redimensionne son viewport
-    // au lieu de rétrécir le body (mode 'body' créait un grand vide en haut
-    // au focus d'un champ sur iOS — le header sticky restait, le contenu
-    // remontait). 'native' garde le layout stable.
-    await Keyboard.setResizeMode({ mode: 'native' as any });
+    // Ce réglage est propre à iOS ; Android répond UNIMPLEMENTED et gère
+    // le redimensionnement dans sa fenêtre native. Son refus ne doit pas
+    // empêcher l'installation des événements du clavier.
+    if (platform === 'ios') {
+      try {
+        await Keyboard.setResizeMode({ mode: KeyboardResize.Native });
+      } catch {
+        // Conserver les événements même si ce réglage optionnel est refusé.
+      }
+    }
 
     let viewportSansClavier = window.innerHeight;
     let hauteurVisibleAvecClavier: number | undefined;
@@ -175,13 +182,14 @@ export async function configurerClavier(): Promise<void> {
       // finale. On ne déplace la zone scrollable que si le champ reste masqué.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
+          if (installationAnnulee) return;
           const field = activeEditableField();
           if (field) keepNativeFieldVisible(field, viewportHeight);
         });
       });
     };
 
-    await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+    listeners.push(await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
       // En resize Native, WKWebView ne reflète pas toujours la nouvelle
       // hauteur dans visualViewport (notamment Simulator/Safari 18). La
       // hauteur du plugin est la source fiable ; Math.min évite de retrancher
@@ -193,19 +201,22 @@ export async function configurerClavier(): Promise<void> {
         calculee > 0 ? calculee : Number.POSITIVE_INFINITY,
       );
       revealFocusedField(hauteurVisibleAvecClavier);
-    });
-    await Keyboard.addListener('keyboardDidHide', () => {
+    }));
+    listeners.push(await Keyboard.addListener('keyboardDidHide', () => {
       hauteurVisibleAvecClavier = undefined;
       window.requestAnimationFrame(() => {
+        if (installationAnnulee) return;
         viewportSansClavier = window.innerHeight;
       });
-    });
+    }));
     document.addEventListener('focusin', () => {
       if (!document.body.classList.contains('keyboard-is-open')) return;
       window.setTimeout(() => revealFocusedField(), 60);
     });
   } catch {
-    // Keyboard plugin not available
+    installationAnnulee = true;
+    // Une installation partielle ne doit pas conserver un listener isolé.
+    await Promise.allSettled(listeners.map(listener => Promise.resolve().then(() => listener.remove())));
   }
 }
 

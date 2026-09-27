@@ -1,3 +1,4 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
 /**
  * Scénario D suspendu : l’ancien script pouvait annoncer un succès sans acte métier.
  * Voir docs/tests-charge.md. Aucun signup, candidature, cron ou email n’est déclenché.
@@ -17,6 +18,6 @@ export default function () { refuserScenarioNonIsole('D'); }
 export function handleSummary(data) {
   return {
     stdout: 'Scénario D non validé : fixtures et isolation insuffisantes. Aucune mutation exécutée.\n',
-    'tests/load/results/04-candidatures-simultanees.json': JSON.stringify({ ...data, preuve_metier: false, scenario_indisponible: 'D' }, null, 2),
+    'tests/load/results/04-candidatures-simultanees.json': JSON.stringify({ ...donneesRapportCharge(data), preuve_metier: false, scenario_indisponible: 'D' }, null, 2),
   };
 }

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+test "${CI:-}" = true
+test "${NATIVE_RECETTE:-}" = 1
+mkdir -p test-results/android-native
+python3 tests/native/android/api.py >test-results/android-native/api-server.log 2>&1 &
+recette_api_pid=$!
+cleanup() {
+  adb logcat -d >test-results/android-native/logcat.txt 2>&1 || true
+  adb shell iptables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv4.txt 2>&1 || true
+  adb shell ip6tables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv6.txt 2>&1 || true
+  kill "$recette_api_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
+for attempt in {1..40}; do
+  if curl --fail --silent http://127.0.0.1:8904/__recette/bilan >/dev/null; then break; fi
+  sleep 0.25
+done
+curl --fail --silent http://127.0.0.1:8904/__recette/bilan >/dev/null
+adb root
+adb wait-for-device
+adb reverse tcp:8904 tcp:8904
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+recette_uid=$(adb shell cmd package list packages -U app.jolene.recette | tr -d '\r' | sed -n 's/^package:app\.jolene\.recette uid:\([0-9][0-9]*\)$/\1/p')
+[[ "$recette_uid" =~ ^[0-9]+$ ]]
+# Even native plugins cannot contact a real service. Only the loopback API
+# forwarded over adb is reachable by this app UID. Rules die with the emulator.
+adb shell iptables -N JOLENE_RECETTE
+adb shell iptables -A JOLENE_RECETTE -d 127.0.0.0/8 -j RETURN
+adb shell iptables -A JOLENE_RECETTE -j REJECT
+adb shell iptables -I OUTPUT 1 -m owner --uid-owner "$recette_uid" -j JOLENE_RECETTE
+adb shell ip6tables -N JOLENE_RECETTE
+adb shell ip6tables -A JOLENE_RECETTE -d ::1/128 -j RETURN
+adb shell ip6tables -A JOLENE_RECETTE -j REJECT
+adb shell ip6tables -I OUTPUT 1 -m owner --uid-owner "$recette_uid" -j JOLENE_RECETTE
+adb shell settings put secure show_ime_with_hard_keyboard 1
+node tests/native/android/navigation.mjs

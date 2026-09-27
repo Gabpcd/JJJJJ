@@ -1,4 +1,4 @@
-import { resumeCharge } from '../helpers/resume.js';
+import { donneesRapportCharge, resumeCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario C — Recherche missions massive.
@@ -74,7 +74,7 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, 'C — Recherche missions massive'),
-    'tests/load/results/03-recherche-missions.json': JSON.stringify(data, null, 2),
+    'tests/load/results/03-recherche-missions.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 

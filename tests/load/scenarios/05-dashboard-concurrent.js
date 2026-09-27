@@ -1,4 +1,4 @@
-import { resumeCharge } from '../helpers/resume.js';
+import { donneesRapportCharge, resumeCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario E — Dashboard concurrent.
@@ -70,7 +70,7 @@ export default function (data) {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, 'E — Dashboard concurrent'),
-    'tests/load/results/05-dashboard-concurrent.json': JSON.stringify(data, null, 2),
+    'tests/load/results/05-dashboard-concurrent.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 

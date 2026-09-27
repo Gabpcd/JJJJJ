@@ -1,3 +1,4 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
 /**
  * Scénario F suspendu : l’ancien script pouvait annoncer un succès sans acte métier.
  * Voir docs/tests-charge.md. Aucun signup, candidature, cron ou email n’est déclenché.
@@ -17,6 +18,6 @@ export default function () { refuserScenarioNonIsole('F'); }
 export function handleSummary(data) {
   return {
     stdout: 'Scénario F non validé : fixtures et isolation insuffisantes. Aucune mutation exécutée.\n',
-    'tests/load/results/06-cron-weekly-invoicing.json': JSON.stringify({ ...data, preuve_metier: false, scenario_indisponible: 'F' }, null, 2),
+    'tests/load/results/06-cron-weekly-invoicing.json': JSON.stringify({ ...donneesRapportCharge(data), preuve_metier: false, scenario_indisponible: 'F' }, null, 2),
   };
 }

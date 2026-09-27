@@ -175,7 +175,7 @@ test('onglets complémentaires : planning, sections facturation et retours aux v
 test('complétion depuis mission : brouillon conservé, garde publication, création puis modification simulées', async ({ page }, info) => {
   const { etat, parcours, state } = await simulerCompletionEtablissement(page);
   await entrer(page, 'inscription');
-  await page.locator('main').getByRole('button', { name: 'Publier une mission', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Préparer une mission', exact: true }).click();
   await expect(page).toHaveURL(/\/etablissement\/missions\/creer/);
   await page.getByLabel('Intitulé *', { exact: true }).fill(titre);
   await page.getByLabel('Description', { exact: true }).fill('Une mission préparée avant de renseigner le dossier.');

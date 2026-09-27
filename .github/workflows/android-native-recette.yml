@@ -1,0 +1,89 @@
+name: Android native simulation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'android/**'
+      - 'package*.json'
+      - 'capacitor.config.ts'
+      - 'tests/native/android/**'
+      - 'scripts/native/**'
+      - '.github/workflows/android-native-recette.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-android:
+    name: Android WebView — inscription, connexion et navigation
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      NATIVE_RECETTE: '1'
+      VITE_NATIVE_BUILD: 'true'
+      VITE_SUPABASE_URL: http://127.0.0.1:8904
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_native_fixture
+      VITE_SUPABASE_ANON_KEY: sb_publishable_native_fixture
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      SENTRY_UPLOAD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Préparer le vrai bundle dans un APK debug isolé
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
+          python3 -m unittest discover -s tests/native/android -p 'test_*.py'
+          npm run build
+          node scripts/native/prepare-android-recette.mjs
+          npx cap sync android
+          cd android
+          ./gradlew --no-daemon assembleDebug
+      - name: Activer KVM sur le runner éphémère
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Simuler sur Android 15 avec clavier et bouton retour natifs
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 2048M
+          disk-size: 4096M
+          enable-hw-keyboard: false
+          disable-animations: false
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash scripts/native/run-android-recette.sh
+      - name: Conserver assertions et captures, y compris en échec
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-native-${{ github.event.pull_request.head.sha || github.sha }}
+          path: test-results/android-native/
+          retention-days: 7

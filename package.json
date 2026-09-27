@@ -31,7 +31,7 @@
     "screenshots:app-store": "CAPTURE_STORE=app-store node scripts/capture-google-play.mjs",
     "screenshots:app-store:check": "node --check scripts/capture-google-play.mjs && CAPTURE_STORE=app-store node scripts/capture-google-play.mjs --check",
     "test:invoicing": "vitest run tests/invoicing/",
-    "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
+    "test:chorus:static": "vitest run --config vitest.invoicing.config.ts tests/invoicing/weekly-pointage-chorus-hardening.test.ts",
     "test:guards": "bash tests/non-regression/guards.sh",
     "test:schema": "node tests/non-regression/schema-guard.mjs",
     "test:admin-password-fixtures": "node scripts/check-admin-password-fixtures.mjs",

@@ -1,3 +1,4 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario B — Login simultané.
@@ -52,7 +53,7 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, 'B — Login simultané'),
-    'tests/load/results/02-login-simultane.json': JSON.stringify(data, null, 2),
+    'tests/load/results/02-login-simultane.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 

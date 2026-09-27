@@ -128,7 +128,9 @@ for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
     await inscrire(page,'ETABLISSEMENT');
     await expect(page).toHaveURL(/etablissement\/tableau-de-bord/);
     await expect(page.locator('main')).toBeVisible();
-    await preuve(page,`etablissement-accueil-${viewport.width}`,testInfo,page.getByRole('heading',{name:'Tableau de bord',exact:true}));
+    await preuve(page,`etablissement-accueil-${viewport.width}`,testInfo,page.getByRole('heading',{name:'Préparez votre première mission',exact:true}));
+    await expect(page.getByText('À compléter avant publication',{exact:true})).toBeVisible();
+    await expect(page.getByText('Validé',{exact:true})).toHaveCount(0);
     for (const [route,titre] of [['missions','Mes missions'],['messagerie','Messagerie'],['mon-compte','Mon établissement']] as const) {
       await page.goto(`/etablissement/${route}`);
       await expect(page.locator('main')).toBeVisible();

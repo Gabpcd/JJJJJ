@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { resumeCharge } from '../load/helpers/resume.js';
+import { donneesRapportCharge, resumeCharge } from '../load/helpers/resume.js';
 import { creerOptionsCharge } from '../load/helpers/options.js';
 import { dashboardValide, rechercheValide, exigerRecherchePeuplee, exigerDashboardMetier, refuserScenarioNonIsole } from '../load/helpers/contrats.js';
 
@@ -158,6 +158,40 @@ test('un résumé sans mesure ne fabrique pas un taux d’erreur nul', () => {
   const resume = resumeCharge({ metrics: {} }, 'C', 'rpc_recherche', { scenarios: {} });
   assert.match(resume, /Échecs HTTP mesurés \(%\) : non mesuré/);
   assert.doesNotMatch(resume, /Échecs HTTP mesurés \(%\) : 0/);
+});
+
+test('les quantiles p50/p95/p99 sont exportés sans déplacer les seuils ni exclure le démarrage', () => {
+  const seuils = { 'http_req_duration{name:rpc_dashboard}': ['p(95)<2000', 'p(99)<3500'] };
+  const options = creerOptionsCharge('charge', defaut, seuils, { LOAD_TEST_VUS: '100', LOAD_TEST_DURATION: '1m' });
+  for (const quantile of ['p(50)', 'p(95)', 'p(99)']) assert.ok(options.summaryTrendStats.includes(quantile));
+  assert.deepEqual(options.thresholds['http_req_duration{name:rpc_dashboard}'], seuils['http_req_duration{name:rpc_dashboard}']);
+  assert.deepEqual(options.scenarios.charge, { executor: 'constant-vus', vus: 100, duration: '1m', gracefulStop: '15s' });
+  const resume = resumeCharge({ metrics: { 'http_req_duration{name:rpc_dashboard}': { values: { med: 111.1, 'p(95)': 153.1, 'p(99)': 4123.7 } } } }, 'E', 'rpc_dashboard', options);
+  assert.match(resume, /p50 \/ p95 \/ p99 \(ms\) : 111 \/ 153 \/ 4124/);
+});
+
+test('les rapports conservent les preuves agrégées et excluent les données de setup ou futurs champs inconnus', async () => {
+  const secret = 'session-fictive-a-ne-jamais-publier';
+  const data = {
+    metrics: { iterations: { values: { count: 42 } } },
+    root_group: { checks: [{ name: 'dashboard 200', passes: 42, fails: 0 }], groups: [] },
+    state: { testRunDurationMs: 60000 },
+    options: { summaryTrendStats: ['p(50)', 'p(95)', 'p(99)'], summaryTimeUnit: 'ms', noColor: true, env: { PASSWORD: secret } },
+    setup_data: { jwt: secret, userId: fixtureId },
+    futur_champ_runtime: { authorization: secret },
+  };
+  const attendu = { metrics: data.metrics, root_group: data.root_group, state: data.state,
+    options: { summaryTrendStats: data.options.summaryTrendStats, summaryTimeUnit: 'ms', noColor: true } };
+  assert.deepEqual(donneesRapportCharge(data), attendu);
+  for (const nom of ['01-inscription-bloc', '02-login-simultane', '03-recherche-missions', '04-candidatures-simultanees', '05-dashboard-concurrent', '06-cron-weekly-invoicing']) {
+    const { module } = await charger(nom);
+    const sorties = module.handleSummary(data);
+    assert.equal(JSON.stringify(sorties).includes(secret), false, nom);
+    const rapport = JSON.parse(sorties[`tests/load/results/${nom}.json`]);
+    const indisponible = nom.startsWith('04-') ? 'D' : nom.startsWith('06-') ? 'F' : null;
+    assert.deepEqual(rapport, indisponible ? { ...attendu, preuve_metier: false, scenario_indisponible: indisponible } : attendu, nom);
+  }
+  assert.equal(data.setup_data.jwt, secret, 'La session en mémoire ne doit pas être modifiée par le rapport');
 });
 
 

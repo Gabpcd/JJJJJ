@@ -1,3 +1,4 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario A — Inscription en bloc (cas viral post LinkedIn).
@@ -51,7 +52,7 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data),
-    'tests/load/results/01-inscription-bloc.json': JSON.stringify(data, null, 2),
+    'tests/load/results/01-inscription-bloc.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 
