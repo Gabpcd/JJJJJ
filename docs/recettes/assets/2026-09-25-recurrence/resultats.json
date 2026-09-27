@@ -1,0 +1,212 @@
+{
+  "stats": {
+    "startTime": "2026-09-25T14:27:21.182Z",
+    "duration": 89009.471,
+    "expected": 25,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "scenario": "inscription : vouvoiement du dossier et de ses erreurs, retour libre à l’espace soignant",
+      "project": "ipad-portrait",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "inscription : vouvoiement du dossier et de ses erreurs, retour libre à l’espace soignant",
+      "project": "ipad-paysage",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "inscription : vouvoiement du dossier et de ses erreurs, retour libre à l’espace soignant",
+      "project": "iphone",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "inscription : vouvoiement du dossier et de ses erreurs, retour libre à l’espace soignant",
+      "project": "android",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "inscription : vouvoiement du dossier et de ses erreurs, retour libre à l’espace soignant",
+      "project": "ordinateur",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : six journées de neuf heures bloquées, puis limite exacte de 48 h autorisée sans publication",
+      "project": "ipad-portrait",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : pause entre deux créneaux exclue du total et exception préservée à l’extension de période",
+      "project": "ipad-portrait",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : nuit dimanche–lundi explicite et répartition exacte entre deux semaines",
+      "project": "ipad-portrait",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : duplication conserve les trois créneaux, la pause et la nuit sans remplacer le planning par son enveloppe",
+      "project": "ipad-portrait",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : six journées de neuf heures bloquées, puis limite exacte de 48 h autorisée sans publication",
+      "project": "ipad-paysage",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : pause entre deux créneaux exclue du total et exception préservée à l’extension de période",
+      "project": "ipad-paysage",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : nuit dimanche–lundi explicite et répartition exacte entre deux semaines",
+      "project": "ipad-paysage",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : duplication conserve les trois créneaux, la pause et la nuit sans remplacer le planning par son enveloppe",
+      "project": "ipad-paysage",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : six journées de neuf heures bloquées, puis limite exacte de 48 h autorisée sans publication",
+      "project": "iphone",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : pause entre deux créneaux exclue du total et exception préservée à l’extension de période",
+      "project": "iphone",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : nuit dimanche–lundi explicite et répartition exacte entre deux semaines",
+      "project": "iphone",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : duplication conserve les trois créneaux, la pause et la nuit sans remplacer le planning par son enveloppe",
+      "project": "iphone",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : six journées de neuf heures bloquées, puis limite exacte de 48 h autorisée sans publication",
+      "project": "android",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : pause entre deux créneaux exclue du total et exception préservée à l’extension de période",
+      "project": "android",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : nuit dimanche–lundi explicite et répartition exacte entre deux semaines",
+      "project": "android",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : duplication conserve les trois créneaux, la pause et la nuit sans remplacer le planning par son enveloppe",
+      "project": "android",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : six journées de neuf heures bloquées, puis limite exacte de 48 h autorisée sans publication",
+      "project": "ordinateur",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : pause entre deux créneaux exclue du total et exception préservée à l’extension de période",
+      "project": "ordinateur",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : nuit dimanche–lundi explicite et répartition exacte entre deux semaines",
+      "project": "ordinateur",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "scenario": "récurrence : duplication conserve les trois créneaux, la pause et la nuit sans remplacer le planning par son enveloppe",
+      "project": "ordinateur",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    }
+  ]
+}

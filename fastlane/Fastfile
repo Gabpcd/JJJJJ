@@ -8,7 +8,7 @@ def release_config
 end
 
 platform :ios do
-  desc 'Submit the signed Jolene build; keep manual release after Apple review'
+  desc 'Submit the signed Jolene build and release automatically after Apple review'
   lane :submit do
     release = release_config
     api = app_store_connect_api_key(
@@ -33,7 +33,7 @@ platform :ios do
       build_number: release.fetch('buildNumber').to_s, skip_binary_upload: true,
       skip_screenshots: true, skip_metadata: false,
       release_notes: { 'fr-FR' => File.read(File.join(ROOT, 'config/mobile-release-notes.txt')).strip },
-      submit_for_review: true, automatic_release: false, force: true,
+      submit_for_review: true, automatic_release: true, force: true,
       run_precheck_before_submit: false
     )
   end

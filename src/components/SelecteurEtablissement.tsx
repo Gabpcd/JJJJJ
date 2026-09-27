@@ -22,6 +22,7 @@ export function SelecteurEtablissement({
   return (
     <div className="space-y-3">
       <select
+        aria-label="Établissement"
         value={valeur}
         onChange={(e) => onChange(e.target.value)}
         className="input-base font-medium"
@@ -37,6 +38,7 @@ export function SelecteurEtablissement({
       {avecFiltres && (
         <div className="flex gap-2 flex-wrap">
           <select
+            aria-label="Filtrer par département"
             value={filtreDepartement || ''}
             onChange={(e) => onChangeDepartement?.(e.target.value)}
             className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]"
@@ -47,6 +49,7 @@ export function SelecteurEtablissement({
             ))}
           </select>
           <select
+            aria-label="Filtrer par type d’établissement"
             value={filtreType || ''}
             onChange={(e) => onChangeType?.(e.target.value)}
             className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]"

@@ -7,6 +7,7 @@ import {
   type Request,
   type Response,
   type TestInfo,
+  type WebSocket,
 } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -271,6 +272,74 @@ function captureSignupDiagnostics(page: Page) {
 
 type FreshAccountRole = 'soignant' | 'etab';
 
+type TransportPhase = 'navigation' | 'settling' | 'inspection';
+type TransportDiagnostic = {
+  timestamp: string;
+  route: string;
+  matrixIndex: number;
+  phase: TransportPhase;
+  event: 'websocket-requested' | 'websocket-closed' | 'websocket-error' | 'console-websocket-error';
+  connectionAttempt: number;
+  subsequentAttempts: number;
+  httpStatus: number | null;
+};
+
+function captureFreshAccountTransport(
+  page: Page,
+  role: FreshAccountRole,
+  route: string,
+  diagnostics: TransportDiagnostic[],
+) {
+  const matrix = role === 'etab' ? ROUTES_ETABLISSEMENT : ROUTES_SOIGNANT;
+  const matrixIndex = matrix.findIndex((entry) => entry === route);
+  const safeRoute = matrixIndex < 0 ? 'unknown-matrix-route' : matrix[matrixIndex].split('?')[0];
+  let phase: TransportPhase = 'navigation';
+  let attempts = 0;
+  const detach: Array<() => void> = [];
+  const record = (event: TransportDiagnostic['event'], connectionAttempt: number, error = '') => {
+    // Liste blanche uniquement : aucune URL, query, frame ou erreur brute.
+    const status = error.match(/^(?:[^:\r\n]{1,64}: ([1-5]\d{2})|Error during WebSocket handshake: Unexpected response code: ([1-5]\d{2}))$/);
+    diagnostics.push({
+      timestamp: new Date().toISOString(),
+      route: safeRoute,
+      matrixIndex,
+      phase,
+      event,
+      connectionAttempt,
+      subsequentAttempts: Math.max(0, attempts - 1),
+      httpStatus: status ? Number(status[1] || status[2]) : null,
+    });
+  };
+  const onSocket = (socket: WebSocket) => {
+    const attempt = ++attempts;
+    // L'événement Playwright signale la requête, pas un handshake réussi.
+    record('websocket-requested', attempt);
+    const onClose = () => record('websocket-closed', attempt);
+    const onError = (error: string) => record('websocket-error', attempt, error);
+    socket.on('close', onClose);
+    socket.on('socketerror', onError);
+    detach.push(() => {
+      socket.off('close', onClose);
+      socket.off('socketerror', onError);
+    });
+  };
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error' && /^WebSocket connection\b/.test(message.text())) {
+      record('console-websocket-error', 0);
+    }
+  };
+  page.on('websocket', onSocket);
+  page.on('console', onConsole);
+  return {
+    setPhase(value: TransportPhase) { phase = value; },
+    stop() {
+      page.off('websocket', onSocket);
+      page.off('console', onConsole);
+      detach.forEach((remove) => remove());
+    },
+  };
+}
+
 type FreshAccountRouteAudit = {
   route: string;
   finalUrl: string;
@@ -303,7 +372,9 @@ async function auditFreshAccountRoute(
   page: Page,
   role: FreshAccountRole,
   route: string,
+  transportDiagnostics: TransportDiagnostic[],
 ): Promise<FreshAccountRouteAudit> {
+  const transport = captureFreshAccountTransport(page, role, route, transportDiagnostics);
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const apiErrors: Array<{ status: number; path: string }> = [];
@@ -331,6 +402,7 @@ async function auditFreshAccountRoute(
 
   try {
     await page.goto(route, { waitUntil: 'domcontentloaded' });
+    transport.setPhase('settling');
     await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -352,6 +424,7 @@ async function auditFreshAccountRoute(
       ).toEqual([]);
     }
 
+    transport.setPhase('inspection');
     const metrics = await page.evaluate(() => {
       const visible = (element: Element) => {
         if (element.getAttribute('aria-hidden') === 'true' || element.closest('[aria-hidden="true"]')) {
@@ -483,6 +556,7 @@ async function auditFreshAccountRoute(
       apiErrors,
     };
   } finally {
+    transport.stop();
     page.off('console', onConsole);
     page.off('pageerror', onPageError);
     page.off('response', onResponse);
@@ -497,9 +571,19 @@ async function auditFreshAccountRoutes(
 ) {
   await settleFreshAccountDashboard(page);
   const results: FreshAccountRouteAudit[] = [];
-  for (const viewport of freshAccountViewports(testInfo)) {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    for (const route of routes) results.push(await auditFreshAccountRoute(page, role, route));
+  const transportDiagnostics: TransportDiagnostic[] = [];
+  try {
+    for (const viewport of freshAccountViewports(testInfo)) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const route of routes) {
+        results.push(await auditFreshAccountRoute(page, role, route, transportDiagnostics));
+      }
+    }
+  } finally {
+    await testInfo.attach(`audit-compte-neuf-transport-${role}.json`, {
+      body: Buffer.from(JSON.stringify(transportDiagnostics, null, 2)),
+      contentType: 'application/json',
+    });
   }
 
   await testInfo.attach(`audit-compte-neuf-${role}.json`, {

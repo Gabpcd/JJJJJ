@@ -75,7 +75,7 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, o
       toast.error('Pro Santé Connect indisponible pour le moment. Réessayez dans quelques minutes ou utilisez l\'inscription par email.');
       setModaleOuverte(false);
     } catch {
-      toast.error('Erreur de connexion à Pro Santé Connect. Vérifie ton réseau.');
+      toast.error('Erreur de connexion à Pro Santé Connect. Vérifiez votre connexion.');
       setModaleOuverte(false);
     } finally {
       setLoading(false);

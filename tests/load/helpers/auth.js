@@ -23,6 +23,9 @@ export const SERVICE_ROLE_KEY = __ENV.STAGING_SUPABASE_SERVICE_ROLE_KEY || '';
 if (!SUPABASE_URL || !ANON_KEY) {
   throw new Error('STAGING_SUPABASE_URL et STAGING_SUPABASE_ANON_KEY requis dans env');
 }
+if (SUPABASE_URL !== 'https://mejpriaetwgtcstbgfid.supabase.co') {
+  throw new Error('Tests de charge réservés au staging Jolene ; production refusée.');
+}
 
 /** Headers anon (lectures publiques + auth flows). */
 export function anonHeaders() {
@@ -101,4 +104,25 @@ export function loginTestAccount(role) {
     ? 'playwright-soignant@jolene.app'
     : 'playwright-etab@jolene.app';
   return login(email, password);
+}
+
+/** E : identité éphémère du run, sans repli vers les comptes fixes de B. */
+export function loginDashboardFixture() {
+  const id = __ENV.LOAD_DASHBOARD_USER_ID;
+  const email = __ENV.LOAD_DASHBOARD_EMAIL;
+  const password = __ENV.LOAD_DASHBOARD_PASSWORD;
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/.test(id || '')
+    || email !== `recette-dashboard-${id}@example.invalid` || !password
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(__ENV.LOAD_TEST_RUN_ID || '')) {
+    throw new Error('Fixture dashboard dédiée au run requise ; aucun repli vers un compte fixe.');
+  }
+  const session = login(email, password);
+  const user = session?.user;
+  if (!session?.access_token || user?.id !== id || user.email !== email
+    || user.app_metadata?.est_compte_test !== true || user.app_metadata?.is_test_playwright !== true
+    || user.app_metadata?.role !== 'SOIGNANT' || user.app_metadata?.load_fixture_kind !== 'DASHBOARD'
+    || user.app_metadata?.load_fixture_run !== __ENV.LOAD_TEST_RUN_ID) {
+    throw new Error('Login du compte dashboard dédié non confirmé.');
+  }
+  return session;
 }

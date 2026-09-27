@@ -1,0 +1,119 @@
+{
+  "origine": "/private/tmp/jolene-decouverte-alertes-e2e-20260925/results.json",
+  "baseURL": "http://127.0.0.1:8902",
+  "stats": {
+    "startTime": "2026-09-25T12:17:48.709Z",
+    "duration": 70397.938,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cas": [
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 7068,
+      "essais": 1
+    },
+    {
+      "scenario": "ancien backend : sauvegarde sans alerte et aucun appel à une API absente",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 2412,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 4991,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 5519,
+      "essais": 1
+    },
+    {
+      "scenario": "ancien backend : sauvegarde sans alerte et aucun appel à une API absente",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 2265,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 5138,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 5259,
+      "essais": 1
+    },
+    {
+      "scenario": "ancien backend : sauvegarde sans alerte et aucun appel à une API absente",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 2209,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 4733,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 5361,
+      "essais": 1
+    },
+    {
+      "scenario": "ancien backend : sauvegarde sans alerte et aucun appel à une API absente",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 2219,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 4797,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 5966,
+      "essais": 1
+    },
+    {
+      "scenario": "ancien backend : sauvegarde sans alerte et aucun appel à une API absente",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 2177,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 5317,
+      "essais": 1
+    }
+  ]
+}

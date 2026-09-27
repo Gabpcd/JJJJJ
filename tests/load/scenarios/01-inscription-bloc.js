@@ -1,3 +1,5 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
+import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario A — Inscription en bloc (cas viral post LinkedIn).
  *
@@ -20,26 +22,21 @@ import { sleep } from 'k6';
 import { signup } from '../helpers/auth.js';
 import { uniqueEmail, strongPassword, soignantMetadata } from '../helpers/data.js';
 
-export const options = {
-  scenarios: {
-    inscription_bloc: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '30s', target: 100 }, // ramp-up à 100 VUs
-        { duration: '1m', target: 100 },  // plateau 1 min
-        { duration: '15s', target: 0 },   // ramp-down
-      ],
-      gracefulRampDown: '15s',
-    },
-  },
-  thresholds: {
-    // Cible : 95%+ succès (5% rate limit acceptable pour Supabase)
-    'http_req_failed{name:auth_signup}': ['rate<0.05'],
-    // p99 < 5s (auth signup peut être lent : INSERT auth.users + trigger profil)
-    'http_req_duration{name:auth_signup}': ['p(95)<3000', 'p(99)<5000'],
-  },
-};
+export const options = creerOptionsCharge('inscription_bloc', {
+  executor: 'ramping-vus',
+  startVUs: 0,
+  stages: [
+    { duration: '30s', target: 100 }, // ramp-up à 100 VUs
+    { duration: '1m', target: 100 },  // plateau 1 min
+    { duration: '15s', target: 0 },   // ramp-down
+  ],
+  gracefulRampDown: '15s',
+}, {
+  // Cible : 95%+ succès (5% rate limit acceptable pour Supabase)
+  'http_req_failed{name:auth_signup}': ['rate<0.05'],
+  // p99 < 5s (auth signup peut être lent : INSERT auth.users + trigger profil)
+  'http_req_duration{name:auth_signup}': ['p(95)<3000', 'p(99)<5000'],
+}, __ENV);
 
 export default function () {
   const email = uniqueEmail('inscr');
@@ -55,7 +52,7 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data),
-    'tests/load/results/01-inscription-bloc.json': JSON.stringify(data, null, 2),
+    'tests/load/results/01-inscription-bloc.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 

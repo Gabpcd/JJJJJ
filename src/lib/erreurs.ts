@@ -419,6 +419,12 @@ export function extraireMessageErreur(error: any): string {
   if (!error) return '';
   const msg = error.message || error.details || error.hint || '';
 
+  // PostgREST refuse un JWT expiré ou invalide avant d'exécuter la requête.
+  // Conserver ce refus et indiquer comment reprendre, sans exposer son anglais.
+  if (error.code === 'PGRST301' || /jwt expired/i.test(msg)) {
+    return 'Votre session a expiré ou n’est plus valide. Reconnectez-vous puis réessayez.';
+  }
+
   // Si c'est une erreur structurée d'inscription, déléguer.
   if (error?.code && CODES_CONNUS.has(error.code)) {
     return mapperErreurInscription(error).message;
@@ -488,7 +494,7 @@ export function extraireMessageErreur(error: any): string {
     return 'Vous n\'avez pas les droits nécessaires pour cette action.';
   }
 
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || /^(?:TypeError: )?Load failed$/i.test(msg)) {
     return 'Erreur de connexion. Vérifiez votre accès internet.';
   }
 

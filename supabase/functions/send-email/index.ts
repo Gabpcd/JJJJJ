@@ -1,3 +1,4 @@
+import { verifierPreferencesEvenementsEmail } from '../_shared/preferences-alertes-email.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
@@ -1921,19 +1922,15 @@ Deno.serve(async (req) => {
       const supabaseCheck = createClient(supabaseUrl, serviceRoleKey);
       let shouldNotify: boolean;
       if (typeEvenement) {
-        const { data, error } = await supabaseCheck.rpc('fn_doit_notifier' as any, {
-          p_utilisateur_id: destinataire_id,
-          p_type_evenement: typeEvenement,
-          p_canal: 'EMAIL',
-        });
-        if (error || typeof data !== 'boolean') {
-          console.error('[send-email] verification preferences impossible', error?.message);
+        try {
+          shouldNotify = await verifierPreferencesEvenementsEmail(supabaseCheck, destinataire_id, type, typeEvenement);
+        } catch (error) {
+          console.error('[send-email] verification preferences impossible', error);
           return new Response(JSON.stringify({ error: 'Verification des preferences indisponible' }), {
             status: 503,
             headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
           });
         }
-        shouldNotify = data;
       } else {
         const { data, error } = await supabaseCheck
           .from('preferences_notifications')

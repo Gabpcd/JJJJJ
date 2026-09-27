@@ -33,7 +33,7 @@ const TAILLES: Record<Taille, string> = {
 
 const VARIANTS: Record<Variant, string> = {
   success: cn(
-    'bg-jolene-cyan-100 text-jolene-cyan-800',
+    'bg-jolene-cyan-100 text-jolene-cyan-900',
     'border border-jolene-cyan-300',
   ),
   warning: cn(

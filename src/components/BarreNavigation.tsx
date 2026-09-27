@@ -130,7 +130,7 @@ function getEtablissementSidebar(canReadFinance: boolean): SidebarEntry[] {
       ],
     },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-    { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
+    { icone: Settings, label: 'Mon compte', route: '/etablissement/mon-compte' },
   ];
 }
 
@@ -169,7 +169,7 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
         onClick={() => toggleGroup(group.label)}
         aria-expanded={isOpen}
         aria-controls={contentId}
-        className={`sidebar-item w-full text-left justify-between ${hasActiveChild ? 'text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+        className={`sidebar-item w-full text-left justify-between ${hasActiveChild ? 'text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
       >
         <div className="flex items-center gap-3">
           <group.icone className="h-5 w-5" />
@@ -187,7 +187,7 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
                 key={item.route}
                 onClick={() => { if (location.pathname !== item.route) navigate(item.route); }}
                 aria-current={actif ? 'page' : undefined}
-                className={`sidebar-item w-full text-left text-sm py-2 ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+                className={`sidebar-item w-full text-left text-sm py-2 ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
               >
                 <item.icone className="h-4 w-4" />
                 <span className="flex-1">{item.label}</span>
@@ -435,7 +435,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             className="fixed left-0 top-0 bottom-0 z-[61] !max-h-none !p-0 w-[280px] max-w-[85vw] flex md:hidden flex-col no-print animate-in slide-in-from-left duration-200"
             style={{
               paddingTop: 'env(safe-area-inset-top)',
-              background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)',
+              background: 'linear-gradient(180deg, hsl(var(--sidebar-bg)) 0%, hsl(var(--sidebar-accent)) 100%)',
             }}
             role="dialog"
             aria-modal="true"
@@ -478,7 +478,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                     key={item.route}
                     onClick={() => { navigate(item.route); setMobileMenuOpen(false); }}
                     aria-current={actif ? 'page' : undefined}
-                    className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+                    className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
                   >
                     <item.icone className="h-5 w-5" />
                     <span className="flex-1">{item.label}</span>
@@ -562,7 +562,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
               onClick={handleDeconnexion}
               aria-label="Se déconnecter"
               title="Se déconnecter"
-              className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition"
+              className="p-2 rounded-lg text-sidebar-foreground hover:text-destructive hover:bg-destructive/10 transition"
             >
               <LogOut className="h-5 w-5" />
             </button>
@@ -592,7 +592,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                 onClick={() => { if (location.pathname !== item.route) navigate(item.route); }}
                 aria-label={item.label}
                 aria-current={actif ? 'page' : undefined}
-                className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+                className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
               >
                 <item.icone className="h-5 w-5" />
                 <span className="flex-1">{item.label}</span>

@@ -15,7 +15,7 @@ test('SOIGNANT — inscription minimale puis dossier : validations, refus et fin
   await page.getByLabel(/^Date de naissance \*/).fill('2015-01-01');
   await enregistrer.click();
   await expect(page.getByText('Numéro de téléphone invalide', { exact: true })).toBeVisible();
-  await expect(page.getByText("Tu dois avoir 18 ans révolus pour t'inscrire", { exact: true })).toBeVisible();
+  await expect(page.getByText('Vous devez avoir 18 ans révolus pour vous inscrire', { exact: true })).toBeVisible();
   expect(completion.soumissions).toHaveLength(0);
   await page.getByLabel(/^Téléphone \*/).fill('0100000000');
   await page.getByLabel(/^Date de naissance \*/).fill('1990-01-01');

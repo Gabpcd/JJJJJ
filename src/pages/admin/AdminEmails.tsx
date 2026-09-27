@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Eye, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
@@ -7,9 +7,11 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { avecDelai } from '@/lib/avecDelai';
+import { envoyerEmailConfirme } from '@/lib/envoiEmailConfirme';
 
 // Données fictives pour prévisualiser et tester les templates transactionnels.
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
@@ -87,42 +89,50 @@ export default function AdminEmails() {
   const [sending, setSending] = useState<string | null>(null);
   const [historique, setHistorique] = useState<any[]>([]);
   const [histLoading, setHistLoading] = useState(true);
+  const [histErreur, setHistErreur] = useState(false);
+  const verrouEnvoi = useRef(false);
+  const clesEnvoi = useRef(new Map<string, string>());
+  const generationHistorique = useRef(0);
 
   useEffect(() => {
-    chargerHistorique();
+    void chargerHistorique();
+    return () => { generationHistorique.current += 1; };
   }, []);
 
   const chargerHistorique = async () => {
+    const generation = ++generationHistorique.current;
     setHistLoading(true);
-    const { data } = await supabase
-      .from('emails_envoyes')
-      .select('id, type, sujet, destinataire_email, destinataire_id, statut, erreur, provider_id, cree_le')
-      .order('cree_le', { ascending: false })
-      .limit(20);
-    setHistorique(data || []);
-    setHistLoading(false);
+    setHistErreur(false);
+    try {
+      const { data, error } = await avecDelai(supabase.from('emails_envoyes')
+        .select('id, type, sujet, destinataire_email, destinataire_id, statut, erreur, provider_id, cree_le')
+        .order('cree_le', { ascending: false }).limit(20), 15_000);
+      if (error || !Array.isArray(data)) throw error || new Error('Historique indisponible');
+      if (generation === generationHistorique.current) setHistorique(data);
+    } catch {
+      if (generation === generationHistorique.current) setHistErreur(true);
+    } finally {
+      if (generation === generationHistorique.current) setHistLoading(false);
+    }
   };
 
   const envoyerTest = async (type: string) => {
-    if (!user) return;
+    if (!user || verrouEnvoi.current) return;
+    verrouEnvoi.current = true;
     setSending(type);
-    const { data: { session } } = await supabase.auth.getSession();
-    const supabaseUrl = SUPABASE_URL;
-    const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session?.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] }),
-    });
-    const error = res.ok ? null : { message: `HTTP ${res.status}` };
-    setSending(null);
-    if (error) {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
-    } else {
+    const operation = `${user.id}:${type}`;
+    const cle = clesEnvoi.current.get(operation) || `admin-test:${crypto.randomUUID()}`;
+    clesEnvoi.current.set(operation, cle);
+    try {
+      await envoyerEmailConfirme({ type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] }, cle);
+      clesEnvoi.current.delete(operation);
       toast.success('Email test envoyé à votre adresse');
-      chargerHistorique();
+      void chargerHistorique();
+    } catch {
+      toast.error("L'envoi de l'email test n'a pas été confirmé. Veuillez réessayer.");
+    } finally {
+      verrouEnvoi.current = false;
+      setSending(null);
     }
   };
 
@@ -252,7 +262,10 @@ export default function AdminEmails() {
             <div className="text-center py-8 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Chargement…
             </div>
-          ) : (() => {
+          ) : histErreur ? <div role="alert" className="card-base space-y-3">
+            <p>Impossible de charger l’historique des emails.</p>
+            <BoutonY2K onClick={chargerHistorique}>Réessayer</BoutonY2K>
+          </div> : (() => {
             const colonnes: ColonneTableau<any>[] = [
               { cle: 'date', titre: 'Date' },
               { cle: 'type', titre: 'Type' },

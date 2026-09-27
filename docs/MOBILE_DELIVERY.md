@@ -1,7 +1,8 @@
 # Distribution mobile
 
-Le workflow `mobile-delivery.yml` attend Validate PR, Playwright, Lighthouse et Vercel,
-sur le même commit de `main`. Il ignore les PR et un commit dépassé par un main
+Le workflow `mobile-delivery.yml` attend Validate PR, Playwright, Lighthouse,
+Android native simulation et Vercel, sur le même commit de `main`.
+Il ignore les PR et un commit dépassé par un main
 plus récent. Les secrets de signature ne sont accessibles qu'aux jobs de livraison.
 
 ## Nouveau build stores
@@ -9,9 +10,15 @@ plus récent. Les secrets de signature ne sont accessibles qu'aux jobs de livrai
 Incrémenter `config/mobile-release.json`, les versions iOS/Android et écrire
 `config/mobile-release-notes.txt` ainsi que le changelog Android. Après recette,
 revue fraîche et merge, le workflow construit les deux binaires signés et les
-soumet à Apple/Google. Apple conserve la publication manuelle après approbation.
+soumet à Apple/Google. Apple publie automatiquement après approbation.
 Google suit le réglage de publication gérée du compte. Aucun délai de validation
 des stores n'est garanti par cette automatisation.
+
+Un workflow vert peut ne rien livrer : consulter le résumé `Delivery` pour
+identifier `native`, `ota` ou `none` et le commit concerné. Sans nouvel incrément
+de version native ni correction compatible revue `mobile:ota`, aucun build
+n'est soumis. « Soumis », « approuvé » et « disponible dans le store » sont des
+états distincts ; les tags de livraison prouvent la soumission, pas sa validation.
 
 Une livraison n'est terminée que lorsque les deux soumissions ont réussi. Le tag
 `mobile-native-N` conserve le commit de référence de ce runtime. Les IPA/AAB sont

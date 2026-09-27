@@ -17,6 +17,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { SuiviMission } from '@/components/SuiviMission';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
@@ -196,6 +197,7 @@ export default function DetailMissionSoignant() {
   const [tentativeChargement, setTentativeChargement] = useState(0);
   const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
   const [erreurCreneaux, setErreurCreneaux] = useState(false);
+  const [chargementCreneaux, setChargementCreneaux] = useState(true);
   const [acceptationEnCours, setAcceptationEnCours] = useState(false);
   const [litigeMission, setLitigeMission] = useState<any>(null);
 
@@ -230,6 +232,8 @@ export default function DetailMissionSoignant() {
     if (!user || !id) return;
 
     let annule = false;
+    const planningController = new AbortController();
+    const tvaController = new AbortController();
     const minuteurChargementProlonge = setTimeout(() => {
       if (!annule) setChargementProlonge(true);
     }, 6_000);
@@ -238,6 +242,7 @@ export default function DetailMissionSoignant() {
     setChargementProlonge(false);
     setErreurChargement(null);
     setErreurCreneaux(false);
+    setChargementCreneaux(true);
     setLitigeMission(null);
 
     const chargerDonneesCritiques = async () => {
@@ -310,41 +315,49 @@ export default function DetailMissionSoignant() {
       // doivent jamais empêcher d'afficher le titre ni le CTA de notation.
       void (async () => {
         try {
-          const [resultatCreneaux, resultatTva] = await Promise.all([
-            supabase
-              .from('mission_creneaux')
-              .select('id, debut, fin, est_pause, type_creneau')
-              .eq('mission_id', id)
-              .eq('type_creneau', 'PREVISIONNEL')
-              .eq('est_pause', false)
-              .order('debut', { ascending: true }),
-            // Déploiement expand/contract : cette lecture peut échouer quelques
-            // instants tant que la migration TVA n'est pas encore posée.
-            supabase
-              .from('missions')
-              .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
-              .eq('id', id)
-              .maybeSingle(),
-          ]);
+          // Une TVA lente ne bloque pas le planning, ni la reprise du suivi.
+          const resultatCreneaux = await avecDelai(supabase
+            .from('mission_creneaux')
+            .select('id, debut, fin, est_pause, type_creneau')
+            .eq('mission_id', id)
+            .eq('type_creneau', 'PREVISIONNEL')
+            .eq('est_pause', false)
+            .order('debut', { ascending: true })
+            .abortSignal(planningController.signal), 8_000, 'Le planning met trop de temps à répondre.');
           if (annule) return;
-
+          if (resultatCreneaux.error) throw resultatCreneaux.error;
           setCreneauxPlanifies(ajouterRepliMissionPonctuelle(
-            (resultatCreneaux.data || []) as CreneauPointage[],
-            m,
+            (resultatCreneaux.data || []) as CreneauPointage[], m,
           ));
-          setErreurCreneaux(Boolean(resultatCreneaux.error));
-          if (resultatTva.data) {
-            setMission((precedente: any) => precedente?.id === m.id
-              ? { ...precedente, ...resultatTva.data }
-              : precedente);
-          }
+          setErreurCreneaux(false);
         } catch (error) {
           if (!annule) {
             setCreneauxPlanifies(ajouterRepliMissionPonctuelle([], m));
             setErreurCreneaux(true);
+            handleErrorSilent(error, 'DetailMissionSoignant.planning');
           }
-          handleErrorSilent(error, 'DetailMissionSoignant.donnees-facultatives');
+        } finally {
+          planningController.abort();
+          if (!annule) setChargementCreneaux(false);
         }
+      })();
+
+      // Lecture facultative indépendante : expand/contract TVA pendant le déploiement.
+      void (async () => {
+        try {
+          const resultatTva = await avecDelai(supabase
+            .from('missions')
+            .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+            .eq('id', id)
+            .abortSignal(tvaController.signal)
+            .maybeSingle(), 8_000);
+          if (annule) return;
+          if (resultatTva.error) throw resultatTva.error;
+          if (resultatTva.data) setMission((precedente: any) => precedente?.id === m.id
+            ? { ...precedente, ...resultatTva.data } : precedente);
+        } catch (error) {
+          if (!annule) handleErrorSilent(error, 'DetailMissionSoignant.tva');
+        } finally { tvaController.abort(); }
       })();
 
       void (async () => {
@@ -451,6 +464,7 @@ export default function DetailMissionSoignant() {
         if (parcours) {
           setEtablissement(resultat.mission.etablissements);
           setCreneauxPlanifies(resultat.mission.creneaux ?? []);
+          setChargementCreneaux(false);
           setLoading(false);
           return;
         }
@@ -468,6 +482,8 @@ export default function DetailMissionSoignant() {
 
     return () => {
       annule = true;
+      planningController.abort();
+      tvaController.abort();
       clearTimeout(minuteurChargementProlonge);
     };
   }, [user, id, tentativeChargement, parcours]);
@@ -839,6 +855,7 @@ export default function DetailMissionSoignant() {
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 
+      <h1 className="text-lg font-bold text-foreground mb-3">{mission.intitule}</h1>
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -856,7 +873,6 @@ export default function DetailMissionSoignant() {
                 </span>
               )}
             </div>
-            <h1 className="text-lg font-bold text-foreground mb-1">{mission.intitule}</h1>
             {mission.description && <p className="text-sm text-muted-foreground mb-2">{mission.description}</p>}
             <p className="text-xs text-muted-foreground">
               {getLabelProfession(mission.profession_requise)} {mission.service && `· ${mission.service}`}
@@ -924,7 +940,7 @@ export default function DetailMissionSoignant() {
             />
           )}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
-          <p className="text-xs text-muted-foreground/60 italic text-center">
+          <p className="text-xs text-muted-foreground italic text-center">
             {missionEstLiberale && estTerminee
               ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
               : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
@@ -955,6 +971,16 @@ export default function DetailMissionSoignant() {
           )}
 
           </section>
+
+          {/* Le suivi reste accessible après les informations nécessaires pour
+              choisir la mission, sans repousser sa rémunération hors écran. */}
+          <div className="lg:col-span-2">
+            <SuiviMission mission={mission} role="SOIGNANT" candidatureEnvoyee={candidatureEnvoyee}
+              onReessayerPlanning={() => setTentativeChargement(t => t + 1)}
+              planning={chargementCreneaux ? { etat: 'chargement' } : erreurCreneaux ? { etat: 'indisponible' }
+                : planningCandidat.exact ? { etat: 'exact', nombreCreneaux: planningCandidat.creneaux.length } : { etat: 'incomplet' }}
+              litigeActif={Boolean(litigeMission?.litige_id && !litigeEstClos)} />
+          </div>
 
           <div className="space-y-4">
           {/* Établissement */}
@@ -1014,19 +1040,19 @@ export default function DetailMissionSoignant() {
                     <>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).plans()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         📍 Plans
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).googleMaps()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🗺️ Maps
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).waze()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🚗 Waze
                       </button>
@@ -1053,7 +1079,7 @@ export default function DetailMissionSoignant() {
                     ⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}
                   </p>
                 )}
-                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Jolene
                 </p>
                 {/* E2: Blacklist côté soignant.
@@ -1091,7 +1117,7 @@ export default function DetailMissionSoignant() {
 
           {/* Le planning contractuel ne doit jamais être présenté comme le
               relevé de pointage d'une mission déjà terminée. */}
-          <div className="card-base">
+          <div id="planning-mission" tabIndex={-1} className="card-base scroll-mt-24">
             <h3 className="font-semibold text-sm text-foreground mb-2">
               🕐 {estTerminee ? 'Horaires planifiés' : 'Horaires'}
             </h3>

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { avecDelai } from '@/lib/avecDelai';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, FileText, Loader2 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -7,7 +9,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { FileDeTravail } from '@/components/admin/FileDeTravail';
 import { supabase } from '@/integrations/supabase/client';
-import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { format } from 'date-fns';
@@ -73,8 +74,9 @@ const PAR_PAGE = 50;
 export default function AdminContrats() {
   usePageTitle('Admin · Contrats');
   const navigate = useNavigate();
-  const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const generationChargement = useRef(0);
   const [contrats, setContrats] = useState<ContratLigne[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -82,31 +84,33 @@ export default function AdminContrats() {
   const [recherche, setRecherche] = useState('');
   const rechercheDeb = useDebounce(recherche, 400);
 
-  async function charger() {
+  const charger = useCallback(async () => {
+    const generation = ++generationChargement.current;
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_contrats' as any, {
-      p_filtre_statut: filtreStatut === 'Tous' ? null : filtreStatut,
-      p_recherche: rechercheDeb.trim() || null,
-      p_limit: PAR_PAGE,
-      p_offset: page * PAR_PAGE,
-    });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: error.message });
-      setLoading(false);
-      return;
+    setErreurChargement(false);
+    try {
+      const { data, error } = await avecDelai(supabase.rpc('fn_admin_lister_contrats' as any, {
+        p_filtre_statut: filtreStatut === 'Tous' ? null : filtreStatut,
+        p_recherche: rechercheDeb.trim() || null,
+        p_limit: PAR_PAGE,
+        p_offset: page * PAR_PAGE,
+      }), 15_000);
+      const resultat = data as any;
+      if (error || !resultat?.success || !Array.isArray(resultat.contrats) || typeof resultat.total !== 'number') throw error || new Error('Réponse invalide');
+      if (generation !== generationChargement.current) return;
+      setContrats(resultat.contrats);
+      setTotal(resultat.total);
+    } catch {
+      if (generation === generationChargement.current) setErreurChargement(true);
+    } finally {
+      if (generation === generationChargement.current) setLoading(false);
     }
-    const result = data as any;
-    if (!result?.success) {
-      afficherNotification({ type: 'erreur', message: result?.error || 'Erreur.' });
-      setLoading(false);
-      return;
-    }
-    setContrats(result.contrats as ContratLigne[]);
-    setTotal(result.total as number);
-    setLoading(false);
-  }
+  }, [filtreStatut, rechercheDeb, page]);
 
-  useEffect(() => { charger(); }, [filtreStatut, rechercheDeb, page]);
+  useEffect(() => {
+    void charger();
+    return () => { generationChargement.current += 1; };
+  }, [charger]);
 
   // File de travail (Session D) :
   // À traiter = signatures en attente (plus anciens d'abord), puis CDD/Salarié signés sans numéro DPAE.
@@ -126,6 +130,12 @@ export default function AdminContrats() {
   }, [contrats]);
 
   if (loading && contrats.length === 0) return <LayoutAdmin><ChargementAdmin titre="Suivre les signatures de contrats" /></LayoutAdmin>;
+
+  if (erreurChargement) return <LayoutAdmin><div className="card-base space-y-3" role="alert">
+    <h1 className="text-xl font-bold">Suivre les signatures de contrats</h1>
+    <p>Chargement impossible. Les contrats ne sont pas disponibles.</p>
+    <BoutonY2K onClick={charger}>Réessayer</BoutonY2K>
+  </div></LayoutAdmin>;
 
   const totalPages = Math.ceil(total / PAR_PAGE);
 

@@ -8,7 +8,7 @@
  * J2.3.C.1
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, BellOff, Save, Trash2, Edit2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,30 +50,35 @@ interface Props {
 }
 
 const FREQUENCE_LABELS: Record<FrequenceAlerte, string> = {
-  IMMEDIATE: 'Immédiat (dès qu\'un nouveau résultat match)',
-  QUOTIDIENNE: 'Quotidien (résumé chaque matin)',
-  HEBDOMADAIRE: 'Hebdomadaire (résumé chaque lundi)',
+  IMMEDIATE: 'Toutes les heures',
+  QUOTIDIENNE: 'Quotidien (au moins 24 h entre vérifications)',
+  HEBDOMADAIRE: 'Hebdomadaire (au moins 7 jours entre vérifications)',
 };
 
 export function FiltresSauvegardes({ audience, filtresCourants, onCharger, alertesDisponibles = true }: Props) {
   const [list, setList] = useState<FiltreSauvegarde[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurListe, setErreurListe] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [editing, setEditing] = useState<FiltreSauvegarde | null>(null);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', { p_audience: audience });
-    if (error) {
-      logger.error('[FiltresSauvegardes] lister error', error);
+    setErreurListe(false);
+    try {
+      const { data, error } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', { p_audience: audience });
+      if (error || !Array.isArray(data)) throw error || new Error('Réponse de recherches invalide');
+      setList(data as unknown as FiltreSauvegarde[]);
+    } catch (error) {
+      logger.error('[RecherchesSauvegardees] lister error', error);
+      setErreurListe(true);
       toast.error('Impossible de charger vos recherches sauvegardées');
-    } else {
-      setList((data as any) || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [audience]);
 
-  useEffect(() => { reload(); }, [audience]);
+  useEffect(() => { void reload(); }, [reload]);
 
   const handleDelete = async (f: FiltreSauvegarde) => {
     if (!confirm(`Supprimer la recherche « ${f.nom} » ?`)) return;
@@ -100,7 +105,7 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger, alert
 
   // §7.4 Lot 7a — tant qu'il n'y a rien à afficher, pas de carte pleine avec
   // paragraphe explicatif : une simple ligne compacte (icône + action).
-  if (!loading && list.length === 0) {
+  if (!loading && !erreurListe && list.length === 0) {
     return (
       <>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -134,7 +139,12 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger, alert
         </BoutonY2K>
       </div>
 
-      {loading ? (
+      {erreurListe ? (
+        <div role="alert" className="space-y-2 text-sm">
+          <p>Vos recherches sauvegardées n’ont pas pu être chargées.</p>
+          <button className="underline" onClick={() => { void reload(); }}>Réessayer</button>
+        </div>
+      ) : loading ? (
         <p className="text-sm text-gray-500">Chargement…</p>
       ) : (
         <ul className="space-y-2">
@@ -209,8 +219,10 @@ function ModalSave({
   const [frequence, setFrequence] = useState<FrequenceAlerte>('QUOTIDIENNE');
   const [submitting, setSubmitting] = useState(false);
 
+  const etaitOuvert = useRef(false);
   useEffect(() => {
-    if (open) { setNom(''); setAlerteActive(alertesDisponibles); setFrequence('QUOTIDIENNE'); }
+    if (open && !etaitOuvert.current) { setNom(''); setAlerteActive(alertesDisponibles); setFrequence('QUOTIDIENNE'); }
+    etaitOuvert.current = open;
   }, [open, alertesDisponibles]);
 
   const submit = async () => {

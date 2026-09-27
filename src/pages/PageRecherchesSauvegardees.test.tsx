@@ -15,6 +15,8 @@ beforeEach(()=>{
  mocks.filtre.nom='IDE Paris';mocks.filtre.alerte_active=false;
  mocks.rpc.mockReset().mockImplementation((nom:string,p:Record<string,unknown>)=>{
   if(nom==='fn_lister_mes_filtres_sauvegardes')return Promise.resolve({data:[{...mocks.filtre}],error:null});
+  if(nom==='fn_capacite_alertes_recherches')return Promise.resolve({data:false,error:null});
+  if(nom==='fn_param_bool')return Promise.resolve({data:true,error:null});
   if(typeof p.p_nom==='string')mocks.filtre.nom=p.p_nom;
   if(typeof p.p_alerte_active==='boolean')mocks.filtre.alerte_active=p.p_alerte_active;
   return Promise.resolve({data:{success:true},error:null});
@@ -52,4 +54,27 @@ describe('gestion centrale des recherches établissement',()=>{
   vue.unmount();afficher('SOIGNANT');
   expect(await screen.findByRole('button',{name:'Activer alertes'})).toBeInTheDocument();
  });
+});
+
+it('propose activation, désactivation et fréquence seulement quand le moteur est disponible',async()=>{
+ const implementation=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((nom:string,p:Record<string,unknown>)=>nom==='fn_capacite_alertes_recherches'?Promise.resolve({data:true,error:null}):implementation(nom,p));
+ afficher();fireEvent.click(await screen.findByRole('button',{name:'Activer alertes'}));
+ await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('fn_modifier_filtre_sauvegarde',{p_id:'recherche-1',p_alerte_active:true}));
+ expect(await screen.findByRole('button',{name:'Désactiver alertes'})).toBeInTheDocument();
+ expect(screen.getByText(/au moins 24 h entre deux vérifications/)).toBeInTheDocument();
+ expect(screen.queryByText(/8h Paris|chaque lundi matin|latence max/)).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Modifier'}));
+ expect(screen.getByRole('switch',{name:'Alertes email'})).toHaveAttribute('aria-checked','true');
+ expect(screen.getByRole('combobox')).toBeInTheDocument();
+});
+
+it('un 503 de lecture affiche une erreur persistante et recharge sans faux état vide',async()=>{
+ const implementation=mocks.rpc.getMockImplementation()!;let panne=true;
+ mocks.rpc.mockImplementation((nom:string,p:Record<string,unknown>)=>nom==='fn_lister_mes_filtres_sauvegardes'&&panne?Promise.resolve({data:null,error:{message:'503'}}):implementation(nom,p));
+ afficher();expect(await screen.findByRole('alert')).toHaveTextContent('n’ont pas pu être chargées');
+ expect(screen.queryByText("Aucune recherche sauvegardée pour l'instant.")).not.toBeInTheDocument();
+ panne=false;fireEvent.click(screen.getByRole('button',{name:'Réessayer'}));
+ expect(await screen.findByRole('heading',{name:'IDE Paris'})).toBeInTheDocument();
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

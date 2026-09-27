@@ -667,7 +667,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         {/* Profession */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Profession requise *</label>
+          <label htmlFor="mission-profession" className="text-sm font-medium text-foreground mb-1 block">Profession requise *</label>
           <SelectProfession
             value={profession}
             onChange={setProfession}

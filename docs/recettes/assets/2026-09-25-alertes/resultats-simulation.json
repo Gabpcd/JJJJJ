@@ -1,0 +1,84 @@
+{
+  "origine": "/private/tmp/jolene-alertes-final-e2e-20260925/results.json",
+  "baseURL": "http://127.0.0.1:8902",
+  "stats": {
+    "startTime": "2026-09-25T10:55:40.525Z",
+    "duration": 57737.394,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cas": [
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 5677,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-portrait",
+      "statut": "passed",
+      "dureeMs": 4829,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 5802,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ipad-paysage",
+      "statut": "passed",
+      "dureeMs": 5102,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 5239,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "iphone",
+      "statut": "passed",
+      "dureeMs": 4879,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 5279,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "android",
+      "statut": "passed",
+      "dureeMs": 4898,
+      "essais": 1
+    },
+    {
+      "scenario": "alertes établissement : capacité, dix critères, panne, sauvegarde et contrôle central",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 6523,
+      "essais": 1
+    },
+    {
+      "scenario": "alerte rapide soignant : sept critères réels, lecture en panne, nouvel essai et aucun doublon",
+      "format": "ordinateur",
+      "statut": "passed",
+      "dureeMs": 5163,
+      "essais": 1
+    }
+  ]
+}

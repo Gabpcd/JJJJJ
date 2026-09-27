@@ -5,6 +5,7 @@ export const ids = {user:'79000000-0000-4000-8000-000000000071', etab:'79000000-
 export const email = 'recette-etablissement@example.invalid';
 export type ModeCompte = 'minimal' | 'complet';
 const lectures = new WeakMap<Page, {enCours:Set<Request>;dernierEvenement:number}>();
+const simulationsEtablissement = new WeakMap<Page, {appels:string[]}>();
 
 /** networkidle peut déjà être acquis sur le document avant sa navigation SPA. */
 export async function stabiliserLectures(page:Page){
@@ -24,10 +25,14 @@ export const creneau = {id:'79000000-0000-4000-8000-000000000076',mission_id:ids
 export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = 'complet') {
  const suivi={enCours:new Set<Request>(),dernierEvenement:0};
  lectures.set(page,suivi);
- page.on('request',requete=>{if(/\/(auth|rest|functions|storage)\/v1\//.test(requete.url())){suivi.enCours.add(requete);suivi.dernierEvenement=Date.now();}});
+ page.on('request',requete=>{
+  if(requete.isNavigationRequest()&&requete.resourceType()==='document')suivi.dernierEvenement=Date.now();
+  if(/\/(auth|rest|functions|storage)\/v1\//.test(requete.url())){suivi.enCours.add(requete);suivi.dernierEvenement=Date.now();}
+ });
  const terminer=(requete:Request)=>{if(suivi.enCours.delete(requete))suivi.dernierEvenement=Date.now();};
  page.on('requestfinished',terminer);page.on('requestfailed',terminer);
  const etat = {mode:modeInitial, donnees:false, permissions:'PROPRIETAIRE', erreurs:[] as string[], inconnues:[] as string[], ecritures:[] as string[], appels:[] as string[], operations:[] as {nom:string;payload:Record<string,unknown>}[], pannes:new Set<string>(), overrides:new Map<string,unknown>()};
+ simulationsEtablissement.set(page,etat);
  const parcours = {user_id:ids.user,type_compte:'ETABLISSEMENT',donnees:{nom:etablissement.nom} as Record<string,unknown>,modifie_le:new Date().toISOString()};
  const invitations:Record<string,unknown>[]=[];
  const recherches:Record<string,unknown>[]=[];
@@ -97,6 +102,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    }
    else if(nom==='mission_creneaux')data=etat.donnees?[creneau]:[];
    else if(nom==='fn_compte_auth_actif')data=true;
+   else if(nom==='fn_capacite_alertes_recherches')data=false;
    else if(nom==='fn_messages_non_lus')data=0;
    else if(nom==='notifications'&&req.method()==='PATCH')data=null;
    else if(nom==='fn_bfa_info')data={eligible:false};
@@ -105,7 +111,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    else if(nom==='fn_lister_api_keys')data={success:true,keys:[]};
    else if(nom==='fn_lister_mes_filtres_sauvegardes')data=recherches.filter(r=>r.audience===req.postDataJSON().p_audience);
    else if(nom==='fn_creer_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});recherches.push({id:'recherche-recette',nom:p.p_nom,audience:p.p_audience,filtres:p.p_filtres,alerte_active:p.p_alerte_active,frequence_alerte:p.p_frequence_alerte,dernier_check_le:new Date().toISOString(),cree_le:new Date().toISOString(),mis_a_jour_le:new Date().toISOString(),nb_resultats_dernier_check:0});data={success:true,id:'recherche-recette'};}
-   else if(nom==='fn_modifier_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});const r=recherches.find(r=>r.id===p.p_id);if(r){if(p.p_nom)r.nom=p.p_nom;if(typeof p.p_alerte_active==='boolean')r.alerte_active=p.p_alerte_active;}data={success:!!r};}
+   else if(nom==='fn_modifier_filtre_sauvegarde'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});const r=recherches.find(r=>r.id===p.p_id);if(r){if(p.p_nom)r.nom=p.p_nom;if(typeof p.p_alerte_active==='boolean')r.alerte_active=p.p_alerte_active;if(typeof p.p_frequence_alerte==='string')r.frequence_alerte=p.p_frequence_alerte;}data={success:!!r};}
    else if(nom==='fn_rechercher_soignants_etab'){etat.operations.push({nom,payload:req.postDataJSON()});data={soignants:[],count_total:0};}
    else if(nom==='fn_mode_exercice')data={niveau:'AUTORISE',categorie:'prive',source_libelle:'Configuration de recette',source_force:'CONFORMITE_JOLENE',source_url:null};
    else if(nom==='fn_note_moyenne')data={moyenne:null,total:0};
@@ -149,6 +155,12 @@ export async function entrer(page:Page, entree:'connexion'|'inscription'){
  await page.getByRole('button',{name:entree==='connexion'?'Se connecter':'Créer mon compte',exact:true}).click();
  await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
  await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+ // Le contenu du dashboard peut précéder le montage des effets du layout.
+ // Confirmer leurs deux lectures avant de considérer l'entrée terminée.
+ await expect.poll(()=>{
+  const etat=simulationsEtablissement.get(page);
+  return etat?.appels.includes('POST fn_mes_permissions_etab')&&etat.appels.includes('POST fn_messages_non_lus');
+ },{message:'Permissions et messagerie du cadre chargées après connexion'}).toBe(true);
  // Attendre les lectures secondaires avant le changement de document suivant.
  // Sans cela WebKit remonte des erreurs de fetch de l'ancien document détruit.
  await stabiliserLectures(page);

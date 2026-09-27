@@ -1,0 +1,48 @@
+const objet = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const nombre = value => typeof value === 'number' && Number.isFinite(value);
+const texte = value => typeof value === 'string' && value.length > 0;
+
+/** Contrat de fn_missions_publiques_recherche, sans transformer un objet erreur en succès. */
+export function rechercheValide(value) {
+  return Array.isArray(value) && value.every(m => objet(m) && texte(m.id) && texte(m.intitule)
+    && texte(m.profession_requise) && texte(m.debut_le) && texte(m.fin_le)
+    && nombre(m.taux_horaire_base) && nombre(m.total_count) && m.total_count >= value.length);
+}
+
+/** Un auth.users sans profil métier ne constitue pas un dashboard soignant mesuré. */
+export function dashboardValide(value) {
+  return objet(value) && !value.error && objet(value.profil) && texte(value.profil.profession)
+    && ['missions_ouvertes', 'mes_missions', 'documents', 'gains_6mois', 'missions_semaine_cal', 'propositions'].every(k => Array.isArray(value[k]))
+    && nombre(value.heures_semaine) && nombre(value.notifs_non_lues)
+    && objet(value.gains_mois) && ['net_total', 'brut_total', 'nb_missions'].every(k => nombre(value.gains_mois[k]));
+}
+
+/** Le RPC LIVE ne projette pas l'id du profil : l'identité fictive porte l'UUID du run. */
+export function dashboardFixtureValide(value, userId) {
+  return typeof userId === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/.test(userId)
+    && dashboardValide(value) && value.profil.prenom === 'Recette' && value.profil.nom === `Dashboard ${userId}`
+    && value.profil.profession === 'AS' && value.profil.identite_verifiee === false && value.profil.tous_documents_valides === false;
+}
+
+export function exigerRecherchePeuplee(value, minimum = 1) {
+  if (!Number.isInteger(minimum) || minimum < 1 || minimum > 1000) throw new Error('Quantité de missions attendue invalide.');
+  if (!rechercheValide(value) || value.length === 0) throw new Error(
+    'Préflight C : au moins une mission publique staging valide et visible est requise ; une base vide ne prouve pas cette charge.',
+  );
+  if (value.length < minimum) throw new Error(`Préflight C : ${value.length}/${minimum} missions attendues ; le catalogue quantifié est incomplet.`);
+  return value.length;
+}
+
+export function exigerDashboardMetier(value) {
+  if (!dashboardValide(value)) throw new Error(
+    'Préflight E : dashboard métier incomplet ou refusé ; vérifier le profil soignant du compte staging.',
+  );
+}
+
+/** Scénarios historiques dangereux/non probants : aucune requête avant isolation correcte. */
+export function refuserScenarioNonIsole(scenario) {
+  const motif = scenario === 'D'
+    ? 'fixtures de soignants éligibles, mission isolée et contrôle des candidatures réellement créées manquants'
+    : 'lot facturable isolé, comparaison exacte avant/après et neutralisation des envois externes manquants';
+  throw new Error(`Scénario ${scenario} indisponible : ${motif}. Aucune mutation exécutée ; aucun succès de charge ne peut être annoncé.`);
+}

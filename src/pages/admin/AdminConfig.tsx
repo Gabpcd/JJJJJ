@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { avecDelai } from '@/lib/avecDelai';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   AlertTriangle, Coins, Save, Settings, ShieldAlert, Sparkles, TrendingUp, Check,
 } from 'lucide-react';
@@ -37,25 +38,30 @@ const CATEGORIES: { cle: string; label: string; description: string; icon: typeo
 export default function AdminConfig() {
   usePageTitle('Configuration système');
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const generationChargement = useRef(0);
   const [params, setParams] = useState<Parametre[]>([]);
   const [brouillons, setBrouillons] = useState<Record<string, string>>({});
   const [savingCle, setSavingCle] = useState<string | null>(null);
 
   const charger = async () => {
+    const generation = ++generationChargement.current;
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_parametres' as any);
-    if (error) {
-      toast.error(error.message || 'Erreur de chargement');
-      setLoading(false);
-      return;
+    setErreurChargement(false);
+    try {
+      const { data, error } = await avecDelai(supabase.rpc('fn_admin_lister_parametres' as any), 15_000);
+      if (error || !Array.isArray(data)) throw error || new Error('Réponse invalide');
+      if (generation !== generationChargement.current) return;
+      const liste = data as unknown as Parametre[];
+      setParams(liste);
+      setBrouillons(Object.fromEntries(liste.map(p => [p.cle, String(p.valeur)])));
+    } catch {
+      if (generation === generationChargement.current) setErreurChargement(true);
+    } finally {
+      if (generation === generationChargement.current) setLoading(false);
     }
-    const liste = (data || []) as Parametre[];
-    setParams(liste);
-    setBrouillons(Object.fromEntries(liste.map((p) => [p.cle, String(p.valeur)])));
-    setLoading(false);
   };
-
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { void charger(); return () => { generationChargement.current += 1; }; }, []);
 
   const parCategorie = useMemo(() => {
     const map = new Map<string, Parametre[]>();
@@ -91,6 +97,12 @@ export default function AdminConfig() {
       </LayoutAdmin>
     );
   }
+
+  if (erreurChargement) return <LayoutAdmin><div className="card-base space-y-3" role="alert">
+    <h1 className="text-xl font-bold">Configuration système</h1>
+    <p>Chargement impossible. Les données ne sont pas disponibles.</p>
+    <BoutonY2K onClick={charger}>Réessayer</BoutonY2K>
+  </div></LayoutAdmin>;
 
   return (
     <LayoutAdmin>

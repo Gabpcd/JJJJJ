@@ -11,7 +11,7 @@ declare const __APP_VERSION__: string;
 export function BuildStamp() {
   const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-unknown';
   return (
-    <p className="text-center text-[10px] text-muted-foreground/60 mt-8 mb-2 select-all">
+    <p className="text-center text-[10px] text-muted-foreground mt-8 mb-2 select-all">
       Jolene · build <span className="font-mono">{version}</span>
     </p>
   );

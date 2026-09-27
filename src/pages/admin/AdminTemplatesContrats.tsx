@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { avecDelai } from '@/lib/avecDelai';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Power, ChevronDown } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -31,29 +32,29 @@ export default function AdminTemplatesContrats() {
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const generationChargement = useRef(0);
   const [toggling, setToggling] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateLigne[]>([]);
   const [inactifsOuverts, setInactifsOuverts] = useState(false);
 
   const charger = useCallback(async () => {
+    const generation = ++generationChargement.current;
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_templates_contrats' as any);
-    if (error) {
-      afficherNotification({ type: 'erreur', message: error.message });
-      setLoading(false);
-      return;
+    setErreurChargement(false);
+    try {
+      const { data, error } = await avecDelai(supabase.rpc('fn_admin_lister_templates_contrats' as any), 15_000);
+      const resultat = data as any;
+      if (error || !resultat?.success || !Array.isArray(resultat.templates)) throw error || new Error('Réponse invalide');
+      if (generation !== generationChargement.current) return;
+      setTemplates(resultat.templates);
+    } catch {
+      if (generation === generationChargement.current) setErreurChargement(true);
+    } finally {
+      if (generation === generationChargement.current) setLoading(false);
     }
-    const result = data as any;
-    if (!result?.success) {
-      afficherNotification({ type: 'erreur', message: result?.error || 'Erreur.' });
-      setLoading(false);
-      return;
-    }
-    setTemplates(result.templates as TemplateLigne[]);
-    setLoading(false);
-  }, [afficherNotification]);
-
-  useEffect(() => { charger(); }, [charger]);
+  }, []);
+  useEffect(() => { void charger(); return () => { generationChargement.current += 1; }; }, [charger]);
 
   async function toggle(t: TemplateLigne) {
     if (!confirm(`${t.est_actif ? 'Désactiver' : 'Activer'} le template "${t.nom}" ?`)) return;
@@ -69,6 +70,12 @@ export default function AdminTemplatesContrats() {
   }
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Templates de contrats" /></LayoutAdmin>;
+
+  if (erreurChargement) return <LayoutAdmin><div className="card-base space-y-3" role="alert">
+    <h1 className="text-xl font-bold">Templates de contrats</h1>
+    <p>Chargement impossible. Les données ne sont pas disponibles.</p>
+    <BoutonY2K onClick={charger}>Réessayer</BoutonY2K>
+  </div></LayoutAdmin>;
 
   const actifs = templates.filter((t) => t.est_actif);
   const inactifs = templates.filter((t) => !t.est_actif);

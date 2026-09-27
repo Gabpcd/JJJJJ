@@ -774,7 +774,14 @@ export default function AdminModeration() {
 
       {documentARejeter && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setDocumentARejeter(null)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titre-rejet-document" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-rejet-document" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || event.defaultPrevented) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (!moderationDocumentLoading) setDocumentARejeter(null);
+            }}
+          >
             <h2 id="titre-rejet-document" className="text-lg font-bold text-foreground">Rejeter le document</h2>
             <p className="text-sm text-muted-foreground">Le motif sera visible par le soignant. Décrivez précisément ce qu’il doit corriger.</p>
             <label className="block">
@@ -791,7 +798,14 @@ export default function AdminModeration() {
 
       {masquerNotationId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMasquerNotationId(null)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titre-masquer-notation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-masquer-notation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || event.defaultPrevented) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (!masquerLoading) setMasquerNotationId(null);
+            }}
+          >
             <h2 id="titre-masquer-notation" className="text-lg font-bold text-foreground">Masquer la notation</h2>
             <p className="text-xs text-muted-foreground">Masquer cette évaluation des vues publiques. La raison est tracée à des fins RGPD.</p>
             <label className="block">
@@ -809,7 +823,14 @@ export default function AdminModeration() {
       {/* Création exceptionnelle d’un litige par un administrateur. */}
       {showCreerLitige && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCreerLitige(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titre-creer-litige-derogation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-creer-litige-derogation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || event.defaultPrevented) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (!creerLitigeLoading) setShowCreerLitige(false);
+            }}
+          >
             <h2 id="titre-creer-litige-derogation" className="text-lg font-bold text-foreground">Créer un litige par dérogation</h2>
             <p className="text-xs text-muted-foreground">Crée exceptionnellement un litige sans passer par le parcours habituel. La justification est journalisée.</p>
             <label className="block">
@@ -843,7 +864,14 @@ export default function AdminModeration() {
       {/* Task 8 — Modal modifier gel scope litige */}
       {gelScopeLitigeId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setGelScopeLitigeId(null)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="titre-modifier-perimetre-gel" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-modifier-perimetre-gel" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || event.defaultPrevented) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (!gelScopeLoading) setGelScopeLitigeId(null);
+            }}
+          >
             <h2 id="titre-modifier-perimetre-gel" className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le périmètre de gel</h2>
             <p className="text-xs text-muted-foreground">Modifie le périmètre de gel du litige. Action tracée RGPD.</p>
             <label className="block">

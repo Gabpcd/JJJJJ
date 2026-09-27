@@ -13,13 +13,13 @@ import {
 
 const PSC_ENDPOINTS = {
   sandbox: {
-    issuer: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet",
+    issuer: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet",
     token:
-      "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token",
+      "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token",
     jwks:
-      "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/certs",
+      "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/certs",
     userinfo:
-      "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo",
+      "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo",
   },
   production: {
     issuer: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Mail, MessageSquare, Smartphone, Loader2, ArrowLeft, Save, CircleCheck, TriangleAlert } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
@@ -10,6 +10,7 @@ import { useRole } from '@/hooks/useRole';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
+import { avecDelai } from '@/lib/avecDelai';
 
 type Canal = 'EMAIL' | 'SMS' | 'PUSH' | 'IN_APP';
 
@@ -69,8 +70,9 @@ export default function PageParametresNotifications() {
   usePageTitle('Préférences de notifications');
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { role } = useRole();
-  const isEtab = role === 'ADMIN_ETABLISSEMENT';
+  const userId = user?.id;
+  const { role, resolved, error: erreurRole, retry: reessayerRole, parcours } = useRole();
+  const isEtab = role === 'ADMIN_ETABLISSEMENT' || (role === 'INCONNU' && parcours?.type_compte === 'ETABLISSEMENT');
   const [typeExercice, setTypeExercice] = useState<string | null>(null);
   // Un soignant purement libéral ne voit pas les événements salarié (CDD) et
   // inversement. MIXTE ou régime inconnu → on affiche tout (B8 régime per-mission).
@@ -83,6 +85,12 @@ export default function PageParametresNotifications() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const sauvegardeEnCours = useRef(false);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const [tentative, setTentative] = useState(0);
+  const [proprietaireCharge, setProprietaireCharge] = useState<string | null>(null);
+  const [profilSmsPresent, setProfilSmsPresent] = useState(false);
+  const proprietaire = user && resolved && !erreurRole ? `${user.id}:${isEtab ? 'ETAB' : 'SOIGNANT'}` : null;
   const [activationPushEnCours, setActivationPushEnCours] = useState(false);
   const [autorisationPushNative, setAutorisationPushNative] = useState<AutorisationPushNative | null>(
     Capacitor.isNativePlatform() ? 'loading' : null,
@@ -97,41 +105,39 @@ export default function PageParametresNotifications() {
   const [smsAlertesActives, setSmsAlertesActives] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data, error } = await supabase.rpc('fn_obtenir_mes_preferences_notifications' as any);
-      if (error) {
-        toast.error('Impossible de charger vos préférences. Vos modifications ne seront pas sauvegardées tant que la page ne charge pas correctement.');
-        setLoading(false);
-        return;
-      }
-      if (data && (data as any).global) {
-        setGlobal((data as any).global);
-        const m = new Map<string, boolean>();
-        for (const p of ((data as any).par_evenement || []) as PrefEvenement[]) {
-          m.set(`${p.type_evenement}:${p.canal}`, p.actif);
+    let actif = true;
+    setLoading(true);
+    setErreurChargement(false);
+    setProprietaireCharge(null);
+    if (!userId || !proprietaire) return () => { actif = false; };
+    void (async () => {
+      try {
+        const { data, error } = await avecDelai(supabase.rpc('fn_obtenir_mes_preferences_notifications' as any), 15_000);
+        const prefs = data as unknown as { global?: PrefsGlobal; par_evenement?: PrefEvenement[] };
+        if (error || !prefs?.global || !['canal_email', 'canal_sms', 'canal_push', 'canal_in_app'].every(c => typeof prefs.global?.[c as keyof PrefsGlobal] === 'boolean') || !Array.isArray(prefs.par_evenement)) {
+          throw new Error('Préférences indisponibles');
         }
-        setParEvenement(m);
-      }
-
-      // Lecture du flag SMS d'alerte (soignant uniquement)
-      if (!isEtab) {
-        const { data: soignant } = await supabase
-          .from('soignants')
-          .select('sms_alertes_actives, type_exercice')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (soignant && (soignant as any).sms_alertes_actives !== null) {
-          setSmsAlertesActives(!!(soignant as any).sms_alertes_actives);
+        let profil: { sms_alertes_actives?: boolean | null; type_exercice?: string | null } | null = null;
+        if (!isEtab) {
+          const resultat = await avecDelai(supabase.from('soignants').select('sms_alertes_actives, type_exercice').eq('id', userId).maybeSingle(), 15_000);
+          if (resultat.error) throw resultat.error;
+          profil = resultat.data;
         }
-        if (soignant && (soignant as any).type_exercice) {
-          setTypeExercice((soignant as any).type_exercice);
-        }
+        if (!actif) return;
+        setGlobal(prefs.global);
+        setParEvenement(new Map(prefs.par_evenement.map(p => [`${p.type_evenement}:${p.canal}`, p.actif])));
+        setSmsAlertesActives(profil?.sms_alertes_actives ?? true);
+        setProfilSmsPresent(!!profil);
+        setTypeExercice(profil?.type_exercice ?? null);
+        setProprietaireCharge(proprietaire);
+      } catch {
+        if (actif) setErreurChargement(true);
+      } finally {
+        if (actif) setLoading(false);
       }
-
-      setLoading(false);
     })();
-  }, [user, isEtab]);
+    return () => { actif = false; };
+  }, [userId, isEtab, proprietaire, tentative]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !user) return;
@@ -175,20 +181,27 @@ export default function PageParametresNotifications() {
     }
   };
 
-  const isEnabled = (event: string, canal: Canal) => {
-    const key = `${event}:${canal}`;
+  // L'ancien écran ETAB utilisait la clé des missions : conserver tout refus
+  // enregistré sous l'une des deux clés, comme le transport email.
+  const evenementsLies = (event: string) => isEtab && event === 'NOUVELLE_MISSION_MATCHANT_FILTRE'
+    ? [event, 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE']
+    : [event];
+
+  const isEnabled = (event: string, canal: Canal) => evenementsLies(event).every(type => {
+    const key = `${type}:${canal}`;
     return parEvenement.has(key) ? !!parEvenement.get(key) : true;
-  };
+  });
 
   const toggle = (event: string, canal: Canal) => {
-    const key = `${event}:${canal}`;
     const current = isEnabled(event, canal);
     const m = new Map(parEvenement);
-    m.set(key, !current);
+    for (const type of evenementsLies(event)) m.set(`${type}:${canal}`, !current);
     setParEvenement(m);
   };
 
   const enregistrer = async () => {
+    if (!proprietaire || proprietaireCharge !== proprietaire || erreurChargement || sauvegardeEnCours.current) return;
+    sauvegardeEnCours.current = true;
     setSaving(true);
     try {
       const par_evenement: any[] = [];
@@ -210,7 +223,7 @@ export default function PageParametresNotifications() {
       // Cast `as any` car la colonne sms_alertes_actives sera ajoutée par la migration
       // 20260506100000_soignants_sms_alertes_actives.sql et les types ne sont pas
       // encore régénérés. À retirer après prochain `supabase gen types`.
-      if (!isEtab && user) {
+      if (!isEtab && user && profilSmsPresent) {
         const { error: smsErr } = await supabase
           .from('soignants')
           .update({ sms_alertes_actives: smsAlertesActives } as any)
@@ -226,13 +239,24 @@ export default function PageParametresNotifications() {
     } catch (err: any) {
       toast.error(err?.message || 'Erreur enregistrement');
     } finally {
+      sauvegardeEnCours.current = false;
       setSaving(false);
     }
   };
 
   const role_safe = (isEtab ? 'ADMIN_ETABLISSEMENT' : 'SOIGNANT') as any;
 
-  if (loading) {
+  if (erreurChargement || erreurRole) return (
+    <LayoutApp role={role_safe}>
+      <div className="card-base space-y-4" role="alert">
+        <h1 className="text-xl font-bold">Préférences de notifications</h1>
+        <p>Impossible de charger vos préférences. Vos choix enregistrés sont conservés.</p>
+        <BoutonY2K onClick={() => { if (erreurRole) reessayerRole(); else setTentative(t => t + 1); }}>Réessayer</BoutonY2K>
+      </div>
+    </LayoutApp>
+  );
+
+  if (loading || !proprietaire || proprietaireCharge !== proprietaire) {
     return (
       <LayoutApp role={role_safe}>
         <div className="flex items-center justify-center py-20">
@@ -259,7 +283,7 @@ export default function PageParametresNotifications() {
 
         {/* SMS d'alerte (soignants uniquement) — opt-in granulaire pour mission
             urgente et rappel J-1. Coupe ces 2 cas sans toucher aux autres SMS. */}
-        {!isEtab && (
+        {!isEtab && profilSmsPresent && (
           <section className="card-base space-y-3">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary" /> SMS d'alerte

@@ -994,6 +994,12 @@ function ModalActionAvecRaison({ ouvert, onFermer, onConfirmer, titre, message, 
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onFermer();
+      }}
     >
       <div className="fixed inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} aria-hidden="true" />
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-[calc(100%-2rem)]">

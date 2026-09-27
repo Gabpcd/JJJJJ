@@ -5,7 +5,7 @@ test.setTimeout(480_000);
 const baseURL=process.env.PLAYWRIGHT_BASE_URL||'http://127.0.0.1:8890';
 // Inventaire App.tsx : toutes les routes canoniques de l'espace établissement.
 export const routesEtablissement = [
- ['tableau-de-bord','Publiez votre première mission','Tableau de bord'],
+ ['tableau-de-bord','Publiez votre première mission','Préparez votre première mission'],
  ['mon-compte','Activité'],['activer','Activer mon établissement'],
  ['parametres','Paramètres de l’établissement'],
  ['parametres/notifications','Préférences de notifications'],

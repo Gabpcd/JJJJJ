@@ -1,3 +1,4 @@
+import { useCapaciteAlertesRecherches } from '@/hooks/useCapaciteAlertesRecherches';
 /**
  * PageRecherchesSauvegardees — gestion centralisée des filtres sauvegardés.
  *
@@ -12,7 +13,7 @@
  * J2.3.C.2
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, BellOff, Trash2, Edit2, Search, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,7 +48,7 @@ interface Props {
 }
 
 const FREQUENCE_LABELS: Record<FrequenceAlerte, string> = {
-  IMMEDIATE: 'Immédiat (vérification horaire)',
+  IMMEDIATE: 'Toutes les heures',
   QUOTIDIENNE: 'Quotidien',
   HEBDOMADAIRE: 'Hebdomadaire',
 };
@@ -57,24 +58,30 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const audience = role === 'SOIGNANT' ? 'SOIGNANT_RECHERCHE_MISSIONS' : 'ETAB_RECHERCHE_SOIGNANTS';
-  const alertesDisponibles = role === 'SOIGNANT';
+  const capaciteAlertes = useCapaciteAlertesRecherches(audience);
+  const alertesDisponibles = capaciteAlertes.disponible;
   const [list, setList] = useState<FiltreSauvegarde[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurListe, setErreurListe] = useState(false);
   const [editing, setEditing] = useState<FiltreSauvegarde | null>(null);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', { p_audience: audience });
-    if (error) {
-      logger.error('[PageRecherchesSauvegardees] error', error);
-      toast.error('Impossible de charger vos recherches');
-    } else {
-      setList((data as any) || []);
+    setErreurListe(false);
+    try {
+      const { data, error } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', { p_audience: audience });
+      if (error || !Array.isArray(data)) throw error || new Error('Réponse de recherches invalide');
+      setList(data as unknown as FiltreSauvegarde[]);
+    } catch (error) {
+      logger.error('[RecherchesSauvegardees] lister error', error);
+      setErreurListe(true);
+      toast.error('Impossible de charger vos recherches sauvegardées');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [audience]);
 
-  useEffect(() => { if (user) reload(); }, [user, audience]);
+  useEffect(() => { if (user) void reload(); }, [user, reload]);
 
   const handleDelete = async (f: FiltreSauvegarde) => {
     if (!confirm(`Supprimer la recherche « ${f.nom} » ?`)) return;
@@ -132,7 +139,12 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
           </div>
         </div>
 
-        {list.length === 0 ? (
+        {erreurListe ? (
+          <div role="alert" className="card-base space-y-3">
+            <p>Vos recherches sauvegardées n’ont pas pu être chargées.</p>
+            <button className="btn-secondary" onClick={() => { void reload(); }}>Réessayer</button>
+          </div>
+        ) : list.length === 0 ? (
           <div className="card-base p-8 text-center">
             <Search className="h-10 w-10 mx-auto text-gray-300 mb-3" />
             <p className="text-gray-500 mb-4">Aucune recherche sauvegardée pour l'instant.</p>
@@ -195,10 +207,11 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
           <strong>Comment fonctionnent les alertes ?</strong><br />
           Les alertes sont envoyées par email selon la fréquence choisie :
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Immédiat</strong> — vérification toutes les heures, latence max 1h.</li>
-            <li><strong>Quotidien</strong> — résumé chaque matin (8h Paris).</li>
-            <li><strong>Hebdomadaire</strong> — résumé chaque lundi matin.</li>
+            <li><strong>Toutes les heures</strong> — recherche de nouveaux résultats au passage du traitement horaire.</li>
+            <li><strong>Quotidien</strong> — au moins 24 h entre deux vérifications.</li>
+            <li><strong>Hebdomadaire</strong> — au moins 7 jours entre deux vérifications.</li>
           </ul>
+          <p className="mt-2">Un email est envoyé uniquement si de nouveaux résultats correspondent à vos filtres. Un retard du service peut décaler son envoi.</p>
           <p className="mt-2">
             Vous pouvez désactiver toutes les alertes email globalement dans <a className="underline"
               href={role === 'SOIGNANT' ? '/soignant/parametres/notifications' : '/etablissement/parametres/notifications'}>
@@ -207,7 +220,9 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
           </p>
           </> : <>
             <strong>Retrouvez vos filtres sans nouvelle alerte email</strong>
-            <p className="mt-2">Les nouvelles alertes établissement ne sont pas disponibles. Les alertes déjà actives sont conservées et peuvent être désactivées. Elles reposent sur la profession, sans prendre en compte tous vos autres filtres.</p>
+            <p className="mt-2">L’activation des alertes email n’est pas disponible pour le moment. Vos recherches et les alertes déjà actives sont conservées ; vous pouvez les désactiver.</p>
+            {capaciteAlertes.erreur && <p role="alert" className="mt-2">{capaciteAlertes.erreur}</p>}
+            <button className="mt-2 underline" disabled={capaciteAlertes.verificationEnCours} onClick={capaciteAlertes.reessayer}>Vérifier à nouveau</button>
           </>}
         </div>
       </div>

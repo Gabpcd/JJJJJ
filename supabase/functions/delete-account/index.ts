@@ -131,26 +131,20 @@ Deno.serve(async (req) => {
     let anonymisation: Record<string, unknown> = { success: true, deja_anonymise: false };
 
     if (soignant) {
-      if (!soignant.supprime_le) {
-        const { data, error } = await userClient.rpc('fn_supprimer_compte_rate_limited');
-        if (error) return jsonResponse(req, { error: error.message }, 409);
-        anonymisation = (data || {}) as Record<string, unknown>;
-        if (anonymisation.error || anonymisation.success === false) {
-          return jsonResponse(req, anonymisation, 409);
-        }
-      } else {
-        anonymisation.deja_anonymise = true;
+      // supprime_le peut représenter une suspension. La RPC ne saute le nettoyage
+      // que sur son reçu privé, et gère la reprise sans consommer le rate limit.
+      const { data, error } = await userClient.rpc('fn_supprimer_compte_rate_limited');
+      if (error) return jsonResponse(req, { error: error.message }, 409);
+      anonymisation = (data || {}) as Record<string, unknown>;
+      if (anonymisation.error || anonymisation.success !== true) {
+        return jsonResponse(req, { ...anonymisation, success: false, error: anonymisation.error || 'Anonymisation non confirmée' }, 409);
       }
     } else if (etablissement) {
-      if (!etablissement.supprime_le) {
-        const { data, error } = await userClient.rpc('fn_supprimer_compte_etablissement_rate_limited');
-        if (error) return jsonResponse(req, { error: error.message }, 409);
-        anonymisation = (data || {}) as Record<string, unknown>;
-        if (anonymisation.error || anonymisation.success === false) {
-          return jsonResponse(req, anonymisation, 409);
-        }
-      } else {
-        anonymisation.deja_anonymise = true;
+      const { data, error } = await userClient.rpc('fn_supprimer_compte_etablissement_rate_limited');
+      if (error) return jsonResponse(req, { error: error.message }, 409);
+      anonymisation = (data || {}) as Record<string, unknown>;
+      if (anonymisation.error || anonymisation.success !== true) {
+        return jsonResponse(req, { ...anonymisation, success: false, error: anonymisation.error || 'Anonymisation non confirmée' }, 409);
       }
     } else if ((memberships || []).length > 0) {
       // Un collaborateur supprime son propre compte, jamais l'etablissement.
@@ -160,6 +154,22 @@ Deno.serve(async (req) => {
       // Inscription interrompue : il n'existe pas encore de profil public, mais
       // l'utilisateur Auth doit tout de meme pouvoir exercer son droit.
       anonymisation = { success: true, profil_incomplet: true };
+    }
+
+    if (soignant || etablissement) {
+      // Vérification serveur distincte du JSON retourné par la RPC : reçu privé
+      // + champs réellement anonymisés. Une panne/ancienne API reste bloquante.
+      const { data: confirme, error: confirmationError } = await admin.rpc('fn_anonymisation_compte_confirmee', {
+        p_utilisateur_id: auth.userId,
+        p_type_profil: soignant ? 'SOIGNANT' : 'ETABLISSEMENT',
+      });
+      if (confirmationError || confirme !== true) {
+        return jsonResponse(req, {
+          success: false, auth_deleted: false,
+          error: 'Anonymisation du profil non confirmée ; suppression Auth non effectuée.',
+          error_code: 'ANONYMISATION_NON_CONFIRMEE',
+        }, 503);
+      }
     }
 
     if ((memberships || []).length > 0) {

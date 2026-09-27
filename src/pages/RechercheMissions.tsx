@@ -1,3 +1,4 @@
+import { preparerAlerteMissions } from '@/lib/alertes-recherche-missions';
 import { useRole } from '@/hooks/useRole';
 import { useExplorationMissions } from '@/hooks/useExplorationMissions';
 import { useMemoireExploration, type HoraireExploration as Horaire, type VueExploration } from '@/hooks/useMemoireExploration';
@@ -169,20 +170,25 @@ function RechercheMissionsCompte() {
   }, []);
 
   // Crée (ou réactive) un filtre sauvegardé « alerte » via le module existant
-  // filtres_sauvegardes : profession du soignant + rayon actuel, alerte email
-  // IMMEDIATE. Idempotent : si une alerte du même nom existe déjà, on la
-  // réactive au lieu de créer un doublon.
+  // filtres_sauvegardes : tous les critères affichés. Seule une recherche
+  // strictement identique peut être réactivée sans créer une nouvelle sauvegarde.
   const creerAlerteRapide = async () => {
     setAlerteEnCours(true);
     try {
       const prof = profession || soignant?.profession || '';
-      const nomAlerte = prof ? `Alerte missions ${getLabelProfession(prof)}` : 'Alerte missions';
+      const nomBase = prof ? `Alerte missions ${getLabelProfession(prof)}` : 'Alerte missions';
 
-      const { data: existants } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', {
+      const { data: existants, error: erreurListe } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', {
         p_audience: 'SOIGNANT_RECHERCHE_MISSIONS',
       });
-      const deja = (((existants as any) || []) as Array<{ id: string; nom: string; alerte_active: boolean }>)
-        .find((f) => f?.nom === nomAlerte);
+      if (erreurListe || !Array.isArray(existants)) {
+        toast.error("Impossible de vérifier vos alertes existantes. Réessayez.");
+        return;
+      }
+      const { deja, nom: nomAlerte, filtres: criteresAlerte } = preparerAlerteMissions(
+        { profession, rayonKm, tauxMin, typeContrat, urgentesOnly, horaire, villeRecherche },
+        existants as any[], nomBase,
+      );
 
       if (deja) {
         if (!deja.alerte_active) {
@@ -194,12 +200,12 @@ function RechercheMissionsCompte() {
             return;
           }
         }
-        toast.success("Ton alerte est active : tu recevras un email dès qu'une nouvelle mission correspond.");
+        toast.success("Ton alerte est active : les nouvelles missions seront vérifiées toutes les heures.");
       } else {
         const { data, error } = await supabase.rpc('fn_creer_filtre_sauvegarde', {
           p_nom: nomAlerte,
           p_audience: 'SOIGNANT_RECHERCHE_MISSIONS',
-          p_filtres: { profession: prof, rayonKm } as Json,
+          p_filtres: criteresAlerte as Json,
           p_alerte_active: true,
           p_frequence_alerte: 'IMMEDIATE',
         });
@@ -207,10 +213,12 @@ function RechercheMissionsCompte() {
           toast.error((data as any)?.error || "Impossible de créer l'alerte");
           return;
         }
-        toast.success("Alerte créée : tu recevras un email dès qu'une nouvelle mission correspond.");
+        toast.success("Alerte créée : les nouvelles missions seront vérifiées toutes les heures.");
       }
       setAlerteOpen(false);
       setFiltresVersion((v) => v + 1); // rafraîchit la liste « Mes recherches sauvegardées »
+    } catch {
+      toast.error("Impossible d’enregistrer l’alerte. Réessayez.");
     } finally {
       setAlerteEnCours(false);
     }
@@ -424,7 +432,7 @@ function RechercheMissionsCompte() {
                 icone={<SearchX />}
                 mascotte="thinking"
                 titre="Aucune mission trouvée"
-                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
+                description="Crée une alerte : les nouvelles missions seront vérifiées toutes les heures. Tu recevras un email si elles correspondent à tes critères."
                 cta={{
                   label: '🔔 Me prévenir des prochaines missions',
                   onClick: () => setAlerteOpen(true),
@@ -636,13 +644,13 @@ function RechercheMissionsCompte() {
             <DialogDescription>
               {professionAlerteLabel ? (
                 <>
-                  Tu recevras un email dès qu'une nouvelle mission{' '}
+                  Les nouvelles missions sont vérifiées toutes les heures. Tu recevras un email si une mission{' '}
                   <strong>{professionAlerteLabel}</strong> correspondant à tes critères
                   (rayon {rayonKm} km) est publiée.
                 </>
               ) : (
                 <>
-                  Tu recevras un email dès qu'une nouvelle mission correspondant à tes
+                  Les nouvelles missions sont vérifiées toutes les heures. Tu recevras un email si une mission correspondant à tes
                   critères (rayon {rayonKm} km) est publiée.
                 </>
               )}{' '}

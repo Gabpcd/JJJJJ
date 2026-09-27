@@ -1,3 +1,5 @@
+import { donneesRapportCharge } from '../helpers/resume.js';
+import { creerOptionsCharge } from '../helpers/options.js';
 /**
  * Scenario B — Login simultané.
  *
@@ -26,24 +28,19 @@ const POOL = [
   { email: 'playwright-etab@jolene.app' },
 ];
 
-export const options = {
-  scenarios: {
-    login_simultane: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '15s', target: 50 },
-        { duration: '1m', target: 50 },
-        { duration: '10s', target: 0 },
-      ],
-      gracefulRampDown: '15s',
-    },
-  },
-  thresholds: {
-    'http_req_failed{name:auth_login}': ['rate<0.01'], // 100% succès attendu
-    'http_req_duration{name:auth_login}': ['p(95)<1000', 'p(99)<2000'],
-  },
-};
+export const options = creerOptionsCharge('login_simultane', {
+  executor: 'ramping-vus',
+  startVUs: 0,
+  stages: [
+    { duration: '15s', target: 50 },
+    { duration: '1m', target: 50 },
+    { duration: '10s', target: 0 },
+  ],
+  gracefulRampDown: '15s',
+}, {
+  'http_req_failed{name:auth_login}': ['rate<0.01'], // 100% succès attendu
+  'http_req_duration{name:auth_login}': ['p(95)<1000', 'p(99)<2000'],
+}, __ENV);
 
 export default function () {
   const password = __ENV.LOAD_TEST_PASSWORD;
@@ -56,7 +53,7 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, 'B — Login simultané'),
-    'tests/load/results/02-login-simultane.json': JSON.stringify(data, null, 2),
+    'tests/load/results/02-login-simultane.json': JSON.stringify(donneesRapportCharge(data), null, 2),
   };
 }
 

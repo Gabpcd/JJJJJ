@@ -15,6 +15,8 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { SuiviMission } from '@/components/SuiviMission';
+import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 import {
   CarteContratElectroniqueMission,
@@ -434,6 +436,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [contratElectronique, setContratElectronique] = useState<ContratElectroniqueMissionResume | null>(null);
 
   // IA Matching
+  const [ongletMission, setOngletMission] = useState('details');
   const [recommandations, setRecommandations] = useState<any[]>([]);
   const [loadingReco, setLoadingReco] = useState(false);
   const [proposing, setProposing] = useState<string | null>(null);
@@ -801,6 +804,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const debut = instantJolene(m.debut_le);
   const fin = instantJolene(m.fin_le);
   const creneauxBruts = (m.creneaux ?? []) as CreneauPointage[];
+  const planningSuivi = construirePlanningCandidat({ ...m, creneaux_planifies: creneauxBruts, erreur_planning: Boolean(erreurPlanning) });
   const creneauxPlanifies = creneauxPrevisionnels(creneauxBruts);
   const creneauxComplets = creneauxPlanifies.filter(
     (creneau): creneau is CreneauPointage & { fin: string } => Boolean(creneau.fin),
@@ -886,6 +890,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         {backLabel}
       </button>
 
+      <h1 className="text-2xl font-bold text-foreground mb-3">{m.intitule}</h1>
       {isAdmin && (
         <section
           className="mb-5 rounded-2xl border border-primary/30 bg-primary/5 p-4"
@@ -1012,6 +1017,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
+      {!isAdmin && <SuiviMission mission={m} role="ADMIN_ETABLISSEMENT" litigeActif={litigeActif}
+        onReessayerPlanning={refresh}
+        onOuvrirPlanning={() => setOngletMission('details')}
+        planning={erreurPlanning ? { etat: 'indisponible' }
+          : planningSuivi.exact ? { etat: 'exact', nombreCreneaux: planningSuivi.creneaux.length } : { etat: 'incomplet' }} />}
+
       {!isAdmin && alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden="true" />
@@ -1042,7 +1053,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </div>
       )}
 
-      <Tabs defaultValue="details">
+      <Tabs value={ongletMission} onValueChange={setOngletMission}>
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
@@ -1052,7 +1063,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
               <div className="card-base">
-                <h1 className="text-2xl font-bold text-foreground mb-2">{m.intitule}</h1>
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <BadgeStatut statut={m.statut} />
                   {m.statut === 'EN_COURS' && (
@@ -1086,7 +1096,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${formatParis(m.debut_le, 'd MMMM yyyy')} → ${formatParis(m.fin_le, 'd MMMM yyyy')}`
                     : formatParis(m.debut_le, 'EEEE d MMMM yyyy')}
                 </p>
-                <div className="mt-3 rounded-xl border border-border bg-muted/20 p-3" aria-label="Créneaux prévisionnels">
+                <div id="planning-mission" tabIndex={-1} className="mt-3 scroll-mt-24 rounded-xl border border-border bg-muted/20 p-3" aria-label="Créneaux prévisionnels">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                     <h2 className="text-sm font-semibold text-foreground">Planning prévu</h2>

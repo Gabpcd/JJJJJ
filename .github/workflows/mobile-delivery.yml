@@ -4,7 +4,7 @@ on:
   status:
   workflow_run:
     # GitHub interprets these names as filter patterns; escape literal plus signs.
-    workflows: ['Validate PR (tests \+ typecheck \+ build \+ drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf \+ a11y \+ best-practices \+ SEO)']
+    workflows: ['Validate PR (tests \+ typecheck \+ build \+ drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf \+ a11y \+ best-practices \+ SEO)', 'Android native simulation']
     types: [completed]
     branches: [main]
   workflow_dispatch:

@@ -105,6 +105,12 @@ export function ModalNoterMission({ missionId, sens, missionIntitule, onClose, o
     <div
       role="dialog"
       aria-modal="true"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!submitting) onClose();
+      }}
       className="fixed inset-0 z-[80] bg-foreground/50 flex items-center justify-center p-4"
       onClick={onClose}
     >

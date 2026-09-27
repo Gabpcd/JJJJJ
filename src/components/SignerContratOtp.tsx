@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, ShieldCheck, MessageSquare, Clock, AlertCircle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface Props {
   contratId: string;
@@ -48,7 +49,18 @@ function messageDepuisCode(code: string | undefined, fallback: string | undefine
  *
  * Mention juridique art. 1366-1367 Code civil.
  */
-export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSigne }: Props) {
+export function SignerContratOtp(props: Props) {
+  // Le consentement et le code ne concernent que cette version du document.
+  return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}`} {...props} />;
+}
+
+function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne }: Props) {
+  const actif = useRef(true);
+  const operationEnCours = useRef(false);
+  useEffect(() => {
+    actif.current = true;
+    return () => { actif.current = false; };
+  }, []);
   const { afficherNotification } = useNotification();
   const [etape, setEtape] = useState<Etape>('idle');
   const [otp, setOtp] = useState('');
@@ -87,11 +99,14 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
   }
 
   async function envoyerOtp() {
+    if (operationEnCours.current || !accepte || erreurBloquante) return;
+    operationEnCours.current = true;
     setLoading(true);
     setTentativesRestantes(null);
     setErreurBloquante(null);
     try {
       const { data, error } = await supabase.rpc('fn_envoyer_otp_signature' as any, { p_contrat_id: contratId });
+      if (!actif.current) return;
       if (error) throw error;
       const result = data as any;
       if (!result?.success) {
@@ -108,13 +123,16 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
         message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,
       });
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau. Réessayez.' });
+      if (!actif.current) return;
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
     } finally {
-      setLoading(false);
+      operationEnCours.current = false;
+      if (actif.current) setLoading(false);
     }
   }
 
   async function signer() {
+    if (operationEnCours.current || erreurBloquante || otpExpire) return;
     if (!/^[0-9]{6}$/.test(otp)) {
       afficherNotification({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;
@@ -123,6 +141,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
       afficherNotification({ type: 'erreur', message: 'Vous devez accepter les termes du contrat avant de signer.' });
       return;
     }
+    operationEnCours.current = true;
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_signer_contrat_otp' as any, {
@@ -131,6 +150,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
         p_hash_document: hashDocument || null,
         p_signature_image: signatureImage || null,
       });
+      if (!actif.current) return;
       if (error) throw error;
       const result = data as any;
       if (!result?.success) {
@@ -147,9 +167,11 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
       });
       onSigne?.({ role: result.role, contratComplet: result.contrat_complet });
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau. Réessayez.' });
+      if (!actif.current) return;
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
     } finally {
-      setLoading(false);
+      operationEnCours.current = false;
+      if (actif.current) setLoading(false);
     }
   }
 
@@ -268,7 +290,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
             <button
               type="button"
               onClick={envoyerOtp}
-              disabled={loading || smsRestants === 0}
+              disabled={loading || smsRestants === 0 || !!erreurBloquante || !accepte}
               title={smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
@@ -277,7 +299,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
             <button
               type="button"
               onClick={signer}
-              disabled={!accepte || otp.length !== 6 || loading || otpExpire}
+              disabled={!accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}

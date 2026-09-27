@@ -577,7 +577,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   onClick={() => setTab('ARCHIVEES')}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors min-h-[28px] ${tab === 'ARCHIVEES' ? 'bg-gradient-hero text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/50'}`}
                 >
-                  Archivées {archivedCount > 0 && <span className="ml-1 opacity-70">({archivedCount})</span>}
+                  Archivées {archivedCount > 0 && <span className="ml-1">({archivedCount})</span>}
                 </button>
               </div>
             </div>
@@ -634,13 +634,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                           {c.is_jolene && <Shield className="h-3.5 w-3.5 text-jolene-rose-500 shrink-0" />}
                         </span>
                         {c.dernier_message_le && (
-                          <span className={`text-[10px] whitespace-nowrap ${c.non_lus > 0 ? 'text-jolene-rose-500 font-semibold' : 'text-muted-foreground'}`}>
+                          <span className={`text-[10px] whitespace-nowrap ${c.non_lus > 0 ? 'text-jolene-rose-700 font-semibold' : 'text-muted-foreground'}`}>
                             {formatTimestampIntelligent(c.dernier_message_le)}
                           </span>
                         )}
                       </div>
                       {c.mission_intitule && (
-                        <p className="text-[10px] text-jolene-mauve-600 truncate font-medium">
+                        <p className="text-[10px] text-jolene-mauve-700 truncate font-medium">
                           Mission · {c.mission_intitule}
                         </p>
                       )}
@@ -648,7 +648,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                         {c.dernier_contenu ? c.dernier_contenu.slice(0, 60) : 'Aucun message'}
                       </p>
                       {c.archived_at && (
-                        <p className="text-[10px] text-muted-foreground/70 italic mt-0.5">Archivée — lecture seule</p>
+                        <p className="text-[10px] text-muted-foreground italic mt-0.5">Archivée — lecture seule</p>
                       )}
                     </div>
                   </button>
@@ -683,14 +683,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       {selectedConv.is_jolene && <Shield className="h-3.5 w-3.5 text-jolene-rose-500" />}
                     </p>
                     {selectedConv.mission_intitule && (
-                      <p className="text-[11px] text-jolene-mauve-600 truncate">Mission · {selectedConv.mission_intitule}</p>
+                      <p className="text-[11px] text-jolene-mauve-700 truncate">Mission · {selectedConv.mission_intitule}</p>
                     )}
                     {realtimeAutreId && (
                       <p
                         aria-live="polite"
                         className={`text-[11px] truncate ${
                           typing
-                            ? 'italic text-jolene-rose-500'
+                            ? 'italic text-jolene-rose-700'
                             : 'text-muted-foreground'
                         }`}
                       >
@@ -752,21 +752,21 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                         <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[80%] px-3.5 py-2 ${
                             mine
-                              ? 'bg-gradient-hero text-white rounded-2xl rounded-br-md shadow-sm'
+                              ? 'bg-gradient-hero rounded-2xl rounded-br-md shadow-sm'
                               : 'bg-card text-foreground rounded-2xl rounded-bl-md border border-border'
                           }`}>
                             {msg.est_admin && (
-                              <p className={`text-[10px] font-bold mb-0.5 flex items-center gap-1 ${mine ? 'text-white/85' : 'text-jolene-rose-500'}`}>
+                              <p className={`text-[10px] font-bold mb-0.5 flex items-center gap-1 ${mine ? 'text-inherit' : 'text-jolene-rose-700'}`}>
                                 <Shield className="h-3 w-3" /> Admin Jolene
                               </p>
                             )}
                             {messageEquipe && (
-                              <p className="text-[10px] font-semibold mb-0.5 text-white/85">
+                              <p className="text-[10px] font-semibold mb-0.5">
                                 Équipe établissement
                               </p>
                             )}
                             <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
-                            <p className={`text-[9px] mt-1 text-right ${mine ? 'text-white/70' : 'text-muted-foreground/70'}`}>
+                            <p className={`text-[9px] mt-1 text-right ${mine ? 'text-inherit' : 'text-muted-foreground'}`}>
                               {format(new Date(msg.cree_le), 'HH:mm')}
                             </p>
                           </div>

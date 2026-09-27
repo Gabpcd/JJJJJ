@@ -1,0 +1,21 @@
+- dialog "📋 Récapitulatif avant publication":
+  - heading "📋 Récapitulatif avant publication" [level=2]
+  - paragraph: Vérifiez les informations et chaque créneau avant de publier la mission.
+  - button "Fermer"
+  - heading "1. Informations mission" [level=3]
+  - text: Intitulé Planning récurrent — simulation uniquement Profession IDE Début dim. 20 oct. à 22:00 Fin lun. 21 oct. à 06:00 Durée estimée 8h00
+  - paragraph: Planning exact · 1 créneau
+  - paragraph: dimanche 20 octobre 2030 · 22:00 → lundi 21 octobre 2030 · 06:00
+  - text: Type de profil Salarié uniquement (CDD) Mode de sélection ⚡ Premier arrivé
+  - heading "2. Coût estimé" [level=3]
+  - text: Base brute estimée (30.00 €/h × 8.0h) 240.00 € Frais Jolene (15% HT) +36.00 € TVA 20 % sur les frais Jolene +7.20 € Total estimé avant charges employeur 283.20 €
+  - paragraph: Estimation indicative. Le bulletin employeur fera foi et ajoutera les charges, majorations CCN, IFM 10 % et ICP 10 % applicables au CDD.
+  - heading "3. Configuration pointage" [level=3]
+  - text: Tolérance GPS 100 m (défaut) QR de pointage ✅ Généré à la signature du contrat
+  - paragraph: Majorations CCN potentielles
+  - list:
+    - listitem: Nuit (21h-6h) — ~8h estimées
+    - listitem: Dimanche et jours fériés (calculés au pointage)
+    - listitem: IFM 10% + ICP 10% (CDD salarié)
+  - button "← Modifier"
+  - button "📤 Publier"

@@ -145,7 +145,7 @@ test('signature OTP : session expirée, code incorrect, code expiré et reprise 
     await page.reload();
     await page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
     state.failOnce='fn_envoyer_otp_signature';await sms.click();
-    await expect(page.getByText('Interruption réseau simulée',{exact:true})).toBeVisible();
+    await expect(page.getByText('Une erreur est survenue. Veuillez réessayer.',{exact:true})).toBeVisible();
     await sms.click();
     const code=page.getByRole('textbox',{name:'Code SMS à 6 chiffres'});
     const signer=page.getByRole('button',{name:'Signer',exact:true});

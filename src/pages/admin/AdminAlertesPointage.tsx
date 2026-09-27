@@ -332,6 +332,12 @@ function ModaleTraiterAlerte({ alerte, onFermer, onTraitee }: { alerte: Alerte; 
         aria-labelledby="titre-traitement-alerte"
         className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!loading) onFermer();
+        }}
       >
         <h2 id="titre-traitement-alerte" className="text-lg font-bold text-foreground">Traiter l'alerte</h2>
 

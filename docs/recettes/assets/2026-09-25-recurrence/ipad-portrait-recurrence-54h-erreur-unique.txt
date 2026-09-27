@@ -1,0 +1,161 @@
+- main:
+  - heading "Publier une mission" [level=1]
+  - text: Intitulé *
+  - textbox "Intitulé *":
+    - /placeholder: "Ex: IDE de nuit — Service Urgences"
+    - text: Planning récurrent — simulation uniquement
+  - paragraph: 42/120
+  - text: Description
+  - textbox "Description":
+    - /placeholder: Informations complémentaires pour le soignant...
+  - text: Profession requise *
+  - combobox:
+    - text: Infirmier(ère) Diplômé(e) d'État (IDE)
+    - img
+  - text: Service
+  - combobox "Service"
+  - text: Type de contrat proposé
+  - 'radio "Tous profils Selon le soignant retenu : salarié (vous êtes l’employeur) ou libéral (honoraires via la plateforme)"'
+  - text: Tous profils
+  - paragraph: "Selon le soignant retenu : salarié (vous êtes l’employeur) ou libéral (honoraires via la plateforme)"
+  - 'radio "Salarié Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine" [checked]'
+  - text: Salarié
+  - paragraph: "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
+  - radio "Libéral Honoraires facturés via la plateforme — pas de plafond horaire"
+  - text: Libéral
+  - paragraph: Honoraires facturés via la plateforme — pas de plafond horaire
+  - paragraph: Planning exact de la mission
+  - paragraph: Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés.
+  - paragraph: 📅 Dates et horaires réels
+  - paragraph: Chaque date est indépendante. Vous pouvez prévoir des jours non travaillés, plusieurs créneaux et des gardes de nuit.
+  - text: Première date affichée *
+  - textbox "Première date affichée *": 2030-10-14
+  - text: Dernière date affichée *
+  - textbox "Dernière date affichée *": 2030-10-19
+  - paragraph: Sélection rapide
+  - button "Toutes les dates"
+  - button "Lundi–vendredi"
+  - button "1 semaine civile sur 2"
+  - button "Aucune"
+  - button "Appliquer le 1er horaire aux jours sélectionnés":
+    - img
+    - text: Appliquer le 1er horaire aux jours sélectionnés
+  - checkbox "lundi 14 octobre 2030 travaillé" [checked]
+  - text: lundi 14 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-14": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-14": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-14":
+    - option "Même jour · lun. 14 oct." [selected]
+    - option "Lendemain · mar. 15 oct."
+  - button "Supprimer le créneau 1 du 2030-10-14":
+    - img
+  - paragraph: lun. 14 oct. 07:00 → lun. 14 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - checkbox "mardi 15 octobre 2030 travaillé" [checked]
+  - text: mardi 15 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-15": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-15": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-15":
+    - option "Même jour · mar. 15 oct." [selected]
+    - option "Lendemain · mer. 16 oct."
+  - button "Supprimer le créneau 1 du 2030-10-15":
+    - img
+  - paragraph: mar. 15 oct. 07:00 → mar. 15 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - checkbox "mercredi 16 octobre 2030 travaillé" [checked]
+  - text: mercredi 16 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-16": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-16": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-16":
+    - option "Même jour · mer. 16 oct." [selected]
+    - option "Lendemain · jeu. 17 oct."
+  - button "Supprimer le créneau 1 du 2030-10-16":
+    - img
+  - paragraph: mer. 16 oct. 07:00 → mer. 16 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - checkbox "jeudi 17 octobre 2030 travaillé" [checked]
+  - text: jeudi 17 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-17": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-17": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-17":
+    - option "Même jour · jeu. 17 oct." [selected]
+    - option "Lendemain · ven. 18 oct."
+  - button "Supprimer le créneau 1 du 2030-10-17":
+    - img
+  - paragraph: jeu. 17 oct. 07:00 → jeu. 17 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - checkbox "vendredi 18 octobre 2030 travaillé" [checked]
+  - text: vendredi 18 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-18": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-18": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-18":
+    - option "Même jour · ven. 18 oct." [selected]
+    - option "Lendemain · sam. 19 oct."
+  - button "Supprimer le créneau 1 du 2030-10-18":
+    - img
+  - paragraph: ven. 18 oct. 07:00 → ven. 18 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - checkbox "samedi 19 octobre 2030 travaillé" [checked]
+  - text: samedi 19 octobre 2030 Travaillé Début
+  - textbox "Début du créneau 1 du 2030-10-19": 07:00
+  - text: → Fin
+  - textbox "Fin du créneau 1 du 2030-10-19": 16:00
+  - text: Date de fin
+  - combobox "Date de fin du créneau 1 du 2030-10-19":
+    - option "Même jour · sam. 19 oct." [selected]
+    - option "Lendemain · dim. 20 oct."
+  - button "Supprimer le créneau 1 du 2030-10-19":
+    - img
+  - paragraph: sam. 19 oct. 07:00 → sam. 19 oct. 16:00 · 9 h
+  - button "Ajouter un créneau ce jour":
+    - img
+    - text: Ajouter un créneau ce jour
+  - paragraph: Contrôle par semaine civile
+  - text: Semaine du 14/10 54 h
+  - img
+  - paragraph: "Maximum légal : 48 h par semaine civile (lundi–dimanche)."
+  - alert:
+    - img
+    - paragraph: "Semaine du 14/10 : 54 h travaillées. Maximum légal : 48 h/semaine."
+    - paragraph: Art. L3121-20 — Un soignant ne peut pas travailler plus de 48 heures sur une même semaine civile (du lundi au dimanche), toutes missions confondues sur la plateforme.
+  - text: Taux horaire brut * (€/h)
+  - spinbutton "Taux horaire brut * (€/h)": "30"
+  - paragraph: "Taux conseillé pour Infirmier(ère) Diplômé(e) d'État (IDE) : 25–38 €/h brut"
+  - text: Mission urgente ?
+  - paragraph: Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité.
+  - button "Mission urgente"
+  - paragraph: Mode de sélection
+  - radio "Premier arrivé Le premier soignant qui accepte remporte la mission." [checked]
+  - text: Premier arrivé
+  - paragraph: Le premier soignant qui accepte remporte la mission.
+  - radio "Je choisis Les soignants postulent, vous consultez les profils et choisissez."
+  - text: Je choisis
+  - paragraph: Les soignants postulent, vous consultez les profils et choisissez.
+  - paragraph: Estimation de rémunération du planning
+  - text: Taux de base 30.00 €/h 6 créneaux — 54h total ~54h Base brute estimée ~1620.00 €
+  - img
+  - paragraph: Frais Jolene distincts
+  - paragraph: "Taux appliqué : 15% HT (18% TTC)"
+  - text: Base de rémunération estimée ~1620.00 € Frais Jolene HT (15%) ~243.00 € TVA (20%) ~48.60 € Frais Jolene TTC ~291.60 €
+  - paragraph: Simulation à titre indicatif. Seuls les montants du bulletin établi par l’employeur font foi.
+  - button "Publier la mission (6 créneaux)" [disabled]

@@ -8,6 +8,7 @@ import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, ChevronRight, AlertTriangle, Timer, Scale, MessageCircle, Clock, Star, type LucideIcon } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
+import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -49,7 +50,7 @@ import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEta
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
-  const { user, etablissementId } = useEtablissementScope();
+  const { user, parcours, etablissementId, loading: scopeLoading, resolved: scopeResolved, error: scopeError, retry: relancerScope } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   interface EtabInfo {
     nom: string;
@@ -106,7 +107,7 @@ export default function DashboardEtablissement() {
   // défaut pour garder la vue par défaut focalisée sur l'action.
   const [statsOuvertes, setStatsOuvertes] = useState(false);
 
-  const { data: dashData, isLoading: loading } = useQuery({
+  const { data: dashData, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard-etablissement', user?.id, etablissementId],
     queryFn: async () => {
       let partialError = false;
@@ -412,11 +413,16 @@ export default function DashboardEtablissement() {
   const evaluationsEnAttente = useMemo(() => dashData?.evaluationsEnAttente ?? { count: 0, premiereMissionId: null }, [dashData]);
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
+  const loading = scopeLoading || !scopeResolved || dashboardLoading;
   const queryClient = useQueryClient();
   const { estProlonge: chargementProlonge, reinitialiser: reinitialiserChargement } = useChargementProlonge(loading);
 
   const relancerDashboard = () => {
     reinitialiserChargement();
+    if (!scopeResolved || scopeError) {
+      relancerScope();
+      return;
+    }
     void queryClient.resetQueries({
       queryKey: ['dashboard-etablissement', user?.id, etablissementId],
       exact: true,
@@ -424,6 +430,14 @@ export default function DashboardEtablissement() {
   };
 
   // handleAnnuler legacy supprimé : remplacé par ModaleAnnulationMissionEtab (Sprint 5.5 PR 3).
+
+  if (scopeError) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <ErreurRubriqueEtablissement titre="Impossible de vérifier votre établissement" reessayer={relancerScope} />
+      </LayoutApp>
+    );
+  }
 
   if (loading) {
     return (
@@ -451,11 +465,15 @@ export default function DashboardEtablissement() {
     );
   }
 
-  // F1 — Mode « première mission » : l'établissement n'a jamais publié de mission.
-  // aDejaPublie peut valoir null si le fetch a échoué → on ne bascule en mode hero
-  // QUE si on est sûr qu'il n'y a aucune mission (=== false), pour ne pas masquer
-  // le dashboard complet sur un simple incident réseau.
-  const premiereMission = aDejaPublie === false;
+  // Un parcours minimal résolu n'a pas encore de dossier : la requête métier
+  // reste désactivée et ses valeurs par défaut ne sont pas des statistiques.
+  const compteEnPreparation = !etablissementId && parcours?.type_compte === 'ETABLISSEMENT';
+  if (!etablissementId && !compteEnPreparation) {
+    return <AccesEtablissement titre="Tableau de bord" description="Retrouvez ici l’activité de votre établissement.">{null}</AccesEtablissement>;
+  }
+  // Pour un établissement existant, null peut signaler une erreur de lecture :
+  // seul false établit l'absence de mission, sans masquer une activité existante.
+  const premiereMission = compteEnPreparation || aDejaPublie === false;
 
   // Blocage dur : compte bloqué automatiquement OU vérification requise.
   // Doit rester visible y compris en mode « première mission » (jamais masqué
@@ -498,10 +516,12 @@ export default function DashboardEtablissement() {
               <Mascotte etat="thinking" taille="lg" />
               <div>
                 <h1 className="text-2xl font-bold text-foreground">
-                  Publiez votre <span className="text-gradient-hero">première mission</span>
+                  {compteEnPreparation ? 'Préparez votre' : 'Publiez votre'} <span className="text-gradient-hero">première mission</span>
                 </h1>
                 <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-                  2 minutes, et vous recevez des candidatures de soignants vérifiés.
+                  {compteEnPreparation
+                    ? 'Décrivez votre besoin, puis complétez votre établissement avant de publier.'
+                    : '2 minutes, et vous recevez des candidatures de soignants vérifiés.'}
                 </p>
               </div>
 
@@ -514,9 +534,9 @@ export default function DashboardEtablissement() {
                     <ShieldAlert className="h-5 w-5 text-amber-500 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">Établissement vérifié</p>
+                    <p className="text-sm font-medium text-foreground">{compteEnPreparation ? 'Informations de l’établissement' : 'Établissement vérifié'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {etabVerifie ? 'Validé' : 'Vérification en cours'}
+                      {compteEnPreparation ? 'À compléter avant publication' : etabVerifie ? 'Validé' : 'Vérification en cours'}
                     </p>
                   </div>
                 </div>
@@ -535,8 +555,13 @@ export default function DashboardEtablissement() {
                 iconeGauche={<FileText className="h-4 w-4" />}
                 className="mt-2"
               >
-                Publier une mission
+                {compteEnPreparation ? 'Préparer une mission' : 'Publier une mission'}
               </BoutonY2K>
+              {compteEnPreparation && (
+                <BoutonY2K variant="secondary" onClick={() => navigate('/inscription/completer')}>
+                  Compléter mon établissement
+                </BoutonY2K>
+              )}
             </div>
           </CardY2K>
         </div>
