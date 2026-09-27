@@ -25,6 +25,11 @@
  * ⚠️ Refuse de tourner si l'URL ressemble à la prod (garde-fou).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { assertHarnessCleanupReady } from './lib/recette-escrow-safety.mjs';
+
+// Ce point d'entrée SQL partage les fixtures historiques des legs Stripe.
+// Refuser avant toute lecture de credentials ou création de client.
+assertHarnessCleanupReady();
 
 const URL = process.env.SUPABASE_URL || '';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -36,7 +41,7 @@ if (!URL || !SERVICE || !ETAB || !SOIGNANT) {
   console.error('Requis : SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RECETTE_ETAB_ID, RECETTE_SOIGNANT_ID');
   process.exit(1);
 }
-if (URL.includes(PROD_REF) && !process.env.RECETTE_FORCE_PROD) {
+if (URL.includes(PROD_REF)) {
   console.error(`REFUS : l'URL cible le projet prod (${PROD_REF}). La recette DOIT tourner sur un projet de test.`);
   process.exit(1);
 }

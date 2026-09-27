@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { assertCandidate, assertHarnessCleanupReady, cleanupWebhooks, createWebhooks, RECETTE_REF, PROD_REF } from '../../scripts/lib/recette-escrow-safety.mjs';
+import { assertCandidate, assertHarnessCleanupReady, cleanupWebhooks, createWebhooks, RECETTE_REF, PROD_REF, CLEANUP_BLOCKER } from '../../scripts/lib/recette-escrow-safety.mjs';
 import { preflight } from '../../scripts/recette-escrow-preflight.mjs';
 
 const sha = 'a'.repeat(40);
@@ -45,6 +47,42 @@ test('even a healthy matching branch remains blocked while legacy cleanup is mis
   await assert.rejects(promise, /RECETTE_BLOQUEE/);
   assert.equal(requests.length, 3);
   assert.throws(assertHarnessCleanupReady, /bearer Vault/);
+});
+test('legacy SQL entry point refuses before transport, even with fake production credentials and old force flag', () => {
+  // Node 24 strips TypeScript natively. Stub only the external client import,
+  // so this proof also runs before npm ci and cannot contact a real backend.
+  const transportTrap = `import { registerHooks } from 'node:module';
+  const clientTrap = "export function createClient() { throw new Error('RECETTE_CLIENT_CREATED'); }";
+  registerHooks({ resolve(specifier, context, nextResolve) {
+    if (specifier === '@supabase/supabase-js') return {
+      shortCircuit: true, url: 'data:text/javascript,' + encodeURIComponent(clientTrap),
+    };
+    return nextResolve(specifier, context);
+  }});
+  globalThis.fetch = () => {
+    process.stderr.write('RECETTE_NETWORK_CALLED\\n');
+    throw new Error('No network allowed');
+  };`;
+  const child = spawnSync(process.execPath, [
+    '--import', `data:text/javascript,${encodeURIComponent(transportTrap)}`,
+    'scripts/recette-escrow.ts',
+  ], {
+    cwd: fileURLToPath(new URL('../../', import.meta.url)),
+    env: {
+      SUPABASE_URL: `https://${PROD_REF}.supabase.co`,
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-fixture-not-a-secret',
+      RECETTE_ETAB_ID: 'e2e00000-0000-4000-8000-0000000000e7',
+      RECETTE_SOIGNANT_ID: 'e2e00000-0000-4000-8000-000000000001',
+      RECETTE_FORCE_PROD: '1',
+    },
+    encoding: 'utf8', timeout: 15_000,
+  });
+  assert.ifError(child.error);
+  assert.equal(child.signal, null);
+  assert.equal(child.status, 1);
+  assert.equal(child.stderr.split('\n').find(line => line.startsWith('Error: ')), `Error: ${CLEANUP_BLOCKER}`);
+  assert.doesNotMatch(child.stderr, /RECETTE_NETWORK_CALLED|RECETTE_CLIENT_CREATED/);
+  assert.equal(child.stdout, '');
 });
 test('old SQL schema fails before the Stripe balance request', async () => {
   const { requests, promise } = fakePreflight({ versions: ['20260711193000'] });
