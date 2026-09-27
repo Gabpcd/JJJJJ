@@ -529,7 +529,7 @@ export function MesGainsApercuContent() {
       {/* Filtre + Actions */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <Select value={moisFiltre} onValueChange={setMoisFiltre}>
-          <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-52" aria-label="Période des revenus"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="CE_MOIS">Ce mois</SelectItem>
             <SelectItem value="TOUS">Tous les mois</SelectItem>

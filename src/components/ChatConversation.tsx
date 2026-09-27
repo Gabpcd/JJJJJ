@@ -332,6 +332,7 @@ export function ChatConversation({
           <AvatarDisplay src={autreInfo?.avatar || null} prenom={autreInfo?.prenom || ''} nom={autreInfo?.nom || ''} size={40} rounded="full" />
           <span
             className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${PRESENCE_DOT_CLASS[presence]}`}
+            role="img"
             aria-label={`Statut : ${presenceLabel(presence, lastSeen)}`}
           />
         </div>

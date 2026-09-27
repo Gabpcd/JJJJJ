@@ -369,6 +369,7 @@ jobs:
             tests/security/rappels-quotidiens-file.test.sql
             tests/security/activation-inscriptions-publiques.test.sql
             tests/security/recherche-publique-comptage.test.sql
+            tests/security/otp-signature-routage-projet.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 

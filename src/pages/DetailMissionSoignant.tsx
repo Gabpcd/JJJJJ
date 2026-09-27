@@ -940,7 +940,7 @@ export default function DetailMissionSoignant() {
             />
           )}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
-          <p className="text-xs text-muted-foreground/60 italic text-center">
+          <p className="text-xs text-muted-foreground italic text-center">
             {missionEstLiberale && estTerminee
               ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
               : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
@@ -1040,19 +1040,19 @@ export default function DetailMissionSoignant() {
                     <>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).plans()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         📍 Plans
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).googleMaps()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🗺️ Maps
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissementAffiche.adresse_lat!, etablissementAffiche.adresse_lng!, etablissementAffiche.nom).waze()}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🚗 Waze
                       </button>
@@ -1079,7 +1079,7 @@ export default function DetailMissionSoignant() {
                     ⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}
                   </p>
                 )}
-                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Jolene
                 </p>
                 {/* E2: Blacklist côté soignant.

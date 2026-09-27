@@ -8,11 +8,11 @@ import { toast } from 'sonner';
 import { IMAGE_DOCUMENT_MIME_TYPES, verifierFichierDocument } from '@/lib/documentUpload';
 
 const FALLBACK_COLORS = [
-  'hsl(var(--primary))',        // teal
+  'hsl(330 85% 40%)',           // rose Jolene
   'hsl(243 75% 59%)',           // indigo
-  'hsl(330 81% 60%)',           // rose
-  'hsl(38 92% 50%)',            // amber
-  'hsl(152 69% 41%)',           // emerald
+  'hsl(330 81% 44%)',           // rose
+  'hsl(38 92% 30%)',            // amber
+  'hsl(152 69% 30%)',           // emerald
   'hsl(263 70% 58%)',           // violet
 ];
 
