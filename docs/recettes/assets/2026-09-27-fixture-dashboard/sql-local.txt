@@ -1,0 +1,1 @@
+OK : SQL réel sur schéma minimal local avec les 10 triggers LIVE, préparation AS non vérifiée, transport OFF, dépendance CASCADE refusée, nettoyage exact et seed retardé bloqué. Aucun service réel appelé.

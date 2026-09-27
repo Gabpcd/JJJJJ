@@ -31,6 +31,11 @@ test('refuse les paramètres dangereux ou ambigus et garde les seuils fonctionne
 
 const mission = { id: 'mission-fixture', intitule: 'Mission fictive', profession_requise: 'IDE', debut_le: '2026-09-26T08:00:00Z', fin_le: '2026-09-26T16:00:00Z', taux_horaire_base: 30, total_count: 1 };
 const dashboard = { profil: { profession: 'IDE' }, missions_ouvertes: [], mes_missions: [], documents: [], gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_semaine: 0, notifs_non_lues: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 } };
+const fixtureId = '10000000-0000-4000-a000-000000000001';
+const dashboardFixture = { ...dashboard, profil: { profession: 'AS', prenom: 'Recette', nom: `Dashboard ${fixtureId}`, identite_verifiee: false, tous_documents_valides: false } };
+const fixtureEmail = `recette-dashboard-${fixtureId}@example.invalid`;
+const fixtureSession = { access_token: 'jwt-fictif', user: { id: fixtureId, email: fixtureEmail,
+  app_metadata: { role: 'SOIGNANT', est_compte_test: true, is_test_playwright: true, load_fixture_kind: 'DASHBOARD', load_fixture_run: 'node-charge-1' } } };
 test('un objet erreur, null ou profil absent ne vaut jamais une réponse métier valide', () => {
   for (const value of [null, {}, [], { error: 'Non authentifié' }, { ...dashboard, profil: null }]) assert.equal(dashboardValide(value), false);
   for (const value of [null, {}, { error: 'Erreur' }, [{}], [{ ...mission, taux_horaire_base: '30' }]]) assert.equal(rechercheValide(value), false);
@@ -49,7 +54,8 @@ const racineLoad = new URL('../load/', import.meta.url);
 async function charger(nom, env = {}) {
   const appels = [], verifications = [], reponses = [];
   const pont = `__k6_fixture_${sequence++}`;
-  globalThis.__ENV = { STAGING_SUPABASE_URL: 'https://mejpriaetwgtcstbgfid.supabase.co', STAGING_SUPABASE_ANON_KEY: 'fictif', LOAD_TEST_PASSWORD: 'fictif', ...env };
+  globalThis.__ENV = { STAGING_SUPABASE_URL: 'https://mejpriaetwgtcstbgfid.supabase.co', STAGING_SUPABASE_ANON_KEY: 'fictif', LOAD_TEST_PASSWORD: 'fictif',
+    LOAD_DASHBOARD_USER_ID: fixtureId, LOAD_DASHBOARD_EMAIL: fixtureEmail, LOAD_DASHBOARD_PASSWORD: 'secret-temporaire-fictif', LOAD_TEST_RUN_ID: 'node-charge-1', ...env };
   globalThis.__ITER = 0; globalThis.__VU = 1;
   globalThis[pont] = {
     http: { post: (...args) => {
@@ -93,12 +99,45 @@ test('C refuse un préflight vide puis contrôle les réponses de recherche sous
 });
 test('E refuse auth sans profil, puis refuse erreur métier HTTP200 pendant la charge', async () => {
   const t = await charger('05-dashboard-concurrent');
-  t.reponses.push({ body: { access_token: 'jwt-fictif' } }, { body: { ...dashboard, profil: null } });
+  t.reponses.push({ body: fixtureSession }, { body: { ...dashboardFixture, profil: null } });
   assert.throws(() => t.module.setup(), /profil soignant/);
-  t.reponses.push({ body: { access_token: 'jwt-fictif' } }, { body: dashboard });
-  assert.deepEqual(t.module.setup(), { jwt: 'jwt-fictif' });
-  t.reponses.push({ body: { error: 'Non authentifié' } }); t.module.default({ jwt: 'jwt-fictif' });
+  t.reponses.push({ body: fixtureSession }, { body: dashboardFixture });
+  assert.deepEqual(t.module.setup(), { jwt: 'jwt-fictif', userId: fixtureId });
+  t.reponses.push({ body: { error: 'Non authentifié' } }); t.module.default({ jwt: 'jwt-fictif', userId: fixtureId });
   assert.equal(t.verifications.at(-1).ok, false);
+});
+test('E exige sa fixture avant réseau et refuse un JWT du compte fixe ou une cohorte non test', async () => {
+  for (const env of [{ LOAD_DASHBOARD_PASSWORD: '' }, { LOAD_DASHBOARD_EMAIL: 'playwright-soignant@jolene.app' }, { LOAD_DASHBOARD_USER_ID: '' }]) {
+    const t = await charger('05-dashboard-concurrent', env);
+    assert.throws(() => t.module.setup(), /Fixture dashboard/); assert.equal(t.appels.length, 0);
+  }
+  for (const user of [{ ...fixtureSession.user, id: 'autre' }, { ...fixtureSession.user, app_metadata: { ...fixtureSession.user.app_metadata, est_compte_test: false } }]) {
+    const t = await charger('05-dashboard-concurrent');t.reponses.push({ body: { ...fixtureSession, user } });
+    assert.throws(() => t.module.setup(), /dédié non confirmé/); assert.equal(t.appels.length, 1);
+  }
+});
+test('E transmet seulement le login temporaire et garde AS non vérifié comme préflight obligatoire', async () => {
+  const t = await charger('05-dashboard-concurrent');
+  t.reponses.push({ body: fixtureSession }, { body: dashboardFixture });t.module.setup();
+  assert.deepEqual(JSON.parse(t.appels[0][1]), { email: fixtureEmail, password: 'secret-temporaire-fictif' });
+  const u = await charger('05-dashboard-concurrent');
+  u.reponses.push({ body: fixtureSession }, { body: dashboard });
+  assert.throws(() => u.module.setup(), /AS minimal/);
+});
+test('chaque réponse E appartient au run : profil AS identique sans marqueur ou autre UUID refusé', async () => {
+  const t = await charger('05-dashboard-concurrent');
+  t.reponses.push({ body: fixtureSession }, { body: dashboardFixture });
+  const data = t.module.setup();
+  for (const profil of [
+    { profession: 'AS', identite_verifiee: false, tous_documents_valides: false },
+    { ...dashboardFixture.profil, nom: 'Dashboard 10000000-0000-4000-a000-000000000002' },
+    { ...dashboardFixture.profil, prenom: 'Autre' },
+  ]) {
+    t.reponses.push({ body: { ...dashboardFixture, profil } }); t.module.default(data);
+    assert.equal(t.verifications.at(-1).ok, false);
+  }
+  t.reponses.push({ body: dashboardFixture }); t.module.default(data);
+  assert.equal(t.verifications.at(-1).ok, true);
 });
 for (const [lettre, nom] of [['D', '04-candidatures-simultanees'], ['F', '06-cron-weekly-invoicing']]) {
   test(`${lettre} échoue explicitement avant toute requête, y compris sans setup`, async () => {

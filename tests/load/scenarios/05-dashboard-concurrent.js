@@ -8,20 +8,21 @@ import { creerOptionsCharge } from '../helpers/options.js';
  *
  * Cible : 100% succès, p95 < 2s.
  *
- * Stratégie : 1 setup() login soignant test fixe → réutilise le JWT pour tous
- * les VUs. C'est représentatif d'un soignant qui rafraîchit régulièrement,
- * ou de plusieurs soignants similaires (la RPC fait le même travail).
+ * Stratégie : 1 setup() login du profil AS minimal éphémère de ce run.
+ * Son JWT est réutilisé pour tous les VUs : une seule identité et aucun dossier
+ * vérifié. Cette mesure ne représente pas 100 utilisateurs distincts.
  *
  * Lancer :
  *   k6 run tests/load/scenarios/05-dashboard-concurrent.js \
  *     -e STAGING_SUPABASE_URL=... -e STAGING_SUPABASE_ANON_KEY=... \
- *     -e LOAD_TEST_PASSWORD=...
+ *     -e LOAD_DASHBOARD_EMAIL=... -e LOAD_DASHBOARD_PASSWORD=... \
+ *     -e LOAD_DASHBOARD_USER_ID=... -e LOAD_TEST_RUN_ID=...
  */
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { SUPABASE_URL, authedHeaders, loginTestAccount } from '../helpers/auth.js';
-import { dashboardValide, exigerDashboardMetier } from '../helpers/contrats.js';
+import { SUPABASE_URL, authedHeaders, loginDashboardFixture } from '../helpers/auth.js';
+import { dashboardFixtureValide, exigerDashboardMetier } from '../helpers/contrats.js';
 
 export const options = creerOptionsCharge('dashboard_concurrent', {
   executor: 'ramping-vus',
@@ -38,17 +39,16 @@ export const options = creerOptionsCharge('dashboard_concurrent', {
 }, __ENV);
 
 export function setup() {
-  const session = loginTestAccount('SOIGNANT');
-  if (!session?.access_token) {
-    throw new Error('setup: login playwright-soignant échoué');
-  }
+  const session = loginDashboardFixture();
   const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`, '{}', {
     headers: authedHeaders(session.access_token), tags: { name: 'dashboard_preflight' }, timeout: '15s',
   });
   if (res.status !== 200) throw new Error(`Préflight E : dashboard indisponible (HTTP ${res.status}).`);
-  exigerDashboardMetier(res.json());
+  const dashboard = res.json();
+  exigerDashboardMetier(dashboard);
+  if (!dashboardFixtureValide(dashboard, session.user.id)) throw new Error('Préflight E : profil AS minimal du run attendu.');
   console.log('Préflight E : profil soignant et structure métier présents ; charge sur un seul compte, aucune mutation métier.');
-  return { jwt: session.access_token };
+  return { jwt: session.access_token, userId: session.user.id };
 }
 
 export default function (data) {
@@ -61,7 +61,7 @@ export default function (data) {
   check(res, {
     'dashboard 200': (r) => r.status === 200,
     'dashboard profil et contrat metier valides': (r) => {
-      try { return dashboardValide(r.json()); } catch { return false; }
+      try { return dashboardFixtureValide(r.json(), data.userId); } catch { return false; }
     },
   });
   sleep(0.5);

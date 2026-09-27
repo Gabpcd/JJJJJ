@@ -17,6 +17,13 @@ export function dashboardValide(value) {
     && objet(value.gains_mois) && ['net_total', 'brut_total', 'nb_missions'].every(k => nombre(value.gains_mois[k]));
 }
 
+/** Le RPC LIVE ne projette pas l'id du profil : l'identité fictive porte l'UUID du run. */
+export function dashboardFixtureValide(value, userId) {
+  return typeof userId === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/.test(userId)
+    && dashboardValide(value) && value.profil.prenom === 'Recette' && value.profil.nom === `Dashboard ${userId}`
+    && value.profil.profession === 'AS' && value.profil.identite_verifiee === false && value.profil.tous_documents_valides === false;
+}
+
 export function exigerRecherchePeuplee(value, minimum = 1) {
   if (!Number.isInteger(minimum) || minimum < 1 || minimum > 1000) throw new Error('Quantité de missions attendue invalide.');
   if (!rechercheValide(value) || value.length === 0) throw new Error(

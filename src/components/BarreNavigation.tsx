@@ -130,7 +130,7 @@ function getEtablissementSidebar(canReadFinance: boolean): SidebarEntry[] {
       ],
     },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-    { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
+    { icone: Settings, label: 'Mon compte', route: '/etablissement/mon-compte' },
   ];
 }
 

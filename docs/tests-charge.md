@@ -12,7 +12,7 @@ Le durcissement du 25 septembre est validé par des **tests des scripts avec un 
 | B — connexion | Rampe vers 50 VUs, plateau 1 min | Password grant sur les deux comptes fixes staging | Disponible ; deux identités répétées, pas 50 utilisateurs distincts. |
 | C — recherche publique | Rampe vers 200 VUs, plateau 90 s | Réponses JSON valides, HTTP et latence de la RPC publique | Lecture seule, préflight peuplé obligatoire. |
 | D — candidatures simultanées | Ancienne cible : 50 soignants sur une mission | Candidatures effectivement créées, unicité, refus justifiés | **Suspendu : échec explicite avant toute requête.** |
-| E — dashboard | Rampe vers 100 VUs, plateau 1 min | Profil et données métier valides, HTTP et latence de la RPC | Lecture métier seule après connexion, préflight profil obligatoire. |
+| E — dashboard | Rampe vers 100 VUs, plateau 1 min | Profil AS fictif non vérifié, identité du run et données métier valides, HTTP et latence de la RPC | Lecture métier après connexion sur une identité éphémère ; préparation/nettoyage isolés en CI. |
 | F — facturation hebdomadaire | Ancienne cible : 500 missions | Factures exactes du lot après un traitement isolé | **Suspendu : échec explicite avant toute requête.** |
 
 `all` inclut D et F et doit donc échouer tant que leur isolation n’est pas rétablie. Pour les premières mesures, lancer C puis E individuellement. Aucun faux résultat vert n’est substitué aux scénarios suspendus.
@@ -55,9 +55,15 @@ Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP é
 
 ## E — dashboard avec profil métier
 
-`05-dashboard-concurrent.js` se connecte avec le compte soignant fixe staging, puis vérifie `fn_dashboard_soignant_complet()` avant la charge. Un compte `auth.users` sans profil `soignants`, un objet `{error: ...}`, `null` ou une structure incomplète échouent explicitement.
+`scripts/ci/prepare-dashboard-fixture.mjs` crée une identité Auth éphémère propre au run sur staging, avec métadonnées privées de test et email fictif `example.invalid`. Son profil AS reste non vérifié, sans document, mission assignée ni finance. Les préférences de notification sont désactivées. Le mot de passe aléatoire est masqué et transmis seulement par `GITHUB_ENV`, jamais par le manifeste ou un argument shell. Les comptes fixes ne sont ni utilisés ni modifiés par E.
 
-Le même JWT utilisateur est réutilisé par les VUs. Cela mesure des lectures concurrentes d’un seul profil avec son jeu de données ; cela **ne représente pas cent profils distincts**. Le login de setup crée une session d’authentification ; aucune mutation de mission, contrat, présence ou paiement n’est exécutée.
+`05-dashboard-concurrent.js` se connecte avec cette identité et vérifie `fn_dashboard_soignant_complet()` avant la charge. UUID et métadonnées du login doivent correspondre au run. Le RPC actuel ne projette pas l’identifiant dans `profil` : le prénom fictif et le nom contenant l’UUID sont donc comparés à la fixture **à chaque réponse**, avec la profession AS et les validations désactivées. Un profil d’un autre compte, un compte Auth sans profil, un objet `{error: ...}`, `null` ou une structure incomplète échouent explicitement.
+
+Le même JWT utilisateur est réutilisé par les VUs. Cela mesure des lectures concurrentes d’un seul profil minimal ; cela **ne représente pas cent profils distincts**, ni un compte avec historique chargé. Le login de setup crée une session d’authentification ; aucune mutation de mission, contrat, présence ou paiement n’est exécutée.
+
+Le cleanup `always()` exige le manifeste déterministe, le même UUID/email, les métadonnées privées et la cohorte test. Il refuse toute dépendance métier, y compris une FK configurée en cascade, puis retire explicitement préférences/profil avant de supprimer l’identité via Auth Admin. Les triggers et FK restent actifs. Un marqueur privé et le verrou SQL commun empêchent un seed de profil retardé après le cleanup. Une création Auth dont la réponse a été perdue et dont l’identité est encore absente n’est jamais déclarée nettoyée : le manifeste est conservé et le workflow échoue pour contrôle ultérieur.
+
+Variables E requises : `LOAD_DASHBOARD_USER_ID`, `LOAD_DASHBOARD_EMAIL`, `LOAD_DASHBOARD_PASSWORD`, `LOAD_TEST_RUN_ID`, toutes préparées automatiquement en CI. Aucun repli vers `LOAD_TEST_PASSWORD` n’existe pour E. [Recette et limites du lot](recettes/2026-09-27-fixture-dashboard-charge.md).
 
 Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP échoué < 1 %, p95 < 2 s et p99 < 3,5 s.
 

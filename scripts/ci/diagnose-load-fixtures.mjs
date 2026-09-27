@@ -3,9 +3,9 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { configuration, creerManifeste, STAGING_REF } from './prepare-load-fixtures.mjs';
 
-// Définition LIVE staging relue le 25/09/2026. Si elle change, relire le SQL
-// avant de comparer le plan développé : celui-ci n'est jamais installé en DB.
-export const SEARCH_DEFINITION_MD5 = '6b3e673608b0848e2d2a2026587708d6';
+// Candidat fondé sur la définition LIVE relue le 25/09/2026, après migration
+// 20260925153200. Le diagnostic refuse un backend antérieur ou différent.
+export const SEARCH_DEFINITION_MD5 = '904e83ab283dac36554a465d7ee717a8';
 const ENDPOINT = `https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const EXPLAIN = 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)';
@@ -48,10 +48,10 @@ const rechercheInterneAnonyme = `WITH filtered AS (
       OR e.adresse_code_postal LIKE btrim(NULL::text) || '%')
     AND (NOT false OR public.fn_soignant_eligible_mission(NULL::uuid, m.id, false))
     AND (NULL::uuid IS NULL OR NOT public.fn_est_exclu(NULL::uuid, m.etablissement_id))
-), counted AS (SELECT count(*)::bigint AS cnt FROM filtered)
+)
 SELECT f.mid, f.mintitule, f.mprof, f.mville, f.mcp, f.mdebut, f.mfin,
-  f.mtaux, f.murgente, f.mcontrat, c.cnt
-FROM filtered f CROSS JOIN counted c ORDER BY f.murgente DESC, f.mcree DESC`;
+  f.mtaux, f.murgente, f.mcontrat, count(*) OVER ()
+FROM filtered f ORDER BY f.murgente DESC, f.mcree DESC`;
 
 export function sondesDiagnostic(manifest) {
   const ids = manifest.missions.map(m => `${literal(m.id)}::uuid`).join(',');
