@@ -282,7 +282,7 @@ export default function PageAccueil() {
           <div className="flex justify-center mb-4">
             <Mascotte etat="happy" taille="md" />
           </div>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-jolene-rose-800 text-sm font-semibold mb-6">
             ✨ Missions, contrats, paie : tout-en-un
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">

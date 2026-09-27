@@ -43,7 +43,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
         <li key={item.id}>
           <a
             href={`#${item.id}`}
-            className="text-base sm:text-sm font-medium text-primary hover:text-primary/70 transition-colors"
+            className="text-base sm:text-sm font-medium text-jolene-rose-800 hover:underline underline-offset-4"
           >
             {item.label}
           </a>
