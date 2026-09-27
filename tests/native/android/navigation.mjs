@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { _android as android, expect } from '@playwright/test';
 import { currentImeShown } from './ime-state.mjs';
+import { attachNativeWebView } from './webview-attachment.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -123,8 +124,11 @@ async function fiveTabs(role, phase) {
 try {
   await nativeShell(`am force-stop ${pkg}`);
   await nativeShell(`am start -n ${pkg}/app.jolene.android.MainActivity`);
-  const webview = await device.webView({ pkg });
-  page = await webview.page();
+  const attachment = [];
+  page = await attachNativeWebView({ device, shell: nativeShell, pkg, record: async (step) => {
+    attachment.push(step);
+    await save('webview-attachment.json', JSON.stringify(attachment, null, 2));
+  } });
   page.setDefaultTimeout(15000);
   page.on('pageerror', (error) => errors.push(error.message));
   await expect(page.getByRole('button', { name: 'Créer un compte soignant', exact: true })).toBeVisible({ timeout: 25000 });

@@ -1,7 +1,7 @@
 name: Recette escrow — legs Stripe (branche test)
 
 # Déroule les legs STRIPE de la recette escrow 7b-D contre la branche Supabase
-# de recette (JAMAIS la prod) : destination charge SEPA réelle, settlement
+# de recette (JAMAIS la prod) avec l'API Stripe TEST : destination charge SEPA, settlement
 # webhook, A10.8 (attente fonds), payout manuel, refunds avec/sans
 # reverse_transfer, échec de débit, dispute. Cf. scripts/recette-escrow-stripe.ts
 # et docs/RECETTE_ESCROW.md.
@@ -12,8 +12,12 @@ name: Recette escrow — legs Stripe (branche test)
 #     (dashboard.stripe.com/connect) : la recette crée un compte connecté.
 #   - SUPABASE_ACCESS_TOKEN  : déjà en place (Management API).
 #
-# Garde-fous : refuse une clé non sk_test / livemode ; ref prod interdit ;
-# l'endpoint webhook Stripe créé pour la branche est détruit en fin de run.
+# RECETTE BLOQUÉE : la branche historique est en MIGRATIONS_FAILED et son
+# registre s'arrête au 11/07/2026. Le préflight n'applique ni migrations ni reset.
+# Il refuse aussi les legs tant que le nettoyage des ressources SQL/Stripe par
+# run et la restauration du bearer Vault ne sont pas implémentés et revus.
+# Aucun contournement par variable d'environnement. Le manifeste de webhooks
+# couvre les créations partielles et n'annonce une suppression qu'après preuve.
 
 on:
   workflow_dispatch:
@@ -34,22 +38,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Garde-fous clé + ref
-        run: |
-          set -euo pipefail
-          if [ -z "${STRIPE_TEST_SECRET_KEY:-}" ]; then
-            echo "::error::Secret STRIPE_TEST_SECRET_KEY absent — le créer dans Settings → Secrets → Actions."
-            exit 1
-          fi
-          case "$STRIPE_TEST_SECRET_KEY" in sk_test_*) ;; *) echo "::error::La clé n'est pas une clé TEST (sk_test_…)."; exit 1;; esac
-          if [ "${{ inputs.branch_ref }}" = "flripxtsyegjshnhzjkz" ]; then
-            echo "::error::Ref PROD interdit."; exit 1
-          fi
-          LIVE=$(curl -sf -u "$STRIPE_TEST_SECRET_KEY:" https://api.stripe.com/v1/balance | jq -r '.livemode')
-          [ "$LIVE" = "false" ] || { echo "::error::livemode=$LIVE"; exit 1; }
-          echo "✅ Clé test vérifiée (livemode=false)."
+      - name: Vérifier les gardes de la recette (sans réseau)
+        run: node --test tests/node/recette-escrow-safety.node.mjs
+
+      - name: Préflight candidate et branche (lecture seule, bloquant)
+        run: node scripts/recette-escrow-preflight.mjs
         env:
+          RECETTE_BRANCH_REF: ${{ inputs.branch_ref }}
+          RECETTE_CANDIDATE_SHA: ${{ github.sha }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       # NB : plus de reveal de la clé service_role de la branche — l'auth des
       # invocations edge passe par un secret vault posé par le harness
@@ -76,48 +74,12 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Basculer les secrets edge de la branche en TEST + webhook Stripe
-        id: wh
+      - name: Webhooks TEST et secrets de la branche
         run: |
-          set -euo pipefail
-          # Deux destinations Stripe distinctes : compte plateforme et comptes
-          # Connect. Chaque destination possède son propre signing secret.
-          WH_PLATFORM=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
-            -u "$STRIPE_TEST_SECRET_KEY:" \
-            -d "url=https://${{ inputs.branch_ref }}.supabase.co/functions/v1/stripe-webhook" \
-            -d "enabled_events[]=payment_intent.succeeded" \
-            -d "enabled_events[]=payment_intent.payment_failed" \
-            -d "enabled_events[]=charge.dispute.created" \
-            -d "enabled_events[]=charge.refunded" \
-            -d "api_version=2026-02-25.clover" \
-            -d "description=recette-escrow plateforme ${{ inputs.branch_ref }} (éphémère)")
-          WH_CONNECT=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
-            -u "$STRIPE_TEST_SECRET_KEY:" \
-            -d "connect=true" \
-            -d "url=https://${{ inputs.branch_ref }}.supabase.co/functions/v1/stripe-connect-webhook" \
-            -d "enabled_events[]=account.updated" \
-            -d "enabled_events[]=payout.created" \
-            -d "enabled_events[]=payout.paid" \
-            -d "enabled_events[]=payout.failed" \
-            -d "enabled_events[]=payout.canceled" \
-            -d "api_version=2026-02-25.clover" \
-            -d "description=recette-escrow Connect ${{ inputs.branch_ref }} (éphémère)")
-          WH_PLATFORM_ID=$(echo "$WH_PLATFORM" | jq -r '.id')
-          WH_PLATFORM_SECRET=$(echo "$WH_PLATFORM" | jq -r '.secret')
-          WH_CONNECT_ID=$(echo "$WH_CONNECT" | jq -r '.id')
-          WH_CONNECT_SECRET=$(echo "$WH_CONNECT" | jq -r '.secret')
-          echo "::add-mask::$WH_PLATFORM_SECRET"
-          echo "::add-mask::$WH_CONNECT_SECRET"
-          echo "platform_endpoint_id=$WH_PLATFORM_ID" >> "$GITHUB_OUTPUT"
-          echo "connect_endpoint_id=$WH_CONNECT_ID" >> "$GITHUB_OUTPUT"
-          # Secrets edge de la BRANCHE (clé test + 2 signing secrets) — redémarre les fns
-          curl -sf -X POST "https://api.supabase.com/v1/projects/${{ inputs.branch_ref }}/secrets" \
-            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "[{\"name\":\"STRIPE_SECRET_KEY\",\"value\":\"$STRIPE_TEST_SECRET_KEY\"},{\"name\":\"STRIPE_PLATFORM_WEBHOOK_SECRET\",\"value\":\"$WH_PLATFORM_SECRET\"},{\"name\":\"STRIPE_CONNECT_WEBHOOK_SECRET\",\"value\":\"$WH_CONNECT_SECRET\"}]"
-          echo "⏳ propagation secrets edge…"; sleep 45
-          echo "✅ endpoints plateforme/Connect + secrets branche posés."
+          node scripts/recette-escrow-webhooks.mjs create
+          sleep 45
         env:
+          RECETTE_BRANCH_REF: ${{ inputs.branch_ref }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
@@ -133,16 +95,9 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
 
-      - name: Nettoyage endpoint webhook (toujours)
+      - name: Nettoyage vérifié des webhooks du run (toujours)
         if: always()
-        run: |
-          [ -n "${{ steps.wh.outputs.platform_endpoint_id }}" ] && \
-            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.platform_endpoint_id }}" \
-              -u "$STRIPE_TEST_SECRET_KEY:" > /dev/null || true
-          [ -n "${{ steps.wh.outputs.connect_endpoint_id }}" ] && \
-            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.connect_endpoint_id }}" \
-              -u "$STRIPE_TEST_SECRET_KEY:" > /dev/null || true
-          echo "endpoints webhooks supprimés."
+        run: node scripts/recette-escrow-webhooks.mjs cleanup
         env:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
 
@@ -151,5 +106,8 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: rapport-recette-stripe
-          path: rapport-stripe.log
+          path: |
+            rapport-stripe.log
+            recette-stripe-preflight.json
+            recette-stripe-webhooks.json
           retention-days: 90

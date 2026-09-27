@@ -6,7 +6,7 @@ test.use({actionTimeout:15_000});
 test.afterEach(async({page},info)=>{const state=simulations.get(page);if(state)await info.attach('appels-api-simules',{body:JSON.stringify(state,null,2),contentType:'application/json'});});
 
 const groupes = [
- [ ['tableau-de-bord','Bienvenue|Bonjour|Explorer|Tes missions'], ['mon-compte','Mon compte|Mon profil'], ['profil','Profil principal'], ['recherche-missions','Explorer'], ['missions','Mes missions'] ],
+ [ ['tableau-de-bord','Bienvenue|Bonjour|Bonsoir|Explorer|Tes missions'], ['mon-compte','Mon compte|Mon profil'], ['profil','Profil principal'], ['recherche-missions','Explorer'], ['missions','Mes missions'] ],
  [ ['mes-documents','Mes documents'], ['disponibilites','Mes disponibilités'], ['conformite','Historique de conformité'], ['presences','Mes présences|Présences'], ['mes-gains','Revenus'] ],
  [ ['score','Mon score de fiabilité'], ['evaluations','Mes évaluations reçues'], ['prevoyance','Prévoyance'], ['attestation-heures',"Attestation d.heures travaillées"], ['passer-en-liberal','parcours libéral|profil professionnel'] ],
  [ ['exclusions','Pool urgence|Mes exclusions'], ['premium','100% gratuit pour les soignants'], ['charges','Charges sociales'], ['notifications','Notifications'], ['parrainage','Parrainage'] ],
@@ -197,7 +197,7 @@ test('SOIGNANT — compte minimal déconnecté, route protégée et reconnexion'
 
 test('SOIGNANT — session expirée : retour connexion et contenu protégé absent',async({page},info)=>{
  const state=await simulerSoignant(page);await entrer(page,'connexion');state.authExpired=true;await page.evaluate(()=>{for(const storage of [sessionStorage,localStorage])for(const key of Object.keys(storage)){if(key.startsWith('sb-')&&key.endsWith('-auth-token')){const session=JSON.parse(storage.getItem(key)!);session.expires_at=Math.floor(Date.now()/1000)-3600;storage.setItem(key,JSON.stringify(session));}}});await recharger(page);
- await expect(page).toHaveURL(/\/connexion/);await expect(page.getByRole('button',{name:'Se connecter',exact:true})).toBeVisible();await expect(page.getByText('Bonjour, Camille',{exact:true})).not.toBeVisible();await preuve(page,'session-expiree',info);
+ await expect(page).toHaveURL(/\/connexion/);await expect(page.getByRole('button',{name:'Se connecter',exact:true})).toBeVisible();await expect(page.getByText(/^(Bonjour|Bonsoir), Camille$/)).not.toBeVisible();await preuve(page,'session-expiree',info);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
 

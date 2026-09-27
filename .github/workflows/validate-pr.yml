@@ -55,6 +55,9 @@ jobs:
       - name: Garde de livraison mobile
         run: node --test tests/node/mobile-delivery-plan.node.mjs
 
+      - name: Gardes de la recette financière isolée
+        run: node --test tests/node/recette-escrow-safety.node.mjs
+
       - name: Valider les formats de captures stores
         run: npm run screenshots:play:check && npm run screenshots:app-store:check
 

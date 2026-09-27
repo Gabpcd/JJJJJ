@@ -6,6 +6,10 @@ mkdir -p test-results/android-native
 python3 tests/native/android/api.py >test-results/android-native/api-server.log 2>&1 &
 recette_api_pid=$!
 cleanup() {
+  # Startup attachment diagnostics contain only process/socket metadata from
+  # this fictional emulator, captured even when Playwright cannot attach.
+  adb shell ps -A >test-results/android-native/android-processes.txt 2>&1 || true
+  adb shell cat /proc/net/unix >test-results/android-native/android-unix-sockets.txt 2>&1 || true
   adb logcat -d >test-results/android-native/logcat.txt 2>&1 || true
   adb exec-out run-as app.jolene.recette cat cache/native-netlog.json >test-results/android-native/native-netlog.json 2>/dev/null || true
   adb shell iptables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv4.txt 2>&1 || true

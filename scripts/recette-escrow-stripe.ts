@@ -29,6 +29,11 @@
  * séparément après recette.
  */
 import { randomBytes } from 'node:crypto';
+import { assertHarnessCleanupReady } from './lib/recette-escrow-safety.mjs';
+
+// Fail before reading credentials, replacing Vault, or touching old fixtures.
+// A reviewed cleanup strategy is required; an environment flag cannot bypass it.
+assertHarnessCleanupReady();
 
 const BRANCH_REF = process.env.RECETTE_BRANCH_REF || '';
 const MGMT_TOKEN = process.env.SUPABASE_ACCESS_TOKEN || '';

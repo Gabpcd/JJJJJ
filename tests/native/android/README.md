@@ -37,6 +37,16 @@ NetLog identifiait 46 requêtes de ce système vers `content-autofill.googleapis
 toutes rejetées. Le clavier Android et les actions du produit restent exercés ;
 le rejet réseau n'est pas assoupli. NetLog reste joint aux preuves.
 
+L'attachement du pilote attend le processus exact de l'application et son socket
+`webview_devtools_remote_<PID>`, puis vérifie `/proc/<PID>/cmdline` avant et après
+connexion. La sélection utilise ce socket observé, sans dépendre de l'heuristique
+de nom de package de Playwright. Le run `36331414022` s'était arrêté avant toute
+assertion car le sélecteur package ne trouvait pas la WebView, alors que la capture
+montrait Connexion. La cause interne précise n'est pas affirmée sans preuve.
+`webview-attachment.json`, `android-processes.txt` et `android-unix-sockets.txt`
+conservent les métadonnées de diagnostic. L'attente initiale est bornée ; aucune
+action métier, aucun échec d'attachement CDP ou scénario n'est rejoué.
+
 Les seules adaptations du build de recette sont son identifiant, l'origine locale
 HTTP pour l'API, l'activation du débogage WebView, l'isolation réseau et la sonde OTA.
 Les pages React, le bridge, les plugins et `MainActivity` sont ceux du produit.
@@ -54,5 +64,6 @@ Vérifications locales sans émulateur :
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/native/android -p 'test_*.py'
 node --check scripts/native/prepare-android-recette.mjs
 node --check tests/native/android/navigation.mjs
+node --test tests/native/android/*.test.mjs
 bash -n scripts/native/run-android-recette.sh
 ```
