@@ -52,6 +52,9 @@ jobs:
       - name: Tests unitaires
         run: npm test -- --reporter=dot
 
+      - name: Garde de livraison mobile
+        run: node --test tests/node/mobile-delivery-plan.node.mjs
+
       - name: Valider les formats de captures stores
         run: npm run screenshots:play:check && npm run screenshots:app-store:check
 

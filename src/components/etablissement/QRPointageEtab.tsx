@@ -272,6 +272,12 @@ export function QRPointageEtab({ missionId, missionIntitule, etablissementNom }:
         <div
           role="dialog"
           aria-modal="true"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setFullscreen(false);
+          }}
           aria-label="QR code de pointage en plein écran"
           className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col items-center justify-center p-8"
         >

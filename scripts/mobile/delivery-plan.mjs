@@ -32,9 +32,10 @@ if (!submitted) {
     sha = reserved; // Check and resume exactly the previously reserved commit.
   }
 }
-for (const workflow of ['validate-pr.yml', 'playwright-e2e.yml', 'lighthouse.yml']) {
+for (const workflow of ['validate-pr.yml', 'playwright-e2e.yml', 'lighthouse.yml', 'android-native-recette.yml']) {
   const { workflow_runs: runs } = await api(`actions/workflows/${workflow}/runs?head_sha=${sha}&event=push&per_page=100`);
-  const latest = runs.filter(run => run.head_branch === 'main').sort((a, b) => b.id - a.id)[0];
+  const latest = runs.filter(run => run.head_branch === 'main' && run.head_sha === sha && run.event === 'push')
+    .sort((a, b) => b.id - a.id)[0];
   if (latest?.conclusion !== 'success') {
     output('none', `Waiting for ${workflow} on this exact commit.`);
     process.exit(0);

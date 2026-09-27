@@ -24,9 +24,11 @@ adb wait-for-device
 adb reverse tcp:8904 tcp:8904
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell run-as app.jolene.recette mkdir -p cache
-# Debuggable WebView command-line flags: capture attempted destinations without
-# allowing a single non-loopback packet. Default capture excludes raw payloads.
-adb shell 'echo "webview --log-net-log=/data/user/0/app.jolene.recette/cache/native-netlog.json --net-log-capture-mode=Default" > /data/local/tmp/webview-command-line'
+# Disable only Chromium's remote form predictions in this isolated WebView:
+# native run 36327000422 proved they contacted content-autofill.googleapis.com.
+# The native keyboard, local autofill and every app/plugin remain unchanged.
+# Default NetLog capture excludes raw payloads; the firewall stays mandatory.
+adb shell 'echo "webview --disable-features=AutofillServerCommunication --log-net-log=/data/user/0/app.jolene.recette/cache/native-netlog.json --net-log-capture-mode=Default" > /data/local/tmp/webview-command-line'
 recette_uid=$(adb shell cmd package list packages -U app.jolene.recette | tr -d '\r' | sed -n 's/^package:app\.jolene\.recette uid:\([0-9][0-9]*\)$/\1/p')
 [[ "$recette_uid" =~ ^[0-9]+$ ]]
 # Even native plugins cannot contact a real service. Only the loopback API

@@ -281,7 +281,14 @@ function ModaleDecisionHeures({ heure, onFermer, onTraitee }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div role="dialog" aria-modal="true" aria-labelledby="admin-heures-externes-title" className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="admin-heures-externes-title" className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!loading) onFermer();
+        }}
+      >
         <h2 id="admin-heures-externes-title" className="text-lg font-bold text-foreground">Valider les heures externes</h2>
 
         <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">

@@ -18,7 +18,7 @@ async function etape(page: Page, id: string, statut: string) {
 async function compact(page: Page, info: TestInfo, nom: string, hauteurMax = 260) {
   const bouton = region(page).getByRole('button', { name: 'Afficher le détail du suivi', exact: true });
   await expect(bouton).toHaveAttribute('aria-expanded', 'false');
-  await expect(region(page).getByRole('list', { name: 'Repères du suivi' }).getByRole('listitem')).toHaveCount(6);
+  await expect(region(page).getByRole('list', { name: 'Repères du suivi' }).getByRole('listitem')).toHaveCount(7);
   await expect(region(page).getByRole('heading', { name: 'Contrat Jolene', exact: true })).toHaveCount(0);
   const box = await region(page).boundingBox();
   expect(box?.height).toBeLessThanOrEqual(hauteurMax);
@@ -73,7 +73,10 @@ for (const role of roles) {
         await expect(page.getByRole('heading', { name: 'Mission terminée 🎉', exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Fermer', exact: true }).click();
       }
-      await etape(page, 'mission', 'Terminée'); await etape(page, 'heures', 'Validation attendue');
+      await etape(page, 'mission', 'Terminée'); await etape(page, 'presence', 'Pointages enregistrés');
+      await etape(page, 'heures', 'Validation attendue');
+      await expect(region(page).getByTestId('suivi-presence').locator('[data-etat]')).toHaveAttribute('data-etat', 'confirme');
+      await expect(region(page).getByTestId('suivi-heures').locator('[data-etat]')).toHaveAttribute('data-etat', 'en_cours');
       await etape(page, 'document', 'Aucun document disponible'); await etape(page, 'reglement', 'Règlement non confirmé');
       state.presence.valide_par_etablissement = true;
       state.facture = { id: '71000000-0000-4000-8000-000000000008', mission_id: ids.mission, numero_facture: 'SIM-HON-SUIVI',
@@ -103,6 +106,62 @@ for (const role of roles) {
       expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
       expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
     } finally { await info.attach('suivi-api-simulee', { body: JSON.stringify({ state, suivi: { ...suivi, erreurs: [...suivi.erreurs] } }, null, 2), contentType: 'application/json' }); }
+  });
+
+  test(`SUIVI ${role} — sept repères, dossier à vérifier et planning en panne puis rétabli`, async ({ context, page }, info) => {
+    const { state, installer, suivi } = creerSuiviSimule();
+    state.mission.statut = 'ASSIGNEE'; state.mission.soignant_assigne_id = ids.soignant; state.mission.type_contrat_applique = 'LIBERAL';
+    state.contratCree = true;
+    await installer(context, role); await page.clock.setFixedTime(new Date(now));
+    // Lectures explicites du dossier de destination ; aucune pièce ni qualification n'est validée ici.
+    await context.route('**/rest/v1/documents_requis_par_profession?*', async route => {
+      expect(role).toBe('SOIGNANT'); expect(route.request().method()).toBe('GET');
+      return route.fulfill({ json: [{ id: 'rcp-simulee', profession: 'MEDECIN', type_document: 'RCP',
+        description: 'Pièce fictive de navigation', a_expiration: false, est_critique: true, type_exercice_requis: null }] });
+    });
+    await context.route('**/rest/v1/rpc/fn_verifier_coherence_documents', async route => {
+      expect(role).toBe('SOIGNANT'); expect(route.request().method()).toBe('POST');
+      return route.fulfill({ json: { coherent: true } });
+    });
+    let planningEnPanne = true;
+    await context.route('**/rest/v1/mission_creneaux?*', async route => {
+      if (planningEnPanne) return route.fulfill({ status: 503, json: { message: 'Planning indisponible pour la recette' } });
+      return route.fallback();
+    });
+    await page.goto(chemin(role));
+    await etape(page, 'planning', 'Planning indisponible');
+    await etape(page, 'conformite', 'Contrôles à consulter');
+    await expect(region(page).getByTestId('suivi-conformite').locator('[data-etat]')).toHaveAttribute('data-etat', 'inconnu');
+    await expect(region(page).getByRole('link', { name: role === 'SOIGNANT' ? 'Consulter mon dossier' : 'Consulter le dossier du soignant' }))
+      .toHaveAttribute('href', role === 'SOIGNANT' ? '/soignant/documents' : `/etablissement/soignants/${ids.soignant}`);
+    await region(page).getByRole('button', { name: 'Masquer le détail du suivi' }).click();
+    await compact(page, info, `suivi-${role}-sept-reperes-planning-indisponible`);
+    await expect(region(page).getByRole('list', { name: 'Repères du suivi' })).toContainText('Planification : Planning indisponible');
+    await expect(region(page).getByRole('alert')).toHaveText('Le planning n’a pas pu être chargé. Actualisez le suivi pour réessayer.');
+    planningEnPanne = false;
+    await actualiser(page); await etape(page, 'planning', 'Créneaux prévus disponibles');
+    await etape(page, 'presence', 'Aucune présence disponible'); await etape(page, 'heures', 'Aucune validation disponible');
+    await expect(region(page).getByTestId('suivi-conformite').locator('[data-etat]')).toHaveAttribute('data-etat', 'inconnu');
+    await region(page).getByRole('link', { name: 'Voir les créneaux prévus', exact: true }).click();
+    await expect(page).toHaveURL(/#planning-mission$/);
+    await expect(page.locator('#planning-mission')).toBeInViewport();
+    await expect(page.locator('#planning-mission')).toContainText(role === 'SOIGNANT' ? 'Horaires' : 'Planning prévu');
+    await preuveMission(page, info, `suivi-${role}-planning-repris`);
+    await region(page).getByRole('link', { name: role === 'SOIGNANT' ? 'Consulter mon dossier' : 'Consulter le dossier du soignant' }).click();
+    if (role === 'SOIGNANT') {
+      await expect(page).toHaveURL(/\/soignant\/mes-documents\?tab=justificatifs$/);
+      await expect(page.getByRole('heading', { name: 'Mes documents', exact: true })).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Justificatifs', exact: true })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByText('Pièce fictive de navigation', { exact: true })).toBeVisible();
+    } else {
+      await expect(page).toHaveURL(new RegExp(`/etablissement/soignants/${ids.soignant}$`));
+      await expect(page.getByRole('heading', { name: 'Camille Recette', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Conformité', exact: true })).toBeVisible();
+    }
+    await preuveMission(page, info, `suivi-${role}-dossier-destination`);
+    expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+    expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
+    await info.attach('suivi-api-simulee', { body: JSON.stringify({ state, suivi: { ...suivi, erreurs: [...suivi.erreurs] } }, null, 2), contentType: 'application/json' });
   });
 
   test(`SUIVI ${role} — salarié, panne, litige, annulation et accès financier limité`, async ({ context, page }, info) => {
@@ -150,5 +209,67 @@ for (const role of roles) {
       expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
       expect(state.calls.filter(c => ['fn_signer_contrat_otp', 'fn_scanner_code_pointage', 'fn_valider_presence', 'send-email'].includes(c.name))).toEqual([]);
     } finally { await info.attach('suivi-api-simulee', { body: JSON.stringify({ state, suivi: { ...suivi, erreurs: [...suivi.erreurs] } }, null, 2), contentType: 'application/json' }); }
+  });
+}
+
+test('SUIVI ADMIN_ETABLISSEMENT — le planning reste accessible depuis les recommandations', async ({ context, page }, info) => {
+  const { state, installer } = creerSuiviSimule();
+  await installer(context, 'ADMIN_ETABLISSEMENT'); await page.clock.setFixedTime(new Date(now));
+  await context.route('**/rest/v1/rpc/fn_recommander_soignants', async route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postDataJSON()).toEqual({ p_mission_id: ids.mission });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto(chemin('ADMIN_ETABLISSEMENT'));
+  await page.getByRole('tab', { name: 'Soignants recommandés', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Soignants recommandés', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#planning-mission')).toHaveCount(0);
+  await ouvrirDetail(page);
+  await region(page).getByRole('link', { name: 'Voir les créneaux prévus', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Détails', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/#planning-mission$/);
+  await expect(page.locator('#planning-mission')).toBeInViewport();
+  await expect(page.locator('#planning-mission')).toBeFocused();
+  await preuveMission(page, info, 'suivi-planning-depuis-recommandations');
+  expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+  expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
+});
+
+for (const sourceBloquee of ['planning', 'tva'] as const) {
+  test(`SUIVI SOIGNANT — lecture ${sourceBloquee} sans réponse bornée et reprise disponible`, async ({ context, page }, info) => {
+    const { state, installer } = creerSuiviSimule();
+    state.mission.statut = 'ASSIGNEE'; state.mission.soignant_assigne_id = ids.soignant; state.mission.type_contrat_applique = 'LIBERAL';
+    state.contratCree = true;
+    await installer(context, 'SOIGNANT'); await page.clock.install({ time: new Date(now) });
+    let bloquer = true;
+    const liberes: (() => void)[] = [];
+    await context.route('**/rest/v1/**', async route => {
+      const url = new URL(route.request().url());
+      const cible = sourceBloquee === 'planning' ? url.pathname.endsWith('/mission_creneaux')
+        : url.pathname.endsWith('/missions') && url.searchParams.get('select') === 'nature_tva_prestation,nature_tva_confirmee_soignant,statut_validation_tva';
+      if (!bloquer || !cible) return route.fallback();
+      await new Promise<void>(resolve => liberes.push(resolve));
+      await route.abort('timedout').catch(() => {}); // La requête doit déjà avoir été annulée au délai.
+    });
+    try {
+      await page.goto(chemin('SOIGNANT'));
+      await etape(page, 'planning', sourceBloquee === 'planning' ? 'Chargement du planning' : 'Créneaux prévus disponibles');
+      await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
+      await page.clock.fastForward(8_100);
+      if (sourceBloquee === 'planning') {
+        await etape(page, 'planning', 'Planning indisponible');
+        await expect(region(page).getByRole('alert')).toHaveText('Le planning n’a pas pu être chargé. Actualisez le suivi pour réessayer.');
+      } else {
+        await etape(page, 'planning', 'Créneaux prévus disponibles');
+        await expect(region(page).getByRole('alert')).toHaveCount(0);
+      }
+      bloquer = false; for (const liberer of liberes) liberer();
+      await actualiser(page);
+      await expect(region(page).getByRole('listitem', { name: 'Planification : Créneaux prévus disponibles', exact: true })).toBeVisible();
+      await etape(page, 'planning', 'Créneaux prévus disponibles');
+      await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
+      await preuveMission(page, info, `suivi-${sourceBloquee}-delai-repris`);
+      expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+    } finally { for (const liberer of liberes) liberer(); }
   });
 }

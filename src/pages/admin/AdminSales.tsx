@@ -1531,7 +1531,14 @@ function ImportCsvModal({ cible, onClose, onImport }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!encours) onClose();
+        }}
+      >
         <div className="flex items-center justify-between">
           <h2 id={titleId} className="font-bold text-foreground">Importer en masse ({cible === 'GROUPES' ? 'groupes' : 'contacts'})</h2>
           <button aria-label="Fermer l’import CSV" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>

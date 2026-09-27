@@ -1,8 +1,20 @@
-# Suivi commun de mission — 25 septembre 2026
+# Suivi commun de mission — 25 et 27 septembre 2026
 
-Le détail de mission soignant et le détail établissement présentent désormais le même suivi en six étapes : attribution, contrat Jolene, mission, heures, document financier et règlement. Le titre de la mission reste placé avant ce suivi. Le suivi affiche un résumé compact par défaut ; « Afficher le détail du suivi » déplie les six cartes et leurs raccourcis. Cela regroupe des informations auparavant réparties entre plusieurs écrans ; les documents, présences et finances existants restent leurs espaces de consultation détaillée.
+Le détail de mission soignant et le détail établissement présentent le même suivi. Le complément du 27 septembre expose sept repères : dossier et conformité, contrat Jolene, planification, présence, validation des heures, document financier et règlement. L’attribution et le statut d’exécution restent dans le contexte détaillé et dans le résumé prioritaire ; aucune information précédente n’est supprimée. Le titre de la mission reste placé avant ce suivi. Le suivi affiche un résumé compact par défaut ; « Afficher le détail du suivi » déplie le contexte, les sept cartes et leurs raccourcis. Cela regroupe des informations auparavant réparties entre plusieurs écrans ; les documents, présences et finances existants restent leurs espaces de consultation détaillée.
 
-## Correction du volume visuel
+## Complément du 27 septembre : étapes distinctes et planning repris
+
+La réconciliation des exigences a retrouvé une omission de portée dans la première version : les six repères initiaux ne rendaient pas explicitement le dossier et la planification, et regroupaient pointage/validation sous « Heures ». Le résumé conserve maintenant sept repères sur une seule rangée. Ouvrir le détail expose aussi attribution et exécution ; la priorité annulation/litige est préservée.
+
+- **Dossier et conformité** : « Contrôles à consulter » et lien vers le dossier existant du rôle concerné. Cette synthèse n’a pas de verdict global chargé ; elle ne dit ni « profil incomplet » ni « dossier validé ». L’attribution, les signatures, un planning exact ou le booléen du contrôle repos/chevauchement ne rendent jamais ce repère vert. Les gardes de candidature et les contrôles métier existants restent inchangés.
+- **Planification** : dérivée des créneaux prévisionnels et des erreurs déjà chargés par la page, avec `construirePlanningCandidat`. Chargement, panne, créneaux incomplets et planning exact restent distincts. « Créneaux prévus disponibles » ne certifie aucune présence. Le lien ouvre le bloc de planning de cette mission par une ancre avec cible focalisable ; côté établissement, il réouvre aussi l’onglet Détails si les recommandations étaient sélectionnées. Une panne est visible même replié ; « Actualiser le suivi » relance aussi la lecture du parent.
+- **Lecture sans réponse** : les lectures facultatives soignant des créneaux et de la TVA sont indépendantes, chacune bornée à huit secondes avec annulation de requête et garde contre une réponse obsolète. Une TVA lente ne bloque plus l’affichage du planning. Une lecture planning sans réponse passe à indisponible et reste réessayable ; elle ne désactive pas l’actualisation des autres données du suivi.
+- **Présence / validation** : mêmes lignes `presences`, deux repères. Arrivée et départ de toutes les présences consultées confirment leurs pointages ; la validation exige en plus le flag de chaque présence. Départ manquant et validation déclarée restent en attente. Un litige garde la validation à vérifier sans effacer les pointages enregistrés. Aucun calcul d’heures, de paie ou nouvelle mutation.
+- **Accès et coût réseau** : aucun nouveau RPC, table ou droit ; le planning est transmis par les parents. Déplier/replier et actualiser les seules données planning reçues ne déclenchent aucune lecture supplémentaire du suivi. Les liens financiers conservent leur contrôle de permission.
+
+Les preuves du 25 septembre ci-dessous décrivent la version initiale à six repères et ses corrections de volume ; elles ne sont pas recomptées comme nouvelles preuves. Les résultats du complément sont consignés en fin de document.
+
+## Correction du volume visuel — historique du 25 septembre
 
 La première version affichait systématiquement les six cartes : sur mobile, ce bloc repoussait trop bas le statut, la rémunération et les informations de mission. Le résumé replié expose maintenant un état prioritaire et six repères indépendants, sans pourcentage, nombre d’étapes achevées ni confirmation financière globale. Une annulation ou une étape à vérifier passe avant une étape simplement en cours. Les pannes, litiges et accès limités restent visibles sans ouvrir le panneau ; l’actualisation reste accessible.
 
@@ -33,9 +45,12 @@ Résultat machine : `/private/tmp/jolene-lisibilite-compact-final/results.json`,
 | Étape | Source existante | Confirmation affichée et garde-fou |
 |---|---|---|
 | Attribution | `missions.soignant_assigne_id`, candidature déjà chargée côté soignant | L’affectation confirme l’attribution. Une candidature enregistrée ne prouve ni acceptation ni refus. Le suivi n’ajoute pas un historique des décisions de candidature. |
+| Dossier et conformité | Raccourci vers les justificatifs soignant ou le profil professionnel autorisé côté établissement | « Contrôles à consulter » reste neutre. Aucun résultat global de conformité n’est chargé ou déduit ; aucun profil déjà validé n’est présenté comme incomplet. |
 | Contrat Jolene | Dernier `contrats_mission`, statut et deux indicateurs de signature | « Deux signatures enregistrées » exige `SIGNE_COMPLET` et les deux signatures vraies. En salariat, ce contrat Jolene ne prouve pas la signature du contrat de travail employeur, qui reste distinct. |
+| Planification | `mission_creneaux` prévisionnels, repli ponctuel métier existant et `construirePlanningCandidat`, déjà chargés dans les pages | L’exactitude et un nombre entier positif de créneaux confirment leur disponibilité. Une panne reste indisponible, même si des horaires indicatifs subsistent ailleurs. Aucun pointage n’est déduit du planning. |
 | Mission | `missions.statut` | L’exécution terminée ou annulée est explicite. Une fin de mission ne valide pas les heures. |
-| Heures | `presences`, pointages et `valide_par_etablissement` | Les présences consultées doivent toutes avoir arrivée, départ et validation. Un litige actif affiche un état à vérifier. Aucun calcul de paie ou de durée n’est ajouté. |
+| Présence | `presences`, arrivée et départ | Tous les pointages consultés doivent avoir arrivée et départ. Ce repère ne confirme pas leur validation. |
+| Validation des heures | Mêmes `presences` et `valide_par_etablissement` | Les présences consultées doivent toutes avoir arrivée, départ et validation. Un litige actif affiche un état à vérifier. Aucun calcul de paie ou de durée n’est ajouté. |
 | Document | `factures_honoraires` pour un régime appliqué `LIBERAL`, `bulletins_paie` pour `SALARIE` | Une facture active émise est distincte d’un avoir, brouillon, document remplacé ou annulé. Un bulletin exige son PDF et un statut `EMIS` ou `PAYE`. Le régime absent reste inconnu, sans repli arbitraire sur le salariat. |
 | Règlement | `paiements_soignant`, statut, confirmation du soignant et contestation | `DECLARE` reste « Déclaré, à confirmer ». `RESOLU`, une facture payée ou la mission terminée ne prouvent pas la réception. `CONFIRME` exige aussi `confirme_par_soignant=true`, sans contestation. Le suivi ne calcule pas le solde de la mission. |
 
@@ -71,3 +86,15 @@ Ces simulations valident le rendu et les interactions du frontend sur réponses 
 ![Soignant grand écran : rémunération avant le résumé fermé](assets/2026-09-25-suivi-compact/soignant-ipad-paysage.png)
 
 ![Établissement iPhone : litige et accès limité restent visibles sans déplier](assets/2026-09-25-suivi-compact/etablissement-iphone-acces-limite.png)
+
+## Résultats du complément G03 — 27 septembre
+
+- **39 tests unitaires verts** : 31 règles de synthèse et 8 tests de composant. Ajouts : planning exact/incomplet/en erreur, aucune conformité globale inventée, présence distincte de sa validation, sept repères et reprise du planning sans relecture à l’ouverture.
+- **40 simulations vertes, 121,74 s**, zéro échec, retry ou cas ignoré, sur iPhone, Android, iPad portrait/paysage et ordinateur. En plus des parcours historiques, chaque rôle reprend un planning en panne et ouvre réellement le dossier cible. Deux lectures soignant volontairement sans réponse (planning puis TVA) sont exercées avec avancement de l’horloge : indisponibilité bornée, planning indépendant de la TVA et actualisation utilisable.
+- **5 simulations additionnelles vertes, 11,65 s** sur les mêmes formats, après le dernier ajustement du raccourci planning : l’onglet Recommandations démontait sa cible. Le lien réouvre maintenant Détails, garde l’ancre et place le focus sur le planning. Le test part réellement de la cible absente et contrôle onglet, URL, visibilité et focus.
+- **10 contrôles historiques de lisibilité verts, 36,99 s** après le passage à sept repères (avant le complément de délai et de navigation) : salariat, honoraires libéraux et rétrocession. La rémunération reste prioritaire et aucun débordement horizontal n’est introduit. Les hauteurs du résumé compact restent celles du tableau historique ci-dessus. Les captures iPhone et iPad ont été inspectées.
+- ESLint ciblé, build de production, TypeScript global `tsc -b` et vérification des espaces du diff passent. Les deux relectures indépendantes des corrections de délai puis de navigation ne signalent plus d’anomalie. Le typecheck porte sur le checkout partagé avec le lot natif ; une erreur transitoire du test natif en cours d’édition a été corrigée par son responsable avant la relance verte.
+
+Preuves locales privées : `/private/tmp/jolene-g03-final-simulation/results.json` (40), `/private/tmp/jolene-g03-planning-onglet-final/results.json` (5), `/private/tmp/jolene-g03-lisibilite-simulation/results.json` (10), `/private/tmp/jolene-g03-reconciliation-unites.log`. Les passes 40 et 5 sont distinctes, pas une passe unique de 45. Les premières probes corrigées restent conservées ; aucun cas n’a été rendu permissif pour masquer un échec.
+
+Ce complément clôt le manque de repères de la synthèse G03 dans la portée frontend. Il ne certifie pas une conformité métier globale, la réception d’un fournisseur ni l’exécution d’un cycle financier réel.

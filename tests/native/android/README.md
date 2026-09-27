@@ -15,7 +15,8 @@ est interrogé et les événements retour passent par `adb input keyevent`.
 
 Couverture : création de deux comptes fictifs, cinq onglets pour chaque rôle,
 déconnexion puis connexion réelle au mock avec les mêmes identifiants, cinq
-onglets à nouveau (20 contrôles), détail/fermeture de mission, champ de mission
+onglets à nouveau (20 contrôles), fermeture du détail de mission par le bouton
+Retour Android avec URL Explorer inchangée, champ de mission
 visible au-dessus du clavier, conservation de la saisie au premier retour, retour
 Android vers l'écran précédent. Chaque contrôle produit un dump ARIA et une
 capture native. Aucun titre vide ou simple rendu du conteneur ne vaut validation.
@@ -27,6 +28,14 @@ assertions finales imposent zéro opération inconnue, zéro erreur JavaScript/C
 zéro paquet natif rejeté, deux comptes, deux inscriptions et deux connexions.
 L'émulateur disparaît après le job. Les captures ne contiennent que des données
 fictives `@example.invalid`.
+
+La prédiction distante des formulaires de Chromium est désactivée uniquement dans
+le WebView debug (`--disable-features=AutofillServerCommunication`), comme dans les
+[tests officiels Android WebView](https://github.com/chromium/chromium/blob/380c6e427a89f57838159b045af13ea32e4f3251/android_webview/javatests/src/org/chromium/android_webview/test/AwAutofillTest.java).
+Le run `36327000422` avait validé les 20 onglets mais échoué sur le garde réseau :
+NetLog identifiait 46 requêtes de ce système vers `content-autofill.googleapis.com`,
+toutes rejetées. Le clavier Android et les actions du produit restent exercés ;
+le rejet réseau n'est pas assoupli. NetLog reste joint aux preuves.
 
 Les seules adaptations du build de recette sont son identifiant, l'origine locale
 HTTP pour l'API, l'activation du débogage WebView, l'isolation réseau et la sonde OTA.

@@ -135,12 +135,16 @@ try {
     await fiveTabs(role, 'inscription');
     if (role === 'soignant') {
       const card = page.getByRole('button', { name: /^Mission IDE à Résidence Camille/ });
+      const explorerUrl = page.url();
       await card.click();
       await expect(page.getByRole('dialog')).toContainText('Remplacement infirmier de jour — simulation');
       await capture('soignant-detail');
-      await page.getByRole('button', { name: 'Fermer', exact: true }).first().click();
+      await nativeShell('input keyevent KEYCODE_BACK');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(card).toBeVisible();
-      metric('mission-detail-close', { role });
+      assert.equal(page.url(), explorerUrl, 'Android Back closes the mission without leaving Explorer');
+      await capture('soignant-detail-retour-explorer');
+      metric('hardware-back-mission-detail', { role, url: page.url() });
     } else {
       await nav('Publier');
       const title = page.getByLabel(/Intitulé/);

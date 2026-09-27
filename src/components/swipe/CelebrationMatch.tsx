@@ -50,6 +50,12 @@ export function CelebrationMatch({
       )}
       role="dialog"
       aria-modal="true"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
       aria-labelledby="celebration-match-title"
     >
       <ConfettiSwipe count={60} />

@@ -4,13 +4,16 @@ import { ArrowRight, CheckCircle2, ChevronDown, Circle, Clock3, RefreshCw, Trian
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { avecDelai } from '@/lib/avecDelai';
-import { construireSuiviMission, type LecturesSuivi, type LectureSuivi, type MissionSuivie } from '@/lib/suiviMission';
+import { construireSuiviMission, type LecturesSuivi, type LectureSuivi, type MissionSuivie, type PlanningSuivi } from '@/lib/suiviMission';
 
 interface Props {
   mission: MissionSuivie;
   role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT';
   candidatureEnvoyee?: boolean;
   litigeActif?: boolean;
+  planning?: PlanningSuivi;
+  onReessayerPlanning?: () => void;
+  onOuvrirPlanning?: () => void;
 }
 const nonConcerne = { etat: 'non_concerne' } as const;
 const initial: LecturesSuivi = { contrat: nonConcerne, presences: nonConcerne, documents: nonConcerne, paiements: nonConcerne };
@@ -23,7 +26,7 @@ export function SuiviMission(props: Props) {
     {...props} userId={user.id} />;
 }
 
-function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif, userId }: Props & { userId: string }) {
+function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif, planning, onReessayerPlanning, onOuvrirPlanning, userId }: Props & { userId: string }) {
   const titreId = useId();
   const detailId = useId();
   const estEtab = role === 'ADMIN_ETABLISSEMENT';
@@ -94,37 +97,50 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
     return () => { actif = false; clearTimeout(fin); controller.abort(); };
   }, [mission.id, mission.etablissement_id, mission.soignant_assigne_id, mission.statut, mission.type_contrat_applique, peutLireMission, estEtab, revision]);
 
-  const etapes = construireSuiviMission(mission, lectures, { candidatureEnvoyee, litigeActif });
+  const etapes = construireSuiviMission(mission, lectures, { candidatureEnvoyee, litigeActif, planning });
+  const reperes = etapes.filter(e => e.id !== 'attribution' && e.id !== 'mission');
+  const contexte = etapes.filter(e => e.id === 'attribution' || e.id === 'mission');
+  // Le dossier reste consultable sans inventer un verdict global jamais chargé.
+  const etapesPrioritaires = etapes.filter(e => e.id !== 'conformite');
   const charge = Object.values(lectures).some(l => l.etat === 'chargement');
   const enErreur = Object.values(lectures).some(l => l.etat === 'indisponible');
   const accesLimite = Object.values(lectures).some(l => l.etat === 'restreint');
   // Une synthèse d’état, jamais un pourcentage d’accomplissement ou un solde financier.
-  const prioritaire = etapes.find(e => e.id === 'mission' && e.etat === 'a_verifier')
-    ?? etapes.find(e => e.etat === 'a_verifier')
-    ?? etapes.find(e => e.etat === 'en_cours')
-    ?? etapes.find(e => e.etat === 'inconnu')
+  const prioritaire = etapesPrioritaires.find(e => e.id === 'mission' && e.etat === 'a_verifier')
+    ?? etapesPrioritaires.find(e => e.etat === 'a_verifier')
+    ?? etapesPrioritaires.find(e => e.etat === 'en_cours')
+    ?? etapesPrioritaires.find(e => e.etat === 'inconnu')
     ?? etapes[etapes.length - 1];
-  const libellesCourts = { attribution: 'Attrib.', contrat: 'Contrat', mission: 'Mission', heures: 'Heures', document: 'Doc.', reglement: 'Règl.' };
+  const libellesCourts = { attribution: 'Attrib.', conformite: 'Dossier', contrat: 'Contrat', planning: 'Prévu', mission: 'Mission', presence: 'Présence', heures: 'Valid.', document: 'Doc.', reglement: 'Règl.' };
   const contratId = lectures.contrat.etat === 'disponible' ? lectures.contrat.lignes[0]?.id : null;
   const base = estEtab ? '/etablissement' : '/soignant';
   const finances = estEtab ? '/etablissement/facturation' : '/soignant/mes-gains';
-  const liens: Partial<Record<(typeof etapes)[number]['id'], { vers: string; texte: string }>> = peutLireMission ? {
+  const liens: Partial<Record<(typeof etapes)[number]['id'], { vers: string; texte: string }>> = {
+    ...(!estEtab ? { conformite: { vers: '/soignant/documents', texte: 'Consulter mon dossier' } }
+      : mission.soignant_assigne_id ? { conformite: { vers: `/etablissement/soignants/${mission.soignant_assigne_id}`, texte: 'Consulter le dossier du soignant' } } : {}),
+    planning: { vers: '#planning-mission', texte: 'Voir les créneaux prévus' },
+    ...(peutLireMission ? {
     ...(contratId ? { contrat: { vers: `/contrat/${contratId}`, texte: 'Consulter le contrat' } } : {}),
-    heures: { vers: `${base}/presences/mission/${mission.id}`, texte: 'Voir les présences' },
+    presence: { vers: `${base}/presences/mission/${mission.id}`, texte: 'Voir les présences' },
+    heures: { vers: `${base}/presences/mission/${mission.id}`, texte: 'Consulter la validation' },
     ...(financeAutorisee ? {
       document: { vers: mission.type_contrat_applique === 'SALARIE'
         ? estEtab ? '/etablissement/export-paie' : '/soignant/mes-gains?tab=bulletins'
         : estEtab ? finances : '/soignant/mes-gains?tab=factures', texte: 'Consulter les documents' },
       reglement: { vers: finances, texte: 'Consulter les finances' },
     } : {}),
-  } : {};
+    } : {}),
+  };
 
   return <section aria-labelledby={titreId} className="card-base mb-4">
     <div className="flex items-center justify-between gap-2">
       <h2 id={titreId} className="font-semibold text-foreground">Suivi de la mission</h2>
-      {peutLireMission && <button type="button" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-primary/5 disabled:opacity-60"
+      {(peutLireMission || planning?.etat === 'indisponible') && <button type="button" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-primary/5 disabled:opacity-60"
         aria-label="Actualiser le suivi" title="Actualiser le suivi"
-        disabled={charge} onClick={() => setRevision(r => r + 1)}>
+        disabled={charge} onClick={() => {
+          setRevision(r => r + 1);
+          if (planning?.etat === 'indisponible') onReessayerPlanning?.();
+        }}>
         <RefreshCw aria-hidden="true" className={`h-4 w-4 ${charge ? 'animate-spin' : ''}`} />
       </button>}
     </div>
@@ -132,10 +148,11 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
       {charge ? 'Vérification du suivi en cours…' : `${prioritaire.titre} · ${prioritaire.statut}`}
     </p>
     {litigeActif && <p className="mt-2 text-sm text-warning" role="status">Un litige est en cours sur cette mission.</p>}
+    {planning?.etat === 'indisponible' && <p role="alert" className="mt-2 text-sm text-destructive">Le planning n’a pas pu être chargé. Actualisez le suivi pour réessayer.</p>}
     {enErreur && <p role="alert" className="mt-2 text-sm text-destructive">Une partie du suivi n’a pas pu être chargée. Les étapes concernées restent à vérifier.</p>}
     {accesLimite && <p className="mt-2 text-sm text-muted-foreground">Accès limité à certaines informations du suivi.</p>}
-    <ol aria-label="Repères du suivi" className="mt-3 grid grid-cols-6 gap-1">
-      {etapes.map(etape => {
+    <ol aria-label="Repères du suivi" className="mt-3 grid grid-cols-7 gap-1">
+      {reperes.map(etape => {
         const Icone = etape.etat === 'confirme' ? CheckCircle2 : etape.etat === 'a_verifier' ? TriangleAlert : etape.etat === 'en_cours' ? Clock3 : Circle;
         const couleur = etape.etat === 'confirme' ? 'text-success' : etape.etat === 'a_verifier' ? 'text-warning' : 'text-muted-foreground';
         return <li key={etape.id} title={`${etape.titre} : ${etape.statut}`} className="flex min-w-0 flex-col items-center gap-1">
@@ -152,8 +169,15 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
       <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 ${detailOuvert ? 'rotate-180' : ''}`} />
     </button>
     <div id={detailId} hidden={!detailOuvert}>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {contexte.map(etape => <div key={etape.id} data-testid={`suivi-${etape.id}`} className="min-w-0 rounded-lg bg-muted/30 p-3">
+        <h3 className="text-sm font-semibold">{etape.titre}</h3>
+        <p className="text-sm" data-etat={etape.etat}>{etape.statut}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{etape.detail}</p>
+      </div>)}
+    </div>
     <ol className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {etapes.map(etape => {
+      {reperes.map(etape => {
         const Icone = etape.etat === 'confirme' ? CheckCircle2 : etape.etat === 'a_verifier' ? TriangleAlert : etape.etat === 'en_cours' ? Clock3 : Circle;
         const couleur = etape.etat === 'confirme' ? 'text-success' : etape.etat === 'a_verifier' ? 'text-warning' : 'text-muted-foreground';
         const lien = liens[etape.id];
@@ -161,7 +185,18 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
           <div className="flex items-center gap-2"><Icone aria-hidden="true" className={`h-4 w-4 shrink-0 ${couleur}`} /><h3 className="text-sm font-semibold">{etape.titre}</h3></div>
           <p className="mt-2 text-sm font-medium" data-etat={etape.etat}>{etape.statut}</p>
           <p className="mt-1 text-xs text-muted-foreground">{etape.detail}</p>
-          {lien && <Link className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline" to={lien.vers}>{lien.texte}<ArrowRight aria-hidden="true" className="h-3 w-3 shrink-0" /></Link>}
+          {lien && (lien.vers.startsWith('#')
+            ? <a className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline" href={lien.vers}
+              onClick={() => {
+                onOuvrirPlanning?.();
+                // Le parent peut devoir remonter l’onglet qui contient le planning.
+                requestAnimationFrame(() => {
+                  const cible = document.getElementById('planning-mission');
+                  cible?.focus({ preventScroll: true });
+                  cible?.scrollIntoView({ block: 'start' });
+                });
+              }}>{lien.texte}<ArrowRight aria-hidden="true" className="h-3 w-3 shrink-0" /></a>
+            : <Link className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline" to={lien.vers}>{lien.texte}<ArrowRight aria-hidden="true" className="h-3 w-3 shrink-0" /></Link>)}
         </li>;
       })}
     </ol>

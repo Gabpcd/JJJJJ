@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import App from "./App.tsx";
 import "./index.css";
 import { normaliserLienJolene } from './lib/nativeLinks';
+import { createNativeBackHandler } from './lib/nativeBack';
 import { fermerNavigateurPsc } from './lib/pscNavigation';
 import { installVitePreloadRecovery } from './lib/chunkRecovery';
 
@@ -318,35 +319,16 @@ async function initNativePlugins() {
     if (launch?.url) appliquerLien(launch.url);
   } catch { /* aucune URL de lancement — flux normal */ }
 
-  // Android hardware back button
-  let lastBackPress = 0;
-  const MAIN_ROUTES = [
-    '/soignant/tableau-de-bord',
-    '/etablissement/tableau-de-bord',
-    '/groupe/tableau-de-bord',
-    '/admin',
-    '/',
-  ];
-
-  CapApp.addListener("backButton", ({ canGoBack }) => {
-    const rawPath = window.location.pathname;
-    const currentPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
-    const isMainRoute = MAIN_ROUTES.includes(currentPath);
-
-    if (canGoBack && !isMainRoute) {
-      window.history.back();
-    } else {
-      const now = Date.now();
-      if (now - lastBackPress < 2000) {
-        CapApp.exitApp();
-      } else {
-        lastBackPress = now;
-        import('sonner').then(({ toast }) => {
-          toast.info('Appuyez à nouveau pour quitter');
-        });
-      }
-    }
-  });
+  // Android: keyboard (OS), active overlay, history, then double Back to quit.
+  CapApp.addListener('backButton', createNativeBackHandler({
+    document,
+    pathname: () => window.location.pathname,
+    back: () => window.history.back(),
+    exit: () => { void CapApp.exitApp(); },
+    notify: () => {
+      void import('sonner').then(({ toast }) => toast.info('Appuyez à nouveau pour quitter'));
+    },
+  }));
 
   // StatusBar configuration — adapt to current theme
   try {

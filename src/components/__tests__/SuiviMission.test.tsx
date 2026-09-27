@@ -60,6 +60,7 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Une partie du suivi n’a pas pu être chargée.');
     ouvrirDetail();
     expect(screen.getByTestId('suivi-heures')).toHaveTextContent('Information indisponible');
+    expect(screen.getByTestId('suivi-presence')).toHaveTextContent('Information indisponible');
     expect(screen.getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
     expect((banc.lire.mock.calls[0][2] as AbortSignal).aborted).toBe(true);
   });
@@ -94,7 +95,7 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     const bouton = screen.getByRole('button', { name: 'Afficher le détail du suivi' });
     expect(bouton).toHaveAttribute('aria-expanded', 'false');
     expect(document.getElementById(bouton.getAttribute('aria-controls')!)).not.toBeVisible();
-    expect(screen.getByRole('list', { name: 'Repères du suivi' }).children).toHaveLength(6);
+    expect(screen.getByRole('list', { name: 'Repères du suivi' }).children).toHaveLength(7);
     expect(screen.queryByRole('link', { name: 'Voir les présences' })).not.toBeInTheDocument();
     const appels = banc.lire.mock.calls.length;
     fireEvent.click(bouton);
@@ -103,6 +104,36 @@ describe('SuiviMission : lectures bornées et isolées', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Masquer le détail du suivi' }));
     expect(bouton).toHaveAttribute('aria-expanded', 'false');
     expect(banc.lire).toHaveBeenCalledTimes(appels);
+  });
+
+  it('garde les sept repères et l’attribution, avec dossier non certifié et planning lié sans lecture supplémentaire', async () => {
+    const reessayer = vi.fn();
+    const { rerender } = render(<MemoryRouter><SuiviMission mission={mission} role="SOIGNANT" planning={{ etat: 'indisponible' }} onReessayerPlanning={reessayer} /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Le planning n’a pas pu être chargé.');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Actualiser le suivi' })); });
+    expect(reessayer).toHaveBeenCalledOnce();
+    const appels = banc.lire.mock.calls.length;
+    ouvrirDetail();
+    expect(screen.getByTestId('suivi-conformite').querySelector('[data-etat]')).toHaveAttribute('data-etat', 'inconnu');
+    expect(screen.getByRole('link', { name: 'Consulter mon dossier' })).toHaveAttribute('href', '/soignant/documents');
+    expect(screen.getByTestId('suivi-attribution')).toHaveTextContent('Soignant attribué');
+    expect(screen.getByTestId('suivi-mission')).toHaveTextContent('À venir');
+    expect(screen.getByTestId('suivi-planning')).toHaveTextContent('Planning indisponible');
+    expect(screen.getByRole('link', { name: 'Voir les créneaux prévus' })).toHaveAttribute('href', '#planning-mission');
+    rerender(<MemoryRouter><SuiviMission mission={mission} role="SOIGNANT" planning={{ etat: 'exact', nombreCreneaux: 2 }} /></MemoryRouter>);
+    expect(screen.getByTestId('suivi-planning')).toHaveTextContent('2 créneaux prévus');
+    expect(screen.getByTestId('suivi-presence')).toHaveTextContent('Aucune présence disponible');
+    expect(screen.getByTestId('suivi-heures')).toHaveTextContent('Aucune validation disponible');
+    expect(banc.lire).toHaveBeenCalledTimes(appels);
+  });
+
+  it('un planning encore en lecture ne bloque pas l’actualisation des autres sources', async () => {
+    render(<MemoryRouter><SuiviMission mission={mission} role="SOIGNANT" planning={{ etat: 'chargement' }} /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled();
+    ouvrirDetail();
+    expect(screen.getByTestId('suivi-planning')).toHaveTextContent('Chargement du planning');
   });
 
   it('garde litige et erreur visibles dans le résumé replié sans confirmer le règlement', async () => {
