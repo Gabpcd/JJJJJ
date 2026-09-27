@@ -1,11 +1,24 @@
 import { expect, test } from '@playwright/test';
-import { allerA, entrer, preuve, simulerEtablissement, stabiliserLectures } from './helpers/recette-complete-etablissement';
+import { entrer, preuve, simulerEtablissement, stabiliserLectures } from './helpers/recette-complete-etablissement';
 
 for (const entree of ['inscription', 'connexion'] as const) {
   test(`dashboard minimal après ${entree} : prochaine étape sans fausse situation financière`, async ({ page }, info) => {
     const { etat } = await simulerEtablissement(page, 'minimal');
     etat.overrides.set('fn_mes_permissions_etab', { success: false, role: null, permissions: {} });
     await entrer(page, entree);
+    // Les retours passent par les vrais onglets de l'application. Un goto
+    // remplacerait le document et pourrait interrompre ses lectures WebKit.
+    const documentInitial = await page.evaluateHandle(() => document);
+    const revenirAccueil = async () => {
+      const sidebar = page.getByRole('navigation', { name: 'Sidebar', exact: true });
+      const navigation = await sidebar.isVisible()
+        ? sidebar
+        : page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+      await navigation.getByRole('button', { name: 'Accueil', exact: true }).click();
+      await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
+      await expect(page.getByRole('heading', { name: 'Préparez votre première mission', exact: true })).toBeVisible();
+      expect(await page.evaluate(documentAvant => documentAvant === document, documentInitial)).toBe(true);
+    };
     const main = page.locator('main');
     await expect(main.getByRole('heading', { name: 'Préparez votre première mission', exact: true })).toBeVisible();
     await expect(main.getByText('À compléter avant publication', { exact: true })).toBeVisible();
@@ -29,12 +42,12 @@ for (const entree of ['inscription', 'connexion'] as const) {
     await expect(main.getByRole('button', { name: 'Supprimer mon compte', exact: true })).toBeVisible();
     await expect(main.getByRole('button', { name: 'Contacter Jolene', exact: true })).toBeVisible();
     await preuve(page, `compte-minimal-${entree}`, info);
-    await allerA(page, '/etablissement/tableau-de-bord');
+    await revenirAccueil();
 
     await main.getByRole('button', { name: 'Préparer une mission', exact: true }).click();
     await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
     await expect(page.getByRole('heading', { name: 'Publier une mission', exact: true })).toBeVisible();
-    await allerA(page, '/etablissement/tableau-de-bord');
+    await revenirAccueil();
     await main.getByRole('button', { name: 'Compléter mon établissement', exact: true }).click();
     await expect(page).toHaveURL(/\/inscription\/completer$/);
     await expect(page.getByRole('button', { name: 'Enregistrer mon établissement', exact: true })).toBeVisible();

@@ -95,13 +95,37 @@ test('mission libérale : candidature, deux signatures, pauses, validation et fa
     await etab.clock.setFixedTime(new Date('2026-09-24T15:15:00Z'));
     await etab.goto('/etablissement/presences?tab=a_valider');
     await expect(etab.getByRole('tab',{name:'À valider: 1 présences',exact:true})).toBeVisible();
-    // La vue carte expose directement les étoiles ; la table ouvre le dialogue de notation.
-    if(await etab.getByRole('button',{name:'Valider',exact:true}).count()) await etab.getByRole('button',{name:'Valider',exact:true}).click();
-    await etab.getByRole('radio',{name:'5 étoiles',exact:true}).click();
-    await etab.getByRole('button',{name:'Valider et noter',exact:true}).click();
-    await expect.poll(()=>state.presence.valide_par_etablissement).toBe(true);
-    await expect(etab.getByRole('tab',{name:'À valider: 0 présences',exact:true})).toBeVisible();
-    expect(state.notes).toHaveLength(1);
+    // Le compteur devient optimiste avant l'audit puis la notation. Retenir
+    // cet audit simulé prouve que le compteur seul n'est pas une fin d'action.
+    let libererAudit!: () => void;
+    const auditRetenu=new Promise<void>(resolve=>{libererAudit=resolve;});
+    let auditValidationRecu=false;
+    await etab.route('**/rest/v1/rpc/fn_ecrire_audit_safe',async route=>{
+      if(route.request().postDataJSON()?.p_action==='PRESENCE_VALIDATION') {
+        auditValidationRecu=true;
+        await auditRetenu;
+      }
+      await route.fallback();
+    });
+    const validationComplete=etab.getByText('Présence validée et note 5/5 envoyée !',{exact:true});
+    try {
+      // La vue carte expose directement les étoiles ; la table ouvre le dialogue de notation.
+      if(await etab.getByRole('button',{name:'Valider',exact:true}).count()) await etab.getByRole('button',{name:'Valider',exact:true}).click();
+      await etab.getByRole('radio',{name:'5 étoiles',exact:true}).click();
+      await etab.getByRole('button',{name:'Valider et noter',exact:true}).click();
+      await expect.poll(()=>auditValidationRecu).toBe(true);
+      expect(state.presence.valide_par_etablissement).toBe(true);
+      await expect(etab.getByRole('tab',{name:'À valider: 0 présences',exact:true})).toBeVisible();
+      expect(state.notes).toHaveLength(0);
+      await expect(validationComplete).toBeHidden();
+    } finally {
+      libererAudit();
+    }
+    await expect(validationComplete).toBeVisible();
+    expect(state.notes).toEqual([{
+      p_mission_id:ids.mission,p_sens:'ETAB_VERS_SOIGNANT',
+      p_critere_1:5,p_critere_2:5,p_critere_3:5,p_critere_4:5,p_commentaire:null,
+    }]);
     await preuveMission(etab,info,'07-presence-validee');
     await etab.goto(`/etablissement/missions/${ids.mission}`);
     await etab.getByRole('button',{name:'Terminer la mission',exact:true}).first().click();
