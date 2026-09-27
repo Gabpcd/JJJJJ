@@ -43,7 +43,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
         <li key={item.id}>
           <a
             href={`#${item.id}`}
-            className="text-base sm:text-sm font-medium text-primary hover:text-primary/70 transition-colors"
+            className="text-base sm:text-sm font-medium text-jolene-rose-800 hover:underline underline-offset-4"
           >
             {item.label}
           </a>
@@ -87,8 +87,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-8 py-8 sm:py-12">
         {/* Title with gradient */}
         <h1
-          className="text-2xl sm:text-3xl font-extrabold mb-1 bg-clip-text text-transparent"
-          style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 60%) 0%, hsl(270 60% 50%) 100%)' }}
+          className="text-2xl sm:text-3xl font-extrabold mb-1 text-gradient-hero"
         >
           {titre}
         </h1>

@@ -1357,18 +1357,29 @@
   }
 }
 
-/* Text-clip variant (texte holographique) */
+/* Texte holographique : nuances lisibles sur les surfaces du thème.
+ * Les couleurs pastel des fonds ne contrastent pas assez comme glyphes.
+ * Ces tokens deviennent clairs en mode sombre ; les fonds restent inchangés.
+ */
 .text-gradient-hero {
   background: linear-gradient(
     135deg,
-    hsl(var(--jolene-rose)) 0%,
-    hsl(var(--jolene-mauve)) 50%,
-    hsl(var(--jolene-cyan)) 100%
+    hsl(var(--jolene-rose-800)) 0%,
+    hsl(var(--jolene-mauve-800)) 50%,
+    hsl(var(--jolene-cyan-900)) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
+}
+
+@media print {
+  .text-gradient-hero {
+    background: none !important;
+    color: #000 !important;
+    -webkit-text-fill-color: #000 !important;
+  }
 }
 
 /* Glow shadow Y2K */

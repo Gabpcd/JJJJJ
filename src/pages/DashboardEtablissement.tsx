@@ -521,7 +521,7 @@ export default function DashboardEtablissement() {
                 <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
                   {compteEnPreparation
                     ? 'Décrivez votre besoin, puis complétez votre établissement avant de publier.'
-                    : '2 minutes, et vous recevez des candidatures de soignants vérifiés.'}
+                    : 'Décrivez votre besoin et publiez votre mission. Les soignants pourront ensuite candidater.'}
                 </p>
               </div>
 

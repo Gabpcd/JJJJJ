@@ -282,12 +282,12 @@ export default function PageAccueil() {
           <div className="flex justify-center mb-4">
             <Mascotte etat="happy" taille="md" />
           </div>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-jolene-rose-800 text-sm font-semibold mb-6">
             ✨ Missions, contrats, paie : tout-en-un
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
             Le remplacement santé,{' '}
-            <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%), hsl(215 80% 55%))' }}>
+            <span className="text-gradient-hero">
               enfin simple.
             </span>
           </h1>
@@ -299,7 +299,7 @@ export default function PageAccueil() {
             <button
               onClick={() => navigate('/inscription/soignant')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+              style={{ background: 'linear-gradient(135deg, hsl(330 85% 42%), hsl(270 60% 42%))' }}
               data-testid="hero-cta-soignant"
             >
               🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
@@ -307,7 +307,7 @@ export default function PageAccueil() {
             <button
               onClick={() => navigate('/inscription/etablissement')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+              style={{ background: 'linear-gradient(135deg, hsl(215 80% 40%), hsl(174 72% 25%))' }}
               data-testid="hero-cta-etab"
             >
               🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
@@ -354,7 +354,7 @@ export default function PageAccueil() {
                 <button
                   onClick={() => navigate('/inscription/soignant')}
                   className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
-                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 42%), hsl(270 60% 42%))' }}
                 >
                   Créer mon profil gratuit ✨ <ArrowRight className="h-4 w-4" />
                 </button>
@@ -381,7 +381,7 @@ export default function PageAccueil() {
                 <button
                   onClick={() => navigate('/inscription/etablissement')}
                   className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
-                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 40%), hsl(174 72% 25%))' }}
                 >
                   Publier ma première mission 🎯 <ArrowRight className="h-4 w-4" />
                 </button>
@@ -409,7 +409,7 @@ export default function PageAccueil() {
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-105 transition-transform duration-300" style={{ background: i === 0 ? 'linear-gradient(135deg, hsl(330 85% 60% / 0.15), hsl(330 85% 60% / 0.05))' : i === 1 ? 'linear-gradient(135deg, hsl(270 60% 50% / 0.15), hsl(270 60% 50% / 0.05))' : 'linear-gradient(135deg, hsl(174 72% 48% / 0.15), hsl(174 72% 48% / 0.05))' }}>
                     <span className="text-3xl">{step.emoji}</span>
                   </div>
-                  <span className="text-xs font-bold uppercase tracking-widest mb-2 bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}>Étape {step.num}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest mb-2 text-gradient-hero">Étape {step.num}</span>
                   <h3 className="text-lg font-bold text-foreground mb-2">{step.titre}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
                 </div>
@@ -493,7 +493,7 @@ export default function PageAccueil() {
               <button
                 onClick={() => navigate('/inscription/soignant')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+                style={{ background: 'linear-gradient(135deg, hsl(330 85% 42%), hsl(270 60% 42%))' }}
                 data-testid="bottom-cta-soignant"
               >
                 🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
@@ -501,7 +501,7 @@ export default function PageAccueil() {
               <button
                 onClick={() => navigate('/inscription/etablissement')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+                style={{ background: 'linear-gradient(135deg, hsl(215 80% 40%), hsl(174 72% 25%))' }}
                 data-testid="bottom-cta-etab"
               >
                 🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />

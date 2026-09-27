@@ -71,8 +71,8 @@ describe('ouverture des futures inscriptions publiques', () => {
     expect(result.summary).toBe('');
   });
 
-  it('appelle le contrat privé atomique et vérifie sa réponse avant de confirmer l’ouverture', () => {
-    const result = runActivation();
+  it.each(['200', '201'])('vérifie la réponse atomique HTTP %s avant de confirmer l’ouverture', (code) => {
+    const result = runActivation({ code });
     expect(result.status).toBe(0);
     const args = result.request!;
     expect(args).toContain(`https://api.supabase.com/v1/projects/${prod}/database/query`);
@@ -82,8 +82,8 @@ describe('ouverture des futures inscriptions publiques', () => {
     expect(result.output).not.toContain('fake-local-no-access');
   });
 
-  it('accepte une fermeture conservée sans annoncer de réouverture', () => {
-    const result = runActivation({ body: [{ activation: { success: true, active: false, activation_effectuee: false, planifiee: false } }] });
+  it.each(['200', '201'])('accepte une fermeture conservée en HTTP %s sans annoncer de réouverture', (code) => {
+    const result = runActivation({ code, body: [{ activation: { success: true, active: false, activation_effectuee: false, planifiee: false } }] });
     expect(result.status).toBe(0);
     expect(result.summary).toContain('Fermeture volontaire conservée');
     expect(result.summary).not.toContain('publiques actives');
@@ -91,6 +91,12 @@ describe('ouverture des futures inscriptions publiques', () => {
 
   it.each([
     { code: '503' },
+    { code: '202' },
+    { code: '204' },
+    { code: '401' },
+    { code: '201', body: [] },
+    { code: '201', body: [{ activation: { success: false, active: true, activation_effectuee: true, planifiee: false } }] },
+    { code: '201', body: [{ activation: { success: true, active: true, activation_effectuee: true, planifiee: true } }] },
     { body: [] },
     { body: [{ activation: { success: true, active: 'true', activation_effectuee: true, planifiee: false } }] },
     { body: [{ activation: { success: true, active: true, activation_effectuee: true, planifiee: true } }] },
