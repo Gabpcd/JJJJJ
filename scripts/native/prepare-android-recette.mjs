@@ -21,10 +21,24 @@ await write('android/app/build.gradle', originalGradle.replace('applicationId "a
 
 // Dedicated debug manifest. Release manifest and MainActivity remain unchanged.
 await mkdir(resolve(root, 'android/app/src/debug/res/xml'), { recursive: true });
+await mkdir(resolve(root, 'android/app/src/debug/res/values'), { recursive: true });
 await write('android/app/src/debug/AndroidManifest.xml', `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-  <application android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/recette_network_security" tools:replace="android:usesCleartextTraffic" />
+  <application android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/recette_network_security" tools:replace="android:usesCleartextTraffic">
+    <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+  </application>
 </manifest>\n`);
+// The real push plugin calls FirebaseMessaging.getInstance() at logout even
+// with notification permission denied. Initialize only a fictional demo app;
+// no token registration, real Firebase project, credential or outbound access.
+await write('android/app/src/debug/res/values/recette_firebase.xml', `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="google_app_id" translatable="false">1:000000000000:android:0000000000000000</string>
+  <string name="google_api_key" translatable="false">AIzaSy000000000000000000000000000000000</string>
+  <string name="gcm_defaultSenderId" translatable="false">000000000000</string>
+  <string name="project_id" translatable="false">demo-jolene-native-recette</string>
+</resources>\n`);
 await write('android/app/src/debug/res/xml/recette_network_security.xml', `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
   <base-config cleartextTrafficPermitted="false" />

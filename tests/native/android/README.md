@@ -4,6 +4,10 @@ Le workflow `android-native-recette.yml` construit un **APK debug Capacitor rée
 du SHA de la PR, sous l'identifiant séparé `app.jolene.recette`, puis le lance sur
 un émulateur Android 15 / Pixel 7 distant. Aucun SDK ou image système volumineux
 n'est installé sur le poste local. Aucun secret, compte réel ou store n'est utilisé.
+Firebase reçoit uniquement des ressources debug fictives du projet
+`demo-jolene-native-recette`, avec création automatique du token FCM désactivée.
+Cela permet au vrai plugin natif de se désinscrire à la déconnexion sans faire
+planter Android faute d'instance Firebase. Les appels externes restent bloqués.
 
 La WebView est pilotée avec l'[API Android de Playwright](https://playwright.dev/docs/api/class-android).
 Le clavier et le bouton retour sont ceux de l'émulateur : l'état de l'IME Android
@@ -27,7 +31,8 @@ fictives `@example.invalid`.
 Les seules adaptations du build de recette sont son identifiant, l'origine locale
 HTTP pour l'API, l'activation du débogage WebView, l'isolation réseau et la sonde OTA.
 Les pages React, le bridge, les plugins et `MainActivity` sont ceux du produit.
-Le script refuse un checkout contenant la configuration Firebase ou une clé release.
+Le script refuse un checkout contenant une configuration Firebase réelle ou une
+clé release. Aucun `google-services.json` n'est ajouté.
 
 Cette recette **ne prouve pas** le backend réel, les permissions professionnelles,
 la livraison push/SMS, les paiements, la signature store ou les performances d'un

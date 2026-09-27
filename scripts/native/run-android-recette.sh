@@ -7,6 +7,7 @@ python3 tests/native/android/api.py >test-results/android-native/api-server.log 
 recette_api_pid=$!
 cleanup() {
   adb logcat -d >test-results/android-native/logcat.txt 2>&1 || true
+  adb exec-out run-as app.jolene.recette cat cache/native-netlog.json >test-results/android-native/native-netlog.json 2>/dev/null || true
   adb shell iptables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv4.txt 2>&1 || true
   adb shell ip6tables -L JOLENE_RECETTE -n -v -x >test-results/android-native/network-ipv6.txt 2>&1 || true
   adb shell dmesg >test-results/android-native/kernel-network.txt 2>&1 || true
@@ -22,6 +23,10 @@ adb root
 adb wait-for-device
 adb reverse tcp:8904 tcp:8904
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb shell run-as app.jolene.recette mkdir -p cache
+# Debuggable WebView command-line flags: capture attempted destinations without
+# allowing a single non-loopback packet. Default capture excludes raw payloads.
+adb shell 'echo "webview --log-net-log=/data/user/0/app.jolene.recette/cache/native-netlog.json --net-log-capture-mode=Default" > /data/local/tmp/webview-command-line'
 recette_uid=$(adb shell cmd package list packages -U app.jolene.recette | tr -d '\r' | sed -n 's/^package:app\.jolene\.recette uid:\([0-9][0-9]*\)$/\1/p')
 [[ "$recette_uid" =~ ^[0-9]+$ ]]
 # Even native plugins cannot contact a real service. Only the loopback API
