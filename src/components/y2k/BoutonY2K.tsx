@@ -41,7 +41,7 @@ const TAILLES: Record<Taille, string> = {
 
 const VARIANTS: Record<Variant, string> = {
   primary: cn(
-    'text-white font-semibold',
+    'text-[#2b183d] font-semibold',
     'bg-gradient-hero shadow-holographic',
     'hover:scale-[1.03] active:scale-[0.98]',
     'motion-reduce:hover:scale-100 motion-reduce:active:scale-100',
@@ -62,7 +62,7 @@ const VARIANTS: Record<Variant, string> = {
     'focus-visible:ring-2 focus-visible:ring-jolene-rose focus-visible:ring-offset-2',
   ),
   destructive: cn(
-    'text-white font-semibold',
+    'text-[#2b183d] font-semibold',
     'bg-gradient-to-br from-[#FF4D6B] to-[#FF6BBE] shadow-[0_8px_24px_-4px_rgba(255,77,107,0.45)]',
     'hover:scale-[1.03] hover:shadow-[0_12px_32px_-4px_rgba(255,77,107,0.6)] active:scale-[0.98]',
     'motion-reduce:hover:scale-100 motion-reduce:active:scale-100',

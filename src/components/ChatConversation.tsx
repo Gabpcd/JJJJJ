@@ -403,25 +403,25 @@ export function ChatConversation({
                     <div
                       className={`max-w-[80%] px-3.5 py-2 ${
                         mine
-                          ? 'bg-gradient-hero text-white rounded-2xl rounded-br-md shadow-sm'
+                          ? 'bg-gradient-hero rounded-2xl rounded-br-md shadow-sm'
                           : 'bg-card text-foreground rounded-2xl rounded-bl-md border border-border'
                       }`}
                     >
                       {msg.est_admin && (
-                        <p className={`text-[10px] font-bold mb-0.5 ${mine ? 'text-white/85' : 'text-jolene-rose-500'}`}>
+                        <p className={`text-[10px] font-bold mb-0.5 ${mine ? 'text-inherit' : 'text-jolene-rose-700'}`}>
                           Admin Jolene
                         </p>
                       )}
                       {messageEquipe && (
-                        <p className="text-[10px] font-semibold mb-0.5 text-white/85">
+                        <p className="text-[10px] font-semibold mb-0.5">
                           Équipe établissement
                         </p>
                       )}
                       <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
-                      <div className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${mine ? 'text-white/70' : 'text-muted-foreground/70'}`}>
+                      <div className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${mine ? 'text-inherit' : 'text-muted-foreground'}`}>
                         <span>{format(new Date(msg.cree_le), 'HH:mm')}</span>
                         {mine && (
-                          msg.lu ? <CheckCheck className="h-3 w-3 text-jolene-cyan-300" aria-label="Lu" />
+                          msg.lu ? <CheckCheck className="h-3 w-3" aria-label="Lu" />
                                  : <Check className="h-3 w-3" aria-label="Envoyé" />
                         )}
                       </div>

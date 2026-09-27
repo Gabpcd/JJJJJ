@@ -77,10 +77,10 @@ export function CelebrationMatch({
           aria-hidden="true"
         />
 
-        <div className="relative px-6 pt-8 pb-6 flex flex-col items-center text-center text-white">
+        <div className="relative px-6 pt-8 pb-6 flex flex-col items-center text-center text-inherit">
           <Mascotte etat="celebrating" taille="xl" className="mb-4" />
 
-          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white/90">
+          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
             <Sparkles className="h-4 w-4 fill-current" aria-hidden="true" />
             C'est un match !
             <Sparkles className="h-4 w-4 fill-current" aria-hidden="true" />
@@ -90,7 +90,7 @@ export function CelebrationMatch({
             Bravo, tu es pris·e !
           </h2>
 
-          <p className="mt-3 text-white/95">
+          <p className="mt-3">
             <strong className="font-semibold">{etablissementNom}</strong> a accepté ta
             candidature pour
           </p>
@@ -112,7 +112,7 @@ export function CelebrationMatch({
                 variant="ghost"
                 onClick={onVoirConversation}
                 iconeGauche={<MessageCircle className="h-4 w-4" />}
-                className="w-full text-white hover:bg-white/20"
+                className="w-full text-[#2b183d] hover:bg-white/20"
               >
                 Voir la conversation
               </BoutonY2K>
@@ -120,7 +120,7 @@ export function CelebrationMatch({
             <button
               type="button"
               onClick={onClose}
-              className="mt-2 text-sm text-white/80 hover:text-white underline"
+              className="mt-2 text-sm text-inherit underline"
               aria-label="Fermer la célébration"
             >
               Plus tard

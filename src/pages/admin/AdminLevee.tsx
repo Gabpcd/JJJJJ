@@ -218,7 +218,7 @@ export default function AdminLevee() {
             {stats.montantSigne > 0 && (
               <CardY2K hoverLift={false} className="bg-gradient-hero text-white">
                 <div className="p-4 text-center">
-                  <p className="text-sm opacity-80">Montant levé (signé)</p>
+                  <p className="text-sm">Montant levé (signé)</p>
                   <p className="text-2xl font-bold">{fmt(stats.montantSigne)}</p>
                 </div>
               </CardY2K>

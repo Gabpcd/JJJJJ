@@ -95,7 +95,7 @@ export function BoutonsActionSwipe({
           'flex items-center justify-center',
         )}
       >
-        <Star className="h-7 w-7 sm:h-8 sm:w-8 text-jolene-butter-600 fill-jolene-butter-400" aria-hidden="true" />
+        <Star className="h-7 w-7 sm:h-8 sm:w-8 text-jolene-butter-800 fill-jolene-butter-400" aria-hidden="true" />
       </button>
 
       {/* LIKE — ouverture du récapitulatif obligatoire */}
@@ -114,7 +114,7 @@ export function BoutonsActionSwipe({
           'flex items-center justify-center',
         )}
       >
-        <Heart className="h-8 w-8 sm:h-10 sm:w-10 text-white fill-white" aria-hidden="true" />
+        <Heart className="h-8 w-8 sm:h-10 sm:w-10 text-current fill-current" aria-hidden="true" />
       </button>
     </div>
   );

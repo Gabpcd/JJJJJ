@@ -168,9 +168,9 @@ export function SimulateurLevee() {
       {/* Résultat principal */}
       <CardY2K hoverLift={false} className="bg-gradient-hero text-white">
         <div className="p-6 text-center">
-          <p className="text-sm opacity-80 flex items-center justify-center gap-2"><Target className="h-4 w-4" /> Montant à lever recommandé</p>
+          <p className="text-sm flex items-center justify-center gap-2"><Target className="h-4 w-4" /> Montant à lever recommandé</p>
           <p className="text-4xl font-bold my-2">{fmt(sim.montantALever)}</p>
-          <p className="text-xs opacity-80">
+          <p className="text-xs">
             Couvre {inputs.runwayCible} mois cible · besoin net {fmt(sim.besoinNet)} + buffer {inputs.buffer}%
             {sim.breakeven > 0 ? ` · breakeven projeté à M${sim.breakeven}` : ' · pas de breakeven sur 36 mois aux paramètres actuels'}
           </p>

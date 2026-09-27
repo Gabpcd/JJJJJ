@@ -6,7 +6,7 @@
  *
  * Variants :
  *  - default     : surface cloud + border rose subtile
- *  - holographic : background gradient hero (texte blanc)
+ *  - holographic : background gradient hero (texte sombre contrasté)
  *  - soft        : background gradient soft (lavender → rose pâle)
  *
  * Usage :
@@ -51,7 +51,7 @@ const VARIANTS: Record<Variant, string> = {
     'shadow-[0_4px_24px_hsl(var(--jolene-rose)/0.08)]',
   ),
   holographic: cn(
-    'text-white',
+    'text-[#2b183d]',
     'bg-gradient-hero',
     'border-2 border-white/30',
     'shadow-holographic',
@@ -89,7 +89,7 @@ export function CarteKPIY2K({
   const admin = useAdminInterface();
   const sens = variation?.sens ?? 'neutral';
   const SensIcone = SENS_STYLES[sens].icone;
-  const sensColor = !admin && variant === 'holographic' ? 'text-white/90' : SENS_STYLES[sens].color;
+  const sensColor = !admin && variant === 'holographic' ? 'text-inherit' : SENS_STYLES[sens].color;
   const Component = onClick ? 'button' : 'div';
 
   return (
@@ -123,7 +123,7 @@ export function CarteKPIY2K({
         <span
           className={cn(
             'text-xs font-medium',
-            admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-white/90' : 'text-jolene-bubblegum',
+            admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-inherit' : 'text-jolene-bubblegum',
           )}
         >
           {label}
@@ -133,7 +133,7 @@ export function CarteKPIY2K({
       <p
         className={cn(
           admin ? 'text-2xl font-semibold tabular-nums leading-tight text-foreground' : 'text-2xl md:text-3xl font-bold tabular-nums leading-tight',
-          !admin && (variant === 'holographic' ? 'text-white' : 'text-jolene-midnight'),
+          !admin && (variant === 'holographic' ? 'text-inherit' : 'text-jolene-midnight'),
         )}
       >
         {valeur}
@@ -156,7 +156,7 @@ export function CarteKPIY2K({
           {contexte && (
             <span
               className={cn(
-                admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-white/70' : 'text-jolene-bubblegum',
+                admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-inherit' : 'text-jolene-bubblegum',
               )}
             >
               {contexte}

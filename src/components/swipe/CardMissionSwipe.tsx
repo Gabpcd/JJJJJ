@@ -280,7 +280,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
         {/* Tags spécialité */}
         <div className="flex flex-wrap gap-1.5 mt-3">
           {mission.profession_requise && (
-            <span className="inline-flex items-center rounded-full bg-jolene-rose-100 text-jolene-rose-700 text-xs font-semibold px-2.5 py-1">
+            <span className="inline-flex items-center rounded-full bg-jolene-rose-100 text-jolene-rose-800 text-xs font-semibold px-2.5 py-1">
               {mission.profession_requise}
             </span>
           )}
@@ -290,7 +290,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
             </span>
           )}
           {contratLabel(mission) && (
-            <span className="inline-flex items-center rounded-full bg-jolene-cyan-100 text-jolene-cyan-700 text-xs font-semibold px-2.5 py-1">
+            <span className="inline-flex items-center rounded-full bg-jolene-cyan-100 text-jolene-cyan-900 text-xs font-semibold px-2.5 py-1">
               {contratLabel(mission)}
             </span>
           )}
