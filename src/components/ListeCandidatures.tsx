@@ -369,11 +369,11 @@ export function ListeCandidatures({
           <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
             <Scale aria-hidden="true" className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>
-              En acceptant un candidat, la mission reste opérée via Jolene (
+              Avant d’accepter un candidat, consultez les conditions de{' '}
               <a href="/cgv#art8" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary">
-                non-contournement & recrutement direct — CGV art. 8
+                non-contournement et de recrutement direct — CGV art. 8
               </a>
-              ). Recruter en CDI un soignant rencontré ici ? La grille dégressive 15/10/5/0 % s'applique — souvent moins cher qu'un cabinet.
+              . Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement.
             </span>
           </p>
           {enAttente.map((c: any) => (
