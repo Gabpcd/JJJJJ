@@ -2,9 +2,9 @@ import { isNative } from './platform';
 
 const PSC_HOSTS = new Set([
   'wallet.esw.esante.gouv.fr',
-  'wallet.bas.esw.esante.gouv.fr',
+  'wallet.bas.psc.esante.gouv.fr',
   'auth.esw.esante.gouv.fr',
-  'auth.bas.esw.esante.gouv.fr',
+  'auth.bas.psc.esante.gouv.fr',
 ]);
 
 export function estUrlPscAutorisee(rawUrl: string): boolean {

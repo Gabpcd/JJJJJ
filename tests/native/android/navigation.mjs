@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { _android as android, expect } from '@playwright/test';
 import { currentImeShown } from './ime-state.mjs';
 import { attachNativeWebView } from './webview-attachment.mjs';
+import { requireAppWindow } from './emulator-preflight.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -132,6 +133,9 @@ try {
   page.setDefaultTimeout(15000);
   page.on('pageerror', (error) => errors.push(error.message));
   await expect(page.getByRole('button', { name: 'Créer un compte soignant', exact: true })).toBeVisible({ timeout: 25000 });
+  const nativeWindow = await nativeShell('dumpsys window');
+  await save('android-window-before-interaction.txt', nativeWindow);
+  requireAppWindow(nativeWindow);
   assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), 'android', 'Must exercise the native Capacitor bridge');
   await page.addLocatorHandler(page.getByRole('button', { name: 'Plus tard', exact: true }), async (button) => { await button.click(); });
   for (const role of ['soignant', 'etab']) {

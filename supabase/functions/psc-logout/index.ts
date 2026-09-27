@@ -7,7 +7,7 @@ import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 
 // Endpoints PSC end_session selon ANS
 const PSC_END_SESSION = {
-  sandbox: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
+  sandbox: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
   production: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
 };
 

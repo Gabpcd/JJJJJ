@@ -47,6 +47,25 @@ montrait Connexion. La cause interne précise n'est pas affirmée sans preuve.
 conservent les métadonnées de diagnostic. L'attente initiale est bornée ; aucune
 action métier, aucun échec d'attachement CDP ou scénario n'est rejoué.
 
+Le run `36332871114` a ensuite attaché cette WebView en 8,884 secondes, mais le
+premier contrôle de clavier a échoué : la capture montrait une fenêtre « Pixel
+Launcher isn't responding » devant Jolene. Logcat date cet ANR à `16:25:22.304`,
+avant même le lancement du script de recette à `16:25:23.196` et l'installation
+de l'APK terminée à `16:25:29.402`. Aucun onglet ni compte n'a
+été validé dans ce run. Le préflight vérifie désormais, **avant installation**,
+que l'application de recette est absente et que le launcher garde le focus dix
+secondes consécutives. Il archive chaque observation. Seulement si le processus
+exact `com.google.android.apps.nexuslauncher` présente cet ANR, il archive aussi
+`dumpsys activity lastanr` puis redémarre ce launcher une seule fois. Tout autre
+ANR, toute erreur d'application, toute récidive ou absence de stabilisation fait
+échouer le job. La détection utilise le
+[titre de fenêtre système AOSP](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-15.0.0_r1/services/core/java/com/android/server/am/AppNotRespondingDialog.java),
+et non le texte traduit du bouton. `emulator-preflight.json` conserve cette phase ;
+les dumps système et une capture finale restent joints même en échec. Après
+attachement, avant tout geste, Jolene doit posséder le focus natif sans fenêtre
+d'erreur. Aucun ANR après installation n'est fermé, aucun parcours n'est rejoué,
+et les assertions clavier ainsi que le pare-feu restent inchangés.
+
 Les seules adaptations du build de recette sont son identifiant, l'origine locale
 HTTP pour l'API, l'activation du débogage WebView, l'isolation réseau et la sonde OTA.
 Les pages React, le bridge, les plugins et `MainActivity` sont ceux du produit.

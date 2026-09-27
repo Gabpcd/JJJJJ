@@ -8,8 +8,8 @@ import { resolvePscEnvironment } from "../_shared/psc-security.ts";
 // https://industriels.esante.gouv.fr/produits-et-services/pro-sante-connect/documentation-technique
 const PSC_ENDPOINTS = {
   sandbox: {
-    issuer: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet",
-    authorization: "https://wallet.bas.esw.esante.gouv.fr/auth",
+    issuer: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet",
+    authorization: "https://wallet.bas.psc.esante.gouv.fr/auth",
   },
   production: {
     issuer: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet",

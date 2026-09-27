@@ -6,6 +6,9 @@ mkdir -p test-results/android-native
 python3 tests/native/android/api.py >test-results/android-native/api-server.log 2>&1 &
 recette_api_pid=$!
 cleanup() {
+  adb shell dumpsys window >test-results/android-native/android-windows.txt 2>&1 || true
+  adb shell dumpsys activity lastanr >test-results/android-native/android-last-anr.txt 2>&1 || true
+  adb exec-out screencap -p >test-results/android-native/android-final-screen.png 2>/dev/null || true
   # Startup attachment diagnostics contain only process/socket metadata from
   # this fictional emulator, captured even when Playwright cannot attach.
   adb shell ps -A >test-results/android-native/android-processes.txt 2>&1 || true
@@ -26,6 +29,7 @@ curl --fail --silent http://127.0.0.1:8904/__recette/bilan >/dev/null
 adb root
 adb wait-for-device
 adb reverse tcp:8904 tcp:8904
+node tests/native/android/emulator-preflight.mjs
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell run-as app.jolene.recette mkdir -p cache
 # Disable only Chromium's remote form predictions in this isolated WebView:
