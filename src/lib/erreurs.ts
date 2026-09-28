@@ -548,6 +548,12 @@ export async function messageErreurEdgeFn(
   const msg = body?.error || body?.message || body?.motif;
   if (msg && typeof msg === 'string') return msg;
   const raw = (error as any)?.message || '';
+  if (
+    error?.name === 'FunctionsFetchError' ||
+    /failed to send a request to the edge function|failed to fetch|networkerror|^(?:typeerror: )?load failed$/i.test(raw)
+  ) {
+    return 'Connexion au service impossible. Vérifiez votre accès internet, puis réessayez.';
+  }
   return raw && !raw.includes('non-2xx') ? raw : fallback;
 }
 

@@ -58,4 +58,16 @@ describe('Mandat SEPA après inscription', () => {
     expect(await screen.findByLabelText('IBAN Stripe')).toBeInTheDocument();
     expect(mocks.invoke).toHaveBeenCalledWith('setup-sepa', { body: { action: 'get_sepa_status' } });
   });
+
+  it('traduit la coupure réseau et retrouve le mandat existant après reprise', async () => {
+    mocks.invoke.mockResolvedValueOnce({ data: null, error: {
+      name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function',
+    } }).mockResolvedValueOnce({ data: { has_sepa: true, last4: '2606' }, error: null });
+    render(<SepaSetupSection etablissementId="etablissement-reel" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Connexion au service impossible. Vérifiez votre accès internet, puis réessayez.');
+    expect(screen.queryByLabelText('IBAN Stripe')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText(/Mandat SEPA actif/)).toHaveTextContent('2606');
+    expect(mocks.invoke.mock.calls.every(([name, options]) => name === 'setup-sepa' && options.body.action === 'get_sepa_status')).toBe(true);
+  });
 });

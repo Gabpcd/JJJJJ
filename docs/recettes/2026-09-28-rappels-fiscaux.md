@@ -60,3 +60,25 @@ validé ne sont pas implémentés. Les liens officiels restent disponibles. Aucu
 paiement/remboursement, règle d'éligibilité libérale ou moteur de paie n'est
 modifié ou validé par ces corrections. Simulations et navigateurs de staging ne
 constituent pas un essai sur appareil physique ni une livraison en production.
+
+## Mandat SEPA et reprise réseau — 29 septembre
+
+La recette réelle a créé un mandat avec l'IBAN officiel Stripe TEST depuis
+Facturation & contrat. Le même client, moyen de paiement et mandat actif ont
+été retrouvés dans le staging et chez Stripe TEST. Le mandat reste visible
+après rechargement ; aucun paiement ni remboursement n'a été exécuté.
+
+Une panne réseau révélait le message anglais du SDK Supabase. Le helper
+traduit désormais cette erreur de transport en français, sans changer les
+messages métier ni les traitements financiers. Réessayer relit le mandat
+existant sans demander sa recréation. Le bouton Enregistrer reste dans le flux
+du formulaire mobile pour ne recouvrir ni les erreurs ni la navigation ; son
+comportement desktop est conservé.
+
+La simulation coupe uniquement la lecture `get_sepa_status`, puis rétablit
+l'accès au staging réel. Le service worker est désactivé dans ce contexte de
+test pour que WebKit permette cette interception ; aucun service worker
+produit n'est modifié. Les preuves locales sont conservées dans
+`audits/2026-09-28-finalisation/finance-ui/sepa-reel/` : rapprochement Stripe,
+captures, lectures après reprise et rechargement, contrôle du bouton mobile.
+Ces vérifications ne prouvent pas le débit ni le remboursement intégré.
