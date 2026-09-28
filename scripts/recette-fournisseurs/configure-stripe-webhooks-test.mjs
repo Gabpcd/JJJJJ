@@ -28,10 +28,23 @@ const codes = new Set(['CREDENTIALS_INVALID', 'RUN_ID_INVALID', 'REQUEST_FAILED'
   'RESPONSE_INVALID', 'WRONG_STRIPE_ACCOUNT', 'NOT_TEST_MODE', 'STRIPE_TEST_RESTRICTED',
   'STAGING_NOT_QUIESCENT', 'KEY_NOT_CONFIGURED', 'EXISTING_WEBHOOK_CONFIG', 'AUTH_MODE_MISMATCH',
   'ENDPOINT_LIST_INCOMPLETE', 'ENDPOINT_RESPONSE_INVALID', 'SECRETS_NOT_DISTINCT',
-  'SECRET_PRESENCE_UNCONFIRMED', 'SIGNATURE_PROBE_FAILED', 'REPORT_WRITE_FAILED']);
+  'SECRET_PRESENCE_UNCONFIRMED', 'SIGNATURE_PROBE_FAILED', 'REPORT_WRITE_FAILED', 'RESUME_INVALID', 'RESUME_EXPIRED', 'RESUME_MISMATCH']);
 const fail = code => { throw new Error(code); };
 
-export async function configureTestWebhooks({ token, stripeKey, runId, checkOnly = false,
+// Stripe TEST a ajouté transfer.canceled à la réponse du run 36488815863.
+// Tolérance limitée à cet ajout observé, sans abonner le handler à un nouvel événement.
+export function endpointMatches(endpoint, route) {
+  const events = endpoint?.enabled_events;
+  return endpoint?.livemode === false && endpoint.url === endpointUrl(route)
+    && endpoint.status === 'enabled' && endpoint.api_version === API_VERSION
+    && Array.isArray(events) && new Set(events).size === events.length
+    && route.events.every(event => events.includes(event))
+    && events.every(event => route.events.includes(event)
+      || (!route.connect && event === 'transfer.canceled'));
+}
+
+export async function configureTestWebhooks({ token, stripeKey, runId, checkOnly = false, resume,
+
   fetchImpl = fetch, checkpoint = () => {}, now = () => Date.now() }) {
   const report = { projectRef: PROJECT, stripeAccount: ACCOUNT, status: 'BLOCKED',
     integratedFlowReady: false, providerPaymentsCreated: 0, secretWriteAttempted: false,
@@ -59,6 +72,10 @@ export async function configureTestWebhooks({ token, stripeKey, runId, checkOnly
   try {
     if (!token?.trim() || !/^(sk|rk)_test_[A-Za-z0-9]+$/.test(stripeKey ?? '')) fail('CREDENTIALS_INVALID');
     if (!/^\d{6,20}$/.test(runId ?? '')) fail('RUN_ID_INVALID');
+    if (resume && (!/^\d{6,20}$/.test(resume.setupRunId ?? '')
+      || !/^we_[A-Za-z0-9]+$/.test(resume.platformEndpointId ?? ''))) fail('RESUME_INVALID');
+    const setupRunId = resume?.setupRunId ?? runId;
+    report.resumedFromRun = resume?.setupRunId ?? null;
     const account = await request('https://api.stripe.com/v1/account', stripeKey);
     if (account?.id !== ACCOUNT) fail('WRONG_STRIPE_ACCOUNT');
     const balance = await request('https://api.stripe.com/v1/balance', stripeKey);
@@ -81,20 +98,31 @@ export async function configureTestWebhooks({ token, stripeKey, runId, checkOnly
       return matches.length === 1 && matches[0].status === 'ACTIVE' && matches[0].verify_jwt === false;
     })) fail('AUTH_MODE_MISMATCH');
     let cursor = '', complete = false;
-    const seen = new Set();
+    const seen = new Set(), existingTargets = [];
     for (let page = 0; page < 10; page++) {
       const list = await request(`https://api.stripe.com/v1/webhook_endpoints?limit=100${cursor ? `&starting_after=${cursor}` : ''}`, stripeKey);
       if (!Array.isArray(list?.data) || typeof list.has_more !== 'boolean') fail('ENDPOINT_LIST_INCOMPLETE');
       for (const endpoint of list.data) {
         if (!/^we_[A-Za-z0-9]+$/.test(endpoint?.id ?? '') || seen.has(endpoint.id)) fail('ENDPOINT_LIST_INCOMPLETE');
         seen.add(endpoint.id);
-        if (ROUTES.some(route => endpoint.url === endpointUrl(route))) fail('EXISTING_WEBHOOK_CONFIG');
+        if (ROUTES.some(route => endpoint.url === endpointUrl(route))) existingTargets.push(endpoint);
       }
       if (!list.has_more) { complete = true; break; }
       if (!list.data.length) fail('ENDPOINT_LIST_INCOMPLETE');
       cursor = list.data.at(-1).id;
     }
     if (!complete) fail('ENDPOINT_LIST_INCOMPLETE');
+    if (!resume && existingTargets.length) fail('EXISTING_WEBHOOK_CONFIG');
+    if (resume) {
+      if (existingTargets.length !== 1 || existingTargets[0].id !== resume.platformEndpointId) fail('RESUME_MISMATCH');
+      const existing = await request(`https://api.stripe.com/v1/webhook_endpoints/${resume.platformEndpointId}`, stripeKey);
+      if (existing.id !== resume.platformEndpointId || !endpointMatches(existing, ROUTES[0])
+        || existing.metadata?.jolene_project !== PROJECT
+        || existing.metadata?.setup_run !== setupRunId) fail('RESUME_MISMATCH');
+      // Stripe conserve une clé au moins 24 h. Marge d'une heure, aucune reprise après expiration.
+      const age = now() - existing.created * 1000;
+      if (!Number.isInteger(existing.created) || !Number.isFinite(age) || age < 0 || age >= 23 * 3600_000) fail('RESUME_EXPIRED');
+    }
     if (checkOnly) { report.status = 'PREREQUISITES_OK'; save(); return report; }
     const secrets = [];
     for (const route of ROUTES) {
@@ -103,16 +131,16 @@ export async function configureTestWebhooks({ token, stripeKey, runId, checkOnly
       report.endpoints.push(state); report.status = 'CONFIGURATION_IN_PROGRESS'; save();
       const form = new URLSearchParams({ url: endpointUrl(route), connect: String(route.connect),
         api_version: API_VERSION, description: `Jolene STAGING TEST — ${route.slug}`,
-        'metadata[jolene_project]': PROJECT, 'metadata[setup_run]': runId });
+        'metadata[jolene_project]': PROJECT, 'metadata[setup_run]': setupRunId });
       route.events.forEach(event => form.append('enabled_events[]', event));
       const result = await request('https://api.stripe.com/v1/webhook_endpoints', stripeKey, {
-        method: 'POST', form, idempotencyKey: `jolene-staging-webhooks/${runId}/${route.slug}` });
+        method: 'POST', form, idempotencyKey: `jolene-staging-webhooks/${setupRunId}/${route.slug}` });
       if (typeof result?.id === 'string' && /^we_[A-Za-z0-9]+$/.test(result.id)) { state.id = result.id; save(); }
-      if (!state.id || result.livemode !== false || result.url !== endpointUrl(route)
-        || result.status !== 'enabled' || result.api_version !== API_VERSION
-        || !Array.isArray(result.enabled_events)
-        || JSON.stringify([...result.enabled_events].sort()) !== JSON.stringify([...route.events].sort())
+      if (!state.id || !endpointMatches(result, route)
         || !/^whsec_[A-Za-z0-9]+$/.test(result.secret ?? '')) fail('ENDPOINT_RESPONSE_INVALID');
+      if (resume && !route.connect && state.id !== resume.platformEndpointId) fail('RESUME_MISMATCH');
+      state.replayed = Boolean(resume && !route.connect);
+      state.additionalEvents = result.enabled_events.filter(event => !route.events.includes(event));
       state.created = true; secrets.push({ name: route.secretName, value: result.secret }); save();
     }
     if (secrets[0].value === secrets[1].value) fail('SECRETS_NOT_DISTINCT');
@@ -160,7 +188,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const checkpoint = report => writeFileSync('configuration-webhooks-staging.json', JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
   const report = await configureTestWebhooks({ token: process.env.STAGING_SUPABASE_ACCESS_TOKEN,
     stripeKey: process.env.STRIPE_TEST_SECRET_KEY, runId: process.env.GITHUB_RUN_ID,
-    checkOnly: process.argv.includes('--check-only'), checkpoint });
+    checkOnly: process.argv.includes('--check-only'), checkpoint,
+    resume: process.env.RESUME_SETUP_RUN_ID || process.env.RESUME_PLATFORM_ENDPOINT_ID
+      ? { setupRunId: process.env.RESUME_SETUP_RUN_ID, platformEndpointId: process.env.RESUME_PLATFORM_ENDPOINT_ID }
+      : undefined });
   console.log(`${report.status}: ${report.issue ?? 'recette paiement/remboursement restant à exécuter'}`);
   process.exitCode = ['PREREQUISITES_OK', 'WEBHOOK_SIGNATURES_CONFIGURED'].includes(report.status) ? 0 : 2;
 }

@@ -9,6 +9,15 @@ on:
         default: configure
         options: [configure, verify-fixtures]
 
+      resume_setup_run_id:
+        description: 'Reprise explicite du run ayant créé le seul webhook plateforme (moins de 23 h)'
+        type: string
+        required: false
+      resume_platform_endpoint_id:
+        description: 'Identifiant Stripe we_ vérifié dans le rapport du run interrompu'
+        type: string
+        required: false
+
 permissions:
   contents: read
 
@@ -21,6 +30,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && inputs.action == 'configure'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      RESUME_SETUP_RUN_ID: ${{ inputs.resume_setup_run_id }}
+      RESUME_PLATFORM_ENDPOINT_ID: ${{ inputs.resume_platform_endpoint_id }}
     steps:
       - uses: actions/checkout@v5
         with:
