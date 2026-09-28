@@ -1,5 +1,6 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { checkBackendDeployment } from './delivery-plan-backend.mjs';
 
 const repo = process.env.GITHUB_REPOSITORY;
 let sha = process.env.MOBILE_DELIVERY_SHA;
@@ -17,7 +18,11 @@ const output = (mode, reason) => {
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Delivery: **${mode}** — ${reason}\n`);
 };
 // Never execute an untrusted PR head with release credentials, or release an old main.
-if ((await api('git/ref/heads/main')).object.sha !== sha) {
+const currentMain = (await api('git/ref/heads/main')).object.sha;
+// A repaired backend may belong to an ancestor of main. Its completion only
+// wakes the planner; all gates are re-evaluated on current main (or its reservation).
+if (process.env.MOBILE_DELIVERY_RECHECK_MAIN === 'true') sha = currentMain;
+if (currentMain !== sha) {
   output('none', 'A newer main commit exists.');
   process.exit(0);
 }
@@ -49,6 +54,11 @@ if (!deployment.statuses.some(status => status.context === 'Vercel' && status.st
 const requested = process.env.MOBILE_DELIVERY_MODE || 'auto';
 if (submitted === sha) {
   output('none', 'This native runtime has already been submitted.');
+  process.exit(0);
+}
+const backend = await checkBackendDeployment({ sha, api, git });
+if (!backend.ready) {
+  output('none', backend.reason);
   process.exit(0);
 }
 if (requested === 'native' || !submitted) {

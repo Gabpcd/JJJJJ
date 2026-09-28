@@ -9,6 +9,9 @@ import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAppliquerParrainage } from '@/hooks/useAppliquerParrainage';
+import { useRole } from '@/hooks/useRole';
 
 interface LayoutAppProps {
   role: UserRole;
@@ -26,6 +29,11 @@ interface LayoutAppProps {
 const CadreContext = createContext<{ setPleinEcran: (value: boolean) => void } | null>(null);
 
 export function AppShell({ role }: { role: UserRole }) {
+  const { user } = useAuth();
+  const { role: roleResolue, parcours, resolved } = useRole();
+  // L'inscription rapide arrive dans Explorer, sans passer par le dashboard.
+  // Attendre le vrai profil, auquel le lien de parrainage est rattaché en base.
+  useAppliquerParrainage(role === 'SOIGNANT' && roleResolue === 'SOIGNANT' && resolved && !parcours ? user?.id : null);
   const [pleinEcran, setPleinEcran] = useState(false);
   const contexte = useMemo(() => ({ setPleinEcran }), []);
   return (

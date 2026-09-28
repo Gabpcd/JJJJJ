@@ -7,9 +7,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { CONTRATS } from '@/lib/constantes';
+import { getTypesContratSoignant } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
-import { Checkbox } from '@/components/ui/checkbox';
+import { ChoixModesExercice } from '@/components/ChoixModesExercice';
 import { FooterLegal } from '@/components/FooterLegal';
 import { logger } from '@/lib/logger';
 
@@ -86,21 +86,13 @@ export default function InscriptionSoignantCompletion() {
       setForm(prev => ({
         ...prev,
         telephone: data.telephone || prev.telephone,
+        typesContrat: data.types_contrat_acceptes || data.type_contrat ? getTypesContratSoignant(data) : prev.typesContrat,
       }));
       setChargement(false);
     })();
   }, [user, authLoading, navigate, afficherNotification]);
 
   const maj = (champ: keyof typeof form, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
-
-  const toggleContrat = (valeur: string) => {
-    setForm(prev => {
-      const next = prev.typesContrat.includes(valeur)
-        ? prev.typesContrat.filter(v => v !== valeur)
-        : [...prev.typesContrat, valeur];
-      return { ...prev, typesContrat: next };
-    });
-  };
 
   // Session E-1 : téléphone optionnel (harmonisé avec le flow email — il est
   // redemandé au bon moment, p.ex. à l'activation des alertes SMS pool urgence).
@@ -115,12 +107,8 @@ export default function InscriptionSoignantCompletion() {
     typesAutorises: typesExerciceProfil,
     loading: typesExerciceChargement,
     indisponible: typesExerciceIndisponibles,
+    reessayer: reessayerTypesExercice,
   } = useTypesExerciceAutorises(identite?.profession || '');
-  const typesExerciceConnus = Array.isArray(typesExerciceProfil);
-  const peutEtreLiberal = !!identite?.profession
-    && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
-  const contratsAffiches = CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION'));
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formValide || !user) return;
@@ -162,15 +150,15 @@ export default function InscriptionSoignantCompletion() {
 
   if (chargement) {
     return (
-      <div className="min-h-[100dvh] gradient-hero flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <main aria-label="Chargement du profil" aria-busy="true" className="min-h-[100dvh] gradient-hero flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+      </main>
     );
   }
 
   return (
     <div className="min-h-[100dvh] gradient-hero flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+      <main aria-labelledby="completion-profil-titre" className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="card-base max-w-lg w-full">
           <LogoJolene
             className="mx-auto mb-4 flex w-fit"
@@ -180,7 +168,7 @@ export default function InscriptionSoignantCompletion() {
 
 
 
-          <h1 className="text-xl font-bold text-foreground text-center mb-1">Votre compte est prêt.</h1>
+          <h1 id="completion-profil-titre" className="text-xl font-bold text-foreground text-center mb-1">Votre compte est prêt.</h1>
           <p className="text-sm text-muted-foreground text-center mb-6">
             Découvrez les missions. Vous pourrez compléter vos préférences et vos documents depuis votre espace.
           </p>
@@ -217,37 +205,14 @@ export default function InscriptionSoignantCompletion() {
               <p className="text-[10px] text-muted-foreground mt-1">Optionnel — utile pour être alerté·e en premier des missions urgentes.</p>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
-                Types de contrat acceptés <span className="text-destructive">*</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {contratsAffiches.map(c => (
-                  <label key={c.valeur} className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer text-sm ${form.typesContrat.includes(c.valeur) ? 'border-primary bg-primary/5' : 'border-input'}`}>
-                    <Checkbox
-                      checked={form.typesContrat.includes(c.valeur)}
-                      onCheckedChange={() => toggleContrat(c.valeur)}
-                    />
-                    <span>{c.label}</span>
-                  </label>
-                ))}
-              </div>
-              {identite?.profession && typesExerciceChargement && (
-                <p className="text-[10px] text-muted-foreground mt-1.5" role="status">
-                  Vérification des types de contrat autorisés…
-                </p>
-              )}
-              {identite?.profession && typesExerciceIndisponibles && (
-                <p className="text-[10px] text-amber-700 mt-1.5" role="status">
-                  Vérification temporairement indisponible. Vous pouvez poursuivre en CDD ou salarié et activer le libéral plus tard après contrôle.
-                </p>
-              )}
-              {identite?.profession && typesExerciceConnus && !peutEtreLiberal && (
-                <p className="text-[10px] text-muted-foreground mt-1.5">
-                  Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
-                </p>
-              )}
-            </div>
+            <ChoixModesExercice
+              valeur={form.typesContrat}
+              onChange={valeur => maj('typesContrat', valeur)}
+              typesAutorises={typesExerciceProfil}
+              loading={typesExerciceChargement}
+              indisponible={typesExerciceIndisponibles}
+              reessayer={reessayerTypesExercice}
+            />
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Ville de recherche (optionnel)</label>
@@ -322,7 +287,7 @@ export default function InscriptionSoignantCompletion() {
             </button>
           </form>
         </div>
-      </div>
+      </main>
       <FooterLegal />
     </div>
   );

@@ -1,0 +1,39 @@
+name: Recette fournisseurs — inventaire lecture seule (NON PRÊT)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Gardes hors réseau
+        run: node --test tests/node/recette-fournisseurs-collector.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs
+      - name: Collecter les seules métadonnées (aucun transport)
+        run: node scripts/recette-fournisseurs/collect-preflight.mjs
+        env:
+          RECETTE_CANDIDATE_SHA: ${{ github.sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Conserver uniquement le rapport expurgé même si NON PRÊT
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: recette-fournisseurs-preflight-${{ github.sha }}
+          path: recette-fournisseurs-preflight.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'ios_review_submission'
 ROOT = File.expand_path('..', __dir__)
 
 default_platform(:ios)
@@ -16,24 +17,27 @@ platform :ios do
       key_content: ENV.fetch('ASC_PRIVATE_KEY_BASE64'), is_key_content_base64: true
     )
     app = Spaceship::ConnectAPI::App.find('app.jolene')
-    builds = app.get_builds(filter: { version: release.fetch('buildNumber').to_s }, includes: 'preReleaseVersion')
-    existing = builds.find { |build| build.app_version == release.fetch('marketingVersion') }
-    submitted_states = %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE PROCESSING_FOR_APP_STORE READY_FOR_SALE READY_FOR_DISTRIBUTION]
-    version = app.get_app_store_versions(filter: { versionString: release.fetch('marketingVersion'), platform: 'IOS' }, includes: 'build').first
-    if existing && version && version.build&.id == existing.id && submitted_states.include?(version.app_store_state)
+    # Read local submission inputs before a possible cancellation of waiting review.
+    release_notes = File.read(File.join(ROOT, 'config/mobile-release-notes.txt')).strip
+    guard = IosReviewSubmission::Guard.new(
+      gateway: IosReviewSubmission::Gateway.new(client: Spaceship::ConnectAPI, app_id: app&.id),
+      marketing_version: release.fetch('marketingVersion'), build_number: release.fetch('buildNumber')
+    )
+    result = guard.prepare! do
+      upload_to_testflight(api_key: api, app_identifier: 'app.jolene', ipa: ENV.fetch('IOS_IPA_PATH'),
+        skip_submission: true, skip_waiting_for_build_processing: true)
+    end
+    if result == :already_submitted
       UI.success('This exact Apple build is already submitted')
       next
-    end
-    unless existing
-      upload_to_testflight(api_key: api, app_identifier: 'app.jolene', ipa: ENV.fetch('IOS_IPA_PATH'),
-        skip_submission: true, skip_waiting_for_build_processing: false)
     end
     upload_to_app_store(
       api_key: api, app_identifier: 'app.jolene', app_version: release.fetch('marketingVersion'),
       build_number: release.fetch('buildNumber').to_s, skip_binary_upload: true,
       skip_screenshots: true, skip_metadata: false,
-      release_notes: { 'fr-FR' => File.read(File.join(ROOT, 'config/mobile-release-notes.txt')).strip },
+      release_notes: { 'fr-FR' => release_notes },
       submit_for_review: true, automatic_release: true, force: true,
+      reject_if_possible: false,
       run_precheck_before_submit: false
     )
   end

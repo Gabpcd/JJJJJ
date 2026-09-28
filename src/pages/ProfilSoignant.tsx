@@ -219,16 +219,6 @@ export default function ProfilSoignant() {
     }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.evenementsScore'));
   }, [user, refreshKey, afficherNotification]);
 
-  const toggleContrat = (valeur: string) => {
-    setTypesContrat((prev) => {
-      if (prev.includes(valeur)) {
-        if (prev.length <= 1) return prev;
-        return prev.filter((v) => v !== valeur);
-      }
-      return [...prev, valeur];
-    });
-  };
-
   const handleSave = async () => {
     if (!user) return;
     if (!anneesExperience && anneesExperience !== 0) {
@@ -447,7 +437,8 @@ export default function ProfilSoignant() {
               specialites={specialites}
               onSpecialitesChange={setSpecialites}
               typesContrat={typesContrat}
-              onToggleContrat={toggleContrat}
+              profession={profession}
+              onTypesContratChange={valeur => { if (valeur.length) setTypesContrat(valeur); }}
               rayon={rayon}
               onRayonChange={setRayon}
               tauxHoraireMinimum={tauxHoraireMinimum}

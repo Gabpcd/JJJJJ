@@ -2,7 +2,8 @@ name: Playwright E2E tests
 
 # Tests Playwright à chaque PR + push main.
 # Stratégie : Chromium + les gates mobiles ciblés bloquent les PR et main. Les
-# runs sont sérialisés car ils partagent une base de test en production.
+# parcours utilisant la base de test partagée en production sont sérialisés.
+# Les simulations entièrement locales sont réparties en lots indépendants.
 
 on:
   pull_request:
@@ -37,7 +38,7 @@ env:
 
 jobs:
   simulation-interfaces:
-    name: Simulation interfaces (${{ matrix.project }})
+    name: Simulation interfaces (${{ matrix.project }}, lot ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
@@ -47,6 +48,8 @@ jobs:
       fail-fast: false
       matrix:
         project: [ipad-portrait, ipad-paysage, iphone, android, ordinateur]
+        # Conserver les 140 scénarios, sans dépasser la limite du job iPad.
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -64,7 +67,7 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ''
           VITE_ENV: test
       - name: Parcours publics, inscription, connexion et espaces métier
-        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }}
+        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
         env:
           RECETTE_START_SERVER: '1'
           CI: 'true'
@@ -72,7 +75,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
-          name: recette-complete-${{ matrix.project }}
+          name: recette-complete-${{ matrix.project }}-lot-${{ matrix.shard }}
           path: test-results/recette-complete/
           retention-days: 7
 

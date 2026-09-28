@@ -16,7 +16,6 @@ import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { ChecklistActivation, useActivationSoignant } from '@/components/dashboard/ChecklistActivation';
-import { useAppliquerParrainage } from '@/hooks/useAppliquerParrainage';
 import type { SoignantActivation, DocumentActivation } from '@/components/dashboard/ChecklistActivation';
 import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -72,8 +71,6 @@ export default function DashboardSoignant() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { parcours } = useRole();
-  // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
-  useAppliquerParrainage(user?.id);
   const [propositions, setPropositions] = useState<PropositionMission[]>([]);
   const [maintenant, setMaintenant] = useState(() => new Date());
 
