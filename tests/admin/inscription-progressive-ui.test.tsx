@@ -102,14 +102,14 @@ describe('Inscription progressive — reprise du profil soignant', () => {
     view.rerender(contenu());
 
     expect(screen.getByRole('checkbox', { name: 'Libéral' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'CDD court' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Salarié (CDD compris)' })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer et continuer plus tard' }));
     await waitFor(() => expect(mocks.enregistrer).toHaveBeenCalledWith(expect.objectContaining({
       typesContrat: ['LIBERAL', 'VACATION'],
     })));
   });
 
-  it('retire les contrats incompatibles après un changement réel de profession', async () => {
+  it('retire le libéral après un changement réel de profession et conserve le CDD court salarié', async () => {
     render(<MemoryRouter><InscriptionSoignant parcours={parcours} /></MemoryRouter>);
     expect(screen.getByRole('checkbox', { name: 'Libéral' })).toBeChecked();
 
@@ -117,7 +117,7 @@ describe('Inscription progressive — reprise du profil soignant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer et continuer plus tard' }));
 
     await waitFor(() => expect(mocks.enregistrer).toHaveBeenCalledWith(expect.objectContaining({
-      profession: 'AS', typesContrat: [],
+      profession: 'AS', typesContrat: ['VACATION'],
     })));
   });
 });

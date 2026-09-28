@@ -59,7 +59,10 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Journal et préflight fournisseurs hors réseau
-        run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs
+        run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
+
+      - name: Projection des statuts stores sans réseau ni secrets
+        run: ruby scripts/mobile/store-status.test.rb
 
       - name: Valider les formats de captures stores
         run: npm run screenshots:play:check && npm run screenshots:app-store:check

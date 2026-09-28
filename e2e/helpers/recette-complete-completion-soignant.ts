@@ -64,7 +64,7 @@ export async function remplirIdentite(page: Page) {
   await page.getByLabel(/^Nom \*/).fill('Recette');
   await page.getByLabel(/^Téléphone \*/).fill('0100000000');
   await page.getByLabel(/^Date de naissance \*/).fill('1990-01-01');
-  await page.getByRole('checkbox', { name: 'Salarié', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Salarié (CDD compris)', exact: true }).check();
 }
 
 export async function verifierRppsSimule(page: Page) {

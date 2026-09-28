@@ -38,6 +38,17 @@ describe('useTypesExerciceAutorises', () => {
     expect(result.current.uniqueType).toBeNull();
   });
 
+  it('réessaie explicitement après une panne et récupère les droits de la même profession', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'panne' } })
+      .mockResolvedValueOnce({ data: ['SALARIE', 'LIBERAL'], error: null });
+    const { result } = renderHook(() => useTypesExerciceAutorises('IDE'));
+    await waitFor(() => expect(result.current.indisponible).toBe(true));
+    act(() => result.current.reessayer());
+    await waitFor(() => expect(result.current.typesAutorises).toEqual(['SALARIE', 'LIBERAL']));
+    expect(result.current.indisponible).toBe(false);
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+  });
+
   it('ignore une réponse tardive de l’ancienne profession', async () => {
     let resoudreIde: ((value: unknown) => void) | undefined;
     const ideSuspendu = new Promise(resolve => {
