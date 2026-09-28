@@ -26,6 +26,8 @@ Le garde mobile exige une preuve de déploiement Supabase réussi compatible ave
 
 Le diagnostic manuel des stores lit les états Apple et Google avec les accès CI existants. Il ne crée pas de transaction Play, ne charge aucun binaire et ne publie aucune version. Les états inconnus restent partiels. Voir `scripts/mobile/store-status.md`.
 
+La préparation des futures soumissions iOS attend désormais le traitement du build exact, même s’il a déjà été chargé lors d’une tentative précédente. Elle exige un build valide, non expiré et la déclaration d’exportation attendue. Un remplacement ne retire que la soumission observée en attente, correspondant à la seule version et au seul élément attendus, après une relecture immédiate. Elle attend ensuite la fin effective de l’annulation avant la nouvelle soumission. Une revue commencée, une publication en attente, un état inconnu ou d’autres éléments bloquent l’automatisation. Vingt-quatre groupes de tests hors réseau couvrent ces cas ; aucun retrait ni chargement Apple n’a été effectué pour les tester. Apple n’offre pas de condition atomique sur l’état lors de l’annulation : une transition entre la dernière lecture et la requête reste possible. Voir `fastlane/README-ios-review.md`.
+
 Le collecteur fournisseurs inventorie uniquement les métadonnées staging et Stripe test, sans modifier les services. Son rapport reste NON_PRET : il documente ce qui manque, sans prétendre que les transports sont autorisés ou que le cycle complet est validé. Voir `scripts/recette-fournisseurs/README.md`.
 
 ## Livraison de ce lot

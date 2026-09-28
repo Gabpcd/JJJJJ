@@ -6,17 +6,69 @@ SELECT ('97600000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
   '00000000-0000-0000-0000-000000000000'::uuid,
   'recette-parrainage-' || n || '@example.invalid','authenticated','authenticated',
   '{"role":"SOIGNANT","is_test_playwright":true}'::jsonb,now()
-FROM generate_series(1,8) n;
+FROM generate_series(1,9) n;
 INSERT INTO public.soignants(id,email,prenom,nom,profession,type_exercice,est_compte_test,code_parrainage)
 SELECT ('97600000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
   'recette-parrainage-' || n || '@example.invalid','Recette','Parrainage','AS','SALARIE',true,
   'RECETTE-976-' || n
-FROM generate_series(1,8) n;
+FROM generate_series(1,9) n;
 -- Préconditions des refus, limitées à ces fixtures et annulées avec la transaction.
 UPDATE public.soignants SET statut_compte='SUSPENDU' WHERE id='97600000-0000-4000-8000-000000000004';
 UPDATE public.soignants SET supprime_le=now() WHERE id='97600000-0000-4000-8000-000000000005';
 UPDATE auth.users SET banned_until=now()+interval '1 day' WHERE id='97600000-0000-4000-8000-000000000006';
 UPDATE auth.users SET deleted_at=now() WHERE id='97600000-0000-4000-8000-000000000007';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"97600000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+-- D'abord exercer les droits réels, avant toute autorisation de laboratoire.
+DO $preuve_acl_reelles$
+DECLARE avant public.soignants; apres public.soignants; refuse boolean := false;
+BEGIN
+  IF has_column_privilege('authenticated', 'public.soignants', 'parraine_par', 'UPDATE') THEN
+    RAISE EXCEPTION 'ACL réelle : parraine_par modifiable directement'; END IF;
+  SELECT * INTO avant FROM public.soignants WHERE id=auth.uid();
+  BEGIN
+    UPDATE public.soignants SET parraine_par='97600000-0000-4000-8000-000000000001',
+      identite_verifiee=true,diplome_verifie=true,heures_cumulees=999999,heures_plateforme=999999
+      WHERE id=auth.uid();
+  EXCEPTION WHEN insufficient_privilege THEN refuse := true;
+  END;
+  IF NOT refuse THEN RAISE EXCEPTION 'ACL réelle : UPDATE offensif non refusé'; END IF;
+  SELECT * INTO apres FROM public.soignants WHERE id=auth.uid();
+  IF apres.parraine_par IS DISTINCT FROM avant.parraine_par
+    OR apres.identite_verifiee IS DISTINCT FROM avant.identite_verifiee
+    OR apres.diplome_verifie IS DISTINCT FROM avant.diplome_verifie
+    OR apres.heures_cumulees IS DISTINCT FROM avant.heures_cumulees
+    OR apres.heures_plateforme IS DISTINCT FROM avant.heures_plateforme THEN
+    RAISE EXCEPTION 'UPDATE refusé mais données modifiées'; END IF;
+END;
+$preuve_acl_reelles$;
+-- La vraie RPC doit déjà persister le lien avec les ACL réelles, sans GRANT.
+SELECT set_config('request.jwt.claims','{"sub":"97600000-0000-4000-8000-000000000009","role":"authenticated"}',true);
+DO $preuve_rpc_acl_reelles$
+DECLARE r jsonb; s public.soignants;
+BEGIN
+  r := public.fn_appliquer_parrainage('RECETTE-976-1');
+  IF r->>'success' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'RPC refusée avec les ACL réelles'; END IF;
+  SELECT * INTO s FROM public.soignants WHERE id=auth.uid();
+  IF s.parraine_par IS DISTINCT FROM '97600000-0000-4000-8000-000000000001'::uuid
+    OR s.est_compte_test IS DISTINCT FROM true OR s.identite_verifiee IS DISTINCT FROM false
+    OR s.diplome_verifie IS DISTINCT FROM false OR s.rpps_verifie IS DISTINCT FROM false
+    OR s.tous_documents_valides IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Attribution réelle ou protections non persistées'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.parrainages WHERE filleul_id=auth.uid()
+    AND parrain_id='97600000-0000-4000-8000-000000000001' AND statut='EN_ATTENTE'
+    AND prime_versee_le IS NULL AND valide_le IS NULL AND commission_cumulee_filleul=0) THEN
+    RAISE EXCEPTION 'Relation réelle ou prime incorrecte'; END IF;
+END;
+$preuve_rpc_acl_reelles$;
+-- Pour atteindre les triggers, autoriser ensuite uniquement les colonnes
+-- attaquées, dans cette transaction de test annulée par ROLLBACK. Ce GRANT
+-- n'est ni un correctif produit ni une modification des ACL de la migration.
+RESET ROLE;
+SAVEPOINT parrainage_test_droits_trigger;
+GRANT UPDATE (parraine_par, identite_verifiee, diplome_verifie,
+  heures_cumulees, heures_plateforme, type_exercice, statut_liberal)
+  ON public.soignants TO authenticated;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims','{"sub":"97600000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 DO $preuve$
@@ -191,4 +243,17 @@ BEGIN
     RAISE EXCEPTION 'Attribution créée pour un compte inactif'; END IF;
 END;
 $preuve_aucun_effet$;
+-- Le wrapper CI retire les seuls BEGIN/COMMIT/ROLLBACK simples. Ce retour
+-- nommé reste donc effectif dans les deux modes, avant l'assertion des ACL.
+ROLLBACK TO SAVEPOINT parrainage_test_droits_trigger;
+
+-- Le retour au savepoint doit restaurer l'ACL observée avant le GRANT.
+DO $preuve_acl_restauree$
+BEGIN
+  IF has_column_privilege('authenticated', 'public.soignants', 'parraine_par', 'UPDATE') THEN
+    RAISE EXCEPTION 'GRANT de test non annulé'; END IF;
+END;
+$preuve_acl_restauree$;
+
+RELEASE SAVEPOINT parrainage_test_droits_trigger;
 ROLLBACK;
