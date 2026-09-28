@@ -55,3 +55,28 @@ Ce n'est **pas un inventaire de contenu déployé complet** : les hash locaux ne
 Ces inconnues sont explicites : la commande termine toujours avec **code 2 / `NON_PRET`**, même si les lectures disponibles réussissent. Le workflow apparaît donc rouge et conserve l'artifact expurgé ; ce rouge attendu ne signifie pas qu'un paiement a échoué. `readyForTransports` et `integratedFlowReady` restent `false`. La bibliothèque pure `preflight.mjs` conserve son contrat et son refus d'exécution directe ; aucune donnée inconnue du collecteur n'est convertie en attestation positive pour ce validateur.
 
 Références des API consultées le 28 septembre 2026 : [requête Supabase avec read_only](https://supabase.com/docs/reference/api/v1-run-a-query), [liste Edge](https://supabase.com/docs/reference/api/v1-list-all-functions), [liste des secrets](https://supabase.com/docs/reference/api/v1-list-all-secrets), [balance Stripe](https://docs.stripe.com/api/balance/balance_retrieve), [webhooks Stripe](https://docs.stripe.com/api/webhook_endpoints/list). Le collecteur ne lance aucune des opérations de création, déploiement ou configuration documentées à côté de ces lectures.
+
+## Raccordement manuel des webhooks TEST
+
+Après la configuration de la clé TEST, le workflow `configure-stripe-webhooks-staging.yml` actualise cinq fonctions du parcours de paiement/facturation puis crée deux endpoints Stripe sur le staging fixé. Il conserve les réglages JWT déjà observés et les authentifications internes. Aucun cron ni paiement n'est déclenché. Il vérifie que les paiements par carte et les transferts sont actifs sur le compte de test ; le collecteur en lecture seule expose désormais ces capacités, sans données d'identité.
+
+Les signatures plateforme et Connect sont distinctes et envoyées directement aux secrets Supabase, sans fichier ni artifact contenant leurs valeurs. Deux sondes signées d'un type volontairement non traité vérifient le bon secret et le rejet du secret opposé, avant toute écriture métier. Elles ne proviennent pas de Stripe et ne constituent pas une preuve de livraison de webhook réel ou de paiement.
+
+Une configuration préexistante ou une réponse ambiguë bloque toute nouvelle installation. Le rapport conserve les tentatives et identifiants connus ; ne pas relancer en supprimant les gardes. Réconcilier les endpoints par projet, route et `metadata.setup_run`, ainsi que le statut de la première écriture, avant toute éventuelle reprise. Le workflow ne supprime aucun endpoint et ne remplace aucun secret existant. Le contrôle du nom `STRIPE_SECRET_KEY` ne prouve pas à lui seul l'identité de la clé chargée par les handlers ; cette attestation reste obligatoire avant la recette financière.
+
+`WEBHOOK_SIGNATURES_CONFIGURED` signifie seulement que le raccordement et ses signatures sont vérifiés. `integratedFlowReady` reste `false` : le paiement, son retour frontend, le remboursement depuis le litige et le rapprochement des mêmes objets Stripe TEST restent à exécuter. La consigne de simulation frontend systématique est enregistrée dans `CLAUDE.md`.
+
+L'action manuelle séparée `verify-fixtures` du même workflow vérifie ensuite la
+préparation des cohortes dans une transaction entièrement annulée. Elle ne
+réexécute pas la configuration des webhooks et n'appelle pas Stripe. Quatre
+identifiants Auth aléatoires sont créés uniquement dans cette transaction :
+l'exclusion des comptes ordinaires, l'admissibilité de nouveaux acteurs, le
+maintien de la cohorte d'un compte déjà créé et la restauration du paramètre
+sont assertés. Le paramètre intermédiaire n'est jamais commité ; aucun ancien
+profil n'est reclassé. Une relecture indépendante confirme le paramètre à zéro
+et l'absence des acteurs de cette recette après `ROLLBACK`.
+
+`FIXTURE_ISOLATION_VERIFIED` ne valide ni la préparation persistante d'acteurs
+financiers ni un paiement/remboursement. Le connecteur Supabase en lecture
+seule ne peut pas effectuer ce contrôle : il utilise les accès staging dédiés
+déjà présents dans GitHub Actions, sur le seul projet fixé dans le script.

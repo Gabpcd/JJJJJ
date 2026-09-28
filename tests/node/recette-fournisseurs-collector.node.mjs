@@ -20,7 +20,9 @@ function fixture(overrides = {}) {
     queues: ['escrow_release_queue', 'stripe_refunds_queue'].map(name => ({ name, total: 2, pending: 1, secret })),
     functions: EDGES.map(slug => ({ slug, version: 3, verify_jwt: false, status: 'ACTIVE', secret })),
     secrets: [{ name: 'STRIPE_SECRET_KEY', value: secret }, { name: secret, value: secret }],
-    account: { id: ACCOUNT, email: secret }, balance: { livemode: false, available: [{ amount: 987654321 }] },
+    account: { id: ACCOUNT, email: secret, charges_enabled: true, payouts_enabled: true,
+      capabilities: { card_payments: 'active', transfers: 'active' },
+      requirements: { past_due: [], disabled_reason: null } }, balance: { livemode: false, available: [{ amount: 987654321 }] },
     webhooks: { data: ['stripe-webhook', 'stripe-connect-webhook'].map((route, i) => ({
       id: `we_example${i}`, url: `https://${PROJECT}.supabase.co/functions/v1/${route}`, livemode: false,
       status: 'enabled', enabled_events: ['*'], secret, description: secret,
@@ -84,6 +86,32 @@ test('missing secrets and live credentials never trigger a request', async () =>
     assert.equal(called, false); assert.equal(report.status, 'NON_PRET');
     assert.deepEqual(report.issues, ['STAGING_TOKEN_ABSENT', 'STRIPE_TEST_KEY_ABSENT_OR_INVALID']);
   }
+});
+
+test('an authenticated test account with disabled payments is reported as restricted, without identity data', async () => {
+  const report = await collect(fixture({ account: { id: ACCOUNT, charges_enabled: false, payouts_enabled: false,
+    capabilities: { card_payments: 'inactive', transfers: 'inactive' },
+    requirements: { past_due: ['person_PRIVATE.address.city', 'person_PRIVATE.dob.year'], disabled_reason: 'requirements.past_due' },
+  } }));
+  assert.equal(report.checks.stripeSandbox.accountMatches, true);
+  assert.equal(report.checks.stripeSandbox.chargesEnabled, false);
+  assert.equal(report.checks.stripeSandbox.payoutsEnabled, false);
+  assert.equal(report.checks.stripeSandbox.pastDueCount, 2);
+  assert.ok(report.issues.includes('STRIPE_TEST_ACCOUNT_RESTRICTED'));
+  assert.ok(!JSON.stringify(report).includes('person_PRIVATE'));
+  assert.equal(report.integratedFlowReady, false);
+});
+
+test('missing capability information stays unknown; an active account still does not validate the circuit', async () => {
+  const unknown = await collect(fixture({ account: { id: ACCOUNT } }));
+  assert.equal(unknown.checks.stripeSandbox.chargesEnabled, null);
+  assert.equal(unknown.checks.stripeSandbox.transfersActive, null);
+  assert.ok(unknown.issues.includes('STRIPE_TEST_CAPABILITIES_UNKNOWN'));
+  const active = await collect(fixture());
+  assert.equal(active.checks.stripeSandbox.chargesEnabled, true);
+  assert.equal(active.checks.stripeSandbox.transfersActive, true);
+  assert.ok(!active.issues.includes('STRIPE_TEST_ACCOUNT_RESTRICTED'));
+  assert.equal(active.integratedFlowReady, false);
 });
 
 test('a wrong account or live balance blocks webhook inspection and redacts provider responses', async () => {

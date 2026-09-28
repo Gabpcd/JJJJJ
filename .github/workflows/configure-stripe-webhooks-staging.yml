@@ -1,0 +1,88 @@
+name: Raccordement Stripe TEST — webhooks staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Configurer les webhooks ou vérifier séparément les fixtures financières (transaction annulée)'
+        type: choice
+        default: configure
+        options: [configure, verify-fixtures]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  configure-webhooks:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'configure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Tester les gardes et le cloisonnement des signatures
+        run: node --test tests/node/configure-stripe-webhooks-staging.node.mjs
+      - name: Précontrôle sans mutation
+        run: node scripts/recette-fournisseurs/configure-stripe-webhooks-test.mjs --check-only
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+      - name: Actualiser les entrées de paiement interactif sans changer leur authentification
+        shell: bash
+        run: |
+          set -euo pipefail
+          for fn in stripe-connect-pay-mission generate-invoice stripe-webhook stripe-connect-webhook process-stripe-refunds; do
+            supabase functions deploy "$fn" --project-ref mejpriaetwgtcstbgfid --use-api --no-verify-jwt
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Installer deux signatures distinctes et vérifier le routage sans paiement
+        run: node scripts/recette-fournisseurs/configure-stripe-webhooks-test.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: État de configuration sans secrets
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: configuration-webhooks-staging-${{ github.run_id }}
+          path: configuration-webhooks-staging.json
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-fixtures:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'verify-fixtures'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Tester les gardes de la vérification isolée
+        run: node --test tests/node/finance-fixture-isolation.node.mjs
+      - name: Vérifier la préparation des cohortes dans une transaction annulée
+        run: node scripts/recette-fournisseurs/verify-finance-fixture-isolation.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Rapport sans données de compte ni secret
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: finance-fixture-isolation-${{ github.run_id }}
+          path: finance-fixture-isolation.json
+          if-no-files-found: error
+          retention-days: 14

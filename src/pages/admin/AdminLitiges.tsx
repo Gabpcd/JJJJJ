@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -68,6 +68,7 @@ export default function AdminLitiges() {
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [validating, setValidating] = useState<string | null>(null);
+  const validationEnCours = useRef(false);
   const [accordAConfirmer, setAccordAConfirmer] = useState<any | null>(null);
 
   const charger = async (afficherChargement = true) => {
@@ -154,17 +155,29 @@ export default function AdminLitiges() {
     setResolutionOpen(true);
   };
 
-  // Valider l'accord financier proposé par les parties (exécute le mouvement financier).
+  // La RPC applique l'accord et peut enfiler un remboursement asynchrone.
+  // Son succès ne prouve donc pas que Stripe a déjà remboursé le paiement.
   const validerAccord = async (litigeId: string) => {
+    if (validationEnCours.current) return;
+    validationEnCours.current = true;
     setValidating(litigeId);
-    const { data, error } = await supabase.rpc('fn_admin_valider_accord_litige' as any, { p_litige_id: litigeId });
-    setValidating(null);
-    if (error || (data as any)?.success === false) {
-      toast.error((data as any)?.error || error?.message || 'Erreur lors de la validation.');
-      return;
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_valider_accord_litige' as any, { p_litige_id: litigeId });
+      const resultat = data as { success?: boolean; statut?: string; execution?: { success?: boolean }; error?: string } | null;
+      if (error || resultat?.success !== true || resultat.statut !== 'RESOLU_ADMIN' || resultat.execution?.success !== true) {
+        toast.error(resultat?.error || 'La validation n’a pas été confirmée. Actualisez le dossier avant de réessayer.');
+      } else {
+        toast.success('Accord validé. Consultez le suivi des paiements pour confirmer le traitement financier.');
+      }
+      // Une réponse perdue peut suivre une écriture réussie : relire le dossier
+      // avant de proposer une autre action, sans rejouer automatiquement la RPC.
+      await charger(false);
+    } catch {
+      toast.error('La validation n’a pas été confirmée. Actualisez le dossier avant de réessayer.');
+    } finally {
+      validationEnCours.current = false;
+      setValidating(null);
     }
-    toast.success('Accord validé — mouvement financier exécuté.');
-    charger();
   };
 
   const counts = useMemo(() => ({
@@ -334,6 +347,7 @@ export default function AdminLitiges() {
                           variant="primary"
                           size="sm"
                           loading={validating === l.id}
+                          disabled={Boolean(validating)}
                           onClick={() => {
                             if (resolutionFinanciereManuelle) {
                               ouvrirResolution(l);
