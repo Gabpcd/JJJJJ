@@ -8,7 +8,8 @@ test('charges — données des missions, caisse médecin, export et accès docum
   const fin = new Date();
   const row = { ...mission, soignant_assigne_id: ids.user, statut: 'TERMINEE', type_contrat_applique: 'LIBERAL', debut_le: new Date(fin.getTime() - 8 * 3600000).toISOString(), fin_le: fin.toISOString(), total_brut: 320, duree_heures: 8 };
   etat.tables.set('missions', [row, { ...row, id: 'mission-salariee-exclue', type_contrat_applique: 'SALARIE', total_brut: 1000 }]);
-  await entrer(page, 'connexion'); await aller(page, '/soignant/charges');
+  await entrer(page, 'connexion'); await aller(page, '/soignant/mes-gains');
+  await page.getByRole('link', { name: 'Mes charges et mon régime fiscal' }).click();
   await expect(page.getByRole('heading', { name: 'Mes charges sociales', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /CARMF.*site officiel/ })).toBeVisible();
   await expect(page.locator('main')).not.toContainText(/CARPIMKO|21,2|1,6|15 mai|Revenu net estimé|Prochaines échéances/);
@@ -23,8 +24,8 @@ test('charges — données des missions, caisse médecin, export et accès docum
   await page.getByRole('button', { name: /Assurance RCP/ }).click();
   await expect(page).toHaveURL(/\/soignant\/mes-documents\?tab=justificatifs$/);
   await expect(page.getByRole('heading', { name: 'Mes documents', exact: true })).toBeVisible();
-  await aller(page, '/soignant/mes-gains');
-  await page.getByRole('link', { name: 'Mes charges et mon régime fiscal' }).click();
+  // Revenir dans l’historique SPA : ne pas remplacer le document pendant les lectures du dossier.
+  await page.goBack();
   await expect(page.getByRole('heading', { name: 'Mes charges sociales', exact: true })).toBeVisible();
   const retourPage = page.getByRole('button', { name: 'Retour aux gains', exact: true });
   if (await retourPage.isVisible()) await retourPage.click();
