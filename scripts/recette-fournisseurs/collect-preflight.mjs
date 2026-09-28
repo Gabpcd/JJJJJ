@@ -162,7 +162,24 @@ export async function collectPreflight({ source, token, stripeKey, fetchImpl = f
       requireValue(account?.id === ACCOUNT);
       const balance = await request('https://api.stripe.com/v1/balance', stripeKey);
       requireValue(balance?.livemode === false);
-      return { accountMatches: true, livemode: false };
+      // Une clé authentifiée ne prouve pas qu'un paiement puisse aboutir.
+      // Ne conserver aucun nom, champ d'identité ni identifiant de personne.
+      const chargesEnabled = typeof account.charges_enabled === 'boolean' ? account.charges_enabled : null;
+      const payoutsEnabled = typeof account.payouts_enabled === 'boolean' ? account.payouts_enabled : null;
+      const cardPaymentsActive = typeof account.capabilities?.card_payments === 'string'
+        ? account.capabilities.card_payments === 'active' : null;
+      const transfersActive = typeof account.capabilities?.transfers === 'string'
+        ? account.capabilities.transfers === 'active' : null;
+      const pastDueCount = Array.isArray(account.requirements?.past_due)
+        ? account.requirements.past_due.length : null;
+      const requirementsPastDue = account.requirements?.disabled_reason === 'requirements.past_due';
+      if ([chargesEnabled, payoutsEnabled, cardPaymentsActive, transfersActive].includes(false)
+        || requirementsPastDue || (pastDueCount !== null && pastDueCount > 0)) issue('STRIPE_TEST_ACCOUNT_RESTRICTED');
+      if ([chargesEnabled, payoutsEnabled, cardPaymentsActive, transfersActive, pastDueCount].includes(null)) {
+        issue('STRIPE_TEST_CAPABILITIES_UNKNOWN');
+      }
+      return { accountMatches: true, livemode: false, chargesEnabled, payoutsEnabled,
+        cardPaymentsActive, transfersActive, pastDueCount, requirementsPastDue };
     });
     // Do not inspect even test endpoints for a different or unconfirmed account.
     if (report.checks.stripeSandbox.status === 'OBSERVED') await check('stripeWebhooks', async () => {

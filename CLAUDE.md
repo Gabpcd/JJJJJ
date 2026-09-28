@@ -2,6 +2,22 @@
 
 > Conventions et règles de travail pour Claude Code sur le projet Jolene.
 
+## Recette frontend systématique — consigne Gabrielle du 28/09/2026
+
+Toute correction ou validation fonctionnelle inclut une simulation du parcours
+dans l'interface. Des tests unitaires, SQL ou API seuls ne suffisent jamais à
+déclarer le parcours terminé. Vérifier les actions utilisateur, les écrans,
+messages, onglets, états d'erreur et la reprise après rechargement pour les rôles
+concernés (soignant, établissement, administrateur si nécessaire), sur iPhone,
+Android, iPad portrait/paysage et ordinateur selon le parcours.
+
+Pour une recette intégrée de paiement/remboursement, relier les actions et états
+visibles aux mêmes objets et montants dans le backend et chez Stripe TEST.
+Conserver les preuves. Distinguer simulation avec réponses simulées, intégration
+réelle en environnement de test, production et appareils physiques ; aucun de
+ces niveaux ne prouve automatiquement les autres. Ne pas annoncer un lancement
+national prêt tant qu'un scénario critique reste cassé ou non vérifié.
+
 ## Workflow Git — règles non-négociables
 
 1. **Branche feature** : créer une branche descriptive si la modification est non-triviale, ou commit direct sur main pour les fixes mineurs
