@@ -128,6 +128,7 @@ export default function PaiementsEscrowAVenir() {
 
   const aVenir = lignes.filter((l) => CONFIG[l.etat]?.aVenir);
   const verses = lignes.filter((l) => l.etat === 'VERSE');
+  const annules = lignes.filter((l) => l.etat === 'ANNULE');
 
   const Ligne = ({ l }: { l: LigneEscrow }) => {
     const c = CONFIG[l.etat];
@@ -174,6 +175,12 @@ export default function PaiementsEscrowAVenir() {
           <p className="text-xs text-muted-foreground">Récemment versé</p>
           {verses.slice(0, 3).map((l) => <Ligne key={l.mission_id} l={l} />)}
         </div>
+      )}
+      {annules.length > 0 && (
+        <section aria-label="Paiements rapides annulés" className="space-y-2 mt-3">
+          <h3 className="text-xs text-muted-foreground">Annulés</h3>
+          {annules.map((l) => <Ligne key={l.mission_id} l={l} />)}
+        </section>
       )}
     </section>
   );
