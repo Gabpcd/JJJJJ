@@ -21,6 +21,9 @@ test('projet fixe, assertions SQL et rollback, puis contrôle distinct', async (
   assert.match(calls[1].query, /ROLLBACK;\s*$/);
   assert.match(calls[1].query, /Cohorte existante requalifiée/);
   assert.match(calls[1].query, /Droits de publication indus/);
+  assert.match(calls[1].query, /WHERE NOT EXISTS/);
+  assert.match(calls[1].query, /Plage de recette indisponible/);
+  assert.doesNotMatch(calls[1].query, /00000000000000/);
   assert.equal(result.status, 'FIXTURE_ISOLATION_VERIFIED');
   assert.equal(result.integratedFlowReady, false);
   assert.ok(!JSON.stringify(result).includes('fixture-token'));

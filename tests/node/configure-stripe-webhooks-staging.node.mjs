@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { ACCOUNT, PROJECT, API_VERSION, ROUTES, FUNCTIONS, configureTestWebhooks } from '../../scripts/recette-fournisseurs/configure-stripe-webhooks-test.mjs';
+import { ACCOUNT, PROJECT, API_VERSION, ROUTES, FUNCTIONS, endpointMatches, configureTestWebhooks } from '../../scripts/recette-fournisseurs/configure-stripe-webhooks-test.mjs';
 
 const key = 'sk_test_NoOutput123';
 const token = 'management-no-output';
@@ -32,18 +32,20 @@ function fixture(overrides = {}) {
     if (url === 'https://api.stripe.com/v1/account') return response(overrides.account ?? {
       id: ACCOUNT, charges_enabled: true, payouts_enabled: true, capabilities: { card_payments: 'active', transfers: 'active' } });
     if (url === 'https://api.stripe.com/v1/balance') return response(overrides.balance ?? { livemode: false });
+    if (/webhook_endpoints\/we_/.test(url)) return response(overrides.existing);
     if (url.includes('webhook_endpoints?')) return response(overrides.list ?? { data: [], has_more: false });
     if (url === 'https://api.stripe.com/v1/webhook_endpoints') {
       const route = ROUTES[created], index = created++;
       assert.equal(options.headers.Authorization, `Bearer ${key}`);
-      assert.equal(options.headers['Idempotency-Key'], `jolene-staging-webhooks/123456789/${route.slug}`);
+      assert.equal(options.headers['Idempotency-Key'], `jolene-staging-webhooks/${overrides.setupRunId ?? '123456789'}/${route.slug}`);
       const form = new URLSearchParams(options.body);
       assert.equal(form.get('connect'), String(route.connect));
       assert.equal(form.get('metadata[jolene_project]'), PROJECT);
+      assert.equal(form.get('metadata[setup_run]'), overrides.setupRunId ?? '123456789');
       assert.deepEqual(form.getAll('enabled_events[]'), route.events);
       if (overrides.createFailure) throw new Error(`ambiguous provider body ${key}`);
       return response({ id: `we_fixture${index}`, livemode: false, url: form.get('url'), status: 'enabled',
-        api_version: API_VERSION, enabled_events: route.events, secret: secrets[index], ...overrides.endpoint });
+        api_version: API_VERSION, enabled_events: route.events, secret: secrets[index], ...overrides.endpoint, ...overrides.endpoints?.[index] });
     }
     assert.ok(url.startsWith(`https://api.supabase.com/v1/projects/${PROJECT}/`));
     assert.equal(options.headers.Authorization, `Bearer ${token}`);
@@ -154,4 +156,77 @@ test('workflow is manual, staging-locked and reports no credential artifacts', (
   assert.match(workflow, /group: jolene-supabase-staging-writes/);
   assert.doesNotMatch(workflow, /pull_request:|push:|schedule:|secrets\.SUPABASE_ACCESS_TOKEN/);
   assert.match(workflow, /path: configuration-webhooks-staging.json/);
+});
+
+const resume = { setupRunId: '123456789', platformEndpointId: 'we_fixture0' };
+const timestamp = 1790632800000;
+const existing = { id: resume.platformEndpointId, livemode: false,
+  url: `https://${PROJECT}.supabase.co/functions/v1/stripe-webhook`, status: 'enabled',
+  api_version: API_VERSION, enabled_events: [...ROUTES[0].events, 'transfer.canceled'],
+  created: timestamp / 1000 - 3600, metadata: { jolene_project: PROJECT, setup_run: resume.setupRunId } };
+const resuming = extra => fixture({ list: { data: [existing], has_more: false }, existing,
+  endpoints: [{ enabled_events: existing.enabled_events }], ...extra });
+
+test('only the observed extra platform event is accepted; missing, duplicated and unknown events fail', () => {
+  assert.ok(endpointMatches(existing, ROUTES[0]));
+  for (const events of [existing.enabled_events.slice(1), [...existing.enabled_events, 'anything.created'],
+    [...existing.enabled_events, 'transfer.created'], ['*'], null]) {
+    assert.equal(endpointMatches({ ...existing, enabled_events: events }, ROUTES[0]), false);
+  }
+  assert.equal(endpointMatches({ ...existing, url: `https://${PROJECT}.supabase.co/functions/v1/stripe-connect-webhook`,
+    enabled_events: [...ROUTES[1].events, 'transfer.canceled'] }, ROUTES[1]), false);
+});
+
+test('explicit recovery replays the original request/key, checks the ID and installs two verified signatures', async () => {
+  const f = resuming(), result = await f.run({ runId: '987654321', resume, now: () => timestamp });
+  assert.equal(result.status, 'WEBHOOK_SIGNATURES_CONFIGURED');
+  assert.equal(result.resumedFromRun, resume.setupRunId);
+  assert.equal(result.endpoints[0].id, resume.platformEndpointId);
+  assert.equal(result.endpoints[0].replayed, true);
+  assert.deepEqual(result.endpoints[0].additionalEvents, ['transfer.canceled']);
+  assert.equal(f.calls.filter(c => c.method === 'POST' && c.url === 'https://api.stripe.com/v1/webhook_endpoints').length, 2);
+  assert.ok(!JSON.stringify(result).includes('whsec_'));
+});
+
+for (const [name, change, issue] of [
+  ['foreign metadata', { metadata: { ...existing.metadata, setup_run: '999999999' } }, 'RESUME_MISMATCH'],
+  ['foreign project', { metadata: { ...existing.metadata, jolene_project: 'other' } }, 'RESUME_MISMATCH'],
+  ['wrong retrieved ID', { id: 'we_other' }, 'RESUME_MISMATCH'],
+  ['wrong URL', { url: 'https://other.example.invalid/webhook' }, 'RESUME_MISMATCH'],
+  ['expired key', { created: timestamp / 1000 - 23 * 3600 }, 'RESUME_EXPIRED'],
+  ['future creation', { created: timestamp / 1000 + 1 }, 'RESUME_EXPIRED'],
+  ['missing creation date', { created: null }, 'RESUME_EXPIRED'],
+]) test(`recovery refuses ${name} before any provider write`, async () => {
+  const f = resuming({ existing: { ...existing, ...change } });
+  const result = await f.run({ resume, now: () => timestamp });
+  assert.equal(result.issue, issue);
+  assert.ok(f.calls.every(c => c.method === 'GET' || c.url.endsWith('/database/query')));
+});
+
+for (const data of [[], [{ ...existing, id: 'we_other' }], [existing, { ...existing, id: 'we_duplicate' }]]) {
+  test(`recovery requires exactly the expected partial endpoint: ${data.length}`, async () => {
+    const f = resuming({ list: { data, has_more: false } });
+    const result = await f.run({ resume, now: () => timestamp });
+    assert.equal(result.issue, 'RESUME_MISMATCH');
+    assert.ok(f.calls.every(c => c.method === 'GET' || c.url.endsWith('/database/query')));
+  });
+}
+
+test('recovery mismatched replay never creates Connect or stores secrets', async () => {
+  const f = resuming({ endpoints: [{ id: 'we_unexpected' }] });
+  const result = await f.run({ resume, now: () => timestamp });
+  assert.equal(result.issue, 'RESUME_MISMATCH');
+  assert.equal(result.endpoints.length, 1);
+  assert.equal(result.secretWriteAttempted, false);
+});
+
+test('recovery precheck is read-only and incomplete resume inputs make no requests', async () => {
+  const f = resuming();
+  assert.equal((await f.run({ resume, checkOnly: true, now: () => timestamp })).status, 'PREREQUISITES_OK');
+  assert.ok(f.calls.every(c => c.method === 'GET' || c.url.endsWith('/database/query')));
+  for (const invalid of [{ setupRunId: '123456789' }, { platformEndpointId: 'we_fixture0' }, { ...resume, setupRunId: '../bad' }]) {
+    const bad = fixture();
+    assert.equal((await bad.run({ resume: invalid })).issue, 'RESUME_INVALID');
+    assert.equal(bad.calls.length, 0);
+  }
 });

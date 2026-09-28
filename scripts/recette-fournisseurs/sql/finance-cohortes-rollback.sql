@@ -12,6 +12,7 @@ DECLARE
   v_etablissement uuid := gen_random_uuid();
   v_apres uuid := gen_random_uuid();
   v_id uuid;
+  v_siret text;
 BEGIN
   IF auth.uid() IS NOT NULL THEN RAISE EXCEPTION 'Backend de recette attendu'; END IF;
   SELECT valeur INTO STRICT v_avant FROM public.parametres_systeme
@@ -32,8 +33,16 @@ BEGIN
   UPDATE public.parametres_systeme SET valeur=1 WHERE cle='inscriptions_publiques_actives';
   INSERT INTO public.soignants(id,prenom,nom,email,profession,type_exercice,statut_liberal)
     VALUES(v_soignant,'Recette','Nouvel acteur financier',v_soignant::text||'@example.invalid','MEDECIN','LIBERAL','ACTIF');
+  -- Identifiant explicitement fictif, libre dans cette transaction : ne pas
+  -- heurter le SIRET de la fixture persistante ni modifier un acteur existant.
+  SELECT '000000' || lpad(n::text,8,'0') INTO v_siret
+    FROM generate_series(1,100) n
+    WHERE NOT EXISTS (SELECT 1 FROM public.etablissements e
+      WHERE e.siret='000000' || lpad(n::text,8,'0'))
+    ORDER BY n LIMIT 1;
+  IF v_siret IS NULL THEN RAISE EXCEPTION 'Plage de recette indisponible'; END IF;
   INSERT INTO public.etablissements(id,nom,siret,type,adresse_rue,adresse_ville,adresse_code_postal,email_contact)
-    VALUES(v_etablissement,'Recette financière annulée','00000000000000','CLINIQUE_PRIVEE',
+    VALUES(v_etablissement,'Recette financière annulée',v_siret,'CLINIQUE_PRIVEE',
       'Adresse fictive de recette','Paris','75001',v_etablissement::text||'@example.invalid');
   IF (SELECT est_compte_test FROM public.soignants WHERE id=v_soignant) IS DISTINCT FROM false
     OR (SELECT est_compte_test FROM public.etablissements WHERE id=v_etablissement) IS DISTINCT FROM false
