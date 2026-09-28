@@ -138,7 +138,7 @@ async function fillSoignantProfile(page: Page) {
   await page.locator('input[type="tel"]').fill('+33612345678');
   await page.locator('input[type="date"]').fill('1990-05-15');
   await expect(page.locator('#profession-select'), 'la profession du compte rapide est reprise').toContainText('(IDE)');
-  await page.getByRole('checkbox', { name: 'Contrat à Durée Déterminée (CDD)' }).check();
+  await page.getByRole('checkbox', { name: 'Salarié (CDD compris)', exact: true }).check();
   await expect(page.getByRole('button', { name: 'Enregistrer mon profil', exact: true })).toBeEnabled();
 }
 

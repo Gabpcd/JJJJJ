@@ -14,6 +14,8 @@ La vérification des définitions déployées a ensuite trouvé que le trigger d
 
 Une suite SQL teste le refus d’INSERT direct, les doublons, les profils inactifs et les tentatives de falsification des heures ou du statut libéral. La recette navigateur staging ajoute une attribution avec le véritable JWT du filleul, sa reconnexion et la relecture du lien en base. Les acteurs sont des comptes jetables non vérifiés ; aucun envoi ni prime n’est déclenché. Le nettoyage contrôle la propriété privée, refuse les relations étrangères ou qualifiées et conserve un journal explicite si une création ou attribution reste ambiguë. Ces vérifications distantes doivent être vertes avant fusion ; leur présence dans ce document ne prouve pas encore leur exécution.
 
+Sur `de4743d5`, la validation SQL transactionnelle a réussi ([run](https://github.com/Gabpcd/JJJJJ/actions/runs/36422548031)). Les cinq scénarios de comptes réels staging, dont l’attribution depuis le navigateur puis la reconnexion, ont réussi en 43,9 secondes ([run](https://github.com/Gabpcd/JJJJJ/actions/runs/36422547957)). Le journal de nettoyage est confirmé par une relecture en base : zéro compte ou profil de parrainage jetable et zéro relation restante. Les droits directs sur les champs protégés restent refusés après la recette. Ces preuves ne portent pas sur un versement de prime.
+
 Reproduction avant correction : 8 échecs sur 11 cas ciblés. Après correction : 11 cas réussis, plus les deux tests de navigation persistante. Deux parcours navigateur ont passé sur les cinq formats : inscription minimale puis finalisation directement depuis une mission ; panne suivie d’une déconnexion/reconnexion. Les appels HTTP sont simulés et inspectés ; ces résultats ne prouvent pas encore une attribution en base staging ni une prime versée.
 
 ## Diagnostic SMS
@@ -35,6 +37,12 @@ Le collecteur fournisseurs inventorie uniquement les métadonnées staging et St
 Le numéro mobile reste 1.0.6 (23), déjà soumis à Apple et Google sur une source antérieure. Ce lot n’utilise pas le label OTA et ne réserve pas de nouvelle version. La mise à jour native de l’inscription nécessite une version ultérieure, après lecture de l’état exact des stores. Les corrections présentes dans main ne doivent pas être décrites comme déjà installées sur les téléphones.
 
 Les captures et journaux locaux sont conservés sous `audits/2026-09-28-finalisation` dans le workspace. Les simulations utilisent des fixtures et ne remplacent ni une authentification PSC réelle, ni les signatures/SMS/paiements du cycle intégré, ni les mesures sur appareils physiques.
+
+## Fiabilité de la recette CI
+
+Les 140 simulations de chaque format sont réparties en deux lots indépendants, sans retrait de scénario ni augmentation du délai de test. L’inventaire Playwright confirme 77 + 63 scénarios, disjoints et complets, sur les cinq formats. Cela évite l’interruption du job iPad portrait à 25 minutes après 130 scénarios réussis. Le parcours Série C utilise le nouveau libellé « Salarié (CDD compris) » et conserve ses contrôles d’enregistrement.
+
+La file des tests utilisant la base partagée attend la fin complète des anciens jobs concernés, nettoyage compris ; elle ne reste plus bloquée par leurs simulations isolées encore actives. Les états inconnus, les jobs manquants, les réponses malformées et les anciennes attentes restent bloquants. Les listes sont paginées et la tentative est relue avant libération. Les GET réseau sont repris au plus trois fois, avec une limite de 15 secondes par tentative et un contrôle périodique toutes les 60 secondes. Les erreurs ne libèrent jamais la file. Cinquante-deux tests couvrent ce contrôleur ; celui-ci n’est pas un verrou atomique contre une relance manuelle postérieure à sa dernière lecture.
 
 ## Éligibilité professionnelle
 
