@@ -58,6 +58,9 @@ jobs:
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
+      - name: Journal et préflight fournisseurs hors réseau
+        run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs
+
       - name: Valider les formats de captures stores
         run: npm run screenshots:play:check && npm run screenshots:app-store:check
 
