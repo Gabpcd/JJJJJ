@@ -82,7 +82,7 @@ export function MesGainsApercuContent() {
             .eq('statut', 'TERMINEE')
             .order('debut_le', { ascending: false })
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1),
-          supabase.from('soignants').select('type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
+          supabase.from('soignants').select('profession, type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
           supabase.from('paiements_soignant' as any)
             .select('id, mission_id, facture_honoraire_id, statut, montant_net, methode, reference_virement, date_paiement, modifie_le, cree_le')
             .eq('soignant_id', user.id)
@@ -501,7 +501,7 @@ export function MesGainsApercuContent() {
         )}
         {libMissions.length > 0 && (
           <p className="text-[11px] text-muted-foreground mb-6">
-            👜 Honoraires libéraux bruts dus pour les missions terminées — ce montant ne signifie pas nécessairement qu'il est déjà encaissé. Les charges URSSAF/CARPIMKO sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
+            👜 Honoraires libéraux bruts dus pour les missions terminées — ce montant ne signifie pas nécessairement qu'il est déjà encaissé. Les charges URSSAF et de retraite sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
           </p>
         )}
       </>}
@@ -520,7 +520,8 @@ export function MesGainsApercuContent() {
       {isLiberal && (
         <div className="mb-6">
           <RappelsFiscaux
-            regimeFiscal={soignant?.regime_fiscal ?? 'MICRO_BNC'}
+            profession={soignant?.profession}
+            regimeFiscal={soignant?.regime_fiscal}
             regimeFiscalConfirme={soignant?.regime_fiscal_confirme === true}
           />
         </div>
@@ -590,7 +591,7 @@ export function MesGainsApercuContent() {
 
       <p className="text-[10px] text-muted-foreground italic mb-3">
         {salMissions.length > 0 && '* Net salarié estimé après cotisations salariales (~22 %). '}
-        {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF/CARPIMKO (annualisées). '}
+        {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF et de retraite (annualisées). '}
         {libMissions.length === 0 && salMissions.length === 0 && '* Aucun montant net n’est inventé tant que le régime n’est pas qualifié. '}
         Seuls les montants calculés par le moteur de paie / la facture font foi.
       </p>
