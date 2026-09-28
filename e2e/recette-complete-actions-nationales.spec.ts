@@ -18,8 +18,14 @@ test('ACTIONS — OTP : refus bloquant, interruption et reprise du contrat sans 
     await sms.dblclick();
     await expect.poll(() => control.appelsRetenus.filter(n => n === 'fn_envoyer_otp_signature').length).toBe(1);
     await expect(sms).toBeDisabled();
-    await page.getByRole('button', { name: /Retour/ }).filter({ visible: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/soignant/missions/${ids.mission}$`));
+    // Le retour traverse ici deux documents (ouverts par goto). L'URL seule
+    // peut changer avant le chargement des modules et le rendu de la mission.
+    await Promise.all([
+      page.waitForURL(new RegExp(`/soignant/missions/${ids.mission}$`), { waitUntil: 'load' }),
+      page.getByRole('button', { name: /Retour/ }).filter({ visible: true }).click(),
+    ]);
+    await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
+    await expect(accord).not.toBeVisible();
     liberer(); await expect.poll(() => state.sms.length).toBe(1);
     await expect(page.getByText(/Code envoyé au/)).not.toBeVisible();
     expect(state.signatures).toHaveLength(0);
