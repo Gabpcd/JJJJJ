@@ -33,7 +33,7 @@ test('modes : inscription rapide libre, choix des deux modes, brouillon et profe
   state.overrides.set('fn_types_exercice_autorises', ['SALARIE']);
   await page.getByRole('combobox', { name: 'Profession *', exact: true }).click();
   await page.getByTestId('profession-option-AS').click();
-  await expect(page.getByText('Votre profession ne permet pas l’exercice libéral. Le mode salarié comprend les CDD et les CDD courts.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.', { exact: true })).toBeVisible();
   await expect(salarie(page)).toBeChecked(); await expect(liberal(page)).toHaveCount(0);
   await capture(page, 'dossier-aide-soignante', info);
   expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]);

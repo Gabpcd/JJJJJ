@@ -43,7 +43,7 @@ export function ChoixModesExercice({ valeur, onChange, typesAutorises, loading, 
         <p className="text-xs text-muted-foreground" role="status">Vérification temporairement indisponible. Le mode salarié reste accessible. Vos choix sont conservés ; l’ajout du libéral nécessite une vérification.</p>
         <button type="button" onClick={reessayer} className="min-h-11 text-sm text-primary underline underline-offset-4">Réessayer la vérification</button>
       </div>}
-      {connus && !liberalAutorise && <p className="text-xs text-muted-foreground mt-2">Votre profession ne permet pas l’exercice libéral. Le mode salarié comprend les CDD et les CDD courts.</p>}
+      {connus && !liberalAutorise && <p className="text-xs text-muted-foreground mt-2">Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.</p>}
       {connus && ((!liberalAutorise && liberalSelectionne) || (!salarieAutorise && salarieSelectionne)) && <p className="text-xs text-destructive mt-2">Une ancienne préférence n’est plus autorisée pour votre profession. Décochez-la pour actualiser vos choix.</p>}
       {!valeur.length && <p className="text-xs text-muted-foreground mt-2">Sélectionnez au moins un mode d’exercice.</p>}
     </fieldset>

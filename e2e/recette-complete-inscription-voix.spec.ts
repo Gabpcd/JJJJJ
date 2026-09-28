@@ -10,7 +10,7 @@ test('inscription : vouvoiement du dossier et de ses erreurs, retour libre à l�
   await expect(page.getByText('Découvrez les missions. Votre dossier professionnel se complète ensuite.', { exact: true })).toBeVisible();
   await attendreAPI(page);
   await ouvrirDossierDepuisMission(page);
-  await expect(page.getByText('Votre profession ne permet pas l’exercice libéral. Le mode salarié comprend les CDD et les CDD courts.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.', { exact: true })).toBeVisible();
   await remplirIdentite(page);
   completion.professionRppsCorrespond = false;
   await page.getByPlaceholder(/^11 chiffres/).fill('10000000000');

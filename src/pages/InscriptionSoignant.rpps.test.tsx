@@ -36,7 +36,7 @@ describe('RPPS — la confirmation correspond aux informations actuellement sais
     fireEvent.change(screen.getByPlaceholderText(/^11 chiffres/), { target: { value: '10000000000' } });
     expect(await screen.findByText(/Ce RPPS correspond à la profession/)).toBeVisible();
     expect(screen.getByText(/Ce RPPS correspond à la profession/)).toHaveTextContent('Vérifiez votre numéro ou votre profession.');
-    expect(screen.getByText('Votre profession ne permet pas l’exercice libéral. Le mode salarié comprend les CDD et les CDD courts.')).toBeVisible();
+    expect(screen.getByText('Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.')).toBeVisible();
     expect(screen.queryByText(/RPPS vérifié dans l’Annuaire Santé/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer mon profil' }));
     expect(await screen.findByText(/Vérifiez les informations suivantes : cohérence du RPPS/)).toBeVisible();

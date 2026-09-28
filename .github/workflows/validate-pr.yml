@@ -379,6 +379,7 @@ jobs:
             tests/security/activation-inscriptions-publiques.test.sql
             tests/security/recherche-publique-comptage.test.sql
             tests/security/otp-signature-routage-projet.test.sql
+            tests/security/parrainage-attribution-protegee.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
