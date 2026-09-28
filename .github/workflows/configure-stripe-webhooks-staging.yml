@@ -2,6 +2,12 @@ name: Raccordement Stripe TEST — webhooks staging
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Configurer les webhooks ou vérifier séparément les fixtures financières (transaction annulée)'
+        type: choice
+        default: configure
+        options: [configure, verify-fixtures]
 
 permissions:
   contents: read
@@ -12,7 +18,7 @@ concurrency:
 
 jobs:
   configure-webhooks:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.action == 'configure'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -52,5 +58,31 @@ jobs:
         with:
           name: configuration-webhooks-staging-${{ github.run_id }}
           path: configuration-webhooks-staging.json
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-fixtures:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'verify-fixtures'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Tester les gardes de la vérification isolée
+        run: node --test tests/node/finance-fixture-isolation.node.mjs
+      - name: Vérifier la préparation des cohortes dans une transaction annulée
+        run: node scripts/recette-fournisseurs/verify-finance-fixture-isolation.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Rapport sans données de compte ni secret
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: finance-fixture-isolation-${{ github.run_id }}
+          path: finance-fixture-isolation.json
           if-no-files-found: error
           retention-days: 14
