@@ -6,13 +6,14 @@ export type RegimeFiscal = 'MICRO_BNC' | 'DECLARATION_CONTROLEE';
 
 interface RappelsFiscauxProps {
   profession?: string | null;
+  afficherLienCharges?: boolean;
   regimeFiscal?: RegimeFiscal | null;
   regimeFiscalConfirme?: boolean;
 }
 
 // Aucun échéancier individuel n'est synchronisé dans Jolene. Ne pas déduire
 // une date, une fréquence ou une urgence du seul régime fiscal/profession.
-export function RappelsFiscaux({ profession, regimeFiscal, regimeFiscalConfirme = false }: RappelsFiscauxProps) {
+export function RappelsFiscaux({ profession, regimeFiscal, regimeFiscalConfirme = false, afficherLienCharges = true }: RappelsFiscauxProps) {
   const installation = profession ? REGLES_INSTALLATION_LIBERAL[profession] : undefined;
   const caisse = installation?.caisse_retraite;
   const lienCaisse = installation?.lien_caisse_retraite;
@@ -45,9 +46,9 @@ export function RappelsFiscaux({ profession, regimeFiscal, regimeFiscalConfirme 
           </a>
         ))}
       </div>
-      <Link to="/soignant/charges" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">
+      {afficherLienCharges && <Link to="/soignant/charges" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">
         Mes charges et mon régime fiscal
-      </Link>
+      </Link>}
     </section>
   );
 }

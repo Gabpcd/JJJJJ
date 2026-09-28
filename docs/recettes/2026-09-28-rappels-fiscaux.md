@@ -1,4 +1,4 @@
-# Rappels fiscaux de la page Revenus
+# Rappels fiscaux et page Mes charges
 
 Le compte médecin fictif de staging affichait la CARPIMKO et des dates fixes
 calculées à partir du jour courant. Aucun échéancier individuel n'était
@@ -30,10 +30,33 @@ Preuves locales hors dépôt :
 `audits/2026-09-28-finalisation/finance-ui/rappels-simules/` et
 `audits/2026-09-28-finalisation/finance-ui/rappels-staging-reel/`.
 
-## Limite distincte encore ouverte
+## Page Mes charges corrigée dans le même lot
 
-La page liée `ChargesSociales` conserve des estimations forfaitaires et des
-dates génériques, notamment CARPIMKO et le 15 mai. Leur pertinence par profession
-et régime doit être revue séparément avant de présenter le module fiscal comme
-validé. Cette correction ne valide aucun barème et ne change ni l'éligibilité
-libérale, ni le moteur de paie, ni les paiements ou remboursements.
+La simulation de la page liée a retrouvé le même défaut : taux URSSAF uniforme,
+forfait/part CARPIMKO, RCP de 400 €, calendrier et revenu net estimé appliqués
+sans connaître la situation individuelle. Ces projections, leur graphique et
+leur CSV sont retirés. Aucun nouveau barème ou conseil fiscal n'est introduit.
+
+Le récapitulatif des missions libérales terminées reste consultable et
+exportable. Son total brut n'est plus nommé chiffre d'affaires encaissé. La
+caisse vient de la matrice existante ; la date RCP vient du document vérifié.
+Le régime fiscal reste modifiable. Aucun choix n'est présélectionné si absent,
+et une sauvegarde n'est annoncée qu'après lecture du profil mis à jour. Une
+panne affiche une erreur et permet de réessayer, sans faux état vide.
+
+Les simulations complémentaires couvrent les missions mixtes et leur export,
+les erreurs de lecture avec reprise, la sauvegarde refusée/incomplète/lente,
+les clics concurrents, le rechargement et la RCP valide puis expirée. Les
+simulations initiales attendaient l’ancienne route Documents ; la vérification
+a été corrigée pour sa destination canonique, sans modification de la route.
+
+Cinq parcours supplémentaires avec le backend de staging réel passent :
+Revenus → Mes charges → enregistrement Déclaration contrôlée → rechargement.
+Seul le profil fictif de recette a été modifié. Son régime final est
+DECLARATION_CONTROLEE, confirmé. Les autres profils n'ont pas été modifiés.
+
+La synchronisation d'échéanciers individuels et un moteur d'estimation fiscale
+validé ne sont pas implémentés. Les liens officiels restent disponibles. Aucun
+paiement/remboursement, règle d'éligibilité libérale ou moteur de paie n'est
+modifié ou validé par ces corrections. Simulations et navigateurs de staging ne
+constituent pas un essai sur appareil physique ni une livraison en production.
