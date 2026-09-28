@@ -1,0 +1,39 @@
+name: Configuration Stripe TEST — staging seulement
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  configure-test-key:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Gardes de configuration
+        run: node --test tests/node/configure-stripe-staging.node.mjs
+      - name: Installer la clé TEST existante dans le seul projet staging
+        run: node scripts/recette-fournisseurs/configure-stripe-test.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Rapport sans clé ni empreinte
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: configuration-stripe-staging-${{ github.run_id }}
+          path: configuration-stripe-staging.json
+          if-no-files-found: error
+          retention-days: 14
