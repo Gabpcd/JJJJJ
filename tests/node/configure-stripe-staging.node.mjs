@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configureStripeTest, PROJECT, ACCOUNT } from '../../scripts/recette-fournisseurs/configure-stripe-test.mjs';
+import { configureStripeTest, PROJECT, ACCOUNT, FUNCTIONS } from '../../scripts/recette-fournisseurs/configure-stripe-test.mjs';
 
 const token = 'management-test-fixture';
 const stripeKey = 'sk_test_fixtureOnly123';
@@ -15,6 +15,7 @@ function fixture(overrides = {}) {
     if (url === 'https://api.stripe.com/v1/balance') return response(overrides.balance ?? { livemode: false });
     assert.ok(url.startsWith(`https://api.supabase.com/v1/projects/${PROJECT}/`));
     assert.equal(options.headers.Authorization, `Bearer ${token}`);
+    if (url.endsWith('/functions')) return response(overrides.functions ?? FUNCTIONS.map(slug => ({ slug, status: 'ACTIVE', verify_jwt: false })));
     if (url.endsWith('/database/query')) {
       assert.equal(JSON.parse(options.body).read_only, true);
       return response(overrides.queues ?? [{ active_crons: 0, releases: 0, refunds: 0 }]);
@@ -48,6 +49,16 @@ test('installs only the existing test key in fixed staging; does not certify tra
   assert.ok(f.calls.every(call => !call.url.includes('webhook_endpoints') && !call.url.includes('payment_intents')));
 });
 
+test('precheck runs all guards without installing a key', async () => {
+  const f = fixture(); const report = await f.run({ checkOnly: true });
+  assert.equal(report.status, 'PREREQUISITES_OK');
+  assert.equal(report.secretWriteAttempted, false);
+  assert.equal(report.readyForTransports, false);
+  assert.equal(f.calls.filter(call => call.method === 'POST' && call.url.endsWith('/secrets')).length, 0);
+  const blocked = fixture({ queues: [{ active_crons: 1, releases: 0, refunds: 0 }] });
+  assert.equal((await blocked.run({ checkOnly: true })).status, 'BLOCKED');
+});
+
 for (const [title, args, code] of [
   ['no token', { token: '' }, 'STAGING_TOKEN_MISSING'],
   ['live key', { stripeKey: 'sk_live_wrong' }, 'TEST_KEY_REQUIRED'],
@@ -70,6 +81,8 @@ for (const [title, overrides, code] of [
   ['default webhook', { before: [{ name: 'STRIPE_WEBHOOK_SECRET' }] }, 'WEBHOOKS_ALREADY_CONFIGURED'],
   ['connect webhook', { before: [{ name: 'STRIPE_CONNECT_WEBHOOK_SECRET' }] }, 'WEBHOOKS_ALREADY_CONFIGURED'],
   ['malformed secrets', { before: [{}] }, 'INVALID_SECRET_METADATA'],
+  ['missing function metadata', { functions: [] }, 'EXISTING_FUNCTION_AUTH_MODE_MISMATCH'],
+  ['different gateway authentication', { functions: FUNCTIONS.map(slug => ({ slug, status: 'ACTIVE', verify_jwt: true })) }, 'EXISTING_FUNCTION_AUTH_MODE_MISMATCH'],
 ]) test(`blocks ${title} without any secret write`, async () => {
   const f = fixture(overrides); const report = await f.run();
   assert.equal(report.status, 'BLOCKED'); assert.equal(report.issue, code);
