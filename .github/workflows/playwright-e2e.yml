@@ -14,8 +14,7 @@ on:
 
 permissions:
   contents: read
-  # Requis par les deux gates GitHub API : file FIFO Playwright et attente du
-  # déploiement Supabase portant exactement le SHA testé sur main.
+  # Requis pour attendre le déploiement Supabase du SHA testé sur main.
   actions: read
 
 env:
@@ -83,6 +82,12 @@ jobs:
   e2e-pr:
     name: Playwright E2E (PR — Chromium)
     if: github.event_name == 'pull_request'
+    # Verrou détenu par GitHub jusqu'à la fin du job et de son nettoyage.
+    # queue:max conserve les jobs en attente au lieu de les remplacer.
+    concurrency:
+      group: jolene-playwright-shared-database
+      queue: max
+      cancel-in-progress: false
     env:
       # La PR précède nécessairement le déploiement de ses migrations. Ces
       # replis sont limités à ce job PR et hérités par ses trois invocations
@@ -97,7 +102,7 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    # 45 min maximum de file FIFO + ~25 min de suite dans le pire cas.
+    # L'attente de concurrence GitHub précède l'allocation du runner.
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
@@ -105,13 +110,6 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-      - name: Attendre les runs Playwright plus anciens (FIFO)
-        timeout-minutes: 46
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
-          PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'
-        run: node scripts/ci/wait-for-older-playwright-runs.mjs
       - name: Install dependencies
         run: npm ci
       - name: Résoudre la clé service_role (Management API — autonome)
@@ -271,6 +269,10 @@ jobs:
   e2e-main:
     name: Playwright E2E (${{ matrix.project }})
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: jolene-playwright-shared-database
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # Bloquant comme le job PR. La matrice est volontairement limitée à
     # Chromium et tous les runs sont sérialisés ci-dessus : un échec ne doit
@@ -280,7 +282,7 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    # 45 min FIFO + 20 min deploy Supabase + ~30 min de suite au maximum.
+    # Inclut l'attente éventuelle du déploiement Supabase et la suite complète.
     timeout-minutes: 100
     strategy:
       fail-fast: false
@@ -300,13 +302,6 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-      - name: Attendre les runs Playwright plus anciens (FIFO)
-        timeout-minutes: 46
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
-          PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'
-        run: node scripts/ci/wait-for-older-playwright-runs.mjs
       - name: Attendre Deploy Supabase du même SHA
         if: github.event_name == 'push'
         timeout-minutes: 21

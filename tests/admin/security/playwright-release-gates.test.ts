@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 import {
   PGRST202_FALLBACK_FLAG,
   isPgrst202EligibilityFallbackAllowed,
@@ -136,10 +137,19 @@ describe('file FIFO Playwright', () => {
     expect(fetchImpl.mock.calls.every(([url]) => !String(url).includes('/cancel'))).toBe(true);
   });
 
-  it('est câblée sur les jobs PR et main sans concurrency GitHub annulable', () => {
-    expect(workflow).not.toMatch(/^concurrency:/m);
-    expect(workflow.match(/wait-for-older-playwright-runs\.mjs/g)).toHaveLength(2);
-    expect(workflow.match(/PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'/g)).toHaveLength(2);
+  it('sérialise les jobs PR et main par la même file GitHub sans annuler les jobs en attente', () => {
+    const config = parse(workflow);
+    expect(config.concurrency).toBeUndefined();
+    const lock = {
+      group: 'jolene-playwright-shared-database',
+      queue: 'max',
+      'cancel-in-progress': false,
+    };
+    expect(config.jobs['e2e-pr'].concurrency).toEqual(lock);
+    expect(config.jobs['e2e-main'].concurrency).toEqual(lock);
+    expect(config.jobs['simulation-interfaces'].concurrency).toBeUndefined();
+    // Une seconde attente FIFO dans le verrou GitHub pourrait bloquer la file.
+    expect(workflow).not.toContain('wait-for-older-playwright-runs.mjs');
     expect(workflow).toContain('actions: read');
   });
 });
