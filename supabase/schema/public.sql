@@ -5353,6 +5353,39 @@ $$;
 ALTER FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE l private.rappels_quotidiens_livraisons; n integer;
+BEGIN
+ IF p_resultat NOT IN ('ENVOYE','ANNULE','ERREUR') OR p_resultat IS NULL THEN RAISE EXCEPTION 'Résultat invalide'; END IF;
+ SELECT * INTO l FROM private.rappels_quotidiens_livraisons WHERE email_id=p_email_id FOR UPDATE;
+ -- Une mission supprimée peut avoir retiré le reçu ; seule son annulation reste permise.
+ IF NOT FOUND AND p_resultat<>'ANNULE' THEN RAISE EXCEPTION 'Livraison absente'; END IF;
+ UPDATE public.email_queue SET statut=p_resultat,envoye=(p_resultat='ENVOYE'),
+   envoye_le=CASE WHEN p_resultat='ENVOYE' THEN now() ELSE NULL END,
+   erreur=CASE p_resultat WHEN 'ERREUR' THEN 'Transport à reprendre' WHEN 'ANNULE' THEN 'Rappel devenu inutile ou refusé par les préférences' ELSE NULL END
+ WHERE id=p_email_id AND statut='EN_ATTENTE' AND type LIKE 'CRON_DAILY_%';
+ GET DIAGNOSTICS n=ROW_COUNT;
+ IF n=0 THEN RETURN; END IF;
+ IF p_resultat='ERREUR' THEN
+   UPDATE private.rappels_quotidiens_livraisons SET tentatives=tentatives+1,
+     prochaine_tentative_le=now()+make_interval(mins=>least(60,power(2,least(tentatives,6))::integer)) WHERE email_id=p_email_id;
+ ELSIF p_resultat='ENVOYE' AND l.nature LIKE 'CONTRAT_%' THEN
+   -- Acquittement et comptabilisation du contrat sont indivisibles, à la date du lot.
+   INSERT INTO public.rappels_contrat_travail(mission_id,envoye_le,cible_etab,cible_soignant)
+   VALUES(l.mission_id,l.jour,l.nature='CONTRAT_ETAB',l.nature='CONTRAT_SOIGNANT')
+   ON CONFLICT(mission_id,envoye_le) DO UPDATE SET
+     cible_etab=public.rappels_contrat_travail.cible_etab OR excluded.cible_etab,
+     cible_soignant=public.rappels_contrat_travail.cible_soignant OR excluded.cible_soignant;
+ END IF;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -18218,6 +18251,15 @@ $$;
 ALTER FUNCTION "public"."fn_annuler_serie_etablissement"("p_mission_ids" "uuid"[]) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_anonymisation_compte_confirmee"("p_utilisateur_id" "uuid", "p_type_profil" "text") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$ SELECT private.fn_anonymisation_compte_confirmee(p_utilisateur_id,p_type_profil) $$;
+
+
+ALTER FUNCTION "public"."fn_anonymisation_compte_confirmee"("p_utilisateur_id" "uuid", "p_type_profil" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_anonymiser_gps_anciennes"() RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -22425,6 +22467,19 @@ $$;
 ALTER FUNCTION "public"."fn_calculer_tous_documents_valides"("p_soignant_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_capacite_alertes_recherches"() RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+ SELECT auth.uid() IS NOT NULL
+ AND private.fn_etablissement_destinataire_alerte(auth.uid()) IS NOT NULL
+ AND EXISTS(SELECT 1 FROM private.alertes_filtres_worker WHERE derniere_execution_le>now()-interval '3 hours')
+$$;
+
+
+ALTER FUNCTION "public"."fn_capacite_alertes_recherches"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_categorie_etablissement"("p_type" "text", "p_finess_secteur" "text" DEFAULT NULL::"text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     SET "search_path" TO 'public'
@@ -23483,21 +23538,10 @@ BEGIN
   IF NOT FOUND THEN RETURN 0; END IF;
 
   IF v_filtre.audience = 'SOIGNANT_RECHERCHE_MISSIONS' THEN
-    v_profession := v_filtre.filtres->>'profession';
-    v_taux_min := COALESCE((v_filtre.filtres->>'tauxMin')::numeric, 0);
-    v_urgentes_only := COALESCE((v_filtre.filtres->>'urgentesOnly')::boolean, false);
-    SELECT count(*) INTO v_count FROM missions m
-    WHERE m.statut = 'OUVERTE'
-      AND m.cree_le > p_since
-      AND (v_profession IS NULL OR v_profession = '' OR m.profession_requise::text = v_profession)
-      AND COALESCE(m.taux_horaire_base, 0) >= v_taux_min
-      AND (NOT v_urgentes_only OR COALESCE(m.est_urgente, false) = true);
+    SELECT count(*) INTO v_count FROM private.fn_resultats_filtre_missions(p_filtre_id,p_since);
   ELSIF v_filtre.audience = 'ETAB_RECHERCHE_SOIGNANTS' THEN
-    v_profession := v_filtre.filtres->>'profession';
-    SELECT count(*) INTO v_count FROM soignants s
-    WHERE s.cree_le > p_since
-      AND COALESCE(s.tous_documents_valides, false) = true
-      AND (v_profession IS NULL OR v_profession = '' OR s.profession::text = v_profession);
+    SELECT count(*) INTO v_count
+    FROM private.fn_resultats_filtre_soignants(p_filtre_id, p_since);
   END IF;
 
   RETURN COALESCE(v_count, 0);
@@ -25347,6 +25391,22 @@ BEGIN
   IF v_uid IS NULL THEN RETURN jsonb_build_object('error','Non authentifié'); END IF;
   IF length(p_nom) = 0 OR length(p_nom) > 100 THEN
     RETURN jsonb_build_object('error','Nom invalide (1-100 caractères)');
+  END IF;
+
+  IF p_audience = 'ETAB_RECHERCHE_SOIGNANTS' THEN
+    IF private.fn_etablissement_destinataire_alerte(v_uid) IS NULL THEN
+      RETURN jsonb_build_object('error','Votre compte doit être actif et rattaché à un établissement.');
+    END IF;
+    IF NOT private.fn_filtres_recherche_soignants_valides(COALESCE(p_filtres,'{}'::jsonb)) THEN
+      RETURN jsonb_build_object('error','Critères de recherche invalides. Recréez la recherche depuis l’annuaire.');
+    END IF;
+  END IF;
+
+  IF p_audience='SOIGNANT_RECHERCHE_MISSIONS' AND (NOT private.fn_destinataire_alerte_actif(v_uid) OR NOT private.fn_filtres_recherche_missions_valides(COALESCE(p_filtres,'{}'::jsonb))) THEN
+    RETURN jsonb_build_object('error','Compte ou critères de recherche invalides.');
+  END IF;
+  IF p_audience='ETAB_RECHERCHE_SOIGNANTS' AND p_alerte_active AND NOT public.fn_capacite_alertes_recherches() THEN
+    RETURN jsonb_build_object('error','Les alertes ne sont pas encore disponibles. Vous pouvez sauvegarder sans alerte.');
   END IF;
 
   -- Limite : 20 filtres max par utilisateur
@@ -31830,7 +31890,7 @@ COMMENT ON FUNCTION "public"."fn_envoyer_message_valide"("p_conversation_id" "uu
 CREATE OR REPLACE FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
-    AS $$
+    AS $_$
 DECLARE
   v_uid uuid := auth.uid();
   v_contrat record;
@@ -31844,6 +31904,8 @@ DECLARE
   v_ip inet;
   v_rate_check jsonb;
   v_idempotency_key text;
+  v_supabase_url text;
+  v_service_role_key text;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
@@ -31889,6 +31951,22 @@ BEGIN
 
   IF v_telephone IS NULL OR v_telephone = '' THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'TELEPHONE_MANQUANT', 'error', 'Numéro de téléphone manquant. Mettez à jour votre profil avant de signer.');
+  END IF;
+
+  -- Le bootstrap staging aligne ces deux valeurs sur son propre projet.
+  -- Aucune URL de production de secours : une configuration absente ou
+  -- étrangère à un projet Supabase refuse l'envoi avant de créer l'OTP.
+  SELECT rtrim(ds.decrypted_secret, '/') INTO v_supabase_url
+    FROM vault.decrypted_secrets ds WHERE ds.name = 'supabase_url' LIMIT 1;
+  SELECT ds.decrypted_secret INTO v_service_role_key
+    FROM vault.decrypted_secrets ds WHERE ds.name = 'service_role_key' LIMIT 1;
+  IF v_supabase_url IS NULL
+     OR v_supabase_url !~ '^https://[a-z0-9]{20}\.supabase\.co$'
+     OR v_service_role_key IS NULL OR btrim(v_service_role_key) = '' THEN
+    RETURN jsonb_build_object(
+      'success', false, 'error_code', 'CONFIGURATION_SMS_INDISPONIBLE',
+      'error', 'Envoi du code indisponible. Réessayez plus tard.'
+    );
   END IF;
 
   PERFORM pg_catalog.pg_advisory_xact_lock(
@@ -31955,13 +32033,10 @@ BEGIN
 
   BEGIN
     PERFORM net.http_post(
-      url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-sms',
+      url := v_supabase_url || '/functions/v1/send-sms',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (
-          SELECT decrypted_secret FROM vault.decrypted_secrets
-           WHERE name = 'service_role_key' LIMIT 1
-        )
+        'Authorization', 'Bearer ' || v_service_role_key
       ),
       body := jsonb_build_object(
         'telephone', v_telephone,
@@ -31986,7 +32061,7 @@ BEGIN
     'sms_restants', greatest(0, 3 - v_sms_count)
   );
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "uuid") OWNER TO "postgres";
@@ -33891,64 +33966,49 @@ ALTER FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "uuid") OWNER 
 
 CREATE OR REPLACE FUNCTION "public"."fn_evaluer_alertes_filtres"("p_frequence" "text" DEFAULT NULL::"text") RETURNS TABLE("filtre_id" "uuid", "utilisateur_id" "uuid", "audience" "public"."filtre_audience", "nom" "text", "nb_nouveaux" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public', 'extensions'
+    SET "search_path" TO ''
     AS $$
-DECLARE
-  r RECORD;
-  v_count integer;
-  -- Lot 17 : cap en configuration (défaut = ancienne valeur en dur).
-  v_cap_h int := GREATEST(1, fn_param_num('alerte_filtre_cap_h', 20)::int);
+DECLARE r record; n integer; items jsonb; payload jsonb; email_type text; email_id uuid; etab uuid;
+ v_cap_h integer:=greatest(1,public.fn_param_num('alerte_filtre_cap_h',20)::int);
 BEGIN
-  FOR r IN
-    SELECT * FROM filtres_sauvegardes
-    WHERE alerte_active = true
-      AND (
-        (p_frequence IS NULL OR frequence_alerte::text = p_frequence)
-        AND (
-          (frequence_alerte = 'QUOTIDIENNE'   AND dernier_check_le < now() - interval '23 hours') OR
-          (frequence_alerte = 'HEBDOMADAIRE'  AND dernier_check_le < now() - interval '6 days 23 hours') OR
-          (frequence_alerte = 'IMMEDIATE'     AND dernier_check_le < now() - interval '55 minutes')
-        )
-      )
-  LOOP
-    v_count := fn_compter_nouveaux_pour_filtre(r.id, r.dernier_check_le);
-    UPDATE filtres_sauvegardes
-    SET dernier_check_le = now(),
-        nb_resultats_dernier_check = v_count
-    WHERE id = r.id;
-    IF v_count > 0 THEN
-      -- 6c.4 : notification in-app/push (soignant) avec deep-link direct dans
-      -- le deck de swipe. L'email (pipeline existant) part en parallèle via
-      -- les lignes retournées par cette fonction.
-      -- 7d-A2 : CAP DE FRÉQUENCE — au plus une notification MISSION_A_POURVOIR
-      -- par N h (param) et par soignant, toutes recherches confondues (anti-spam).
-      IF r.audience = 'SOIGNANT_RECHERCHE_MISSIONS' AND NOT EXISTS (
-        SELECT 1 FROM notifications n
-         WHERE n.destinataire_id = r.utilisateur_id
-           AND n.type = 'MISSION_A_POURVOIR'
-           AND n.cree_le > now() - make_interval(hours => v_cap_h)
-      ) THEN
-        INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
-        VALUES (
-          r.utilisateur_id, 'SOIGNANT', 'MISSION_A_POURVOIR',
-          '✨ ' || v_count || ' nouvelle' || CASE WHEN v_count > 1 THEN 's' ELSE '' END
-            || ' mission' || CASE WHEN v_count > 1 THEN 's' ELSE '' END
-            || ' pour « ' || r.nom || ' »',
-          'De nouvelles missions correspondent à ta recherche sauvegardée — découvre-les avant les autres.',
-          '/soignant/recherche-missions?vue=swipe'
-        );
-      END IF;
-
-      filtre_id := r.id;
-      utilisateur_id := r.utilisateur_id;
-      audience := r.audience;
-      nom := r.nom;
-      nb_nouveaux := v_count;
-      RETURN NEXT;
+ FOR r IN SELECT f.* FROM public.filtres_sauvegardes f
+ WHERE f.alerte_active AND (p_frequence IS NULL OR f.frequence_alerte::text=p_frequence)
+ AND f.dernier_check_le <= now()-CASE f.frequence_alerte WHEN 'IMMEDIATE' THEN interval '1 hour' WHEN 'QUOTIDIENNE' THEN interval '1 day' ELSE interval '7 days' END
+ ORDER BY f.dernier_check_le, f.id
+ LIMIT least(500,greatest(1,public.fn_param_num('alertes_filtres_lot',100)::integer))
+ FOR UPDATE OF f SKIP LOCKED
+ LOOP
+  n:=public.fn_compter_nouveaux_pour_filtre(r.id,r.dernier_check_le);
+  IF n>0 THEN
+   items:=public.fn_obtenir_apercu_filtre(r.id,r.dernier_check_le,5);
+   IF jsonb_array_length(items)=0 THEN RAISE EXCEPTION 'Compteur et aperçu divergents pour %',r.id; END IF;
+   payload:=jsonb_build_object('nom_filtre',r.nom,'count',n);
+   etab:=NULL;
+   IF r.audience='SOIGNANT_RECHERCHE_MISSIONS' THEN
+    email_type:='NOUVELLES_MISSIONS_FILTRE';
+    payload:=payload||jsonb_build_object('prenom',coalesce((SELECT s.prenom FROM public.soignants s WHERE s.id=r.utilisateur_id),''),'missions',items);
+   ELSE
+    email_type:='NOUVEAUX_SOIGNANTS_FILTRE';
+    etab:=private.fn_etablissement_destinataire_alerte(r.utilisateur_id);
+    payload:=payload||jsonb_build_object('nom_etab',(SELECT e.nom FROM public.etablissements e WHERE e.id=etab),'soignants',items);
+   END IF;
+   -- A retry of the same transaction/window never creates a second queue row.
+   IF NOT EXISTS(SELECT 1 FROM private.alertes_filtres_livraisons l WHERE l.filtre_id=r.id AND l.fenetre_debut=r.dernier_check_le AND l.fenetre_fin=now()) THEN
+    INSERT INTO public.email_queue(type,destinataire_id,data,statut) VALUES(email_type,r.utilisateur_id,payload,'EN_ATTENTE') RETURNING id INTO email_id;
+    INSERT INTO private.alertes_filtres_livraisons(email_id,filtre_id,fenetre_debut,fenetre_fin,filtres,etablissement_id)
+    VALUES(email_id,r.id,r.dernier_check_le,now(),r.filtres,etab);
+    IF r.audience='SOIGNANT_RECHERCHE_MISSIONS' AND NOT EXISTS(SELECT 1 FROM public.notifications no WHERE no.destinataire_id=r.utilisateur_id AND no.type='MISSION_A_POURVOIR' AND no.cree_le>now()-make_interval(hours=>v_cap_h)) THEN
+     INSERT INTO public.notifications(destinataire_id,type_destinataire,type,titre,corps,lien)
+     VALUES(r.utilisateur_id,'SOIGNANT','MISSION_A_POURVOIR',n||' nouvelle(s) mission(s) pour « '||r.nom||' »','De nouvelles missions correspondent à votre recherche sauvegardée.','/soignant/parametres/recherches-sauvegardees');
     END IF;
-  END LOOP;
-END;
-$$;
+   END IF;
+  END IF;
+  UPDATE public.filtres_sauvegardes f SET dernier_check_le=now(),nb_resultats_dernier_check=n WHERE f.id=r.id;
+ END LOOP;
+ -- Le contrat de retour reste compatible avec l'ancien worker : aucune ligne
+ -- à envoyer en parallèle. Il sait déjà consommer email_queue une seule fois.
+ RETURN;
+END $$;
 
 
 ALTER FUNCTION "public"."fn_evaluer_alertes_filtres"("p_frequence" "text") OWNER TO "postgres";
@@ -38117,6 +38177,41 @@ $$;
 ALTER FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "uuid", "p_expected_s3_cle" "text", "p_iban" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_lire_rappel_quotidien"("p_email_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE l private.rappels_quotidiens_livraisons; m public.missions; s public.soignants;
+BEGIN
+ SELECT * INTO l FROM private.rappels_quotidiens_livraisons WHERE email_id=p_email_id;
+ IF NOT FOUND THEN RETURN jsonb_build_object('valide',false); END IF;
+ SELECT * INTO m FROM public.missions WHERE id=l.mission_id;
+ SELECT * INTO s FROM public.soignants WHERE id=l.soignant_id;
+ IF m.id IS NULL OR s.id IS NULL OR s.supprime_le IS NOT NULL OR m.debut_le<=now()
+   OR m.debut_le IS DISTINCT FROM l.debut_le OR m.soignant_assigne_id IS DISTINCT FROM l.soignant_id
+   OR m.etablissement_id IS DISTINCT FROM l.etablissement_id
+   OR NOT EXISTS(SELECT 1 FROM public.etablissements WHERE id=l.etablissement_id AND supprime_le IS NULL)
+   OR NOT EXISTS(SELECT 1 FROM public.email_queue WHERE id=p_email_id AND statut='EN_ATTENTE'
+     AND destinataire_id=l.destinataire_id AND type='CRON_DAILY_'||l.nature AND data=l.corps)
+ THEN RETURN jsonb_build_object('valide',false); END IF;
+ -- Le texte « demain » ne peut traverser minuit dans une file en retard.
+ IF l.nature LIKE 'MISSION_%' AND (m.statut<>'ASSIGNEE' OR l.jour<>CURRENT_DATE OR m.debut_le::date<>CURRENT_DATE+1)
+ THEN RETURN jsonb_build_object('valide',false); END IF;
+ IF l.nature LIKE 'CONTRAT_%' AND (m.statut NOT IN ('ASSIGNEE','EN_COURS') OR m.type_contrat_applique IS DISTINCT FROM 'SALARIE'
+   OR EXISTS(SELECT 1 FROM public.contrats_travail_missions WHERE mission_id=l.mission_id))
+ THEN RETURN jsonb_build_object('valide',false); END IF;
+ -- Ne jamais envoyer à un ancien téléphone après une modification de profil.
+ IF l.nature='MISSION_SMS' AND (s.telephone IS DISTINCT FROM l.corps->>'telephone'
+   OR s.sms_actif=false OR s.sms_alertes_actives=false OR s.est_compte_test=true)
+ THEN RETURN jsonb_build_object('valide',false); END IF;
+ RETURN jsonb_build_object('valide',true,'canal',CASE WHEN l.nature='MISSION_SMS' THEN 'SMS' ELSE 'EMAIL' END,
+   'scope',l.scope,'identite',l.identite,'corps',l.corps);
+END $$;
+
+
+ALTER FUNCTION "public"."fn_lire_rappel_quotidien"("p_email_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_lire_secret_cron"() RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'vault', 'extensions'
@@ -41312,12 +41407,10 @@ BEGIN
            OR e.adresse_code_postal LIKE btrim(p_ville) || '%')
       AND (NOT v_est_soignant OR public.fn_soignant_eligible_mission(v_uid, m.id, false))
       AND (v_uid IS NULL OR NOT public.fn_est_exclu(v_uid, m.etablissement_id))
-  ), counted AS (
-    SELECT count(*)::bigint AS cnt FROM filtered
   )
   SELECT f.mid, f.mintitule, f.mprof, f.mville, f.mcp, f.mdebut, f.mfin,
-         f.mtaux, f.murgente, f.mcontrat, c.cnt
-  FROM filtered f CROSS JOIN counted c
+         f.mtaux, f.murgente, f.mcontrat, count(*) OVER ()
+  FROM filtered f
   ORDER BY f.murgente DESC, f.mcree DESC;
 END;
 $$;
@@ -41515,6 +41608,23 @@ BEGIN
 
   IF p_nom IS NOT NULL AND (length(p_nom) = 0 OR length(p_nom) > 100) THEN
     RETURN jsonb_build_object('error','Nom invalide (1-100 caractères)');
+  END IF;
+
+  IF v_old.audience = 'ETAB_RECHERCHE_SOIGNANTS' AND p_alerte_active IS TRUE THEN
+    IF private.fn_etablissement_destinataire_alerte(v_uid) IS NULL THEN
+      RETURN jsonb_build_object('error','Votre compte doit être actif et rattaché à un établissement.');
+    END IF;
+    IF NOT private.fn_filtres_recherche_soignants_valides(v_old.filtres) THEN
+      RETURN jsonb_build_object('error','Critères de recherche invalides. Recréez la recherche depuis l’annuaire.');
+    END IF;
+  END IF;
+
+  IF p_alerte_active IS TRUE AND v_old.audience='SOIGNANT_RECHERCHE_MISSIONS'
+    AND (NOT private.fn_destinataire_alerte_actif(v_uid) OR NOT private.fn_filtres_recherche_missions_valides(v_old.filtres)) THEN
+    RETURN jsonb_build_object('error','Compte ou critères de recherche invalides.');
+  END IF;
+  IF p_alerte_active IS TRUE AND NOT v_old.alerte_active AND v_old.audience='ETAB_RECHERCHE_SOIGNANTS' AND NOT public.fn_capacite_alertes_recherches() THEN
+    RETURN jsonb_build_object('error','Les alertes ne sont pas encore disponibles.');
   END IF;
 
   UPDATE filtres_sauvegardes SET
@@ -43913,9 +44023,6 @@ BEGIN
   IF NOT FOUND THEN RETURN '[]'::jsonb; END IF;
 
   IF v_filtre.audience = 'SOIGNANT_RECHERCHE_MISSIONS' THEN
-    v_profession := v_filtre.filtres->>'profession';
-    v_taux_min := COALESCE((v_filtre.filtres->>'tauxMin')::numeric, 0);
-    v_urgentes_only := COALESCE((v_filtre.filtres->>'urgentesOnly')::boolean, false);
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
       'id', m.id, 'intitule', m.intitule, 'profession', m.profession_requise::text,
       'etablissement', e.nom, 'ville', e.adresse_ville,
@@ -43925,29 +44032,22 @@ BEGIN
     ) ORDER BY m.cree_le DESC), '[]'::jsonb)
     INTO v_result
     FROM (
-      SELECT * FROM missions m2
-      WHERE m2.statut = 'OUVERTE' AND m2.cree_le > p_since
-        AND (v_profession IS NULL OR v_profession = '' OR m2.profession_requise::text = v_profession)
-        AND COALESCE(m2.taux_horaire_base, 0) >= v_taux_min
-        AND (NOT v_urgentes_only OR COALESCE(m2.est_urgente, false) = true)
-      ORDER BY m2.cree_le DESC LIMIT p_limit
+      SELECT m2.* FROM missions m2
+      JOIN private.fn_resultats_filtre_missions(p_filtre_id,p_since) r ON r.mission_id=m2.id
+      ORDER BY m2.cree_le DESC,m2.id LIMIT least(100,greatest(1,coalesce(p_limit,5)))
     ) m
     LEFT JOIN etablissements e ON e.id = m.etablissement_id;
   ELSIF v_filtre.audience = 'ETAB_RECHERCHE_SOIGNANTS' THEN
-    v_profession := v_filtre.filtres->>'profession';
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
-      'id', s.id, 'prenom', s.prenom,
-      'nom_initiale', LEFT(s.nom, 1) || '.',
+      'id', s.id, 'prenom', s.prenom, 'nom_initiale', LEFT(s.nom,1) || '.',
       'profession', s.profession::text,
-      'note_moyenne', s.note_moyenne
-    ) ORDER BY s.cree_le DESC), '[]'::jsonb)
-    INTO v_result
+      'note_moyenne', CASE WHEN COALESCE(s.nb_evaluations,0) >= 3 THEN s.note_moyenne ELSE NULL END
+    ) ORDER BY s.cree_le DESC, s.id), '[]'::jsonb) INTO v_result
     FROM (
-      SELECT * FROM soignants s2
-      WHERE s2.cree_le > p_since
-        AND COALESCE(s2.tous_documents_valides, false) = true
-        AND (v_profession IS NULL OR v_profession = '' OR s2.profession::text = v_profession)
-      ORDER BY s2.cree_le DESC LIMIT p_limit
+      SELECT s.* FROM private.fn_resultats_filtre_soignants(p_filtre_id,p_since) r
+      JOIN public.soignants s ON s.id=r.soignant_id
+      ORDER BY s.cree_le DESC, s.id
+      LIMIT LEAST(GREATEST(COALESCE(p_limit,5),1),100)
     ) s;
   ELSE
     v_result := '[]'::jsonb;
@@ -47031,6 +47131,75 @@ $$;
 ALTER FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "uuid", "p_date_naissance" "date", "p_sexe" "text", "p_lieu_naissance" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_rappels_quotidiens"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE resultat jsonb;
+BEGIN
+ WITH j1 AS (
+   -- Même sélection que fn_email_rappels_j1 LIVE, enrichie uniquement de l'ID.
+   SELECT m.id mission_id,m.debut_le,m.etablissement_id,s.id soignant_id,
+     s.prenom,m.intitule mission,e.nom etablissement,
+     to_char(m.debut_le AT TIME ZONE 'Europe/Paris','HH24:MI') heure_debut,
+     s.telephone,s.sms_actif,s.sms_alertes_actives,s.est_compte_test
+   FROM public.missions m JOIN public.soignants s ON s.id=m.soignant_assigne_id
+   JOIN public.etablissements e ON e.id=m.etablissement_id
+   WHERE m.statut='ASSIGNEE' AND m.debut_le::date=CURRENT_DATE+1 AND s.email IS NOT NULL
+ ), contrats AS (
+   SELECT * FROM jsonb_to_recordset(public.fn_lister_missions_contrat_travail_manquant())
+     AS c(mission_id uuid,etablissement_id uuid,soignant_id uuid,intitule text,debut_le timestamptz,
+       nom_etablissement text,prenom_soignant text,nom_soignant text)
+ ), souhaites AS (
+   SELECT j.mission_id,j.debut_le,j.etablissement_id,j.soignant_id,j.soignant_id destinataire_id,
+     'MISSION_EMAIL'::text nature,'rappel_mission_j1'::text scope,
+     jsonb_build_object('soignant_id',j.soignant_id,'jour',to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD')) identite,
+     jsonb_build_object('type','RAPPEL_MISSION','destinataire_id',j.soignant_id,'data',
+       jsonb_build_object('prenom',j.prenom,'mission',j.mission,'etablissement',j.etablissement,'heure_debut',j.heure_debut)) corps
+   FROM j1 j
+   UNION ALL
+   SELECT j.mission_id,j.debut_le,j.etablissement_id,j.soignant_id,j.soignant_id,
+     'MISSION_SMS','sms_rappel_mission_j1',
+     jsonb_build_object('soignant_id',j.soignant_id,'jour',to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD'),
+       'mission',j.mission,'etablissement',j.etablissement,'heure_debut',j.heure_debut),
+     jsonb_build_object('type','RAPPEL_MISSION_J1','destinataire_id',j.soignant_id,'telephone',j.telephone,
+       'contenu','📅 Rappel : votre mission '||left(coalesce(j.mission,''),40)||' démarre demain à '||j.heure_debut||' chez '||left(coalesce(j.etablissement,''),30)||'. Bonne journée !',
+       'prefix_type','RAPPEL_MISSION_J1')
+   FROM j1 j WHERE coalesce(j.telephone,'')<>'' AND j.sms_actif IS DISTINCT FROM false
+     AND j.sms_alertes_actives IS DISTINCT FROM false AND j.est_compte_test IS DISTINCT FROM true
+   UNION ALL
+   SELECT c.mission_id,c.debut_le,c.etablissement_id,c.soignant_id,c.etablissement_id,
+     'CONTRAT_ETAB','contrat_travail_etab',jsonb_build_object('mission_id',c.mission_id,'cible','etablissement'),
+     jsonb_build_object('type','CONTRAT_TRAVAIL_RAPPEL_ETAB','destinataire_id',c.etablissement_id,'data',
+       jsonb_build_object('intitule_mission',coalesce(nullif(c.intitule,''),'mission'),'prenom_soignant',c.prenom_soignant,
+         'nom_soignant',c.nom_soignant,'date_debut',to_char(c.debut_le AT TIME ZONE 'UTC','DD/MM/YYYY'),'mission_id',c.mission_id))
+   FROM contrats c
+   UNION ALL
+   SELECT c.mission_id,c.debut_le,c.etablissement_id,c.soignant_id,c.soignant_id,
+     'CONTRAT_SOIGNANT','contrat_travail_soignant',jsonb_build_object('mission_id',c.mission_id,'cible','soignant'),
+     jsonb_build_object('type','CONTRAT_TRAVAIL_MANQUANT_SOIGNANT','destinataire_id',c.soignant_id,'data',
+       jsonb_build_object('prenom',c.prenom_soignant,'nom_etablissement',c.nom_etablissement,
+         'intitule_mission',coalesce(nullif(c.intitule,''),'mission'),'date_debut',to_char(c.debut_le AT TIME ZONE 'UTC','DD/MM/YYYY'),'mission_id',c.mission_id))
+   FROM contrats c
+ ), recus AS (
+   INSERT INTO private.rappels_quotidiens_livraisons(mission_id,debut_le,etablissement_id,soignant_id,destinataire_id,nature,scope,identite,corps,jour)
+   SELECT mission_id,debut_le,etablissement_id,soignant_id,destinataire_id,nature,scope,identite,corps,CURRENT_DATE FROM souhaites
+   ON CONFLICT(mission_id,destinataire_id,nature,jour) DO NOTHING RETURNING *
+ ), files AS (
+   INSERT INTO public.email_queue(id,type,destinataire_id,data,statut)
+   SELECT email_id,'CRON_DAILY_'||nature,destinataire_id,corps,'EN_ATTENTE' FROM recus RETURNING type
+ )
+ SELECT jsonb_build_object('total',count(*),'mission_email',count(*) FILTER(WHERE type='CRON_DAILY_MISSION_EMAIL'),
+   'mission_sms',count(*) FILTER(WHERE type='CRON_DAILY_MISSION_SMS'),
+   'contrat_etab',count(*) FILTER(WHERE type='CRON_DAILY_CONTRAT_ETAB'),
+   'contrat_soignant',count(*) FILTER(WHERE type='CRON_DAILY_CONTRAT_SOIGNANT')) INTO resultat FROM files;
+ RETURN resultat;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_preparer_rappels_quotidiens"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -48298,6 +48467,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_protect_etablissement_storage_paths"() R
     AS $$
 BEGIN
   IF auth.uid() IS NULL OR public.est_admin() THEN RETURN NEW; END IF;
+  IF NEW.id=auth.uid() AND NEW.supprime_le IS NOT NULL
+     AND EXISTS (SELECT 1 FROM private.suppression_etablissement_context c
+       WHERE c.backend_pid=pg_backend_pid() AND c.transaction_id=txid_current()
+         AND c.utilisateur_id=auth.uid()) THEN
+    RETURN NEW;
+  END IF;
   IF NOT public.fn_a_permission_etablissement('profil_etab', NEW.id) THEN
     RAISE EXCEPTION 'Permission profil etablissement requise' USING ERRCODE = '42501';
   END IF;
@@ -50441,15 +50616,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_rechercher_soignants_etab"("p_profession
     AS $$
 DECLARE
   v_etab_id uuid;
-  v_etab_lat numeric;
-  v_etab_lng numeric;
   v_limit integer;
   v_offset integer;
   v_result jsonb;
 BEGIN
+  IF NOT public.fn_compte_auth_actif() THEN
+    RETURN jsonb_build_object('error','Accès refusé : compte inactif');
+  END IF;
   IF NOT est_admin() THEN
     v_etab_id := mon_etablissement_id();
-    IF v_etab_id IS NULL THEN
+    IF v_etab_id IS NULL OR NOT EXISTS(SELECT 1 FROM public.etablissements e WHERE e.id=v_etab_id AND e.supprime_le IS NULL) THEN
       RETURN jsonb_build_object(
         'error',
         'Accès refusé : étab requis'
@@ -50460,126 +50636,14 @@ BEGIN
   v_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 100);
   v_offset := GREATEST(COALESCE(p_offset, 0), 0);
 
-  IF v_etab_id IS NOT NULL
-     AND p_distance_max_km IS NOT NULL THEN
-    SELECT adresse_lat, adresse_lng
-    INTO v_etab_lat, v_etab_lng
-    FROM etablissements
-    WHERE id = v_etab_id;
-  END IF;
-
-  WITH filtered AS (
-    SELECT
-      s.id,
-      s.prenom,
-      s.nom,
-      s.profession,
-      s.specialite_medicale,
-      s.type_exercice,
-      s.score_fiabilite,
-      s.note_moyenne,
-      s.nb_evaluations,
-      s.total_missions_terminees,
-      s.annees_experience,
-      s.specialites,
-      s.bio,
-      s.avatar_url,
-      s.rpps_verifie,
-      s.tous_documents_valides,
-      s.disponible_urgence,
-      s.adresse_ville,
-      s.priorite_missions_urgentes,
-      s.badge_ambassadeur,
-      CASE
-        WHEN v_etab_lat IS NOT NULL
-             AND s.adresse_lat IS NOT NULL THEN
-          round((
-            6371 * 2 * asin(sqrt(
-              power(sin(radians(s.adresse_lat - v_etab_lat) / 2), 2)
-              + cos(radians(v_etab_lat))
-                * cos(radians(s.adresse_lat))
-                * power(
-                  sin(radians(s.adresse_lng - v_etab_lng) / 2),
-                  2
-                )
-            ))
-          )::numeric, 1)
-        ELSE NULL
-      END AS distance_km
-    FROM soignants s
-    WHERE s.supprime_le IS NULL
-      AND (
-        (
-          v_etab_id IS NULL
-          AND s.est_compte_test IS FALSE
-        )
-        OR (
-          v_etab_id IS NOT NULL
-          AND private.fn_comptes_meme_cohorte_test(s.id, v_etab_id)
-        )
-      )
-      AND (
-        p_profession IS NULL
-        OR p_profession = ''
-        OR s.profession::text = p_profession
-      )
-      AND (
-        p_specialites IS NULL
-        OR array_length(p_specialites, 1) IS NULL
-        OR s.specialites && p_specialites
-      )
-      AND (
-        p_ville IS NULL
-        OR p_ville = ''
-        OR s.adresse_ville ILIKE '%' || p_ville || '%'
-      )
-      AND (
-        p_type_exercice IS NULL
-        OR p_type_exercice = ''
-        OR COALESCE(s.type_exercice, 'SALARIE') = p_type_exercice
-      )
-      AND (
-        p_note_min IS NULL
-        OR (
-          COALESCE(s.nb_evaluations, 0) >= 3
-          AND COALESCE(s.note_moyenne, 0) >= p_note_min
-        )
-      )
-      AND (
-        p_score_min IS NULL
-        OR (
-          COALESCE(s.total_missions_terminees, 0) >= 3
-          AND COALESCE(s.score_fiabilite, 0) >= p_score_min
-        )
-      )
-      AND (
-        p_experience_min IS NULL
-        OR COALESCE(s.annees_experience, 0) >= p_experience_min
-      )
-      AND (
-        p_disponible_urgence IS NULL
-        OR COALESCE(s.disponible_urgence, false) =
-          p_disponible_urgence
-      )
-      AND (
-        p_documents_valides IS NULL
-        OR COALESCE(s.tous_documents_valides, false) =
-          p_documents_valides
-      )
-      AND (
-        p_recherche_texte IS NULL
-        OR p_recherche_texte = ''
-        OR s.prenom ILIKE '%' || p_recherche_texte || '%'
-        OR COALESCE(s.bio, '') ILIKE
-          '%' || p_recherche_texte || '%'
-      )
-  ),
-  with_distance AS (
-    SELECT *
-    FROM filtered
-    WHERE p_distance_max_km IS NULL
-      OR distance_km IS NULL
-      OR distance_km <= p_distance_max_km
+  WITH with_distance AS (
+    SELECT s.*, r.distance_km
+    FROM private.fn_resultats_recherche_soignants_etab(
+      v_etab_id, p_profession, p_specialites, p_ville, p_distance_max_km,
+      p_type_exercice, p_note_min, p_score_min, p_experience_min,
+      p_disponible_urgence, p_documents_valides, p_recherche_texte
+    ) r
+    JOIN public.soignants s ON s.id=r.soignant_id
   ),
   ranked AS (
     SELECT
@@ -51823,6 +51887,56 @@ ALTER FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_
 
 COMMENT ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) IS 'E16 transmet candidature.type_contrat_choisi a fn_accepter_mission. RAISE E16_CANDIDATURE_ORPHELINE si MIXTE TOUS sans choix.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reporter_echec_alerte_filtre"("p_email_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+ UPDATE private.alertes_filtres_livraisons SET tentatives=tentatives+1,
+ prochaine_tentative_le=now()+make_interval(hours=>least(24,power(2,least(tentatives,5))::int))
+ WHERE email_id=p_email_id;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_reporter_echec_alerte_filtre"("p_email_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reprendre_alertes_filtres"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE n integer;
+BEGIN
+ INSERT INTO private.alertes_filtres_worker(id,derniere_execution_le) VALUES(true,now())
+ ON CONFLICT(id) DO UPDATE SET derniere_execution_le=excluded.derniere_execution_le;
+ UPDATE public.email_queue q SET statut='EN_ATTENTE'
+ FROM private.alertes_filtres_livraisons l
+ WHERE q.id=l.email_id AND q.statut='ERREUR' AND l.prochaine_tentative_le<=now();
+ GET DIAGNOSTICS n=ROW_COUNT;
+ RETURN n;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_reprendre_alertes_filtres"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reprendre_rappels_quotidiens"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE n integer;
+BEGIN
+ UPDATE public.email_queue q SET statut='EN_ATTENTE'
+ FROM private.rappels_quotidiens_livraisons l
+ WHERE q.id=l.email_id AND q.statut='ERREUR' AND l.prochaine_tentative_le<=now();
+ GET DIAGNOSTICS n=ROW_COUNT;
+ RETURN n;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_reprendre_rappels_quotidiens"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
@@ -57068,24 +57182,19 @@ ALTER FUNCTION "public"."fn_supprimer_api_key"("p_id" "uuid") OWNER TO "postgres
 
 CREATE OR REPLACE FUNCTION "public"."fn_supprimer_compte_etablissement_rate_limited"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public', 'extensions'
+    SET "search_path" TO ''
     AS $$
-DECLARE
-  v_uid uuid := auth.uid();
-  v_allowed boolean;
+DECLARE uid uuid:=auth.uid();
 BEGIN
-  IF v_uid IS NULL THEN
-    RETURN jsonb_build_object('error', 'Non authentifié');
-  END IF;
-
-  v_allowed := public.fn_verifier_rate_limit(v_uid::text, 'supprimer_compte_etablissement', 1, 86400);
-  IF NOT v_allowed THEN
-    RETURN jsonb_build_object('error', 'Demande de suppression déjà en cours.');
-  END IF;
-
-  RETURN public.fn_supprimer_mon_compte_etablissement();
-END;
-$$;
+ IF uid IS NULL THEN RETURN jsonb_build_object('error','Non authentifié'); END IF;
+ IF private.fn_anonymisation_compte_confirmee(uid,'ETABLISSEMENT') THEN
+   RETURN jsonb_build_object('success',true,'deja_anonymise',true);
+ END IF;
+ IF public.fn_verifier_rate_limit(uid::text,'supprimer_compte_etablissement',1,86400) IS DISTINCT FROM true THEN
+   RETURN jsonb_build_object('error','Demande de suppression déjà en cours.');
+ END IF;
+ RETURN public.fn_supprimer_mon_compte_etablissement();
+END $$;
 
 
 ALTER FUNCTION "public"."fn_supprimer_compte_etablissement_rate_limited"() OWNER TO "postgres";
@@ -57093,24 +57202,19 @@ ALTER FUNCTION "public"."fn_supprimer_compte_etablissement_rate_limited"() OWNER
 
 CREATE OR REPLACE FUNCTION "public"."fn_supprimer_compte_rate_limited"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
-DECLARE
-    v_user_id UUID := auth.uid();
-    v_allowed BOOLEAN;
+DECLARE uid uuid:=auth.uid();
 BEGIN
-    IF v_user_id IS NULL THEN
-        RETURN jsonb_build_object('error', 'Non authentifié');
-    END IF;
-    
-    v_allowed := fn_verifier_rate_limit(v_user_id::TEXT, 'supprimer_compte', 1, 86400);
-    IF NOT v_allowed THEN
-        RETURN jsonb_build_object('error', 'Demande de suppression déjà en cours.');
-    END IF;
-    
-    RETURN fn_supprimer_mon_compte();
-END;
-$$;
+ IF uid IS NULL THEN RETURN jsonb_build_object('error','Non authentifié'); END IF;
+ IF private.fn_anonymisation_compte_confirmee(uid,'SOIGNANT') THEN
+   RETURN jsonb_build_object('success',true,'deja_anonymise',true);
+ END IF;
+ IF public.fn_verifier_rate_limit(uid::text,'supprimer_compte',1,86400) IS DISTINCT FROM true THEN
+   RETURN jsonb_build_object('error','Demande de suppression déjà en cours.');
+ END IF;
+ RETURN public.fn_supprimer_mon_compte();
+END $$;
 
 
 ALTER FUNCTION "public"."fn_supprimer_compte_rate_limited"() OWNER TO "postgres";
@@ -57171,13 +57275,29 @@ DECLARE
     v_missions_futures INTEGER;
     v_hash TEXT;
     v_uid UUID := auth.uid();
+    v_supprime_le timestamptz;
+    v_system_update text := COALESCE(current_setting('jolene.system_update', true), '');
+    v_bank_update text := COALESCE(current_setting('jolene.bank_server_update', true), '');
+    v_liberal_transition text := COALESCE(current_setting('jolene.liberal_transition', true), '');
+    v_siret_reset text := COALESCE(current_setting('jolene.siret_liberal_reset', true), '');
 BEGIN
+    IF v_uid IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
+    SELECT supprime_le INTO v_supprime_le FROM public.soignants WHERE id = v_uid FOR UPDATE;
+    IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Aucun profil soignant lié à ce compte'); END IF;
+    IF private.fn_anonymisation_compte_confirmee(v_uid,'SOIGNANT') THEN
+      RETURN jsonb_build_object('success', true, 'deja_anonymise', true);
+    END IF;
     SELECT COUNT(*) INTO v_missions_futures FROM missions
     WHERE soignant_assigne_id = v_uid AND statut IN ('ASSIGNEE','EN_COURS') AND fin_le > NOW();
     IF v_missions_futures > 0 THEN
         RETURN jsonb_build_object('error', 'Vous avez ' || v_missions_futures || ' mission(s) en cours.');
     END IF;
     v_hash := encode(digest(v_uid::TEXT || NOW()::TEXT, 'sha256'), 'hex');
+    PERFORM set_config('jolene.system_update', 'true', true);
+    PERFORM set_config('jolene.bank_server_update', 'true', true);
+    PERFORM set_config('jolene.liberal_transition', 'true', true);
+    PERFORM set_config('jolene.siret_liberal_reset', 'true', true);
+    BEGIN
     UPDATE soignants SET
         prenom = 'Soignant', nom = 'Supprimé',
         email = v_hash || '@supprime.jolene.app',
@@ -57190,12 +57310,35 @@ BEGIN
         numero_tva = NULL, bio = NULL, specialites = NULL,
         avatar_url = NULL, adresse_lat = NULL, adresse_lng = NULL,
         numero_rpps = NULL, numero_adeli = NULL,
-        iban_last4 = NULL, stripe_account_id = NULL,
+        iban_last4 = NULL, iban_virement = NULL, iban_titulaire = NULL,
+        iban_source_document_id = NULL, iban_identite_document_id = NULL,
+        iban_source_s3_cle = NULL, iban_empreinte_sha256 = NULL,
+        iban_verifie_le = NULL, iban_titulaire_coherent = false,
+        stripe_account_id = NULL,
+        rpps_verifie = false, adeli_verifie = false,
+        identite_verifiee = false, diplome_verifie = false, tous_documents_valides = false,
+        siret_liberal_verifie = false, siret_liberal_verifie_le = NULL,
+        siret_liberal_raison_sociale = NULL, siret_liberal_coherence_identite = NULL,
         psc_sub = NULL, psc_linked_le = NULL, psc_last_login = NULL,
         mandat_facturation_signe = FALSE, mandat_facturation_signe_le = NULL,
         sms_actif = FALSE, sms_consent_le = NULL,
         supprime_le = NOW()
     WHERE id = v_uid;
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config('jolene.system_update', v_system_update, true);
+      PERFORM set_config('jolene.bank_server_update', v_bank_update, true);
+      PERFORM set_config('jolene.liberal_transition', v_liberal_transition, true);
+      PERFORM set_config('jolene.siret_liberal_reset', v_siret_reset, true);
+      RAISE;
+    END;
+    PERFORM set_config('jolene.system_update', v_system_update, true);
+    PERFORM set_config('jolene.bank_server_update', v_bank_update, true);
+    PERFORM set_config('jolene.liberal_transition', v_liberal_transition, true);
+    PERFORM set_config('jolene.siret_liberal_reset', v_siret_reset, true);
+    -- Une suppression ne peut jamais annoncer un succès avec un profil encore actif.
+    IF NOT EXISTS (SELECT 1 FROM public.soignants WHERE id=v_uid AND supprime_le IS NOT NULL) THEN
+      RAISE EXCEPTION 'Anonymisation non confirmée';
+    END IF;
     UPDATE evaluations SET commentaire = NULL WHERE evaluateur_id = v_uid OR evalue_id = v_uid;
     DELETE FROM tokens_push WHERE utilisateur_id = v_uid;
     DELETE FROM tokens_calendrier WHERE soignant_id = v_uid;
@@ -57237,7 +57380,9 @@ BEGIN
     DELETE FROM cessions_creance WHERE soignant_id = v_uid;
     UPDATE factures_honoraires SET soignant_id = v_uid WHERE soignant_id = v_uid;
     DELETE FROM factor_advances WHERE soignant_id = v_uid;
-    DELETE FROM psc_auth_sessions WHERE cree_le < NOW();
+    -- Une tentative PSC est anonyme jusqu'au callback et n'appartient pas
+    -- à ce compte. Son expiration est traitée par le nettoyeur PSC dédié.
+    -- La suppression d'un soignant ne doit interrompre aucune autre connexion.
     DELETE FROM email_queue WHERE destinataire_id = v_uid;
     UPDATE sms_envoyes SET telephone = 'SUPPRIME', destinataire_id = NULL WHERE destinataire_id = v_uid;
     DELETE FROM cotisations_sociales WHERE soignant_id = v_uid;
@@ -57257,6 +57402,10 @@ BEGIN
             'mandats_facturation_signatures','cessions_creance','factures_honoraires','factor_advances',
             'email_queue','sms_envoyes','cotisations_sociales','conformite_travail',
             'messages_litige','stripe_transfers','paiements_soignant']));
+    INSERT INTO private.suppressions_compte_confirmees(utilisateur_id,type_profil,anonymise_le,email_anonymise)
+    SELECT id,'SOIGNANT',supprime_le,email FROM public.soignants WHERE id=v_uid
+    ON CONFLICT(utilisateur_id,type_profil) DO UPDATE SET anonymise_le=excluded.anonymise_le,email_anonymise=excluded.email_anonymise;
+    IF NOT private.fn_anonymisation_compte_confirmee(v_uid,'SOIGNANT') THEN RAISE EXCEPTION 'Anonymisation soignant non confirmée'; END IF;
     RETURN jsonb_build_object('success', true, 'message', 'Votre compte a été supprimé et vos données anonymisées.');
 END;
 $$;
@@ -57275,14 +57424,19 @@ DECLARE
   v_missions_actives int;
   v_factures_impayees int;
   v_hash text;
+  v_interne text := COALESCE(current_setting('app.internal_operation',true),'');
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('error', 'Non authentifié');
   END IF;
 
-  SELECT id INTO v_etab_id FROM etablissements WHERE id = v_uid;
+  SELECT id INTO v_etab_id FROM etablissements WHERE id = v_uid FOR UPDATE;
   IF v_etab_id IS NULL THEN
     RETURN jsonb_build_object('error', 'Aucun établissement lié à ce compte');
+  END IF;
+
+  IF private.fn_anonymisation_compte_confirmee(v_uid,'ETABLISSEMENT') THEN
+    RETURN jsonb_build_object('success',true,'deja_anonymise',true);
   END IF;
 
   -- Garde-fou : missions actives
@@ -57307,6 +57461,9 @@ BEGIN
   PERFORM set_config('app.internal_operation', 'true', true);
   v_hash := encode(extensions.digest(v_etab_id::text || NOW()::text, 'sha256'), 'hex');
 
+  BEGIN
+  INSERT INTO private.suppression_etablissement_context(backend_pid,transaction_id,utilisateur_id)
+  VALUES(pg_backend_pid(),txid_current(),v_uid);
   -- Anonymisation établissement
   UPDATE etablissements SET
     nom = 'Établissement supprimé',
@@ -57330,6 +57487,14 @@ BEGIN
     supprime_le = NOW(),
     stripe_sepa_payment_method_id = NULL
   WHERE id = v_etab_id;
+
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('app.internal_operation',v_interne,true);
+    RAISE;
+  END;
+  DELETE FROM private.suppression_etablissement_context
+  WHERE backend_pid=pg_backend_pid() AND transaction_id=txid_current() AND utilisateur_id=v_uid;
+  PERFORM set_config('app.internal_operation',v_interne,true);
 
   -- Tables liées
   DELETE FROM admins_groupe_sante WHERE utilisateur_id = v_uid;
@@ -57368,6 +57533,11 @@ BEGIN
   INSERT INTO journaux_audit (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
   VALUES (v_uid, 'ADMIN_ETABLISSEMENT', 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT', 'etablissement', v_etab_id,
     jsonb_build_object('anonymise', true));
+
+  INSERT INTO private.suppressions_compte_confirmees(utilisateur_id,type_profil,anonymise_le,email_anonymise)
+  SELECT id,'ETABLISSEMENT',supprime_le,email_contact FROM public.etablissements WHERE id=v_etab_id
+  ON CONFLICT(utilisateur_id,type_profil) DO UPDATE SET anonymise_le=excluded.anonymise_le,email_anonymise=excluded.email_anonymise;
+  IF NOT private.fn_anonymisation_compte_confirmee(v_uid,'ETABLISSEMENT') THEN RAISE EXCEPTION 'Anonymisation établissement non confirmée'; END IF;
 
   RETURN jsonb_build_object(
     'success', true,
@@ -63148,6 +63318,34 @@ $$;
 ALTER FUNCTION "public"."fn_verifier_documents_expirants"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_verifier_livraison_alerte_filtre"("p_email_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE l private.alertes_filtres_livraisons; f public.filtres_sauvegardes; q public.email_queue; ids uuid[];
+BEGIN
+ SELECT * INTO l FROM private.alertes_filtres_livraisons WHERE email_id=p_email_id;
+ IF NOT FOUND THEN RETURN false; END IF;
+ SELECT * INTO f FROM public.filtres_sauvegardes WHERE id=l.filtre_id;
+ SELECT * INTO q FROM public.email_queue WHERE id=p_email_id;
+ IF f.id IS NULL OR NOT f.alerte_active OR f.filtres<>l.filtres OR q.destinataire_id<>f.utilisateur_id
+ OR NOT private.fn_destinataire_alerte_actif(f.utilisateur_id) THEN RETURN false; END IF;
+ IF f.audience='ETAB_RECHERCHE_SOIGNANTS' THEN
+  IF private.fn_etablissement_destinataire_alerte(f.utilisateur_id) IS DISTINCT FROM l.etablissement_id THEN RETURN false; END IF;
+  SELECT array_agg(r.soignant_id) INTO ids FROM private.fn_resultats_filtre_soignants(f.id,l.fenetre_debut) r
+   JOIN public.soignants s ON s.id=r.soignant_id WHERE s.cree_le<=l.fenetre_fin;
+  RETURN NOT EXISTS(SELECT 1 FROM jsonb_array_elements(q.data->'soignants') item WHERE NOT coalesce((item->>'id')::uuid=ANY(ids),false));
+ ELSE
+  SELECT array_agg(r.mission_id) INTO ids FROM private.fn_resultats_filtre_missions(f.id,l.fenetre_debut) r
+   JOIN public.missions m ON m.id=r.mission_id WHERE m.cree_le<=l.fenetre_fin;
+  RETURN NOT EXISTS(SELECT 1 FROM jsonb_array_elements(q.data->'missions') item WHERE NOT coalesce((item->>'id')::uuid=ANY(ids),false));
+ END IF;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_verifier_livraison_alerte_filtre"("p_email_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_verifier_otp_telephone"("p_code" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'extensions'
@@ -65030,7 +65228,7 @@ CREATE TABLE IF NOT EXISTS "public"."soignants" (
     "licence_remplacement_le" timestamp with time zone,
     "licence_remplacement_valide_jusqua" "date",
     "licence_remplacement_specialite" "text",
-    "est_compte_test" boolean DEFAULT true NOT NULL,
+    "est_compte_test" boolean DEFAULT false NOT NULL,
     "regime_fiscal" "text" DEFAULT 'MICRO_BNC'::"text" NOT NULL,
     "regime_fiscal_confirme" boolean DEFAULT false NOT NULL,
     "siret_liberal_verifie" boolean DEFAULT false NOT NULL,
@@ -66330,7 +66528,7 @@ CREATE TABLE IF NOT EXISTS "public"."etablissements" (
     "justificatif_fonction_verifie_le" timestamp with time zone,
     "justificatif_fonction_resultat_ia" "jsonb",
     "iban_last4" "text",
-    "est_compte_test" boolean DEFAULT true NOT NULL,
+    "est_compte_test" boolean DEFAULT false NOT NULL,
     "jour_paie_habituel" smallint,
     "verification_source_version" bigint DEFAULT 0 NOT NULL,
     "rib_verifie_s3_key" "text",
@@ -70862,6 +71060,10 @@ CREATE INDEX "idx_documents_soignants_preuve_courante" ON "public"."documents_so
 
 
 
+CREATE INDEX "idx_email_queue_attente_date_id" ON "public"."email_queue" USING "btree" ("cree_le", "id") WHERE ("statut" = 'EN_ATTENTE'::"text");
+
+
+
 CREATE INDEX "idx_email_queue_pending" ON "public"."email_queue" USING "btree" ("envoye", "cree_le") WHERE ("envoye" = false);
 
 
@@ -71067,6 +71269,10 @@ CREATE INDEX "idx_file_revue_en_attente" ON "public"."file_revue_manuelle" USING
 
 
 CREATE INDEX "idx_filtres_sauvegardes_alerte_cron" ON "public"."filtres_sauvegardes" USING "btree" ("alerte_active", "frequence_alerte", "dernier_check_le") WHERE ("alerte_active" = true);
+
+
+
+CREATE INDEX "idx_filtres_sauvegardes_alertes_echeance" ON "public"."filtres_sauvegardes" USING "btree" ("dernier_check_le", "id") WHERE "alerte_active";
 
 
 
@@ -77388,6 +77594,11 @@ GRANT ALL ON FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") TO "authenti
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) TO "service_role";
@@ -78185,6 +78396,11 @@ GRANT ALL ON FUNCTION "public"."fn_annuler_serie_etablissement"("p_mission_ids" 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_anonymisation_compte_confirmee"("p_utilisateur_id" "uuid", "p_type_profil" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_anonymisation_compte_confirmee"("p_utilisateur_id" "uuid", "p_type_profil" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_anonymiser_gps_anciennes"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_anonymiser_gps_anciennes"() TO "service_role";
 
@@ -78546,6 +78762,12 @@ GRANT ALL ON FUNCTION "public"."fn_calculer_taux_free_transition_safe"("p_soigna
 
 REVOKE ALL ON FUNCTION "public"."fn_calculer_tous_documents_valides"("p_soignant_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_calculer_tous_documents_valides"("p_soignant_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_capacite_alertes_recherches"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_capacite_alertes_recherches"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_capacite_alertes_recherches"() TO "authenticated";
 
 
 
@@ -79771,6 +79993,11 @@ GRANT ALL ON FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_lire_rappel_quotidien"("p_email_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_lire_rappel_quotidien"("p_email_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_lire_secret_cron"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_lire_secret_cron"() TO "service_role";
 
@@ -80605,6 +80832,11 @@ GRANT ALL ON FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_preparer_rappels_quotidiens"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_rappels_quotidiens"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") TO "service_role";
@@ -81043,6 +81275,21 @@ GRANT ALL ON FUNCTION "public"."fn_repondre_litige"("p_litige_id" "uuid", "p_rep
 REVOKE ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reporter_echec_alerte_filtre"("p_email_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reporter_echec_alerte_filtre"("p_email_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reprendre_alertes_filtres"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reprendre_alertes_filtres"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() TO "service_role";
 
 
 
@@ -81995,6 +82242,11 @@ GRANT ALL ON FUNCTION "public"."fn_verifier_coherence_publication"() TO "service
 
 REVOKE ALL ON FUNCTION "public"."fn_verifier_documents_expirants"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_verifier_documents_expirants"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_verifier_livraison_alerte_filtre"("p_email_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_verifier_livraison_alerte_filtre"("p_email_id" "uuid") TO "service_role";
 
 
 

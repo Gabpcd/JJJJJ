@@ -1,0 +1,61 @@
+name: Configuration fournisseurs TEST — staging seulement
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  configure-test-key:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Gardes de configuration
+        run: node --test tests/node/configure-stripe-staging.node.mjs
+      - name: Vérifier les prérequis et préserver les réglages d'authentification
+        run: node scripts/recette-fournisseurs/configure-stripe-test.mjs --check-only
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+      - name: Actualiser les sept fonctions fournisseurs en conservant leur mode JWT existant
+        # Le précontrôle impose verify_jwt=false déjà présent sur les sept
+        # fonctions staging. Chaque handler conserve ses contrôles utilisateur,
+        # service-role ou signature Stripe. Aucun mode d'accès n'est élargi.
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy --help >/dev/null
+          for fn in send-sms escrow-debit-echeance escrow-release process-stripe-refunds stripe-webhook stripe-connect-webhook stripe-connect-onboard; do
+            supabase functions deploy "$fn" \
+              --project-ref mejpriaetwgtcstbgfid --use-api --no-verify-jwt
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Installer la clé TEST existante dans le seul projet staging
+        run: node scripts/recette-fournisseurs/configure-stripe-test.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Rapport sans clé ni empreinte
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: configuration-stripe-staging-${{ github.run_id }}
+          path: configuration-stripe-staging.json
+          if-no-files-found: error
+          retention-days: 14
