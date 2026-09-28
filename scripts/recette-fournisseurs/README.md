@@ -1,11 +1,12 @@
 # Préparation de la recette fournisseurs
 
-Ces bibliothèques préparent une future recette isolée. Elles ne contactent aucun fournisseur, ne créent aucun compte, ne déplacent aucun fonds et ne modifient ni les exclusions de fixtures ni le verrou de l'ancien harnais financier. Aucun parcours réel SMS/signature/paiement n'est validé par leur réussite.
+Ces bibliothèques et l'inventaire en lecture seule préparent une future recette isolée. Les bibliothèques restent hors réseau ; le collecteur décrit ci-dessous lit uniquement des métadonnées Supabase et Stripe test. Aucun compte n'est créé, aucun fonds n'est déplacé et ni les exclusions de fixtures ni le verrou de l'ancien harnais financier ne sont modifiés. Aucun parcours réel SMS/signature/paiement n'est validé par leur réussite.
 
 ## Vérification locale
 
 ```sh
 node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs
+node --test tests/node/recette-fournisseurs-collector.node.mjs
 ```
 
 Ces tests n'utilisent ni secrets ni réseau. Le préflight est une bibliothèque importable, pas une commande opérationnelle ; son exécution directe refuse de produire un succès. `validatePreflightMetadata` vérifie les métadonnées fournies par un futur collecteur. Même un résultat `METADONNEES_COHERENTES` conserve `readyForTransports: false` et `integratedFlowReady: false`.
@@ -28,10 +29,29 @@ Une donnée absente, inconnue, incohérente, trop ancienne ou de production prod
 
 ## Travail restant avant une exécution
 
-- Collecteur en lecture seule, liant les preuves à la source relue et à l'environnement exact ; aucun contournement des droits manquants.
+- Compléter l'inventaire ci-dessous par la comparaison exacte des définitions déployées et les attestations de configuration manquantes ; aucun contournement des droits manquants.
 - Adaptateurs de transport limités aux ressources du journal et preuve d'idempotence réelle de chaque API.
 - Réconciliation des résultats ambigus, inventaire complet des descendants, nettoyage repris après perte d'un runner et gestion explicite des résidus non supprimables.
 - Verrou du moteur, stockage durable protégé du journal et preuve d'arrêt d'un worker précédent.
 - Modèle d'acteurs admissibles et isolés pour un cycle intégré, sans requalifier les fixtures ni désactiver leurs exclusions.
 
 La réception d'un SMS, les signatures, les événements de paiement et leur rapprochement restent des preuves distinctes à obtenir sur les mêmes objets du futur parcours intégré.
+
+## Inventaire manuel en lecture seule
+
+Le workflow `.github/workflows/recette-fournisseurs-preflight.yml` se lance uniquement manuellement sur la référence relue. Il exécute les tests hors réseau puis `collect-preflight.mjs`, avec `RECETTE_CANDIDATE_SHA` égal au SHA du checkout GitHub. Il utilise les secrets existants `STAGING_SUPABASE_ACCESS_TOKEN` et `STRIPE_TEST_SECRET_KEY` ; aucun secret n'est demandé par argument ni écrit dans le rapport. Le groupe de concurrence est partagé avec les écritures staging pour éviter un chevauchement de ces workflows.
+
+La cible est fixée à `mejpriaetwgtcstbgfid` et le compte Stripe test attendu à `acct_1T9pt0EVhQ7cb53W`. Aucun paramètre ne permet de les rediriger. La commande n'appelle ni RPC métier, ni Edge, ni transport SMS/paiement. Les seuls POST passent des SELECT fixes à Management API avec `read_only: true`. Les autres appels sont des GET, sans redirection HTTP. Le collecteur ne lit pas `vault.decrypted_secrets` et n'exporte ni valeur/digest de secret, ni URL arbitraire, ni corps d'erreur, ni donnée de compte Stripe.
+
+L'artifact `recette-fournisseurs-preflight.json` contient :
+
+- SHA et empreintes des fichiers sources **commités**, versions des migrations attendues et appliquées, comparaison de leurs listes ;
+- présence, version et réglage JWT des sept Edge requises ; empreintes MD5 observées des quatre fonctions SQL sensibles, sans leur définition ;
+- présence des seuls noms de configuration attendus ; comptages des crons et deux files financières, sans leurs commandes, identifiants ou données métier ;
+- confirmation du compte Stripe et de `livemode=false`, routes webhook exactes vers staging et couverture d'événements, avec pagination bornée.
+
+Ce n'est **pas un inventaire de contenu déployé complet** : les hash locaux ne sont pas comparés aux bundles Edge, les MD5 SQL ne disposent pas encore d'une référence canonique issue de la candidate, l'égalité des valeurs Vault et des signing secrets n'est pas vérifiée, la portée Connect n'est pas déduite d'une URL, les files ne sont pas classées par propriétaire, les cohortes ne sont pas attestées et aucun SMS n'est reçu. Les lectures ne forment pas un snapshot transactionnel. Une liste de noms de secrets ne garantit pas que leurs valeurs sont utilisables.
+
+Ces inconnues sont explicites : la commande termine toujours avec **code 2 / `NON_PRET`**, même si les lectures disponibles réussissent. Le workflow apparaît donc rouge et conserve l'artifact expurgé ; ce rouge attendu ne signifie pas qu'un paiement a échoué. `readyForTransports` et `integratedFlowReady` restent `false`. La bibliothèque pure `preflight.mjs` conserve son contrat et son refus d'exécution directe ; aucune donnée inconnue du collecteur n'est convertie en attestation positive pour ce validateur.
+
+Références des API consultées le 28 septembre 2026 : [requête Supabase avec read_only](https://supabase.com/docs/reference/api/v1-run-a-query), [liste Edge](https://supabase.com/docs/reference/api/v1-list-all-functions), [liste des secrets](https://supabase.com/docs/reference/api/v1-list-all-secrets), [balance Stripe](https://docs.stripe.com/api/balance/balance_retrieve), [webhooks Stripe](https://docs.stripe.com/api/webhook_endpoints/list). Le collecteur ne lance aucune des opérations de création, déploiement ou configuration documentées à côté de ces lectures.

@@ -4,6 +4,7 @@ import { _android as android, expect } from '@playwright/test';
 import { currentImeShown } from './ime-state.mjs';
 import { attachNativeWebView } from './webview-attachment.mjs';
 import { requireAppWindow } from './emulator-preflight.mjs';
+import { captureIme } from './capture-ime.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -22,7 +23,7 @@ const metric = (kind, data) => validations.push({ kind, ...data });
 async function capture(name) {
   await device.screenshot({ path: `${output}/${name}.png` });
   if (page) {
-    await save(`${name}.ime.txt`, await nativeShell('dumpsys input_method'));
+    await save(`${name}.ime.txt`, await captureIme(device.serial()));
     await save(`${name}.aria.txt`, await page.locator('body').ariaSnapshot());
     await save(`${name}.viewport.json`, JSON.stringify(await page.evaluate(() => ({
       width: innerWidth, height: innerHeight, dpr: devicePixelRatio,

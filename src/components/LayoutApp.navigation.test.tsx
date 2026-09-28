@@ -4,6 +4,10 @@ import { MemoryRouter, Routes, Route, Link, useNavigate } from 'react-router-dom
 import { describe, expect, it, vi } from 'vitest';
 import { AppShell, LayoutApp } from './LayoutApp';
 
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'navigation-test' } }) }));
+vi.mock('@/hooks/useRole', () => ({ useRole: () => ({ role: 'SOIGNANT', resolved: true, parcours: null }) }));
+vi.mock('@/hooks/useAppliquerParrainage', () => ({ useAppliquerParrainage: vi.fn() }));
+
 vi.mock('@/components/BarreNavigation', () => ({ BarreNavigation: () => <nav aria-label="Onglets"><Link to="/a">Accueil</Link><Link to="/b">Explorer</Link><Link to="/swipe">Swipe</Link></nav> }));
 vi.mock('@/components/DemandePermissionPush', () => ({ DemandePermissionPush: () => null }));
 vi.mock('@/components/BandeauHorsLigne', () => ({ BandeauHorsLigne: () => null }));

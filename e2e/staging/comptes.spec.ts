@@ -215,3 +215,185 @@ test('compte suspendu : le refus Data API conserve l’identité Auth et ne pré
     expect(blockedRead.status()).toBe(403);
   } finally { await fixture.cleanup(); }
 });
+
+// Recette réelle, sans qualification, prime, mission ni appel fournisseur.
+// La seule attribution est déclenchée par le navigateur avec le JWT du filleul.
+test('parrainage : attribution UI réelle, reconnexion et unicité persistée', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const run = randomUUID();
+  const fixtures: { id: string; email: string; password: string; role: 'parrain' | 'filleul' }[] = [];
+  const intentions: { role: 'parrain' | 'filleul'; email: string; etat: 'intention' | 'cree' | 'ambigu' }[] = [];
+  let attributionDemandee = false;
+  let attributionTerminee = false;
+  const parrainagesCaptures = new Set<string>();
+  const signalsCaptures = new Set<string>();
+  const journal = async (etat: string) => testInfo.attach(`parrainage-${etat}`, {
+    body: JSON.stringify({ version: 1, cible: 'mejpriaetwgtcstbgfid', run, etat,
+      intentions, comptes: fixtures.map(({ id, role }) => ({ id, role })),
+      parrainages: [...parrainagesCaptures], signaux: [...signalsCaptures] }),
+    contentType: 'application/json',
+  });
+  const verifier: (condition: unknown, code: string) => asserts condition = (condition, code) => {
+    if (!condition) throw new Error(`Recette parrainage : ${code}`);
+  };
+  const creer = async (role: 'parrain' | 'filleul') => {
+    const email = `playwright-test-parrainage-${randomUUID()}@example.invalid`;
+    const password = `Jolene!${randomUUID()}aA1`;
+    const intention = { role, email, etat: 'intention' as 'intention' | 'cree' | 'ambigu' };
+    intentions.push(intention);
+    await journal('intention-auth'); // Aucun mot de passe ; avant l'appel distant.
+    let response;
+    try {
+      response = await admin.auth.admin.createUser({ email, password, email_confirm: true,
+        app_metadata: { role: 'SOIGNANT', is_test_playwright: true, recette_parrainage_run: run, recette_parrainage_fixture: role } });
+    } catch {
+      intention.etat = 'ambigu';
+      throw new Error('Recette parrainage : creation_auth_ambigue_reconciliation_requise');
+    }
+    if (response.error || !response.data.user) {
+      intention.etat = 'ambigu';
+      throw new Error('Recette parrainage : creation_auth_non_confirmee_reconciliation_requise');
+    }
+    const fixture = { id: response.data.user.id, email, password, role };
+    fixtures.push(fixture); // Capturer l'identifiant avant toute autre écriture.
+    intention.etat = 'cree';
+    await journal('auth-cree');
+    const inserted = await admin.from('soignants').insert({ id: fixture.id, email, prenom: 'Recette', nom: 'Parrainage',
+      profession: 'AS', type_exercice: 'SALARIE', est_compte_test: true,
+      identite_verifiee: false, diplome_verifie: false, rpps_verifie: false, tous_documents_valides: false });
+    verifier(!inserted.error, 'creation_profil_refusee');
+    return fixture;
+  };
+  const relations = async () => {
+    const filtre = fixtures.flatMap(({ id }) => [`parrain_id.eq.${id}`, `filleul_id.eq.${id}`]).join(',');
+    const result = await admin.from('parrainages').select('id,parrain_id,filleul_id,statut,prime_versee_le,valide_le,commission_cumulee_filleul').or(filtre);
+    verifier(!result.error && result.data, 'lecture_parrainages_refusee');
+    for (const row of result.data!) parrainagesCaptures.add(row.id);
+    return result.data!;
+  };
+  const profil = async (id: string) => {
+    const result = await admin.from('soignants').select('id,code_parrainage,parraine_par,est_compte_test,identite_verifiee,diplome_verifie,rpps_verifie,tous_documents_valides').eq('id', id).maybeSingle();
+    verifier(!result.error, 'lecture_profil_refusee');
+    return result.data;
+  };
+  const verifierProfilTest = (row: Awaited<ReturnType<typeof profil>>) => {
+    verifier(row?.est_compte_test === true, 'cohorte_test_absente');
+    verifier(row.identite_verifiee === false && row.diplome_verifie === false
+      && row.rpps_verifie === false && row.tous_documents_valides === false, 'qualification_inattendue');
+  };
+  const nettoyer = async () => {
+    verifier(intentions.every(intention => intention.etat === 'cree'), 'creation_auth_ambigue_reconciliation_requise');
+    if (!fixtures.length) return;
+    // Un transport interrompu ne prouve pas le rollback serveur. Conserver les
+    // UUID pour réconciliation, sans annoncer un nettoyage sûr avant résolution.
+    verifier(!attributionDemandee || attributionTerminee, 'attribution_ambigue_reconciliation_requise');
+    for (const fixture of fixtures) {
+      const auth = await admin.auth.admin.getUserById(fixture.id);
+      const metadata = auth.data.user?.app_metadata;
+      verifier(!auth.error && auth.data.user?.id === fixture.id && auth.data.user.email === fixture.email
+        && metadata?.role === 'SOIGNANT' && metadata.is_test_playwright === true
+        && metadata.recette_parrainage_run === run && metadata.recette_parrainage_fixture === fixture.role, 'propriete_privee_non_confirmee');
+      const row = await profil(fixture.id);
+      if (row) verifierProfilTest(row);
+    }
+    const rows = await relations();
+    const parrain = fixtures.find(f => f.role === 'parrain');
+    const filleul = fixtures.find(f => f.role === 'filleul');
+    for (const row of rows) {
+      verifier(row.parrain_id === parrain?.id && row.filleul_id === filleul?.id, 'relation_etrangere_refus_nettoyage');
+      verifier(row.statut === 'EN_ATTENTE' && row.prime_versee_le === null && row.valide_le === null
+        && Number(row.commission_cumulee_filleul) === 0, 'parrainage_qualifie_refus_nettoyage');
+      const signals = await admin.from('parrainage_fraude_signals').select('id').eq('parrainage_id', row.id);
+      verifier(!signals.error, 'lecture_signaux_refusee');
+      for (const signal of signals.data ?? []) signalsCaptures.add(signal.id);
+    }
+    await journal('avant-nettoyage');
+    const ids = fixtures.map(f => f.id);
+    // Contrôler les journaux de transport sans lire leurs contenus ni supprimer
+    // une preuve d'envoi. Les UUID ciblés appartiennent exclusivement à ce run.
+    for (const table of ['emails_envoyes', 'sms_envoyes']) {
+      const result = await admin.from(table).select('id', { count: 'exact', head: true }).in('destinataire_id', ids);
+      verifier(!result.error && result.count === 0, 'transport_inattendu_conserver_preuves');
+    }
+    const queue = await admin.from('email_queue').select('id,statut,envoye').in('destinataire_id', ids);
+    verifier(!queue.error && (queue.data ?? []).every(row => row.statut === 'EN_ATTENTE' && row.envoye === false), 'file_email_inattendue');
+    const notifications = await admin.from('notifications').select('id,email_envoye,push_envoyee').in('destinataire_id', ids);
+    verifier(!notifications.error && (notifications.data ?? []).every(row => !row.email_envoye && !row.push_envoyee), 'notification_envoyee_inattendue');
+    for (const table of ['email_queue', 'notifications']) {
+      const removed = await admin.from(table).delete().in('destinataire_id', ids);
+      verifier(!removed.error, 'suppression_notification_refusee');
+    }
+    for (const row of rows) {
+      const removed = await admin.from('parrainages').delete().eq('id', row.id).eq('parrain_id', row.parrain_id).eq('filleul_id', row.filleul_id);
+      verifier(!removed.error, 'suppression_parrainage_refusee');
+    }
+    // FK LIVE : parrainage_fraude_signals.parrainage_id → parrainages ON DELETE CASCADE.
+    if (parrainagesCaptures.size) {
+      const remaining = await admin.from('parrainage_fraude_signals').select('id', { count: 'exact', head: true }).in('parrainage_id', [...parrainagesCaptures]);
+      verifier(!remaining.error && remaining.count === 0, 'signaux_orphelins');
+    }
+    verifier((await relations()).length === 0, 'parrainages_residuels');
+    for (const fixture of [...fixtures].reverse()) {
+      const removed = await admin.from('soignants').delete().eq('id', fixture.id).eq('est_compte_test', true);
+      verifier(!removed.error, 'suppression_profil_refusee');
+      const authRemoved = await admin.auth.admin.deleteUser(fixture.id);
+      verifier(!authRemoved.error, 'suppression_auth_refusee');
+      verifier((await profil(fixture.id)) === null, 'profil_residuel');
+      const authAbsent = await admin.auth.admin.getUserById(fixture.id);
+      verifier(authAbsent.error?.status === 404 && !authAbsent.data.user, 'auth_residuel_ou_absence_non_confirmee');
+    }
+    for (const [table, colonne] of [['notifications', 'destinataire_id'], ['email_queue', 'destinataire_id'],
+      ['preferences_notifications', 'utilisateur_id'], ['preferences_notifications_par_evenement', 'utilisateur_id']]) {
+      const remaining = await admin.from(table).select('*', { count: 'exact', head: true }).in(colonne, ids);
+      verifier(!remaining.error && remaining.count === 0, 'residus_apres_nettoyage');
+    }
+    await journal('nettoyage-verifie');
+  };
+  // Aucun Edge Function ne peut être déclenché dans ce scénario, même sur staging.
+  await page.route('**/functions/v1/**', route => route.abort());
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/rest/v1/rpc/fn_appliquer_parrainage') attributionDemandee = true;
+  });
+  let erreurParcours: unknown;
+  let erreurNettoyage: unknown;
+  try {
+    const parrain = await creer('parrain');
+    const filleul = await creer('filleul');
+    verifierProfilTest(await profil(parrain.id)); verifierProfilTest(await profil(filleul.id));
+    expect(await relations()).toHaveLength(0);
+    const code = (await profil(parrain.id))?.code_parrainage;
+    verifier(typeof code === 'string' && /^[A-Z0-9-]{4,16}$/.test(code), 'code_absent');
+    await page.goto(`/inscription/soignant?ref=${encodeURIComponent(code)}`);
+    // Observer l'effet du vrai point d'entrée, sans injecter l'attribution.
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('jolene.parrainage_code'))).toBe(code);
+    const reponsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/rest/v1/rpc/fn_appliquer_parrainage').catch(() => null);
+    await connexion(page, filleul.email, filleul.password);
+    const reponse = await reponsePromise;
+    verifier(reponse, 'reponse_attribution_absente');
+    const resultat = await reponse.json();
+    attributionTerminee = true;
+    expect(reponse.ok()).toBe(true); expect(resultat.success).toBe(true);
+    await expect(page.getByText('Code de parrainage enregistré.', { exact: true })).toBeVisible();
+    await page.goto('/soignant/mon-compte');
+    await page.getByRole('button', { name: 'Se déconnecter', exact: true }).last().click();
+    await expect(page).toHaveURL(/\/(connexion)?$/);
+    await connexion(page, filleul.email, filleul.password);
+    const rows = await relations();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ parrain_id: parrain.id, filleul_id: filleul.id, statut: 'EN_ATTENTE', prime_versee_le: null, valide_le: null, commission_cumulee_filleul: 0 });
+    const filleulApres = await profil(filleul.id);
+    verifierProfilTest(filleulApres); verifierProfilTest(await profil(parrain.id));
+    // Ne pas remplacer cette assertion par une correction via service_role :
+    // elle détecte notamment un trigger qui annulerait silencieusement le lien.
+    expect(filleulApres?.parraine_par).toBe(parrain.id);
+  } catch (error) { erreurParcours = error; }
+  finally {
+    try { await page.close(); }
+    catch (error) { erreurParcours = new AggregateError([erreurParcours, error].filter(Boolean), 'Fermeture navigateur incomplète.'); }
+    try { await nettoyer(); }
+    catch (error) { erreurNettoyage = error; await journal('nettoyage-incomplet-reconciliation-requise'); }
+  }
+  if (erreurParcours || erreurNettoyage) {
+    throw new AggregateError([erreurParcours, erreurNettoyage].filter(Boolean), 'Recette parrainage non validée ; consulter les erreurs et le journal de nettoyage.');
+  }
+});

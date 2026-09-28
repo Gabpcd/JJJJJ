@@ -7,8 +7,10 @@ import {
   isPgrst202EligibilityFallbackAllowed,
 } from '../../../e2e/helpers/liberal-eligibility-policy';
 import {
+  githubJson,
   isStaleQueuedRun,
   olderActiveRuns,
+  sharedDatabaseJobsFinished,
   waitForOlderPlaywrightRuns,
 } from '../../../scripts/ci/wait-for-older-playwright-runs.mjs';
 import {
@@ -66,7 +68,7 @@ describe('file FIFO Playwright', () => {
     ]);
   });
 
-  it('ignore uniquement les runs queued/requested fantômes de plus de 3 h', () => {
+  it('repère les vieux runs queued/requested mais les garde bloquants sans preuve de fin des jobs', () => {
     const nowMs = Date.parse('2026-08-07T12:00:00Z');
     const options = { nowMs, staleQueuedAfterMs: 3 * 60 * 60 * 1000 };
     const currentRun = { id: 20, run_number: 20 };
@@ -83,7 +85,9 @@ describe('file FIFO Playwright', () => {
       { id: 12, run_number: 12, status: 'queued', created_at: '2026-08-07T10:00:00Z' },
       { id: 13, run_number: 13, status: 'in_progress', created_at: '2026-08-06T12:00:00Z' },
       { id: 14, run_number: 14, status: 'queued' },
-    ], currentRun, options)).toEqual([
+    ], currentRun)).toEqual([
+      { id: 10, run_number: 10, status: 'queued', created_at: '2026-08-07T08:59:59Z' },
+      { id: 11, run_number: 11, status: 'requested', created_at: '2026-08-07T08:00:00Z' },
       { id: 12, run_number: 12, status: 'queued', created_at: '2026-08-07T10:00:00Z' },
       { id: 13, run_number: 13, status: 'in_progress', created_at: '2026-08-06T12:00:00Z' },
       { id: 14, run_number: 14, status: 'queued' },
@@ -95,6 +99,9 @@ describe('file FIFO Playwright', () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith('/actions/runs/12')) {
         return jsonResponse({ id: 12, run_number: 12, workflow_id: 42 });
+      }
+      if (url.endsWith('/actions/runs/11')) {
+        return jsonResponse({ id: 11, run_number: 11, status: 'queued' });
       }
       if (url.includes('status=in_progress')) {
         inProgressPoll += 1;
@@ -125,7 +132,7 @@ describe('file FIFO Playwright', () => {
       log: { log: vi.fn() },
     });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    expect(fetchImpl).toHaveBeenCalledTimes(12);
     expect(fetchImpl.mock.calls.every(([url]) => !String(url).includes('/cancel'))).toBe(true);
   });
 
@@ -134,6 +141,223 @@ describe('file FIFO Playwright', () => {
     expect(workflow.match(/wait-for-older-playwright-runs\.mjs/g)).toHaveLength(2);
     expect(workflow.match(/PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'/g)).toHaveLength(2);
     expect(workflow).toContain('actions: read');
+  });
+});
+
+
+describe('FIFO limitée aux jobs de base de la tentative courante', () => {
+  const run = (extra = {}) => ({ id: 11, run_number: 11, run_attempt: 1, status: 'in_progress', event: 'pull_request', ...extra });
+  const job = (extra = {}) => ({ id: 101, run_id: 11, name: 'Playwright E2E (PR — Chromium)', status: 'completed', conclusion: 'success', ...extra });
+  const simulation = (extra = {}) => job({ id: 102, name: 'Simulation interfaces (ipad-portrait, lot 1/2)', status: 'in_progress', conclusion: null, ...extra });
+
+  function harness({ older = run(), jobs = [job(), simulation()], override }: {
+    older?: ReturnType<typeof run>;
+    jobs?: ReturnType<typeof job>[];
+    override?: (url: URL, turn: number) => unknown;
+  } = {}) {
+    let clock = 0;
+    let turn = 0;
+    const fetchImpl = vi.fn(async (raw: string) => {
+      const url = new URL(raw);
+      if (url.pathname.endsWith('/actions/runs/12')) return jsonResponse({ id: 12, run_number: 12, workflow_id: 42 });
+      const value = override?.(url, turn);
+      if (value !== undefined) return jsonResponse(value);
+      if (url.pathname.endsWith('/actions/runs/11')) return jsonResponse(older);
+      if (url.pathname.includes('/attempts/')) return jsonResponse({ jobs, total_count: jobs.length });
+      if (url.pathname.endsWith('/runs')) return jsonResponse({ workflow_runs: url.searchParams.get('status') === older.status ? [older] : [] });
+      throw new Error(`Appel imprévu : ${url.pathname}`);
+    });
+    const execute = () => waitForOlderPlaywrightRuns({
+      env: { GITHUB_TOKEN: 'fixture', GITHUB_REPOSITORY: 'test/repo', GITHUB_RUN_ID: '12',
+        PLAYWRIGHT_FIFO_MAX_WAIT_MS: '20', PLAYWRIGHT_FIFO_POLL_INTERVAL_MS: '10' },
+      fetchImpl,
+      sleep: async (ms: number) => { clock += ms; turn += 1; },
+      now: () => clock,
+      log: { log: vi.fn() },
+    });
+    return { execute, fetchImpl, elapsed: () => clock };
+  }
+
+  it('laisse les simulations actives continuer dès que le job base et son nettoyage sont terminés', async () => {
+    const h = harness();
+    await h.execute();
+    expect(h.elapsed()).toBe(0);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/attempts/1/jobs?per_page=100&page=1'))).toBe(true);
+    expect(h.fetchImpl.mock.calls.filter(([url]) => url.endsWith('/actions/runs/11'))).toHaveLength(2);
+    expect(h.fetchImpl.mock.calls.every(([url]) => !/cancel|rerun|dispatch/.test(url))).toBe(true);
+  });
+
+  it('attend la fin du job complet, même si ses tests ont déjà réussi pendant le nettoyage', async () => {
+    const h = harness({ override: (url, turn) => url.pathname.includes('/attempts/')
+      ? { total_count: 2, jobs: [job({ status: turn === 0 ? 'in_progress' : 'completed',
+        conclusion: turn === 0 ? null : 'success', steps: [{ name: 'Nettoyage', status: turn === 0 ? 'in_progress' : 'completed' }] }), simulation()] }
+      : undefined });
+    await h.execute();
+    expect(h.elapsed()).toBe(10);
+  });
+
+  it.each(['failure', 'cancelled', 'timed_out', 'skipped'])('un job base terminé %s libère la base, sans transformer son verdict en succès', async conclusion => {
+    const h = harness({ jobs: [job({ conclusion }), simulation()] });
+    await h.execute();
+    expect(h.elapsed()).toBe(0);
+  });
+
+  it.each([
+    ['job inconnu', [job(), simulation({ name: 'Nouveau job inconnu' })]],
+    ['statut inconnu', [job(), simulation({ status: 'mystery' })]],
+    ['conclusion absente', [job({ conclusion: null }), simulation()]],
+    ['job base absent', [simulation()]],
+    ['jobs absents', []],
+    ['nom trompeur de simulation', [job(), simulation({ name: 'Simulation interfaces (nouvelle-base)' })]],
+  ])('reste fermé si %s', async (_nom, jobs) => {
+    const h = harness({ jobs: jobs as ReturnType<typeof job>[] });
+    await expect(h.execute()).rejects.toThrow('Timeout FIFO');
+    expect(h.elapsed()).toBe(20);
+  });
+
+  it.each(['queued', 'requested', 'waiting', 'pending'])('charge et bloque un run %s, même ancien, sans réutiliser ses anciens jobs', async status => {
+    const h = harness({ older: run({ status, created_at: '2020-01-01T00:00:00Z' }) });
+    await expect(h.execute()).rejects.toThrow('Timeout FIFO');
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes(`status=${status}`))).toBe(true);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/attempts/'))).toBe(false);
+  });
+
+  it('ne libère pas une relance à partir des succès de la tentative précédente', async () => {
+    let metadataReads = 0;
+    const h = harness({ override: url => {
+      if (url.pathname.endsWith('/actions/runs/11')) {
+        metadataReads += 1;
+        return run({ run_attempt: metadataReads === 1 ? 1 : 2 });
+      }
+      return undefined;
+    } });
+    await h.execute();
+    expect(h.elapsed()).toBe(10);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/attempts/1/jobs'))).toBe(true);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/attempts/2/jobs'))).toBe(true);
+  });
+
+  it('parcourt toutes les pages des runs et des jobs avant de libérer la base', async () => {
+    const hundredNewerRuns = Array.from({ length: 100 }, (_, i) => run({ id: 100 + i, run_number: 100 + i }));
+    const hundredSimulations = Array.from({ length: 100 }, (_, i) => simulation({ id: 200 + i }));
+    const h = harness({ override: url => {
+      const page = url.searchParams.get('page');
+      if (url.pathname.endsWith('/runs') && url.searchParams.get('status') === 'in_progress') {
+        return { workflow_runs: page === '1' ? hundredNewerRuns : [run()] };
+      }
+      if (url.pathname.includes('/attempts/')) return { total_count: 101, jobs: page === '1' ? hundredSimulations : [job()] };
+      return undefined;
+    } });
+    await h.execute();
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/runs?status=in_progress&per_page=100&page=2'))).toBe(true);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.includes('/attempts/1/jobs?per_page=100&page=2'))).toBe(true);
+  });
+
+  it.each([
+    { total_count: 2, jobs: [job()] },
+    { total_count: 1 },
+    { total_count: 1, jobs: [job({ run_id: 999 })] },
+  ])('échoue explicitement sur une liste de jobs incomplète ou incohérente', async body => {
+    const h = harness({ override: url => url.pathname.includes('/attempts/') ? body : undefined });
+    await expect(h.execute()).rejects.toThrow(/FIFO fermée/);
+  });
+
+  it('arrête les lectures de jobs au premier ancien run bloquant', async () => {
+    const h = harness({ override: url => {
+      if (url.pathname.endsWith('/runs') && url.searchParams.get('status') === 'in_progress') {
+        return { workflow_runs: [run(), run({ id: 10, run_number: 10 })] };
+      }
+      if (url.pathname.endsWith('/actions/runs/10')) return run({ id: 10, run_number: 10, status: 'queued' });
+      return undefined;
+    } });
+    await expect(h.execute()).rejects.toThrow('Timeout FIFO');
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.endsWith('/actions/runs/10'))).toBe(true);
+    expect(h.fetchImpl.mock.calls.some(([url]) => url.endsWith('/actions/runs/11'))).toBe(false);
+  });
+
+  it('exige le job attendu pour les événements main et PR', () => {
+    expect(sharedDatabaseJobsFinished([job()], 'push')).toBe(false);
+    expect(sharedDatabaseJobsFinished([job({ name: 'Playwright E2E (chromium)' }), simulation()], 'push')).toBe(true);
+    expect(sharedDatabaseJobsFinished([job()], 'événement-inconnu')).toBe(false);
+  });
+});
+
+
+describe('lectures GET GitHub bornées', () => {
+  const url = 'https://api.github.com/repos/test/repo/actions/runs/11';
+  const http = (status: number, retryAfter?: string) => ({ ok: false, status,
+    headers: { get: () => retryAfter ?? null } });
+
+  it('reprend une exception réseau sans ouvrir la file et ne fait que des GET', async () => {
+    const fetchImpl = vi.fn().mockRejectedValueOnce(new TypeError('fetch failed')).mockResolvedValueOnce(jsonResponse({ id: 11 }));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).resolves.toEqual({ id: 11 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(1000);
+    expect(fetchImpl.mock.calls.every(([, options]) => options.method === 'GET' && options.signal instanceof AbortSignal)).toBe(true);
+  });
+
+  it('reprend deux HTTP 5xx, puis accepte seulement la troisième lecture réussie', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(http(502)).mockResolvedValueOnce(http(503)).mockResolvedValueOnce(jsonResponse({ id: 11 }));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).resolves.toEqual({ id: 11 });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep.mock.calls).toEqual([[1000], [2000]]);
+  });
+
+  it.each(['réseau', '5xx'])('reste fermé après trois erreurs %s', async kind => {
+    const fetchImpl = kind === 'réseau' ? vi.fn().mockRejectedValue(new TypeError('fetch failed')) : vi.fn().mockResolvedValue(http(503));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).rejects.toThrow('après 3 essais ; FIFO fermée');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([400, 401, 403, 404, 422])('ne rejoue pas HTTP %s', async status => {
+    const fetchImpl = vi.fn().mockResolvedValue(http(status));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).rejects.toThrow(`API ${status}`);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('respecte un Retry-After court pour 429, puis reprend une vraie lecture', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(http(429, '2')).mockResolvedValueOnce(jsonResponse({ id: 11 }));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).resolves.toEqual({ id: 11 });
+    expect(sleep).toHaveBeenCalledWith(2000);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([undefined, '61', 'invalide'])('reste fermé sans Retry-After court valide (%s)', async retryAfter => {
+    const fetchImpl = vi.fn().mockResolvedValue(http(429, retryAfter));
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).rejects.toThrow('API 429');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('borne chacune des trois tentatives à 15 s même quand fetch attend indéfiniment', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      }));
+      const sleep = vi.fn(async () => {});
+      const result = githubJson(fetchImpl, url, 'fixture', { sleep });
+      const assertion = expect(result).rejects.toThrow('après 3 essais ; FIFO fermée');
+      await vi.advanceTimersByTimeAsync(45_000);
+      await assertion;
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      expect(sleep).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('ne rejoue pas une réponse JSON invalide', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw new SyntaxError('JSON invalide'); } });
+    const sleep = vi.fn(async () => {});
+    await expect(githubJson(fetchImpl, url, 'fixture', { sleep })).rejects.toThrow('JSON invalide');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
 

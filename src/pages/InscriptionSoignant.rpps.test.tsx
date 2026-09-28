@@ -14,7 +14,7 @@ vi.mock('@/integrations/supabase/client', () => ({ SUPABASE_URL: 'http://127.0.0
 vi.mock('@/lib/inscriptionProgressive', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/inscriptionProgressive')>(), finaliserProfil: mocks.finaliser }));
 
 const trouve = (professionCorrespond: boolean) => ({ ok: true, json: async () => ({ trouve: true, prenom: 'Camille', nom_api: 'Recette', profession_api: professionCorrespond ? 'IDE' : 'Médecin', profession_correspond: professionCorrespond }) });
-const afficher = () => render(<MemoryRouter><InscriptionSoignant parcours={{ user_id: 'fixture', type_compte: 'SOIGNANT', modifie_le: '', donnees: { prenom: 'Camille', nom: 'Recette', profession: 'IDE', telephone: '0100000000', dateNaissance: '1990-01-01', typesContrat: ['SALARIE'] } }} /></MemoryRouter>);
+const afficher = (typesContrat = ['SALARIE']) => render(<MemoryRouter><InscriptionSoignant parcours={{ user_id: 'fixture', type_compte: 'SOIGNANT', modifie_le: '', donnees: { prenom: 'Camille', nom: 'Recette', profession: 'IDE', telephone: '0100000000', dateNaissance: '1990-01-01', typesContrat } }} /></MemoryRouter>);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,13 +24,19 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('RPPS — la confirmation correspond aux informations actuellement saisies', () => {
+  it('conserve une vacation salariée restaurée même lorsque le libéral est interdit', () => {
+    afficher(['VACATION']);
+    expect(screen.getByRole('checkbox', { name: 'Salarié (CDD compris)' })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: 'Libéral' })).not.toBeInTheDocument();
+  });
+
   it('signale une profession incompatible sans annoncer de vérification réussie ni finaliser', async () => {
     mocks.fetch.mockResolvedValue(trouve(false));
     afficher();
     fireEvent.change(screen.getByPlaceholderText(/^11 chiffres/), { target: { value: '10000000000' } });
     expect(await screen.findByText(/Ce RPPS correspond à la profession/)).toBeVisible();
     expect(screen.getByText(/Ce RPPS correspond à la profession/)).toHaveTextContent('Vérifiez votre numéro ou votre profession.');
-    expect(screen.getByText('Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.')).toBeVisible();
+    expect(screen.getByText('Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.')).toBeVisible();
     expect(screen.queryByText(/RPPS vérifié dans l’Annuaire Santé/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer mon profil' }));
     expect(await screen.findByText(/Vérifiez les informations suivantes : cohérence du RPPS/)).toBeVisible();

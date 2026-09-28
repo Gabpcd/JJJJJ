@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditC
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { messageErreurEdgeFn } from '@/lib/erreurs';
+import { resultatTestSms } from '@/lib/resultatTestSms';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
@@ -265,17 +266,12 @@ export function PanneauxHealthcheck() {
         const msg = await messageErreurEdgeFn(error, 'Erreur lors de l\'envoi du SMS de test.');
         setSmsResult({ ok: false, detail: msg });
         toast.error(`Échec : ${msg}`);
-      } else if (data?.success === false) {
-        setSmsResult({ ok: false, detail: data.error || 'Twilio rejected' });
-        toast.error(`Twilio rejette : ${data.error || 'Erreur'}`);
-      } else if (data?.configured === false) {
-        setSmsResult({ ok: false, detail: 'Twilio non configuré (TWILIO_FROM_NUMBER absent)' });
-        toast.warning('Twilio non configuré');
-      } else if (data?.sid) {
-        setSmsResult({ ok: true, detail: `SMS envoyé · sid=${data.sid} · to=${data.to}` });
-        toast.success('SMS envoyé');
       } else {
-        setSmsResult({ ok: true, detail: 'Réponse inattendue : ' + JSON.stringify(data).slice(0, 200) });
+        const resultat = resultatTestSms(data);
+        setSmsResult({ ok: resultat.etat === 'accepte', detail: resultat.detail });
+        if (resultat.etat === 'accepte') toast.success('Demande de SMS acceptée — réception à confirmer');
+        else if (resultat.etat === 'incertain') toast.warning(resultat.detail);
+        else toast.error(resultat.detail);
       }
     } catch (error: unknown) {
       const detail = messageInconnue(error);

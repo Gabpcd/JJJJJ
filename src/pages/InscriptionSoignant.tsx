@@ -18,8 +18,8 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { DeclarationEtudiant, FORMATIONS_ETUDIANT } from '@/components/inscription/DeclarationEtudiant';
 import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
-import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_RPPS_REQUIS } from '@/lib/constantes';
-import { Checkbox } from '@/components/ui/checkbox';
+import { PROFESSIONS_SANS_RPPS, PROFESSIONS_RPPS_REQUIS } from '@/lib/constantes';
+import { ChoixModesExercice } from '@/components/ChoixModesExercice';
 import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 import { ApercuMarche } from '@/components/inscription/ApercuMarche';
@@ -160,16 +160,6 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
-  const toggleContrat = (valeur: string) => {
-    setForm(prev => {
-      const current = prev.typesContrat;
-      const next = current.includes(valeur)
-        ? current.filter(v => v !== valeur)
-        : [...current, valeur];
-      return { ...prev, typesContrat: next };
-    });
-  };
-
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
   const {
@@ -177,6 +167,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     uniqueType: typeExerciceUnique,
     loading: typesExerciceChargement,
     indisponible: typesExerciceIndisponibles,
+    reessayer: reessayerTypesExercice,
   } = useTypesExerciceAutorises(form.profession);
   const typesExerciceConnus = Array.isArray(typesExerciceProfil);
   const peutEtreLiberal = !!form.profession
@@ -187,7 +178,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     professionPrecedente.current = form.profession;
     if (!professionChangee && (!typesExerciceConnus || peutEtreLiberal)) return;
     setForm(prev => {
-      const cleaned = prev.typesContrat.filter(v => v !== 'LIBERAL' && v !== 'VACATION');
+      const cleaned = prev.typesContrat.filter(v => v !== 'LIBERAL');
       return cleaned.length === prev.typesContrat.length ? prev : { ...prev, typesContrat: cleaned };
     });
   }, [form.profession, typesExerciceConnus, peutEtreLiberal]);
@@ -346,7 +337,7 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     e.preventDefault();
     if (rppsVerifiant) return;
     if (!etape2Valide) {
-      const manque = [!form.prenom && 'prénom', !form.nom && 'nom', !telephoneValide && 'téléphone valide', !dateNaissanceMajeur && 'date de naissance (18 ans minimum)', !form.profession && 'profession', !form.typesContrat.length && 'type de contrat', rppsObligatoireInscription && form.rpps.length !== 11 && 'numéro RPPS à 11 chiffres', rppsBloquant && 'cohérence du RPPS'].filter(Boolean);
+      const manque = [!form.prenom && 'prénom', !form.nom && 'nom', !telephoneValide && 'téléphone valide', !dateNaissanceMajeur && 'date de naissance (18 ans minimum)', !form.profession && 'profession', !form.typesContrat.length && 'mode d’exercice', rppsObligatoireInscription && form.rpps.length !== 11 && 'numéro RPPS à 11 chiffres', rppsBloquant && 'cohérence du RPPS'].filter(Boolean);
       setErreurInscription({ code: 'MISSING_REQUIRED_FIELDS', message: `Vérifiez les informations suivantes : ${manque.join(', ')}.` }); return;
     }
     setSubmitting(true);
@@ -576,39 +567,14 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
                 onChangeAnnee={(v) => maj('scolariteAnnee', v)}
                 onSuggererProfession={(p) => maj('profession', p)}
               />
-              <fieldset className="border-0 p-0 m-0">
-                <legend className="text-sm font-medium text-foreground mb-1.5">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></legend>
-                <div className="grid grid-cols-2 gap-2 mt-1" role="group" aria-label="Types de contrat acceptés">
-                  {CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION')).map(c => (
-                    <label key={c.valeur} className="flex items-center gap-2 cursor-pointer rounded-lg border border-input px-3 py-2.5 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                      <Checkbox
-                        checked={form.typesContrat.includes(c.valeur)}
-                        onCheckedChange={() => toggleContrat(c.valeur)}
-                        aria-label={c.label}
-                      />
-                      <span className="text-sm text-foreground">{c.label}</span>
-                    </label>
-                  ))}
-                </div>
-                {form.profession && typesExerciceChargement && (
-                  <p className="text-[10px] text-muted-foreground mt-1.5" role="status">
-                    Vérification des types de contrat autorisés…
-                  </p>
-                )}
-                {form.profession && typesExerciceIndisponibles && (
-                  <p className="text-[10px] text-amber-700 mt-1.5" role="status">
-                    Vérification temporairement indisponible. Vous pouvez poursuivre en CDD ou salarié et activer le libéral plus tard après contrôle.
-                  </p>
-                )}
-                {form.profession && typesExerciceConnus && !peutEtreLiberal && (
-                  <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
-                  </p>
-                )}
-                {form.typesContrat.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
-                )}
-              </fieldset>
+              <ChoixModesExercice
+                valeur={form.typesContrat}
+                onChange={valeur => maj('typesContrat', valeur)}
+                typesAutorises={typesExerciceProfil}
+                loading={typesExerciceChargement}
+                indisponible={typesExerciceIndisponibles}
+                reessayer={reessayerTypesExercice}
+              />
               {afficherChampRpps ? (
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS{rppsObligatoireInscription ? ' *' : ''}</span>

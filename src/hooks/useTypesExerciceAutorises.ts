@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 type EtatTypesExercice = {
@@ -8,6 +8,8 @@ type EtatTypesExercice = {
 };
 
 export function useTypesExerciceAutorises(profession: string) {
+  const [tentative, setTentative] = useState(0);
+  const reessayer = useCallback(() => setTentative(value => value + 1), []);
   const [etat, setEtat] = useState<EtatTypesExercice>({
     profession: '',
     typesAutorises: null,
@@ -42,7 +44,7 @@ export function useTypesExerciceAutorises(profession: string) {
     return () => {
       actif = false;
     };
-  }, [profession]);
+  }, [profession, tentative]);
 
   // Ne jamais exposer la réponse de la profession précédente pendant le
   // changement : une règle IDE ne doit pas être appliquée à un profil AS.
@@ -54,5 +56,5 @@ export function useTypesExerciceAutorises(profession: string) {
   const indisponible = correspondProfession && etat.statut === 'indisponible';
   const uniqueType = typesAutorises && typesAutorises.length === 1 ? typesAutorises[0] : null;
 
-  return { typesAutorises, uniqueType, loading, indisponible };
+  return { typesAutorises, uniqueType, loading, indisponible, reessayer };
 }

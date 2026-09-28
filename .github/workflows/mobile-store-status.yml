@@ -1,0 +1,53 @@
+name: Mobile store status (read only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-store-status
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Secrets are only exposed to reviewed code on main, even for a manual dispatch on another ref.
+          ref: main
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Verify report filtering without credentials or network
+        run: bundle exec ruby scripts/mobile/store-status.test.rb
+      - name: Read App Store Connect and Google Play production status
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64 }}
+        run: bundle exec ruby scripts/mobile/store-status.rb "$RUNNER_TEMP/mobile-store-status"
+      - name: Attach sanitized summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/mobile-store-status/store-status.md" ]; then
+            cat "$RUNNER_TEMP/mobile-store-status/store-status.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-store-status
+          path: |
+            ${{ runner.temp }}/mobile-store-status/store-status.json
+            ${{ runner.temp }}/mobile-store-status/store-status.md
+          if-no-files-found: warn
+          retention-days: 14

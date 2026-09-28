@@ -36,7 +36,7 @@ test('SOIGNANT — inscription minimale puis dossier : validations, refus et fin
   expect(state.mode).toBe('minimal');
   await expect(page.getByLabel(/^Prénom \*/)).toHaveValue('Camille');
   await expect(page.getByLabel(/^Téléphone \*/)).toHaveValue('0100000000');
-  await expect(page.getByRole('checkbox', { name: 'Salarié', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Salarié (CDD compris)', exact: true })).toBeChecked();
   await preuve(page, 'completion-soignant-refus-conserve', info, true);
   await sansDebordement(page);
   completion.refusFinalisation = false;
@@ -93,7 +93,7 @@ test('SOIGNANT — brouillon professionnel enregistré, retour à Explorer et re
   await expect(page.getByLabel(/^Téléphone \*/)).toHaveValue('0100000000');
   await expect(page.getByLabel(/^Date de naissance \*/)).toHaveValue('');
   await page.getByLabel(/^Date de naissance \*/).fill('1990-01-01');
-  await page.getByRole('checkbox', { name: 'Salarié', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Salarié (CDD compris)', exact: true }).check();
   await verifierRppsSimule(page);
   state.failures.add('fn_enregistrer_parcours_inscription');
   await page.getByRole('button', { name: 'Enregistrer mon profil', exact: true }).click();

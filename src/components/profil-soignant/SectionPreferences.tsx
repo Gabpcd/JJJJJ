@@ -1,6 +1,7 @@
 import { Switch } from '@/components/ui/switch';
 import { useNavigate } from 'react-router-dom';
-import { CONTRATS } from '@/lib/constantes';
+import { ChoixModesExercice } from '@/components/ChoixModesExercice';
+import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { SectionBio } from '@/components/SectionBio';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +18,8 @@ interface Props {
   specialites: string[];
   onSpecialitesChange: (vals: string[]) => void;
   typesContrat: string[];
-  onToggleContrat: (valeur: string) => void;
+  profession: string;
+  onTypesContratChange: (valeur: string[]) => void;
   rayon: number;
   onRayonChange: (val: number) => void;
   tauxHoraireMinimum: number | null;
@@ -35,7 +37,7 @@ export function SectionPreferences(props: Props) {
   const {
     userId, bio, onBioChange, anneesExperience, onAnneesChange,
     specialites, onSpecialitesChange,
-    typesContrat, onToggleContrat,
+    typesContrat, profession, onTypesContratChange,
     rayon, onRayonChange,
     tauxHoraireMinimum, onTauxChange,
     poolUrgenceActif, poolUrgenceRayon, onPoolUrgenceUpdate,
@@ -44,6 +46,7 @@ export function SectionPreferences(props: Props) {
   const { afficherNotification } = useNotification();
   const { role } = useRole();
   const navigate = useNavigate();
+  const modesExercice = useTypesExerciceAutorises(profession);
 
   return (
     <div className="space-y-4">
@@ -57,24 +60,11 @@ export function SectionPreferences(props: Props) {
       />
 
       <div className="card-base">
-        <h2 className="text-base font-semibold text-foreground mb-2">Types de contrat acceptés</h2>
-        <p className="text-xs text-muted-foreground mb-3">Coche tous les types de contrat que tu acceptes.</p>
-        <div className="space-y-2">
-          {CONTRATS.map((c) => (
-            <label key={c.valeur} className="flex min-h-11 items-center gap-3 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={typesContrat.includes(c.valeur)}
-                onChange={() => onToggleContrat(c.valeur)}
-                className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary"
-              />
-              <span className="text-sm text-foreground group-hover:text-primary transition-colors">{c.label}</span>
-            </label>
-          ))}
-        </div>
-        {typesContrat.length === 0 && (
-          <p className="text-xs text-destructive mt-1">Sélectionne au moins un type de contrat</p>
-        )}
+        <ChoixModesExercice
+          valeur={typesContrat}
+          onChange={onTypesContratChange}
+          {...modesExercice}
+        />
       </div>
 
       <div className="card-base">
