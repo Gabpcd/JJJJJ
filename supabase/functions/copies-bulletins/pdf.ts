@@ -1,5 +1,5 @@
 // Le même parseur épinglé que generate-invoice ; aucune réécriture du PDF reçu.
-import { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFStream, PDFObject, PDFString, PDFHexString } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFStream, PDFObject, PDFString, PDFHexString, PDFNumber } from 'npm:pdf-lib@1.17.1';
 
 export const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -12,6 +12,8 @@ export async function verifierPdfOfficiel(bytes: Uint8Array): Promise<void> {
   try {
     const pdf = await PDFDocument.load(bytes, {
       ignoreEncryption: false, throwOnInvalidObject: true, updateMetadata: false,
+      // Conserver la valeur parsée pour la refuser, jamais la ramener au plafond.
+      capNumbers: false,
     });
     if (pdf.isEncrypted || pdf.getPageCount() < 1 || pdf.getPageCount() > 200) throw new Error();
     // Parcours structurel, références indirectes comprises. Une OpenAction de
@@ -27,6 +29,12 @@ export async function verifierPdfOfficiel(bytes: Uint8Array): Promise<void> {
       }
       if (vus.has(objet)) return;
       vus.add(objet);
+      if (objet instanceof PDFNumber) {
+        const valeur = objet.asNumber();
+        // Les dimensions décimales ordinaires sont permises ; pas les valeurs
+        // non finies ou hors de la plage représentable sans débordement entier.
+        if (!Number.isFinite(valeur) || Math.abs(valeur) > Number.MAX_SAFE_INTEGER) throw new Error();
+      }
       if (objet instanceof PDFStream) { visiter(objet.dict, profondeur + 1); return; }
       if (objet instanceof PDFArray) {
         for (let i = 0; i < objet.size(); i++) visiter(objet.get(i), profondeur + 1);
