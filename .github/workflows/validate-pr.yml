@@ -471,6 +471,7 @@ jobs:
         # est le workflow manuel `recette-escrow-stripe.yml`, exécuté sur la
         # branche Supabase de recette avec une clé sk_test.
         run: |
+          python3 -m unittest discover -s tests/python -p 'test_resend_stripe_test_event.py' -v
           npm ci
           npx vitest run \
             tests/admin/security/copies-bulletins-handler.test.ts \
