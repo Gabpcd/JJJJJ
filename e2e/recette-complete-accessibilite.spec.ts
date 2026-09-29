@@ -145,8 +145,21 @@ async function verifierCombobox(page: Page, nom: string) {
   await expect(page.locator(`[id="${contenuId}"]`)).toBeVisible();
   // Le trigger peut annoncer l'ouverture avant l'installation du portail et
   // l'autofocus Radix. Attendre le contrôle réellement prêt avant Échap.
-  if (nom === 'Profession requise *' && page.viewportSize()!.width >= 768) {
-    await expect(page.getByPlaceholder('Rechercher une profession...', { exact: true })).toBeFocused();
+  if (nom === 'Profession requise *') {
+    if (page.viewportSize()!.width < 768) {
+      // Le focus initial non éditable évite d'ouvrir le clavier logiciel tout
+      // en gardant la navigation clavier dans le drawer modal.
+      await expect(page.getByRole('heading', { name: 'Choisir une profession', exact: true })).toBeFocused();
+      await page.keyboard.press('Tab');
+    }
+    const recherche = page.getByPlaceholder('Rechercher une profession...', { exact: true });
+    await expect(recherche).toBeFocused();
+    if (page.viewportSize()!.width < 768) {
+      await page.keyboard.press('Tab');
+      await expect(recherche).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(recherche).toBeFocused();
+    }
   } else if (nom === 'Période des revenus') {
     await expect(page.getByRole('option', { name: 'Ce mois', exact: true })).toBeFocused();
   }
@@ -168,6 +181,11 @@ async function naviguer(page: Page, info: TestInfo, role: 'soignant' | 'etabliss
   await cible.focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/${role}/${entree.chemin}$`));
+  if (role === 'etablissement' && entree.chemin === 'mon-compte') {
+    // aria-current précède parfois le chargement lazy du compte. Attendre son
+    // contenu évite de tester Tab entre un écran vide et l'arrivée des boutons.
+    await expect(page.locator('main').getByRole('heading', { name: 'Résidence Camille — recette', exact: true })).toBeVisible();
+  }
   if (role === 'soignant' && entree.chemin === 'recherche-missions') {
     const quiz = page.getByRole('dialog', { name: '5 questions pour un deck qui te ressemble', exact: true });
     await expect(quiz).toBeVisible();

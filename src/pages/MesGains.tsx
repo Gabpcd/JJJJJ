@@ -647,7 +647,6 @@ export function MesGainsApercuContent() {
       <p className="text-[10px] text-muted-foreground italic mb-3">
         {salMissions.length > 0 && '* Net salarié estimé après cotisations salariales (~22 %). '}
         {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF et de retraite (annualisées). '}
-        {libMissions.length === 0 && salMissions.length === 0 && '* Aucun montant net n’est inventé tant que le régime n’est pas qualifié. '}
         Les simulations salariales sont indicatives ; le net exact figure sur le bulletin officiel fourni par l’employeur. Les honoraires libéraux sont détaillés sur la facture.
       </p>
 

@@ -24,6 +24,7 @@ function normalize(s: string): string {
 export function SelectProfession({ value, onChange, disabled, filtresProfessions, placeholder, triggerId }: SelectProfessionProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const drawerTitleRef = useRef<HTMLHeadingElement>(null);
   const [largeurListe, setLargeurListe] = useState<number>();
   const changerOuverture = (ouvert: boolean) => {
     if (ouvert && triggerRef.current) {
@@ -110,10 +111,15 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
         <DrawerContent
           className="max-h-[82dvh] rounded-t-[24px] border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)]"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            // Entrer dans le modal sans ouvrir le clavier logiciel. Tab rejoint
+            // ensuite la recherche au lieu de parcourir le formulaire derrière.
+            event.preventDefault();
+            drawerTitleRef.current?.focus({ preventScroll: true });
+          }}
         >
           <DrawerHeader className="pb-2 text-left">
-            <DrawerTitle>Choisir une profession</DrawerTitle>
+            <DrawerTitle ref={drawerTitleRef} tabIndex={-1}>Choisir une profession</DrawerTitle>
             <DrawerDescription>Parcours la liste ou touche la recherche pour filtrer.</DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 overflow-hidden px-2 pb-3">
