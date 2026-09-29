@@ -6,6 +6,7 @@ import { ids as soignantIds } from './recette-complete-soignant';
 
 export function pdfFictif(texte = 'Copie fictive de recette - aucun bulletin réel') {
   const pdf = new jsPDF(); pdf.text(texte, 20, 20);
+  pdf.addPage(); pdf.text('Page 2 - complément fictif pour vérifier la pagination', 20, 20);
   const buffer = Buffer.from(pdf.output('arraybuffer'));
   return { name: 'copie-recette.pdf', mimeType: 'application/pdf', buffer,
     sha256: createHash('sha256').update(buffer).digest('hex') };

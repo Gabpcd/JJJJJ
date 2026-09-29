@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "path";
+import { pdfjsLocalAssets } from './scripts/pdfjs-local-assets.mjs';
 
 // Upload des source maps Sentry. Activé UNIQUEMENT quand le projet Sentry
 // est confirmé créé (env SENTRY_UPLOAD_ENABLED=true) ET que le token est
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    pdfjsLocalAssets(),
     {
       name: 'native-system-fonts',
       transformIndexHtml: (html: string) => process.env.VITE_NATIVE_BUILD === 'true'
@@ -79,13 +81,19 @@ export default defineConfig(({ mode }) => ({
     // Injecté dans main.tsx pour Sentry.init({ release })
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
+  worker: { rolldownOptions: { transform: { target: ['es2020', 'safari15'] }, output: { keepNames: true } } },
   build: {
+    // Match the native iOS 15 minimum, including the PDF preview worker.
+    // Vite's default Safari 16.4 target leaves static class blocks untransformed.
+    target: ['es2020', 'safari15'],
     // Sans upload Sentry explicite, aucune source map de production n'est
     // publiée. Avec upload, le mode hidden évite les sourceMappingURL puis le
     // plugin supprime les fichiers après envoi.
     sourcemap: shouldUploadSourcemaps ? 'hidden' : false,
     rolldownOptions: {
       output: {
+        // PDF.js requires class/function names to survive production bundling.
+        keepNames: true,
         codeSplitting: {
           groups: [
             { name: 'vendor-react', test: /node_modules\/(?:react|react-dom|react-router|react-router-dom)\// },

@@ -85,7 +85,13 @@ BEGIN
   IF NOT refuse THEN RAISE EXCEPTION 'Chemin non réservé accepté'; END IF;
   IF EXISTS(SELECT 1 FROM storage.objects WHERE bucket_id='copies-bulletins-paie') THEN RAISE EXCEPTION 'Storage lisible directement'; END IF;
   UPDATE storage.objects SET metadata='{"remplace":true}' WHERE bucket_id='copies-bulletins-paie';
-  DELETE FROM storage.objects WHERE bucket_id='copies-bulletins-paie';
+  -- Storage peut refuser même un DELETE auquel la RLS ne rend aucune ligne.
+  -- Dans les deux cas, l'assertion privilégiée ci-dessous exige le blob intact.
+  BEGIN
+    DELETE FROM storage.objects WHERE bucket_id='copies-bulletins-paie';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 
   -- Les acteurs non habilités ne peuvent ni publier ni lire les métadonnées.
   FOREACH acteur IN ARRAY ARRAY[rh,lecture,pointage,autre_etab,tiers] LOOP
@@ -192,8 +198,9 @@ BEGIN
   BEGIN PERFORM public.fn_acces_copie_bulletin(copie,'telecharger'); EXCEPTION WHEN insufficient_privilege THEN refuse:=true; END;
   IF NOT refuse THEN RAISE EXCEPTION 'PDF tiers exposé'; END IF;
 
-  -- La correction historique ne dépend plus des missions vivantes : modification
-  -- de dates/réaffectation d'une mission et suppression de l'autre fixture.
+  -- Les horaires acceptés restent protégés. La fixture privilégiée peut être
+  -- réaffectée : le destinataire de la copie publiée doit néanmoins rester figé.
+  -- La correction reste aussi possible si une autre mission a été supprimée.
   EXECUTE 'RESET ROLE';
   IF (SELECT count(*) FROM public.paiements_soignant WHERE mission_id IN(mission1,mission2))<>avant_paiements
     OR (SELECT count(*) FROM public.bulletins_paie WHERE mission_id IN(mission1,mission2))<>avant_simulations
@@ -201,7 +208,19 @@ BEGIN
     RAISE EXCEPTION 'Publication initiale modifie paie/paiement/contrat'; END IF;
   PERFORM set_config('request.jwt.claim.sub','',true); PERFORM set_config('request.jwt.claim.role','service_role',true);
   PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
-  UPDATE public.missions SET debut_le='2035-07-18 09:00:00+02',fin_le='2035-07-18 17:00:00+02',soignant_assigne_id=tiers WHERE id=mission1;
+  refuse:=false;
+  BEGIN
+    UPDATE public.missions SET debut_le='2035-07-18 09:00:00+02',fin_le='2035-07-18 17:00:00+02' WHERE id=mission1;
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'Les horaires ne peuvent plus être modifiés après acceptation.' THEN RAISE; END IF;
+    refuse:=true;
+  END;
+  IF NOT refuse OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=mission1
+    AND debut_le='2035-06-18 09:00:00+02' AND fin_le='2035-06-18 17:00:00+02') THEN
+    RAISE EXCEPTION 'Horaires historiques modifiables'; END IF;
+  UPDATE public.missions SET soignant_assigne_id=tiers WHERE id=mission1;
+  IF (SELECT soignant_assigne_id FROM public.missions WHERE id=mission1) IS DISTINCT FROM tiers THEN
+    RAISE EXCEPTION 'Réaffectation de fixture historique non effectuée'; END IF;
   DELETE FROM public.missions WHERE id=mission2;
   IF EXISTS(SELECT 1 FROM public.missions WHERE id=mission2) THEN RAISE EXCEPTION 'Mission fixture non supprimée'; END IF;
   SELECT count(*) INTO avant_paiements FROM public.paiements_soignant WHERE mission_id IN(mission1,mission2);

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ApercuPdfCopie } from '@/components/ApercuPdfCopie';
 import { DialogResponsive, DialogResponsiveBody, DialogResponsiveContent, DialogResponsiveDescription, DialogResponsiveFooter, DialogResponsiveHeader, DialogResponsiveTitle } from '@/components/ui/DialogResponsive';
 import { chargerMissionsCopies, CopieRetireeErreur, empreintePdfCopie, idempotenceCopie, nouvelleIdempotenceCopie, publierCopieBulletin, type CopieBulletin, type DepotCopieBulletin, type MissionCopieBulletin, type MotifRemplacementCopie } from '@/lib/copiesBulletins';
 import { cleJourParis, formatParis } from '@/lib/date-heure-paris';
@@ -29,6 +30,8 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
   const [motif, setMotif] = useState<MotifRemplacementCopie>('CONTENU');
   const [etape, setEtape] = useState<'saisie' | 'confirmation'>('saisie');
   const [confirme, setConfirme] = useState(false);
+  const [apercuPret, setApercuPret] = useState(false);
+  const actualiserApercu = useCallback((pret: boolean) => { setApercuPret(pret); if (!pret) setConfirme(false); }, []);
   const [erreur, setErreur] = useState<string | null>(null);
   const [intentionRetiree, setIntentionRetiree] = useState<{ empreinte: string; id: string } | null>(null);
   const [information, setInformation] = useState<string | null>(null);
@@ -64,7 +67,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
 
   async function choisirFichier(file: File | undefined) {
     const lecture = ++lectureCourante.current;
-    setPdf(null); setErreur(null); setConfirme(false);
+    setPdf(null); setErreur(null); setConfirme(false); setApercuPret(false);
     if (!file) { setLectureFichier(false); return; }
     setLectureFichier(true);
     try {
@@ -75,7 +78,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
   }
 
   async function publier() {
-    if (verrou.current || intentionRetiree || !confirme || !peutPrevisualiser || !pdf) return;
+    if (verrou.current || intentionRetiree || !confirme || !apercuPret || !peutPrevisualiser || !pdf) return;
     verrou.current = true; setErreur(null); setInformation(null); setProgression('Préparation du dépôt…');
     const depot = donneesDepot();
     try {
@@ -135,8 +138,8 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
           {lectureFichier && <p role="status" className="text-sm">Vérification du fichier…</p>}
         </fieldset> : <div className="space-y-4">
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-semibold">Destinataire : {nom}</p><p>Période : du {formatParis(debut, 'dd/MM/yyyy')} au {formatParis(fin, 'dd/MM/yyyy')}</p><p>{missionIds.length} mission{missionIds.length > 1 ? 's' : ''} sélectionnée{missionIds.length > 1 ? 's' : ''}{remplacement ? ` · remplace la version ${remplacement.version}` : ''}</p></div>
-          {pdf && <><iframe sandbox="" src={pdf.url} title="Aperçu de la copie du bulletin officiel" className="h-80 w-full rounded-lg border" /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir l’aperçu dans un nouvel onglet</a><p className="text-xs text-muted-foreground">Vérifiez le destinataire et la période dans le PDF. Si votre navigateur n’affiche pas l’aperçu intégré, ouvrez-le dans un nouvel onglet. Un fichier illisible ne doit pas être confirmé.</p></>}
-          <label className="flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" className="mt-1" checked={confirme} disabled={busy || Boolean(intentionRetiree)} onChange={e => setConfirme(e.target.checked)} /><span>Je confirme le destinataire et que cette copie du bulletin officiel a déjà été remise par le service paie de l’employeur.</span></label>
+          {pdf && <><ApercuPdfCopie key={pdf.url} file={pdf.file} onPretChange={actualiserApercu} /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir aussi le PDF dans un nouvel onglet</a></>}
+          <label className="flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" className="mt-1" checked={confirme} disabled={busy || !apercuPret || Boolean(intentionRetiree)} onChange={e => setConfirme(e.target.checked)} /><span>Je confirme le destinataire et que cette copie du bulletin officiel a déjà été remise par le service paie de l’employeur.</span></label>
         </div>}
         {erreur && <p role="alert" className="mt-4 text-sm text-destructive">{erreur}</p>}
         {information && <p role="status" className="mt-4 text-sm">{information}</p>}
@@ -146,7 +149,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
         <Button variant="outline" disabled={busy} onClick={() => { if (etape === 'confirmation') { setEtape('saisie'); setConfirme(false); setErreur(null); setIntentionRetiree(null); setInformation(null); } else onFermer(); }}>{etape === 'confirmation' ? 'Modifier le dépôt' : 'Annuler'}</Button>
         {etape === 'saisie' ? <Button disabled={!peutPrevisualiser} onClick={() => { setEtape('confirmation'); setErreur(null); }}>Aperçu et confirmation</Button>
           : intentionRetiree ? <Button disabled={busy} onClick={() => { void preparerNouveauDepot(); }}>Préparer un nouveau dépôt</Button>
-            : <Button disabled={!confirme || busy || !peutPrevisualiser} onClick={() => { void publier(); }}>{busy ? 'Publication en cours…' : 'Confirmer la publication'}</Button>}
+            : <Button disabled={!confirme || !apercuPret || busy || !peutPrevisualiser} onClick={() => { void publier(); }}>{busy ? 'Publication en cours…' : 'Confirmer la publication'}</Button>}
       </DialogResponsiveFooter>
     </DialogResponsiveContent>
   </DialogResponsive>;

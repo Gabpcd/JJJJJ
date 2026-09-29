@@ -1,21 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { simulerEtablissement, entrer as entrerEtab, preuve as preuveEtab } from './helpers/recette-complete-etablissement';
 import { simulerSoignant, entrer as entrerSoignant, preuve as preuveSoignant, ids as soignantIds } from './helpers/recette-complete-soignant';
 import { recetteCopies, pdfFictif } from './helpers/recette-copies-bulletins';
 
-// Le blocage SW de Playwright injecte son code dans tous les cadres, dont le
-// PDF sandboxé sans même origine. Bloquer l'inscription dans l'app seulement,
-// sans relâcher le sandbox du produit ni filtrer ses erreurs JavaScript.
-test.use({ serviceWorkers: 'allow' });
-function bloquerServiceWorkerRecette() {
-  if (window === window.top && 'serviceWorker' in navigator) navigator.serviceWorker.register = async () => { throw new Error('Service worker désactivé pour cette simulation'); };
-}
-test.beforeEach(async ({ context }) => { await context.addInitScript(bloquerServiceWorkerRecette); });
-
 const section = (page: Page) => page.getByRole('region', { name: 'Copies des bulletins officiels', exact: true });
 const aucunPaiement = (appels: { nom: string }[]) => expect(appels.some(a => /paiement|escrow|stripe|cotisation/.test(a.nom))).toBe(false);
-async function ouvrirDepot(page: Page, pdf: ReturnType<typeof pdfFictif>, remplacement = false) {
+async function ouvrirDepot(page: Page, pdf: ReturnType<typeof pdfFictif>, remplacement = false, verifierRendu = true) {
   if (!remplacement) await section(page).getByRole('button', { name: 'Déposer une copie officielle', exact: true }).click();
   const dialog = page.getByRole('dialog');
   if (!remplacement) {
@@ -29,7 +21,20 @@ async function ouvrirDepot(page: Page, pdf: ReturnType<typeof pdfFictif>, rempla
   await dialog.getByRole('button', { name: 'Aperçu et confirmation', exact: true }).click();
   await expect(dialog.getByText('Destinataire : Camille Recette', { exact: true })).toBeVisible();
   await expect(dialog.getByText(/2 missions sélectionnées/)).toBeVisible();
-  await expect(dialog.locator('iframe[title="Aperçu de la copie du bulletin officiel"]')).toHaveAttribute('src', /^blob:/);
+  if (!verifierRendu) return dialog;
+  const canvas = dialog.getByTestId('apercu-pdf-canvas');
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(dialog.getByTestId('apercu-pdf-pagination')).toHaveText('Page 1 sur 2');
+  const pixelsSombres = () => canvas.evaluate((el: HTMLCanvasElement) => {
+    const data = el.getContext('2d')!.getImageData(0, 0, el.width, el.height).data;
+    let sombres = 0; for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 0 && data[i] + data[i + 1] + data[i + 2] < 600) sombres++;
+    return sombres;
+  });
+  expect(await pixelsSombres()).toBeGreaterThan(50);
+  await dialog.getByRole('button', { name: 'Page suivante', exact: true }).click();
+  await expect(dialog.getByTestId('apercu-pdf-pagination')).toHaveText('Page 2 sur 2');
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  expect(await pixelsSombres()).toBeGreaterThan(50);
   await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeDisabled();
   await dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ }).check();
   return dialog;
@@ -58,6 +63,7 @@ test('copie officielle : dépôt unique pour deux missions, consultation salari�
   const e = await simulerEtablissement(page); const r = recetteCopies(); const pdf = r.enregistrerPdf();
   await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
   const dialog = await ouvrirDepot(page, pdf);
+  await preuveEtab(page, 'copie-apercu-deuxieme-page-visible', info);
   await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
   await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
   await expect(section(page)).toContainText('Une copie disponible ne confirme pas le paiement du salaire.');
@@ -65,9 +71,8 @@ test('copie officielle : dépôt unique pour deux missions, consultation salari�
   await page.reload(); await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
   await preuveEtab(page, 'copie-officielle-publiee-etablissement', info);
   expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]);
-  const contexte = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: page.viewportSize()!, locale: 'fr-FR', isMobile: info.project.name !== 'ordinateur', hasTouch: info.project.name !== 'ordinateur' });
+  const contexte = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: page.viewportSize()!, locale: 'fr-FR', serviceWorkers: 'block', isMobile: info.project.name !== 'ordinateur', hasTouch: info.project.name !== 'ordinateur' });
   try {
-    await contexte.addInitScript(bloquerServiceWorkerRecette);
     const salarie = await contexte.newPage(); const s = await simulerSoignant(salarie);
     // Son historique salarié reste accessible après un changement de mode.
     s.profile.type_exercice = 'LIBERAL'; await r.installer(salarie);
@@ -228,4 +233,66 @@ test('dépôt : fichier non PDF et période incohérente bloqués avant réserva
   expect(r.state.intentions.size).toBe(0);
   await preuveEtab(page, 'copie-fichier-periode-refuses', info);
   expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]);
+});
+
+test('aperçu : PDF illisible refusé, réessai explicite et remplacement par un fichier lisible', async ({ page }, info) => {
+  await simulerEtablissement(page); const r = recetteCopies();
+  await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
+  const buffer = Buffer.from('%PDF-1.7\nDocument fictif tronqué sans catalogue\n%%EOF');
+  const invalide = { name: 'illisible.pdf', mimeType: 'application/pdf', buffer, sha256: createHash('sha256').update(buffer).digest('hex') };
+  const dialog = await ouvrirDepot(page, invalide, false, false);
+  await expect(dialog.getByRole('alert')).toContainText('L’aperçu du PDF est indisponible');
+  await expect(dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Réessayer l’aperçu', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('L’aperçu du PDF est indisponible');
+  expect(r.state.intentions.size).toBe(0);
+  await preuveEtab(page, 'copie-apercu-illisible-publication-interdite', info);
+  await dialog.getByRole('button', { name: 'Modifier le dépôt', exact: true }).click();
+  await dialog.getByLabel('PDF officiel (10 Mo maximum)', { exact: true }).setInputFiles(r.enregistrerPdf());
+  await dialog.getByRole('button', { name: 'Aperçu et confirmation', exact: true }).click();
+  await expect(dialog.getByTestId('apercu-pdf-canvas')).toHaveAttribute('data-ready', 'true');
+  await expect(dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ })).toBeEnabled();
+  await expect(dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ })).not.toBeChecked();
+  await dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ }).check();
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(r.state.copies).toHaveLength(1); aucunPaiement(r.state.appels);
+});
+
+test('aperçu : PDF scanné visible sans OffscreenCanvas, publication après contrôle du destinataire', async ({ page }, info) => {
+  const e = await simulerEtablissement(page); const r = recetteCopies();
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis, 'OffscreenCanvas', { configurable: true, value: undefined });
+    Object.defineProperty(Promise, 'withResolvers', { configurable: true, writable: true, value: undefined });
+    Object.defineProperty(ArrayBuffer.prototype, 'transferToFixedLength', { configurable: true, writable: true, value: undefined });
+    Object.defineProperty(globalThis, 'structuredClone', { configurable: true, writable: true, value: undefined });
+    Object.defineProperty(Array.prototype, 'at', { configurable: true, writable: true, value: undefined });
+  });
+  let workerSansOffscreen = false;
+  await page.route('**/pdf.worker.copie-*.js', async route => {
+    const response = await route.fetch();
+    workerSansOffscreen = true;
+    await route.fulfill({ response, body: 'self.OffscreenCanvas = undefined; Promise.withResolvers = undefined; ArrayBuffer.prototype.transferToFixedLength = undefined; self.structuredClone = undefined; Array.prototype.at = undefined;\n' + await response.text() });
+  });
+  const buffer = readFileSync(new URL('./fixtures/copies-bulletins/scan-fictif.pdf', import.meta.url));
+  const pdf = r.enregistrerPdf({ name: 'scan-fictif.pdf', mimeType: 'application/pdf', buffer, sha256: createHash('sha256').update(buffer).digest('hex') });
+  await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
+  const dialog = await ouvrirDepot(page, pdf, false, false);
+  const canvas = dialog.getByTestId('apercu-pdf-canvas');
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(dialog.getByTestId('apercu-pdf-pagination')).toHaveText('Page 1 sur 1');
+  expect(workerSansOffscreen).toBe(true);
+  const sombres = await canvas.evaluate((el: HTMLCanvasElement) => {
+    const data = el.getContext('2d')!.getImageData(0, 0, el.width, el.height).data;
+    let count = 0; for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 0 && data[i] + data[i + 1] + data[i + 2] < 600) count++;
+    return count;
+  });
+  expect(sombres).toBeGreaterThan(500);
+  await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeDisabled();
+  await preuveEtab(page, 'copie-apercu-scan-sans-offscreen-visible', info);
+  await dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ }).check();
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(r.state.copies).toHaveLength(1); expect(e.etat.inconnues).toEqual([]); aucunPaiement(r.state.appels);
 });

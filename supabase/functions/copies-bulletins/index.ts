@@ -15,7 +15,7 @@ const utilisateur = (req: Request) => createClient(url, anon, {
 const admin = () => createClient(url, service, options);
 
 Deno.serve(creerHandlerCopies({
-  cors: corsHeaders,
+  cors: (req) => corsHeaders(req),
   async authentifier(req) {
     if (!url || !anon || !service) throw new Error('CONFIGURATION_ABSENTE');
     return authentifierCopie(req, (bearer) => utilisateur(req).auth.getUser(bearer), service);
