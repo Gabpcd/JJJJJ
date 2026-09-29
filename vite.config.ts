@@ -92,8 +92,12 @@ export default defineConfig(({ mode }) => ({
     sourcemap: shouldUploadSourcemaps ? 'hidden' : false,
     rolldownOptions: {
       output: {
-        // PDF.js requires class/function names to survive production bundling.
-        keepNames: true,
+        // Preserve PDF.js names in the minifier without Rolldown's keepNames
+        // helpers, which inject static class blocks after Safari 15 lowering.
+        minify: {
+          compress: { target: ['es2020', 'safari15'], keepNames: { function: true, class: true } },
+          mangle: { keepNames: true },
+        },
         codeSplitting: {
           groups: [
             { name: 'vendor-react', test: /node_modules\/(?:react|react-dom|react-router|react-router-dom)\// },
