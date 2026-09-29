@@ -33,6 +33,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
   const [apercuPret, setApercuPret] = useState(false);
   const actualiserApercu = useCallback((pret: boolean) => { setApercuPret(pret); if (!pret) setConfirme(false); }, []);
   const [erreur, setErreur] = useState<string | null>(null);
+  const erreurElement = useRef<HTMLParagraphElement>(null);
   const [intentionRetiree, setIntentionRetiree] = useState<{ empreinte: string; id: string } | null>(null);
   const [information, setInformation] = useState<string | null>(null);
   const [progression, setProgression] = useState<string | null>(null);
@@ -64,6 +65,9 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
   }, [etablissementId, debut, fin, periodeValide, remplacement, revision]);
   useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url); }, [pdf]);
   useEffect(() => () => { lectureCourante.current += 1; }, []);
+  useEffect(() => {
+    if (erreur) erreurElement.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  }, [erreur]);
 
   async function choisirFichier(file: File | undefined) {
     const lecture = ++lectureCourante.current;
@@ -141,7 +145,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
           {pdf && <><ApercuPdfCopie key={pdf.url} file={pdf.file} onPretChange={actualiserApercu} /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir aussi le PDF dans un nouvel onglet</a></>}
           <label className="flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" className="mt-1" checked={confirme} disabled={busy || !apercuPret || Boolean(intentionRetiree)} onChange={e => setConfirme(e.target.checked)} /><span>Je confirme le destinataire et que cette copie du bulletin officiel a déjà été remise par le service paie de l’employeur.</span></label>
         </div>}
-        {erreur && <p role="alert" className="mt-4 text-sm text-destructive">{erreur}</p>}
+        {erreur && <p ref={erreurElement} role="alert" className="mt-4 text-sm text-destructive">{erreur}</p>}
         {information && <p role="status" className="mt-4 text-sm">{information}</p>}
         {progression && <p role="status" className="mt-4 text-sm">{progression}</p>}
       </DialogResponsiveBody>

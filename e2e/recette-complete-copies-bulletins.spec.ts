@@ -131,7 +131,18 @@ test('publication : PDF refusé par le serveur, formulaire conservé et autre PD
   await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
   const dialog = await ouvrirDepot(page, refuse);
   await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toHaveText('Le PDF a été refusé : il est illisible, invalide ou protégé. Choisissez « Modifier le dépôt », puis sélectionnez un PDF lisible et non protégé.');
+  const alerte = dialog.getByRole('alert');
+  await expect(alerte).toHaveText('Le PDF a été refusé : il est illisible, invalide ou protégé. Choisissez « Modifier le dépôt », puis sélectionnez un PDF lisible et non protégé.');
+  await expect(alerte).toBeInViewport({ ratio: 1 });
+  // Text presence alone misses an alert clipped by the scrolling body/footer.
+  const positionAlerte = await alerte.evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    const corps = el.parentElement!.getBoundingClientRect();
+    const boutons = el.parentElement!.nextElementSibling!.getBoundingClientRect();
+    return { haut: rect.top, bas: rect.bottom, hautVisible: Math.max(corps.top, 0), basVisible: Math.min(corps.bottom, boutons.top, window.innerHeight) };
+  });
+  expect(positionAlerte.haut).toBeGreaterThanOrEqual(positionAlerte.hautVisible);
+  expect(positionAlerte.bas).toBeLessThanOrEqual(positionAlerte.basVisible);
   await expect(dialog).not.toContainText('COPIE_PDF_INVALIDE');
   await expect(dialog.getByText('Destinataire : Camille Recette', { exact: true })).toBeVisible();
   await expect(dialog.getByText('Période : du 01/09/2026 au 30/09/2026', { exact: true })).toBeVisible();
