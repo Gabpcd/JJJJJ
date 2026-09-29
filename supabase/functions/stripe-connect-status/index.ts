@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
     const { data: onboarding, error: onboardingError } = await supabaseAdmin
       .from("stripe_connect_onboarding")
-      .select("id, stripe_account_id, statut, modifie_le, charges_enabled, payouts_enabled, details_submitted, iban_last4")
+      .select("id, stripe_account_id, statut, modifie_le, onboarding_complete, charges_enabled, payouts_enabled, details_submitted, iban_last4")
       .eq("soignant_id", auth.userId)
       .maybeSingle();
     if (onboardingError) {
@@ -82,7 +82,12 @@ Deno.serve(async (req) => {
       ? new Date(onboarding.modifie_le).getTime()
       : 0;
     const cacheAge = Date.now() - modifieLe;
-    const cacheValid = !forceRefresh && cacheAge < CACHE_TTL_MS;
+    const completeFromFlags = !!(onboarding.charges_enabled && onboarding.payouts_enabled && onboarding.details_submitted);
+    // Les anciennes écritures pouvaient oublier onboarding_complete. Relire
+    // Stripe avant de réparer une ligne, sans valider des comptes par backfill.
+    const cacheConsistent = onboarding.onboarding_complete === completeFromFlags
+      && (onboarding.statut === "COMPLET") === completeFromFlags;
+    const cacheValid = !forceRefresh && cacheAge >= 0 && cacheAge < CACHE_TTL_MS && cacheConsistent;
 
     if (cacheValid) {
       // Cache hit : pas d'appel Stripe
@@ -125,15 +130,23 @@ Deno.serve(async (req) => {
           `Connect account ${onboarding.stripe_account_id} deleted on Stripe side — marking SUPPRIME`
         );
 
-        await supabaseAdmin
+        const { data: deletedRecord, error: deletedRecordError } = await supabaseAdmin
           .from("stripe_connect_onboarding")
           .update({
             statut: "SUPPRIME",
+            onboarding_complete: false,
             charges_enabled: false,
             payouts_enabled: false,
+            details_submitted: false,
             modifie_le: new Date().toISOString(),
           })
-          .eq("soignant_id", auth.userId);
+          .eq("soignant_id", auth.userId)
+          .eq("stripe_account_id", onboarding.stripe_account_id)
+          .select("id")
+          .maybeSingle();
+        if (deletedRecordError || !deletedRecord) {
+          return jsonResponse(req, { error: 'STRIPE_STATUS_UNAVAILABLE', message: 'Statut de paiement temporairement indisponible.' }, 503);
+        }
 
         // Audit RGPD
         await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
@@ -192,17 +205,24 @@ Deno.serve(async (req) => {
     }
 
     // Update onboarding record (bumpe modifie_le pour le cache)
-    await supabaseAdmin
+    const { data: updatedRecord, error: updatedRecordError } = await supabaseAdmin
       .from("stripe_connect_onboarding")
       .update({
         statut,
+        onboarding_complete: onboardingComplete,
         charges_enabled: account.charges_enabled ?? false,
         payouts_enabled: account.payouts_enabled ?? false,
         details_submitted: account.details_submitted ?? false,
         iban_last4: ibanLast4,
         modifie_le: new Date().toISOString(),
       })
-      .eq("soignant_id", auth.userId);
+      .eq("soignant_id", auth.userId)
+      .eq("stripe_account_id", onboarding.stripe_account_id)
+      .select("id")
+      .maybeSingle();
+    if (updatedRecordError || !updatedRecord) {
+      return jsonResponse(req, { error: 'STRIPE_STATUS_UNAVAILABLE', message: 'Statut de paiement temporairement indisponible.' }, 503);
+    }
 
     return jsonResponse(req, {
         statut,

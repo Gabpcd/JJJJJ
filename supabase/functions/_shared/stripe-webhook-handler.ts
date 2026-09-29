@@ -2337,14 +2337,19 @@ export async function handleStripeWebhook(
 
     // Handle account.updated (Connect onboarding status)
     if (verified.source === "CONNECT" && event.type === "account.updated") {
-      const account = event.data.object as Stripe.Account;
-      const accountId = account.id;
+      const notifiedAccount = event.data.object as Stripe.Account;
+      const accountId = notifiedAccount.id;
       if (!eventAccount || accountId !== eventAccount) {
         throw new Error("Connect account.updated object/account mismatch");
       }
+      // Un événement ancien rejoué ne doit pas réactiver un compte depuis
+      // suspendu. Persister l'état courant du même compte, relu chez Stripe.
+      const account = await stripe.accounts.retrieve(accountId);
+      if (account.id !== accountId) throw new Error("Connect account lookup mismatch");
 
       let statut = "EN_COURS";
-      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+      const onboardingComplete = !!(account.details_submitted && account.charges_enabled && account.payouts_enabled);
+      if (onboardingComplete) {
         statut = "COMPLET";
       } else if (account.requirements?.disabled_reason) {
         statut = "SUSPENDU";
@@ -2362,6 +2367,7 @@ export async function handleStripeWebhook(
         .from("stripe_connect_onboarding")
         .update({
           statut,
+          onboarding_complete: onboardingComplete,
           charges_enabled: account.charges_enabled ?? false,
           payouts_enabled: account.payouts_enabled ?? false,
           details_submitted: account.details_submitted ?? false,
