@@ -1,0 +1,51 @@
+name: Rejeu ciblé d'un événement Stripe TEST existant
+
+on:
+  workflow_dispatch:
+    inputs:
+      event_id:
+        description: 'Un seul événement existant ; charge.refunded est exclu'
+        required: true
+        type: choice
+        options:
+          - evt_3UKvRlEVhQ7cb53W0Ani5a0O
+          - evt_3UKvRlEVhQ7cb53W0GdDVERo
+          - evt_3UKvRlEVhQ7cb53W0fm2OFrt
+      sql_precheck_confirmed:
+        description: 'Précontrôles SQL en lecture seule relus : event non traité, aucun lease, remboursement acquis et files vides'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  resend-one-event:
+    if: github.ref == 'refs/heads/main' && inputs.sql_precheck_confirmed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Tester les refus et l'unique POST, sans réseau ni secret
+        run: python3 -m unittest discover -s tests/python -p 'test_resend_stripe_test_event.py' -v
+      - name: Vérifier Stripe TEST puis demander une seule nouvelle livraison
+        run: python3 scripts/recette-fournisseurs/resend-stripe-test-event.py
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          STRIPE_REPLAY_EVENT_ID: ${{ inputs.event_id }}
+          STRIPE_REPLAY_SQL_PRECHECK: ${{ inputs.sql_precheck_confirmed }}
+      - name: Conserver le résultat expurgé, distinct d'une preuve de livraison
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: stripe-test-event-replay-${{ github.run_id }}
+          path: stripe-test-event-replay.json
+          if-no-files-found: ignore
+          retention-days: 14
