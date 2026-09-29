@@ -21,14 +21,30 @@ export function BloquerUtilisateur({ cibleId, variant = 'lien', libelleCible = '
   const [bloque, setBloque] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [erreurLecture, setErreurLecture] = useState(false);
+  const [tentativeLecture, setTentativeLecture] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    supabase.rpc('fn_est_bloque' as any, { p_cible_id: cibleId }).then(({ data }) => {
-      if (alive) setBloque(data === true);
-    });
-    return () => { alive = false; };
-  }, [cibleId]);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    setBloque(null);
+    setConfirm(false);
+    setErreurLecture(false);
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('fn_est_bloque' as any, { p_cible_id: cibleId }).abortSignal(controller.signal);
+        if (!alive) return;
+        if (error || typeof data !== 'boolean') setErreurLecture(true);
+        else setBloque(data);
+      } catch {
+        if (alive) setErreurLecture(true);
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+    return () => { alive = false; clearTimeout(timeout); controller.abort(); };
+  }, [cibleId, tentativeLecture]);
 
   const basculer = async () => {
     setBusy(true);
@@ -46,11 +62,19 @@ export function BloquerUtilisateur({ cibleId, variant = 'lien', libelleCible = '
           ? `${libelleCible.charAt(0).toUpperCase()}${libelleCible.slice(1)} débloqué${libelleCible === 'l’établissement' ? '' : '·e'}.`
           : `${libelleCible.charAt(0).toUpperCase()}${libelleCible.slice(1)} bloqué${libelleCible === 'l’établissement' ? '' : '·e'} — les nouveaux messages sont coupés dans les deux sens.`,
       );
+    } catch {
+      toast.error('Action impossible pour le moment. Réessayez.');
     } finally {
       setBusy(false);
     }
   };
 
+  if (erreurLecture) return (
+    <span className="inline-flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span role="status">Statut de blocage indisponible.</span>
+      <button type="button" onClick={() => setTentativeLecture(n => n + 1)} className="underline">Réessayer le statut de blocage</button>
+    </span>
+  );
   if (bloque === null) return null;
 
   const label = bloque ? 'Débloquer' : 'Bloquer';

@@ -318,7 +318,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   if (escrowPresent) return (
     <div className="card-base border-primary/20 space-y-2">
       <p className="text-sm font-semibold">Paiement suivi par Jolene</p>
-      <p className="text-xs text-muted-foreground">Consultez le suivi de la mission pour connaître l’état du paiement, du versement ou du remboursement.</p>
+      <p className="text-xs text-muted-foreground">Le paiement et ses éventuels remboursements sont gérés par Jolene. Aucune déclaration de paiement manuel n’est nécessaire ici.</p>
     </div>
   );
 
