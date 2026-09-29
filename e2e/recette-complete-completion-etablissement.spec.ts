@@ -125,7 +125,8 @@ test('onglets complémentaires : planning, sections facturation et retours aux v
   }
   await page.getByRole('button', { name: /Export comptable \/ Paie/ }).click();
   await expect(page).toHaveURL(/\/etablissement\/export-paie$/);
-  await expect(page.getByRole('heading', { name: 'Export Paie', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Paie', exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Variables pour votre service paie', exact: true, level: 2 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Aucune période salariée validée', exact: true })).toBeVisible();
 
   await allerA(page, '/etablissement/rh');

@@ -38,7 +38,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as const) {
     await expect(reglement).toContainText('Remboursement confirmé');
     if (role === 'ADMIN_ETABLISSEMENT') {
       const lecturesAvant = suivi.lectures.filter(l => l.table === 'fn_suivi_escrow_mission').length;
-      suivi.financeAutorisee = false; await actualiser();
+      suivi.financeAutorisee = false; suivi.copiesAutorisees = false; await actualiser();
       await expect(reglement).toContainText('Accès limité');
       expect(suivi.lectures.filter(l => l.table === 'fn_suivi_escrow_mission')).toHaveLength(lecturesAvant);
       await expect(suiviUi.getByRole('link', { name: 'Consulter les finances' })).toHaveCount(0);

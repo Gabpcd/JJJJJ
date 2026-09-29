@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { creerUuidV4 } from '@/lib/uuid';
 
 type TypeNotification = 'succes' | 'erreur' | 'avertissement' | 'info';
 
@@ -81,7 +82,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const afficherNotification = useCallback((n: Omit<Notification, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = creerUuidV4();
     const duree = n.duree ?? DUREES_PAR_DEFAUT[n.type];
 
     setNotifications(prev => {

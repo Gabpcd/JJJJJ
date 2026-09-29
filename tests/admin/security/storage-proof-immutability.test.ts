@@ -31,13 +31,15 @@ describe('preuves documentaires immuables dans Storage', () => {
   });
 
   it('versionne chaque RIB établissement sans jamais écraser une preuve existante', () => {
-    expect(finaliserInscription).toContain('rib-etablissement-${Date.now()}-${globalThis.crypto.randomUUID()}');
+    expect(finaliserInscription).toContain("import { creerUuidV4 } from '@/lib/uuid'");
+    expect(finaliserInscription).toContain('rib-etablissement-${Date.now()}-${creerUuidV4()}');
     expect(finaliserInscription).toMatch(/\.upload\(path, ribFile, \{ upsert: false,/);
     expect(finaliserInscription).not.toMatch(/rib\.[^`]*`[\s\S]{0,200}upsert:\s*true/);
   });
 
   it('versionne chaque contrat de travail mission sans upsert Storage', () => {
-    expect(contratTravail).toContain('${Date.now()}-${globalThis.crypto.randomUUID()}-contrat.pdf');
+    expect(contratTravail).toContain("import { creerUuidV4 } from '@/lib/uuid'");
+    expect(contratTravail).toContain('${Date.now()}-${creerUuidV4()}-contrat.pdf');
     expect(contratTravail).toMatch(/\.upload\(path, file, \{ upsert: false,/);
     expect(contratTravail).not.toContain('contrats-travail/${missionId}/contrat.pdf');
   });

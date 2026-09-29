@@ -41,12 +41,13 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
  const user = {id:ids.user,email,aud:'authenticated',role:'authenticated',email_confirmed_at:new Date().toISOString(),app_metadata:{},user_metadata:{},identities:[]};
  const session = {user,token_type:'bearer',access_token:'fixture-auth',refresh_token:'fixture-refresh',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600};
  const emptyTables = new Set(['presences','contrats_mission','litiges','notifications','messages_chat','presence_status','typing_status','paliers_commission','evaluations','notations_missions','candidatures','stripe_transfers','paiements_mission','factures_honoraires','paiements_soignant','parrainages_etablissements','chorus_pro_config','exclusions','favoris_etab_soignant','bulletins_paie','reclamations','stripe_connect_onboarding','documents_etablissements','heures_externes_soignants']);
- const emptyRpcs = new Set(['fn_suivi_escrow_mission','fn_mes_soignants_etablissement','fn_rechercher_soignants_etab','fn_mes_filleuls_etab','fn_litiges_etablissement','fn_mes_reclamations','fn_lister_missions_a_noter_etab','fn_lister_conversations_messagerie','fn_mes_favoris_soignants','fn_pool_urgence_etablissement','fn_mes_factures','fn_lister_mes_filtres_sauvegardes','fn_lister_api_keys','fn_lister_notations_recues','fn_mes_evenements_score','fn_recommander_soignants','fn_presences_detail_mission','fn_explorer_missions_inscription']);
+ const emptyRpcs = new Set(['fn_lister_copies_bulletins','fn_suivi_escrow_mission','fn_mes_soignants_etablissement','fn_rechercher_soignants_etab','fn_mes_filleuls_etab','fn_litiges_etablissement','fn_mes_reclamations','fn_lister_missions_a_noter_etab','fn_lister_conversations_messagerie','fn_mes_favoris_soignants','fn_pool_urgence_etablissement','fn_mes_factures','fn_lister_mes_filtres_sauvegardes','fn_lister_api_keys','fn_lister_notations_recues','fn_mes_evenements_score','fn_recommander_soignants','fn_presences_detail_mission','fn_explorer_missions_inscription']);
  page.on('pageerror', e=>etat.erreurs.push(e.message));
- await page.addInitScript(()=>localStorage.setItem('cookie-consent','refused'));
+ await page.addInitScript(()=>{if(window===window.top)localStorage.setItem('cookie-consent','refused');});
  await page.routeWebSocket('**/*', socket=>socket.close());
  await page.route('**/*', async route=>{
   const req=route.request(), url=new URL(req.url()), nom=url.pathname.split('/').pop()!;
+  if(url.protocol==='blob:'&&['127.0.0.1','localhost'].includes(new URL(url.pathname).hostname))return route.continue();
   const repondre=(args:Parameters<typeof route.fulfill>[0])=>route.fulfill({...args,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS','access-control-expose-headers':'content-range',...args?.headers}});
   if(url.hostname==='fonts.googleapis.com') return repondre({contentType:'text/css',body:''});
   if(url.hostname==='js.stripe.com') return repondre({contentType:'application/javascript',body:'window.Stripe = function(){ return {}; };'});

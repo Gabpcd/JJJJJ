@@ -9,7 +9,8 @@ export function creerSuiviSimule() {
     paiements: [] as { statut: string; confirme_par_soignant: boolean; conteste: boolean }[],
     escrow: [] as { statut: string; paye_le: string | null }[],
     bulletins: [] as { statut: string; pdf_s3_key: string | null }[],
-    litige: false, financeAutorisee: true,
+    copies: [] as Record<string, unknown>[],
+    litige: false, financeAutorisee: true, copiesAutorisees: true,
     erreurs: new Set<string>(),
     lectures: [] as { role: RoleRecette; table: string; select: string; missionId: string | null }[],
   };
@@ -19,10 +20,16 @@ export function creerSuiviSimule() {
       const req = route.request(); const url = new URL(req.url()); const name = url.pathname.split('/').pop()!;
       if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort('blockedbyclient');
       if (url.pathname.includes('/rpc/')) {
-        if (!['fn_mes_permissions_etab', 'fn_litige_pour_mission', 'fn_presences_detail_mission', 'fn_suivi_escrow_mission'].includes(name)) return route.fallback();
+        if (!['fn_mes_permissions_etab', 'fn_litige_pour_mission', 'fn_presences_detail_mission', 'fn_suivi_escrow_mission', 'fn_lister_copies_bulletins'].includes(name)) return route.fallback();
         expect(req.method()).toBe('POST');
         expect(req.headers().authorization).toBe(`Bearer simulation-mission-${role}`);
         const body = req.postDataJSON(); base.state.calls.push({ role, name, method: req.method(), body });
+        if (name === 'fn_lister_copies_bulletins') {
+          expect(body.p_mission_id).toBe(ids.mission);
+          if (role === 'ADMIN_ETABLISSEMENT') expect(suivi.copiesAutorisees).toBe(true);
+          suivi.lectures.push({ role, table: name, select: 'copies officielles', missionId: body.p_mission_id });
+          return suivi.erreurs.has(name) ? route.fulfill({ status: 503, json: { message: 'Source indisponible pour la recette' } }) : route.fulfill({ json: suivi.copies });
+        }
         if (name === 'fn_suivi_escrow_mission') {
           expect(body).toEqual({ p_mission_id: ids.mission });
           if (role === 'ADMIN_ETABLISSEMENT') expect(suivi.financeAutorisee).toBe(true);
@@ -46,7 +53,7 @@ export function creerSuiviSimule() {
         expect(role).toBe('ADMIN_ETABLISSEMENT');
         expect(body.p_etablissement_id == null || body.p_etablissement_id === ids.etablissement).toBe(true);
         return route.fulfill({ json: { success: true, role: suivi.financeAutorisee ? 'PROPRIETAIRE' : 'POINTAGE_ONLY', etablissement_id: ids.etablissement,
-          permissions: Object.fromEntries(['gerer_equipe', 'supprimer_compte', 'profil_etab', 'missions', 'candidatures', 'contrats', 'pointage', 'rh', 'lecture', 'lecture_paiement', 'paiement'].map(p => [p, ['lecture_paiement', 'paiement'].includes(p) ? suivi.financeAutorisee : true])) } });
+          permissions: Object.fromEntries(['gerer_equipe', 'supprimer_compte', 'profil_etab', 'missions', 'candidatures', 'contrats', 'pointage', 'rh', 'lecture', 'lecture_paiement', 'paiement'].map(p => [p, p === 'paiement' ? suivi.copiesAutorisees : p === 'lecture_paiement' ? suivi.financeAutorisee : true])) } });
       }
       const colonnes: Record<string, string> = {
         contrats_mission: 'id,statut,signature_soignant,signature_etablissement',

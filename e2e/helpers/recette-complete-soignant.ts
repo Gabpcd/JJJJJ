@@ -44,14 +44,15 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
  const session = { user, token_type: 'bearer', access_token: 'fixture-auth', refresh_token: 'fixture-refresh', expires_in: 3600, expires_at: Math.floor(Date.now()/1000)+3600 };
  const emptyTables = ['admins_groupe_sante','attestations_heures_externes','bulletins_paie','candidatures','conformite_travail','contrats_mission','contrats_travail_missions','conversations','cotisations_sociales','disponibilites_soignant','documents_requis_par_profession','documents_soignants','evaluations','exclusions','factures_honoraires','heures_externes_soignants','justificatifs','liste_attente_premium','litiges','mandats_facturation_signatures','messages_chat','messages_litige','missions_sauvegardees','notations_missions','notifications','paiements_soignant','presence_status','presences','prevoyance_liste_attente','reclamations','specialites_medicales','stripe_connect_onboarding','swipes','typing_status'];
  for(const table of emptyTables)state.tables.set(table, []);
- const emptyRpcs = new Set(['fn_suivi_escrow_mission','fn_evolution_score_soignant','fn_mes_evaluations_recues','fn_lister_notations_recues','fn_mes_exclusions_recues','fn_mes_favoris_etablissements','fn_mes_avances_factor','fn_mes_bulletins_paie','fn_mes_dpae','fn_mes_factures_honoraires','fn_mes_paiements_escrow','fn_pool_urgence_missions_pour_soignant_UNUSED','fn_interlocuteurs_conversations','fn_lister_conversations_messagerie','fn_lister_mes_filtres_sauvegardes','fn_top_soignants','fn_mes_reclamations','fn_mes_litiges','fn_presences_detail_mission']);
+ const emptyRpcs = new Set(['fn_lister_copies_bulletins','fn_suivi_escrow_mission','fn_evolution_score_soignant','fn_mes_evaluations_recues','fn_lister_notations_recues','fn_mes_exclusions_recues','fn_mes_favoris_etablissements','fn_mes_avances_factor','fn_mes_bulletins_paie','fn_mes_dpae','fn_mes_factures_honoraires','fn_mes_paiements_escrow','fn_pool_urgence_missions_pour_soignant_UNUSED','fn_interlocuteurs_conversations','fn_lister_conversations_messagerie','fn_lister_mes_filtres_sauvegardes','fn_top_soignants','fn_mes_reclamations','fn_mes_litiges','fn_presences_detail_mission']);
  const nullRpcs = new Set(['fn_onboarding_soignant_statut','fn_mon_token_calendrier','fn_litige_pour_mission','fn_mon_breakdown_actuel','fn_consulter_mon_iban']);
  const auditRpcs = new Set(['fn_audit_connexion','fn_maj_activite_soignant','fn_ecrire_audit_safe','fn_update_presence']);
  page.on('pageerror', e => state.errors.push(e.message));
- await page.addInitScript(() => localStorage.setItem('cookie-consent','refused'));
+ await page.addInitScript(() => {if(window===window.top)localStorage.setItem('cookie-consent','refused');});
  await page.routeWebSocket('**/*', socket => socket.close());
  await page.route('**/*', async route => {
   const req=route.request(), url=new URL(req.url()), name=url.pathname.split('/').pop()!;
+  if(url.protocol==='blob:'&&['127.0.0.1','localhost'].includes(new URL(url.pathname).hostname))return route.continue();
   const fulfill = (options: Parameters<typeof route.fulfill>[0]) => route.fulfill({...options,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,HEAD,OPTIONS',...options?.headers}});
   if(!['127.0.0.1','localhost'].includes(url.hostname)) return route.abort();
   if(!/\/(auth|rest|functions|storage)\/v1\//.test(url.pathname)){

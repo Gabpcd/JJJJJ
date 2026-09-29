@@ -134,18 +134,18 @@ export function construireSuiviMission(
   }
 
   const regime = mission.type_contrat_applique;
-  const document: EtapeSuivi = { id: 'document', titre: regime === 'SALARIE' ? 'Bulletin de paie' : regime === 'LIBERAL' ? 'Facture d’honoraires' : 'Document financier',
-    etat: 'inconnu', statut: 'Aucun document disponible', detail: 'L’émission d’un document financier n’est pas encore confirmée.' };
+  const document: EtapeSuivi = { id: 'document', titre: regime === 'SALARIE' ? 'Copie du bulletin officiel' : regime === 'LIBERAL' ? 'Facture d’honoraires' : 'Document financier',
+    etat: 'inconnu', statut: regime === 'SALARIE' ? 'Aucune copie disponible' : 'Aucun document disponible', detail: regime === 'SALARIE' ? 'Aucune copie officielle publiée n’est disponible pour cette mission. Une simulation ne constitue pas le bulletin de l’employeur.' : 'L’émission d’un document financier n’est pas encore confirmée.' };
   const manqueDocument = lectureManquante(lectures.documents);
   if (manqueDocument) Object.assign(document, manqueDocument);
   if (regime !== 'SALARIE' && regime !== 'LIBERAL') Object.assign(document, { etat: 'inconnu', statut: 'Régime à confirmer', detail: 'Le régime appliqué à cette mission n’est pas encore enregistré.' });
   else if (lectures.documents.etat === 'disponible') {
     const lignes = lectures.documents.lignes;
     const emis = lignes.some(d => regime === 'SALARIE'
-      ? Boolean(d.pdf_s3_key) && ['EMIS', 'PAYE'].includes(d.statut ?? '')
+      ? d.type_document === 'COPIE_BULLETIN_OFFICIEL' && d.statut === 'PUBLIEE'
       : d.type_document === 'FACTURE' && ['EMISE', 'EN_ATTENTE_PAIEMENT', 'EN_RETARD', 'PAYEE', 'FACTORISEE'].includes(d.statut ?? ''));
-    if (emis) Object.assign(document, { etat: 'confirme', statut: 'Document disponible', detail: regime === 'SALARIE' ? 'Un bulletin avec son PDF est enregistré pour cette mission.' : 'Une facture d’honoraires émise est enregistrée pour cette mission.' });
-    else if (lignes.length) Object.assign(document, { etat: 'a_verifier', statut: 'Document à vérifier', detail: 'Les documents enregistrés ne permettent pas de confirmer une pièce définitive active.' });
+    if (emis) Object.assign(document, { etat: 'confirme', statut: regime === 'SALARIE' ? 'Copie disponible' : 'Document disponible', detail: regime === 'SALARIE' ? 'Une copie du bulletin officiel est publiée pour cette mission. Sa disponibilité ne confirme pas le paiement du salaire.' : 'Une facture d’honoraires émise est enregistrée pour cette mission.' });
+    else if (lignes.length) Object.assign(document, { etat: 'a_verifier', statut: regime === 'SALARIE' ? 'Copie à vérifier' : 'Document à vérifier', detail: 'Les documents enregistrés ne permettent pas de confirmer une pièce définitive active.' });
   }
 
   const reglement: EtapeSuivi = { id: 'reglement', titre: 'Règlement', etat: 'inconnu', statut: 'Règlement non confirmé', detail: 'Aucune confirmation de règlement n’est disponible ici. Consultez les finances pour le détail des versements.' };

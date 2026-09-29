@@ -73,6 +73,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Syntaxe du JavaScript livré compatible avec iOS 15
+        run: node scripts/check-browser-syntax.mjs dist
+
   drift-detection:
     name: Drift detection (Lovable legacy patterns)
     runs-on: ubuntu-latest

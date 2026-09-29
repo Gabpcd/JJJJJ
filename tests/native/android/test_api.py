@@ -72,6 +72,17 @@ class NativeFixtureBoundary(unittest.TestCase):
         code, _ = self.request('/rest/v1/missions', token='invalid')
         self.assertEqual(code, 401)
 
+    def test_copies_read_is_empty_but_mutations_stay_forbidden(self):
+        path = '/rest/v1/rpc/fn_lister_copies_bulletins'
+        self.assertEqual(self.request(path, {}, 'invalid')[0], 401)
+        _, signup = self.request('/auth/v1/signup', {'email': 'copies@example.invalid', 'password': 'Recette-Native!2026'})
+        token = signup['access_token']
+        self.assertEqual(self.request(path, {'p_etablissement_id': None, 'p_mission_id': None}, token), (200, []))
+        for name in ['fn_reserver_copie_bulletin', 'fn_publier_copie_bulletin_interne', 'fn_retirer_copie_bulletin', 'fn_signaler_copie_bulletin']:
+            code, _ = self.request('/rest/v1/rpc/' + name, {}, token)
+            self.assertEqual(code, 501)
+            self.assertEqual(self.api.UNKNOWN[-1]['path'], '/rest/v1/rpc/' + name)
+
     def test_signup_does_not_create_a_verified_professional(self):
         _, signup = self.request('/auth/v1/signup', {'email': 'minimal@example.invalid', 'password': 'Recette-Native!2026'})
         token = signup['access_token']
