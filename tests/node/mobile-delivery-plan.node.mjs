@@ -95,14 +95,15 @@ function plan(t, scenario = {}) {
   const result = spawnSync(process.execPath, ['--import', join(cwd, 'api.mjs'), executable], {
     cwd,
     encoding: 'utf8',
-    env: { PATH: process.env.PATH, GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', MOBILE_DELIVERY_SHA: scenario.backendWake ? baseline : candidate,
-      MOBILE_DELIVERY_RECHECK_MAIN: scenario.backendWake ? 'true' : 'false',
+    env: { PATH: process.env.PATH, GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', MOBILE_DELIVERY_SHA: candidate,
+      GITHUB_EVENT_NAME: scenario.event ?? 'workflow_dispatch', GITHUB_REF: scenario.ref ?? 'refs/heads/main',
+      MOBILE_DELIVERY_MODE: scenario.mode ?? 'native',
       GITHUB_OUTPUT: outputFile, GITHUB_STEP_SUMMARY: summaryFile },
   });
   return { ...result, candidate, baseline, output: readFileSync(outputFile, 'utf8'), summary: readFileSync(summaryFile, 'utf8') };
 }
 
-test('all gates on the exact main push select the new native build', (t) => {
+test('an explicit native dispatch with all gates on the exact main push selects the new native build', (t) => {
   const result = plan(t);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.output, `mode=native\nsha=${result.candidate}\n`);
@@ -207,10 +208,49 @@ test('the extracted trusted guard still blocks an older reserved source with no 
   assert.match(result.stderr, /Waiting for Supabase/);
 });
 
-test('a repaired backend ancestor wakes all release gates on current main', (t) => {
-  const result = plan(t, { backendWake: true });
+for (const event of ['push', 'status', 'workflow_run', 'pull_request', '']) {
+  test(`event ${event || 'absent'} cannot authorize a release even with native mode`, (t) => {
+    const result = plan(t, { event });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.output, `mode=none\nsha=${result.candidate}\n`);
+    assert.match(result.summary, /explicit manual dispatch/);
+  });
+}
+
+test('manual dispatch on another branch cannot authorize a release', (t) => {
+  const result = plan(t, { ref: 'refs/heads/fix/example' });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.output, `mode=native\nsha=${result.candidate}\n`);
+  assert.match(result.output, /^mode=none\n/);
+});
+
+for (const mode of ['check', '']) {
+  test(`verification ${mode || 'default'} checks the gates without starting a build`, (t) => {
+    const result = plan(t, { mode });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.output, /^mode=none\n/);
+    assert.match(result.summary, /Verification only/);
+  });
+}
+
+test('verification reports missing checks without releasing', (t) => {
+  const result = plan(t, { mode: 'check', nativeAbsent: true });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.output, /^mode=none\n/);
+  assert.match(result.summary, /Waiting for android-native-recette/);
+});
+
+test('an OTA request never escalates to a native build when a runtime is missing', (t) => {
+  const result = plan(t, { mode: 'ota' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.output, /^mode=none\n/);
+  assert.match(result.summary, /OTA cannot start a native/);
+});
+
+test('legacy auto mode is rejected without a release output', (t) => {
+  const result = plan(t, { mode: 'auto' });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.output, '');
+  assert.match(result.stderr, /Unknown manual delivery mode/);
 });
 
 // A real git graph proves ancestry/content; only the GitHub transport is fake.
@@ -486,8 +526,15 @@ test('workflow rechecks protect both publishing paths and retain read-only Actio
     assert.match(job, /node "\$RUNNER_TEMP\/mobile-delivery-plan-backend\.mjs"/);
     assert.ok(job.indexOf('node "$RUNNER_TEMP/mobile-delivery-plan-backend.mjs"') < job.indexOf(`- name: ${publish}`));
   }
-  assert.match(workflow, /Deploy Supabase \(migrations \\\+ edge functions\)/);
-  assert.match(workflow, /MOBILE_DELIVERY_RECHECK_MAIN:/);
+  const triggers = workflow.slice(workflow.indexOf('\non:\n'), workflow.indexOf('\npermissions:'));
+  assert.match(triggers, /workflow_dispatch:/);
+  assert.doesNotMatch(triggers, /status:|workflow_run:|push:|schedule:/);
+  assert.match(triggers, /default: check/);
+  for (const [job, mode] of [[ota, 'ota'], [native, 'native']]) {
+    assert.ok(job.includes("github.event_name == 'workflow_dispatch'"));
+    assert.ok(job.includes("github.ref == 'refs/heads/main'"));
+    assert.ok(job.includes(`inputs.mode == '${mode}'`));
+  }
   assert.match(workflow, /guard_sha: \$\{\{ steps\.guard\.outputs\.sha \}\}/);
   assert.match(workflow, /echo "sha=\$\(git rev-parse HEAD\)" >> "\$GITHUB_OUTPUT"/);
 });
