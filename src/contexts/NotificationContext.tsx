@@ -108,7 +108,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       */}
       <div
         role="region"
-        className="pointer-events-none fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 md:right-4 md:left-auto md:w-96"
+        className="pointer-events-none fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-[var(--native-store-toast-bottom,calc(5rem+env(safe-area-inset-bottom)))] md:bottom-[var(--native-store-toast-bottom,1rem)] md:right-4 md:left-auto md:w-96"
         aria-live="polite"
         aria-label="Notifications"
         data-toast-safe-zone="bottom"

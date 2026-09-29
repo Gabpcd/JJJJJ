@@ -47,7 +47,7 @@ describe('Lot 21 — mécanique admin', () => {
     expect(app).toContain('position="bottom-right"');
     expect(app).toContain('mobileOffset');
     expect(notifications).toContain('data-toast-safe-zone="bottom"');
-    expect(notifications).toContain('md:bottom-4');
+    expect(notifications).toContain('md:bottom-[var(--native-store-toast-bottom,1rem)]');
   });
 
   it('centralise formats français, zéro négatif et warnings de vetting', () => {
