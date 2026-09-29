@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classerPaiementSalaire,
   indexerDernierPaiementParMission,
   repartirPaiementConfirme,
 } from './paiementSoignantUi';
@@ -47,5 +48,42 @@ describe('paiementSoignantUi', () => {
       montantRestant: 0,
       estPartiel: false,
     });
+  });
+});
+
+describe('réception salariale déclarée', () => {
+  const confirme = { statut: 'CONFIRME', confirme_par_soignant: true, conteste: false, montant_net: 300 };
+
+  it('ne confond pas réception et référence employeur, sans fabriquer de solde', () => {
+    expect(classerPaiementSalaire({ ...confirme, montant_du_reference: 425, source_montant_du: 'BULLETIN_OFFICIEL_ETABLISSEMENT' })).toEqual({
+      etat: 'confirme', libelle: 'Réception confirmée', montantDeclare: 300, montantReferenceEmployeur: 425,
+    });
+  });
+
+  it.each([false, null, undefined])('exige la confirmation explicite du soignant (%s)', confirmation => {
+    expect(classerPaiementSalaire({ ...confirme, confirme_par_soignant: confirmation }).etat).toBe('a_verifier');
+  });
+
+  it.each([null, undefined, '', ' ', 0, '0', -1, 'invalide', NaN, Infinity, true, {}])('ne remplace jamais un montant invalide (%s)', montant => {
+    const paiement = classerPaiementSalaire({ ...confirme, montant_net: montant });
+    expect(paiement.etat).toBe('a_verifier');
+    expect(paiement.montantDeclare).toBeNull();
+  });
+
+  it.each(['RESOLU', 'CONTESTE', 'DECLARE', 'EN_ATTENTE', 'INCONNU'])('ne déduit pas la réception du statut %s', statut => {
+    expect(classerPaiementSalaire({ ...confirme, statut }).etat).not.toBe('confirme');
+  });
+
+  it('fait primer la contestation sur une ancienne confirmation', () => {
+    expect(classerPaiementSalaire({ ...confirme, conteste: true }).etat).toBe('conteste');
+  });
+
+  it.each(['ESTIMATION_AVANT_PAS_A_CONFIRMER', 'FACTURE_HONORAIRES', null, undefined])('ne traite pas la source %s comme un net employeur', source => {
+    expect(classerPaiementSalaire({ ...confirme, montant_du_reference: 999, source_montant_du: source }).montantReferenceEmployeur).toBeNull();
+  });
+
+  it('accepte les nombres décimaux PostgREST et distingue l’absence de déclaration', () => {
+    expect(classerPaiementSalaire({ ...confirme, montant_net: '300.25' }).montantDeclare).toBe(300.25);
+    expect(classerPaiementSalaire().etat).toBe('absent');
   });
 });

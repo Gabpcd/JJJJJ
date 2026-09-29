@@ -10,9 +10,10 @@
 export function NoteNetEstime({ className = '' }: { className?: string }) {
   return (
     <p className={`text-[11px] text-muted-foreground ${className}`}>
-      * Pour une mission salariée, le net est estimé après cotisations sociales.
+      * Pour une mission salariée, le net est estimé après cotisations sociales et avant prélèvement à la source.
       Tant que le régime n'est pas choisi, le montant affiché reste une rémunération
-      brute indicative. Le montant définitif est confirmé après validation des présences.
+      brute indicative. Cette estimation peut différer du net du bulletin officiel établi par
+      l’employeur ou son service paie.
     </p>
   );
 }

@@ -943,7 +943,9 @@ export default function DetailMissionSoignant() {
           <p className="text-xs text-muted-foreground italic text-center">
             {missionEstLiberale && estTerminee
               ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
-              : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
+              : missionEstLiberale
+                ? 'Honoraires indiqués à titre prévisionnel. Le montant facturé est détaillé sur la facture d’honoraires.'
+                : 'Simulation salariale indicative avant prélèvement à la source. Le net exact figure sur le bulletin officiel établi par l’employeur.'}
           </p>
           )}
 

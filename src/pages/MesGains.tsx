@@ -40,7 +40,7 @@ import {
   regrouperFacturesParMission,
   resumerFacturesMission,
 } from '@/lib/factureHonorairesUi';
-import { indexerDernierPaiementParMission, repartirPaiementConfirme } from '@/lib/paiementSoignantUi';
+import { classerPaiementSalaire, indexerDernierPaiementParMission, repartirPaiementConfirme } from '@/lib/paiementSoignantUi';
 import { cleJourParis, cleMoisParis, formatParis } from '@/lib/date-heure-paris';
 import { chargerCreneauxMissionsPagines, type CreneauMissionCharge } from '@/lib/mission-creneaux-pagines';
 import { construireExportPaiePeriode } from '@/lib/export-paie-planning';
@@ -48,6 +48,15 @@ import { construireExportPaiePeriode } from '@/lib/export-paie-planning';
 function fmt(v: number | null | undefined) {
   if (v == null) return '—';
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
+
+function regimeMission(mission: { type_contrat_applique?: string | null; type_contrat_recherche?: string | null }) {
+  const regime = mission.type_contrat_applique ?? mission.type_contrat_recherche;
+  return regime === 'SALARIE' || regime === 'LIBERAL' ? regime : null;
+}
+
+function estMissionSalariee(mission: Parameters<typeof regimeMission>[0]) {
+  return regimeMission(mission) === 'SALARIE';
 }
 
 export function MesGainsApercuContent() {
@@ -86,7 +95,7 @@ export function MesGainsApercuContent() {
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1),
           supabase.from('soignants').select('profession, type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
           supabase.from('paiements_soignant' as any)
-            .select('id, mission_id, facture_honoraire_id, statut, montant_net, methode, reference_virement, date_paiement, modifie_le, cree_le')
+            .select('id, mission_id, facture_honoraire_id, statut, montant_net, confirme_par_soignant, conteste, montant_du_reference, source_montant_du, methode, reference_virement, date_paiement, modifie_le, cree_le')
             .eq('soignant_id', user.id)
             .order('modifie_le', { ascending: false, nullsFirst: false })
             .order('cree_le', { ascending: false, nullsFirst: false })
@@ -243,10 +252,17 @@ export function MesGainsApercuContent() {
   // Salarié : net estimé après cotisations salariales (~22 %).
   const netSal = useMemo(() => salMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [salMissions]);
 
-  // 6d.1 — Pipeline UNIQUE « À valider → En attente de paiement → Payé ».
-  // Mêmes sources que l'onglet Factures (fn_mes_factures_honoraires) + paiements :
-  // « facture émise » = présences validées côté flux de facturation. La confiance
-  // paiement est LE facteur de conversion — plus jamais deux chiffres divergents.
+  // Les déclarations salariales restent par mission : une même paie mensuelle
+  // peut avoir été rattachée à plusieurs missions dans le modèle historique.
+  const salaires = useMemo(() => allMissions.filter(estMissionSalariee).map(mission => ({
+    mission,
+    paiement: classerPaiementSalaire(paiementsMap[mission.id]),
+  })), [allMissions, paiementsMap]);
+  const nbReceptionsSalaires = salaires.filter(({ paiement }) => paiement.etat === 'confirme').length;
+  const nbSalairesAConfirmer = salaires.filter(({ paiement }) => paiement.etat === 'declare').length;
+
+  // Les montants de ce pipeline concernent les honoraires ; les salaires ne
+  // contribuent ni au reçu ni à un reliquat calculé depuis le net estimé.
   const pipeline = useMemo(() => {
     const etapes = {
       // 9.1 — aValider.ids : liste des missions comptées (pour la règle singleton
@@ -269,6 +285,7 @@ export function MesGainsApercuContent() {
     });
 
     allMissions.forEach(m => {
+      if (regimeMission(m) !== 'LIBERAL') return;
       const p = paiementsMap[m.id];
       const documents = facturesMap[m.id] ?? [];
       const resumeFactures = resumerFacturesMission(documents);
@@ -313,24 +330,21 @@ export function MesGainsApercuContent() {
     return etapes;
   }, [allMissions, paiementsMap, facturesMap]);
 
-  const regimesHistorique = useMemo(() => ({
-    salarie: allMissions.some(mission => mission.type_contrat_applique === 'SALARIE'),
-    liberal: allMissions.some(mission => mission.type_contrat_applique === 'LIBERAL'),
-  }), [allMissions]);
-  const destinationPaiements = regimesHistorique.salarie && regimesHistorique.liberal
-    ? '/soignant/mes-gains?tab=apercu'
-    : regimesHistorique.salarie
-      ? '/soignant/mes-gains?tab=bulletins'
-      : '/soignant/mes-gains?tab=factures';
+  const destinationPaiements = '/soignant/mes-gains?tab=factures';
+  const afficherSuiviSalaires = () => {
+    const suivi = document.getElementById('suivi-salaires');
+    suivi?.focus();
+    suivi?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
 
   // 7f (§5) : pic d'émotion — le PREMIER paiement reçu est le meilleur moment
   // pour suggérer le parrainage (une seule fois, throttle 30 j global).
   useEffect(() => {
-    if (loading || pipeline.paye.nb < 1) return;
+    if (loading || pipeline.paye.nb + nbReceptionsSalaires < 1) return;
     if (localStorage.getItem('jolene_prompt_parrainage_1er_paiement')) return;
     localStorage.setItem('jolene_prompt_parrainage_1er_paiement', '1');
     promptParrainage('Premier paiement reçu — félicitations ! Fais découvrir Jolene à un(e) collègue : une prime pour chacun.');
-  }, [loading, pipeline.paye.nb]);
+  }, [loading, pipeline.paye.nb, nbReceptionsSalaires]);
 
   const exporterCSV = () => {
     if (exportIndisponible) return;
@@ -369,21 +383,60 @@ export function MesGainsApercuContent() {
           </p>
         </div>
       )}
-      <BandeauPaiementDeclare onUpdate={() => setReloadKey((key) => key + 1)} />
+      <div id="paiements-a-confirmer" tabIndex={-1} className="scroll-mt-20">
+        <BandeauPaiementDeclare onUpdate={() => setReloadKey((key) => key + 1)} />
+      </div>
+
+      {salaires.length > 0 && (
+        <section id="suivi-salaires" tabIndex={-1} aria-label="Déclarations de salaire par mission" className="scroll-mt-20 rounded-2xl border border-border bg-card p-4 mb-6">
+          <h2 className="text-sm font-semibold">Déclarations de salaire par mission</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Le salaire est versé directement par l’employeur. Ce suivi des missions terminées affichées ne totalise pas les virements mensuels : une même paie peut concerner plusieurs missions.
+          </p>
+          <p className="mt-2 text-sm">
+            Réception confirmée pour {nbReceptionsSalaires} mission{nbReceptionsSalaires > 1 ? 's' : ''} · {nbSalairesAConfirmer} à confirmer
+          </p>
+          {nbSalairesAConfirmer > 0 && (
+            <button type="button" className="mt-2 text-sm text-primary underline min-h-[44px]" onClick={() => {
+              const bandeau = document.getElementById('paiements-a-confirmer');
+              bandeau?.focus();
+              bandeau?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            }}>
+              Voir les paiements à confirmer
+            </button>
+          )}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm min-h-[44px] py-2">Voir les états par mission ({salaires.length})</summary>
+            <ul className="divide-y divide-border">
+              {salaires.map(({ mission, paiement }) => (
+                <li key={mission.id} className="py-3 text-sm" aria-label={mission.intitule}>
+                  <p className="font-medium break-words">{mission.intitule}</p>
+                  <p className="text-xs text-muted-foreground">{mission.etablissements?.nom || '—'}</p>
+                  <p className={paiement.etat === 'confirme' ? 'text-success' : paiement.etat === 'conteste' ? 'text-destructive' : 'text-muted-foreground'}>{paiement.libelle}</p>
+                  {paiement.etat !== 'absent' && (
+                    <p>{paiement.montantDeclare === null ? 'Montant déclaré indisponible' : `Montant déclaré : ${fmt(paiement.montantDeclare)}`}</p>
+                  )}
+                  {paiement.montantReferenceEmployeur !== null && (
+                    <p className="text-xs text-muted-foreground">Net de référence déclaré par l’employeur : {fmt(paiement.montantReferenceEmployeur)}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
 
       {/* Paiement rapide ⚡ (escrow) — bloc « À venir » en tête. Masqué si aucun
           paiement escrow (cf. PaiementsEscrowAVenir + spec §4). */}
       <PaiementsEscrowAVenir />
 
-      {/* 6d.1 — Pipeline unique : la SEULE histoire d'argent de l'Aperçu.
-          Chaque étape a un montant ; « En attente » lit exactement les factures
-          de l'onglet Factures (montants TTC identiques, plus de divergence). */}
+      {/* Honoraires : mêmes factures et montants que l’onglet Factures. */}
       {(pipeline.aValider.nb + pipeline.enAttente.nb + pipeline.paye.nb) > 0 && (
-        <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
+        <div role="region" aria-label="Suivi des honoraires" className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Clock className="h-4 w-4 text-primary" />
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Tes rémunérations, étape par étape
+              Tes honoraires, étape par étape
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -405,7 +458,7 @@ export function MesGainsApercuContent() {
                 label: 'En attente de paiement',
                 detail: pipeline.enAttente.nbPartiels > 0
                   ? `${pipeline.enAttente.nbPartiels} paiement${pipeline.enAttente.nbPartiels > 1 ? 's' : ''} partiel${pipeline.enAttente.nbPartiels > 1 ? 's' : ''} à solder`
-                  : 'facture ou paie en cours',
+                  : 'facture en cours',
                 etape: pipeline.enAttente,
                 onClick: () => navigate(destinationPaiements),
               },
@@ -439,7 +492,7 @@ export function MesGainsApercuContent() {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground italic mt-2">
-            Honoraires libéraux et nets salariés estimés restent séparés dans le détail. Le versement salarié est effectué par l'établissement employeur.
+            Les déclarations de salaire sont présentées séparément, sans addition aux honoraires.
           </p>
         </div>
       )}
@@ -467,9 +520,9 @@ export function MesGainsApercuContent() {
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(netSal)}
-            label={`Net salarié* · ${labelPeriode}`}
+            label={`Net salarié estimé* · ${labelPeriode}`}
             variant={libMissions.length > 0 ? 'default' : 'holographic'}
-            onClick={() => navigate('/soignant/mes-gains?tab=bulletins')}
+            onClick={afficherSuiviSalaires}
           />
         )}
         <CarteKPIY2K
@@ -477,7 +530,7 @@ export function MesGainsApercuContent() {
           valeur={fmt(totalBrutFiltre)}
           label={`Brut · ${labelPeriode}`}
           variant={isSalariePur ? 'holographic' : 'default'}
-          onClick={() => navigate(destinationPaiements)}
+          onClick={salaires.length > 0 ? afficherSuiviSalaires : libMissions.length > 0 ? () => navigate(destinationPaiements) : undefined}
         />
         <CarteKPIY2K
           icone={<Clock className="h-4 w-4" />}
@@ -595,7 +648,7 @@ export function MesGainsApercuContent() {
         {salMissions.length > 0 && '* Net salarié estimé après cotisations salariales (~22 %). '}
         {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF et de retraite (annualisées). '}
         {libMissions.length === 0 && salMissions.length === 0 && '* Aucun montant net n’est inventé tant que le régime n’est pas qualifié. '}
-        Seuls les montants calculés par le moteur de paie / la facture font foi.
+        Les simulations salariales sont indicatives ; le net exact figure sur le bulletin officiel fourni par l’employeur. Les honoraires libéraux sont détaillés sur la facture.
       </p>
 
       {/* Recherche */}
@@ -685,6 +738,13 @@ export function MesGainsApercuContent() {
                       <p className="text-[10px] text-muted-foreground">brut : {fmt(m.total_brut)}</p>
                     )}
                     {(() => {
+                      if (estMissionSalariee(m)) {
+                        const salaire = classerPaiementSalaire(paiementsMap[m.id]);
+                        return <p className={`text-[10px] ${salaire.etat === 'confirme' ? 'text-success' : salaire.etat === 'conteste' ? 'text-destructive' : 'text-muted-foreground'}`}>{salaire.libelle}</p>;
+                      }
+                      if (regimeMission(m) === null) {
+                        return <p className="text-[10px] text-muted-foreground">Régime à vérifier</p>;
+                      }
                       const resume = resumerFacturesMission(facturesMap[m.id] ?? []);
                       if (resume.nbEnAttente > 0) {
                         return (

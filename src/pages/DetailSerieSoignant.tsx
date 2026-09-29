@@ -501,7 +501,9 @@ export default function DetailSerieSoignant() {
         <div className="card-base bg-gradient-to-r from-primary/5 to-info/5 mb-4">
           <p className="text-sm font-bold text-foreground">💰 {resumeMontantsSelection.join(' · ')}</p>
           <p className="text-[10px] text-muted-foreground/60 italic mt-1">
-            Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+            {montantsSelection.NET_SALARIE_ESTIME > 0 && 'Simulation salariale indicative avant prélèvement à la source. Le net exact figure sur le bulletin officiel établi par l’employeur. '}
+            {montantsSelection.HONORAIRES_LIBERAUX > 0 && 'Les honoraires libéraux sont détaillés sur la facture. '}
+            {montantsSelection.BRUT_INDICATIF > 0 && 'Montant brut indicatif tant que le régime de la mission n’est pas choisi.'}
           </p>
         </div>
       )}

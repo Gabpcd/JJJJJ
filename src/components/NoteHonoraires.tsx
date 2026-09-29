@@ -284,7 +284,7 @@ export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: No
       </div>
 
       <p className="text-[10px] text-muted-foreground/60 italic text-center mt-3 print:hidden">
-        Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+        Aperçu indicatif des honoraires. Le montant facturé est détaillé sur la facture d’honoraires.
       </p>
     </div>
   );
