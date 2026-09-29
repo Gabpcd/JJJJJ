@@ -1,5 +1,10 @@
 # Distribution mobile
 
+Les livraisons mobiles sont **exclusivement manuelles**. Un merge sur `main`,
+un déploiement Vercel ou la fin d'un contrôle ne déclenche ni build de distribution,
+ni soumission aux stores, ni publication OTA. Les builds de vérification CI,
+les tests et les déploiements web/backend continuent normalement.
+
 Le workflow `mobile-delivery.yml` attend Validate PR, Playwright, Lighthouse,
 Android native simulation et Vercel, sur le même commit de `main`.
 Il ignore les PR et un commit dépassé par un main
@@ -9,8 +14,11 @@ plus récent. Les secrets de signature ne sont accessibles qu'aux jobs de livrai
 
 Incrémenter `config/mobile-release.json`, les versions iOS/Android et écrire
 `config/mobile-release-notes.txt` ainsi que le changelog Android. Après recette,
-revue fraîche et merge, le workflow construit les deux binaires signés et les
-soumet à Apple/Google. Apple publie automatiquement après approbation.
+revue fraîche et merge, lancer explicitement le workflow sur `main` avec le mode
+`native`. Ce lancement construit les deux binaires signés et les soumet à Apple/Google.
+Le mode par défaut `check` vérifie les prérequis sans construire ni publier.
+Un workflow désactivé doit être réactivé seulement après présence de ces déclencheurs
+manuels sur `main` ; sa réactivation ne constitue pas un lancement. Apple publie automatiquement après approbation.
 Google suit le réglage de publication gérée du compte. Aucun délai de validation
 des stores n'est garanti par cette automatisation.
 
@@ -33,6 +41,10 @@ une erreur visible à examiner ; il n'est jamais présenté comme une livraison.
 
 Le build 20 introduit le client Capawesome Live Update, auto-hébergé sur GitHub
 Releases. Il faut donc installer cette version native une première fois.
+
+Le mode manuel `ota` publie seulement un correctif compatible. Il ne se transforme
+jamais en build natif si le runtime requis manque. Un merge, même avec le label,
+ne publie rien automatiquement.
 
 Le label de PR `mobile:ota` est une décision de revue explicite : uniquement des
 correctifs compatibles et des ajustements visuels, sans nouvelle fonctionnalité.

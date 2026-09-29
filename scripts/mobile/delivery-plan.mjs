@@ -17,11 +17,15 @@ const output = (mode, reason) => {
   appendFileSync(process.env.GITHUB_OUTPUT, `mode=${mode}\nsha=${sha}\n`);
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Delivery: **${mode}** — ${reason}\n`);
 };
+// A merge, Vercel status or completed workflow can never authorize a release.
+const requested = process.env.MOBILE_DELIVERY_MODE || 'check';
+if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || process.env.GITHUB_REF !== 'refs/heads/main') {
+  output('none', 'Mobile releases require an explicit manual dispatch on main.');
+  process.exit(0);
+}
+if (!['check', 'native', 'ota'].includes(requested)) throw new Error('Unknown manual delivery mode');
 // Never execute an untrusted PR head with release credentials, or release an old main.
 const currentMain = (await api('git/ref/heads/main')).object.sha;
-// A repaired backend may belong to an ancestor of main. Its completion only
-// wakes the planner; all gates are re-evaluated on current main (or its reservation).
-if (process.env.MOBILE_DELIVERY_RECHECK_MAIN === 'true') sha = currentMain;
 if (currentMain !== sha) {
   output('none', 'A newer main commit exists.');
   process.exit(0);
@@ -51,7 +55,6 @@ if (!deployment.statuses.some(status => status.context === 'Vercel' && status.st
   output('none', 'Waiting for the Vercel deployment of this exact commit.');
   process.exit(0);
 }
-const requested = process.env.MOBILE_DELIVERY_MODE || 'auto';
 if (submitted === sha) {
   output('none', 'This native runtime has already been submitted.');
   process.exit(0);
@@ -61,7 +64,15 @@ if (!backend.ready) {
   output('none', backend.reason);
   process.exit(0);
 }
-if (requested === 'native' || !submitted) {
+if (requested === 'check') {
+  output('none', 'Quality and backend gates passed. Verification only: no build, update or store submission.');
+  process.exit(0);
+}
+if (requested === 'ota' && !submitted) {
+  output('none', 'No submitted native runtime for this build. OTA cannot start a native store submission.');
+  process.exit(0);
+}
+if (requested === 'native') {
   if (submitted) throw new Error('Build number already submitted from another commit');
   const previousBuilds = git('tag', '--list', 'mobile-native-*').split('\n').map(tag => Number(tag.replace('mobile-native-', ''))).filter(Number.isFinite);
   if (release.buildNumber <= Math.max(19, ...previousBuilds)) throw new Error('Native build number must increase');
