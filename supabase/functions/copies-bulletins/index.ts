@@ -3,6 +3,10 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { creerHandlerCopies, type AccesCopie } from './handler.ts';
 import { verifierPdfOfficiel } from './pdf.ts';
 import { authentifierCopie } from './auth.ts';
+import { installerAvertissementsCopies } from './avertissements.ts';
+
+// Frontière permanente de cette Edge, avant la première requête/document.
+installerAvertissementsCopies();
 
 const url = Deno.env.get('SUPABASE_URL') || '';
 const anon = Deno.env.get('SUPABASE_ANON_KEY') || '';
