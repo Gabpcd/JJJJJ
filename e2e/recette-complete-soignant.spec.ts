@@ -133,9 +133,33 @@ test('SOIGNANT — justificatif présent, onglets de documents et simulations de
  state.tables.set('documents_soignants',[{id:'document-recette',soignant_id:ids.user,type_document:'CARTE_IDENTITE',nom_fichier:'identite-recette.pdf',statut_verification:'VERIFIE',televerse_le:'2026-09-01T09:00:00Z',valide_jusqua:null,supprime_le:null}]);
  await entrer(page,'connexion');await aller(page,'/soignant/mes-documents');await expect(page.getByText(/identite-recette\.pdf/)).toBeVisible();await preuve(page,'documents-presents',info);
  for(const name of ['Contrats','DPAE']){await page.getByRole('tab',{name,exact:true}).click();await expect(page.getByRole('tabpanel')).toContainText(/Aucun contrat/);await preuve(page,`documents-complet-${name}`,info);}
- await aller(page,'/soignant/mes-gains');const brut=page.getByRole('button',{name:/Brut ·/});await expect(brut).toBeVisible();
- const b=await brut.evaluate(el=>{const card=el.getBoundingClientRect();return [...el.querySelectorAll('span,p')].map(e=>({right:e.getBoundingClientRect().right,cardRight:card.right}));});expect(b.every(v=>v.right<=v.cardRight)).toBe(true);
- await page.getByRole('tab',{name:'Paie',exact:true}).click();await expect(page.getByRole('tabpanel')).toContainText(/Aucun|Aucune/);await preuve(page,'revenus-simulations-vide',info);
+ expect(state.profile.type_exercice).toBe('SALARIE');
+ await aller(page,'/soignant/mes-gains');
+ await expect(page.getByRole('tab',{name:'Aperçu',exact:true})).toHaveAttribute('aria-selected','true');
+ // Sans mission ni déclaration, le brut reste une carte statique : aucun paiement à ouvrir.
+ const brut=page.getByText(/^Brut · /).locator('..').locator('..');
+ await expect(brut).toBeVisible();await expect(brut.locator(':scope > p')).toHaveText(/^0,00\s*€$/);
+ await expect(page.getByRole('button',{name:/Brut ·/})).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Déclarations de salaire par mission',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Suivi des honoraires',exact:true})).toHaveCount(0);
+ await expect(page.getByText("bulletin de paie fourni par l'établissement employeur",{exact:true})).toBeVisible();
+ const b=await brut.evaluate(el=>{const card=el.getBoundingClientRect();return [...el.querySelectorAll('span,p')].map(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,cardLeft:card.left,cardRight:card.right}));});
+ expect(b.length).toBeGreaterThan(0);expect(b.every(v=>v.left>=v.cardLeft&&v.right<=v.cardRight)).toBe(true);
+ await sansDebordement(page);await preuve(page,'revenus-salarie-sans-declaration',info,true);
+ await page.getByRole('tab',{name:'Paie',exact:true}).click();
+ await expect(page).toHaveURL(/\/soignant\/mes-gains\?tab=bulletins$/);
+ const copies=page.getByRole('region',{name:'Copies des bulletins officiels',exact:true});
+ const paie=page.getByRole('region',{name:'Simulations de paie',exact:true});
+ for(const reprise of [false,true]){
+  if(reprise)await recharger(page);
+  await expect(page.getByRole('tab',{name:'Paie',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(copies).toContainText('Aucune copie de bulletin officiel disponible.');
+  await expect(copies).toContainText('Une copie disponible ne confirme pas le paiement du salaire.');
+  await expect(paie.getByRole('heading',{name:'Aucune simulation de paie pour le moment',exact:true})).toBeVisible();
+  await sansDebordement(page);
+ }
+ await preuve(page,'revenus-simulations-vide-apres-reprise',info,true);
+ expect(state.calls.filter(c=>/fn_confirmer_reception_paiement|fn_contester_paiement|fn_declarer_paiement/.test(c.name))).toEqual([]);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
 
