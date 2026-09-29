@@ -96,9 +96,14 @@ export async function listerCopiesBulletins(etablissementId: string | null = nul
 }
 
 export async function chargerMissionsCopies(etablissementId: string, debut: string, fin: string): Promise<MissionCopieBulletin[]> {
-  const { data: profils, error: erreurProfils } = await avecDelai(supabase.rpc('fn_mes_soignants_etablissement'), 15_000);
-  if (erreurProfils || !Array.isArray(profils)) throw new Error('Les destinataires ne peuvent pas être vérifiés. Réessayez.');
-  const noms = new Map((profils as unknown as { id: string; nom: string; prenom: string }[]).map(p => [p.id, p]));
+  const noms = new Map<string, { id: string; nom: string; prenom: string }>();
+  for (let offset = 0; ; offset += 200) {
+    const { data: profils, error: erreurProfils } = await avecDelai(supabase.rpc('fn_mes_soignants_etablissement')
+      .order('id').range(offset, offset + 199), 15_000);
+    if (erreurProfils || !Array.isArray(profils)) throw new Error('Les destinataires ne peuvent pas être vérifiés. Réessayez.');
+    for (const profil of profils as unknown as { id: string; nom: string; prenom: string }[]) noms.set(profil.id, profil);
+    if (profils.length < 200) break;
+  }
   const missions: MissionCopieBulletin[] = [];
   for (let offset = 0; ; offset += 200) {
     const { data, error } = await avecDelai(supabase.from('missions')

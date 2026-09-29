@@ -1,11 +1,12 @@
 import { webcrypto } from 'node:crypto';
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { StorageApiError, StorageClient } from '@supabase/storage-js';
+import { PostgrestClient } from '@supabase/postgrest-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { copieBulletinTelechargeable, CopieRetireeErreur, idempotenceCopie, nouvelleIdempotenceCopie, publierCopieBulletin, validerListeCopiesBulletins, type CopieBulletin, type DepotCopieBulletin } from '../copiesBulletins';
+import { chargerMissionsCopies, copieBulletinTelechargeable, CopieRetireeErreur, idempotenceCopie, nouvelleIdempotenceCopie, publierCopieBulletin, validerListeCopiesBulletins, type CopieBulletin, type DepotCopieBulletin } from '../copiesBulletins';
 
-const banc = vi.hoisted(() => ({ rpc: vi.fn(), storage: vi.fn(), invoke: vi.fn() }));
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: banc.rpc, storage: { from: banc.storage }, functions: { invoke: banc.invoke } } }));
+const banc = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), storage: vi.fn(), invoke: vi.fn() }));
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: banc.rpc, from: banc.from, storage: { from: banc.storage }, functions: { invoke: banc.invoke } } }));
 const copie: CopieBulletin = {
   id: '10000000-0000-4000-8000-000000000001', etablissement_id: '10000000-0000-4000-8000-000000000002',
   soignant_id: '10000000-0000-4000-8000-000000000003', etablissement_nom: 'Employeur de test',
@@ -33,6 +34,63 @@ describe('copies officielles : lecture bornée et réponses vérifiables', () =>
     [{ ...copie, publie_le: null }], [{ ...copie, periode_fin: '2026-08-01' }],
   ])('une réponse invalide entraîne une erreur explicite (%j)', reponse => {
     expect(() => validerListeCopiesBulletins(reponse)).toThrow('ne peut pas être vérifiée');
+  });
+});
+
+describe('copies officielles : destinataires et missions paginés', () => {
+  const profilsPremierePage = Array.from({ length: 200 }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, nom: 'Autre', prenom: `Salarié ${i}`,
+  }));
+  const profilCible = { id: copie.soignant_id, nom: copie.soignant_nom, prenom: copie.soignant_prenom };
+  const missionCible = { id: copie.mission_ids[0], intitule: 'Mission cible', debut_le: '2026-09-15T08:00:00Z', fin_le: '2026-09-15T16:00:00Z', soignant_assigne_id: copie.soignant_id };
+  const missions = [...profilsPremierePage.map(p => ({ ...missionCible, id: p.id, soignant_assigne_id: p.id })), missionCible];
+  function installer(mode: 'complet' | 'indisponible' | 'invalide' | 'destinataire absent' = 'complet') {
+    const appels: URL[] = [];
+    const requete = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const url = new URL(String(input)); appels.push(url);
+      expect(url.searchParams.get('order')).toBe('id.asc');
+      expect(url.searchParams.get('limit')).toBe('200');
+      const offset = Number(url.searchParams.get('offset'));
+      let data: unknown;
+      if (url.pathname.endsWith('/rpc/fn_mes_soignants_etablissement')) {
+        if (offset === 200 && mode === 'indisponible') return new Response(JSON.stringify({ message: 'Service indisponible' }), { status: 503 });
+        data = offset === 0 ? profilsPremierePage : mode === 'invalide' ? {} : mode === 'destinataire absent' ? [] : [profilCible];
+      } else {
+        expect(url.pathname).toBe('/rest/v1/missions');
+        expect(url.searchParams.get('etablissement_id')).toBe(`eq.${copie.etablissement_id}`);
+        expect(url.searchParams.get('type_contrat_applique')).toBe('eq.SALARIE');
+        data = missions.slice(offset, offset + 200);
+      }
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    const client = new PostgrestClient('https://recette.invalid/rest/v1', { fetch: requete });
+    banc.rpc.mockImplementation(() => client.rpc('fn_mes_soignants_etablissement'));
+    banc.from.mockImplementation(() => client.from('missions'));
+    return appels;
+  }
+  beforeEach(() => { banc.rpc.mockReset(); banc.from.mockReset(); });
+
+  it('retrouve exactement le salarié et sa mission sur la deuxième page, avec un ordre stable', async () => {
+    const appels = installer();
+    const resultat = await chargerMissionsCopies(copie.etablissement_id, copie.periode_debut, copie.periode_fin);
+    expect(resultat).toHaveLength(201);
+    expect(resultat[200]).toEqual({ id: missionCible.id, intitule: missionCible.intitule, debut_le: missionCible.debut_le,
+      fin_le: missionCible.fin_le, soignant_id: profilCible.id, soignant_nom: profilCible.nom, soignant_prenom: profilCible.prenom });
+    expect(appels.map(u => [u.pathname.split('/').pop(), u.searchParams.get('offset')])).toEqual([
+      ['fn_mes_soignants_etablissement', '0'], ['fn_mes_soignants_etablissement', '200'], ['missions', '0'], ['missions', '200'],
+    ]);
+  });
+
+  it.each(['indisponible', 'invalide'] as const)('ne conserve pas une liste partielle si la deuxième page est %s', async mode => {
+    const appels = installer(mode);
+    await expect(chargerMissionsCopies(copie.etablissement_id, copie.periode_debut, copie.periode_fin)).rejects.toThrow('Les destinataires ne peuvent pas être vérifiés. Réessayez.');
+    expect(appels.map(u => u.searchParams.get('offset'))).toEqual(['0', '200']);
+    expect(banc.from).not.toHaveBeenCalled();
+  });
+
+  it('refuse encore une mission dont le destinataire exact reste absent après toutes les pages', async () => {
+    installer('destinataire absent');
+    await expect(chargerMissionsCopies(copie.etablissement_id, copie.periode_debut, copie.periode_fin)).rejects.toThrow('Le destinataire d’une mission ne peut pas être vérifié. Réessayez.');
   });
 });
 

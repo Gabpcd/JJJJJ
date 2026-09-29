@@ -87,6 +87,32 @@ test('copie officielle : dépôt unique pour deux missions, consultation salari�
   aucunPaiement(r.state.appels);
 });
 
+test('dépôt : destinataire et missions de deuxième page accessibles après plus de 200 profils', async ({ page }, info) => {
+  const e = await simulerEtablissement(page); const r = recetteCopies(); const pdf = r.enregistrerPdf();
+  const profils = Array.from({ length: 200 }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, prenom: `Salarié ${i}`, nom: 'Pagination',
+  }));
+  r.state.profils = [...profils, ...r.state.profils];
+  r.state.missions = [...profils.map((p, i) => ({ ...r.state.missions[0],
+    id: `10000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    intitule: `Mission antérieure ${i}`, soignant_assigne_id: p.id,
+  })), ...r.state.missions];
+  await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
+  const dialog = await ouvrirDepot(page, pdf);
+  expect(r.state.profils).toHaveLength(201); expect(r.state.missions).toHaveLength(202);
+  expect(r.state.pagesProfils).toContain(200); expect(r.state.pagesMissions).toContain(200);
+  await expect(dialog.getByText('Destinataire : Camille Recette', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('2 missions sélectionnées', { exact: true })).toBeVisible();
+  await preuveEtab(page, 'copie-destinataire-deuxieme-page-selectionne', info);
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(r.state.copies).toHaveLength(1);
+  expect(r.state.copies[0].soignant_id).toBe(soignantIds.user);
+  expect(r.state.copies[0].mission_ids).toEqual(r.state.missions.slice(200).map(m => m.id));
+  await page.reload(); await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]); aucunPaiement(r.state.appels);
+});
+
 test('dépôt : envoi en panne puis publication en panne, reprise même intention et même PDF', async ({ page }, info) => {
   const e = await simulerEtablissement(page); const r = recetteCopies(); const pdf = r.enregistrerPdf(); r.state.panneUpload = true;
   await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');

@@ -58,7 +58,7 @@ export function ApercuPdfCopie({ file, onPretChange }: Props) {
     {chargement && <p role="status" className="text-sm">Affichage de l’aperçu…</p>}
     {erreur && <div role="alert" className="space-y-2 text-sm text-destructive"><p>{erreur}</p><Button variant="outline" onClick={() => { onPretChange(false); setRevision(v => v + 1); }}>Réessayer l’aperçu</Button></div>}
     <div ref={conteneur} className="w-full overflow-hidden rounded-lg border bg-muted/30">
-      <canvas ref={canvas} role="img" aria-label={`Aperçu du PDF, page ${page}`} data-testid="apercu-pdf-canvas" data-ready={!chargement && !erreur && Boolean(document)} className={`mx-auto max-w-full ${chargement || erreur ? 'hidden' : 'block'}`} />
+      <canvas ref={canvas} role="img" aria-label={`Aperçu du PDF, page ${page}`} data-testid="apercu-pdf-canvas" data-ready={!chargement && !erreur && Boolean(document)} className={`mx-auto block max-w-full ${chargement || erreur ? 'invisible' : ''}`} />
     </div>
     <p className="text-xs text-muted-foreground">Vérifiez le destinataire et la période dans le PDF. Parcourez les pages du document avant de confirmer.</p>
   </section>;

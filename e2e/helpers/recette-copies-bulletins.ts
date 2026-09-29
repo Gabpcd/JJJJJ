@@ -23,6 +23,8 @@ type Copie = Record<string, any>;
 export function recetteCopies() {
   const state = {
     copies: [] as Copie[], fichiers: new Map<string, ReturnType<typeof pdfFictif>>(),
+    profils: [destinataireCopie], missions: [...missionsCopies],
+    pagesProfils: [] as number[], pagesMissions: [] as number[],
     intentions: new Map<string, Copie>(), uploads: new Map<string, Buffer>(),
     pdfRefuses: new Set<string>(),
     appels: [] as { nom: string; body: any }[],
@@ -43,14 +45,25 @@ export function recetteCopies() {
     state.copies.push(copie); return copie;
   }
   async function installer(page: Page) {
-    await page.route('**/rest/v1/rpc/fn_mes_soignants_etablissement', route => route.fulfill({ json: [destinataireCopie] }));
+    await page.route('**/rest/v1/rpc/fn_mes_soignants_etablissement*', route => {
+      const url = new URL(route.request().url());
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 200);
+      if (url.searchParams.has('offset')) expect(url.searchParams.get('order')).toBe('id.asc');
+      state.pagesProfils.push(offset);
+      return route.fulfill({ json: [...state.profils].sort((a, b) => a.id.localeCompare(b.id)).slice(offset, offset + limit) });
+    });
     await page.route('**/rest/v1/missions*', route => {
       const url = new URL(route.request().url());
       if (url.searchParams.get('select') !== 'id,intitule,debut_le,fin_le,soignant_assigne_id') return route.fallback();
       expect(url.searchParams.get('etablissement_id')).toBe(`eq.${etabIds.etab}`);
       expect(url.searchParams.get('type_contrat_applique')).toBe('eq.SALARIE');
       expect(url.searchParams.get('statut')).toBe('not.in.(OUVERTE,EXPIREE)');
-      return route.fulfill({ json: missionsCopies });
+      expect(url.searchParams.get('order')).toBe('id.asc');
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 200);
+      state.pagesMissions.push(offset);
+      return route.fulfill({ json: [...state.missions].sort((a, b) => a.id.localeCompare(b.id)).slice(offset, offset + limit) });
     });
     await page.route('**/rest/v1/rpc/*copie*bulletin*', async route => {
       const nom = new URL(route.request().url()).pathname.split('/').pop()!;

@@ -118,7 +118,9 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
         <DialogResponsiveTitle>{etape === 'confirmation' ? 'Aperçu et confirmation' : remplacement ? 'Remplacer la copie du bulletin' : 'Déposer une copie officielle'}</DialogResponsiveTitle>
         <DialogResponsiveDescription>Copie PDF du bulletin déjà remis par le service paie de l’employeur. Le dépôt ne déclare aucun salaire payé.</DialogResponsiveDescription>
       </DialogResponsiveHeader>
-      <DialogResponsiveBody>
+      {/* A stable scrollbar width prevents the PDF ResizeObserver from
+          restarting rendering as the canvas becomes visible. Works on iOS 15. */}
+      <DialogResponsiveBody className="overflow-y-scroll">
         {etape === 'saisie' ? <fieldset disabled={busy} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium">Début de période<input className={champ} type="date" value={debut} disabled={Boolean(remplacement)} onChange={e => { setDebut(e.target.value); setConfirme(false); }} /></label>
