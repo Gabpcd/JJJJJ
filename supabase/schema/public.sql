@@ -5201,6 +5201,34 @@ $$;
 ALTER FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p_action" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v public.copies_bulletins_paie;
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() OR p_action NOT IN ('finaliser','telecharger') OR p_action IS NULL THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  SELECT * INTO v FROM public.copies_bulletins_paie WHERE id=p_copie_id;
+  IF v.id IS NULL OR NOT (
+    (p_action='finaliser' AND v.cree_par=auth.uid() AND private.fn_gestion_copie_bulletin(v.etablissement_id,auth.uid()))
+    OR (p_action='telecharger'
+      AND (v.soignant_id=auth.uid() OR private.fn_gestion_copie_bulletin(v.etablissement_id,auth.uid())))) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF v.statut='RETIREE' THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_RETIREE'; END IF;
+  IF p_action='telecharger' AND v.statut NOT IN ('PUBLIEE','REMPLACEE') THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF p_action='finaliser' AND v.statut='RESERVEE' AND v.expire_le<=now() THEN
+    RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_RESERVATION_EXPIREE'; END IF;
+  RETURN jsonb_build_object('id',v.id,'statut',v.statut,'storage_path',v.storage_path,
+    'sha256_attendu',v.sha256_attendu,'taille_attendue',v.taille_attendue);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p_action" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -20138,6 +20166,19 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_auto_valider_presences_72h"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_autoriser_upload_copie_bulletin"("p_path" "text") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+ SELECT public.fn_compte_auth_actif() AND EXISTS(SELECT 1 FROM public.copies_bulletins_paie c
+  WHERE c.storage_path=p_path AND c.cree_par=auth.uid() AND c.statut='RESERVEE'
+    AND c.expire_le>now() AND private.fn_gestion_copie_bulletin(c.etablissement_id,auth.uid()));
+$$;
+
+
+ALTER FUNCTION "public"."fn_autoriser_upload_copie_bulletin"("p_path" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_award_badges_match"() RETURNS "trigger"
@@ -38444,6 +38485,32 @@ $$;
 ALTER FUNCTION "public"."fn_lister_conversations_messagerie"("p_avant" timestamp with time zone, "p_avant_id" "uuid", "p_limite" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissement_id" "uuid" DEFAULT NULL::"uuid", "p_mission_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif()
+    OR (p_etablissement_id IS NOT NULL AND NOT private.fn_gestion_copie_bulletin(p_etablissement_id,auth.uid())) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  RETURN (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'etablissement_id',c.etablissement_id,
+    'etablissement_nom',e.nom,'soignant_id',c.soignant_id,'soignant_nom',s.nom,'soignant_prenom',s.prenom,
+    'periode_debut',c.periode_debut,'periode_fin',c.periode_fin,'statut',c.statut,'version',c.version,
+    'publie_le',c.publie_le,'remplace_id',c.remplace_id,'motif_remplacement',c.motif_remplacement,
+    'mission_ids',c.mission_ids,'taille_octets',c.taille_octets,'sha256',c.sha256,
+    'signalee',EXISTS(SELECT 1 FROM public.signalements_copies_bulletins x WHERE x.copie_id=c.id))
+    ORDER BY c.periode_fin DESC,c.publie_le DESC),'[]'::jsonb)
+    FROM public.copies_bulletins_paie c JOIN public.etablissements e ON e.id=c.etablissement_id
+    JOIN public.soignants s ON s.id=c.soignant_id WHERE c.statut<>'RESERVEE'
+      AND ((p_etablissement_id IS NULL AND c.soignant_id=auth.uid()) OR c.etablissement_id=p_etablissement_id)
+      AND (p_mission_id IS NULL OR p_mission_id=ANY(c.mission_ids)));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissement_id" "uuid", "p_mission_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_lister_factures_a_regenerer"("p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "numero_facture" "text", "type_document" "public"."type_document_facture", "soignant_id" "uuid", "cree_le" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -49474,6 +49541,64 @@ $$;
 ALTER FUNCTION "public"."fn_proteger_verification_siret_liberal"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_publier_copie_bulletin_interne"("p_copie_id" "uuid", "p_acteur_id" "uuid", "p_sha256" "text", "p_taille" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v public.copies_bulletins_paie; precedent public.copies_bulletins_paie;
+BEGIN
+  -- Seule l'Edge authentifiée, après parsing des octets, possède EXECUTE.
+  IF COALESCE(auth.role(),'')<>'service_role' THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  SELECT * INTO v FROM public.copies_bulletins_paie WHERE id=p_copie_id FOR UPDATE;
+  IF v.id IS NULL OR p_acteur_id IS DISTINCT FROM v.cree_par
+    OR NOT private.fn_gestion_copie_bulletin(v.etablissement_id,p_acteur_id) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF p_sha256 IS DISTINCT FROM v.sha256_attendu OR p_taille IS DISTINCT FROM v.taille_attendue THEN
+    RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_INTEGRITE_INVALIDE'; END IF;
+  IF v.statut='RETIREE' THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_RETIREE'; END IF;
+  IF v.statut IN ('PUBLIEE','REMPLACEE') THEN
+    RETURN jsonb_build_object('ok',true,'id',v.id,'statut',v.statut); END IF;
+  IF v.expire_le<=now() THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_RESERVATION_EXPIREE'; END IF;
+  IF v.remplace_id IS NULL THEN
+    PERFORM m.id FROM public.missions m WHERE m.id=ANY(v.mission_ids) ORDER BY m.id FOR SHARE;
+    IF (SELECT count(*) FROM public.missions m WHERE m.id=ANY(v.mission_ids)
+      AND m.etablissement_id=v.etablissement_id AND m.soignant_assigne_id=v.soignant_id AND m.type_contrat_applique='SALARIE'
+      AND m.statut::text NOT IN ('OUVERTE','EXPIREE')
+      AND (m.debut_le AT TIME ZONE 'Europe/Paris')::date<=v.periode_fin
+      AND (m.fin_le AT TIME ZONE 'Europe/Paris')::date>=v.periode_debut)<>cardinality(v.mission_ids) THEN
+      RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_MISSIONS_INVALIDES'; END IF;
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM storage.objects WHERE bucket_id='copies-bulletins-paie' AND name=v.storage_path) THEN
+    RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_FICHIER_ABSENT'; END IF;
+  -- Verrou période : empêche deux premières publications concurrentes et
+  -- sérialise les replacements, avant l'unicité partielle qui ferme la course.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v.etablissement_id::text||v.soignant_id::text||v.periode_debut::text||v.periode_fin::text,0));
+  IF v.remplace_id IS NOT NULL THEN
+    SELECT * INTO precedent FROM public.copies_bulletins_paie WHERE id=v.remplace_id FOR UPDATE;
+    IF precedent.statut IS DISTINCT FROM 'PUBLIEE'
+      OR (precedent.etablissement_id,precedent.soignant_id,precedent.periode_debut,precedent.periode_fin,precedent.mission_ids,precedent.version+1)
+        IS DISTINCT FROM (v.etablissement_id,v.soignant_id,v.periode_debut,v.periode_fin,v.mission_ids,v.version) THEN
+      RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='COPIE_VERSION_CONFLIT'; END IF;
+    UPDATE public.copies_bulletins_paie SET statut='REMPLACEE' WHERE id=precedent.id;
+  ELSIF EXISTS(SELECT 1 FROM public.copies_bulletins_paie c WHERE c.etablissement_id=v.etablissement_id
+    AND c.soignant_id=v.soignant_id AND c.periode_debut=v.periode_debut AND c.periode_fin=v.periode_fin AND c.statut='PUBLIEE') THEN
+    RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='COPIE_VERSION_CONFLIT'; END IF;
+  UPDATE public.copies_bulletins_paie SET statut='PUBLIEE',publie_le=now(),sha256=p_sha256,taille_octets=p_taille WHERE id=v.id;
+  INSERT INTO private.audit_copies_bulletins(copie_id,acteur_id,action)
+    VALUES(v.id,p_acteur_id,CASE WHEN v.remplace_id IS NULL THEN 'PUBLICATION' ELSE 'REMPLACEMENT' END);
+  INSERT INTO public.notifications(destinataire_id,type_destinataire,type,titre,corps,lien,type_ressource,id_ressource)
+    VALUES(v.soignant_id,'SOIGNANT','SYSTEM','Document disponible',
+      'Une copie de document de paie est disponible dans Jolene.',
+      '/soignant/mes-gains?tab=bulletins','COPIE_BULLETIN',v.id);
+  RETURN jsonb_build_object('ok',true,'id',v.id,'statut','PUBLIEE');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_publier_copie_bulletin_interne"("p_copie_id" "uuid", "p_acteur_id" "uuid", "p_sha256" "text", "p_taille" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_publier_notations_echues"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -51968,6 +52093,79 @@ END $$;
 ALTER FUNCTION "public"."fn_reprendre_rappels_quotidiens"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid" DEFAULT NULL::"uuid", "p_motif_remplacement" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE v public.copies_bulletins_paie; precedent public.copies_bulletins_paie;
+  ids uuid[]; nouvel_id uuid := gen_random_uuid();
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif()
+    OR NOT private.fn_gestion_copie_bulletin(p_etablissement_id,auth.uid()) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF p_idempotence IS NULL OR p_soignant_id IS NULL OR p_periode_debut IS NULL
+    OR p_periode_fin IS NULL OR p_periode_fin<p_periode_debut
+    OR p_periode_fin-p_periode_debut>366 OR p_sha256_attendu IS NULL
+    OR p_sha256_attendu !~ '^[0-9a-f]{64}$' OR p_taille_attendue IS NULL
+    OR p_taille_attendue NOT BETWEEN 1 AND 10485760
+    OR p_mission_ids IS NULL OR cardinality(p_mission_ids) NOT BETWEEN 1 AND 100
+    OR array_position(p_mission_ids,NULL) IS NOT NULL
+    OR (p_remplace_id IS NULL AND p_motif_remplacement IS NOT NULL)
+    OR (p_remplace_id IS NOT NULL AND (p_motif_remplacement IS NULL OR p_motif_remplacement NOT IN ('CONTENU','AUTRE'))) THEN
+    RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_PARAMETRES_INVALIDES'; END IF;
+  SELECT array_agg(DISTINCT x ORDER BY x) INTO ids FROM unnest(p_mission_ids) x;
+  IF cardinality(ids)<>cardinality(p_mission_ids) THEN
+    RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_MISSIONS_INVALIDES'; END IF;
+  -- Sérialise les intentions identiques, même en cas de double clic simultané.
+  PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text||p_idempotence::text,0));
+  SELECT * INTO v FROM public.copies_bulletins_paie
+    WHERE cree_par=auth.uid() AND idempotence=p_idempotence FOR UPDATE;
+  IF v.id IS NOT NULL THEN
+    IF (v.etablissement_id,v.soignant_id,v.periode_debut,v.periode_fin,v.mission_ids,
+        v.sha256_attendu,v.taille_attendue,v.remplace_id,v.motif_remplacement)
+      IS DISTINCT FROM (p_etablissement_id,p_soignant_id,p_periode_debut,p_periode_fin,ids,
+        p_sha256_attendu,p_taille_attendue,p_remplace_id,p_motif_remplacement) THEN
+      RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_IDEMPOTENCE_CONFLIT'; END IF;
+    IF v.statut='RETIREE' THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_RETIREE'; END IF;
+    IF v.statut='RESERVEE' THEN
+      UPDATE public.copies_bulletins_paie SET expire_le=now()+interval '24 hours' WHERE id=v.id;
+    END IF;
+    RETURN jsonb_build_object('id',v.id,'statut',v.statut,'version',v.version,
+      'bucket','copies-bulletins-paie','storage_path',v.storage_path);
+  END IF;
+  IF p_remplace_id IS NOT NULL THEN
+    SELECT * INTO precedent FROM public.copies_bulletins_paie WHERE id=p_remplace_id FOR UPDATE;
+    IF precedent.id IS NULL OR precedent.statut<>'PUBLIEE'
+      OR (precedent.etablissement_id,precedent.soignant_id,precedent.periode_debut,precedent.periode_fin,precedent.mission_ids)
+        IS DISTINCT FROM (p_etablissement_id,p_soignant_id,p_periode_debut,p_periode_fin,ids) THEN
+      RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='COPIE_VERSION_CONFLIT'; END IF;
+  ELSE
+    -- La première copie doit être justifiée par les missions vivantes. Le
+    -- verrou ferme la course avec UPDATE/DELETE entre validation et commit.
+    PERFORM m.id FROM public.missions m WHERE m.id=ANY(ids) ORDER BY m.id FOR SHARE;
+    IF (SELECT count(*) FROM public.missions m WHERE m.id=ANY(ids)
+      AND m.etablissement_id=p_etablissement_id AND m.soignant_assigne_id=p_soignant_id
+      AND m.type_contrat_applique='SALARIE' AND m.statut::text NOT IN ('OUVERTE','EXPIREE')
+      AND (m.debut_le AT TIME ZONE 'Europe/Paris')::date<=p_periode_fin
+      AND (m.fin_le AT TIME ZONE 'Europe/Paris')::date>=p_periode_debut) <> cardinality(ids) THEN
+      RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_MISSIONS_INVALIDES'; END IF;
+    IF EXISTS(SELECT 1 FROM public.copies_bulletins_paie WHERE etablissement_id=p_etablissement_id
+      AND soignant_id=p_soignant_id AND periode_debut=p_periode_debut AND periode_fin=p_periode_fin AND statut='PUBLIEE') THEN
+      RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='COPIE_VERSION_CONFLIT'; END IF;
+  END IF;
+  INSERT INTO public.copies_bulletins_paie(id,etablissement_id,soignant_id,periode_debut,periode_fin,
+    mission_ids,idempotence,cree_par,version,remplace_id,motif_remplacement,storage_path,sha256_attendu,taille_attendue)
+  VALUES(nouvel_id,p_etablissement_id,p_soignant_id,p_periode_debut,p_periode_fin,ids,p_idempotence,auth.uid(),
+    COALESCE(precedent.version+1,1),p_remplace_id,p_motif_remplacement,nouvel_id::text||'/original.pdf',p_sha256_attendu,p_taille_attendue)
+  RETURNING * INTO v;
+  RETURN jsonb_build_object('id',v.id,'statut',v.statut,'version',v.version,'bucket','copies-bulletins-paie','storage_path',v.storage_path);
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -52726,6 +52924,29 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_retirer_copie_bulletin"("p_copie_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v public.copies_bulletins_paie;
+BEGIN
+  SELECT * INTO v FROM public.copies_bulletins_paie WHERE id=p_copie_id FOR UPDATE;
+  IF v.id IS NULL OR auth.uid() IS NULL OR NOT public.fn_compte_auth_actif()
+    OR NOT private.fn_gestion_copie_bulletin(v.etablissement_id,auth.uid()) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF v.statut='RESERVEE' THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='COPIE_NON_PUBLIEE'; END IF;
+  IF v.statut<>'RETIREE' THEN
+    UPDATE public.copies_bulletins_paie SET statut='RETIREE',retire_le=now() WHERE id=v.id;
+    INSERT INTO private.audit_copies_bulletins(copie_id,acteur_id,action) VALUES(v.id,auth.uid(),'RETRAIT');
+  END IF;
+  RETURN jsonb_build_object('ok',true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_retirer_copie_bulletin"("p_copie_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_retirer_exclusion"("p_exclu_id" "uuid") RETURNS "jsonb"
@@ -54022,6 +54243,40 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_set_user_role"("p_user_id" "uuid", "p_role" "text", "p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "uuid", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v public.copies_bulletins_paie; ajoute integer;
+BEGIN
+  SELECT * INTO v FROM public.copies_bulletins_paie WHERE id=p_copie_id FOR UPDATE;
+  IF v.id IS NULL OR auth.uid() IS NULL OR NOT public.fn_compte_auth_actif()
+    OR v.soignant_id<>auth.uid() OR v.statut='RESERVEE' THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='COPIE_ACCES_REFUSE'; END IF;
+  IF p_motif IS NULL OR p_motif NOT IN ('DESTINATAIRE','CONTENU','AUTRE') THEN
+    RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='COPIE_MOTIF_INVALIDE'; END IF;
+  INSERT INTO public.signalements_copies_bulletins(copie_id,auteur_id,motif) VALUES(v.id,auth.uid(),p_motif) ON CONFLICT DO NOTHING;
+  GET DIAGNOSTICS ajoute=ROW_COUNT;
+  IF ajoute>0 THEN
+    INSERT INTO private.audit_copies_bulletins(copie_id,acteur_id,action) VALUES(v.id,auth.uid(),'SIGNALEMENT');
+    INSERT INTO public.notifications(destinataire_id,type_destinataire,type,titre,corps,lien,type_ressource,id_ressource)
+      SELECT v.cree_par,'ETABLISSEMENT','SYSTEM','Document à vérifier',
+        'Une copie de document de paie a été signalée. Consultez les copies dans Jolene.',
+        '/etablissement/export-paie','COPIE_BULLETIN',v.id
+      WHERE private.fn_gestion_copie_bulletin(v.etablissement_id,v.cree_par);
+  END IF;
+  IF p_motif='DESTINATAIRE' AND v.statut<>'RETIREE' THEN
+    UPDATE public.copies_bulletins_paie SET statut='RETIREE',retire_le=now() WHERE id=v.id;
+    INSERT INTO private.audit_copies_bulletins(copie_id,acteur_id,action) VALUES(v.id,auth.uid(),'RETRAIT');
+  END IF;
+  RETURN jsonb_build_object('ok',true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_signaler_notation"("p_notation_id" "uuid", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -66155,6 +66410,45 @@ ALTER TABLE ONLY "public"."conversions_liberal" FORCE ROW LEVEL SECURITY;
 ALTER TABLE "public"."conversions_liberal" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."copies_bulletins_paie" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "etablissement_id" "uuid" NOT NULL,
+    "soignant_id" "uuid" NOT NULL,
+    "periode_debut" "date" NOT NULL,
+    "periode_fin" "date" NOT NULL,
+    "mission_ids" "uuid"[] NOT NULL,
+    "idempotence" "uuid" NOT NULL,
+    "cree_par" "uuid" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "expire_le" timestamp with time zone DEFAULT ("now"() + '24:00:00'::interval) NOT NULL,
+    "statut" "text" DEFAULT 'RESERVEE'::"text" NOT NULL,
+    "version" integer NOT NULL,
+    "remplace_id" "uuid",
+    "motif_remplacement" "text",
+    "storage_path" "text" NOT NULL,
+    "sha256_attendu" "text" NOT NULL,
+    "taille_attendue" bigint NOT NULL,
+    "sha256" "text",
+    "taille_octets" bigint,
+    "publie_le" timestamp with time zone,
+    "retire_le" timestamp with time zone,
+    CONSTRAINT "copies_bulletins_paie_check" CHECK (("periode_fin" >= "periode_debut")),
+    CONSTRAINT "copies_bulletins_paie_check1" CHECK (((("remplace_id" IS NULL) AND ("motif_remplacement" IS NULL) AND ("version" = 1)) OR (("remplace_id" IS NOT NULL) AND ("motif_remplacement" IS NOT NULL) AND ("version" > 1)))),
+    CONSTRAINT "copies_bulletins_paie_check2" CHECK (((("statut" = 'RESERVEE'::"text") AND ("publie_le" IS NULL) AND ("sha256" IS NULL) AND ("taille_octets" IS NULL)) OR (("statut" <> 'RESERVEE'::"text") AND ("publie_le" IS NOT NULL) AND ("sha256" IS NOT NULL) AND ("taille_octets" IS NOT NULL) AND ("sha256" = "sha256_attendu") AND ("taille_octets" = "taille_attendue")))),
+    CONSTRAINT "copies_bulletins_paie_mission_ids_check" CHECK ((("cardinality"("mission_ids") >= 1) AND ("cardinality"("mission_ids") <= 100))),
+    CONSTRAINT "copies_bulletins_paie_motif_remplacement_check" CHECK (("motif_remplacement" = ANY (ARRAY['CONTENU'::"text", 'AUTRE'::"text"]))),
+    CONSTRAINT "copies_bulletins_paie_sha256_attendu_check" CHECK (("sha256_attendu" ~ '^[0-9a-f]{64}$'::"text")),
+    CONSTRAINT "copies_bulletins_paie_sha256_check" CHECK (("sha256" ~ '^[0-9a-f]{64}$'::"text")),
+    CONSTRAINT "copies_bulletins_paie_statut_check" CHECK (("statut" = ANY (ARRAY['RESERVEE'::"text", 'PUBLIEE'::"text", 'REMPLACEE'::"text", 'RETIREE'::"text"]))),
+    CONSTRAINT "copies_bulletins_paie_taille_attendue_check" CHECK ((("taille_attendue" >= 1) AND ("taille_attendue" <= 10485760))),
+    CONSTRAINT "copies_bulletins_paie_taille_octets_check" CHECK ((("taille_octets" >= 1) AND ("taille_octets" <= 10485760))),
+    CONSTRAINT "copies_bulletins_paie_version_check" CHECK (("version" >= 1))
+);
+
+
+ALTER TABLE "public"."copies_bulletins_paie" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."cotisations_sociales" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "mission_id" "uuid" NOT NULL,
@@ -69025,6 +69319,18 @@ CREATE TABLE IF NOT EXISTS "public"."signalements" (
 ALTER TABLE "public"."signalements" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."signalements_copies_bulletins" (
+    "copie_id" "uuid" NOT NULL,
+    "auteur_id" "uuid" NOT NULL,
+    "motif" "text" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "signalements_copies_bulletins_motif_check" CHECK (("motif" = ANY (ARRAY['DESTINATAIRE'::"text", 'CONTENU'::"text", 'AUTRE'::"text"])))
+);
+
+
+ALTER TABLE "public"."signalements_copies_bulletins" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."signature_rate_limit_ip" (
     "ip_signature" "inet" NOT NULL,
     "fenetre_debut" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -69801,6 +70107,21 @@ ALTER TABLE ONLY "public"."conversations"
 
 ALTER TABLE ONLY "public"."conversions_liberal"
     ADD CONSTRAINT "conversions_liberal_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_cree_par_idempotence_key" UNIQUE ("cree_par", "idempotence");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_storage_path_key" UNIQUE ("storage_path");
 
 
 
@@ -70589,6 +70910,11 @@ ALTER TABLE ONLY "public"."shifts"
 
 
 
+ALTER TABLE ONLY "public"."signalements_copies_bulletins"
+    ADD CONSTRAINT "signalements_copies_bulletins_pkey" PRIMARY KEY ("copie_id", "auteur_id", "motif");
+
+
+
 ALTER TABLE ONLY "public"."signalements"
     ADD CONSTRAINT "signalements_pkey" PRIMARY KEY ("id");
 
@@ -70825,6 +71151,18 @@ ALTER TABLE ONLY "public"."utilisateurs_bloques"
 
 
 CREATE UNIQUE INDEX "bulletins_paie_unique_actif_mission" ON "public"."bulletins_paie" USING "btree" ("mission_id") WHERE ("statut" <> 'ANNULE'::"text");
+
+
+
+CREATE UNIQUE INDEX "copies_bulletins_remplacement_unique" ON "public"."copies_bulletins_paie" USING "btree" ("remplace_id") WHERE (("publie_le" IS NOT NULL) AND ("remplace_id" IS NOT NULL));
+
+
+
+CREATE INDEX "copies_bulletins_soignant" ON "public"."copies_bulletins_paie" USING "btree" ("soignant_id", "publie_le" DESC);
+
+
+
+CREATE UNIQUE INDEX "copies_bulletins_version_active" ON "public"."copies_bulletins_paie" USING "btree" ("etablissement_id", "soignant_id", "periode_debut", "periode_fin") WHERE ("statut" = 'PUBLIEE'::"text");
 
 
 
@@ -73756,6 +74094,26 @@ ALTER TABLE ONLY "public"."conversions_liberal"
 
 
 
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_cree_par_fkey" FOREIGN KEY ("cree_par") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_remplace_id_fkey" FOREIGN KEY ("remplace_id") REFERENCES "public"."copies_bulletins_paie"("id");
+
+
+
+ALTER TABLE ONLY "public"."copies_bulletins_paie"
+    ADD CONSTRAINT "copies_bulletins_paie_soignant_id_fkey" FOREIGN KEY ("soignant_id") REFERENCES "public"."soignants"("id");
+
+
+
 ALTER TABLE ONLY "public"."cotisations_sociales"
     ADD CONSTRAINT "cotisations_sociales_mission_id_fkey" FOREIGN KEY ("mission_id") REFERENCES "public"."missions"("id");
 
@@ -74441,6 +74799,16 @@ ALTER TABLE ONLY "public"."shifts"
 
 
 
+ALTER TABLE ONLY "public"."signalements_copies_bulletins"
+    ADD CONSTRAINT "signalements_copies_bulletins_auteur_id_fkey" FOREIGN KEY ("auteur_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."signalements_copies_bulletins"
+    ADD CONSTRAINT "signalements_copies_bulletins_copie_id_fkey" FOREIGN KEY ("copie_id") REFERENCES "public"."copies_bulletins_paie"("id");
+
+
+
 ALTER TABLE ONLY "public"."signatures_contrats"
     ADD CONSTRAINT "signatures_contrats_contrat_id_fkey" FOREIGN KEY ("contrat_id") REFERENCES "public"."contrats_mission"("id") ON DELETE CASCADE;
 
@@ -74792,6 +75160,9 @@ ALTER TABLE "public"."conversations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."conversions_liberal" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."copies_bulletins_paie" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."cotisations_sociales" ENABLE ROW LEVEL SECURITY;
@@ -76885,6 +77256,9 @@ ALTER TABLE "public"."shifts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."signalements" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."signalements_copies_bulletins" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."signature_rate_limit_ip" ENABLE ROW LEVEL SECURITY;
 
 
@@ -77643,6 +78017,11 @@ GRANT ALL ON FUNCTION "public"."fn_accepter_mission"("p_mission_id" "uuid", "p_c
 REVOKE ALL ON FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p_action" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p_action" "text") TO "authenticated";
 
 
 
@@ -78648,6 +79027,11 @@ GRANT ALL ON FUNCTION "public"."fn_auto_valider_etablissement_siret"() TO "servi
 
 REVOKE ALL ON FUNCTION "public"."fn_auto_valider_presences_72h"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_auto_valider_presences_72h"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_autoriser_upload_copie_bulletin"("p_path" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_autoriser_upload_copie_bulletin"("p_path" "text") TO "authenticated";
 
 
 
@@ -80092,6 +80476,11 @@ GRANT ALL ON FUNCTION "public"."fn_lister_conversations_messagerie"("p_avant" ti
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissement_id" "uuid", "p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissement_id" "uuid", "p_mission_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_lister_factures_a_regenerer"("p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_lister_factures_a_regenerer"("p_limit" integer) TO "service_role";
 
@@ -81137,6 +81526,11 @@ GRANT ALL ON FUNCTION "public"."fn_proteger_verification_siret_liberal"() TO "se
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_publier_copie_bulletin_interne"("p_copie_id" "uuid", "p_acteur_id" "uuid", "p_sha256" "text", "p_taille" bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_publier_copie_bulletin_interne"("p_copie_id" "uuid", "p_acteur_id" "uuid", "p_sha256" "text", "p_taille" bigint) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_publier_notations_echues"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_publier_notations_echues"() TO "service_role";
 
@@ -81361,6 +81755,11 @@ GRANT ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() TO "service_r
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") TO "service_role";
 
@@ -81418,6 +81817,11 @@ GRANT ALL ON FUNCTION "public"."fn_resoudre_revue_verification_etablissement"("p
 REVOKE ALL ON FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_retirer_candidature"("p_candidature_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_retirer_copie_bulletin"("p_copie_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_retirer_copie_bulletin"("p_copie_id" "uuid") TO "authenticated";
 
 
 
@@ -81535,6 +81939,11 @@ GRANT ALL ON FUNCTION "public"."fn_set_mis_a_jour_le"() TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."fn_set_user_role"("p_user_id" "uuid", "p_role" "text", "p_etablissement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_set_user_role"("p_user_id" "uuid", "p_role" "text", "p_etablissement_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "uuid", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "uuid", "p_motif" "text") TO "authenticated";
 
 
 
@@ -82693,6 +83102,10 @@ GRANT ALL ON TABLE "public"."conversions_liberal" TO "service_role";
 
 
 
+GRANT SELECT ON TABLE "public"."copies_bulletins_paie" TO "service_role";
+
+
+
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."cotisations_sociales" TO "authenticated";
 GRANT ALL ON TABLE "public"."cotisations_sociales" TO "service_role";
 
@@ -83259,6 +83672,10 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."shifts" TO "authenticated";
 
 
 GRANT ALL ON TABLE "public"."signalements" TO "service_role";
+
+
+
+GRANT SELECT ON TABLE "public"."signalements_copies_bulletins" TO "service_role";
 
 
 

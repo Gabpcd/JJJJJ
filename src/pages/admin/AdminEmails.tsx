@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { avecDelai } from '@/lib/avecDelai';
 import { envoyerEmailConfirme } from '@/lib/envoiEmailConfirme';
+import { creerUuidV4 } from '@/lib/uuid';
 
 // Données fictives pour prévisualiser et tester les templates transactionnels.
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
@@ -121,7 +122,7 @@ export default function AdminEmails() {
     verrouEnvoi.current = true;
     setSending(type);
     const operation = `${user.id}:${type}`;
-    const cle = clesEnvoi.current.get(operation) || `admin-test:${crypto.randomUUID()}`;
+    const cle = clesEnvoi.current.get(operation) || `admin-test:${creerUuidV4()}`;
     clesEnvoi.current.set(operation, cle);
     try {
       await envoyerEmailConfirme({ type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] }, cle);

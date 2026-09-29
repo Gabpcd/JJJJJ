@@ -182,7 +182,7 @@ export function BulletinsPaieContent() {
           {MENTION_SIMULATION_PAIE}
         </p>
         <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-xs text-muted-foreground" role="note">
-          Jolene n’est pas ton employeur : seul l’établissement employeur peut émettre le bulletin de paie officiel. Cette vue contient donc uniquement des simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
+          Le bulletin officiel est établi sous la responsabilité de l’employeur, éventuellement par son prestataire de paie. Cette section contient uniquement des simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
         </div>
         {missionCible && (
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-sm" role="status">

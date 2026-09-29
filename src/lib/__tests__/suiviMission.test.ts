@@ -52,10 +52,18 @@ describe('suivi commun : seuls les états canoniques confirment une étape', () 
     const etape = construireSuiviMission({ ...mission, type_contrat_applique: null }, vide()).find(e => e.id === 'document')!;
     expect(etape).toMatchObject({ titre: 'Document financier', statut: 'Régime à confirmer', etat: 'inconnu' });
   });
-  it('un bulletin requiert un PDF et un statut canonique émis ou payé', () => {
-    for (const [statut, pdf_s3_key, etat] of [['EMIS', 'bulletin.pdf', 'confirme'], ['EMIS', null, 'a_verifier'], ['INCONNU', 'bulletin.pdf', 'a_verifier']]) {
+  it('un PDF de simulation ne prouve jamais une copie officielle, même marqué payé', () => {
+    for (const [statut, pdf_s3_key] of [['EMIS', 'bulletin.pdf'], ['PAYE', 'bulletin.pdf'], ['EMIS', null]]) {
       const lectures = vide(); lectures.documents = { etat: 'disponible', lignes: [{ statut, pdf_s3_key }] };
-      expect(construireSuiviMission({ ...mission, type_contrat_applique: 'SALARIE' }, lectures).find(e => e.id === 'document')!).toMatchObject({ titre: 'Bulletin de paie', etat });
+      expect(construireSuiviMission({ ...mission, type_contrat_applique: 'SALARIE' }, lectures).find(e => e.id === 'document')!).toMatchObject({ titre: 'Copie du bulletin officiel', etat: 'a_verifier' });
+    }
+  });
+  it('seule une copie officielle publiée confirme le document, jamais le règlement', () => {
+    for (const statut of ['PUBLIEE', 'REMPLACEE', 'RETIREE']) {
+      const lectures = vide(); lectures.documents = { etat: 'disponible', lignes: [{ statut, type_document: 'COPIE_BULLETIN_OFFICIEL' }] };
+      const etapes = construireSuiviMission({ ...mission, type_contrat_applique: 'SALARIE' }, lectures);
+      expect(etapes.find(e => e.id === 'document')!.etat).toBe(statut === 'PUBLIEE' ? 'confirme' : 'a_verifier');
+      expect(etapes.find(e => e.id === 'reglement')!.etat).toBe('inconnu');
     }
   });
   it.each([

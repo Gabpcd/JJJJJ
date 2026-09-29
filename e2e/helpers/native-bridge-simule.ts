@@ -6,6 +6,7 @@ export async function simulerBridgeNatif(page: Page, platform: 'ios' | 'android'
     const w = window as any;
     const callbacks = new Map<string, { plugin: string; event: string; callback: Function }>();
     const state = { permission: 'granted', update, storeOpened: false, calls: [] as string[], next: 0,
+      files: {} as Record<string, string>, fileSizes: {} as Record<string, number>, shares: [] as { url: string; data: string }[],
       emit(plugin: string, event: string, value: unknown) { for (const listener of callbacks.values()) if (listener.plugin === plugin && listener.event === event) listener.callback(value); },
     };
     w.__native = state;
@@ -18,6 +19,7 @@ export async function simulerBridgeNatif(page: Page, platform: 'ios' | 'android'
       Keyboard: ['setResizeMode', 'setScroll', 'setAccessoryBarVisible', 'hide'],
       Preferences: ['get', 'set', 'remove'], Haptics: ['impact', 'selectionStart', 'selectionEnd', 'selectionChanged'],
       NativeBiometric: ['isAvailable'],
+      Filesystem: ['mkdir', 'readdir', 'writeFile', 'getUri', 'deleteFile'], Share: ['share'],
     };
     w.Capacitor = {
       PluginHeaders: Object.entries(plugins).map(([name, methods]) => ({ name, methods: [
@@ -39,6 +41,18 @@ export async function simulerBridgeNatif(page: Page, platform: 'ios' | 'android'
         if (plugin === 'App' && method === 'getState') return { isActive: true };
         if (plugin === 'Network') return { connected: true, connectionType: 'wifi' };
         if (plugin === 'NativeBiometric') return { isAvailable: false };
+        if (plugin === 'Filesystem') {
+          if (method === 'readdir') return { files: Object.keys(state.files).filter(path => path.startsWith(`${options.path}/`)).map(path => ({ name: path.slice(options.path.length + 1), type: 'file', size: state.fileSizes[path] ?? atob(state.files[path]).length })) };
+          if (method === 'writeFile') { state.files[options.path] = options.data; return { uri: `file:///cache/${options.path}` }; }
+          if (method === 'getUri') return { uri: `file:///cache/${options.path}` };
+          if (method === 'deleteFile') { delete state.files[options.path]; delete state.fileSizes[options.path]; }
+          return {};
+        }
+        if (plugin === 'Share' && method === 'share') {
+          const data = state.files[options.url.replace('file:///cache/', '')];
+          if (!data) throw Error('Fichier de partage absent');
+          state.shares.push({ url: options.url, data }); return { activityType: 'cible-simulee' };
+        }
         if (plugin === 'PushNotifications') {
           if (method.includes('Permissions')) return { receive: state.permission };
           if (method === 'register') state.emit(plugin, 'registration', { value: 'native-fixture-token' });

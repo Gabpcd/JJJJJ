@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { verifierFichierDocument } from '@/lib/documentUpload';
+import { creerUuidV4 } from '@/lib/uuid';
 import { toast } from 'sonner';
 import SignatureCanvas from '@/components/SignatureCanvas';
 import { buildContratServiceTexte, CONTRAT_SERVICE_VERSION, hashContratTexte } from '@/constantes/contratServiceEtablissement';
@@ -201,7 +202,7 @@ export default function FinaliserInscriptionEtab() {
     try {
       // Une nouvelle clé évite tout écrasement d'une preuve déjà vérifiée et
       // reste compatible avec la politique Storage immuable.
-      const path = `${user.id}/rib-etablissement-${Date.now()}-${globalThis.crypto.randomUUID()}.${validation.extension}`;
+      const path = `${user.id}/rib-etablissement-${Date.now()}-${creerUuidV4()}.${validation.extension}`;
       const ancienRibKey = etabInfo?.rib_s3_key && etabInfo.rib_s3_key !== 'legacy/auto-backfill'
         ? etabInfo.rib_s3_key
         : null;

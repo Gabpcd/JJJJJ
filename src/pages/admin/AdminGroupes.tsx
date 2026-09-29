@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send, Edit3, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { envoyerEmailConfirme } from '@/lib/envoiEmailConfirme';
+import { creerUuidV4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 
@@ -272,7 +273,7 @@ export default function AdminGroupes() {
     const contenu = { subject: emailSubject, body: emailBody, groupe: groupeNom };
     const signature = JSON.stringify([emails, contenu]);
     if (campagneEmail.current?.signature !== signature) {
-      campagneEmail.current = { signature, envoyes: new Set(), cles: new Map(emails.map(e => [e, `admin-broadcast:${crypto.randomUUID()}`])) };
+      campagneEmail.current = { signature, envoyes: new Set(), cles: new Map(emails.map(e => [e, `admin-broadcast:${creerUuidV4()}`])) };
     }
     const campagne = campagneEmail.current;
     verrouEmail.current = true;
