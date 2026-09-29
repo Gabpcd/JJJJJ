@@ -6,8 +6,9 @@ import { Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { avecDelai } from '@/lib/avecDelai';
+import { signalerVerification, VERIFIER_MISE_A_JOUR } from '@/lib/nativeStoreUpdateEvents';
 
-export const VERIFIER_MISE_A_JOUR = 'jolene:check-store-update';
+export { VERIFIER_MISE_A_JOUR } from '@/lib/nativeStoreUpdateEvents';
 const APPLE_ID = '6774672845';
 
 /** Native store availability comes from the store, never from a Git commit. */
@@ -30,11 +31,17 @@ export function NativeStoreUpdate() {
     if (!Capacitor.isNativePlatform()) return;
     let disposed = false;
     let enCours = false;
+    let retourManuel = false;
     let derniereVerification = 0;
     const verifier = async (manuel = false) => {
+      if (manuel) {
+        retourManuel = true;
+        signalerVerification(true);
+      }
       if (enCours || (!manuel && Date.now() - derniereVerification < 60 * 60_000)) return;
       if (!Capacitor.isPluginAvailable('AppUpdate')) {
-        if (manuel) toast.info('Consultez le store pour vérifier la version disponible.');
+        if (retourManuel) signalerVerification(false, 'Consultez le store pour vérifier la version disponible.');
+        retourManuel = false;
         return;
       }
       enCours = true;
@@ -44,16 +51,18 @@ export function NativeStoreUpdate() {
         if (disposed) return;
         const disponible = info.updateAvailability === AppUpdateAvailability.UPDATE_AVAILABLE;
         setVersion(disponible ? info.availableVersionName || info.availableVersionCode || '' : null);
-        if (disponible && manuel) setFerme(false);
-        else if (manuel) {
-          if (info.updateAvailability === AppUpdateAvailability.UPDATE_NOT_AVAILABLE) toast.success('Jolene est à jour sur cet appareil.');
-          else toast.info('La disponibilité de la mise à jour n’a pas pu être confirmée. Réessayez plus tard.');
+        if (disponible && retourManuel) setFerme(false);
+        if (retourManuel) {
+          const message = disponible ? '' : info.updateAvailability === AppUpdateAvailability.UPDATE_NOT_AVAILABLE
+            ? 'Jolene est à jour sur cet appareil.'
+            : 'La disponibilité de la mise à jour n’a pas pu être confirmée. Réessayez plus tard.';
+          signalerVerification(false, message);
         }
       } catch {
         // Failure is not evidence that the installed app is current.
         derniereVerification = Date.now() - 55 * 60_000;
-        if (manuel && !disposed) toast.error('Impossible de vérifier les mises à jour. Vérifiez votre connexion puis réessayez.');
-      } finally { enCours = false; }
+        if (retourManuel && !disposed) signalerVerification(false, 'Impossible de vérifier les mises à jour. Vérifiez votre connexion puis réessayez.');
+      } finally { enCours = false; retourManuel = false; }
     };
     const manuel = () => { void verifier(true); };
     window.addEventListener(VERIFIER_MISE_A_JOUR, manuel);

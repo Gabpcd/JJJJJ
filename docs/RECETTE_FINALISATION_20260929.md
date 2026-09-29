@@ -75,3 +75,11 @@ avis du store et erreurs réseau. La réception effective APNs/FCM sur un
 téléphone verrouillé et la disponibilité du plugin de mise à jour dans le
 prochain binaire nécessitent encore une validation sur appareils physiques.
 Ces tests ne constituent pas une déclaration de préparation nationale complète.
+
+La CI iPhone a ensuite révélé un chevauchement entre le message d'erreur du
+store et le bouton de réessai. Le retour de la vérification manuelle est
+désormais affiché dans « Mon compte », sous le bouton, sans notification
+flottante. Le bouton indique le chargement puis permet de réessayer ; une
+vérification automatique déjà en cours peut répondre à cette demande manuelle.
+Le scénario conserve les clics ordinaires, sans clic forcé ni suppression des
+messages d'erreur dans les tests.

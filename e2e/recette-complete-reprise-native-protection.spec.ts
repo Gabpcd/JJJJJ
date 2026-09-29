@@ -84,14 +84,21 @@ test('le dialogue de duplication reste ouvert après une absence longue',async({
  await expect(page).toHaveURL(/\/etablissement\/missions$/);
 });
 import {simulerSoignant,entrer as entrerSoignant} from './helpers/recette-complete-soignant';
-test('panne store puis réessai et fermeture de l’avis',async({page},info)=>{
- await simulerBridgeNatif(page, info.project.name === 'android' ? 'android' : 'ios',-1);await simulerSoignant(page);
+for (const role of ['soignant', 'etablissement'] as const) {
+test(`panne store puis réessai et fermeture de l’avis (${role})`,async({page},info)=>{
+ await simulerBridgeNatif(page, info.project.name === 'android' ? 'android' : 'ios',-1);
+ if (role === 'soignant') await simulerSoignant(page); else await simulerEtablissement(page);
  await page.route('**/rest/v1/rpc/fn_upsert_token_push',r=>r.fulfill({json:null}));
- await entrerSoignant(page,'connexion');await page.goto('/soignant/mon-compte');
+ if (role === 'soignant') await entrerSoignant(page,'connexion'); else await entrer(page,'connexion');
+ await page.goto(`/${role}/mon-compte`);
  const banner=page.getByRole('complementary',{name:'Mise à jour de Jolene'});
  await expect(banner).toBeHidden();
  await page.getByRole('button',{name:'Vérifier les mises à jour',exact:true}).click();
  await expect(page.getByText('Impossible de vérifier les mises à jour. Vérifiez votre connexion puis réessayez.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('status').filter({hasText:'Impossible de vérifier les mises à jour.'})).toBeVisible();
+ await expect(page.locator('[data-sonner-toast]').filter({hasText:'Impossible de vérifier les mises à jour.'})).toHaveCount(0);
+ await info.attach('erreur-store',{body:await page.locator('main').ariaSnapshot(),contentType:'text/plain'});
+ await page.screenshot({path:info.outputPath('erreur-store.png'),fullPage:true});
  await expect(page.getByText('Jolene est à jour sur cet appareil.',{exact:true})).toBeHidden();
  await page.evaluate(()=>(window as any).__native.update=2);
  await page.getByRole('button',{name:'Vérifier les mises à jour',exact:true}).click();
@@ -100,3 +107,4 @@ test('panne store puis réessai et fermeture de l’avis',async({page},info)=>{
  await page.getByRole('button',{name:'Vérifier les mises à jour',exact:true}).click();await expect(banner).toBeVisible();
  await info.attach('apres-reessai',{body:await banner.ariaSnapshot(),contentType:'text/plain'});
 });
+}
