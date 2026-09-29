@@ -106,6 +106,46 @@ test('dépôt : envoi en panne puis publication en panne, reprise même intentio
   expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]); aucunPaiement(r.state.appels);
 });
 
+test('upload reçu puis réponse perdue : reprise après rechargement sur doublon HTTP 400, sans randomUUID', async ({ page }, info) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
+  });
+  const e = await simulerEtablissement(page); const r = recetteCopies(); const pdf = r.enregistrerPdf();
+  r.state.perdreReponseUpload = true;
+  await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
+  let dialog = await ouvrirDepot(page, pdf);
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('L’envoi n’a pas été confirmé');
+  await expect(dialog.getByRole('alert')).toBeInViewport({ ratio: 1 });
+  expect(r.state.intentions.size).toBe(1); expect(r.state.uploads.size).toBe(1); expect(r.state.copies).toHaveLength(0);
+  const [cle, reservation] = [...r.state.intentions.entries()][0];
+  expect(cle).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const reservationInitiale = structuredClone(reservation);
+  await preuveEtab(page, 'copie-upload-recu-reponse-perdue', info);
+
+  await page.reload(); dialog = await ouvrirDepot(page, pdf);
+  r.state.pannePublication = true;
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('La publication n’a pas été confirmée');
+  await expect(dialog.getByRole('alert')).toBeInViewport({ ratio: 1 });
+  expect(r.state.intentions.size).toBe(1); expect(r.state.intentions.get(cle)).toEqual(reservationInitiale);
+  expect(r.state.uploads.size).toBe(1); expect(r.state.uploads.get(reservation.storage_path)).toEqual(pdf.buffer);
+  expect(r.state.copies).toHaveLength(0);
+  expect(r.state.appels.filter(a => a.nom === 'copies-bulletins' && a.body.action === 'finaliser')).toHaveLength(1);
+  await preuveEtab(page, 'copie-doublon-400-verification-encore-requise', info);
+
+  r.state.pannePublication = false;
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(r.state.intentions.size).toBe(1); expect(r.state.uploads.size).toBe(1); expect(r.state.copies).toHaveLength(1);
+  expect(r.state.copies[0].sha256).toBe(pdf.sha256);
+  expect(r.state.appels.filter(a => a.nom === 'upload')).toHaveLength(3);
+  expect(r.state.appels.filter(a => a.nom === 'fn_reserver_copie_bulletin').map(a => a.body.p_idempotence)).toEqual([cle, cle, cle]);
+  await page.reload(); await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  await preuveEtab(page, 'copie-reprise-doublon-400-publiee', info);
+  expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]); aucunPaiement(r.state.appels);
+});
+
 test('publication enregistrée mais réponse perdue : réessai sans nouvelle copie', async ({ page }, info) => {
   const e = await simulerEtablissement(page); const r = recetteCopies(); const pdf = r.enregistrerPdf(); r.state.perdreReponsePublication = true;
   await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');

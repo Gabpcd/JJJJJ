@@ -1,5 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
+import { StorageApiError, StorageClient } from '@supabase/storage-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copieBulletinTelechargeable, CopieRetireeErreur, idempotenceCopie, nouvelleIdempotenceCopie, publierCopieBulletin, validerListeCopiesBulletins, type CopieBulletin, type DepotCopieBulletin } from '../copiesBulletins';
 
@@ -68,7 +69,7 @@ describe('copies officielles : refus du PDF distinct d’une publication incerta
     expect(banc.invoke).toHaveBeenCalledWith('copies-bulletins', { body: { action: 'finaliser', copie_id: copie.id, destinataire_confirme: true } });
 
     // An explicit same-file retry still uses the immutable reservation/upload.
-    upload.mockResolvedValue({ error: { statusCode: '409' } });
+    upload.mockResolvedValue({ error: new StorageApiError('The resource already exists', 409, '409') });
     await expect(publierCopieBulletin(depot, file, copie.sha256, id, vi.fn())).rejects.toThrow(messageRefus);
     expect(await idempotenceCopie('employeur', depot, copie.sha256)).toBe(id);
     expect(error.context.bodyUsed).toBe(false);
@@ -122,6 +123,66 @@ describe('copies officielles : refus du PDF distinct d’une publication incerta
   });
 });
 
+describe('copies officielles : doublons transformés par le vrai SDK Storage', () => {
+  const depot: DepotCopieBulletin = { etablissementId: copie.etablissement_id, soignantId: copie.soignant_id,
+    periodeDebut: copie.periode_debut, periodeFin: copie.periode_fin, missionIds: copie.mission_ids,
+    remplaceId: null, motifRemplacement: null };
+  const file = new File(['%PDF-test'], 'copie.pdf', { type: 'application/pdf' });
+  const reservation = Object.freeze({ id: copie.id, statut: 'RESERVEE', bucket: 'copies-bulletins-paie', storage_path: `${copie.id}/original.pdf` });
+  function storageRepond(status: number, body: Record<string, string>) {
+    const requete = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+    const api = new StorageClient('https://recette.invalid/storage/v1', {}, requete).from(reservation.bucket);
+    banc.storage.mockReturnValue(api);
+    return { requete, upload: vi.spyOn(api, 'upload') };
+  }
+  beforeEach(() => {
+    sessionStorage.clear(); vi.stubGlobal('crypto', webcrypto);
+    banc.rpc.mockReset().mockResolvedValue({ data: reservation, error: null }); banc.storage.mockReset();
+    banc.invoke.mockReset().mockResolvedValue({ data: { ok: true, statut: 'PUBLIEE' }, error: null });
+  });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it.each([
+    { nom: 'legacy HTTP 400', status: 400, code: '400', body: { statusCode: '400', error: 'Duplicate', message: 'The resource already exists' } },
+    { nom: 'legacy HTTP 409', status: 409, code: '409', body: { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' } },
+    { nom: 'code moderne ResourceAlreadyExists', status: 409, code: 'ResourceAlreadyExists', body: { code: 'ResourceAlreadyExists', message: 'The resource already exists' } },
+  ])('reprend $nom sans écraser le fichier, puis exige la finalisation', async ({ status, code, body }) => {
+    const id = await idempotenceCopie('employeur', depot, copie.sha256);
+    const sdk = storageRepond(status, body);
+    await expect(publierCopieBulletin(depot, file, copie.sha256, id, vi.fn())).resolves.toBe(copie.id);
+    const resultat = await sdk.upload.mock.results[0].value;
+    expect(resultat.error).toBeInstanceOf(StorageApiError);
+    expect(resultat.error).toMatchObject({ status, statusCode: code, message: 'The resource already exists' });
+    expect(resultat.error).not.toHaveProperty('error');
+    expect(sdk.requete).toHaveBeenCalledTimes(1);
+    expect(sdk.requete.mock.calls[0][0]).toBe(`https://recette.invalid/storage/v1/object/${reservation.bucket}/${reservation.storage_path}`);
+    expect(new Headers(sdk.requete.mock.calls[0][1]?.headers).get('x-upsert')).toBe('false');
+    expect(banc.invoke).toHaveBeenCalledExactlyOnceWith('copies-bulletins', { body: { action: 'finaliser', copie_id: copie.id, destinataire_confirme: true } });
+    expect(await idempotenceCopie('employeur', depot, copie.sha256)).toBe(id);
+    expect(banc.rpc).toHaveBeenCalledTimes(1); expect(reservation.statut).toBe('RESERVEE');
+  });
+
+  it.each([
+    { nom: '400 générique', status: 400, body: { statusCode: '400', error: 'InvalidRequest', message: 'Invalid request' } },
+    { nom: 'message partiel', status: 400, body: { statusCode: '400', message: 'The resource already exists: access denied' } },
+    { nom: 'code de droit en HTTP 400', status: 400, body: { code: 'AccessDenied', message: 'The resource already exists' } },
+    { nom: '401 avec code doublon', status: 401, body: { code: 'ResourceAlreadyExists', message: 'The resource already exists' } },
+    { nom: '403 avec ancien code 400', status: 403, body: { statusCode: '400', error: 'Duplicate', message: 'The resource already exists' } },
+    { nom: 'erreur serveur', status: 500, body: { statusCode: '500', message: 'The resource already exists' } },
+  ])('ne finalise pas après $nom', async ({ status, body }) => {
+    storageRepond(status, body);
+    await expect(publierCopieBulletin(depot, file, copie.sha256, copie.id, vi.fn())).rejects.toThrow('L’envoi n’a pas été confirmé. Gardez ce fichier et réessayez');
+    expect(banc.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(['COPIE_INTEGRITE_INVALIDE', 'COPIE_ACCES_REFUSE'])('le doublon ne masque jamais le refus final de contrôle %s', async code => {
+    storageRepond(400, { statusCode: '400', error: 'Duplicate', message: 'The resource already exists' });
+    banc.invoke.mockResolvedValue({ data: null, error: new FunctionsHttpError(new Response(JSON.stringify({ error: code }), { status: code === 'COPIE_INTEGRITE_INVALIDE' ? 409 : 403 })) });
+    await expect(publierCopieBulletin(depot, file, copie.sha256, copie.id, vi.fn())).rejects.toThrow('La publication n’a pas été confirmée. Le serveur doit vérifier le PDF et vos droits.');
+    expect(banc.invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('copies officielles : reprise explicite après retrait', () => {
   const depot: DepotCopieBulletin = { etablissementId: copie.etablissement_id, soignantId: copie.soignant_id,
     periodeDebut: copie.periode_debut, periodeFin: copie.periode_fin, missionIds: copie.mission_ids,
@@ -151,6 +212,24 @@ describe('copies officielles : reprise explicite après retrait', () => {
     expect(await idempotenceCopie('employeur', depot, 'b'.repeat(64))).not.toBe(initiale);
     expect(await idempotenceCopie('employeur', { ...depot, soignantId: copie.etablissement_id }, copie.sha256)).not.toBe(initiale);
     expect(await idempotenceCopie('employeur', depot, copie.sha256)).toBe(initiale);
+  });
+
+  it('sans randomUUID, conserve un UUID v4 sécurisé après rechargement et renouvelle seulement sur action explicite', async () => {
+    const alea = vi.fn((octets: Uint8Array) => webcrypto.getRandomValues(octets));
+    vi.stubGlobal('crypto', { subtle: webcrypto.subtle, getRandomValues: alea });
+    const initiale = await idempotenceCopie('employeur', depot, copie.sha256);
+    expect(initiale).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(alea).toHaveBeenCalledTimes(1);
+    expect(alea.mock.calls[0][0]).toHaveLength(16);
+    vi.resetModules();
+    const rechargement = await import('../copiesBulletins');
+    expect(await rechargement.idempotenceCopie('employeur', depot, copie.sha256)).toBe(initiale);
+    expect(alea).toHaveBeenCalledTimes(1);
+    const nouvelle = await rechargement.nouvelleIdempotenceCopie('employeur', depot, copie.sha256, initiale);
+    expect(nouvelle).not.toBe(initiale);
+    expect(nouvelle).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(alea).toHaveBeenCalledTimes(2);
+    expect(await rechargement.idempotenceCopie('employeur', depot, copie.sha256)).toBe(nouvelle);
   });
 
   it.each([

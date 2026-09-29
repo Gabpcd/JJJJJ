@@ -133,7 +133,16 @@ async function obtenirIdempotenceCopie(userId: string, depot: DepotCopieBulletin
     const previous = sessionStorage.getItem(key);
     if (previous && /^[0-9a-f-]{36}$/i.test(previous) && previous !== idempotenceRetiree) return previous;
   } catch { /* The caller retains its intention for in-memory retries. */ }
-  const id = crypto.randomUUID();
+  // iOS 15.0–15.3 provides secure random bytes, but not randomUUID yet.
+  let id: string;
+  if (typeof crypto.randomUUID === 'function') id = crypto.randomUUID();
+  else {
+    const octets = crypto.getRandomValues(new Uint8Array(16));
+    octets[6] = (octets[6] & 0x0f) | 0x40;
+    octets[8] = (octets[8] & 0x3f) | 0x80;
+    const hex = Array.from(octets, octet => octet.toString(16).padStart(2, '0')).join('');
+    id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
   try { sessionStorage.setItem(key, id); } catch { /* Session storage may be disabled. */ }
   return id;
 }
@@ -160,6 +169,14 @@ async function pdfRefuseParServeur(error: unknown): Promise<boolean> {
   } catch { return false; }
 }
 
+function fichierCopieDejaEnvoye(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const { status, statusCode, message } = error as { status?: number; statusCode?: string; message?: string };
+  // StorageApiError preserves the HTTP status (including modern 409 codes),
+  // but drops the legacy response's `error: 'Duplicate'` field.
+  return status === 409 || (status === 400 && statusCode === '400' && message === 'The resource already exists');
+}
+
 export async function publierCopieBulletin(depot: DepotCopieBulletin, file: File, sha256: string, idempotence: string, progression: (message: string) => void): Promise<string> {
   progression('Réservation du dépôt…');
   const { data, error } = await avecDelai(supabase.rpc('fn_reserver_copie_bulletin' as any, {
@@ -182,7 +199,7 @@ export async function publierCopieBulletin(depot: DepotCopieBulletin, file: File
       'L’envoi n’a pas été confirmé à temps. Réessayez avec le même fichier pour reprendre ce dépôt.');
     // A lost upload response can leave the immutable object in place. The
     // server must verify that exact reservation before declaring publication.
-    if (upload.error && !['409', 'Duplicate'].includes(String((upload.error as { statusCode?: string; error?: string }).statusCode ?? (upload.error as { error?: string }).error ?? ''))) {
+    if (upload.error && !fichierCopieDejaEnvoye(upload.error)) {
       throw new Error('L’envoi n’a pas été confirmé. Gardez ce fichier et réessayez : le même dépôt sera repris.');
     }
   }

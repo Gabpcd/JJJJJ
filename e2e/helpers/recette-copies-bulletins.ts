@@ -27,7 +27,7 @@ export function recetteCopies() {
     pdfRefuses: new Set<string>(),
     appels: [] as { nom: string; body: any }[],
     panneListe: false, panneUpload: false, pannePublication: false,
-    perdreReponsePublication: false, panneLecture: false, lectureCorrompue: false,
+    perdreReponseUpload: false, perdreReponsePublication: false, panneLecture: false, lectureCorrompue: false,
     listeInvalide: false,
   };
   function enregistrerPdf(pdf = pdfFictif()) { state.fichiers.set(pdf.sha256, pdf); return pdf; }
@@ -89,7 +89,7 @@ export function recetteCopies() {
       const path = new URL(req.url()).pathname.split('/copies-bulletins-paie/')[1];
       state.appels.push({ nom: 'upload', body: { path } });
       if (state.panneUpload) return route.fulfill({ status: 503, json: { message: 'Envoi indisponible' } });
-      if (state.uploads.has(path)) return route.fulfill({ status: 409, json: { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' } });
+      if (state.uploads.has(path)) return route.fulfill({ status: 400, json: { statusCode: '400', error: 'Duplicate', message: 'The resource already exists' } });
       // Le protocole WebKit omet les octets des pièces multipart dans postData.
       // Sa simulation vérifie l'intention et le transport, pas les octets envoyés
       // (vérifiés séparément avec Storage réel). Chromium expose le corps complet.
@@ -99,6 +99,7 @@ export function recetteCopies() {
       const fichier = webkit ? state.fichiers.get(intention!.body.p_sha256_attendu)
         : [...state.fichiers.values()].find(f => req.postDataBuffer()?.includes(f.buffer));
       expect(fichier).toBeTruthy(); state.uploads.set(path, fichier!.buffer);
+      if (state.perdreReponseUpload) { state.perdreReponseUpload = false; return route.abort('failed'); }
       return route.fulfill({ json: { Key: `copies-bulletins-paie/${path}` } });
     });
     await page.route('**/functions/v1/copies-bulletins', async route => {
