@@ -384,6 +384,9 @@ jobs:
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
+            tests/security/suivi-escrow-mission.test.sql
+            tests/security/financial-audit-jwt-role.test.sql
+            tests/security/stripe-refund-identifiers.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
@@ -471,6 +474,8 @@ jobs:
             tests/admin/security/invoice-payment-state-cas.test.ts \
             tests/admin/security/mission-payment-persistence.test.ts \
             tests/admin/security/refund-queue-recovery.test.ts \
+            tests/admin/security/stripe-escrow-reversal.test.ts \
+            tests/admin/security/stripe-transfer-reversal-hardening.test.ts \
             tests/admin/security/stripe-payment-rbac.test.ts \
             tests/admin/security/stripe-webhook-source-reconciliation.test.ts
 

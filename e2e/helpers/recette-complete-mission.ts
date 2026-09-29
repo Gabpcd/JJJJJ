@@ -210,6 +210,7 @@ export function creerMissionSimulee() {
             mission.statut='TERMINEE';return json({success:true});
           case 'fn_mes_factures_honoraires': return json(state.facture?[state.facture]:[]);
           case 'fn_mes_bulletins_paie': return json([]);
+          case 'fn_suivi_escrow_mission':
           case 'fn_mes_paiements_escrow': return json([]);
           case 'fn_mes_factures': return json([]);
           case 'fn_paiements_etablissement': return json({paiements:[]});

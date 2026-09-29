@@ -28,7 +28,18 @@ async function compact(page: Page, info: TestInfo, nom: string, hauteurMax = 260
   await page.screenshot({ path: info.outputPath(`${nom}.png`) });
   await info.attach(nom, { path: info.outputPath(`${nom}.png`), contentType: 'image/png' });
 }
-async function recharger(page: Page) { await stabiliserActionsNationales(page); await page.reload(); await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled(); }
+async function recharger(page: Page) {
+  // La carte de pointage se rafraîchit toutes les 5 s. Figer les timers avant
+  // d'attendre les requêtes évite un nouveau fetch entre l'attente et reload.
+  const maintenant = await page.evaluate(() => Date.now());
+  // pauseAt est rejoué après reload avec une date mobile. Fixer d'abord Date
+  // évite que la cible devienne passée entre deux appels Playwright en CI.
+  await page.clock.setFixedTime(maintenant);
+  await page.clock.pauseAt(maintenant);
+  await stabiliserActionsNationales(page);
+  await page.reload();
+  await page.clock.setFixedTime(maintenant);
+  await page.clock.resume(); await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled(); }
 async function actualiser(page: Page) { await region(page).getByRole('button', { name: 'Actualiser le suivi' }).click(); await expect(region(page).getByRole('button', { name: 'Actualiser le suivi' })).toBeEnabled(); }
 const chemin = (role: RoleRecette) => `${role === 'SOIGNANT' ? '/soignant' : '/etablissement'}/missions/${ids.mission}`;
 
@@ -102,7 +113,7 @@ for (const role of roles) {
         await page.getByRole('button', { name: 'Fermer', exact: true }).click();
       }
       await preuveMission(page, info, `suivi-${role}-reception-enregistree`);
-      expect(suivi.lectures.every(l => l.missionId === `eq.${ids.mission}`)).toBe(true);
+      expect(suivi.lectures.every(l => l.missionId === (l.table === 'fn_suivi_escrow_mission' ? ids.mission : `eq.${ids.mission}`))).toBe(true);
       expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
       expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
     } finally { await info.attach('suivi-api-simulee', { body: JSON.stringify({ state, suivi: { ...suivi, erreurs: [...suivi.erreurs] } }, null, 2), contentType: 'application/json' }); }

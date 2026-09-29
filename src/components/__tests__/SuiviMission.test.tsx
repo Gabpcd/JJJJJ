@@ -20,7 +20,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: {
     };
     return requete;
   },
-  rpc: (_: string, body: unknown) => ({ abortSignal: (signal: AbortSignal) => banc.permission(body, signal) }),
+  rpc: (name: string, body: { p_mission_id?: string }) => ({ abortSignal: (signal: AbortSignal) => name === 'fn_suivi_escrow_mission' ? banc.lire(name, body.p_mission_id, signal) : banc.permission(body, signal) }),
 } }));
 const mission = { id: 'mission-a', etablissement_id: 'etab', soignant_assigne_id: 'soignant', statut: 'ASSIGNEE', type_contrat_applique: 'LIBERAL' };
 const reponse = (data: unknown[]) => Promise.resolve({ data, error: null });

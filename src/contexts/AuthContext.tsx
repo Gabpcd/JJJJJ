@@ -144,11 +144,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // pas seulement après le formulaire de connexion. Le module est idempotent.
   useEffect(() => {
     if (loading) return;
+    let disposed = false;
+    let remove: (() => Promise<void>) | undefined;
     if (userId) {
-      void import('@/lib/pushNative').then(({ initNativePush }) => initNativePush(userId));
+      void import('@/lib/pushNative').then(({ initNativePush }) => { if (!disposed) return initNativePush(userId); });
+      // Permissions can change in Settings while the app stays alive. A resume
+      // also retries a registration that failed because the network was offline.
+      void import('@capacitor/core').then(async ({ Capacitor }) => {
+        if (!Capacitor.isNativePlatform() || disposed) return;
+        const { App } = await import('@capacitor/app');
+        const listener = await App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive && !disposed) void import('@/lib/pushNative').then(({ initNativePush }) => {
+            if (!disposed) return initNativePush(userId, { actualiser: true });
+          });
+        });
+        if (disposed) await listener.remove(); else remove = () => listener.remove();
+      }).catch(() => undefined);
     } else {
       void import('@/lib/pushNative').then(({ resetNativePushListeners }) => resetNativePushListeners());
     }
+    return () => { disposed = true; void remove?.(); };
   }, [loading, userId]);
 
   const connexion = useCallback(async (email: string, motDePasse: string, captchaToken?: string) => {

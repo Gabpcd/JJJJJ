@@ -59,5 +59,18 @@ et dumps ARIA avant/après, sans mot de passe, session ni secret Stripe.
 - Crons inactifs et queues financières étrangères vides avant chaque action
   de worker ; conservation explicite des écritures financières non supprimables.
 
-**Statut : non exécutée.** Aucun paiement ou remboursement n'est prouvé par ce
-document. Le harnais historique `recette-escrow-stripe.ts` reste verrouillé.
+**État de ce document au 28 septembre : non exécutée.** La matrice ci-dessus
+décrit le point de départ, pas le résultat actuel.
+
+## Mise à jour du 29 septembre
+
+Le circuit escrow a depuis été exercé avec des acteurs fictifs isolés : débit
+SEPA TEST de 283,56 €, remboursement du même montant, reversal et remboursement
+de la commission de 43,56 €. Le staging conserve le statut REMBOURSE et la file
+de remboursement TRAITE, sans versement bancaire au soignant. Les interfaces
+des deux rôles relisent ce remboursement réel avant/après rechargement ; voir
+`RECETTE_FINALISATION_20260929.md` pour les preuves et limites.
+
+La restriction du remboursement Connect interactif décrite plus haut n'est
+pas levée par cette recette escrow. Le harnais historique
+`recette-escrow-stripe.ts` reste verrouillé.

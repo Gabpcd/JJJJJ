@@ -63,9 +63,11 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const [newRef, setNewRef] = useState('');
   const [modifLoading, setModifLoading] = useState(false);
   const [stripeTransfer, setStripeTransfer] = useState<any>(null);
+  const [escrowPresent, setEscrowPresent] = useState(false);
 
   useEffect(() => {
     if (permissionsLoading) return;
+    setEscrowPresent(false);
     if (permissionsError) {
       setInfo(null);
       setPaiementExistant(null);
@@ -93,7 +95,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       setMontantNetReel('');
       setMontantNetDu('');
       try {
-        const [modeResponse, paiementResponse, transferResponse] = await Promise.all([
+        const [modeResponse, paiementResponse, transferResponse, escrowResponse] = await Promise.all([
           supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId }),
           supabase.from('paiements_soignant')
             .select('*')
@@ -107,11 +109,13 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             .in('statut', ['EN_ATTENTE', 'CHARGE_REUSSI', 'TRANSFERE', 'PAYE'])
             .order('cree_le', { ascending: false })
             .limit(1),
+          supabase.rpc('fn_suivi_escrow_mission' as any, { p_mission_id: missionId }),
         ]);
         if (modeResponse.error) throw modeResponse.error;
         if (paiementResponse.error) throw paiementResponse.error;
         if (transferResponse.error) throw transferResponse.error;
-        if (!Array.isArray(paiementResponse.data) || !Array.isArray(transferResponse.data)) {
+        if (escrowResponse.error) throw escrowResponse.error;
+        if (!Array.isArray(paiementResponse.data) || !Array.isArray(transferResponse.data) || !Array.isArray(escrowResponse.data)) {
           throw new Error('Historique de paiement incomplet');
         }
         const modeData = modeResponse.data as (InfoPaiement & { error?: string }) | null;
@@ -120,6 +124,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         }
         if (cancelled) return;
         setInfo(modeData);
+        setEscrowPresent(escrowResponse.data.length > 0);
         if (paiementResponse.data?.length) setPaiementExistant(paiementResponse.data[0]);
         if (transferResponse.data?.length) setStripeTransfer(transferResponse.data[0]);
       } catch (error) {
@@ -307,6 +312,15 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   }
 
   if (!info) return null;
+
+  // A managed payment, including a refunded one, must never offer a second
+  // manual payment or reuse a historical declaration as its current status.
+  if (escrowPresent) return (
+    <div className="card-base border-primary/20 space-y-2">
+      <p className="text-sm font-semibold">Paiement suivi par Jolene</p>
+      <p className="text-xs text-muted-foreground">Le paiement et ses éventuels remboursements sont gérés par Jolene. Aucune déclaration de paiement manuel n’est nécessaire ici.</p>
+    </div>
+  );
 
   const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 

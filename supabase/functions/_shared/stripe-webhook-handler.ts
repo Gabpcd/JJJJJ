@@ -7,6 +7,7 @@ import {
 import { assertStripeSecretMode, isProductionRuntime } from "./stripe-production.ts";
 import { releaseStripePaymentFlowClaimForExpiredSession } from "./stripe-payment-flow-claim.ts";
 import { writeRequiredFinancialAudit } from "./financial-audit.ts";
+import { requireEscrowReversalBinding } from "./stripe-escrow-reversal.ts";
 import {
   requireAcquiredStripeSourceCharge,
   StripeSourceChargeValidationError,
@@ -2726,7 +2727,9 @@ export async function handleStripeWebhook(
 
     // ── charge.refunded : rapprochement exact Refund → queue → avoir/escrow ──
     if (verified.source === "PLATFORM" && event.type === "charge.refunded") {
-      const charge = event.data.object as Stripe.Charge;
+      // Un retry d'un ancien événement doit comparer les remboursements aux
+      // totaux courants de la charge, pas à son instantané périmé.
+      const charge = await stripe.charges.retrieve((event.data.object as Stripe.Charge).id);
       const paymentIntentId = stripeObjectId(charge.payment_intent);
       if (!paymentIntentId) throw new Error(`Refunded charge ${charge.id} missing PaymentIntent`);
       const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -2746,7 +2749,11 @@ export async function handleStripeWebhook(
           ...(refundStartingAfter ? { starting_after: refundStartingAfter } : {}),
         });
         refunds.push(...page.data);
-        refundStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+        const next = page.has_more ? page.data.at(-1)?.id : undefined;
+        if (page.has_more && (!next || next === refundStartingAfter)) {
+          throw new Error(`Refunded charge ${charge.id} pagination incomplete`);
+        }
+        refundStartingAfter = next;
       } while (refundStartingAfter);
 
       const succeededRefundAmount = refunds
@@ -3419,7 +3426,25 @@ export async function handleStripeWebhook(
           p_navigateur: "stripe-webhook",
         }, "Transfer reversal audit failed");
       } else {
-        throw new Error(`Reversed transfer ${transfer.id} has no local binding`);
+        const escrow = await requireEscrowReversalBinding(stripe, supabaseAdmin, transfer);
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: escrow.soignant_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "FINANCE_TRANSFER_REVERSED",
+          p_type_ressource: "mission",
+          p_id_ressource: escrow.mission_id,
+          p_cle_s3: null,
+          p_details: {
+            paiement_escrow_id: escrow.id,
+            stripe_transfer_id: transfer.id,
+            amount: transfer.amount,
+            amount_reversed: transfer.amount_reversed,
+            reversal_total: transfer.reversed,
+            source: "ESCROW_DESTINATION_CHARGE",
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Escrow transfer reversal audit failed");
       }
       console.log(`transfer.reversed handled: ${transfer.id}`);
     }

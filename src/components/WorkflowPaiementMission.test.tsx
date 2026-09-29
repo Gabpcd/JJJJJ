@@ -103,6 +103,7 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
     mocks.permissionError = null;
     mocks.from.mockImplementation(() => queryResponse());
     mocks.rpc.mockImplementation((name: string) => {
+      if (name === 'fn_suivi_escrow_mission') return Promise.resolve({ data: [], error: null });
       if (name === 'fn_mode_paiement_mission') {
         return Promise.resolve({ data: salaryPaymentInfo, error: null });
       }
@@ -148,6 +149,7 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
   it('reste bloqué en cas d’erreur de chargement et permet une relance explicite', async () => {
     let attempts = 0;
     mocks.rpc.mockImplementation((name: string) => {
+      if (name === 'fn_suivi_escrow_mission') return Promise.resolve({ data: [], error: null });
       if (name !== 'fn_mode_paiement_mission') {
         return Promise.resolve({ data: { success: true }, error: null });
       }
@@ -167,4 +169,22 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
     expect(await screen.findByLabelText(/Montant réellement versé/i)).toBeInTheDocument();
     expect(attempts).toBe(2);
   });
+  it.each(['DEBITE', 'PAYE', 'REMBOURSE_EN_COURS', 'REMBOURSE'])('ne propose pas de second paiement quand un escrow %s existe', async statut => {
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve({ data: name === 'fn_suivi_escrow_mission' ? [{ statut, paye_le: null }] : { ...salaryPaymentInfo, mode_recommande: 'VIREMENT_NOTE_HONORAIRES', type_contrat_applique: 'LIBERAL' }, error: null }));
+    renderWorkflow();
+    expect(await screen.findByText('Paiement suivi par Jolene')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Déclarer le paiement effectué' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Honoraires à verser/)).not.toBeInTheDocument();
+  });
+
+  it('ne propose pas de paiement si la recherche escrow échoue puis réessaie', async () => {
+    let panne = true;
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve(name === 'fn_suivi_escrow_mission' ? { data: panne ? null : [], error: panne ? { message: 'Paiement géré indisponible' } : null } : { data: salaryPaymentInfo, error: null }));
+    renderWorkflow();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Paiement géré indisponible');
+    expect(screen.queryByRole('button', { name: 'Déclarer le paiement effectué' })).not.toBeInTheDocument();
+    panne = false; fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Virement de rémunération salariée')).toBeVisible();
+  });
+
 });

@@ -27,7 +27,7 @@ interface PrefEvenement {
   actif: boolean;
 }
 
-type AutorisationPushNative = 'loading' | 'granted' | 'prompt' | 'denied' | 'unavailable';
+type AutorisationPushNative = 'loading' | 'granted' | 'prompt' | 'denied' | 'registration-error' | 'unavailable';
 
 interface EventDef {
   type: string;
@@ -142,13 +142,15 @@ export default function PageParametresNotifications() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !user) return;
     let actif = true;
-    void import('@capacitor/push-notifications')
+    const verifier = () => { void import('@capacitor/push-notifications')
       .then(async ({ PushNotifications }) => {
         const permission = await PushNotifications.checkPermissions();
+        const { initNativePush, enregistrementPushConfirme } = await import('@/lib/pushNative');
+        if (permission.receive === 'granted') await initNativePush(user.id);
         if (!actif) return;
         setAutorisationPushNative(
           permission.receive === 'granted'
-            ? 'granted'
+            ? (enregistrementPushConfirme(user.id) ? 'granted' : 'registration-error')
             : permission.receive === 'denied'
               ? 'denied'
               : 'prompt',
@@ -156,8 +158,10 @@ export default function PageParametresNotifications() {
       })
       .catch(() => {
         if (actif) setAutorisationPushNative('unavailable');
-      });
-    return () => { actif = false; };
+      }); };
+    verifier();
+    const listener = import('@capacitor/app').then(({ App }) => App.addListener('appStateChange', ({ isActive }) => { if (isActive) verifier(); }));
+    return () => { actif = false; void listener.then(handle => handle.remove()).catch(() => undefined); };
   }, [user]);
 
   const activerPushSurAppareil = async () => {
@@ -345,10 +349,11 @@ export default function PageParametresNotifications() {
                     {autorisationPushNative === 'prompt' && 'Le canal est actif dans Jolene, mais le téléphone doit encore autoriser les notifications.'}
                     {autorisationPushNative === 'denied' && 'Les notifications sont bloquées par le téléphone. Réactivez Jolene dans les réglages système.'}
                     {autorisationPushNative === 'unavailable' && 'L’état système n’a pas pu être vérifié. Réessayez dans quelques instants.'}
+                    {autorisationPushNative === 'registration-error' && 'Les notifications sont autorisées, mais cet appareil n’a pas pu être enregistré. Vérifiez votre connexion puis réessayez.'}
                   </p>
                 </div>
               </div>
-              {autorisationPushNative === 'prompt' && global.canal_push && (
+              {['prompt', 'registration-error', 'unavailable'].includes(autorisationPushNative) && global.canal_push && (
                 <Button
                   type="button"
                   variant="outline"

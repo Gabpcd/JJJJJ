@@ -1,5 +1,7 @@
 import React, { Suspense, useEffect } from 'react';
 import { NativeUpdateReady } from './components/NativeUpdateReady';
+import { NativeSessionResume } from './components/NativeSessionResume';
+import { NativeStoreUpdate } from './components/NativeStoreUpdate';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -513,6 +515,8 @@ const App = () => (
         <AuthProvider>
           <NotificationProvider>
             <BrowserRouter>
+              <NativeSessionResume />
+              <NativeStoreUpdate />
               <a href="#app-route-content" className="skip-to-content">Aller au contenu principal</a>
               <div id="app-route-content" tabIndex={-1} className="flex-1 min-h-0">
                 <AppRoutes />
@@ -521,11 +525,11 @@ const App = () => (
                 position="bottom-right"
                 richColors
                 closeButton
-                offset={{ right: 16, bottom: 16 }}
+                offset={{ right: 16, bottom: 'var(--native-store-toast-bottom, 16px)' }}
                 mobileOffset={{
                   right: 16,
                   left: 16,
-                  bottom: 'calc(5rem + env(safe-area-inset-bottom))',
+                  bottom: 'var(--native-store-toast-bottom, calc(5rem + env(safe-area-inset-bottom)))',
                 }}
                 toastOptions={{ duration: 5000 }}
               />

@@ -16,7 +16,7 @@ interface Props {
   onOuvrirPlanning?: () => void;
 }
 const nonConcerne = { etat: 'non_concerne' } as const;
-const initial: LecturesSuivi = { contrat: nonConcerne, presences: nonConcerne, documents: nonConcerne, paiements: nonConcerne };
+const initial: LecturesSuivi = { contrat: nonConcerne, presences: nonConcerne, documents: nonConcerne, paiements: nonConcerne, escrow: nonConcerne };
 
 /** Remontage par compte, mission et rôle : aucune donnée du compte précédent ne survit. */
 export function SuiviMission(props: Props) {
@@ -40,7 +40,7 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
     if (!peutLireMission) {
       const inaccessible = { etat: 'restreint' } as const;
       setLectures(mission.soignant_assigne_id
-        ? { contrat: inaccessible, presences: inaccessible, documents: inaccessible, paiements: inaccessible } : initial);
+        ? { contrat: inaccessible, presences: inaccessible, documents: inaccessible, paiements: inaccessible, escrow: inaccessible } : initial);
       setFinanceAutorisee(false);
       return;
     }
@@ -51,14 +51,14 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
     const chargement = { etat: 'chargement' } as const;
     setFinanceAutorisee(false);
     const regimeConnu = ['SALARIE', 'LIBERAL'].includes(mission.type_contrat_applique ?? '');
-    setLectures({ contrat: chargement, presences: chargement, documents: regimeConnu ? chargement : nonConcerne, paiements: chargement });
+    setLectures({ contrat: chargement, presences: chargement, documents: regimeConnu ? chargement : nonConcerne, paiements: chargement, escrow: mission.type_contrat_applique === 'LIBERAL' ? chargement : nonConcerne });
     async function lire<T>(operation: PromiseLike<{ data: T[] | null; error: unknown }>): Promise<LectureSuivi<T>> {
       try {
         const { data, error } = await avecDelai(operation, 10_000);
         return !error && Array.isArray(data) ? { etat: 'disponible', lignes: data } : indisponible;
       } catch { return indisponible; }
     }
-    async function lireFinances(): Promise<Pick<LecturesSuivi, 'documents' | 'paiements'>> {
+    async function lireFinances(): Promise<Pick<LecturesSuivi, 'documents' | 'paiements' | 'escrow'>> {
       if (estEtab) {
         try {
           const { data, error } = await avecDelai(supabase.rpc('fn_mes_permissions_etab', {
@@ -66,24 +66,27 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
           }).abortSignal(controller.signal), 10_000);
           const acces = data as { success?: boolean; etablissement_id?: string; permissions?: { lecture_paiement?: boolean; paiement?: boolean } } | null;
           if (error || !acces?.success || acces.etablissement_id !== mission.etablissement_id) {
-            return { documents: indisponible, paiements: indisponible };
+            return { documents: indisponible, paiements: indisponible, escrow: indisponible };
           }
           if (!acces.permissions?.lecture_paiement && !acces.permissions?.paiement) {
-            return { documents: { etat: 'restreint' }, paiements: { etat: 'restreint' } };
+            return { documents: { etat: 'restreint' }, paiements: { etat: 'restreint' }, escrow: { etat: 'restreint' } };
           }
-        } catch { return { documents: indisponible, paiements: indisponible }; }
+        } catch { return { documents: indisponible, paiements: indisponible, escrow: indisponible }; }
       }
-      if (!actif || controller.signal.aborted) return { documents: indisponible, paiements: indisponible };
+      if (!actif || controller.signal.aborted) return { documents: indisponible, paiements: indisponible, escrow: indisponible };
       setFinanceAutorisee(true);
-      const [documents, paiements] = await Promise.all([
+      const [documents, paiements, escrow] = await Promise.all([
         regimeConnu ? mission.type_contrat_applique === 'LIBERAL'
           ? lire(supabase.from('factures_honoraires').select('statut,type_document').eq('mission_id', mission.id).abortSignal(controller.signal))
           : lire(supabase.from('bulletins_paie').select('statut,pdf_s3_key').eq('mission_id', mission.id).abortSignal(controller.signal))
           : Promise.resolve(nonConcerne),
         lire(supabase.from('paiements_soignant').select('statut,confirme_par_soignant,conteste')
           .eq('mission_id', mission.id).abortSignal(controller.signal)),
+        mission.type_contrat_applique === 'LIBERAL'
+          ? lire<{ statut: string; paye_le: string | null }>(supabase.rpc('fn_suivi_escrow_mission' as any, { p_mission_id: mission.id }).abortSignal(controller.signal) as any)
+          : Promise.resolve(nonConcerne),
       ]);
-      return { documents, paiements };
+      return { documents, paiements, escrow };
     }
     void Promise.all([
       lire(supabase.from('contrats_mission').select('id,statut,signature_soignant,signature_etablissement')
