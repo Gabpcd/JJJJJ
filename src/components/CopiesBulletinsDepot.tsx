@@ -145,7 +145,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
           {pdf && <><ApercuPdfCopie key={pdf.url} file={pdf.file} onPretChange={actualiserApercu} /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir aussi le PDF dans un nouvel onglet</a></>}
           <label className="flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" className="mt-1" checked={confirme} disabled={busy || !apercuPret || Boolean(intentionRetiree)} onChange={e => setConfirme(e.target.checked)} /><span>Je confirme le destinataire et que cette copie du bulletin officiel a déjà été remise par le service paie de l’employeur.</span></label>
         </div>}
-        {erreur && <p ref={erreurElement} role="alert" className="mt-4 text-sm text-destructive">{erreur}</p>}
+        {erreur && <p ref={erreurElement} role="alert" className="mt-4 scroll-my-1 text-sm text-destructive">{erreur}</p>}
         {information && <p role="status" className="mt-4 text-sm">{information}</p>}
         {progression && <p role="status" className="mt-4 text-sm">{progression}</p>}
       </DialogResponsiveBody>
