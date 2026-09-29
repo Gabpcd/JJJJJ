@@ -26,6 +26,21 @@ RESET ROLE;
 -- ancienne variable service_role : le rôle signé JSON est prioritaire.
 SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT set_config('request.jwt.claims','{"role":"authenticated","user_metadata":{"role":"service_role"}}',true);
+-- Le rôle SQL a EXECUTE ; le refus doit donc venir du contrôle interne,
+-- pas seulement des ACL. Un ancien GUC service_role ne masque pas le JWT.
+SET LOCAL ROLE service_role;
+DO $priorite_json$
+DECLARE blocked boolean:=false; v_event_id text:='evt_recette_priorite_'||gen_random_uuid();
+BEGIN
+  BEGIN PERFORM public.fn_stripe_webhook_event_claim(v_event_id,'payment_intent.succeeded','{}','PLATFORM',false);
+  EXCEPTION WHEN insufficient_privilege THEN blocked:=true; END;
+  IF NOT blocked THEN RAISE EXCEPTION 'Ancien rôle privilégié a masqué le JWT';END IF;
+  blocked:=false;
+  BEGIN PERFORM public.fn_stripe_webhook_event_is_new(v_event_id,'payment_intent.succeeded','{}');
+  EXCEPTION WHEN insufficient_privilege THEN blocked:=true; END;
+  IF NOT blocked THEN RAISE EXCEPTION 'Ancien helper ignore la priorité JWT';END IF;
+END $priorite_json$;
+RESET ROLE;
 SET LOCAL ROLE authenticated;
 DO $refus_auth$
 DECLARE blocked boolean:=false; v_event_id text:='evt_recette_refused_'||gen_random_uuid();
