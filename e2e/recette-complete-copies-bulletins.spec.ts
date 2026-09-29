@@ -121,6 +121,54 @@ test('publication enregistrée mais réponse perdue : réessai sans nouvelle cop
   expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]);
 });
 
+test('publication : PDF refusé par le serveur, formulaire conservé et autre PDF publié après confirmation', async ({ page }, info) => {
+  const e = await simulerEtablissement(page); const r = recetteCopies();
+  // The preview can render this fixture; only the server response is simulated
+  // here. Parser validation against real invalid PDFs is covered separately.
+  const refuse = r.enregistrerPdf(pdfFictif('Fichier fictif refusé par le serveur'));
+  const valide = r.enregistrerPdf({ ...pdfFictif('Fichier fictif corrigé et lisible'), name: 'copie-corrigee.pdf' });
+  r.state.pdfRefuses.add(refuse.sha256);
+  await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');
+  const dialog = await ouvrirDepot(page, refuse);
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Le PDF a été refusé : il est illisible, invalide ou protégé. Choisissez « Modifier le dépôt », puis sélectionnez un PDF lisible et non protégé.');
+  await expect(dialog).not.toContainText('COPIE_PDF_INVALIDE');
+  await expect(dialog.getByText('Destinataire : Camille Recette', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Période : du 01/09/2026 au 30/09/2026', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('2 missions sélectionnées', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Modifier le dépôt', exact: true })).toBeEnabled();
+  expect(r.state.copies).toHaveLength(0); expect(r.state.intentions.size).toBe(1); expect(r.state.uploads.size).toBe(1);
+  const [ancienneCle, ancienneReservation] = [...r.state.intentions.entries()][0];
+  const reservationInitiale = structuredClone(ancienneReservation);
+  await preuveEtab(page, 'copie-refus-serveur-pdf-modifiable', info);
+
+  await dialog.getByRole('button', { name: 'Modifier le dépôt', exact: true }).click();
+  await expect(dialog.getByLabel('Début de période', { exact: true })).toHaveValue('2026-09-01');
+  await expect(dialog.getByLabel('Fin de période', { exact: true })).toHaveValue('2026-09-30');
+  await expect(dialog.getByRole('combobox', { name: 'Destinataire', exact: true })).toHaveValue(soignantIds.user);
+  for (const n of [1, 2]) await expect(dialog.getByRole('checkbox', { name: new RegExp(`Mission salariée ${n}`) })).toBeChecked();
+  await expect(dialog.getByText(`Fichier sélectionné : ${refuse.name}`, { exact: true })).toBeVisible();
+  await dialog.getByLabel('PDF officiel (10 Mo maximum)', { exact: true }).setInputFiles(valide);
+  await expect(dialog.getByText(`Fichier sélectionné : ${valide.name}`, { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Aperçu et confirmation', exact: true }).click();
+  await expect(dialog.getByTestId('apercu-pdf-canvas')).toHaveAttribute('data-ready', 'true');
+  await expect(dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ })).not.toBeChecked();
+  await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeDisabled();
+  expect(r.state.intentions.size).toBe(1);
+  expect(r.state.appels.filter(a => a.nom === 'fn_reserver_copie_bulletin')).toHaveLength(1);
+  expect(r.state.appels.filter(a => a.nom === 'copies-bulletins' && a.body.action === 'finaliser')).toHaveLength(1);
+  await dialog.getByRole('checkbox', { name: /Je confirme le destinataire/ }).check();
+  await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
+  await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  expect(r.state.copies).toHaveLength(1); expect(r.state.copies[0].sha256).toBe(valide.sha256);
+  expect(r.state.intentions.size).toBe(2); expect(r.state.uploads.size).toBe(2);
+  expect(r.state.intentions.get(ancienneCle)).toEqual(reservationInitiale);
+  expect(r.state.uploads.get(ancienneReservation.storage_path)).toEqual(refuse.buffer);
+  await page.reload(); await expect(section(page).getByText('Copie disponible', { exact: true })).toBeVisible();
+  await preuveEtab(page, 'copie-autre-pdf-apres-refus-publie', info);
+  expect(e.etat.erreurs).toEqual([]); expect(e.etat.inconnues).toEqual([]); aucunPaiement(r.state.appels);
+});
+
 test('remplacement : nouvelle version, ancienne conservée, retrait sans toucher au paiement', async ({ page }, info) => {
   const e = await simulerEtablissement(page); const r = recetteCopies(); r.copiePubliee(); const nouveau = r.enregistrerPdf(pdfFictif('Copie fictive corrigée - version 2'));
   await r.installer(page); await entrerEtab(page, 'connexion'); await page.goto('/etablissement/export-paie');

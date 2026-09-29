@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { isNative } from '@/lib/platform';
 import { verifierFichierDocument } from '@/lib/documentUpload';
@@ -147,6 +148,18 @@ export async function nouvelleIdempotenceCopie(userId: string, depot: DepotCopie
   return obtenirIdempotenceCopie(userId, depot, sha256, idempotenceRetiree);
 }
 
+async function pdfRefuseParServeur(error: unknown): Promise<boolean> {
+  if (!(error instanceof FunctionsHttpError) || typeof Response === 'undefined'
+    || !(error.context instanceof Response) || error.context.status !== 422) return false;
+  try {
+    // Inspect only the known refusal, without consuming the original response
+    // or letting a stalled/malformed body hide the existing retry guidance.
+    const payload: unknown = await avecDelai(error.context.clone().json(), 1_000);
+    return payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+      && 'error' in payload && payload.error === 'COPIE_PDF_INVALIDE';
+  } catch { return false; }
+}
+
 export async function publierCopieBulletin(depot: DepotCopieBulletin, file: File, sha256: string, idempotence: string, progression: (message: string) => void): Promise<string> {
   progression('Réservation du dépôt…');
   const { data, error } = await avecDelai(supabase.rpc('fn_reserver_copie_bulletin' as any, {
@@ -177,6 +190,9 @@ export async function publierCopieBulletin(depot: DepotCopieBulletin, file: File
   const result = await avecDelai(supabase.functions.invoke('copies-bulletins', { body: { action: 'finaliser', copie_id: reservation.id, destinataire_confirme: true } }), 30_000,
     'La publication n’a pas été confirmée à temps. Réessayez avec le même fichier pour retrouver le résultat du dépôt.');
   if (result.error || !result.data?.ok || !['PUBLIEE', 'REMPLACEE'].includes(result.data.statut)) {
+    if (await pdfRefuseParServeur(result.error)) {
+      throw new Error('Le PDF a été refusé : il est illisible, invalide ou protégé. Choisissez « Modifier le dépôt », puis sélectionnez un PDF lisible et non protégé.');
+    }
     throw new Error('La publication n’a pas été confirmée. Le serveur doit vérifier le PDF et vos droits. Réessayez avec ce même fichier ; aucun second dépôt ne sera créé.');
   }
   return reservation.id;

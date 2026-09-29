@@ -24,6 +24,7 @@ export function recetteCopies() {
   const state = {
     copies: [] as Copie[], fichiers: new Map<string, ReturnType<typeof pdfFictif>>(),
     intentions: new Map<string, Copie>(), uploads: new Map<string, Buffer>(),
+    pdfRefuses: new Set<string>(),
     appels: [] as { nom: string; body: any }[],
     panneListe: false, panneUpload: false, pannePublication: false,
     perdreReponsePublication: false, panneLecture: false, lectureCorrompue: false,
@@ -114,6 +115,7 @@ export function recetteCopies() {
       if (reservation!.statut === 'RESERVEE') {
         const p = reservation!.body;
         expect(state.uploads.get(reservation!.storage_path)).toEqual(state.fichiers.get(p.p_sha256_attendu)!.buffer);
+        if (state.pdfRefuses.has(p.p_sha256_attendu)) return route.fulfill({ status: 422, json: { error: 'COPIE_PDF_INVALIDE' } });
         const ancienne = state.copies.find(c => c.id === p.p_remplace_id);
         if (ancienne) ancienne.statut = 'REMPLACEE';
         copiePubliee(state.fichiers.get(p.p_sha256_attendu), { id: reservation!.id,
