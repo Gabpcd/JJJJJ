@@ -9,13 +9,14 @@ vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => mock.na
 vi.mock('@capacitor/app', () => ({ App: { addListener: vi.fn(async (_, callback) => { mock.listener = callback; return { remove: vi.fn() }; }) } }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: mock.user, loading: false }) }));
 vi.mock('@/hooks/useRole', () => ({ useRole: () => ({ role: mock.role, parcours: mock.parcours }) }));
-function Route() { return <><output>{useLocation().pathname}</output><form><input aria-label="Brouillon" /></form></>; }
+function Route() { return <><output>{useLocation().pathname}</output><form><input aria-label="Brouillon" /></form><textarea aria-label="Message" /><canvas aria-label="Signature" /></>; }
 function mount(path = '/soignant/missions') { return render(<MemoryRouter initialEntries={[path]}><NativeSessionResume /><Route /></MemoryRouter>); }
 async function absence(ms: number) {
   act(() => mock.listener({ isActive: false }));
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); mock.listener({ isActive: true }); mock.listener({ isActive: true }); await vi.advanceTimersByTimeAsync(400); });
 }
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-29T12:00:00Z')); localStorage.clear(); mock.user = { id: 'user' }; mock.native = true; mock.role = 'SOIGNANT'; mock.parcours = null; });
+let scenario = 0;
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-29T12:00:00Z').getTime() + ++scenario * 86400_000); localStorage.clear(); mock.user = { id: 'user' }; mock.native = true; mock.role = 'SOIGNANT'; mock.parcours = null; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 it.each([['SOIGNANT', null, '/soignant/tableau-de-bord'], ['ADMIN_ETABLISSEMENT', null, '/etablissement/tableau-de-bord'], ['INCONNU', { type_compte: 'SOIGNANT' }, '/soignant/tableau-de-bord'], ['INCONNU', { type_compte: 'ETABLISSEMENT' }, '/etablissement/tableau-de-bord']] as const)('returns %s to the dashboard without changing the session', async (role, parcours, path) => {
   mock.role = role; mock.parcours = parcours; const user = mock.user; mount(); await absence(31 * 60_000);
@@ -57,4 +58,27 @@ it('keeps a pending cold-start decision across a temporary role revalidation', a
   await act(async () => { await vi.advanceTimersByTimeAsync(400); });
   expect(screen.getByRole('status')).toHaveTextContent('/soignant/tableau-de-bord');
   expect(localStorage.getItem('jolene.native.background.user')).toBeNull();
+});
+
+it('preserves an unsaved message outside a form', async () => {
+  mount(); fireEvent.input(screen.getByLabelText('Message'), { target: { value: 'Brouillon hors formulaire' } });
+  await absence(31 * 60_000); expect(screen.getByRole('status')).toHaveTextContent('/soignant/missions');
+  expect(screen.getByLabelText('Message')).toHaveValue('Brouillon hors formulaire');
+});
+it('preserves canvas input outside a form', async () => {
+  mount(); fireEvent.pointerDown(screen.getByLabelText('Signature')); await absence(31 * 60_000);
+  expect(screen.getByRole('status')).toHaveTextContent('/soignant/missions');
+});
+it.each([true, false])('only preserves a visible custom dialog (visible=%s)', async visible => {
+  mount(); const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); document.body.append(dialog);
+  vi.spyOn(dialog, 'getClientRects').mockReturnValue((visible ? [{ width: 300, height: 100 }] : []) as unknown as DOMRectList);
+  await absence(31 * 60_000);
+  expect(screen.getByRole('status')).toHaveTextContent(visible ? '/soignant/missions' : '/soignant/tableau-de-bord'); dialog.remove();
+});
+it('preserves the cold-start link during slow authentication, but not the next absence', async () => {
+  localStorage.setItem('jolene.native.background.user', String(Date.now() - 86400_000));
+  signalerNavigationNative(); await vi.advanceTimersByTimeAsync(15_000); mount('/soignant/messagerie');
+  await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+  expect(screen.getByRole('status')).toHaveTextContent('/soignant/messagerie');
+  await absence(31 * 60_000); expect(screen.getByRole('status')).toHaveTextContent('/soignant/tableau-de-bord');
 });

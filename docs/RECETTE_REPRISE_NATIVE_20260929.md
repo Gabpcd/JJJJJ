@@ -10,7 +10,9 @@
 
 ## Vérification effectuée
 
-30 scénarios frontend dans Chromium/WebKit : soignant et établissement après connexion ou inscription, reprise courte et longue, session conservée, notification ouvrant la messagerie, rechargement après absence, avis du store et réessai après panne du registre push. Formats : iPhone, Android, iPad portrait, iPad paysage, ordinateur.
+55 scénarios frontend dans Chromium/WebKit : soignant et établissement après connexion ou inscription, reprise courte et longue, session conservée, notification ouvrant la messagerie, rechargement après absence, avis du store et réessai après panne du registre push. Formats : iPhone, Android, iPad portrait, iPad paysage, ordinateur.
+
+La revue indépendante a aussi reproduit trois régressions, désormais corrigées et intégrées à la recette : le brouillon de messagerie et la signature sur canvas hors formulaire, le dialogue de duplication sans attribut Radix, et le lien de démarrage pendant une restauration de compte de plus de douze secondes. Une saisie ou un dialogue visible empêche le retour automatique ; un lien reçu depuis le début de l’absence reste prioritaire, sans délai d’expiration arbitraire. Un ancien lien ne bloque pas le retour après une absence suivante.
 
 Après correction du chevauchement, le scénario de mise à jour a été rejoué sur les cinq formats avec une assertion géométrique : le bas du message de connexion reste au-dessus du haut de l'avis. Les deux captures suivantes complètent ces assertions :
 
@@ -37,7 +39,7 @@ Mettre à jour
 Me le rappeler plus tard
 ```
 
-28 tests ciblés couvrent aussi les formulaires non enregistrés, liens profonds, permissions refusées, session changée, rotation du token échouée et disponibilité inconnue du store. TypeScript et les 17 garde-fous passent.
+33 tests ciblés couvrent aussi les formulaires non enregistrés, liens profonds, permissions refusées, session changée, rotation du token échouée et disponibilité inconnue du store. TypeScript et les 17 garde-fous passent.
 
 ## Limites et livraison
 
