@@ -52,10 +52,39 @@ test('aperçu PDF : rendu et confirmation stables avec barre de défilement clas
   expect(stabilite.changements).toEqual([]); expect(stabilite.largeurs).toHaveLength(1);
   await expect(accord).toBeChecked();
   await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeEnabled();
-  await page.screenshot({ path: info.outputPath('apercu-stable.png'), fullPage: true, animations: 'disabled' });
+  // Window resizing / tablet rotation re-renders the same content without
+  // making the user confirm it again. A different page still requires consent.
+  const initial = page.viewportSize()!;
+  const largeurRendue = await canvas.evaluate(el => el.style.width);
+  await info.attach('confirmation-avant-redimensionnement', { body: await dialog.ariaSnapshot(), contentType: 'text/plain' });
+  // Wide dialogs have a max width: cross that threshold to resize the PDF too.
+  await page.setViewportSize({ width: initial.width > 700 ? 620 : initial.width + 96, height: initial.height });
+  await expect.poll(() => canvas.evaluate(el => el.style.width)).not.toBe(largeurRendue);
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(accord).toBeChecked();
+  const largeurRedimensionnee = await canvas.evaluate(el => el.style.width);
+  await page.setViewportSize(initial);
+  // WebKit may change between overlay/classic gutters after orientation changes.
+  await expect.poll(() => canvas.evaluate(el => el.style.width)).not.toBe(largeurRedimensionnee);
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(accord).toBeChecked();
+  await dialog.getByRole('button', { name: 'Page suivante', exact: true }).click();
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(accord).not.toBeChecked();
+  await expect(dialog.getByRole('button', { name: 'Confirmer la publication', exact: true })).toBeDisabled();
+  await accord.check();
+  // Full-page capture temporarily expands the viewport: also exercise that
+  // resize, then keep a normal viewport image after the renderer settles.
+  await page.screenshot({ path: info.outputPath('redimensionnement-capture.png'), fullPage: true, animations: 'disabled' });
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await expect(accord).toBeChecked();
+  await canvas.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('apercu-stable.png'), animations: 'disabled' });
+  await info.attach('confirmation-apres-redimensionnement', { body: await dialog.ariaSnapshot(), contentType: 'text/plain' });
   await dialog.getByRole('button', { name: 'Confirmer la publication', exact: true }).click();
   await expect(section.getByText('Copie disponible', { exact: true })).toBeVisible();
   expect(recette.state.copies).toHaveLength(1);
+  await info.attach('copie-publiee', { body: await section.ariaSnapshot(), contentType: 'text/plain' });
   await page.reload(); await expect(section.getByText('Copie disponible', { exact: true })).toBeVisible();
   expect(etab.etat.erreurs).toEqual([]); expect(etab.etat.inconnues).toEqual([]);
   expect(recette.state.appels.some(a => /paiement|escrow|stripe/.test(a.nom))).toBe(false);

@@ -241,20 +241,11 @@ export async function ouvrirCopieBulletin(copie: CopieBulletin): Promise<void> {
       fenetre.location.replace(url);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } else {
-      const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
-      const path = `copie-paie-${copie.id}.pdf`;
+      const { partagerPdfCopieNatif } = await import('@/lib/copiesBulletinsPartageNatif');
       const octets = new Uint8Array(bytes);
       let binary = '';
       for (let start = 0; start < octets.length; start += 8192) binary += String.fromCharCode(...octets.subarray(start, start + 8192));
-      let fichierEcrit = false;
-      try {
-        await Filesystem.writeFile({ path, data: btoa(binary), directory: Directory.Cache });
-        fichierEcrit = true;
-        const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
-        await Share.share({ url: uri, title: 'Copie du bulletin de paie' });
-      } finally {
-        if (fichierEcrit) await Filesystem.deleteFile({ path, directory: Directory.Cache });
-      }
+      await partagerPdfCopieNatif(btoa(binary));
     }
   } catch (error) {
     fenetre?.close();

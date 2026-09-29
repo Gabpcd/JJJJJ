@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { DocumentApercuPdf } from '@/lib/apercuPdfCopie';
 
-interface Props { file: File; onPretChange: (pret: boolean) => void; }
+interface Props { file: File; onPretChange: (pret: boolean) => void; onRelecture: () => void; }
 
-export function ApercuPdfCopie({ file, onPretChange }: Props) {
+export function ApercuPdfCopie({ file, onPretChange, onRelecture }: Props) {
   const conteneur = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [document, setDocument] = useState<DocumentApercuPdf | null>(null);
@@ -26,13 +26,13 @@ export function ApercuPdfCopie({ file, onPretChange }: Props) {
   useEffect(() => {
     const controleur = new AbortController();
     let charge: DocumentApercuPdf | null = null;
-    setDocument(null); setPage(1); setErreur(null); setChargement(true); onPretChange(false);
+    setDocument(null); setPage(1); setErreur(null); setChargement(true); onPretChange(false); onRelecture();
     // The renderer and its worker are only imported for this official preview.
     void import('@/lib/apercuPdfCopie').then(module => module.chargerApercuPdf(file, controleur.signal))
       .then(resultat => { charge = resultat; if (controleur.signal.aborted) resultat.detruire(); else setDocument(resultat); })
       .catch(() => { if (!controleur.signal.aborted) { setChargement(false); setErreur('L’aperçu du PDF est indisponible. Réessayez ou choisissez un PDF lisible et non protégé par mot de passe.'); } });
     return () => { controleur.abort(); charge?.detruire(); onPretChange(false); };
-  }, [file, revision, onPretChange]);
+  }, [file, revision, onPretChange, onRelecture]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -41,13 +41,13 @@ export function ApercuPdfCopie({ file, onPretChange }: Props) {
     setChargement(true); setErreur(null); onPretChange(false);
     void document.rendrePage(page, element, largeur, window.devicePixelRatio, controleur.signal)
       .then(() => { if (!controleur.signal.aborted) { setChargement(false); onPretChange(true); } })
-      .catch(() => { if (!controleur.signal.aborted) { setChargement(false); setErreur('Cette page ne peut pas être affichée. Réessayez l’aperçu ou choisissez un autre PDF.'); } });
+      .catch(() => { if (!controleur.signal.aborted) { setChargement(false); onRelecture(); setErreur('Cette page ne peut pas être affichée. Réessayez l’aperçu ou choisissez un autre PDF.'); } });
     return () => { controleur.abort(); onPretChange(false); };
-  }, [document, page, largeur, onPretChange]);
+  }, [document, page, largeur, onPretChange, onRelecture]);
 
   useEffect(() => { const element = canvas.current; return () => { if (element) { element.width = 0; element.height = 0; } }; }, []);
 
-  function changerPage(numero: number) { onPretChange(false); setChargement(true); setPage(numero); }
+  function changerPage(numero: number) { onRelecture(); onPretChange(false); setChargement(true); setPage(numero); }
 
   return <section aria-label="Aperçu de la copie du bulletin officiel" className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">

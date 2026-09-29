@@ -1,12 +1,15 @@
-import { webcrypto } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
+import { Blob as NodeBlob } from 'node:buffer';
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { StorageApiError, StorageClient } from '@supabase/storage-js';
 import { PostgrestClient } from '@supabase/postgrest-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chargerMissionsCopies, copieBulletinTelechargeable, CopieRetireeErreur, idempotenceCopie, nouvelleIdempotenceCopie, publierCopieBulletin, validerListeCopiesBulletins, type CopieBulletin, type DepotCopieBulletin } from '../copiesBulletins';
+import { chargerMissionsCopies, copieBulletinTelechargeable, CopieRetireeErreur, idempotenceCopie, nouvelleIdempotenceCopie, ouvrirCopieBulletin, publierCopieBulletin, validerListeCopiesBulletins, type CopieBulletin, type DepotCopieBulletin } from '../copiesBulletins';
 
-const banc = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), storage: vi.fn(), invoke: vi.fn() }));
+const banc = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), storage: vi.fn(), invoke: vi.fn(), native: vi.fn(() => false), partager: vi.fn() }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: banc.rpc, from: banc.from, storage: { from: banc.storage }, functions: { invoke: banc.invoke } } }));
+vi.mock('@/lib/platform', () => ({ isNative: banc.native }));
+vi.mock('@/lib/copiesBulletinsPartageNatif', () => ({ partagerPdfCopieNatif: banc.partager }));
 const copie: CopieBulletin = {
   id: '10000000-0000-4000-8000-000000000001', etablissement_id: '10000000-0000-4000-8000-000000000002',
   soignant_id: '10000000-0000-4000-8000-000000000003', etablissement_nom: 'Employeur de test',
@@ -34,6 +37,31 @@ describe('copies officielles : lecture bornée et réponses vérifiables', () =>
     [{ ...copie, publie_le: null }], [{ ...copie, periode_fin: '2026-08-01' }],
   ])('une réponse invalide entraîne une erreur explicite (%j)', reponse => {
     expect(() => validerListeCopiesBulletins(reponse)).toThrow('ne peut pas être vérifiée');
+  });
+});
+
+describe('copies officielles : téléchargement vers le partage natif', () => {
+  const bytes = Buffer.from('%PDF-original-de-test');
+  const document = { ...copie, sha256: createHash('sha256').update(bytes).digest('hex'), taille_octets: bytes.length };
+  beforeEach(() => {
+    vi.stubGlobal('crypto', webcrypto); vi.stubGlobal('Blob', NodeBlob);
+    banc.native.mockReturnValue(true); banc.partager.mockReset().mockResolvedValue(undefined);
+    banc.invoke.mockReset().mockResolvedValue({ data: new NodeBlob([bytes], { type: 'application/pdf' }), error: null });
+  });
+  afterEach(() => { banc.native.mockReturnValue(false); vi.unstubAllGlobals(); });
+
+  it('transmet les octets originaux contrôlés au cycle de conservation natif', async () => {
+    await ouvrirCopieBulletin(document);
+    expect(banc.partager).toHaveBeenCalledExactlyOnceWith(bytes.toString('base64'));
+    expect(banc.invoke).toHaveBeenCalledWith('copies-bulletins', { body: { action: 'telecharger', copie_id: copie.id } });
+  });
+  it('ne prépare aucun fichier local si l’intégrité n’est pas confirmée', async () => {
+    await expect(ouvrirCopieBulletin({ ...document, sha256: 'a'.repeat(64) })).rejects.toThrow('L’intégrité du PDF ne peut pas être confirmée');
+    expect(banc.partager).not.toHaveBeenCalled();
+  });
+  it('conserve le traitement silencieux de l’annulation du sélecteur', async () => {
+    banc.partager.mockRejectedValue(new Error('Share canceled'));
+    await expect(ouvrirCopieBulletin(document)).resolves.toBeUndefined();
   });
 });
 

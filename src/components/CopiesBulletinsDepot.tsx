@@ -31,7 +31,9 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
   const [etape, setEtape] = useState<'saisie' | 'confirmation'>('saisie');
   const [confirme, setConfirme] = useState(false);
   const [apercuPret, setApercuPret] = useState(false);
-  const actualiserApercu = useCallback((pret: boolean) => { setApercuPret(pret); if (!pret) setConfirme(false); }, []);
+  // A resize re-renders the same PDF: block publication until ready, without
+  // erasing consent. Changing the file/page or a rendering error does erase it.
+  const invaliderConfirmation = useCallback(() => setConfirme(false), []);
   const [erreur, setErreur] = useState<string | null>(null);
   const erreurElement = useRef<HTMLParagraphElement>(null);
   const [intentionRetiree, setIntentionRetiree] = useState<{ empreinte: string; id: string } | null>(null);
@@ -144,7 +146,7 @@ export function CopiesBulletinsDepot({ etablissementId, userId, remplacement, on
           {lectureFichier && <p role="status" className="text-sm">Vérification du fichier…</p>}
         </fieldset> : <div className="space-y-4">
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-semibold">Destinataire : {nom}</p><p>Période : du {formatParis(debut, 'dd/MM/yyyy')} au {formatParis(fin, 'dd/MM/yyyy')}</p><p>{missionIds.length} mission{missionIds.length > 1 ? 's' : ''} sélectionnée{missionIds.length > 1 ? 's' : ''}{remplacement ? ` · remplace la version ${remplacement.version}` : ''}</p></div>
-          {pdf && <><ApercuPdfCopie key={pdf.url} file={pdf.file} onPretChange={actualiserApercu} /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir aussi le PDF dans un nouvel onglet</a></>}
+          {pdf && <><ApercuPdfCopie key={pdf.url} file={pdf.file} onPretChange={setApercuPret} onRelecture={invaliderConfirmation} /><a className="inline-flex min-h-11 items-center text-sm text-primary underline" href={pdf.url} target="_blank" rel="noopener noreferrer">Ouvrir aussi le PDF dans un nouvel onglet</a></>}
           <label className="flex items-start gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" className="mt-1" checked={confirme} disabled={busy || !apercuPret || Boolean(intentionRetiree)} onChange={e => setConfirme(e.target.checked)} /><span>Je confirme le destinataire et que cette copie du bulletin officiel a déjà été remise par le service paie de l’employeur.</span></label>
         </div>}
         {erreur && <p ref={erreurElement} role="alert" className="mt-4 scroll-my-1 text-sm text-destructive">{erreur}</p>}
