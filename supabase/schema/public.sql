@@ -30624,7 +30624,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_ecrire_audit_safe"("p_acteur_id" "uuid",
 DECLARE
   v_id uuid;
   v_uid uuid := auth.uid();
-  v_is_service boolean := COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role';
+  v_is_service boolean := COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'service_role';
   v_acteur_id uuid := p_acteur_id;
 BEGIN
   -- Iter3 sec fix : empêcher impersonation cross-user dans audit log
@@ -32701,7 +32701,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_escrow_confirmer_payout"("p_paiement_esc
 DECLARE
   v_row public.paiements_escrow%ROWTYPE;
 BEGIN
-  IF COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+  IF COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') <> 'service_role' THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
@@ -32821,7 +32821,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_escrow_echouer_payout"("p_paiement_escro
 DECLARE
   v_row public.paiements_escrow%ROWTYPE;
 BEGIN
-  IF COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+  IF COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') <> 'service_role' THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
@@ -56223,7 +56223,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_stripe_lier_payout_transfers"("p_stripe_
 DECLARE
   v_updated integer := 0;
 BEGIN
-  IF COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+  IF COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') <> 'service_role' THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
@@ -56674,11 +56674,11 @@ BEGIN
   -- créé le moindre objet ; NULL reste alors une provenance explicite.
   IF p_resultat IN ('SUCCEEDED', 'CANCELED')
      AND (p_stripe_refund_id IS NULL
-          OR p_stripe_refund_id !~ '^re_[A-Za-z0-9]+$') THEN
+          OR p_stripe_refund_id !~ '^(re|pyr)_[A-Za-z0-9]+$') THEN
     RAISE EXCEPTION 'Identifiant Stripe refund requis' USING ERRCODE = '22023';
   END IF;
   IF p_stripe_refund_id IS NOT NULL
-     AND p_stripe_refund_id !~ '^re_[A-Za-z0-9]+$' THEN
+     AND p_stripe_refund_id !~ '^(re|pyr)_[A-Za-z0-9]+$' THEN
     RAISE EXCEPTION 'Identifiant Stripe refund invalide' USING ERRCODE = '22023';
   END IF;
 
@@ -57176,6 +57176,40 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_suis_soignant_reel"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") RETURNS TABLE("statut" "text", "paye_le" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etablissement uuid;
+  v_soignant uuid;
+  v_finance boolean;
+BEGIN
+  IF auth.uid() IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès refusé.' USING ERRCODE='42501';
+  END IF;
+  SELECT m.etablissement_id, m.soignant_assigne_id
+  INTO v_etablissement, v_soignant FROM public.missions m WHERE m.id=p_mission_id;
+  v_finance := public.fn_a_permission_etablissement('lecture_paiement',v_etablissement) IS TRUE
+    OR public.fn_a_permission_etablissement('paiement',v_etablissement) IS TRUE;
+  IF v_etablissement IS NULL OR (v_soignant IS DISTINCT FROM auth.uid() AND NOT v_finance) THEN
+    RAISE EXCEPTION 'Accès refusé.' USING ERRCODE='42501';
+  END IF;
+  RETURN QUERY SELECT pe.statut::text, pe.paye_le
+  FROM public.paiements_escrow pe
+  WHERE pe.mission_id=p_mission_id AND pe.etablissement_id=v_etablissement
+    AND (v_finance OR pe.soignant_id=auth.uid());
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") IS 'Lecture du seul statut escrow de la mission autorisée ; aucun montant, aucun identifiant Stripe, aucune mutation.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_supprimer_api_key"("p_id" "uuid") RETURNS "jsonb"
@@ -81732,6 +81766,12 @@ GRANT ALL ON FUNCTION "public"."fn_suggestions_missions_pour_soignant"("p_limit"
 REVOKE ALL ON FUNCTION "public"."fn_suis_soignant_reel"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_suis_soignant_reel"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_suis_soignant_reel"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_suivi_escrow_mission"("p_mission_id" "uuid") TO "authenticated";
 
 
 
