@@ -113,7 +113,7 @@ for (const role of roles) {
         await page.getByRole('button', { name: 'Fermer', exact: true }).click();
       }
       await preuveMission(page, info, `suivi-${role}-reception-enregistree`);
-      expect(suivi.lectures.every(l => l.missionId === `eq.${ids.mission}`)).toBe(true);
+      expect(suivi.lectures.every(l => l.missionId === (l.table === 'fn_suivi_escrow_mission' ? ids.mission : `eq.${ids.mission}`))).toBe(true);
       expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
       expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
     } finally { await info.attach('suivi-api-simulee', { body: JSON.stringify({ state, suivi: { ...suivi, erreurs: [...suivi.erreurs] } }, null, 2), contentType: 'application/json' }); }
