@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { creerSuiviSimule } from './helpers/recette-complete-suivi-mission';
 import { ids } from './helpers/recette-complete-mission';
 import { stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
-import { simulerEtablissement, ids as idsAdmin, stabiliserLectures } from './helpers/recette-complete-etablissement';
+import { entrer, simulerEtablissement, ids as idsAdmin, mission as missionEtab, stabiliserLectures } from './helpers/recette-complete-etablissement';
 
 // Routes réellement montées, API strictement simulée : aucun paiement ni relance réelle.
 const salaire = "En salarié, le salaire est versé par l'établissement employeur.";
@@ -51,6 +51,8 @@ for (const regime of ['SALARIE', 'LIBERAL'] as const) {
     await expect(historique).toContainText(salaire);
     await expect(historique).toContainText(liberal);
     await expect(page.getByText(ancienPaiement)).toHaveCount(0);
+    await expect(page.getByText('CODE_ROTATIF', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('🔢 Code', { exact: true })).toHaveCount(2);
     await preuve(page, historique, info, `historique-${regime}`);
     await stabiliserActionsNationales(page);
     await page.reload();
@@ -62,6 +64,8 @@ for (const regime of ['SALARIE', 'LIBERAL'] as const) {
     await expect(detail).toContainText(salaire);
     await expect(detail).toContainText(liberal);
     await expect(page.getByText(ancienPaiement)).toHaveCount(0);
+    await expect(page.getByText(/NaN|Infinity|Première arrivée : 0m/)).toHaveCount(0);
+    await preuve(page, page.getByRole('heading', { name: 'Contrôles du pointage' }).locator('..'), info, `controle-sans-gps-${regime}`);
     await preuve(page, detail.locator('..'), info, `detail-${regime}`);
     await page.getByRole('button', { name: "Relancer l'établissement", exact: true }).click();
     await expect(page.getByText('Établissement relancé.', { exact: true })).toBeVisible();
@@ -118,4 +122,109 @@ test('admin — la correction salariée annonce une simulation et conserve le fo
   expect(etat.appels.filter(c => /fn_admin_.*resoudre|fn_admin_valider_accord|fn_declarer_paiement/.test(c))).toEqual([]);
   expect(etat.inconnues).toEqual([]);
   expect(etat.erreurs).toEqual([]);
+});
+
+
+test('établissement — présences sans GPS, alerte connue et mesure zéro restent distinctes après reprise', async ({ page }, info) => {
+  const { etat } = await simulerEtablissement(page);
+  await entrer(page, 'connexion');
+  const mission = { ...missionEtab, statut: 'TERMINEE', soignant_assigne_id: idsAdmin.soignant,
+    debut_le: '2026-09-24T07:00:00Z', fin_le: '2026-09-24T15:00:00Z', duree_heures: 8 };
+  const presence = { id: 'presence-gps-recette', mission_id: idsAdmin.mission, soignant_id: idsAdmin.soignant,
+    pointage_arrivee_le: mission.debut_le, pointage_depart_le: mission.fin_le,
+    perimetre_gps_valide: null as boolean | null, distance_etablissement_m: null as number | null,
+    valide_par_etablissement: false, alerte_teleportation: false, missions: mission };
+  etat.overrides.set('presences', [presence]);
+  // La mission terminée a bien un pointage : l'absence de GPS ne doit pas créer une fausse absence.
+  etat.overrides.set('missions', [mission]);
+  etat.overrides.set('fn_mes_soignants_etablissement', [{ id: idsAdmin.soignant, prenom: 'Camille', nom: 'GPS Recette', profession: 'IDE' }]);
+  const creneaux = ['PREVISIONNEL', 'EFFECTIF'].map((type_creneau, index) => ({
+    id: `gps-creneau-${index}`, mission_id: idsAdmin.mission, debut: mission.debut_le, fin: mission.fin_le, est_pause: false, type_creneau }));
+  let lecturesCreneaux = 0;
+  await page.route('**/rest/v1/mission_creneaux?*', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: {
+      'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, OPTIONS',
+    } });
+    expect(route.request().method()).toBe('GET');
+    expect(new URL(route.request().url()).searchParams.get('mission_id')).toBe(`in.(${idsAdmin.mission})`);
+    lecturesCreneaux++;
+    etat.appels.push('GET mission_creneaux');
+    // Le lecteur paginé exige le count exact de PostgREST, même pour une seule mission.
+    await route.fulfill({ json: creneaux, headers: {
+      'content-range': '0-1/2', 'access-control-expose-headers': 'content-range', 'access-control-allow-origin': '*',
+    } });
+  });
+
+  const mobile = page.viewportSize()!.width < 768;
+  const panneau = page.getByRole('tabpanel');
+  const surface = mobile
+    ? panneau.getByRole('listitem').filter({ hasText: 'Camille GPS Recette · IDE' })
+    : panneau.getByRole('row').filter({ hasText: 'Camille GPS Recette' });
+  const lot = page.getByRole('button', { name: /Tout valider \(sans alerte\)/ });
+  const alertes = page.getByRole('tab', { name: /Alertes:/ });
+  const aValider = page.getByRole('tab', { name: 'À valider: 1 présences', exact: true });
+  async function verifierMontage() {
+    await expect(surface).toBeVisible();
+    await stabiliserLectures(page);
+    await expect(aValider).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'En cours: 0 présences', exact: true })).toBeVisible();
+    if (mobile) {
+      await expect(surface.getByRole('heading', { name: 'Camille GPS Recette · IDE', exact: true })).toBeVisible();
+      await expect(panneau.getByRole('table')).toHaveCount(0);
+    } else {
+      await expect(panneau.getByRole('table')).toBeVisible();
+      await expect(panneau.getByRole('listitem')).toHaveCount(0);
+      await expect(surface.getByRole('button', { name: 'Valider', exact: true })).toBeVisible();
+    }
+    await expect(page.getByText(/NaN|Infinity|Missions terminées sans pointage/)).toHaveCount(0);
+  }
+  async function verifierAucuneAlerte() {
+    await alertes.click();
+    await expect(panneau.getByText('Aucune alerte', { exact: true })).toBeVisible();
+    await stabiliserLectures(page);
+    await expect(page.getByText('Missions terminées sans pointage', { exact: true })).toHaveCount(0);
+    await aValider.click();
+    await verifierMontage();
+  }
+
+  await page.goto('/etablissement/presences?tab=a_valider');
+  await verifierMontage();
+  await page.reload();
+  await verifierMontage();
+  await expect(surface.getByText(/Hors périmètre|Hors zone|Arrivée : 0m/)).toHaveCount(0);
+  await expect(alertes).toHaveAccessibleName('Alertes: 0 anomalies');
+  await expect(lot).toBeDisabled();
+  await preuve(page, surface, info, 'etab-presence-sans-gps');
+  await verifierAucuneAlerte();
+
+  presence.perimetre_gps_valide = false;
+  await page.reload();
+  await verifierMontage();
+  await expect(surface.getByText(mobile
+    ? "Hors périmètre à l'arrivée (distance indisponible)"
+    : 'Hors zone', { exact: true })).toBeVisible();
+  await expect(surface.getByText(/Arrivée : 0m/)).toHaveCount(0);
+  await expect(alertes).toHaveAccessibleName('Alertes: 1 anomalies');
+  await expect(lot).toBeDisabled();
+  await alertes.click();
+  await verifierMontage();
+  await preuve(page, surface, info, 'etab-alerte-sans-distance');
+  await aValider.click();
+  await verifierMontage();
+
+  presence.perimetre_gps_valide = true; presence.distance_etablissement_m = 0;
+  await page.reload();
+  await verifierMontage();
+  // Seule la carte mobile affiche la distance ; le tableau affiche l'état et l'éligibilité.
+  await expect(surface.getByText(mobile ? 'Arrivée : 0m · ✅ OK' : 'À valider', { exact: true })).toBeVisible();
+  await expect(surface.getByText(/Hors périmètre|Hors zone/)).toHaveCount(0);
+  await expect(alertes).toHaveAccessibleName('Alertes: 0 anomalies');
+  await expect(lot).toHaveText('Tout valider (sans alerte) · 1 présences');
+  await expect(lot).toBeEnabled();
+  await preuve(page, surface, info, 'etab-mesure-zero');
+  await verifierAucuneAlerte();
+  expect(lecturesCreneaux).toBeGreaterThanOrEqual(4);
+  expect(etat.appels.filter(c => /fn_valider_presence|fn_declarer_paiement/.test(c))).toEqual([]);
+  expect(etat.ecritures).toEqual([]);
+  expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]);
 });

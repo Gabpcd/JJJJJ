@@ -422,8 +422,10 @@ export default function PresencesSoignant() {
       afficherNotification({ type: 'info', message: '✅ Arrivée pointée. La distance GPS est indisponible.' });
     } else if (perimetreOk === true) {
       afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Tu es à ${Math.round(distanceM)}m de l'établissement.` });
-    } else {
+    } else if (perimetreOk === false) {
       afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais tu es à ${Math.round(distanceM)}m (périmètre : 500m).` });
+    } else {
+      afficherNotification({ type: 'info', message: `✅ Arrivée pointée à ${Math.round(distanceM)}m. La vérification du périmètre est indisponible.` });
     }
 
     if (alerteTeleportation) {

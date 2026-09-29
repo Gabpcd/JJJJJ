@@ -142,3 +142,10 @@ it('affiche la mesure GPS zéro sans la confondre avec une absence', () => {
     onValider={vi.fn()} onContester={vi.fn()} /></MemoryRouter>);
   expect(screen.getByText('Arrivée : 0m · ✅ OK')).toBeInTheDocument();
 });
+
+it('une distance connue ne transforme pas un périmètre inconnu en alerte', () => {
+  render(<MemoryRouter><CarteValidation presence={{ ...creerPresence([]), distance_etablissement_m: 25, perimetre_gps_valide: null }}
+    onValider={vi.fn()} onContester={vi.fn()} /></MemoryRouter>);
+  expect(screen.getByText('Arrivée : 25m · Périmètre non renseigné')).toBeInTheDocument();
+  expect(screen.queryByText(/Hors périmètre/)).not.toBeInTheDocument();
+});

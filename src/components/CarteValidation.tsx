@@ -163,9 +163,9 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
       {/* GPS info */}
       <div className="flex flex-wrap gap-3 text-xs">
         {mesureGpsDisponible(presence.distance_etablissement_m) && (
-          <span className={`flex items-center gap-1 ${presence.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
+          <span className={`flex items-center gap-1 ${presence.perimetre_gps_valide === true ? 'text-success' : presence.perimetre_gps_valide === false ? 'text-warning' : 'text-muted-foreground'}`}>
             <MapPin className="h-3.5 w-3.5" />
-            Arrivée : {Math.round(presence.distance_etablissement_m)}m · {presence.perimetre_gps_valide ? '✅ OK' : '⚠️ Hors périmètre'}
+            Arrivée : {Math.round(presence.distance_etablissement_m)}m · {presence.perimetre_gps_valide === true ? '✅ OK' : presence.perimetre_gps_valide === false ? '⚠️ Hors périmètre' : 'Périmètre non renseigné'}
           </span>
         )}
         {mesureGpsDisponible(presence.arrivee_precision_gps_m) && (

@@ -663,10 +663,10 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           <h2 className="font-semibold text-foreground mb-3">Contrôles du pointage</h2>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             {mesureGpsDisponible(presenceReference.distance_etablissement_m) && (
-              <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
+              <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide === true ? 'text-success' : presenceReference.perimetre_gps_valide === false ? 'text-warning' : 'text-muted-foreground'}`}>
                 <MapPin className="h-3.5 w-3.5" />
                 Première arrivée : {Math.round(presenceReference.distance_etablissement_m)}m
-                {presenceReference.perimetre_gps_valide ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                {presenceReference.perimetre_gps_valide === true ? <CheckCircle className="h-3 w-3" /> : presenceReference.perimetre_gps_valide === false ? <XCircle className="h-3 w-3" /> : null}
               </span>
             )}
             {mesureGpsDisponible(presenceReference.arrivee_precision_gps_m) && (
