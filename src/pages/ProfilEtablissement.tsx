@@ -15,6 +15,7 @@ import { reverseGeocode } from '@/lib/geocodage';
 import { getCurrentPosition as obtenirGeoloc } from '@/lib/geoloc';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { verifierFichierDocument } from '@/lib/documentUpload';
+import { creerUuidV4 } from '@/lib/uuid';
 import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock, Clipboard } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -425,7 +426,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
       afficherNotification({ type: 'erreur', message: validation.message });
       return;
     }
-    const path = `${cibleId}/rib-etablissement-${Date.now()}-${globalThis.crypto.randomUUID()}.${validation.extension}`;
+    const path = `${cibleId}/rib-etablissement-${Date.now()}-${creerUuidV4()}.${validation.extension}`;
     const ancienRibKey = ribKey;
     setUploadingRib(true);
     try {

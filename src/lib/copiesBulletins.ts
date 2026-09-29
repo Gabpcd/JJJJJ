@@ -4,6 +4,7 @@ import { isNative } from '@/lib/platform';
 import { verifierFichierDocument } from '@/lib/documentUpload';
 import { debutJourParis, ajouterJoursCivilsParis } from '@/lib/date-heure-paris';
 import { avecDelai } from '@/lib/avecDelai';
+import { creerUuidV4 } from '@/lib/uuid';
 
 export type StatutCopieBulletin = 'PUBLIEE' | 'REMPLACEE' | 'RETIREE';
 export type MotifSignalementCopie = 'DESTINATAIRE' | 'CONTENU' | 'AUTRE';
@@ -133,16 +134,7 @@ async function obtenirIdempotenceCopie(userId: string, depot: DepotCopieBulletin
     const previous = sessionStorage.getItem(key);
     if (previous && /^[0-9a-f-]{36}$/i.test(previous) && previous !== idempotenceRetiree) return previous;
   } catch { /* The caller retains its intention for in-memory retries. */ }
-  // iOS 15.0–15.3 provides secure random bytes, but not randomUUID yet.
-  let id: string;
-  if (typeof crypto.randomUUID === 'function') id = crypto.randomUUID();
-  else {
-    const octets = crypto.getRandomValues(new Uint8Array(16));
-    octets[6] = (octets[6] & 0x0f) | 0x40;
-    octets[8] = (octets[8] & 0x3f) | 0x80;
-    const hex = Array.from(octets, octet => octet.toString(16).padStart(2, '0')).join('');
-    id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-  }
+  const id = creerUuidV4();
   try { sessionStorage.setItem(key, id); } catch { /* Session storage may be disabled. */ }
   return id;
 }

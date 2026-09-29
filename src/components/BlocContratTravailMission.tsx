@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { verifierFichierDocument } from '@/lib/documentUpload';
+import { creerUuidV4 } from '@/lib/uuid';
 import { toast } from 'sonner';
 
 interface Props {
@@ -77,7 +78,7 @@ export function BlocContratTravailMission({
     try {
       // Le premier segment doit être l'établissement propriétaire. Une clé
       // unique rend le remplacement compatible avec les preuves immuables.
-      const path = `${etablissementId}/contrats-travail/${missionId}/${Date.now()}-${globalThis.crypto.randomUUID()}-contrat.pdf`;
+      const path = `${etablissementId}/contrats-travail/${missionId}/${Date.now()}-${creerUuidV4()}-contrat.pdf`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { upsert: false, contentType: validation.mime });
