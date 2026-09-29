@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -24,10 +24,13 @@ export default function PageStripeConnect() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const retourStripe = searchParams.get('success') === 'true';
+  const verificationCourante = useRef(0);
   const [loading, setLoading] = useState(true);
   const [statut, setStatut] = useState<ConnectStatut>('NON_DEMANDE');
   const [ibanLast4, setIbanLast4] = useState<string | null>(null);
   const [revenus, setRevenus] = useState<{ mois_en_cours: number; total: number; en_attente: number } | null>(null);
+  const [erreurRevenus, setErreurRevenus] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [typeExercice, setTypeExercice] = useState<TypeExercice>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -37,11 +40,13 @@ export default function PageStripeConnect() {
   const [erreurStatut, setErreurStatut] = useState<string | null>(null);
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
+    const verification = ++verificationCourante.current;
     try {
       // [CP-STRIPE-6 H10] `?force=true` bypass le cache 5 min côté edge function
       const { data, error } = await supabase.functions.invoke(
         forceRefresh ? 'stripe-connect-status?force=true' : 'stripe-connect-status'
       );
+      if (verification !== verificationCourante.current) return false;
       if (error || !data || !['NON_DEMANDE', 'EN_COURS', 'COMPLET', 'SUSPENDU', 'REJETE', 'SUPPRIME'].includes(data.statut)
         || (data.statut === 'COMPLET' && !(data.onboarding_complete === true && data.charges_enabled === true && data.payouts_enabled === true))) {
         throw new Error('Statut Stripe indisponible');
@@ -53,28 +58,38 @@ export default function PageStripeConnect() {
       setErreurStatut(null);
       return true;
     } catch {
-      setErreurStatut('Le statut de ton compte de paiement ne peut pas être vérifié pour le moment. Réessaie dans quelques instants.');
+      if (verification === verificationCourante.current) {
+        setErreurStatut('Le statut de ton compte de paiement ne peut pas être vérifié pour le moment. Réessaie dans quelques instants.');
+      }
       return false;
     }
   }, []);
 
   const chargerRevenus = useCallback(async () => {
     try {
-      const { data } = await supabase.rpc('fn_mes_revenus_connect' as any);
-      if (data) setRevenus(data as any);
+      const { data, error } = await supabase.rpc('fn_mes_revenus_connect' as any);
+      if (error || !data || ['mois_en_cours', 'total', 'en_attente'].some(key =>
+        typeof data[key] !== 'number' || !Number.isFinite(data[key]))) {
+        throw new Error('Revenus indisponibles');
+      }
+      setRevenus({ mois_en_cours: data.mois_en_cours, total: data.total, en_attente: data.en_attente });
+      setErreurRevenus(false);
     } catch {
-      // Function may not exist
+      setRevenus(null);
+      setErreurRevenus(true);
     }
   }, []);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     const init = async () => {
       setLoading(true);
       // Load soignant type first
       const { data: sg } = await supabase.from('soignants')
         .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
         .eq('id', user.id).maybeSingle();
+      if (!actif) return;
 
       if (sg) {
         setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
@@ -83,20 +98,17 @@ export default function PageStripeConnect() {
 
         // Only load Stripe data if LIBERAL or MIXTE
         if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
-          await chargerStatut();
-          await chargerRevenus();
+          // Une seule lecture initiale, forcée au retour du fournisseur :
+          // aucune réponse de cache concurrente ne doit écraser ce résultat.
+          await chargerStatut(retourStripe);
+          if (actif) await chargerRevenus();
         }
       }
-      setLoading(false);
+      if (actif) setLoading(false);
     };
     init();
-  }, [user, chargerStatut, chargerRevenus]);
-
-  useEffect(() => {
-    if (searchParams.get('success') === 'true') {
-      void chargerStatut(true);
-    }
-  }, [searchParams, chargerStatut]);
+    return () => { actif = false; verificationCourante.current++; };
+  }, [user, retourStripe, chargerStatut, chargerRevenus]);
 
   const lancerOnboarding = async () => {
     if (estCompteTest) {
@@ -352,6 +364,11 @@ export default function PageStripeConnect() {
                   </div>
                 </div>
 
+                {erreurRevenus && (
+                  <p className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm" role="status">
+                    Tes revenus sont temporairement indisponibles. Utilise « Actualiser » pour réessayer.
+                  </p>
+                )}
                 {revenus && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <CarteKPIY2K

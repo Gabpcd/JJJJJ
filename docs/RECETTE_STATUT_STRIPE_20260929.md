@@ -15,15 +15,22 @@ Dans l'écran Paiements, une erreur ou une réponse incohérente affiche un
 message et un bouton Réessayer. Elle ne suggère plus de créer un compte Stripe
 et n'affiche plus un faux succès d'actualisation. Le texte salarié distingue
 le salaire versé par l'employeur du bulletin décrivant le montant dû.
+Le retour Stripe lance une seule lecture forcée ; une génération de requête
+empêche une ancienne réponse d'écraser une vérification plus récente.
+Une réponse de revenus invalide ou en erreur masque les chiffres et affiche
+une indisponibilité explicite ; aucun montant zéro n'est inventé et aucun NaN
+n'est affiché. La fixture de revenus utilise les clés du vrai contrat SQL.
 
 ## Vérifications locales
 
 - 48 tests backend, dont 10 exécutent les vrais handlers avec des fournisseurs
   simulés : réparation du cache, trois critères de complétude, suppression,
   refus de persistance, événement ancien, idempotence et réessai.
-- 20 scénarios frontend (quatre parcours sur cinq formats), sans retry :
+- 35 scénarios frontend (sept parcours sur cinq formats), sans retry :
   salarié, panne initiale, panne après succès, retour Stripe incohérent,
-  reprise et rechargement. Captures iPad portrait et Android relues.
+  reprise, rechargement et absence de lecture cache concurrente au retour de
+  Stripe en cas d'erreur ou de suspension ; revenus invalides, indisponibles puis
+  reçus correctement. Captures iPad portrait et Android relues.
 - Typecheck et compilation frontend réussis.
 
 Ces scénarios ne déclenchent aucun versement, prime, remboursement ni nouvel

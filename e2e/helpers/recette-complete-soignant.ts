@@ -107,7 +107,7 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
    else if(name==='fn_get_or_create_parcours_liberal')data=liberal;
    else if(name==='fn_compteur_heures_soignant')data={heures_jolene:0,heures_externes_validees:0,heures_externes_en_attente:0,heures_totales:0,eligible_free_transition:false};
    else if(name==='fn_pool_urgence_missions_pour_soignant')data={missions:[],pool_actif:false,rayon_km:30,sms_opt_in:false};
-   else if(name==='fn_mes_revenus_connect')data={total_recu:0,total_en_attente:0,paiements:[]};
+   else if(name==='fn_mes_revenus_connect')data={mois_en_cours:0,total:0,en_attente:0,stripe_connect_actif:false};
    else if(name==='fn_cumul_annuel_paie')data={brut:0,net:0};
    else if(name==='fn_etablissement_public')data=etablissement;
    else if(name==='fn_etablissements_safe')data=[etablissement];
