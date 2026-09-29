@@ -1,19 +1,13 @@
-name: Mobile delivery (signed updates + store submission)
+name: Mobile delivery — manual release only
 
 on:
-  status:
-  workflow_run:
-    # GitHub interprets these names as filter patterns; escape literal plus signs.
-    workflows: ['Validate PR (tests \+ typecheck \+ build \+ drift detection)', 'Playwright E2E tests', 'Lighthouse CI (perf \+ a11y \+ best-practices \+ SEO)', 'Android native simulation', 'Deploy Supabase (migrations \+ edge functions)']
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
         type: choice
-        options: [auto, native]
-        default: auto
-        description: 'Release current main after all quality gates'
+        options: [check, native, ota]
+        default: check
+        description: 'check: verify only; native: build and submit to stores; ota: publish compatible signed update'
 
 permissions:
   contents: read
@@ -30,7 +24,7 @@ env:
 
 jobs:
   plan:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'status' && github.event.context == 'Vercel' && github.event.state == 'success') || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || (github.event.workflow_run.name == 'Deploy Supabase (migrations + edge functions)' && github.event.workflow_run.event == 'workflow_dispatch')))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
@@ -39,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # The planner itself always comes from trusted main, even on a PR status event.
+          # A manual release must use trusted main; branch dispatches cannot publish.
           ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v5
@@ -52,14 +46,13 @@ jobs:
       - id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          MOBILE_DELIVERY_SHA: ${{ github.event.workflow_run.head_sha || github.event.sha || github.sha }}
-          MOBILE_DELIVERY_RECHECK_MAIN: ${{ github.event.workflow_run.name == 'Deploy Supabase (migrations + edge functions)' }}
-          MOBILE_DELIVERY_MODE: ${{ inputs.mode || 'auto' }}
+          MOBILE_DELIVERY_SHA: ${{ github.sha }}
+          MOBILE_DELIVERY_MODE: ${{ inputs.mode || 'check' }}
         run: node scripts/mobile/delivery-plan.mjs
 
   ota:
     needs: plan
-    if: needs.plan.outputs.mode == 'ota'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'ota' && needs.plan.outputs.mode == 'ota'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -111,7 +104,7 @@ jobs:
 
   reserve-native:
     needs: plan
-    if: needs.plan.outputs.mode == 'native'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'native' && needs.plan.outputs.mode == 'native'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -126,7 +119,7 @@ jobs:
 
   native:
     needs: [plan, reserve-native]
-    if: needs.plan.outputs.mode == 'native'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'native' && needs.plan.outputs.mode == 'native'
     strategy:
       fail-fast: false
       matrix:
