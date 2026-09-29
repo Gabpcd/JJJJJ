@@ -693,7 +693,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {role === 'SOIGNANT' && presenceEnAttente && (
         <div className="card-base border-warning/30 bg-warning/5">
           <p className="text-sm text-foreground font-medium mb-1">⏳ Tes présences attendent la validation de l'établissement</p>
-          <p className="text-xs text-muted-foreground mb-3">Le paiement se débloque à la validation (automatique sous 72h). Tu peux envoyer un rappel.</p>
+          <p className="text-xs text-muted-foreground mb-3">La validation des heures (automatique sous 72 h) est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission. Tu peux envoyer un rappel.</p>
           <BoutonY2K variant="secondary" size="sm" onClick={relancerEtablissement} disabled={relancing}>
             {relancing ? 'Envoi…' : 'Relancer l\'établissement'}
           </BoutonY2K>

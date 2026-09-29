@@ -641,7 +641,7 @@ export function LitigeResolutionModal({
 
             {missionSalariee ? (
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs" data-testid="action-paie-salariee">
-                <p className="font-semibold text-foreground">Rectification de paie automatique</p>
+                <p className="font-semibold text-foreground">Recalcul automatique de la simulation de paie</p>
                 <p className="mt-1 text-muted-foreground">
                   Aucun choix de facture d’honoraires n’est applicable à une mission salariée. Les preuves restent conservées et les nouveaux montants sont liés à ce litige.
                 </p>

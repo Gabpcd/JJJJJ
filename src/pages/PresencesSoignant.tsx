@@ -710,7 +710,7 @@ export default function PresencesSoignant() {
         <TabsContent value="historique">
           {filtreAValider && (
             <div className="mb-3 rounded-xl bg-warning/10 border border-warning/30 p-3 text-sm text-warning font-medium">
-              ⏳ Présences en attente de validation par l'établissement. Le paiement est débloqué dès la validation (automatique sous 72h).
+              ⏳ Présences en attente de validation par l'établissement (validation automatique sous 72 h). La validation des heures est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission.
             </div>
           )}
           {historiqueAffiche.length > 0 ? (
