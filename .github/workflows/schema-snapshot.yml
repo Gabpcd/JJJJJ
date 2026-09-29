@@ -10,17 +10,17 @@ name: Schema snapshot (weekly)
 # dédiée `auto/schema-baseline` ; une PR de cette branche vers main la fait
 # atterrir (main exige une PR — protection de branche).
 #
-# NOTE 05/07/2026 : le déclencheur workflow_run n'a jamais tiré (name exact ✓,
-# workflows sur main ✓, pas de filtre branches ✓ — cause inconnue). Fallback :
-# schedule QUOTIDIEN 6h UTC (1h après drift-check) + dispatch manuel après un
-# merge de migration si on veut verdir sans attendre.
+# Les noms workflow_run sont des motifs : le « + » du nom du déploiement
+# doit être échappé pour correspondre au caractère littéral. Le schedule
+# quotidien reste un filet de sécurité ; le snapshot arrive par PR revue.
 
 on:
   workflow_run:
-    workflows: ["Deploy Supabase (migrations + edge functions)"]
+    workflows: ['Deploy Supabase (migrations \+ edge functions)']
     types: [completed]
+    branches: [main]
   schedule:
-    # Quotidien 6h UTC — filet permanent puisque workflow_run ne tire pas.
+    # Quotidien 6h UTC — filet de sécurité en complément des déploiements.
     - cron: '0 6 * * *'
   workflow_dispatch: # Déclenchement manuel
 
