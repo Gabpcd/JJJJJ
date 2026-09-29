@@ -9,6 +9,8 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
 import { BulletinsPaieContent } from './BulletinsPaie';
+import { CopiesBulletinsSoignant } from '@/components/CopiesBulletins';
+import { listerCopiesBulletins } from '@/lib/copiesBulletins';
 import { MesAvancesContent } from './MesAvances';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
@@ -759,6 +761,8 @@ export default function MesGains() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [exercice, setExercice] = useState<{ type: string | null; liberalActif: boolean } | null>(null);
   const [aDesBulletins, setADesBulletins] = useState(false);
+  const [aDesCopies, setADesCopies] = useState(false);
+  const [copiesIndisponibles, setCopiesIndisponibles] = useState(false);
   const [aDesFacturesHonoraires, setADesFacturesHonoraires] = useState(false);
   const [erreurMetaFinances, setErreurMetaFinances] = useState<string | null>(null);
   // Affacturage Defacto pas en prod → onglet « Avances » masqué tant que le flag
@@ -769,17 +773,19 @@ export default function MesGains() {
     if (!user) return;
     let actif = true;
     void (async () => {
-      const [profilResult, bulletinsResult, facturesResult] = await Promise.all([
+      const [profilResult, bulletinsResult, facturesResult, copiesResult] = await Promise.all([
         supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle(),
         supabase.rpc('fn_mes_bulletins_paie' as any),
         supabase.rpc('fn_mes_factures_honoraires' as any),
+        listerCopiesBulletins().then(data => ({ data, error: null })).catch(() => ({ data: [], error: 'Les copies des bulletins ne peuvent pas être vérifiées. Ouvrez l’onglet Paie pour réessayer.' })),
       ]);
       if (!actif) return;
-      if (profilResult.error || bulletinsResult.error || facturesResult.error) {
+      if (profilResult.error || bulletinsResult.error || facturesResult.error || copiesResult.error) {
         setErreurMetaFinances(
           profilResult.error?.message
           || bulletinsResult.error?.message
           || facturesResult.error?.message
+          || copiesResult.error
           || 'Impossible de vérifier tout l’historique financier.',
         );
       } else {
@@ -787,6 +793,8 @@ export default function MesGains() {
       }
       const data = profilResult.data;
       setADesBulletins(Array.isArray(bulletinsResult.data) && bulletinsResult.data.length > 0);
+      setADesCopies(copiesResult.data.length > 0);
+      setCopiesIndisponibles(Boolean(copiesResult.error));
       setADesFacturesHonoraires(Array.isArray(facturesResult.data) && facturesResult.data.length > 0);
       setExercice({
         type: (data as any)?.type_exercice ?? null,
@@ -806,7 +814,7 @@ export default function MesGains() {
   // Si le type est inconnu (null) on reste permissif : on garde l'onglet ciblé par
   // ?tab= accessible afin de ne jamais casser un lien profond.
   const showFactures = aDesFacturesHonoraires || estLiberal || (exercice == null);
-  const showBulletins = aDesBulletins || estSalarie || (type == null && exercice != null) || (exercice == null);
+  const showBulletins = copiesIndisponibles || aDesCopies || aDesBulletins || estSalarie || (type == null && exercice != null) || (exercice == null);
   // Avances = affacturage Defacto → uniquement si le flag est actif.
   const showAvances = (estLiberal || (exercice == null)) && affacturageActif;
 
@@ -829,7 +837,7 @@ export default function MesGains() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground">💰 Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, simulations de paie et avance de trésorerie au même endroit' : 'Tes gains, factures et simulations de paie au même endroit'}</p>
+        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, documents de paie et avance de trésorerie au même endroit' : 'Tes gains, factures et documents de paie au même endroit'}</p>
       </div>
 
       {erreurMetaFinances && (
@@ -854,7 +862,7 @@ export default function MesGains() {
           {showBulletins && (
             <TabsTrigger value="bulletins" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>Simulations</span>
+              <span>Paie</span>
             </TabsTrigger>
           )}
           {showAvances && (
@@ -879,7 +887,7 @@ export default function MesGains() {
 
         {showBulletins && (
           <TabsContent value="bulletins" className="mt-0">
-            <BulletinsPaieContent />
+            <div className="space-y-6"><CopiesBulletinsSoignant /><section aria-label="Simulations de paie"><h2 className="mb-3 font-semibold">Simulations de paie</h2><BulletinsPaieContent /></section></div>
           </TabsContent>
         )}
 

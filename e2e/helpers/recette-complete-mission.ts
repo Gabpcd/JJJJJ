@@ -209,7 +209,8 @@ export function creerMissionSimulee() {
             if(state.segments.some(s=>!s.fin)) return json({success:false,error:'Un segment de pointage est encore ouvert'});
             mission.statut='TERMINEE';return json({success:true});
           case 'fn_mes_factures_honoraires': return json(state.facture?[state.facture]:[]);
-          case 'fn_mes_bulletins_paie': return json([]);
+          case 'fn_mes_bulletins_paie':
+          case 'fn_lister_copies_bulletins': return json([]);
           case 'fn_suivi_escrow_mission':
           case 'fn_mes_paiements_escrow': return json([]);
           case 'fn_mes_factures': return json([]);

@@ -135,7 +135,7 @@ test('SOIGNANT — justificatif présent, onglets de documents et simulations de
  for(const name of ['Contrats','DPAE']){await page.getByRole('tab',{name,exact:true}).click();await expect(page.getByRole('tabpanel')).toContainText(/Aucun contrat/);await preuve(page,`documents-complet-${name}`,info);}
  await aller(page,'/soignant/mes-gains');const brut=page.getByRole('button',{name:/Brut ·/});await expect(brut).toBeVisible();
  const b=await brut.evaluate(el=>{const card=el.getBoundingClientRect();return [...el.querySelectorAll('span,p')].map(e=>({right:e.getBoundingClientRect().right,cardRight:card.right}));});expect(b.every(v=>v.right<=v.cardRight)).toBe(true);
- await page.getByRole('tab',{name:'Simulations',exact:true}).click();await expect(page.getByRole('tabpanel')).toContainText(/Aucun|Aucune/);await preuve(page,'revenus-simulations-vide',info);
+ await page.getByRole('tab',{name:'Paie',exact:true}).click();await expect(page.getByRole('tabpanel')).toContainText(/Aucun|Aucune/);await preuve(page,'revenus-simulations-vide',info);
  expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);
 });
 

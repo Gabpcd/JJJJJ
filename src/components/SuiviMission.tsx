@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, ChevronDown, Circle, Clock3, RefreshCw, Trian
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { avecDelai } from '@/lib/avecDelai';
+import { listerCopiesBulletins } from '@/lib/copiesBulletins';
 import { construireSuiviMission, type LecturesSuivi, type LectureSuivi, type MissionSuivie, type PlanningSuivi } from '@/lib/suiviMission';
 
 interface Props {
@@ -59,6 +60,7 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
       } catch { return indisponible; }
     }
     async function lireFinances(): Promise<Pick<LecturesSuivi, 'documents' | 'paiements' | 'escrow'>> {
+      let copiesAutorisees = !estEtab;
       if (estEtab) {
         try {
           const { data, error } = await avecDelai(supabase.rpc('fn_mes_permissions_etab', {
@@ -71,6 +73,7 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
           if (!acces.permissions?.lecture_paiement && !acces.permissions?.paiement) {
             return { documents: { etat: 'restreint' }, paiements: { etat: 'restreint' }, escrow: { etat: 'restreint' } };
           }
+          copiesAutorisees = acces.permissions?.paiement === true;
         } catch { return { documents: indisponible, paiements: indisponible, escrow: indisponible }; }
       }
       if (!actif || controller.signal.aborted) return { documents: indisponible, paiements: indisponible, escrow: indisponible };
@@ -78,7 +81,10 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
       const [documents, paiements, escrow] = await Promise.all([
         regimeConnu ? mission.type_contrat_applique === 'LIBERAL'
           ? lire(supabase.from('factures_honoraires').select('statut,type_document').eq('mission_id', mission.id).abortSignal(controller.signal))
-          : lire(supabase.from('bulletins_paie').select('statut,pdf_s3_key').eq('mission_id', mission.id).abortSignal(controller.signal))
+          : copiesAutorisees
+            ? lire(listerCopiesBulletins(estEtab ? mission.etablissement_id : null, mission.id)
+              .then(copies => ({ data: copies.map(c => ({ statut: c.statut, type_document: 'COPIE_BULLETIN_OFFICIEL' })), error: null })))
+            : Promise.resolve({ etat: 'restreint' } as const)
           : Promise.resolve(nonConcerne),
         lire(supabase.from('paiements_soignant').select('statut,confirme_par_soignant,conteste')
           .eq('mission_id', mission.id).abortSignal(controller.signal)),
@@ -127,9 +133,9 @@ function SuiviMissionPourCompte({ mission, role, candidatureEnvoyee, litigeActif
     presence: { vers: `${base}/presences/mission/${mission.id}`, texte: 'Voir les présences' },
     heures: { vers: `${base}/presences/mission/${mission.id}`, texte: 'Consulter la validation' },
     ...(financeAutorisee ? {
-      document: { vers: mission.type_contrat_applique === 'SALARIE'
+      ...(lectures.documents.etat !== 'restreint' ? { document: { vers: mission.type_contrat_applique === 'SALARIE'
         ? estEtab ? '/etablissement/export-paie' : '/soignant/mes-gains?tab=bulletins'
-        : estEtab ? finances : '/soignant/mes-gains?tab=factures', texte: 'Consulter les documents' },
+        : estEtab ? finances : '/soignant/mes-gains?tab=factures', texte: 'Consulter les documents' } } : {}),
       reglement: { vers: finances, texte: 'Consulter les finances' },
     } : {}),
     } : {}),

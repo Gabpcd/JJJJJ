@@ -19,6 +19,7 @@ import {
   type MissionExportPaiePeriode,
 } from '@/lib/export-paie-planning';
 import { cleMoisParis, formatParis } from '@/lib/date-heure-paris';
+import { CopiesBulletinsEtablissement } from '@/components/CopiesBulletins';
 
 type FormatExport = 'Standard' | 'Silae' | 'Sage';
 
@@ -94,6 +95,15 @@ export default function ExportPaie() {
 }
 
 function ExportPaieContent() {
+  const { etablissementId } = useEtablissementScope();
+  return <LayoutApp role="ADMIN_ETABLISSEMENT"><div className="space-y-8">
+    <h1 className="text-xl font-bold text-foreground">Paie</h1>
+    {etablissementId && <CopiesBulletinsEtablissement etablissementId={etablissementId} />}
+    <section aria-label="Variables pour votre service paie"><VariablesPaieContent /></section>
+  </div></LayoutApp>;
+}
+
+function VariablesPaieContent() {
   usePageTitle('Export Paie');
   const navigate = useNavigate();
   const { user, etablissementId } = useEtablissementScope();
@@ -219,16 +229,16 @@ function ExportPaieContent() {
     }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   if (erreurChargement) {
     return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <div>
         <div className="card-base border-destructive/30 bg-destructive/5" role="alert">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
             <div>
-              <h1 className="font-semibold text-foreground">Export de paie bloqué</h1>
+              <h2 className="font-semibold text-foreground">Export de paie bloqué</h2>
               <p className="text-sm text-muted-foreground mt-1">{erreurChargement}</p>
               <p className="text-xs text-muted-foreground mt-1">Aucun fichier n'est généré tant que les créneaux, validations et profils ne sont pas tous vérifiables.</p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -238,7 +248,7 @@ function ExportPaieContent() {
             </div>
           </div>
         </div>
-      </LayoutApp>
+      </div>
     );
   }
 
@@ -251,11 +261,11 @@ function ExportPaieContent() {
   ];
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <div>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <FileSpreadsheet className="h-6 w-6 text-primary" /> Export Paie
-        </h1>
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <FileSpreadsheet className="h-6 w-6 text-primary" /> Variables pour votre service paie
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">Générez un fichier CSV compatible avec votre logiciel de paie</p>
       </div>
 
@@ -366,6 +376,6 @@ function ExportPaieContent() {
       <p className="text-xs text-muted-foreground italic mt-4">
         ⚠️ Simulation à titre indicatif. Les heures proviennent des créneaux exacts validés ; les montants des missions couvrant plusieurs mois sont ventilés au prorata de ces heures. L’export est bloqué si des majorations ne peuvent pas être attribuées avec certitude. Seuls les montants calculés par le moteur de paie font foi.
       </p>
-    </LayoutApp>
+    </div>
   );
 }
