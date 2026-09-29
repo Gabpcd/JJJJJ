@@ -106,6 +106,9 @@ describe('suivi commun : seuls les états canoniques confirment une étape', () 
     const etapes = construireSuiviMission({ ...mission, statut: 'ANNULEE_PAR_ETABLISSEMENT' }, vide());
     expect(etapes.find(e => e.id === 'mission')!).toMatchObject({ etat: 'a_verifier', statut: 'Annulée' });
   });
+  it.each([['LITIGE', 'Mission marquée en litige'], ['EXPIREE', 'Expirée'], ['ABSENCE', 'Absence signalée']])('reconnaît le statut opérationnel %s sans inventer une mission terminée', (statut, libelle) => {
+    expect(construireSuiviMission({ ...mission, statut }, vide()).find(e => e.id === 'mission')).toMatchObject({ etat: 'a_verifier', statut: libelle });
+  });
   it('un remboursement sécurisé prime sur un ancien règlement déclaré sans inventer un versement au soignant', () => {
     const lectures = vide();
     lectures.paiements = { etat: 'disponible', lignes: [{ statut: 'CONFIRME', confirme_par_soignant: true, conteste: false }] };

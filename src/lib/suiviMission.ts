@@ -110,6 +110,9 @@ export function construireSuiviMission(
 
   const execution: EtapeSuivi = { id: 'mission', titre: 'Mission', etat: 'inconnu', statut: 'État à confirmer', detail: 'Le statut de la mission n’est pas reconnu.' };
   if (annulee) Object.assign(execution, { etat: 'a_verifier', statut: 'Annulée', detail: 'La mission est annulée. Les documents déjà enregistrés restent consultables.' });
+  else if (mission.statut === 'LITIGE') Object.assign(execution, { etat: 'a_verifier', statut: 'Mission marquée en litige', detail: 'Consultez le litige et sa décision. Le règlement est suivi séparément.' });
+  else if (mission.statut === 'EXPIREE') Object.assign(execution, { etat: 'a_verifier', statut: 'Expirée', detail: 'La mission a expiré sans être déclarée terminée.' });
+  else if (mission.statut === 'ABSENCE') Object.assign(execution, { etat: 'a_verifier', statut: 'Absence signalée', detail: 'Une absence est enregistrée sur cette mission. Consultez son détail.' });
   else if (mission.statut === 'TERMINEE') Object.assign(execution, { etat: 'confirme', statut: 'Terminée', detail: 'La mission est clôturée. La validation des heures est suivie séparément.' });
   else if (mission.statut === 'EN_COURS') Object.assign(execution, { etat: 'en_cours', statut: 'En cours', detail: 'La mission a commencé.' });
   else if (['OUVERTE', 'ASSIGNEE'].includes(mission.statut)) Object.assign(execution, { etat: 'en_cours', statut: 'À venir', detail: 'La mission n’est pas encore déclarée en cours.' });
