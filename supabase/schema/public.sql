@@ -18824,9 +18824,15 @@ DECLARE
   v_parrainage_id UUID;
   v_ip TEXT;
   v_user_agent TEXT;
+  v_contexte_parrainage text := current_setting('jolene.parrainage_attribution_id', true);
   v_prime integer := (public.fn_param_num('prime_parrainage_eur', 50))::integer;
 BEGIN
   IF v_filleul_id IS NULL THEN RETURN '{"error":"Non authentifié"}'::JSONB; END IF;
+  IF NOT public.fn_compte_auth_actif() THEN RETURN '{"error":"Compte suspendu, supprimé ou désactivé"}'::jsonb; END IF;
+  -- Sérialiser les attributions d'un même filleul avant le contrôle d'unicité.
+  PERFORM 1 FROM public.soignants WHERE id = v_filleul_id AND supprime_le IS NULL
+    AND statut_compte NOT IN ('SUSPENDU', 'SUPPRIME') FOR UPDATE;
+  IF NOT FOUND THEN RETURN '{"error":"Profil soignant introuvable"}'::jsonb; END IF;
   SELECT * INTO v_parrain FROM soignants WHERE code_parrainage = UPPER(TRIM(p_code)) AND supprime_le IS NULL;
   IF v_parrain IS NULL THEN RETURN '{"error":"Code de parrainage invalide"}'::JSONB; END IF;
   IF v_parrain.id = v_filleul_id THEN RETURN '{"error":"Vous ne pouvez pas vous parrainer vous-même"}'::JSONB; END IF;
@@ -18834,7 +18840,19 @@ BEGIN
   IF v_nb_filleuls_valides >= 20 THEN RETURN '{"error":"Le parrain a atteint la limite de 20 filleuls validés"}'::JSONB; END IF;
   IF EXISTS (SELECT 1 FROM parrainages WHERE filleul_id = v_filleul_id) THEN RETURN '{"error":"Vous avez déjà appliqué un code de parrainage"}'::JSONB; END IF;
   INSERT INTO parrainages (parrain_id, filleul_id, code_parrainage, statut) VALUES (v_parrain.id, v_filleul_id, UPPER(TRIM(p_code)), 'EN_ATTENTE') RETURNING id INTO v_parrainage_id;
-  UPDATE soignants SET parraine_par = v_parrain.id WHERE id = v_filleul_id AND parraine_par IS NULL;
+  -- Contexte limité à la relation qui vient d'être créée ; aucune permission
+  -- générale de modifier la qualification, le score ou le compte Stripe.
+  PERFORM set_config('jolene.parrainage_attribution_id', v_parrainage_id::text, true);
+  BEGIN
+    UPDATE soignants SET parraine_par = v_parrain.id WHERE id = v_filleul_id AND parraine_par IS NULL;
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('jolene.parrainage_attribution_id', COALESCE(v_contexte_parrainage, ''), true);
+    RAISE;
+  END;
+  PERFORM set_config('jolene.parrainage_attribution_id', COALESCE(v_contexte_parrainage, ''), true);
+  IF NOT EXISTS (SELECT 1 FROM soignants WHERE id = v_filleul_id AND parraine_par = v_parrain.id) THEN
+    RAISE EXCEPTION 'Attribution du parrain non persistée';
+  END IF;
   BEGIN
     v_ip := COALESCE(current_setting('request.headers', true)::json->>'x-forwarded-for', current_setting('request.headers', true)::json->>'x-real-ip', 'unknown');
     v_user_agent := COALESCE(current_setting('request.headers', true)::json->>'user-agent', 'unknown');
@@ -48915,9 +48933,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_protect_soignant_verification"() RETURNS
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
+DECLARE
+  v_attribution_autorisee boolean;
 BEGIN
   IF auth.role() = 'service_role' OR auth.uid() IS NULL OR public.est_admin() THEN RETURN NEW; END IF;
   IF COALESCE(current_setting('jolene.system_update', true), '') = 'true' THEN RETURN NEW; END IF;
+
+  -- Seul le premier lien du compte authentifié, adossé à la relation exacte
+  -- créée par la RPC, peut franchir la protection de parraine_par.
+  v_attribution_autorisee := OLD.id = auth.uid()
+    AND OLD.parraine_par IS NULL AND NEW.parraine_par IS NOT NULL
+    AND EXISTS (SELECT 1 FROM public.parrainages p
+      WHERE p.id::text = current_setting('jolene.parrainage_attribution_id', true)
+        AND p.filleul_id = OLD.id AND p.parrain_id = NEW.parraine_par
+        AND p.statut = 'EN_ATTENTE');
 
   IF COALESCE(current_setting('jolene.rpc_update', true), '') = 'true' THEN
     IF OLD.id = auth.uid() THEN
@@ -48952,7 +48981,7 @@ BEGIN
       NEW.heures_plateforme := OLD.heures_plateforme;
       NEW.stripe_account_id := OLD.stripe_account_id;
       NEW.supprime_le := OLD.supprime_le;
-      NEW.parraine_par := OLD.parraine_par;
+      NEW.parraine_par := CASE WHEN v_attribution_autorisee THEN NEW.parraine_par ELSE OLD.parraine_par END;
       IF OLD.rpps_verifie IS TRUE THEN NEW.numero_rpps := OLD.numero_rpps; END IF;
     END IF;
     RETURN NEW;
@@ -48995,7 +49024,7 @@ BEGIN
     NEW.validation_3200h_statut := OLD.validation_3200h_statut;
     NEW.stripe_account_id := OLD.stripe_account_id;
     NEW.supprime_le := OLD.supprime_le;
-    NEW.parraine_par := OLD.parraine_par;
+    NEW.parraine_par := CASE WHEN v_attribution_autorisee THEN NEW.parraine_par ELSE OLD.parraine_par END;
   END IF;
   RETURN NEW;
 END;
@@ -56956,7 +56985,7 @@ DECLARE
 BEGIN
   IF NOT (
     public.est_admin()
-    OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+    OR COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'service_role'
   ) THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
@@ -57033,7 +57062,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_stripe_webhook_event_is_new"("p_event_id
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-  IF NOT (est_admin() OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role') THEN
+  IF NOT (est_admin() OR COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'service_role') THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
@@ -70302,6 +70331,11 @@ ALTER TABLE ONLY "public"."parrainages_etablissements"
 
 
 ALTER TABLE ONLY "public"."parrainages"
+    ADD CONSTRAINT "parrainages_filleul_id_key" UNIQUE ("filleul_id");
+
+
+
+ALTER TABLE ONLY "public"."parrainages"
     ADD CONSTRAINT "parrainages_parrain_id_filleul_id_key" UNIQUE ("parrain_id", "filleul_id");
 
 
@@ -83002,7 +83036,7 @@ GRANT ALL ON TABLE "public"."parrainage_fraude_signals" TO "service_role";
 
 
 
-GRANT SELECT,INSERT ON TABLE "public"."parrainages" TO "authenticated";
+GRANT SELECT ON TABLE "public"."parrainages" TO "authenticated";
 GRANT ALL ON TABLE "public"."parrainages" TO "service_role";
 
 
