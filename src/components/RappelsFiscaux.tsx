@@ -1,150 +1,54 @@
-/**
- * RappelsFiscaux — échéances fiscales du libéral, branchées sur le régime fiscal.
- *
- * §7.7 Lot 7a — règles de copy :
- * - Jamais un numéro de formulaire seul à côté d'une date (« 2035 — 15 mai 2027 »
- *   se lit comme une année et sème la confusion). Toujours : action en langage
- *   clair + année des revenus + formulaire entre parenthèses.
- * - Micro-BNC (défaut, tag « à confirmer » tant que non répondu) : PAS de 2035 —
- *   la déclaration passe par la 2042-C-PRO avec la déclaration de revenus.
- * - URSSAF et CARPIMKO sont communs aux deux régimes.
- */
-import { useMemo } from 'react';
-import { Calendar } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom';
+import { Calendar, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { REGLES_INSTALLATION_LIBERAL } from '@/lib/regles-installation-liberal';
 
 export type RegimeFiscal = 'MICRO_BNC' | 'DECLARATION_CONTROLEE';
 
 interface RappelsFiscauxProps {
+  profession?: string | null;
+  afficherLienCharges?: boolean;
   regimeFiscal?: RegimeFiscal | null;
   regimeFiscalConfirme?: boolean;
 }
 
-function getProchainTrimestreURSSAF(): Date {
-  const now = new Date();
-  const y = now.getFullYear();
-  const echeances = [
-    new Date(y, 0, 5), new Date(y, 3, 5), new Date(y, 6, 5), new Date(y, 9, 5),
+// Aucun échéancier individuel n'est synchronisé dans Jolene. Ne pas déduire
+// une date, une fréquence ou une urgence du seul régime fiscal/profession.
+export function RappelsFiscaux({ profession, regimeFiscal, regimeFiscalConfirme = false, afficherLienCharges = true }: RappelsFiscauxProps) {
+  const installation = profession ? REGLES_INSTALLATION_LIBERAL[profession] : undefined;
+  const caisse = installation?.caisse_retraite;
+  const lienCaisse = installation?.lien_caisse_retraite;
+  const regime = regimeFiscal === 'MICRO_BNC' ? 'Micro-BNC'
+    : regimeFiscal === 'DECLARATION_CONTROLEE' ? 'Déclaration contrôlée' : null;
+  const organismes = [
+    { label: 'URSSAF', href: 'https://www.urssaf.fr/' },
+    ...(caisse && lienCaisse ? [{ label: caisse, href: lienCaisse }] : []),
+    { label: 'Impôts', href: 'https://www.impots.gouv.fr/accueil' },
   ];
-  return echeances.find(d => d > now) || new Date(y + 1, 0, 5);
-}
-
-function getEcheanceCARPIMKO(): Date {
-  const now = new Date();
-  const avril = new Date(now.getFullYear(), 3, 1);
-  return avril > now ? avril : new Date(now.getFullYear() + 1, 3, 1);
-}
-
-/** Déclaration contrôlée : dépôt de la 2035 — 15 mai de l'année suivant les revenus. */
-function getEcheance2035(): Date {
-  const now = new Date();
-  const mai = new Date(now.getFullYear(), 4, 15);
-  return mai > now ? mai : new Date(now.getFullYear() + 1, 4, 15);
-}
-
-/** Micro-BNC : la 2042-C-PRO part avec la déclaration de revenus (fin mai–début
- *  juin selon le département) — date indicative, affichée avec ≈. */
-function getEcheance2042CPro(): Date {
-  const now = new Date();
-  const finMai = new Date(now.getFullYear(), 4, 31);
-  return finMai > now ? finMai : new Date(now.getFullYear() + 1, 4, 31);
-}
-
-export function RappelsFiscaux({ regimeFiscal = 'MICRO_BNC', regimeFiscalConfirme = false }: RappelsFiscauxProps) {
-  const navigate = useNavigate();
-  const microBnc = (regimeFiscal ?? 'MICRO_BNC') === 'MICRO_BNC';
-
-  const echeances = useMemo(() => {
-    const dateImpot = microBnc ? getEcheance2042CPro() : getEcheance2035();
-    const anneeRevenus = dateImpot.getFullYear() - 1;
-    return [
-      {
-        label: 'URSSAF — déclaration trimestrielle',
-        date: getProchainTrimestreURSSAF(),
-        approx: false,
-        icon: '🏛️',
-      },
-      {
-        label: 'CARPIMKO — cotisation annuelle',
-        date: getEcheanceCARPIMKO(),
-        approx: false,
-        icon: '🛡️',
-      },
-      microBnc
-        ? {
-            label: `Déclaration de tes revenus ${anneeRevenus} (formulaire 2042-C-PRO)`,
-            date: dateImpot,
-            approx: true,
-            icon: '📋',
-          }
-        : {
-            label: `Déclaration de tes revenus ${anneeRevenus} (formulaire 2035)`,
-            date: dateImpot,
-            approx: false,
-            icon: '📋',
-          },
-    ];
-  }, [microBnc]);
-
-  // 9.3 — promotion J-7 : l'échéance la plus proche à ≤ 7 jours passe la carte en
-  // mode « urgent » et affiche un bandeau qui pousse vers la préparation (Mes
-  // charges / exports, juste en dessous dans l'écran Revenus).
-  const joursMin = useMemo(
-    () => Math.min(...echeances.map(e => differenceInDays(e.date, new Date()))),
-    [echeances],
-  );
-  const urgente = joursMin >= 0 && joursMin <= 7;
 
   return (
-    <div
-      className={`card-base mb-6 cursor-pointer hover:shadow-md transition-all ${
-        urgente ? 'border-destructive/40 ring-1 ring-destructive/20' : ''
-      }`}
-      onClick={() => navigate('/soignant/charges')}
-    >
-      {urgente && (
-        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 text-destructive text-xs font-semibold px-3 py-2 mb-3">
-          ⏰ Échéance {joursMin === 0 ? "aujourd'hui" : `dans ${joursMin}j`} — prépare tes exports et tes charges maintenant.
-        </div>
-      )}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Calendar className="h-5 w-5 text-primary shrink-0" />
-          <h3 className="font-semibold text-foreground">📅 Prochaines échéances fiscales</h3>
-        </div>
-        {/* Régime affiché en clair ; « à confirmer » tant que la question n'a pas
-            été posée — le clic sur la carte mène à Mes charges où elle se règle. */}
-        <span className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-          regimeFiscalConfirme ? 'bg-muted text-muted-foreground' : 'bg-warning/10 text-warning'
-        }`}>
-          {microBnc ? 'Micro-BNC' : 'Déclaration contrôlée'}{regimeFiscalConfirme ? '' : ' · à confirmer'}
-        </span>
+    <section className="card-base mb-6" aria-label="Mes échéances fiscales et sociales">
+      <div className="flex items-center gap-2 mb-2">
+        <Calendar className="h-5 w-5 text-primary shrink-0" />
+        <h3 className="font-semibold text-foreground">Mes échéances fiscales et sociales</h3>
       </div>
-      <div className="space-y-2">
-        {echeances.map(e => {
-          const jours = differenceInDays(e.date, new Date());
-          const color = jours <= 14 ? 'text-destructive' : jours <= 30 ? 'text-warning' : 'text-muted-foreground';
-          return (
-            <div key={e.label} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="shrink-0">{e.icon}</span>
-                <span className="text-sm text-foreground">{e.label}</span>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs font-medium text-foreground">
-                  {e.approx ? '≈ ' : ''}{format(e.date, 'd MMM yyyy', { locale: fr })}
-                </p>
-                <p className={`text-[10px] ${color}`}>
-                  {jours <= 0 ? 'Échue' : `dans ${jours}j`}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+      <p className="text-sm text-muted-foreground mb-3">
+        Retrouve tes dates et tes montants à régler dans tes espaces officiels.
+      </p>
+      <p className="text-xs text-muted-foreground mb-3">
+        {regime ? `${regime}${regimeFiscalConfirme ? '' : ' · à confirmer'}` : 'Régime fiscal à renseigner'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {organismes.map(({ label, href }) => (
+          <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`${label} — site officiel (nouvelle fenêtre)`}>
+            {label}<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
+        ))}
       </div>
-      <p className="text-xs text-primary mt-2 text-center">Voir mes charges détaillées →</p>
-    </div>
+      {afficherLienCharges && <Link to="/soignant/charges" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">
+        Mes charges et mon régime fiscal
+      </Link>}
+    </section>
   );
 }

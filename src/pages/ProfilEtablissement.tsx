@@ -1064,8 +1064,9 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         </div>
         )}
 
-        {/* Lot 11 : Enregistrer sticky — toujours accessible sur un long formulaire mobile */}
-        <div className="sticky bottom-4 z-10">
+        {/* Sur mobile, garder le bouton dans le flux : il ne masque ni les
+            erreurs du formulaire ni les onglets fixes. */}
+        <div className="md:sticky md:bottom-4 z-10">
           <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50 shadow-lg">
             {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
           </button>
