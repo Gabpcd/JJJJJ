@@ -17,6 +17,8 @@ et n'affiche plus un faux succès d'actualisation. Le texte salarié distingue
 le salaire versé par l'employeur du bulletin décrivant le montant dû.
 Le retour Stripe lance une seule lecture forcée ; une génération de requête
 empêche une ancienne réponse d'écraser une vérification plus récente.
+Une panne ou une absence de profil affiche une erreur neutre avec réessai ;
+elle ne classe jamais le compte en salarié par défaut.
 Une réponse de revenus invalide ou en erreur masque les chiffres et affiche
 une indisponibilité explicite ; aucun montant zéro n'est inventé et aucun NaN
 n'est affiché. La fixture de revenus utilise les clés du vrai contrat SQL.
@@ -26,7 +28,8 @@ n'est affiché. La fixture de revenus utilise les clés du vrai contrat SQL.
 - 48 tests backend, dont 10 exécutent les vrais handlers avec des fournisseurs
   simulés : réparation du cache, trois critères de complétude, suppression,
   refus de persistance, événement ancien, idempotence et réessai.
-- 35 scénarios frontend (sept parcours sur cinq formats), sans retry :
+- 45 scénarios frontend (neuf parcours sur cinq formats), sans retry :
+  profil en panne ou absent, réessai sans rechargement puis reprise ;
   salarié, panne initiale, panne après succès, retour Stripe incohérent,
   reprise, rechargement et absence de lecture cache concurrente au retour de
   Stripe en cas d'erreur ou de suspension ; revenus invalides, indisponibles puis
@@ -40,3 +43,10 @@ un chantier séparé.
 
 La référence `public.sql` reprend exactement le snapshot produit après le
 déploiement de la PR987. Elle ne contient pas de nouvelle migration à exécuter.
+
+Cinq parcours supplémentaires avec le backend staging et Stripe TEST ont
+confirmé le statut connecté, son actualisation et sa persistance après
+rechargement, sur les mêmes cinq formats. La lecture en base confirme les
+indicateurs cohérents. Aucun nouveau paiement, remboursement ou onboarding
+n’a été lancé. Le simulateur utilise une origine locale déjà autorisée ;
+aucune règle CORS n’a été élargie pour ce contrôle.

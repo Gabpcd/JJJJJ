@@ -38,6 +38,8 @@ export default function PageStripeConnect() {
   const [motifRejet, setMotifRejet] = useState<string | null>(null);
   const [estCompteTest, setEstCompteTest] = useState(false);
   const [erreurStatut, setErreurStatut] = useState<string | null>(null);
+  const [erreurProfil, setErreurProfil] = useState(false);
+  const [relectureProfil, setRelectureProfil] = useState(0);
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
     const verification = ++verificationCourante.current;
@@ -85,30 +87,37 @@ export default function PageStripeConnect() {
     let actif = true;
     const init = async () => {
       setLoading(true);
-      // Load soignant type first
-      const { data: sg } = await supabase.from('soignants')
-        .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
-        .eq('id', user.id).maybeSingle();
-      if (!actif) return;
+      setErreurProfil(false);
+      try {
+        // Ne jamais déduire le mode d'exercice d'une lecture en panne.
+        const { data: sg, error } = await supabase.from('soignants')
+          .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
+          .eq('id', user.id).maybeSingle();
+        if (!actif) return;
+        if (error || !sg) throw new Error('Profil de paiement indisponible');
 
-      if (sg) {
-        setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
-        setSoignantNom(`${sg.prenom} ${sg.nom}`);
-        setEstCompteTest(!!sg.est_compte_test);
+        if (sg) {
+          setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
+          setSoignantNom(`${sg.prenom} ${sg.nom}`);
+          setEstCompteTest(!!sg.est_compte_test);
 
-        // Only load Stripe data if LIBERAL or MIXTE
-        if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
-          // Une seule lecture initiale, forcée au retour du fournisseur :
-          // aucune réponse de cache concurrente ne doit écraser ce résultat.
-          await chargerStatut(retourStripe);
-          if (actif) await chargerRevenus();
+          // Only load Stripe data if LIBERAL or MIXTE
+          if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
+            // Une seule lecture initiale, forcée au retour du fournisseur :
+            // aucune réponse de cache concurrente ne doit écraser ce résultat.
+            await chargerStatut(retourStripe);
+            if (actif) await chargerRevenus();
+          }
         }
+      } catch {
+        if (actif) setErreurProfil(true);
+      } finally {
+        if (actif) setLoading(false);
       }
-      if (actif) setLoading(false);
     };
     init();
     return () => { actif = false; verificationCourante.current++; };
-  }, [user, retourStripe, chargerStatut, chargerRevenus]);
+  }, [user, retourStripe, chargerStatut, chargerRevenus, relectureProfil]);
 
   const lancerOnboarding = async () => {
     if (estCompteTest) {
@@ -154,6 +163,16 @@ export default function PageStripeConnect() {
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (erreurProfil) return (
+    <LayoutApp role="SOIGNANT">
+      <h1 className="mb-6 text-xl font-bold">Paiements</h1>
+      <div className="card-base max-w-2xl space-y-3" role="alert">
+        <h2 className="font-semibold">Profil de paiement indisponible</h2>
+        <p className="text-sm text-muted-foreground">Ton mode d’exercice ne peut pas être vérifié pour le moment. Réessaie dans quelques instants.</p>
+        <BoutonY2K onClick={() => setRelectureProfil(valeur => valeur + 1)}>Réessayer</BoutonY2K>
+      </div>
+    </LayoutApp>
+  );
 
   const isLiberal = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
 

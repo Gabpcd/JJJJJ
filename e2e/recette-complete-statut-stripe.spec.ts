@@ -3,6 +3,43 @@ import { simulerSoignant, entrer, preuve } from './helpers/recette-complete-soig
 
 const actif = { statut: 'COMPLET', onboarding_complete: true, charges_enabled: true, payouts_enabled: true, iban_last4: '1234' };
 
+for (const panne of ['erreur', 'absent'] as const) {
+  test(`profil de paiement ${panne} : aucun faux mode salarié, réessai sans rechargement`, async ({ page }, info) => {
+    const s = await simulerSoignant(page);
+    Object.assign(s.profile, { type_exercice: 'LIBERAL', est_compte_test: false });
+    s.overrides.set('stripe-connect-status', actif);
+    await entrer(page, 'connexion');
+    let enPanne = true;
+    await page.route('**/rest/v1/soignants*', async route => {
+      const url = new URL(route.request().url());
+      if (!enPanne || route.request().method() !== 'GET'
+        || url.searchParams.get('select') !== 'prenom,nom,type_exercice,statut_liberal,est_compte_test') return route.fallback();
+      return route.fulfill({
+        status: panne === 'erreur' ? 503 : 200,
+        headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' },
+        json: panne === 'erreur' ? { message: 'Profil temporairement indisponible' } : null,
+      });
+    });
+    await page.goto('/soignant/stripe-connect');
+    const erreur = page.getByRole('alert').filter({ hasText: 'Profil de paiement indisponible' });
+    await expect(erreur).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mode salarié' })).toHaveCount(0);
+    await expect(page.getByText('Compte connecté', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Connecter mon compte bancaire' })).toHaveCount(0);
+    expect(s.calls.filter(c => c.name.startsWith('stripe-connect-'))).toEqual([]);
+    await erreur.getByRole('button', { name: 'Réessayer', exact: true }).click();
+    await expect(erreur).toBeVisible();
+    await preuve(page, `profil-paiement-${panne}`, info, true);
+    enPanne = false;
+    await erreur.getByRole('button', { name: 'Réessayer', exact: true }).click();
+    await expect(page.getByText('Compte connecté', { exact: true })).toBeVisible();
+    await expect(erreur).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText('Compte connecté', { exact: true })).toBeVisible();
+    expect(s.errors).toEqual([]); expect(s.unknown).toEqual([]);
+  });
+}
+
 test.afterEach(async ({ page }) => {
   await expect(page.locator('main')).not.toContainText('NaN');
 });
