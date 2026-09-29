@@ -506,9 +506,9 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         </>
       )}
 
-      {/* ── Mobile bottom tab bar ── */}
+      {/* Fond opaque : le contraste des libellés reste stable quand le contenu défile dessous. */}
       <nav
-        className="fixed left-0 right-0 flex md:hidden z-50 no-print mobile-nav-bottom border-t border-border/80 bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/80 shadow-lg"
+        className="fixed left-0 right-0 flex md:hidden z-50 no-print mobile-nav-bottom border-t border-border/80 bg-card shadow-lg"
         style={{
           bottom: 'var(--viewport-offset-bottom, 0px)',
           height: 'calc(4rem + env(safe-area-inset-bottom))',
