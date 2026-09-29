@@ -384,6 +384,7 @@ jobs:
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
+            tests/security/suivi-escrow-mission.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 

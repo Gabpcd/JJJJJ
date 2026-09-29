@@ -302,7 +302,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
               <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{fmt(totalBrut)}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Montant à verser au soignant (100 % du brut honoraires, aucune retenue par Jolene)
+              {typeContratApplique ? 'Honoraires prévus au contrat.' : 'Honoraires prévisionnels de la mission.'} Ce montant n’est pas un solde à verser : consultez le suivi pour connaître les paiements et remboursements enregistrés.
             </p>
           </div>
 

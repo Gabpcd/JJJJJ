@@ -7,6 +7,7 @@ export function creerSuiviSimule() {
   const base = creerActionsNationales();
   const suivi = {
     paiements: [] as { statut: string; confirme_par_soignant: boolean; conteste: boolean }[],
+    escrow: [] as { statut: string; paye_le: string | null }[],
     bulletins: [] as { statut: string; pdf_s3_key: string | null }[],
     litige: false, financeAutorisee: true,
     erreurs: new Set<string>(),
@@ -18,10 +19,16 @@ export function creerSuiviSimule() {
       const req = route.request(); const url = new URL(req.url()); const name = url.pathname.split('/').pop()!;
       if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort('blockedbyclient');
       if (url.pathname.includes('/rpc/')) {
-        if (!['fn_mes_permissions_etab', 'fn_litige_pour_mission', 'fn_presences_detail_mission'].includes(name)) return route.fallback();
+        if (!['fn_mes_permissions_etab', 'fn_litige_pour_mission', 'fn_presences_detail_mission', 'fn_suivi_escrow_mission'].includes(name)) return route.fallback();
         expect(req.method()).toBe('POST');
         expect(req.headers().authorization).toBe(`Bearer simulation-mission-${role}`);
         const body = req.postDataJSON(); base.state.calls.push({ role, name, method: req.method(), body });
+        if (name === 'fn_suivi_escrow_mission') {
+          expect(body).toEqual({ p_mission_id: ids.mission });
+          if (role === 'ADMIN_ETABLISSEMENT') expect(suivi.financeAutorisee).toBe(true);
+          suivi.lectures.push({ role, table: name, select: 'statut,paye_le', missionId: body.p_mission_id });
+          return suivi.erreurs.has(name) ? route.fulfill({ status: 503, json: { message: 'Source indisponible pour la recette' } }) : route.fulfill({ json: suivi.escrow });
+        }
         if (name === 'fn_presences_detail_mission') {
           expect(body).toEqual({ p_mission_id: ids.mission });
           const p = base.state.presence;

@@ -106,4 +106,29 @@ describe('suivi commun : seuls les états canoniques confirment une étape', () 
     const etapes = construireSuiviMission({ ...mission, statut: 'ANNULEE_PAR_ETABLISSEMENT' }, vide());
     expect(etapes.find(e => e.id === 'mission')!).toMatchObject({ etat: 'a_verifier', statut: 'Annulée' });
   });
+  it('un remboursement sécurisé prime sur un ancien règlement déclaré sans inventer un versement au soignant', () => {
+    const lectures = vide();
+    lectures.paiements = { etat: 'disponible', lignes: [{ statut: 'CONFIRME', confirme_par_soignant: true, conteste: false }] };
+    lectures.escrow = { etat: 'disponible', lignes: [{ statut: 'REMBOURSE', paye_le: null }] };
+    const etape = construireSuiviMission(mission, lectures).find(e => e.id === 'reglement')!;
+    expect(etape).toMatchObject({ etat: 'confirme', statut: 'Remboursement confirmé' });
+    expect(etape.detail).toContain('n’est pas un versement au soignant');
+    lectures.escrow.lignes[0].paye_le = '2026-09-25T08:00:00Z';
+    expect(construireSuiviMission(mission, lectures).find(e => e.id === 'reglement')).toMatchObject({ etat: 'a_verifier', statut: 'Remboursement après versement' });
+  });
+  it.each([
+    ['DEBITE', 'Fonds prélevés', 'en_cours'],
+    ['REMBOURSE_EN_COURS', 'Remboursement en cours', 'en_cours'],
+    ['PAYE', 'Versement confirmé par le prestataire', 'confirme'],
+    ['DISPUTE', 'Paiement sécurisé en litige', 'a_verifier'],
+    ['STATUT_INCONNU', 'État du paiement sécurisé à vérifier', 'a_verifier'],
+  ])('distingue %s d’une réception déclarée par le soignant', (statutSource, statut, etat) => {
+    const lectures = vide(); lectures.escrow = { etat: 'disponible', lignes: [{ statut: statutSource, paye_le: null }] };
+    expect(construireSuiviMission(mission, lectures).find(e => e.id === 'reglement')).toMatchObject({ statut, etat });
+  });
+  it('une lecture escrow en panne ne devient pas un remboursement confirmé et ne modifie pas le circuit salarié', () => {
+    const lectures = vide(); lectures.escrow = { etat: 'indisponible' };
+    expect(construireSuiviMission(mission, lectures).find(e => e.id === 'reglement')?.statut).toBe('Information indisponible');
+    expect(construireSuiviMission({ ...mission, type_contrat_applique: 'SALARIE' }, lectures).find(e => e.id === 'reglement')?.statut).toBe('Règlement non confirmé');
+  });
 });

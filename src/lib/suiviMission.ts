@@ -31,11 +31,16 @@ export interface PaiementSuivi {
   confirme_par_soignant: boolean | null;
   conteste: boolean | null;
 }
+export interface EscrowSuivi {
+  statut: string;
+  paye_le: string | null;
+}
 export interface LecturesSuivi {
   contrat: LectureSuivi<ContratSuivi>;
   presences: LectureSuivi<PresenceSuivie>;
   documents: LectureSuivi<DocumentSuivi>;
   paiements: LectureSuivi<PaiementSuivi>;
+  escrow?: LectureSuivi<EscrowSuivi>;
 }
 export type PlanningSuivi =
   | { etat: 'chargement' | 'indisponible' | 'incomplet' }
@@ -149,6 +154,32 @@ export function construireSuiviMission(
     else if (lignes.some(p => p.statut === 'DECLARE')) Object.assign(reglement, { etat: 'en_cours', statut: 'Déclaré, à confirmer', detail: 'Un règlement a été déclaré. Sa réception doit encore être confirmée par le soignant.' });
     else if (lignes.length && lignes.every(p => p.statut === 'CONFIRME' && p.confirme_par_soignant === true)) Object.assign(reglement, { etat: 'confirme', statut: 'Réception enregistrée', detail: 'Le soignant a confirmé les règlements affichés dans les finances. Ce suivi ne calcule pas le solde restant.' });
     else if (lignes.length) Object.assign(reglement, { etat: 'a_verifier', statut: 'Confirmation à vérifier', detail: 'La résolution d’un litige ou un statut seul ne confirme pas la réception du règlement.' });
+  }
+  // Le circuit sécurisé ne crée pas nécessairement de paiement déclaré à la
+  // main. Son état doit être lu directement, sans déduire un versement d'un
+  // prélèvement ni une réception bancaire d'un remboursement.
+  if (regime === 'LIBERAL' && lectures.escrow && lectures.escrow.etat !== 'non_concerne') {
+    const manqueEscrow = lectureManquante(lectures.escrow);
+    if (manqueEscrow) Object.assign(reglement, manqueEscrow);
+    else if (lectures.escrow.etat === 'disponible' && lectures.escrow.lignes.length) {
+      const [escrow] = lectures.escrow.lignes;
+      const etats: Record<string, Pick<EtapeSuivi, 'etat' | 'statut' | 'detail'>> = {
+        INITIE: { etat: 'en_cours', statut: 'Prélèvement en cours', detail: 'Le paiement sécurisé est engagé. Aucun versement au soignant n’est encore confirmé.' },
+        DEBITE: { etat: 'en_cours', statut: 'Fonds prélevés', detail: 'Le prélèvement de l’établissement est confirmé. Le versement au soignant reste une étape distincte.' },
+        DISPONIBLE: { etat: 'en_cours', statut: 'Fonds disponibles', detail: 'Les fonds du paiement sécurisé sont disponibles. Le versement au soignant reste à confirmer.' },
+        RELEASE_PLANIFIE: { etat: 'en_cours', statut: 'Versement planifié', detail: 'Le versement au soignant est planifié, mais son exécution n’est pas encore confirmée.' },
+        PAYE: { etat: 'confirme', statut: 'Versement confirmé par le prestataire', detail: 'Le prestataire confirme le versement. Ce statut ne constitue pas une confirmation de réception saisie par le soignant.' },
+        ECHOUE: { etat: 'a_verifier', statut: 'Paiement sécurisé à vérifier', detail: 'Une erreur est enregistrée sur le paiement sécurisé. Consultez les finances pour connaître la suite.' },
+        DISPUTE: { etat: 'a_verifier', statut: 'Paiement sécurisé en litige', detail: 'Le règlement est suspendu ou contesté. Consultez le litige avant de considérer le paiement comme définitif.' },
+        REMBOURSE_EN_COURS: { etat: 'en_cours', statut: 'Remboursement en cours', detail: 'Le remboursement à l’établissement a été demandé. Sa réalisation reste à confirmer.' },
+        REMBOURSE: escrow.paye_le
+          ? { etat: 'a_verifier', statut: 'Remboursement après versement', detail: 'Un remboursement à l’établissement est enregistré après un versement au soignant. Consultez les finances pour les montants concernés.' }
+          : { etat: 'confirme', statut: 'Remboursement confirmé', detail: 'Les fonds du paiement sécurisé ont été remboursés à l’établissement. Ce remboursement n’est pas un versement au soignant.' },
+      };
+      Object.assign(reglement, lectures.escrow.lignes.length === 1 && etats[escrow.statut]
+        ? etats[escrow.statut]
+        : { etat: 'a_verifier', statut: 'État du paiement sécurisé à vérifier', detail: 'Les informations disponibles ne permettent pas de confirmer le règlement. Consultez les finances.' });
+    }
   }
   return [attribution, conformite, contrat, planification, execution, presence, heures, document, reglement];
 }
