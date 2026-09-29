@@ -383,6 +383,7 @@ jobs:
             tests/security/recherche-publique-comptage.test.sql
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
+            tests/security/stripe-webhook-jwt-role.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
