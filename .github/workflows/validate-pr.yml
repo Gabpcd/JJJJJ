@@ -385,6 +385,7 @@ jobs:
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/financial-audit-jwt-role.test.sql
+            tests/security/stripe-refund-identifiers.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
