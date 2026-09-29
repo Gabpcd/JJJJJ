@@ -383,6 +383,7 @@ jobs:
             tests/security/recherche-publique-comptage.test.sql
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
+            tests/security/copies-bulletins-officiels.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
@@ -469,6 +470,8 @@ jobs:
         run: |
           npm ci
           npx vitest run \
+            tests/admin/security/copies-bulletins-handler.test.ts \
+            tests/admin/security/copies-bulletins-pdf.test.ts \
             src/components/gains/PaiementsEscrowAVenir.test.tsx \
             tests/admin/security/escrow-release-debite-gate.test.ts \
             tests/admin/security/invoice-payment-state-cas.test.ts \

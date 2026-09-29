@@ -5,10 +5,12 @@
     "remote_total": 76,
     "remote_verify_jwt_false": 71,
     "local_total_after_admin_2fa_retirement": 77,
+    "local_total_after_copies_bulletins": 78,
     "local_verify_jwt_false": 72
   },
   "entries": [
     {"slug":"admin-invoke","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"Gateway JWT Supabase puis garde admin dans la fonction."},
+    {"slug":"copies-bulletins","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":["authentifierCopie","auth.getUser","fn_acces_copie_bulletin"],"justification":"JWT gateway puis session utilisateur vérifiée auprès d’Auth ; droits documentaires par RPC avant lecture des octets et publication atomique. Clés de service refusées comme identité utilisateur."},
     {"slug":"chorus-pro-verify","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"JWT utilisateur requis par le gateway."},
     {"slug":"finalize-etablissement-proof-upload","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"JWT utilisateur requis avant finalisation de preuve."},
     {"slug":"verify-justificatif-fonction","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"JWT utilisateur requis avant vérification documentaire."},
