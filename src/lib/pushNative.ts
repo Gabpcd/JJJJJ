@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from './logger';
 import { normaliserLienJolene } from './nativeLinks';
 import { memoriserTokenPushAppareil } from './pushDeviceToken';
+import { signalerNavigationNative } from './nativeResume';
 
 type RoleApp = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ETABLISSEMENT' | 'ADMIN_PLATEFORME' | 'ADMIN' | 'ADMIN_GROUPE' | null;
 
@@ -70,10 +71,19 @@ function lienExplicite(data: Record<string, unknown>): string | null {
  */
 export async function initNativePush(
   userId: string,
-  { autoriserDemande = false }: { autoriserDemande?: boolean } = {},
+  { autoriserDemande = false, actualiser = false }: { autoriserDemande?: boolean; actualiser?: boolean } = {},
 ): Promise<void> {
   if (!isNative() || !userId) return;
-  if (userInitialise === userId && !autoriserDemande) return;
+  if (userInitialise === userId && !autoriserDemande) {
+    if (!actualiser) return;
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    const permission = await PushNotifications.checkPermissions();
+    if (userInitialise !== userId) return;
+    // Preserve listeners while a tapped notification is waking the app. Token
+    // rotation is already handled by the existing registration callback.
+    if (permission.receive === 'granted') return;
+    userInitialise = null;
+  }
   if (initialisationEnCours && userInitialisationEnCours === userId) return initialisationEnCours;
 
   // Un changement de compte invalide immédiatement les callbacks de l'ancien
@@ -96,7 +106,7 @@ export async function initNativePush(
     }
     if (permission.receive !== 'granted') {
       logger.debug('[PUSH] Permission non accordée — attente d’une action utilisateur');
-      userInitialise = userId;
+      userInitialise = null;
       return;
     }
 
@@ -113,11 +123,22 @@ export async function initNativePush(
         refuserToken(new Error('Le service push n’a retourné aucun token'));
         return;
       }
-      void enregistrerToken(value, userId).then(confirmerToken).catch(refuserToken);
+      void enregistrerToken(value, userId).then(() => {
+        if (generation !== generationPush) return;
+        userInitialise = userId;
+        confirmerToken();
+      }).catch(error => {
+        if (generation !== generationPush) return;
+        // A later token rotation can fail after the initial promise settled.
+        // Keep the device retryable instead of retaining a false confirmation.
+        userInitialise = null;
+        refuserToken(error);
+      });
     });
 
     await PushNotifications.addListener('registrationError', (error) => {
       if (generation !== generationPush) return;
+      userInitialise = null;
       const detail = valeurTexte((error as { error?: unknown }).error) ?? 'erreur native';
       refuserToken(new Error(`Échec enregistrement push : ${detail}`));
     });
@@ -135,6 +156,7 @@ export async function initNativePush(
 
     await PushNotifications.addListener('pushNotificationActionPerformed', async ({ notification }) => {
       if (generation !== generationPush) return;
+      signalerNavigationNative();
       const data = (notification.data ?? {}) as Record<string, unknown>;
       // Un lien explicite n'a besoin d'aucun appel réseau : il doit fonctionner
       // immédiatement, y compris quand l'app est lancée hors-ligne.
@@ -187,11 +209,18 @@ export async function demanderPermissionNativePush(userId: string): Promise<bool
   await initNativePush(userId, { autoriserDemande: true });
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
-    return (await PushNotifications.checkPermissions()).receive === 'granted';
+    const accordee = (await PushNotifications.checkPermissions()).receive === 'granted';
+    if (accordee && !enregistrementPushConfirme(userId)) {
+      throw new Error('Autorisation accordée, mais enregistrement de cet appareil impossible');
+    }
+    return accordee;
   } catch {
-    return false;
+    throw new Error('Impossible de confirmer l’enregistrement des notifications sur cet appareil');
   }
 }
+
+/** Permission alone is not proof that the server can address this installation. */
+export function enregistrementPushConfirme(userId: string): boolean { return userInitialise === userId; }
 
 /** Nettoie uniquement les listeners locaux ; le logout supprime le token côté DB. */
 export async function resetNativePushListeners(): Promise<void> {

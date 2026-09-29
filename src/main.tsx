@@ -273,6 +273,7 @@ function showUpdateBanner() {
 }
 
 import { SentryErrorFallback } from "./components/SentryErrorFallback";
+import { signalerNavigationNative } from './lib/nativeResume';
 
 // ─── Capacitor Native Init (deep links + push + back button + splash) ───
 async function initNativePlugins() {
@@ -296,6 +297,7 @@ async function initNativePlugins() {
   const appliquerLien = (rawUrl: string): boolean => {
     const route = normaliserLienJolene(rawUrl);
     if (!route) return false;
+    signalerNavigationNative();
     deepLinkTraite = true;
     window.history.replaceState(null, '', route);
     window.dispatchEvent(new PopStateEvent('popstate'));
