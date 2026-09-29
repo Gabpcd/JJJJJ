@@ -5,14 +5,14 @@ import { ids, now, preuveMission } from './helpers/recette-complete-mission';
 for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as const) {
   test(`${role} : prélèvement, remboursement demandé puis confirmé, panne et accès limité`, async ({ context, page }, info) => {
     const { state, installer, suivi } = creerSuiviSimule();
-    state.mission.statut = 'LITIGE'; state.mission.soignant_assigne_id = ids.soignant;
+    state.mission.statut = 'TERMINEE'; state.mission.soignant_assigne_id = ids.soignant;
     state.mission.type_contrat_applique = 'LIBERAL'; state.contratCree = true;
     suivi.escrow = [{ statut: 'DEBITE', paye_le: null }];
     await installer(context, role); await page.clock.setFixedTime(new Date(now));
     await page.goto(`/${role === 'SOIGNANT' ? 'soignant' : 'etablissement'}/missions/${ids.mission}`);
+    if (role === 'ADMIN_ETABLISSEMENT') await page.getByRole('button', { name: 'Fermer', exact: true }).click();
     const suiviUi = page.getByRole('region', { name: 'Suivi de la mission', exact: true });
     await suiviUi.getByRole('button', { name: 'Afficher le détail du suivi' }).click();
-    await expect(suiviUi.getByTestId('suivi-mission')).toContainText('Mission marquée en litige');
     const reglement = suiviUi.getByTestId('suivi-reglement');
     const actualiser = async () => { await suiviUi.getByRole('button', { name: 'Actualiser le suivi' }).click(); };
     await expect(reglement).toContainText('Fonds prélevés');
@@ -47,5 +47,21 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as const) {
     expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
     expect(state.signatures).toHaveLength(0); expect(state.sms).toHaveLength(0); expect(state.emails).toHaveLength(0);
     await info.attach('lectures-simulees-sans-mutation', { body: JSON.stringify(suivi.lectures), contentType: 'application/json' });
+  });
+
+  test(`${role} : le remboursement d’une mission en litige ne devient pas un statut inconnu`, async ({ context, page }, info) => {
+    const { state, installer, suivi } = creerSuiviSimule();
+    state.mission.statut = 'LITIGE'; state.mission.soignant_assigne_id = ids.soignant;
+    state.mission.type_contrat_applique = 'LIBERAL'; state.contratCree = true;
+    suivi.escrow = [{ statut: 'REMBOURSE', paye_le: null }];
+    await installer(context, role);
+    await page.goto(`/${role === 'SOIGNANT' ? 'soignant' : 'etablissement'}/missions/${ids.mission}`);
+    const suiviUi = page.getByRole('region', { name: 'Suivi de la mission', exact: true });
+    await suiviUi.getByRole('button', { name: 'Afficher le détail du suivi' }).click();
+    await expect(suiviUi.getByTestId('suivi-mission')).toContainText('Mission marquée en litige');
+    await expect(suiviUi.getByTestId('suivi-reglement')).toContainText('Remboursement confirmé');
+    await expect(suiviUi).not.toContainText('Le statut de la mission n’est pas reconnu');
+    expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]);
+    await preuveMission(page, info, `${role}-mission-litige-remboursement-confirme`);
   });
 }
