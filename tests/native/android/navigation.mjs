@@ -17,13 +17,21 @@ const device = devices[0];
 const validations = [];
 const errors = [];
 let page;
+let originalAppPid;
 const nativeShell = async (command) => (await device.shell(command)).toString();
 const save = (name, value) => writeFile(`${output}/${name}`, value);
 const metric = (kind, data) => validations.push({ kind, ...data });
 async function capture(name) {
   await device.screenshot({ path: `${output}/${name}.png` });
   if (page) {
-    await save(`${name}.ime.txt`, await captureIme(device.serial()));
+    const collection = [];
+    await save(`${name}.ime.txt`, await captureIme(device.serial(), {
+      expectedPid: originalAppPid,
+      record: async (entry) => {
+        collection.push({ at: new Date().toISOString(), ...entry });
+        await save(`${name}.ime-collection.json`, JSON.stringify(collection, null, 2));
+      },
+    }));
     await save(`${name}.aria.txt`, await page.locator('body').ariaSnapshot());
     await save(`${name}.viewport.json`, JSON.stringify(await page.evaluate(() => ({
       width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
@@ -133,6 +141,9 @@ try {
   } });
   page.setDefaultTimeout(15000);
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('crash', () => errors.push('Native WebView crashed'));
+  originalAppPid = (await nativeShell(`pidof ${pkg}`)).trim();
+  assert.match(originalAppPid, /^[1-9]\d*$/, 'Record the original Jolene PID before interaction');
   await expect(page.getByRole('button', { name: 'Créer un compte soignant', exact: true })).toBeVisible({ timeout: 25000 });
   const nativeWindow = await nativeShell('dumpsys window');
   await save('android-window-before-interaction.txt', nativeWindow);

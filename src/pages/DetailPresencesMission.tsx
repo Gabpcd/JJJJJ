@@ -28,6 +28,8 @@ import {
   memeJourParis,
 } from '@/lib/date-heure-paris';
 
+import { mesureGpsDisponible } from '@/lib/presencesSoignantUi';
+
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
@@ -548,7 +550,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                   return (
                     <div key={effectif.id ?? `${effectif.debut}-${idx}`} className={`rounded-xl border p-3 space-y-2 ${
                       presenceReference?.alerte_teleportation ? 'border-destructive/40 bg-destructive/5' :
-                      presenceReference?.perimetre_gps_valide === false && presenceReference?.distance_etablissement_m !== null ? 'border-warning/40 bg-warning/5' :
+                      presenceReference?.perimetre_gps_valide === false && mesureGpsDisponible(presenceReference?.distance_etablissement_m) ? 'border-warning/40 bg-warning/5' :
                       presenceReference?.valide_par_etablissement ? 'border-success/30 bg-success/5' :
                       'border-border'
                     }`}>
@@ -660,20 +662,20 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
         <div className="card-base mb-6">
           <h2 className="font-semibold text-foreground mb-3">Contrôles du pointage</h2>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            {presenceReference.distance_etablissement_m !== null && (
+            {mesureGpsDisponible(presenceReference.distance_etablissement_m) && (
               <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
                 <MapPin className="h-3.5 w-3.5" />
                 Première arrivée : {Math.round(presenceReference.distance_etablissement_m)}m
                 {presenceReference.perimetre_gps_valide ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
               </span>
             )}
-            {presenceReference.arrivee_precision_gps_m && (
+            {mesureGpsDisponible(presenceReference.arrivee_precision_gps_m) && (
               <span className="flex items-center gap-1">
                 <Radio className="h-3.5 w-3.5" />
                 Précision première arrivée : {Math.round(presenceReference.arrivee_precision_gps_m)}m
               </span>
             )}
-            {presenceReference.depart_precision_gps_m && (
+            {mesureGpsDisponible(presenceReference.depart_precision_gps_m) && (
               <span className="flex items-center gap-1">
                 <Radio className="h-3.5 w-3.5" />
                 Précision dernier départ : {Math.round(presenceReference.depart_precision_gps_m)}m

@@ -122,3 +122,23 @@ describe('CarteValidation — créneaux effectifs multi-jours', () => {
     expect(screen.queryByRole('button', { name: /valider/i })).not.toBeInTheDocument();
   });
 });
+
+it.each([undefined, null, NaN, Infinity, -1])('une mesure absente ou invalide (%s) ne fabrique pas de distance', distance => {
+  const { container } = render(<MemoryRouter><CarteValidation presence={{ ...creerPresence([]),
+    distance_etablissement_m: distance, perimetre_gps_valide: null }}
+    onValider={vi.fn()} onContester={vi.fn()} /></MemoryRouter>);
+  expect(container.textContent).not.toMatch(/NaN|Infinity|Arrivée : 0m|Hors périmètre/);
+});
+
+it('conserve une alerte hors périmètre connue sans inventer de distance', () => {
+  render(<MemoryRouter><CarteValidation presence={{ ...creerPresence([]),
+    distance_etablissement_m: null, perimetre_gps_valide: false }}
+    onValider={vi.fn()} onContester={vi.fn()} /></MemoryRouter>);
+  expect(screen.getByText("Hors périmètre à l'arrivée (distance indisponible)")).toBeInTheDocument();
+});
+
+it('affiche la mesure GPS zéro sans la confondre avec une absence', () => {
+  render(<MemoryRouter><CarteValidation presence={{ ...creerPresence([]), distance_etablissement_m: 0 }}
+    onValider={vi.fn()} onContester={vi.fn()} /></MemoryRouter>);
+  expect(screen.getByText('Arrivée : 0m · ✅ OK')).toBeInTheDocument();
+});

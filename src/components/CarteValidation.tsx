@@ -15,6 +15,8 @@ import {
 } from '@/lib/synthese-presence-mission';
 import { formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
+import { mesureGpsDisponible } from '@/lib/presencesSoignantUi';
+
 function formatPlageExacte(debut: Date, fin: Date): string {
   const debutFormate = formatParis(debut, 'EEE d MMM yyyy · HH:mm');
   const finFormatee = memeJourParis(debut, fin)
@@ -62,11 +64,11 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
     ? synthese.minutesTravaillees - synthese.minutesPlanifiees
     : null;
 
-  const aAlertes = presence.alerte_teleportation || !presence.perimetre_gps_valide;
+  const aAlertes = presence.alerte_teleportation || presence.perimetre_gps_valide === false;
 
   const borderClass = presence.alerte_teleportation
     ? 'border-l-4 border-destructive bg-destructive/5'
-    : !presence.perimetre_gps_valide
+    : presence.perimetre_gps_valide === false
       ? 'border-l-4 border-warning bg-warning/5'
       : presence.valide_par_etablissement
         ? 'border-success/30'
@@ -160,13 +162,13 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
 
       {/* GPS info */}
       <div className="flex flex-wrap gap-3 text-xs">
-        {typeof presence.distance_etablissement_m === 'number' && (
+        {mesureGpsDisponible(presence.distance_etablissement_m) && (
           <span className={`flex items-center gap-1 ${presence.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
             <MapPin className="h-3.5 w-3.5" />
             Arrivée : {Math.round(presence.distance_etablissement_m)}m · {presence.perimetre_gps_valide ? '✅ OK' : '⚠️ Hors périmètre'}
           </span>
         )}
-        {presence.arrivee_precision_gps_m && (
+        {mesureGpsDisponible(presence.arrivee_precision_gps_m) && (
           <span className="flex items-center gap-1 text-muted-foreground">
             <Radio className="h-3.5 w-3.5" /> {Math.round(presence.arrivee_precision_gps_m)}m
           </span>
@@ -185,9 +187,9 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
       {/* Détail alertes legacy (préserve compat) */}
       {aAlertes && (
         <div className="space-y-1">
-          {!presence.perimetre_gps_valide && (
+          {presence.perimetre_gps_valide === false && (
             <p className="text-xs text-warning flex items-center gap-1">
-              <AlertTriangle className="h-3.5 w-3.5" /> Hors périmètre à l'arrivée ({Math.round(presence.distance_etablissement_m || 0)}m)
+              <AlertTriangle className="h-3.5 w-3.5" /> Hors périmètre à l'arrivée{mesureGpsDisponible(presence.distance_etablissement_m) ? ` (${Math.round(presence.distance_etablissement_m)}m)` : ' (distance indisponible)'}
             </p>
           )}
           {presence.alerte_teleportation && (
