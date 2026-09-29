@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -24,75 +24,100 @@ export default function PageStripeConnect() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const retourStripe = searchParams.get('success') === 'true';
+  const verificationCourante = useRef(0);
   const [loading, setLoading] = useState(true);
   const [statut, setStatut] = useState<ConnectStatut>('NON_DEMANDE');
   const [ibanLast4, setIbanLast4] = useState<string | null>(null);
   const [revenus, setRevenus] = useState<{ mois_en_cours: number; total: number; en_attente: number } | null>(null);
+  const [erreurRevenus, setErreurRevenus] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [typeExercice, setTypeExercice] = useState<TypeExercice>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [soignantNom, setSoignantNom] = useState('');
   const [motifRejet, setMotifRejet] = useState<string | null>(null);
   const [estCompteTest, setEstCompteTest] = useState(false);
+  const [erreurStatut, setErreurStatut] = useState<string | null>(null);
+  const [erreurProfil, setErreurProfil] = useState(false);
+  const [relectureProfil, setRelectureProfil] = useState(0);
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
+    const verification = ++verificationCourante.current;
     try {
       // [CP-STRIPE-6 H10] `?force=true` bypass le cache 5 min côté edge function
-      const { data } = await supabase.functions.invoke(
+      const { data, error } = await supabase.functions.invoke(
         forceRefresh ? 'stripe-connect-status?force=true' : 'stripe-connect-status'
       );
-      if (data) {
-        setStatut(data.statut || 'NON_DEMANDE');
-        setIbanLast4(data.iban_last4 || null);
-        // Motif de rejet/suspension pour l'écran REJETE (chemin de remédiation).
-        setMotifRejet(data.disabled_reason || (Array.isArray(data.requirements) ? data.requirements[0] : null) || null);
+      if (verification !== verificationCourante.current) return false;
+      if (error || !data || !['NON_DEMANDE', 'EN_COURS', 'COMPLET', 'SUSPENDU', 'REJETE', 'SUPPRIME'].includes(data.statut)
+        || (data.statut === 'COMPLET' && !(data.onboarding_complete === true && data.charges_enabled === true && data.payouts_enabled === true))) {
+        throw new Error('Statut Stripe indisponible');
       }
+      setStatut(data.statut);
+      setIbanLast4(data.iban_last4 || null);
+      // Motif de rejet/suspension pour l'écran REJETE (chemin de remédiation).
+      setMotifRejet(data.disabled_reason || (Array.isArray(data.requirements) ? data.requirements[0] : null) || null);
+      setErreurStatut(null);
+      return true;
     } catch {
-      // Not LIBERAL or function unavailable — OK
+      if (verification === verificationCourante.current) {
+        setErreurStatut('Le statut de ton compte de paiement ne peut pas être vérifié pour le moment. Réessaie dans quelques instants.');
+      }
+      return false;
     }
   }, []);
 
   const chargerRevenus = useCallback(async () => {
     try {
-      const { data } = await supabase.rpc('fn_mes_revenus_connect' as any);
-      if (data) setRevenus(data as any);
+      const { data, error } = await supabase.rpc('fn_mes_revenus_connect' as any);
+      if (error || !data || ['mois_en_cours', 'total', 'en_attente'].some(key =>
+        typeof data[key] !== 'number' || !Number.isFinite(data[key]))) {
+        throw new Error('Revenus indisponibles');
+      }
+      setRevenus({ mois_en_cours: data.mois_en_cours, total: data.total, en_attente: data.en_attente });
+      setErreurRevenus(false);
     } catch {
-      // Function may not exist
+      setRevenus(null);
+      setErreurRevenus(true);
     }
   }, []);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     const init = async () => {
       setLoading(true);
-      // Load soignant type first
-      const { data: sg } = await supabase.from('soignants')
-        .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
-        .eq('id', user.id).maybeSingle();
+      setErreurProfil(false);
+      try {
+        // Ne jamais déduire le mode d'exercice d'une lecture en panne.
+        const { data: sg, error } = await supabase.from('soignants')
+          .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
+          .eq('id', user.id).maybeSingle();
+        if (!actif) return;
+        if (error || !sg) throw new Error('Profil de paiement indisponible');
 
-      if (sg) {
-        setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
-        setSoignantNom(`${sg.prenom} ${sg.nom}`);
-        setEstCompteTest(!!sg.est_compte_test);
+        if (sg) {
+          setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
+          setSoignantNom(`${sg.prenom} ${sg.nom}`);
+          setEstCompteTest(!!sg.est_compte_test);
 
-        // Only load Stripe data if LIBERAL or MIXTE
-        if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
-          await chargerStatut();
-          await chargerRevenus();
+          // Only load Stripe data if LIBERAL or MIXTE
+          if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
+            // Une seule lecture initiale, forcée au retour du fournisseur :
+            // aucune réponse de cache concurrente ne doit écraser ce résultat.
+            await chargerStatut(retourStripe);
+            if (actif) await chargerRevenus();
+          }
         }
+      } catch {
+        if (actif) setErreurProfil(true);
+      } finally {
+        if (actif) setLoading(false);
       }
-      setLoading(false);
     };
     init();
-  }, [user, chargerStatut, chargerRevenus]);
-
-  useEffect(() => {
-    if (searchParams.get('success') === 'true') {
-      chargerStatut().then(() => {
-        toast.success('Statut mis à jour !');
-      });
-    }
-  }, [searchParams, chargerStatut]);
+    return () => { actif = false; verificationCourante.current++; };
+  }, [user, retourStripe, chargerStatut, chargerRevenus, relectureProfil]);
 
   const lancerOnboarding = async () => {
     if (estCompteTest) {
@@ -130,13 +155,24 @@ export default function PageStripeConnect() {
   const rafraichirStatut = async () => {
     setActionLoading(true);
     // [CP-STRIPE-6 H10] Bouton "Actualiser" → force=true (bypass cache)
-    await chargerStatut(true);
-    await chargerRevenus();
-    setActionLoading(false);
-    toast.success('Statut actualisé');
+    try {
+      if (await chargerStatut(true)) await chargerRevenus();
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (erreurProfil) return (
+    <LayoutApp role="SOIGNANT">
+      <h1 className="mb-6 text-xl font-bold">Paiements</h1>
+      <div className="card-base max-w-2xl space-y-3" role="alert">
+        <h2 className="font-semibold">Profil de paiement indisponible</h2>
+        <p className="text-sm text-muted-foreground">Ton mode d’exercice ne peut pas être vérifié pour le moment. Réessaie dans quelques instants.</p>
+        <BoutonY2K onClick={() => setRelectureProfil(valeur => valeur + 1)}>Réessayer</BoutonY2K>
+      </div>
+    </LayoutApp>
+  );
 
   const isLiberal = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
 
@@ -170,7 +206,7 @@ export default function PageStripeConnect() {
                 <div>
                   <h2 className="font-bold text-foreground">Mode salarié</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    En tant que salarié(e), tes paiements sont gérés directement par l'établissement employeur via bulletin de paie ou virement.
+                    En tant que salarié(e), ton salaire est versé directement par l'établissement employeur. Le bulletin de paie détaille le montant dû ; il ne prouve pas que le virement a été reçu.
                   </p>
                 </div>
               </div>
@@ -275,8 +311,17 @@ export default function PageStripeConnect() {
                 </div>
               </div>
             )}
+            {!estCompteTest && erreurStatut && (
+              <div className="card-base border-warning/30 bg-warning/5 space-y-3" role="alert">
+                <p className="font-semibold">Statut de paiement indisponible</p>
+                <p className="text-sm text-muted-foreground">{erreurStatut}</p>
+                <BoutonY2K onClick={rafraichirStatut} disabled={actionLoading} loading={actionLoading} variant="secondary">
+                  Réessayer
+                </BoutonY2K>
+              </div>
+            )}
             {/* NON_DEMANDE */}
-            {!estCompteTest && statut === 'NON_DEMANDE' && (
+            {!estCompteTest && !erreurStatut && statut === 'NON_DEMANDE' && (
               <div className="card-base text-center space-y-4 py-8">
                 <CreditCard className="h-12 w-12 text-primary mx-auto" />
                 <h2 className="text-lg font-bold text-foreground">Reçois tes honoraires directement</h2>
@@ -296,7 +341,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* EN_COURS */}
-            {!estCompteTest && statut === 'EN_COURS' && (
+            {!estCompteTest && !erreurStatut && statut === 'EN_COURS' && (
               <div className="card-base space-y-4">
                 <div className="flex items-start gap-3">
                   <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
@@ -318,7 +363,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* COMPLET */}
-            {!estCompteTest && statut === 'COMPLET' && (
+            {!estCompteTest && !erreurStatut && statut === 'COMPLET' && (
               <>
                 <div className="card-base space-y-3">
                   <div className="flex items-center justify-between">
@@ -338,6 +383,11 @@ export default function PageStripeConnect() {
                   </div>
                 </div>
 
+                {erreurRevenus && (
+                  <p className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm" role="status">
+                    Tes revenus sont temporairement indisponibles. Utilise « Actualiser » pour réessayer.
+                  </p>
+                )}
                 {revenus && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <CarteKPIY2K
@@ -387,7 +437,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* SUSPENDU */}
-            {!estCompteTest && statut === 'SUSPENDU' && (
+            {!estCompteTest && !erreurStatut && statut === 'SUSPENDU' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -405,7 +455,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* [CP-STRIPE-6 H11] SUPPRIME : compte Stripe Connect inexistant côté Stripe */}
-            {!estCompteTest && statut === 'SUPPRIME' && (
+            {!estCompteTest && !erreurStatut && statut === 'SUPPRIME' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -436,7 +486,7 @@ export default function PageStripeConnect() {
 
             {/* REJETE : compte refusé par Stripe (vérification KO). Raison + remédiation.
                 (6e état — auparavant absent de l'UI → écran vide possible.) */}
-            {!estCompteTest && statut === 'REJETE' && (
+            {!estCompteTest && !erreurStatut && statut === 'REJETE' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
