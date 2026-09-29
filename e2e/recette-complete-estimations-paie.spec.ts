@@ -59,6 +59,13 @@ test('soignant — estimations sur accueil, historique, recherche, détail et s�
   await aller(page, `/soignant/missions/${ids.mission}`);
   await preuveNote(page, page.getByText('Honoraires indiqués à titre prévisionnel. Le montant facturé est détaillé sur la facture d’honoraires.', { exact: true }), info, 'note-detail-liberal');
   await expect(page.getByText(/^Simulation salariale indicative/)).toHaveCount(0);
+  etat.tables.set('missions', [{ ...ouverte, type_contrat_applique: null, type_contrat_recherche: 'TOUS' }]);
+  await recharger(page);
+  const neutre = page.getByText('Montant brut indicatif tant que le régime de la mission n’est pas choisi.', { exact: true });
+  await preuveNote(page, neutre, info, 'note-detail-regime-non-choisi');
+  await expect(page.getByText(/^Simulation salariale indicative|^Honoraires indiqués à titre prévisionnel|Salaire versé vers/)).toHaveCount(0);
+  await recharger(page);
+  await expect(neutre).toBeVisible();
   expect(etat.unknown).toEqual([]); expect(etat.errors).toEqual([]);
 });
 
