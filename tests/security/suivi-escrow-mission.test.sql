@@ -22,8 +22,10 @@ VALUES('98700000-0000-4000-8000-000000000010','98700000-0000-4000-8000-000000000
 SELECT public.fn_test_seed_mission(jsonb_build_object('id','98700000-0000-4000-8000-000000000020',
  'intitule','Recette statut escrow','etablissement_id','98700000-0000-4000-8000-000000000010',
  'profession_requise','MEDECIN','service','Recette','debut_le',now()+interval '20 years','fin_le',now()+interval '20 years 8 hours','taux_horaire_base',30,'statut','OUVERTE'));
+-- Le test porte sur la lecture après remboursement d’une mission en litige,
+-- pas sur une attribution de mission à venir ni sur ses exigences documentaires.
 SELECT public.fn_test_update_mission('98700000-0000-4000-8000-000000000020',
- '{"soignant_assigne_id":"98700000-0000-4000-8000-000000000001","type_contrat_applique":"LIBERAL","type_paiement_soignant":"NOTE_HONORAIRES","statut":"ASSIGNEE"}');
+ '{"soignant_assigne_id":"98700000-0000-4000-8000-000000000001","type_contrat_applique":"LIBERAL","type_paiement_soignant":"NOTE_HONORAIRES","statut":"LITIGE"}');
 INSERT INTO public.paiements_escrow(mission_id,etablissement_id,soignant_id,montant_total_cents,commission_cents,honoraires_cents,statut,methode_debit,debit_prevu_le,premiere_mission_etab)
 VALUES('98700000-0000-4000-8000-000000000020','98700000-0000-4000-8000-000000000010',
  '98700000-0000-4000-8000-000000000001',28356,4356,24000,'REMBOURSE','SEPA',now()+interval '20 years',true);
