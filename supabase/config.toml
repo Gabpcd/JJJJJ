@@ -1,5 +1,8 @@
 project_id = "flripxtsyegjshnhzjkz"
 
+[functions.copies-bulletins]
+verify_jwt = true
+
 [functions.set-user-claims]
 verify_jwt = false
 
