@@ -59,7 +59,7 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Isolation des migrations PR et du bootstrap staging
-        run: node --test tests/node/staging-migration-base.node.mjs
+        run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 
       - name: Vérifier les empreintes inventaire explicites
         run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
@@ -337,6 +337,28 @@ jobs:
             echo "::error::Activation de pg_cron refusée sur le staging (HTTP $cron_code)."
             jq -r '.message // .error // "Erreur SQL non détaillée"' \
               /tmp/jolene-staging-pg-cron-response.json 2>/dev/null || true
+            exit 1
+          fi
+
+          # Réconciliation persistante et bornée de la base STAGING : le DO
+          # historique de routage salarié a été rejoué deux fois. Le script
+          # refuse tout autre corps/droit et reconstruit uniquement main.
+          # Les migrations PR suivantes restent entièrement sous ROLLBACK.
+          node scripts/ci/reconcile-staging-litige-base.mjs \
+            "$BASE_WORKTREE" "$RUNNER_TEMP/jolene-staging-registry.json" \
+            > "$RUNNER_TEMP/jolene-staging-litige-base.sql"
+          jq -Rs '{query: .}' "$RUNNER_TEMP/jolene-staging-litige-base.sql" \
+            > "$RUNNER_TEMP/jolene-staging-litige-base.json"
+          reconcile_code=$(curl -sS --connect-timeout 10 --max-time 60 \
+            -o "$RUNNER_TEMP/jolene-staging-litige-base-response.json" -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/jolene-staging-litige-base.json")
+          if [ "$reconcile_code" -lt 200 ] || [ "$reconcile_code" -ge 300 ]; then
+            echo "::error::Réconciliation bornée de la base staging refusée (HTTP $reconcile_code)."
+            jq -r '.message // .error // "Erreur SQL non détaillée"' \
+              "$RUNNER_TEMP/jolene-staging-litige-base-response.json" 2>/dev/null || true
             exit 1
           fi
 
