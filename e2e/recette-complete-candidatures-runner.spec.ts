@@ -8,7 +8,7 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   const m={missionId:identifiants.mission,marker:state.mission.intitule,debut:state.mission.debut_le,fin:state.mission.fin_le,
     membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom})),
       {slot:2,userId:identifiants.etablissement,email:'clinique@example.invalid',prenom:'Clinique',nom:'Simulation'}]};
-  const refus: string[]=[];
+  const refus: string[]=[],metadonneesDashboard: number[]=[];
   for(const [slot,acteur]of (['as1','as2','etablissement'] as const).entries()) {
     const context=await browser.newContext({...info.project.use});
     await simulation.installer(context,acteur);
@@ -17,17 +17,28 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
       if(/^\/(auth|rest|functions|storage)\//.test(u.pathname)) {
         const autorisee=requeteFrontendD({url:STAGING_URL+u.pathname+u.search,method:r.method(),body:r.postData()?r.postDataJSON():undefined},m.membres[slot],m);
         if(!autorisee){refus.push(`${r.method()} ${u.pathname}`);return route.abort();}
+        if(u.pathname==='/rest/v1/missions'&&u.searchParams.get('id')?.startsWith('in.')) {
+          expect(r.method()).toBe('GET');expect([...u.searchParams.keys()].sort()).toEqual(['id','select']);
+          expect(u.searchParams.get('id')).toBe(`in.(${m.missionId})`);expect(u.searchParams.get('select')).toBe('id,nb_creneaux');metadonneesDashboard.push(slot);
+        }
       }
       return route.fallback();
     });
     const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
     try {
+      if(slot<2) {
+        await page.goto('/soignant/tableau-de-bord');
+        await expect(page.getByRole('heading',{name:`Bonjour, ${m.membres[slot].prenom}`,exact:true})).toBeVisible();
+        await expect(page.getByText('1 mission près de chez toi — tu peux déjà postuler.',{exact:true})).toBeVisible();
+        await page.waitForLoadState('networkidle');
+      }
       const diagnostic=diagnosticD();
       const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});}};
       if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
     }finally{await context.close();}
   }
   expect(refus).toEqual([]);simulation.verifierBornes();
+  expect(metadonneesDashboard).toEqual([0,1]);
   expect(state.candidatures).toHaveLength(2);
   expect(state.candidatures.every(c=>c.message===m.marker&&c.statut==='EN_ATTENTE')).toBe(true);
   expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toHaveLength(2);

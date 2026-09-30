@@ -97,6 +97,8 @@ export function creerCandidaturesDeuxAs() {
           case 'fn_get_my_role': return json({ role, etablissement_id: estSoignant ? null : identifiants[acteur] });
           case 'fn_compte_auth_actif': return json(true);
           case 'fn_mon_profil_soignant_complet': return json(profil);
+          case 'fn_dashboard_soignant_complet': return json({ profil, missions_ouvertes:[mission], mes_missions:[], documents:[], heures_semaine:0,
+            gains_mois:{net_total:0,brut_total:0,nb_missions:0}, gains_6mois:[], missions_semaine_cal:[], propositions:[], heures_totales_terminees:0, missions_oubliees_count:0, notifs_non_lues:0 });
           case 'fn_mon_etablissement_complet': return json({ ...etablissement, id: identifiants[acteur] });
           case 'fn_etablissement_public': return json(null); // Les comptes test sont exclus de la fiche publique.
           case 'fn_etablissement_pour_mission': return json(etablissement);
@@ -136,6 +138,8 @@ export function creerCandidaturesDeuxAs() {
           soignants: profil ? [profil] : [], etablissements: [{ ...etablissement, id: identifiants[acteur] }],
           contrats_mission: [], contrats_travail_missions: [], parcours_inscription: [], notifications: [],
           documents_soignants: [], favoris: [], notations_missions: [], evaluations: [],
+          stripe_connect_onboarding: [], litiges: [],
+          documents_requis_par_profession: [{profession:'AS',type_document:'CARTE_IDENTITE',est_critique:true,type_exercice_requis:'TOUS'}],
         };
         if (name in data) {
           const rows = data[name].filter(row => [...url.searchParams.entries()].every(([key, value]) => {
@@ -160,7 +164,11 @@ export function creerCandidaturesDeuxAs() {
     expect(mission.statut).toBe('OUVERTE'); expect(mission.soignant_assigne_id).toBeNull();
     expect(mission.type_contrat_applique).toBeNull();
     expect(state.candidatures.every(c => c.statut === 'EN_ATTENTE')).toBe(true);
-    expect(state.calls.filter(c => /accepter|traiter_candidature|generer_contrat|signer|payer|checkout|stripe|dpae/i.test(c.name))).toEqual([]);
+    // Le dashboard lit l'état local d'onboarding, sans appeler Stripe. Seule
+    // cette lecture est permise ; les écritures et endpoints financiers restent interdits.
+    expect(state.calls.filter(c => /accepter|traiter_candidature|generer_contrat|signer|payer|checkout|stripe|dpae/i.test(c.name)
+      && !(c.name === 'stripe_connect_onboarding' && c.method === 'GET' && c.body === null
+        && (c.acteur === 'as1' || c.acteur === 'as2')))).toEqual([]);
     for (const profil of soignants) expect(profil).toMatchObject({ profession: 'AS', type_exercice: 'SALARIE',
       identite_verifiee: false, diplome_verifie: false, rpps_verifie: false, tous_documents_valides: false, est_compte_test: true });
     expect(etablissement).toMatchObject({ statut_verification: 'EN_ATTENTE', peut_publier: false, est_compte_test: true });

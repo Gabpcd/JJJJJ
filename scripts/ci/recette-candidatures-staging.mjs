@@ -66,11 +66,19 @@ export function diagnosticD({temps=()=>performance.now()}={}) {
       erreurs++;const r={phase,action,slotPhase:slot,slotEmetteur,...projection},k=JSON.stringify(r);
       const precedent=erreursNavigateur.get(k),ms=relatif();
       if(erreursNavigateur.size<32||precedent)erreursNavigateur.set(k,{...r,nombre:(precedent?.nombre||0)+1,actionDepuisMs,premierMs:precedent?.premierMs??ms,dernierMs:ms});else erreursNavigateurTronquees++;
-    }, reseau(url,method,status) {
-      let origine='invalide',chemin='autre';
+    }, reseau(url,method,status,missionId) {
+      let origine='invalide',chemin='autre',requeteMission;
       try { const u=new URL(url);origine=u.origin===ORIGINE_UI?'preview':u.origin===STAGING_URL?'staging':'externe';
-        const nom=u.pathname.split('/').pop();chemin=origine==='preview'?'local':origine!=='staging'?'externe':noms.has(nom)?nom:['/auth/v1/token','/auth/v1/user'].includes(u.pathname)?`auth-${nom}`:'autre'; }catch{/* Projection fermée. */}
-      const r={phase,slot,origine,chemin,methode:['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE'].includes(method)?method:'autre',statut:Number.isInteger(status)&&status>=100&&status<=599?status:['refus','transport','ferme'].includes(status)?status:'autre'};
+        const nom=u.pathname.split('/').pop();chemin=origine==='preview'?'local':origine!=='staging'?'externe':noms.has(nom)?nom:['/auth/v1/token','/auth/v1/user'].includes(u.pathname)?`auth-${nom}`:'autre';
+        if(origine==='staging'&&u.pathname==='/rest/v1/missions'&&status==='refus') {
+          const cles=[...u.searchParams.keys()],connues=new Set(['select','id','etablissement_id','soignant_assigne_id','or','and','order','limit','offset']);
+          const id=u.searchParams.getAll('id'),select=u.searchParams.getAll('select');
+          requeteMission={projection:select.length===1&&select[0]==='id,nb_creneaux'?'id_nb_creneaux':'autre',
+            selecteur:typeof missionId==='string'&&id.length===1?(id[0]===`eq.${missionId}`?'eq_manifeste':id[0]===`in.(${missionId})`?'in_manifeste':'autre'):'autre',
+            parametresUniques:new Set(cles).size===cles.length,cles:[...new Set(cles.map(c=>connues.has(c)?c:'autre'))].sort()};
+        }
+      }catch{/* Projection fermée. */}
+      const r={phase,slot,origine,chemin,methode:['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE'].includes(method)?method:'autre',statut:Number.isInteger(status)&&status>=100&&status<=599?status:['refus','transport','ferme'].includes(status)?status:'autre',...(requeteMission?{requeteMission}:{})};
       const k=JSON.stringify(r),precedent=reseau.get(k),ms=relatif(); if(reseau.size<128||precedent)reseau.set(k,{...r,nombre:(precedent?.nombre||0)+1,premierMs:precedent?.premierMs??ms,dernierMs:ms});else erreurs++;
     }, resultat() { return {phase,slot,action,actionDepuisMs,tempsMs:relatif(),erreurFinale,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
 }
@@ -144,8 +152,8 @@ export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcri
   await context.route('**/*',async route=>{
     const execution=(async()=>{
       const request=route.request();let body;
-      try{body=request.postData()?request.postDataJSON():undefined;}catch{diagnostic.erreur();diagnostic.reseau(request.url(),request.method(),'refus');await route.abort();return;}
-      if(!requeteFrontendD({url:request.url(),method:request.method(),body},a,m)){diagnostic.erreur();diagnostic.reseau(request.url(),request.method(),'refus');await route.abort();return;}
+      try{body=request.postData()?request.postDataJSON():undefined;}catch{diagnostic.erreur();diagnostic.reseau(request.url(),request.method(),'refus',m.missionId);await route.abort();return;}
+      if(!requeteFrontendD({url:request.url(),method:request.method(),body},a,m)){diagnostic.erreur();diagnostic.reseau(request.url(),request.method(),'refus',m.missionId);await route.abort();return;}
       const u=new URL(request.url());if(u.origin===ORIGINE_UI){await route.continue();return;}
       const rpc=u.pathname.split('/').pop();
       try {
