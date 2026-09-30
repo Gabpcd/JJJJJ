@@ -57,7 +57,8 @@ BEGIN
   FOREACH acteur IN ARRAY ARRAY[etab,sal,rh,lecture,groupe] LOOP
     PERFORM set_config('request.jwt.claim.sub',acteur::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',acteur,'role','authenticated')::text,true);
-    r := public.fn_contrat_storage_path(contrat1);
+    IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
+  r := public.fn_contrat_storage_path(contrat1);
     IF r->>'success' IS DISTINCT FROM 'true' OR r->>'storage_path' IS DISTINCT FROM 'recette/contrat-original.html'
       OR r->>'hash_document' IS DISTINCT FROM repeat('a',64) THEN
       RAISE EXCEPTION 'Acteur habilité refusé : % %',acteur,r; END IF;
@@ -66,63 +67,107 @@ BEGIN
   FOREACH acteur IN ARRAY ARRAY[pointage,tiers,autre_etab,NULL::uuid] LOOP
     PERFORM set_config('request.jwt.claim.sub',COALESCE(acteur::text,''),true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',acteur,'role','authenticated')::text,true);
-    r := public.fn_contrat_storage_path(contrat1);
+    IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
+  r := public.fn_contrat_storage_path(contrat1);
     IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' OR r ? 'hash_document' THEN
       RAISE EXCEPTION 'Acteur non habilité accepté : % %',acteur,r; END IF;
   END LOOP;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   UPDATE public.membres_etablissement SET role='POINTAGE_ONLY' WHERE user_id=rh AND etablissement_id=etab;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
   PERFORM set_config('request.jwt.claim.sub',rh::text,true);
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',rh,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Permission révoquée acceptée'; END IF;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   UPDATE public.membres_etablissement SET role='RH' WHERE user_id=rh AND etablissement_id=etab;
   UPDATE public.membres_etablissement SET actif=false WHERE user_id=rh AND etablissement_id=etab;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
   PERFORM set_config('request.jwt.claim.sub',rh::text,true);
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',rh,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Membre désactivé accepté'; END IF;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   -- Auth reste vivant : les marqueurs de fermeture publics doivent suffire.
   UPDATE public.soignants SET supprime_le=now() WHERE id=sal;
   UPDATE public.etablissements SET supprime_le=now() WHERE id=groupe;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
   FOREACH acteur IN ARRAY ARRAY[sal,groupe] LOOP
     PERFORM set_config('request.jwt.claim.sub',acteur::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',acteur,'role','authenticated')::text,true);
-    r := public.fn_contrat_storage_path(contrat1);
+    IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
+  r := public.fn_contrat_storage_path(contrat1);
     IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' OR r ? 'hash_document' THEN
       RAISE EXCEPTION 'Profil fermé avec Auth valide accepté : %',acteur; END IF;
   END LOOP;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   UPDATE public.soignants SET supprime_le=NULL WHERE id=sal;
   UPDATE auth.users SET banned_until=now()+interval '1 day' WHERE id=sal;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
   PERFORM set_config('request.jwt.claim.sub',sal::text,true);
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',sal,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Auth suspendu accepté'; END IF;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   UPDATE auth.users SET banned_until=NULL,deleted_at=now() WHERE id=sal;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
+  PERFORM set_config('request.jwt.claim.sub',sal::text,true);
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',sal,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Auth supprimé accepté'; END IF;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   UPDATE auth.users SET deleted_at=NULL WHERE id=sal;
   UPDATE public.etablissements SET supprime_le=now() WHERE id=etab;
   EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM set_config('request.jwt.claim.role','authenticated',true);
   PERFORM set_config('request.jwt.claim.sub',etab::text,true);
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',etab,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Propriétaire fermé accepté'; END IF;
   PERFORM set_config('request.jwt.claim.sub',lecture::text,true);
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',lecture,'role','authenticated')::text,true);
+  IF auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Contexte utilisateur de recette incorrect'; END IF;
   r := public.fn_contrat_storage_path(contrat1);
   IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' THEN RAISE EXCEPTION 'Tenant fermé accepté via membre'; END IF;
   EXECUTE 'RESET ROLE';
+  -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.
+  PERFORM set_config('request.jwt.claim.sub','',true);
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   IF (SELECT hash_document FROM public.contrats_mission WHERE id=contrat1) IS DISTINCT FROM repeat('a',64) THEN
     RAISE EXCEPTION 'La lecture a altéré la preuve'; END IF;
   RAISE EXCEPTION USING ERRCODE='ZCA01',MESSAGE='ROLLBACK_FIXTURES_CONTRAT_ACCES';

@@ -56,3 +56,14 @@ Preuves locales : `/private/tmp/jolene-contrats-vitest.txt`, `jolene-contrats-ma
 - Un upload réussi dont la publication SQL échoue peut laisser un objet sans référence. Il n’est pas supprimé automatiquement dans ce correctif, afin de ne pas effacer une preuve au statut incertain. Pas de nouvelle purge/rétention.
 - Les URLs déjà délivrées conservent leur TTL existant (24 h pour cette Edge). Les nouveaux liens sont refusés après révocation ; aucune révocation rétroactive d’un lien signé n’est promise.
 - Le téléchargement de l’écran reste un HTML enveloppé à partir du contenu serveur préservé ; il ne constitue pas encore un export octet pour octet du fichier Storage. L’Edge relit l’objet stocké existant. Ce lot ne prétend pas livrer l’export documentaire complet.
+
+## Première recette SQL réelle intégrée
+
+Le job `109816686056` du run `36693738609` a refusé la préparation du cas
+« membre réactivé » : `RESET ROLE` laissait les claims JWT du membre sans droit
+de gestion. Le déclencheur RBAC a correctement bloqué sa modification de rôle.
+Le test réinitialise désormais le contexte de préparation et rétablit explicitement
+le rôle et l’identité utilisateur avant chaque assertion. Il vérifie aussi
+`auth.role() = authenticated` à chaque appel testé. Aucune garde produit n’est
+retirée et aucun acteur testé ne reçoit des droits supplémentaires. La transaction
+a été annulée ; la recette corrigée doit encore être exécutée en CI.
