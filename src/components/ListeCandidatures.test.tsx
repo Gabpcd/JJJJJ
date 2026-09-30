@@ -102,6 +102,18 @@ describe('ListeCandidatures — confirmation établissement', () => {
     }));
   });
 
+  it('relit la même mission lorsque le clic notification demande une actualisation', async () => {
+    resultatCandidatures = { data: [], error: null };
+    const props = { missionId: 'mission-1', onAccepted: vi.fn(), onError: vi.fn(), onSuccess: vi.fn() };
+    const view = render(<ListeCandidatures {...props} actualisation={0} />);
+    await waitFor(() => expect(mocks.from).toHaveBeenCalledWith('candidatures'));
+    await screen.findByText('En attente de candidats');
+    resultatCandidatures = { data: [{ id: 'nouvelle', soignant_id: 'sg-1', message: 'Candidature après absence', statut: 'EN_ATTENTE', cree_le: '2026-07-01T10:00:00Z' }], error: null };
+    view.rerender(<ListeCandidatures {...props} actualisation={1} />);
+    expect(await screen.findByText(/Candidature après absence/)).toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('fn_traiter_candidature_planning_v1', expect.anything());
+  });
+
   it('affiche une erreur de chargement au lieu d’un faux état vide', async () => {
     resultatCandidatures = { data: null, error: { message: 'Réseau indisponible' } };
 

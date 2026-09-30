@@ -1,11 +1,12 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { urlCallbackPublique } from '@/lib/nativeLinks';
+import { retourMissionNotification } from '@/lib/navigationNotification';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
@@ -40,6 +41,11 @@ export default function PageConnexion() {
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetEnvoyeA, setResetEnvoyeA] = useState<string | null>(null);
   const [resetDisponibleDans, setResetDisponibleDans] = useState(0);
+  const pageActive = useRef(true);
+  useEffect(() => {
+    pageActive.current = true;
+    return () => { pageActive.current = false; };
+  }, []);
 
   useEffect(() => {
     if (isNative()) {
@@ -87,6 +93,7 @@ export default function PageConnexion() {
     // Cela évite qu'une base momentanément chargée bloque une authentification
     // déjà réussie, comme lors de la review Apple du 27/07/2026.
     const { data: sessionData } = await supabase.auth.getSession();
+    if (!pageActive.current) return true;
     // Le lien d'équipe doit survivre à la connexion, y compris pour un compte
     // sans rôle métier. Seule cette route interne précise est acceptée : aucun
     // redirect arbitraire, et l'acceptation reste explicite et contrôlée par RPC.
@@ -136,6 +143,7 @@ export default function PageConnexion() {
       destination = destinationPourRole(role);
     }
 
+    if (!pageActive.current) return true;
     if (!destination) {
       navigate('/inscription/reprendre');
       return true;
@@ -162,7 +170,14 @@ export default function PageConnexion() {
       logger.warn('[CONNEXION] Activation biométrique ignorée', biometricError);
     }
 
-    navigate(destination);
+    const retourMission = retourMissionNotification(searchParams.get('return'));
+    // A retained native tap may already have opened its mission while role
+    // lookup or biometrics was pending. Do not overwrite that newer action.
+    if (!pageActive.current) return true;
+    // The restored identity must belong to the establishment interface. RLS
+    // and RouteProtegee keep checking access; this never selects a tenant.
+    navigate(sessionData.session && destination === '/etablissement/tableau-de-bord' && retourMission
+      ? retourMission : destination);
     return true;
   };
 

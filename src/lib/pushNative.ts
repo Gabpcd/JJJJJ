@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { normaliserLienJolene } from './nativeLinks';
 import { memoriserTokenPushAppareil } from './pushDeviceToken';
 import { signalerNavigationNative } from './nativeResume';
+import { OUVERTURE_NOTIFICATION } from './navigationNotification';
 
 type RoleApp = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ETABLISSEMENT' | 'ADMIN_PLATEFORME' | 'ADMIN' | 'ADMIN_GROUPE' | null;
 
@@ -164,8 +165,13 @@ export async function initNativePush(
       // immédiatement, y compris quand l'app est lancée hors-ligne.
       const path = lienExplicite(data) ?? navigationPathForEvent(data, await roleCourant());
       if (!path) return;
-      window.history.pushState(null, '', path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
+      if (window.location.pathname + window.location.search + window.location.hash !== path) {
+        window.history.pushState(null, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+      // A tap may target the page already mounted before the app went to sleep.
+      // Navigation alone does not invalidate its data in that case.
+      window.dispatchEvent(new CustomEvent(OUVERTURE_NOTIFICATION, { detail: { path } }));
     });
 
     await PushNotifications.register();
