@@ -250,6 +250,26 @@ générateur, aucun compte distant ou workflow lancé. Les 15 simulations fronte
 antérieures restent une preuve UI indépendante ; ce raccord sans modification
 produit n'en ajoute aucune.
 
+Premier essai SQL réel : run `36728077785`, head `1de35c3e`, échec le 30/09 à
+14:18:26 UTC. Le préflight catalogue passe ; PostgreSQL refuse le premier
+SELECT du garde avec SQLSTATE 55000, `record "c" is not assigned yet` : le
+record PL/pgSQL masquait l'alias `pg_constraint c` du SELECT catalogue. Les
+SELECT distincts après échec confirment les zéros du manifeste
+`sql-d2-ci-36728077785-1`, y compris audits/reçus, emails, tokens push et présence ;
+les empreintes restent inchangées. Preuve filtrée conservée dans le dossier
+projet `audits/2026-09-30-preparation-nationale/d2-sql-36728077785/`.
+
+La correction renomme seulement le record dans les trois blocs et le garde
+partagé, sans changer le SELECT catalogue, ses empreintes ou les assertions.
+Le contrôle local `python3 tests/security/check-d2-catalogue-scope.py` utilise
+pglast : il compare les records des AST PL/pgSQL aux alias de relations des
+AST SQL, vérifie les quatre requêtes réelles, puis refuse un témoin négatif
+pour chaque alias réellement présent. Ses trois tests passent, ainsi que
+les 146 contrats Node et 17 guards. Ce contrôle requiert pglast localement,
+n'ajoute aucune dépendance au runner et ne prétend pas résoudre toute la
+sémantique PostgreSQL. **La prochaine exécution SQL réelle, avec un nouveau
+run, reste la régression déterminante ; aucune réussite SQL D2 à ce stade.**
+
 ## Ancien seed F fermé
 
 `seed_load_test_data=true` reste accepté comme input déprécié pour produire un
