@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, ShieldCheck, MessageSquare, Clock, AlertCircle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface Props {
@@ -63,12 +62,12 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
     actif.current = true;
     return () => { actif.current = false; };
   }, []);
-  const { afficherNotification } = useNotification();
+  const [retour, setRetour] = useState<{ type: 'succes' | 'erreur'; message: string } | null>(null);
   const [etape, setEtape] = useState<Etape>('idle');
   const [otp, setOtp] = useState('');
+  const [telMasked, setTelMasked] = useState<string | null>(null);
   const [accepte, setAccepte] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [telMasked, setTelMasked] = useState<string | null>(null);
   const [tentativesRestantes, setTentativesRestantes] = useState<number | null>(null);
   const [secondesRestantes, setSecondesRestantes] = useState(0);
   const [smsRestants, setSmsRestants] = useState<number | null>(null);
@@ -96,7 +95,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
     if (code && bloquantes.has(code)) {
       setErreurBloquante({ code, message: msg });
     } else {
-      afficherNotification({ type: 'erreur', message: msg });
+      setRetour({ type: 'erreur', message: msg });
     }
   }
 
@@ -104,6 +103,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
     if (!documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
     operationEnCours.current = true;
     setLoading(true);
+    setRetour(null);
     setTentativesRestantes(null);
     setErreurBloquante(null);
     try {
@@ -120,13 +120,13 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
       setSecondesRestantes(OTP_DUREE_SEC);
       setOtp('');
       setEtape('otp_envoye');
-      afficherNotification({
+      setRetour({
         type: 'succes',
         message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,
       });
     } catch (err: any) {
       if (!actif.current) return;
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
+      setRetour({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
     } finally {
       operationEnCours.current = false;
       if (actif.current) setLoading(false);
@@ -136,15 +136,16 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
   async function signer() {
     if (!documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
     if (!/^[0-9]{6}$/.test(otp)) {
-      afficherNotification({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
+      setRetour({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;
     }
     if (!accepte) {
-      afficherNotification({ type: 'erreur', message: 'Vous devez accepter les termes du contrat avant de signer.' });
+      setRetour({ type: 'erreur', message: 'Vous devez accepter les termes du contrat avant de signer.' });
       return;
     }
     operationEnCours.current = true;
     setLoading(true);
+    setRetour(null);
     try {
       const { data, error } = await supabase.rpc('fn_signer_contrat_otp' as any, {
         p_contrat_id: contratId,
@@ -163,14 +164,14 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
         return;
       }
       setEtape('signe');
-      afficherNotification({
+      setRetour({
         type: 'succes',
         message: `Contrat signé ✅${result.contrat_complet ? ' — Mission confirmée par les 2 parties.' : ''}`,
       });
       onSigne?.({ role: result.role, contratComplet: result.contrat_complet });
     } catch (err: any) {
       if (!actif.current) return;
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
+      setRetour({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
     } finally {
       operationEnCours.current = false;
       if (actif.current) setLoading(false);
@@ -179,10 +180,10 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
 
   if (etape === 'signe') {
     return (
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3 animate-in fade-in duration-300">
+      <div role="status" className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-start gap-3 animate-in fade-in duration-300">
         <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold text-emerald-900 dark:text-emerald-200">Signature électronique sécurisée Jolene</p>
+          <p className="font-semibold text-emerald-900 dark:text-emerald-200">{retour?.message || 'Contrat signé ✅'}</p>
           <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-1">
             Signé avec succès. Horodatage, IP et hash du document conservés (art. 1366-1367 Code civil).
           </p>
@@ -195,7 +196,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
     || erreurBloquante.code === 'CONTRAT_DEJA_COMPLET'
     || erreurBloquante.code === 'DEJA_SIGNE')) {
     return (
-      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 flex items-start gap-3">
+      <div role="alert" className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 flex items-start gap-3">
         <Info className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="flex-1">
           <p className="font-semibold text-amber-900 dark:text-amber-200">Signature non disponible pour le moment</p>
@@ -219,9 +220,18 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
       </div>
 
       {erreurBloquante && (
-        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive">
+        <div role="alert" className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <span>{erreurBloquante.message}</span>
+        </div>
+      )}
+
+      {retour && !erreurBloquante && (
+        <div role={retour.type === 'erreur' ? 'alert' : 'status'}
+          className={`rounded-lg border p-3 text-xs ${retour.type === 'erreur'
+            ? 'bg-destructive/10 border-destructive/30 text-destructive'
+            : 'bg-success/5 border-success/30 text-foreground'}`}>
+          {retour.message}
         </div>
       )}
 

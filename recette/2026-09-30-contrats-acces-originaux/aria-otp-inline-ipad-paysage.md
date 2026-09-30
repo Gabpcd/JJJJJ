@@ -1,0 +1,155 @@
+## otp-session-expiree-aria
+
+```yaml
+- main:
+  - button "← Retour"
+  - timer:
+    - img
+    - paragraph: Signature à finaliser sous72h 00m 00s
+  - img
+  - heading "Contrat SIM-2026-0001" [level=1]
+  - paragraph: "Statut : ⏳ En attente de signatures"
+  - button "Télécharger le contrat":
+    - img
+    - text: Télécharger le contrat
+  - button "Imprimer":
+    - img
+    - text: Imprimer
+  - paragraph:
+    - img
+    - text: Document officiel figé le 24/09/2026 à 08:55 — empreinte aaaaaaaa…aaaa
+  - heading "Document fictif de recette" [level=2]
+  - paragraph: Camille Recette — Clinique Simulation
+  - paragraph: "24 septembre 2026 : 09:00 à 17:00 — 8 heures à 80,00 €, soit 640,00 €."
+  - heading "Signatures" [level=3]
+  - img
+  - text: "Établissement : ⏳ En attente"
+  - img
+  - text: "Soignant(e) : ⏳ En attente"
+  - heading "Votre signature" [level=3]
+  - paragraph: "Choisissez votre mode de signature :"
+  - radiogroup:
+    - radio "📱 Signature électronique OTP SMS RECOMMANDÉE Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil." [checked]:
+      - img
+    - text: 📱 Signature électronique OTP SMS RECOMMANDÉE
+    - paragraph: Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.
+    - radio "✍️ Signature manuscrite (canvas) Signez directement sur votre écran"
+    - text: ✍️ Signature manuscrite (canvas)
+    - paragraph: Signez directement sur votre écran
+  - img
+  - paragraph: Signature électronique sécurisée
+  - paragraph: Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer. La signature inclut horodatage, IP et hash SHA-256 du document (preuve juridique art. 1366 Code civil).
+  - alert: Session expirée. Reconnectez-vous puis réessayez.
+  - checkbox "J'ai lu l'intégralité du contrat affiché ci-dessus et j'accepte ses termes." [checked]
+  - text: J'ai lu l'intégralité du contrat affiché ci-dessus et j'accepte ses termes.
+  - button "Recevoir le code SMS pour signer"
+  - paragraph: Contrat de prestation entre l’établissement et le professionnel libéral. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.
+- region "Notifications alt+T"
+- region "Notifications"
+```
+
+## otp-invalide-expire-aria
+
+```yaml
+- main:
+  - button "← Retour"
+  - timer:
+    - img
+    - paragraph: Signature à finaliser sous72h 00m 00s
+  - img
+  - heading "Contrat SIM-2026-0001" [level=1]
+  - paragraph: "Statut : ⏳ En attente de signatures"
+  - button "Télécharger le contrat":
+    - img
+    - text: Télécharger le contrat
+  - button "Imprimer":
+    - img
+    - text: Imprimer
+  - paragraph:
+    - img
+    - text: Document officiel figé le 24/09/2026 à 08:55 — empreinte aaaaaaaa…aaaa
+  - heading "Document fictif de recette" [level=2]
+  - paragraph: Camille Recette — Clinique Simulation
+  - paragraph: "24 septembre 2026 : 09:00 à 17:00 — 8 heures à 80,00 €, soit 640,00 €."
+  - heading "Signatures" [level=3]
+  - img
+  - text: "Établissement : ⏳ En attente"
+  - img
+  - text: "Soignant(e) : ⏳ En attente"
+  - heading "Votre signature" [level=3]
+  - paragraph: "Choisissez votre mode de signature :"
+  - radiogroup:
+    - radio "📱 Signature électronique OTP SMS RECOMMANDÉE Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil." [checked]:
+      - img
+    - text: 📱 Signature électronique OTP SMS RECOMMANDÉE
+    - paragraph: Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.
+    - radio "✍️ Signature manuscrite (canvas) Signez directement sur votre écran"
+    - text: ✍️ Signature manuscrite (canvas)
+    - paragraph: Signez directement sur votre écran
+  - img
+  - paragraph: Signature électronique sécurisée
+  - paragraph: Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer. La signature inclut horodatage, IP et hash SHA-256 du document (preuve juridique art. 1366 Code civil).
+  - alert: Le code SMS a expiré (10 min). Demandez un nouveau code.
+  - checkbox "J'ai lu l'intégralité du contrat affiché ci-dessus et j'accepte ses termes." [checked]
+  - text: J'ai lu l'intégralité du contrat affiché ci-dessus et j'accepte ses termes. Code envoyé au
+  - strong: +33 6 ** ** ** 01
+  - text: (2 envois restants)
+  - img
+  - text: 10:00
+  - textbox "Code SMS à 6 chiffres":
+    - /placeholder: "123456"
+    - text: "123456"
+  - img
+  - text: Code incorrect. 4 tentatives restantes.
+  - button "Renvoyer le code"
+  - button "Signer"
+  - paragraph: Contrat de prestation entre l’établissement et le professionnel libéral. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.
+- region "Notifications alt+T"
+- region "Notifications"
+```
+
+## otp-reprise-signature-unique-aria
+
+```yaml
+- main:
+  - button "← Retour"
+  - timer:
+    - img
+    - paragraph: Signature à finaliser sous72h 00m 00s
+  - img
+  - heading "Contrat SIM-2026-0001" [level=1]
+  - paragraph: "Statut : ⏳ En attente de signatures"
+  - button "Télécharger le contrat":
+    - img
+    - text: Télécharger le contrat
+  - button "Imprimer":
+    - img
+    - text: Imprimer
+  - paragraph:
+    - img
+    - text: Document officiel figé le 24/09/2026 à 08:55 — empreinte aaaaaaaa…aaaa
+  - heading "Document fictif de recette" [level=2]
+  - paragraph: Camille Recette — Clinique Simulation
+  - paragraph: "24 septembre 2026 : 09:00 à 17:00 — 8 heures à 80,00 €, soit 640,00 €."
+  - img
+  - heading "Certificat de signature Jolene" [level=3]
+  - text: soignant ✅ Signé
+  - term: Date / heure
+  - definition: 24/09/2026 à 08:55:00
+  - term: OTP validé
+  - definition: ✓ Code SMS vérifié
+  - term: RPPS vérifié
+  - definition: ✓
+  - term: PSC actif
+  - definition: —
+  - paragraph: Signature électronique sécurisée Jolene — conforme art. 1366-1367 Code civil (signature électronique simple/avancée renforcée par OTP SMS + horodatage + IP). Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié.
+  - heading "Signatures" [level=3]
+  - img
+  - text: "Établissement : ⏳ En attente"
+  - img
+  - text: "Soignant(e) : ✅ Signé le 24/09/2026 à 08:55"
+  - status: ✅ Vous avez déjà signé ce contrat
+  - paragraph: Contrat de prestation entre l’établissement et le professionnel libéral. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.
+- region "Notifications alt+T"
+- region "Notifications"
+```

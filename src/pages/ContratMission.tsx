@@ -685,7 +685,7 @@ export default function ContratMission() {
         {dejaSigneParMoi && (
           <div className="space-y-4">
             <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 text-center">
-              <p className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
+              <p role="status" className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
             </div>
             {/* Rappel DPAE — indépendant de l'ordre des signatures. */}
             {!isSoignant && !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut) && (
