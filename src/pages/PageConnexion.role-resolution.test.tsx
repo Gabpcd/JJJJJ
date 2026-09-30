@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   getSession: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  native: false,
+  authenticateWithBiometric: vi.fn(),
+  refreshSession: vi.fn(),
 }));
 
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: () => undefined }));
@@ -26,16 +29,16 @@ vi.mock('@/integrations/supabase/client', () => ({
     auth: {
       signOut: mocks.signOut,
       getSession: mocks.getSession,
-      refreshSession: vi.fn(),
+      refreshSession: mocks.refreshSession,
       resetPasswordForEmail: mocks.resetPasswordForEmail,
     },
   },
 }));
-vi.mock('@/lib/platform', () => ({ isNative: () => false }));
+vi.mock('@/lib/platform', () => ({ isNative: () => mocks.native }));
 vi.mock('@/lib/biometric', () => ({
-  isBiometricAvailable: vi.fn().mockResolvedValue(false),
-  isBiometricEnabled: () => false,
-  authenticateWithBiometric: vi.fn(),
+  isBiometricAvailable: async () => mocks.native,
+  isBiometricEnabled: () => mocks.native,
+  authenticateWithBiometric: mocks.authenticateWithBiometric,
   enableBiometric: vi.fn(),
   getBiometricLabel: () => 'Face ID',
 }));
@@ -61,6 +64,9 @@ function renderConnexion(entree = '/connexion') {
         <Route path="/inscription/reprendre" element={<div>Reprise inscription</div>} />
         <Route path="/inscription/soignant" element={<div>Inscription soignant</div>} />
         <Route path="/soignant/tableau-de-bord" element={<div>Tableau de bord soignant</div>} />
+        <Route path="/etablissement/tableau-de-bord" element={<div>Tableau de bord établissement</div>} />
+        <Route path="/groupe/tableau-de-bord" element={<div>Tableau de bord groupe</div>} />
+        <Route path="/etablissement/missions/:id" element={<div>Fiche mission retrouvée</div>} />
         <Route path="/etab/invitation/:token" element={<div>Invitation à confirmer</div>} />
       </Routes>
     </MemoryRouter>,
@@ -77,6 +83,9 @@ async function soumettreConnexion() {
 describe('PageConnexion — résolution sûre du rôle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.native = false;
+    mocks.authenticateWithBiometric.mockResolvedValue('refresh-fictif');
+    mocks.refreshSession.mockResolvedValue({ error: null });
     mocks.connexion.mockResolvedValue(undefined);
     mocks.signOut.mockResolvedValue({ error: null });
     mocks.getSession.mockResolvedValue({ data: { session: null } });
@@ -98,6 +107,38 @@ describe('PageConnexion — résolution sûre du rôle', () => {
       type: 'succes',
       message: 'Connexion réussie !',
     }));
+  });
+
+  it.each([true, false])('retrouve la mission après connexion établissement (rôle signé=%s)', async signe => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: signe ? { role: 'ADMIN_ETABLISSEMENT' } : {} } } } });
+    mocks.rpc.mockResolvedValue({ data: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'etab-rh' }, error: null });
+    renderConnexion('/connexion?return=%2Fetablissement%2Fmissions%2F71000000-0000-4000-8000-000000000003');
+    await soumettreConnexion();
+    expect(await screen.findByText('Fiche mission retrouvée')).toBeInTheDocument();
+  });
+
+  it('retrouve aussi la mission après authentification biométrique', async () => {
+    mocks.native = true;
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: { role: 'ADMIN_ETABLISSEMENT' } } } } });
+    renderConnexion('/connexion?return=%2Fetablissement%2Fmissions%2F71000000-0000-4000-8000-000000000003');
+    fireEvent.click(await screen.findByRole('button', { name: 'Se connecter avec Face ID' }));
+    expect(await screen.findByText('Fiche mission retrouvée')).toBeInTheDocument();
+    expect(mocks.refreshSession).toHaveBeenCalledWith({ refresh_token: 'refresh-fictif' });
+    expect(mocks.connexion).not.toHaveBeenCalled();
+  });
+
+  it.each(['SOIGNANT', 'ADMIN_GROUPE'])('ne fait pas passer %s dans la route établissement', async role => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: { role } } } } });
+    renderConnexion('/connexion?return=%2Fetablissement%2Fmissions%2F71000000-0000-4000-8000-000000000003');
+    await soumettreConnexion();
+    expect(await screen.findByText(role === 'SOIGNANT' ? 'Tableau de bord soignant' : 'Tableau de bord groupe')).toBeInTheDocument();
+  });
+
+  it.each(['https://evil.invalid/etablissement/missions/71000000-0000-4000-8000-000000000003', '//evil.invalid', '/etablissement/missions/../../admin', '/etablissement/missions/creer', '/etablissement/missions/71000000-0000-4000-8000-000000000003?return=https://evil.invalid'])('refuse le retour mission non canonique %s', async retour => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: { role: 'ADMIN_ETABLISSEMENT' } } } } });
+    renderConnexion(`/connexion?return=${encodeURIComponent(retour)}`);
+    await soumettreConnexion();
+    expect(await screen.findByText('Tableau de bord établissement')).toBeInTheDocument();
   });
 
   it('conserve la session et ne redirige pas vers l’inscription si la RPC de rôle échoue', async () => {

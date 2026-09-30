@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { ChargementPage } from '@/components/ChargementPage';
+import { retourMissionNotification } from '@/lib/navigationNotification';
 
 interface RouteProtegeeProps {
   rolesAutorises: string[];
@@ -21,7 +22,10 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
   } = useRole();
 
   if (authLoading || roleLoading) return <ChargementPage />;
-  if (!user || !session) return <Navigate to="/connexion" replace />;
+  if (!user || !session) {
+    const retour = retourMissionNotification(location.pathname + location.search + location.hash);
+    return <Navigate to={retour ? `/connexion?return=${encodeURIComponent(retour)}` : '/connexion'} replace />;
+  }
 
   // C2: Vérifier que l'email est confirmé
   if (!session.user.email_confirmed_at) {

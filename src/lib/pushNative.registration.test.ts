@@ -87,3 +87,17 @@ it('retries a failed later token rotation instead of keeping a stale confirmatio
   await push.initNativePush('user', { actualiser: true });
   expect(push.enregistrementPushConfirme('user')).toBe(true);
 });
+
+it('signale une seule ouverture et relit la fiche déjà affichée sans nouvelle navigation', async () => {
+  const path = '/etablissement/missions/71000000-0000-4000-8000-000000000003';
+  window.history.replaceState(null, '', path);
+  const navigation = vi.spyOn(window.history, 'pushState');
+  const ouverture = vi.fn(); window.addEventListener('jolene:notification-opened', ouverture);
+  try {
+    const push = await import('./pushNative'); await push.initNativePush('user');
+    await m.listeners.get('pushNotificationActionPerformed')?.({ notification: { data: { type_evenement: 'CANDIDATURE_RECUE', lien: path } } });
+    expect(ouverture).toHaveBeenCalledTimes(1);
+    expect((ouverture.mock.calls[0][0] as CustomEvent).detail.path).toBe(path);
+    expect(navigation).not.toHaveBeenCalled();
+  } finally { window.removeEventListener('jolene:notification-opened', ouverture); navigation.mockRestore(); }
+});

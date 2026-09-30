@@ -42,7 +42,9 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    timeout-minutes: 25
+    # Un lot WebKit peut prendre 24 min, hors préparation et dépôt des preuves.
+    # Garder une marge bornée pour terminer le job après les assertions.
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

@@ -278,3 +278,74 @@ Les anciens scripts seed/cleanup lèvent une exception et ne contiennent plus
 de purge ou création. Les instructions contradictoires de `docs/staging.md`
 sont retirées. Aucun reset, bootstrap, purge, cron F ni appel fournisseur n’a
 été lancé pour effectuer ce retrait.
+
+## Extension frontend : deux dépôts HTTP en vol depuis deux interfaces
+
+Branche locale `test/candidatures-concurrentes-frontend-20260930`, base
+`b8c1820bf6ec62d8e5f17e0d7a01fe79a3a055ee`. Le pilote staging
+[36761445010](https://github.com/Gabpcd/JJJJJ/actions/runs/36761445010) avait
+validé les deux dépôts **successifs**, les recharges, la relecture établissement
+et les zéros indépendants après nettoyage. Il ne valide pas cette extension.
+
+Le runner conserve simultanément les contextes iPhone 13 et iPad Pro 11 des
+soignants. Il les connecte par formulaire, suit les liens React et prépare les
+deux dialogues avec le même planning avant tout dépôt. Il clique les deux
+boutons « Envoyer ma candidature ». La barrière ne transmet les requêtes
+qu'après réception des deux POSTULER exacts, déjà autorisés et décomptés par
+les budgets existants. Attente maximale 20 s ; aucun retry, délai produit ou
+retard artificiel de réponse. L'absence du second participant annule la barrière.
+
+La preuve compte deux appels `route.fetch` simultanément en cours côté pilote :
+`min(réceptions) - max(débuts) > 0`, horloge monotone commune, millisecondes
+relatives bornées, slots 0/1 uniquement. Une durée nulle, une réponse manquante
+ou deux appels successifs ne passent pas. Les deux IDs renvoyés doivent être
+distincts et correspondre aux deux propriétaires relus en backend. Les rappels
+documentaires, captures, recharges et lecture établissement restent exigés.
+Le troisième contexte demeure un iPad Pro 11 et s'ouvre après fermeture des deux
+soignants. Aucun accepter, paiement, messagerie ou présence n'est ajouté.
+
+Chaque contexte conserve sa phase/action et attribue ses erreurs/réponses au
+bon slot. `allSettled` attend les deux interfaces même après un échec. Avant
+fermeture des contextes, le transport refuse toute nouvelle requête et draine
+les opérations déjà lancées ; ces refus et erreurs restent bloquants. Une
+réponse serveur perdue reste ambiguë : fermer le navigateur ne prouve pas une
+annulation de transaction serveur. Les gardes et verrous du cleanup exact,
+ses contrôles de dépendances et les audits conservés ne sont pas modifiés.
+
+Le rapport ajoute `concurrenceHTTP` avec seulement slots, débuts/réceptions
+relatifs et chevauchement. Il conserve `concurrenceDB:false` : le RPC verrouille
+la ligne mission avec `FOR UPDATE`, et ce banc n'observe pas les transactions
+PostgreSQL ni leurs attentes. Ce n'est ni une charge k6, ni une preuve de
+concurrence d'acceptation/affectation ou de capacité nationale.
+
+Les comptes, fixtures, empreintes, endpoints, budgets d'écritures, canaux fermés,
+workflow manuel exclusif, verrou staging et cleanup restent byte-identiques à
+b8 hors runner frontend. Aucun pilote distant de cette extension n'est lancé
+pendant son développement ; une revue indépendante puis un dispatch explicite
+restent nécessaires.
+
+Validation locale de cette extension : 70/70 tests Node ciblés (dont 38 du
+runner), `tsc -b`, typecheck E2E isolé, syntaxe Node et 17 guards verts. Les
+négatifs couvrent participant absent/étranger, absence de chevauchement, ID
+ou slot dupliqué, réponse perdue, erreur d'une interface pendant l'autre
+transport, drainage du vrai `finally`, écriture tardive refusée et canaris
+secrets. Aucun seuil ou assertion d'erreur navigateur n'est assoupli.
+
+Simulation compilée : cinq parcours sur iPhone, Android, iPad portrait/paysage
+et ordinateur, 5/5 sans retry/skip, trois formulaires et 15 captures après
+recharge. Réponses API en mémoire et WebSockets fermés. Le transport simulé
+attend `route.fulfill` directement : `route.fallback()` ne mesure pas la
+réception et ne sert pas de preuve de chevauchement. Ces durées simulées ne
+mesurent ni latence staging ni concurrence PostgreSQL. Les fixtures UI restent
+celles du helper existant (02/10, 09–13 Paris), distinctes du futur manifeste
+staging. Build `/private/tmp/F1-dist` inchangé, entrée `index-Cxzp0ZeM.js`,
+stamp 31f760ff avec l'import statique de la modale déjà intégré à b8 ; aucun
+nouveau build. Captures en pixels CSS, dimensions/DPR des contextes inchangés.
+
+Preuves : `/private/tmp/jolene-d2-concurrence-20260930` et
+`/private/tmp/jolene-d2-concurrence-5formats-css`, avec manifestes SHA256.
+Les essais préparatoires `desktop-initial`, `desktop-response`, `desktop-direct`
+et `final` sous `/private/tmp/jolene-d2-concurrence-*` sont conservés : deux
+corrections du mock de transport, puis ENOSPC. Ils ne comptent pas parmi les
+cinq succès finaux. La dernière passe conserve JSON et captures explicites ;
+les traces et captures automatiques lourdes sont désactivées pour le disque.

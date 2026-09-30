@@ -43,6 +43,7 @@ import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
+import { OUVERTURE_NOTIFICATION, retourMissionNotification } from '@/lib/navigationNotification';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -512,6 +513,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   // Incrémente cet état pour re-fetcher les données ciblées sans perdre l'UI.
   const [refreshTick, setRefreshTick] = useState(0);
   const refresh = React.useCallback(() => setRefreshTick(t => t + 1), []);
+  const [actualisationCandidatures, setActualisationCandidatures] = useState(0);
+
+  useEffect(() => {
+    const ouvrirNotification = (event: Event) => {
+      const path = retourMissionNotification((event as CustomEvent<{ path?: unknown }>).detail?.path);
+      if (path !== `/etablissement/missions/${id}`) return;
+      refresh();
+      setActualisationCandidatures(t => t + 1);
+    };
+    window.addEventListener(OUVERTURE_NOTIFICATION, ouvrirNotification);
+    return () => window.removeEventListener(OUVERTURE_NOTIFICATION, ouvrirNotification);
+  }, [id, refresh]);
 
   const verifierStatutConnect = React.useCallback(async (
     missionId: string,
@@ -1036,6 +1049,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
             missionId={m.id}
+            actualisation={actualisationCandidatures}
             missionIntitule={m.intitule}
             missionCreneaux={creneauxBruts}
             missionNbCreneaux={m.nb_creneaux}

@@ -26,6 +26,7 @@ function scoreBadge(score: number) {
 
 interface ListeCandidaturesProps {
   missionId: string;
+  actualisation?: number;
   missionIntitule?: string;
   missionCreneaux?: CreneauPointage[];
   missionNbCreneaux?: number | null;
@@ -133,6 +134,7 @@ function getCandidatMatchBadge(
 
 export function ListeCandidatures({
   missionId,
+  actualisation = 0,
   missionIntitule,
   missionCreneaux = [],
   missionNbCreneaux,
@@ -164,7 +166,7 @@ export function ListeCandidatures({
 
   useEffect(() => {
     charger();
-  }, [missionId]);
+  }, [missionId, actualisation]);
 
   const charger = async () => {
     setLoading(true);

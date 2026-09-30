@@ -44,15 +44,30 @@ SET encrypted_password = crypt('<nouveau_mdp>', gen_salt('bf'))
 WHERE email = 'ops-test@jolene.app';
 ```
 
-### 3. Supabase — Backups Pro tier
+### 3. Supabase — sauvegardes DB et preuve de reprise
 
-Dashboard Supabase → Project Settings → Add-ons :
+Relevé en lecture seule du 30/09/2026 à 18:57:31 UTC : huit sauvegardes physiques
+`COMPLETED` observées, dernière le 30/09 à 03:49:43.757 UTC ; WAL-G activé,
+**PITR désactivé**. Preuve : [workflow backup-status réussi](https://github.com/Gabpcd/JJJJJ/actions/runs/36762256592).
+Ce relevé ne prouve pas une restauration ni les objectifs internes RPO 5 min / RTO 4 h.
 
-- [ ] Confirmer que la formule est **Pro** (≥ 25 $/mois) ou **Team**.
-- [ ] Activer **Point-In-Time Recovery (PITR)** (7 jours Pro, 30 jours Team).
-- [ ] Tester un PITR sur un projet **clone/staging** (Settings → Backups
-      → Restore to new project) pour valider la procédure.
-- [ ] Documenter le test dans `docs/procedure-backup.md` (date + résultat).
+- [ ] Contrôler la formule, la rétention effective, les accès et les points restaurables.
+      Le PITR est un add-on payant distinct ; Pro ne l'active pas automatiquement.
+      La documentation décrit 7/14/28 jours pour PITR, et 7/14/30 jours de backups
+      quotidiens selon Pro/Team/Enterprise. Ne pas confondre ces deux grilles.
+- [ ] Préparer puis exécuter l'exercice synthétique isolé de
+      [procedure-backup.md](procedure-backup.md), avec coût borné et absence
+      d'effets fournisseurs démontrée avant la sauvegarde/restauration.
+      Un clone physique recopie aussi Vault et peut redémarrer les jobs immédiatement ;
+      le staging partagé et un clone non isolé de production ne sont pas des destinations sûres.
+- [ ] Décider séparément, sur devis chiffré, de l'activation éventuelle de PITR.
+      Les backups quotidiens observés ne permettent pas d'affirmer un RPO de cinq minutes.
+- [ ] Consigner restauration DB, fichiers Storage, recette frontend reliée au backend,
+      RPO/RTO mesurés, écarts et limites. Une simulation API ou une reconstruction de
+      schéma ne vaut pas preuve de restauration d'une sauvegarde.
+
+Sources : [Database Backups](https://supabase.com/docs/guides/platform/backups),
+[Restore to a New Project](https://supabase.com/docs/guides/platform/clone-project).
 
 ### 4. Supabase — Cron pg_cron
 
@@ -170,12 +185,34 @@ Dashboard Stripe :
 - [ ] Outil suggéré : Posthog (libre + tier Free généreux) ou Metabase
       auto-hébergé sur Supabase.
 
-### 15. Backup secondaire Storage
+### 15. Sauvegarde indépendante des originaux Storage
 
-- [ ] Configurer cron `rclone` mensuel vers un bucket S3 de secours pour le
-      bucket `jolene-documents` (factures, mandats, documents soignants).
-      Pas critique car factures regenerable depuis DB, mais recommandé pour
-      les documents soignants (pièces d'identité, diplômes).
+Les backups DB contiennent les métadonnées Storage, **pas les octets des fichiers**.
+Aucune copie indépendante ni restauration d'originaux n'est encore attestée.
+Le catalogue lu le 30/09/2026 contient cinq buckets, tous privés :
+
+| Bucket | Périmètre à couvrir |
+|---|---|
+| `attestations-heures-externes` | Attestations originales |
+| `contrats-signes` | Originaux contractuels et preuves de signature |
+| `copies-bulletins-paie` | Bulletins originaux fournis par l'employeur |
+| `jolene-documents` | Pièces et documents métier |
+| `justificatifs` | Justificatifs originaux |
+
+- [ ] Choisir et configurer une destination indépendante privée, chiffrée, à accès
+      restreint ; documenter fréquence, rétention, coût et récupération.
+- [ ] Préserver une copie/version qui ne réplique pas immédiatement la suppression
+      accidentelle de la source. Une synchronisation seule n'est pas cette preuve.
+- [ ] Recopier les octets, tailles, types MIME et SHA-256, puis restaurer un original
+      synthétique de chaque bucket ; comparer les cinq téléchargements au manifeste.
+- [ ] Vérifier RLS, accès soignant/établissement et refus d'un tiers dans l'interface
+      réelle, y compris après rechargement, selon [procedure-backup.md](procedure-backup.md).
+- [ ] Fixer la fréquence à partir du RPO retenu ; une copie mensuelle ne soutient pas
+      une perte maximale de cinq minutes. La régénération d'une facture ne restaure
+      ni une pièce originale ni une signature.
+
+Aucun cron rclone, bucket S3 de secours, clé ou service de copie opérationnel n'est
+attesté par cette liste. Ne cocher les cases qu'avec configuration et preuves réelles.
 
 ### 16. SOC 2 / ISO 27001 (long terme)
 
