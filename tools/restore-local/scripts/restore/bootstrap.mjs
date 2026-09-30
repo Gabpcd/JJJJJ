@@ -165,6 +165,21 @@ function inspect(plan,partial=false){
  }else validateInspection(plan,networks[0],containers,volumes,{partial});
  return {containers,volumes,networkPresent:networks.length===1};
 }
+export function classifyHealthOutput(output){
+ if(typeof output!=='string'||output.length===0)return {category:'no_output',http_status:null,loopback_family:'not_observed'};
+ const text=output.slice(0,4096),http=text.match(/\bHTTP\/\d(?:\.\d)?[ \t]+([1-5]\d{2})\b/i);
+ // A literal address elsewhere (for example a response body) does not establish the connection target.
+ const ipv4=/(?:^|\n)Connecting to (?:localhost|127\.0\.0\.1):5000 \(127\.0\.0\.1:5000\)|(?:^|\n)Connecting to localhost \(localhost\)\|127\.0\.0\.1\|:5000/i.test(text);
+ const ipv6=/(?:^|\n)Connecting to (?:localhost|\[::1\]):5000 \(\[::1\]:5000\)|(?:^|\n)Connecting to localhost \(localhost\)\|::1\|:5000/i.test(text);
+ const category=/executable file not found|exec: .*: not found|wget: not found/i.test(text)?'executable_missing'
+  :/unrecognized option|unknown option|invalid option/i.test(text)?'invalid_option'
+  :/connection refused/i.test(text)?'connection_refused'
+  :/bad address|name or service not known|temporary failure in name resolution|unable to resolve host/i.test(text)?'dns_failure'
+  :/timed out|timeout/i.test(text)?'timeout'
+  :/permission denied/i.test(text)?'permission_denied'
+  :http?'http_status':'unclassified';
+ return {category,http_status:http?Number(http[1]):null,loopback_family:ipv4&&ipv6?'both':ipv4?'ipv4':ipv6?'ipv6':'not_observed'};
+}
 export function projectContainers(plan,containers,network){
  runName(plan.name);
  const states=['created','running','paused','restarting','removing','exited','dead'],health=['starting','healthy','unhealthy'];
@@ -179,7 +194,8 @@ export function projectContainers(plan,containers,network){
    return {side,service,present:Boolean(c),state:c?(states.includes(c.State?.Status)?c.State.Status:'other'):null,
     health:c?(health.includes(c.State?.Health?.Status)?c.State.Health.Status:'other'):null,
     exit_code:integer(c?.State?.ExitCode,255),oom_killed:typeof c?.State?.OOMKilled==='boolean'?c.State.OOMKilled:null,
-    health_exit_code:integer(checks.at(-1)?.ExitCode,255),failing_streak:integer(c?.State?.Health?.FailingStreak,10000)};
+    health_exit_code:integer(checks.at(-1)?.ExitCode,255),failing_streak:integer(c?.State?.Health?.FailingStreak,10000),
+    health_output:classifyHealthOutput(checks.at(-1)?.Output)};
   }))};
 }
 function diagnose(plan){

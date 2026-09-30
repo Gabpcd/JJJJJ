@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {makePlan,validatePlan,validateInspection,gateway,runName,main,FORBIDDEN,verifySources,assertAbsent,projectContainers,projectProcessFailure,publicFailure} from './bootstrap.mjs';
+import {makePlan,validatePlan,validateInspection,gateway,runName,main,FORBIDDEN,verifySources,assertAbsent,projectContainers,projectProcessFailure,publicFailure,classifyHealthOutput} from './bootstrap.mjs';
 const run='jolene-restore-drill-unittest',lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
 const secrets={source:{password:'SOURCE_PASSWORD_CANARY',jwt:'SOURCE_JWT_CANARY'},target:{password:'TARGET_PASSWORD_CANARY',jwt:'TARGET_JWT_CANARY'}};
 const plan=()=>makePlan(run,'/tmp/private-plan',lock,secrets);
@@ -101,4 +101,43 @@ test('untrusted exception message, name, stack and process detail never become p
 test('known CLI refusal preserves failure and fixed phase',()=>{
  let caught;try{main(['invalid','/tmp/no-run']);}catch(e){caught=e;}
  assert.ok(caught);assert.deepEqual(publicFailure(caught),{result:'REFUSED',code:'COMMAND_INVALID',phase:'read_plan'});
+});
+test('health output classifies transport, HTTP and executable failures without retaining text',()=>{
+ const examples=[
+  ["wget: can't connect to remote host: Connection refused",'connection_refused',null],
+  ["wget: bad address 'CANARY_SECRET:5000'",'dns_failure',null],
+  ['wget: server returned error: HTTP/1.1 503 CANARY_SECRET','http_status',503],
+  ['OCI runtime exec failed: exec: "wget": executable file not found in $PATH: CANARY_SECRET','executable_missing',null],
+  ["wget: unrecognized option '--CANARY_SECRET'",'invalid_option',null],
+  ['wget: download timed out CANARY_SECRET','timeout',null],
+  ['wget: permission denied CANARY_SECRET','permission_denied',null],
+  ['CANARY_SECRET HTTP/1.1 999','unclassified',null],
+  ['', 'no_output',null],
+ ];
+ for(const [message,category,http_status]of examples){
+  const r=classifyHealthOutput(message);assert.deepEqual(r,{category,http_status,loopback_family:'not_observed'});assert.ok(!JSON.stringify(r).includes('CANARY'));
+ }
+ assert.deepEqual(classifyHealthOutput({Output:'CANARY_SECRET'}),{category:'no_output',http_status:null,loopback_family:'not_observed'});
+});
+test('inspection projects only the last healthcheck category, never its body or credentials',()=>{
+ const p=plan(),i=inspection(p),secret='CANARY_EMAIL_PASSWORD_JWT_HTTPS_QUERY';
+ i.containers[0].State.Health.Log=[{ExitCode:1,Output:'wget: server returned error: HTTP/1.1 500 '+secret},{ExitCode:1,Output:"wget: can't connect to remote host: Connection refused "+secret}];
+ const d=projectContainers(p,i.containers,i.network);
+ assert.deepEqual(d.services[0].health_output,{category:'connection_refused',http_status:null,loopback_family:'not_observed'});
+ assert.ok(!JSON.stringify(d).includes(secret));assert.ok(!JSON.stringify(d).includes('HTTP/'));assert.ok(!JSON.stringify(d).includes('Output'));
+ assert.deepEqual(classifyHealthOutput('x'.repeat(4096)+'HTTP/1.1 503 '+secret),{category:'unclassified',http_status:null,loopback_family:'not_observed'});
+});
+test('loopback family requires a known connection line, not an address mentioned elsewhere',()=>{
+ for(const [text,family]of [
+  ['Connecting to localhost:5000 ([::1]:5000)\nwget: Connection refused','ipv6'],
+  ['Connecting to localhost:5000 (127.0.0.1:5000)\nwget: Connection refused','ipv4'],
+  ['Connecting to localhost (localhost)|::1|:5000... failed: Connection refused.','ipv6'],
+  ['Connecting to localhost (localhost)|127.0.0.1|:5000... connected.','ipv4'],
+  ['Connecting to localhost:5000 ([::1]:5000)\nConnecting to localhost:5000 (127.0.0.1:5000)','both'],
+  ['Resolving localhost... ::1, 127.0.0.1\nHTTP/1.1 503 CANARY_SECRET','not_observed'],
+  ['response body: Connecting to localhost:5000 ([::1]:5000) CANARY_SECRET','not_observed'],
+  ['Connecting to CANARY_SECRET:5000 (192.0.2.1:5000)','not_observed'],
+ ]){
+  const r=classifyHealthOutput(text);assert.equal(r.loopback_family,family);assert.ok(!JSON.stringify(r).includes('CANARY'));assert.ok(!JSON.stringify(r).includes('::1'));assert.ok(!JSON.stringify(r).includes('127.0.0.1'));
+ }
 });
