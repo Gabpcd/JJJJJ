@@ -46,6 +46,23 @@ test('réseau : seul POSTULER exact par AS, aucun tiers/paiement/présence/réin
 test('budget consommé avant transport : aucun rejeu login/candidature, même si réponse perdue',()=>{
   for(const a of identites){const b=budgetEcrituresD(a);assert.equal(b.complet(),false);for(const n of ['auth-token','fn_audit_connexion',...(a.slot<2?['fn_maj_activite_soignant','fn_confirmer_action_planning_v1']:['fn_ecrire_audit_safe'])]){b.consommer(n);assert.throws(()=>b.consommer(n));}assert.equal(b.complet(),true);assert.throws(()=>b.consommer('fn_update_presence'));}
 });
+test('dashboard établissement : deux lectures sans argument réservées au slot2',()=>{
+  for(const rpc of ['fn_mon_score_etab','fn_bfa_info']) {
+    const path=`/rest/v1/rpc/${rpc}`;
+    assert.equal(req(path,'POST',{},identites[2]),true);
+    assert.equal(req(path,'OPTIONS',undefined,identites[2]),true);
+    for(const a of identites.slice(0,2)) {
+      assert.equal(req(path,'POST',{},a),false);
+      assert.equal(req(path,'OPTIONS',undefined,a),false);
+    }
+    for(const method of ['GET','HEAD','PATCH','PUT','DELETE'])assert.equal(req(path,method,{},identites[2]),false);
+    for(const body of [undefined,null,[],{p_annee:2026},{p_etablissement_id:m.membres[2].userId},{extra:true}])assert.equal(req(path,'POST',body,identites[2]),false);
+    assert.equal(req(path+'?p_annee=2026','POST',{},identites[2]),false);
+    assert.equal(req(path,'POST',{},identites[2],'https://flripxtsyegjshnhzjkz.supabase.co'),false);
+  }
+  assert.equal(req('/rest/v1/rpc/fn_verser_bfa','POST',{},identites[2]),false);
+  assert.equal(req('/rest/v1/rpc/fn_stats_etab_complements','POST',{},identites[2]),false);
+});
 test('dashboard : métadonnées de la seule mission du manifeste, aucun ID supplémentaire/projection ou OR',()=>{
   const path=`/rest/v1/missions?select=id%2Cnb_creneaux&id=in.%28${m.missionId}%29`;
   assert.equal(req(path),true);

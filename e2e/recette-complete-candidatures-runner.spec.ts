@@ -9,15 +9,16 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   state.etablissement.nom=state.mission.intitule;
   const m={missionId:identifiants.mission,marker:state.mission.intitule,debut:state.mission.debut_le,fin:state.mission.fin_le,
     membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom,password:'Mot-de-passe-fictif-recette-D2'})),
-      {slot:2,userId:identifiants.etablissement,email:'clinique@example.invalid',prenom:'Clinique',nom:'Simulation'}]};
+      {slot:2,userId:identifiants.etablissement,email:'etablissement@example.invalid',prenom:'Clinique',nom:'Simulation',password:'Mot-de-passe-fictif-recette-D2'}]};
   const refus: string[]=[],metadonneesDashboard: number[]=[];
   for(const [slot,acteur]of (['as1','as2','etablissement'] as const).entries()) {
     const context=await browser.newContext({...info.project.use});
     await simulation.installer(context,acteur);
-    let activites=0,audits=0,documents=0;
+    let activites=0,audits=0,consultations=0,documents=0;
     await context.addInitScript(()=>{if(location.pathname==='/connexion')sessionStorage.removeItem('sb-127-auth-token');});
-    await context.route('**/rest/v1/rpc/{fn_audit_connexion,fn_maj_activite_soignant}',route=>{
-      if(new URL(route.request().url()).pathname.endsWith('/fn_audit_connexion'))audits++;else activites++;
+    await context.route('**/rest/v1/rpc/{fn_audit_connexion,fn_maj_activite_soignant,fn_ecrire_audit_safe}',route=>{
+      const nom=new URL(route.request().url()).pathname.split('/').pop();
+      if(nom==='fn_audit_connexion')audits++;else if(nom==='fn_ecrire_audit_safe')consultations++;else activites++;
       return route.fulfill({json:{success:true}});
     });
     await context.route('**/*',async route=>{
@@ -35,20 +36,22 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
     });
     const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
     try {
-      if(slot<2) {
-        // Même point de départ que le pilote : vrai formulaire puis dashboard
-        // asynchrone. Le lien de mission assure la barrière de rendu utile.
-        await page.goto('/connexion');
-        await page.getByLabel('Email',{exact:true}).fill(m.membres[slot].email);
-        await page.getByLabel('Mot de passe',{exact:true}).fill('Mot-de-passe-fictif-recette-D2');
-        await page.getByRole('button',{name:'Se connecter',exact:true}).click();
-        await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
-        await expect.poll(()=>activites).toBe(1);
-        await page.waitForLoadState('networkidle');
-      }
+      // Les trois identités passent par le formulaire et leur vrai dashboard,
+      // comme le pilote ; aucune session préinjectée sur cette page.
+      await page.goto('/connexion');
+      await page.getByLabel('Email',{exact:true}).fill(m.membres[slot].email);
+      await page.getByLabel('Mot de passe',{exact:true}).fill('Mot-de-passe-fictif-recette-D2');
+      await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+      await expect(page).toHaveURL(slot<2?/\/soignant\/tableau-de-bord$/:/\/etablissement\/tableau-de-bord$/);
+      await expect.poll(()=>slot<2?activites:consultations).toBe(1);
+      await page.waitForLoadState('networkidle');
       const diagnostic=diagnosticD();
       const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{
         if(slot<2){expect(documents).toBe(etape==='recharge'?2:1);expect(audits).toBe(1);expect(activites).toBe(1);}
+        else {
+          expect(audits).toBe(1);expect(consultations).toBe(1);expect(activites).toBe(0);
+          for(const s of state.soignants)await expect(page.getByText(`${s.prenom} ${s.nom}`,{exact:false})).toHaveCount(0);
+        }
         if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});
       }};
       if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
