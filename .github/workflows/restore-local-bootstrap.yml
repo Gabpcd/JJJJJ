@@ -69,6 +69,15 @@ jobs:
           set -euo pipefail
           node scripts/restore/bootstrap.mjs inspect "$PRIVATE_DIR" > "$PROOF_DIR/inspect.json" 2>&1
           node scripts/restore/ci-guard.mjs existing-refusal "$PRIVATE_DIR" > "$PROOF_DIR/existing-refusal.json" 2>&1
+      - name: Filtered container states before cleanup
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROOF_DIR"
+          if [[ -f "$PRIVATE_DIR/manifest.json" ]]; then
+            node scripts/restore/bootstrap.mjs diagnose "$PRIVATE_DIR" > "$PROOF_DIR/diagnostic.json" 2>&1
+          fi
       - name: Always clean only exact owned resources
         if: always()
         timeout-minutes: 2

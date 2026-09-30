@@ -8,7 +8,20 @@ import { spawnSync } from 'node:child_process';
 export const FORBIDDEN=['flripxtsyegjshnhzjkz','mejpriaetwgtcstbgfid','wnepopwygokbhlqghydb'];
 const HERE=dirname(fileURLToPath(import.meta.url)), ROOT=resolve(HERE,'../..');
 const LABEL='org.jolene.restore-drill', SIDES=['source','target'], ROLES=['db','auth','rest','storage','api'];
-const fail=code=>{throw new Error(code)}, sha=b=>createHash('sha256').update(b).digest('hex');
+const SAFE_ERROR=Symbol('bootstrap-safe-error');
+const PHASES=new Set(['plan','read_plan','docker_context','preload','image_preflight','compose_config','resource_preflight','compose_up','inspection','diagnostic','empty_sql_source','empty_sql_target','api_health_source','api_health_target','cleanup_inventory','cleanup_containers','cleanup_volumes','cleanup_network','verify_absence']);
+let currentPhase='read_plan';
+const fail=(code,detail)=>{const e=new Error(code);e[SAFE_ERROR]=true;e.detail=detail;throw e},sha=b=>createHash('sha256').update(b).digest('hex');
+export function projectProcessFailure(result){
+ const signals=['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV'];
+ return {exit_code:Number.isInteger(result.status)&&result.status>=0&&result.status<=255?result.status:null,
+  signal:result.signal===null?null:(signals.includes(result.signal)?result.signal:'other'),timed_out:result.error?.code==='ETIMEDOUT'};
+}
+export function publicFailure(error){
+ return {result:'REFUSED',code:error?.[SAFE_ERROR]===true?error.message:'UNCLASSIFIED_FAILURE',phase:PHASES.has(currentPhase)?currentPhase:'other',
+  ...(error?.[SAFE_ERROR]===true&&error.detail?{process:projectProcessFailure(error.detail)}:{})};
+}
+
 const read=p=>JSON.parse(readFileSync(p,'utf8'));
 const name=(run,side,role)=>[run,side,role].join('-');
 const write=(p,b)=>writeFileSync(p,b,{mode:0o600,flag:'wx'});
@@ -122,8 +135,8 @@ export function validateInspection(plan,network,containers,volumes,{partial=fals
 }
 function invoke(args,input){
  const r=spawnSync('docker',args,{input,encoding:'utf8',maxBuffer:4*1024*1024,timeout:240000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
- if(r.error?.code==='ENOENT')fail('DOCKER_UNAVAILABLE');
- if(r.error||r.status!==0)fail('DOCKER_COMMAND_FAILED');return r.stdout;
+ if(r.error?.code==='ENOENT')fail('DOCKER_UNAVAILABLE',r);
+ if(r.error||r.status!==0)fail('DOCKER_COMMAND_FAILED',r);return r.stdout;
 }
 function localDocker(){
  const ctx=JSON.parse(invoke(['context','inspect']));
@@ -152,8 +165,32 @@ function inspect(plan,partial=false){
  }else validateInspection(plan,networks[0],containers,volumes,{partial});
  return {containers,volumes,networkPresent:networks.length===1};
 }
+export function projectContainers(plan,containers,network){
+ runName(plan.name);
+ const states=['created','running','paused','restarting','removing','exited','dead'],health=['starting','healthy','unhealthy'];
+ const integer=(n,max)=>Number.isInteger(n)&&n>=0&&n<=max?n:null;
+ const expected=Object.values(plan.services).map(s=>'/'+s.container_name);
+ return {result:'CONTAINER_DIAGNOSTIC_ONLY',run:plan.name,network_present:Boolean(network),
+  network_internal:network?network.Internal===true:null,network_owned:network?network.Labels?.[LABEL]===plan.name:null,
+  unexpected_labelled_containers:containers.filter(c=>!expected.includes(c.Name)).length,
+  services:SIDES.flatMap(side=>ROLES.map(service=>{
+   const c=containers.find(c=>c.Name==='/'+name(plan.name,side,service));
+   const checks=Array.isArray(c?.State?.Health?.Log)?c.State.Health.Log:[];
+   return {side,service,present:Boolean(c),state:c?(states.includes(c.State?.Status)?c.State.Status:'other'):null,
+    health:c?(health.includes(c.State?.Health?.Status)?c.State.Health.Status:'other'):null,
+    exit_code:integer(c?.State?.ExitCode,255),oom_killed:typeof c?.State?.OOMKilled==='boolean'?c.State.OOMKilled:null,
+    health_exit_code:integer(checks.at(-1)?.ExitCode,255),failing_streak:integer(c?.State?.Health?.FailingStreak,10000)};
+  }))};
+}
+function diagnose(plan){
+ const names=invoke(['ps','-a','--filter','label='+LABEL+'='+plan.name,'--format','{{.Names}}']).trim().split('\n').filter(Boolean);
+ const containers=names.length?JSON.parse(invoke(['inspect',...names])):[];
+ const networks=invoke(['network','ls','--format','{{.Name}}']).trim().split('\n');
+ const network=networks.includes(plan.name+'-network')?JSON.parse(invoke(['network','inspect',plan.name+'-network']))[0]:null;
+ return projectContainers(plan,containers,network);
+}
 export function assertAbsent(run,execute=invoke){
- runName(run);
+ currentPhase='verify_absence';runName(run);
  const expectedContainers=SIDES.flatMap(s=>ROLES.map(r=>name(run,s,r)));
  const expectedVolumes=SIDES.flatMap(s=>['data','config','files'].map(r=>name(run,s,r)));
  for(const [kind,expected]of [['container',expectedContainers],['volume',expectedVolumes],['network',[run+'-network']]]){
@@ -165,9 +202,9 @@ export function assertAbsent(run,execute=invoke){
  return {result:'EXACT_RESOURCES_ABSENT',run,containers:0,volumes:0,networks:0};
 }
 export function main(args){
- const [cmd,dirArg,runArg]=args,dir=resolve(dirArg??'.');
+ const [cmd,dirArg,runArg]=args,dir=resolve(dirArg??'.');currentPhase='read_plan';
  if(cmd==='plan'){
-  const run=runName(runArg??'');verifySources();if(existsSync(dir))fail('DIRECTORY_MUST_BE_NEW');
+  currentPhase='plan';const run=runName(runArg??'');verifySources();if(existsSync(dir))fail('DIRECTORY_MUST_BE_NEW');
   const lock=read(resolve(ROOT,'images.lock.json')),secrets=Object.fromEntries(SIDES.map(side=>[side,{password:randomBytes(32).toString('hex'),jwt:randomBytes(48).toString('hex')}]));
   const plan=makePlan(run,dir,lock,secrets);validatePlan(plan,run);mkdirSync(dir,{mode:0o700});
   const gateway_sha256={};
@@ -176,18 +213,19 @@ export function main(args){
   const manifest={version:1,run,compose_sha256:sha(body),gateway_sha256,network:run+'-network',containers:Object.values(plan.services).map(x=>x.container_name),volumes:Object.values(plan.volumes).map(x=>x.name),backend_urls:Object.fromEntries(SIDES.map(s=>[s,'http://'+name(run,s,'api')+':8000'])),schema_imported:false,actors_created:0,files_uploaded:0};
   write(resolve(dir,'manifest.json'),JSON.stringify(manifest,null,2));return {result:'LOCAL_PLAN_ONLY',run,containers:10,schema_imported:false};
  }
- if(cmd==='absent'){localDocker();return assertAbsent(runName(dirArg??''));}
- if(!['preload','preflight','up','inspect','down'].includes(cmd))fail('COMMAND_INVALID');
- const {m,plan,file}=readRun(dir);verifySources();localDocker();
+ if(cmd==='absent'){currentPhase='docker_context';localDocker();return assertAbsent(runName(dirArg??''));}
+ if(!['preload','preflight','up','inspect','diagnose','down'].includes(cmd))fail('COMMAND_INVALID');
+ const {m,plan,file}=readRun(dir);verifySources();currentPhase='docker_context';localDocker();
  const locked=new Set(read(resolve(ROOT,'images.lock.json')).images.map(x=>x.reference));
  if(Object.values(plan.services).some(s=>!locked.has(s.image)))fail('IMAGE_NOT_LOCKED');
+ if(cmd==='diagnose'){currentPhase='diagnostic';return diagnose(plan);}
  if(cmd==='preload'){
-  assertAbsent(m.run);
+  assertAbsent(m.run);currentPhase='preload';
   for(const image of new Set(Object.values(plan.services).map(s=>s.image)))invoke(['pull','--platform','linux/amd64',image]);
   return {result:'FIVE_PINNED_IMAGES_PRELOADED',run:m.run};
  }
  if(cmd==='preflight'||cmd==='up'){
-  for(const image of new Set(Object.values(plan.services).map(x=>x.image))){
+  currentPhase='image_preflight';for(const image of new Set(Object.values(plan.services).map(x=>x.image))){
    const a=JSON.parse(invoke(['image','inspect',image]));
    if(a.length!==1||!a[0].RepoDigests?.includes(image)||a[0].Architecture!=='amd64'||a[0].Os!=='linux')fail('IMAGE_NOT_PRELOADED_EXACT');
    for(const service of Object.values(plan.services).filter(s=>s.image===image)){
@@ -196,32 +234,32 @@ export function main(args){
    }
   }
   const base=['compose','--project-name',m.run,'--env-file',resolve(dir,'empty.env'),'--file',file];
-  invoke([...base,'config','--quiet']);if(cmd==='preflight')return {result:'DOCKER_PREFLIGHT_ONLY',run:m.run};
-  for(const [kind,names]of [['container',m.containers],['volume',m.volumes],['network',[m.network]]]){
+  currentPhase='compose_config';invoke([...base,'config','--quiet']);if(cmd==='preflight')return {result:'DOCKER_PREFLIGHT_ONLY',run:m.run};
+  currentPhase='resource_preflight';for(const [kind,names]of [['container',m.containers],['volume',m.volumes],['network',[m.network]]]){
    const list=invoke(kind==='container'?['ps','-a','--format','{{.Names}}']:[kind,'ls','--format','{{.Name}}']).trim().split('\n');
    if(names.some(x=>list.includes(x)))fail('RESOURCES_ALREADY_EXIST');
   }
-  invoke([...base,'up','--detach','--pull','never','--wait','--wait-timeout','180']);
+  currentPhase='compose_up';invoke([...base,'up','--detach','--pull','never','--wait','--wait-timeout','180']);
  }
- const state=inspect(plan,cmd==='down');
+ currentPhase=cmd==='down'?'cleanup_inventory':'inspection';const state=inspect(plan,cmd==='down');
  if(cmd==='down'){
-  for(const c of state.containers)invoke(['rm','--force',c.Id]);
-  for(const v of state.volumes)invoke(['volume','rm',v.Name]);
-  if(state.networkPresent)invoke(['network','rm',m.network]);
+  currentPhase='cleanup_containers';for(const c of state.containers)invoke(['rm','--force',c.Id]);
+  currentPhase='cleanup_volumes';for(const v of state.volumes)invoke(['volume','rm',v.Name]);
+  currentPhase='cleanup_network';if(state.networkPresent)invoke(['network','rm',m.network]);
   assertAbsent(m.run);return {result:'OWNED_RESOURCES_REMOVED',run:m.run};
  }
  const api_health=[];
  for(const side of SIDES){
-  invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],readFileSync(resolve(HERE,'preflight-empty.sql'),'utf8'));
+  currentPhase='empty_sql_'+side;invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],readFileSync(resolve(HERE,'preflight-empty.sql'),'utf8'));
   const origin='http://'+name(m.run,side,'api')+':8000';
   const probe="(async()=>{const statuses=[];for(const path of ['/auth/v1/health','/rest/v1/','/storage/v1/status']){const r=await fetch("+JSON.stringify(origin)+"+path,{headers:{apikey:process.env.ANON_KEY,Authorization:'Bearer '+process.env.ANON_KEY},redirect:'error',signal:AbortSignal.timeout(5000)});statuses.push(r.status);await r.body?.cancel();if(r.status!==200)process.exit(2)}let escaped=false;try{await fetch('https://example.com',{redirect:'error',signal:AbortSignal.timeout(3000)});escaped=true}catch{}if(escaped)process.exit(3);process.stdout.write(JSON.stringify({statuses,outbound:'blocked'}))})().catch(()=>process.exit(4))";
-  const response=JSON.parse(invoke(['exec',name(m.run,side,'storage'),'node','-e',probe]));
+  currentPhase='api_health_'+side;const response=JSON.parse(invoke(['exec',name(m.run,side,'storage'),'node','-e',probe]));
   if(JSON.stringify(response)!==JSON.stringify({statuses:[200,200,200],outbound:'blocked'}))fail('API_HEALTH_RESPONSE_INVALID');
   api_health.push({side,...response});
  }
  return {result:'EMPTY_CORE_ONLY',run:m.run,containers:10,api_health,schema_imported:false,actors_created:0,files_uploaded:0};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- try{console.log(JSON.stringify(main(process.argv.slice(2))));}catch(e){console.error(JSON.stringify({result:'REFUSED',code:/^[A-Z_]+$/.test(e.message)?e.message:'UNCLASSIFIED_FAILURE'}));process.exitCode=1;}
+ try{console.log(JSON.stringify(main(process.argv.slice(2))));}catch(e){console.error(JSON.stringify(publicFailure(e)));process.exitCode=1;}
 }
 

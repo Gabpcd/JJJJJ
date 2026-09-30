@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {makePlan,validatePlan,validateInspection,gateway,runName,main,FORBIDDEN,verifySources,assertAbsent} from './bootstrap.mjs';
+import {makePlan,validatePlan,validateInspection,gateway,runName,main,FORBIDDEN,verifySources,assertAbsent,projectContainers,projectProcessFailure,publicFailure} from './bootstrap.mjs';
 const run='jolene-restore-drill-unittest',lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
 const secrets={source:{password:'SOURCE_PASSWORD_CANARY',jwt:'SOURCE_JWT_CANARY'},target:{password:'TARGET_PASSWORD_CANARY',jwt:'TARGET_JWT_CANARY'}};
 const plan=()=>makePlan(run,'/tmp/private-plan',lock,secrets);
@@ -71,4 +71,34 @@ test('independent absence uses exact names AND labels, without delete',()=>{
  const calls=[];const r=assertAbsent(run,args=>{calls.push(args);return ''});assert.equal(r.result,'EXACT_RESOURCES_ABSENT');assert.equal(calls.length,6);assert.ok(calls.every(a=>!a.includes('rm')));
  for(const output of [run+'-source-db',run+'-source-data',run+'-network'])assert.throws(()=>assertAbsent(run,()=>output),/RESOURCES_REMAIN/);
  assert.throws(()=>assertAbsent(run,args=>args.includes('--filter')?'unexpected-labelled-object':''),/RESOURCES_REMAIN/);
+});
+
+test('diagnostic distinguishes running unhealthy from stopped OOM without logging payload',()=>{
+ const p=plan(),i=inspection(p);
+ const a=i.containers[0],b=i.containers[1];
+ a.State={Status:'running',ExitCode:0,OOMKilled:false,Health:{Status:'unhealthy',FailingStreak:24,Log:[{ExitCode:1,Output:'CANARY_PASSWORD_JWT_URL'}]}};
+ b.State={Status:'exited',ExitCode:137,OOMKilled:true,Error:'CANARY_PASSWORD_JWT_URL'};
+ a.Config.Env=['CANARY_PASSWORD_JWT_URL'];
+ const d=projectContainers(p,i.containers,i.network);
+ assert.equal(d.services[0].state,'running');assert.equal(d.services[0].health,'unhealthy');assert.equal(d.services[0].exit_code,0);assert.equal(d.services[0].health_exit_code,1);assert.equal(d.services[0].oom_killed,false);
+ assert.equal(d.services[1].state,'exited');assert.equal(d.services[1].exit_code,137);assert.equal(d.services[1].oom_killed,true);
+ assert.ok(!JSON.stringify(d).includes('CANARY'));assert.ok(!JSON.stringify(d).includes('Output'));assert.ok(!JSON.stringify(d).includes('Env'));
+});
+test('diagnostic handles partial startup and closed unknown enums without raw identifiers',()=>{
+ const p=plan(),i=inspection(p);i.containers=i.containers.slice(0,1);i.containers[0].State={Status:'CANARY_SECRET',ExitCode:999,OOMKilled:'CANARY_SECRET',Health:{Status:'CANARY_SECRET',FailingStreak:-1,Log:[{ExitCode:-1,Output:'CANARY_SECRET'}]}};
+ i.containers.push({Name:'/CANARY_SECRET',Config:{Env:['CANARY_SECRET']}});
+ const d=projectContainers(p,i.containers,null);assert.equal(d.unexpected_labelled_containers,1);assert.equal(d.network_present,false);assert.equal(d.services[0].state,'other');assert.equal(d.services[0].health,'other');assert.equal(d.services[0].exit_code,null);assert.equal(d.services[0].health_exit_code,null);assert.equal(d.services[0].oom_killed,null);assert.equal(d.services[1].present,false);assert.equal(d.services.length,10);assert.ok(!JSON.stringify(d).includes('CANARY'));
+});
+test('process projection emits only numeric exit/signal enum/timeout',()=>{
+ const p=projectProcessFailure({status:1,signal:'SIGTERM',error:{code:'ETIMEDOUT',message:'CANARY_SECRET'},stderr:'CANARY_SECRET',stdout:'CANARY_SECRET',env:{JWT:'CANARY_SECRET'}});
+ assert.deepEqual(p,{exit_code:1,signal:'SIGTERM',timed_out:true});
+ assert.deepEqual(projectProcessFailure({status:-1,signal:'CANARY_SECRET',error:{code:'CANARY_SECRET'}}),{exit_code:null,signal:'other',timed_out:false});
+});
+test('untrusted exception message, name, stack and process detail never become public code',()=>{
+ const e=Object.assign(new Error('CANARY_SECRET'),{name:'CANARY_SECRET',stack:'CANARY_SECRET',detail:{status:1,stderr:'CANARY_SECRET'}});
+ const p=publicFailure(e);assert.equal(p.code,'UNCLASSIFIED_FAILURE');assert.ok(!JSON.stringify(p).includes('CANARY'));assert.equal('process' in p,false);
+});
+test('known CLI refusal preserves failure and fixed phase',()=>{
+ let caught;try{main(['invalid','/tmp/no-run']);}catch(e){caught=e;}
+ assert.ok(caught);assert.deepEqual(publicFailure(caught),{result:'REFUSED',code:'COMMAND_INVALID',phase:'read_plan'});
 });
