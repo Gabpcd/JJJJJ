@@ -16,6 +16,7 @@ DECLARE
   claim_admin uuid := 'a9305700-0000-4000-8000-000000000008';
   admin_valide uuid := 'a9305700-0000-4000-8000-000000000009';
   membre_avec_etab_propre uuid := 'a9305700-0000-4000-8000-000000000010';
+  soignant_en_cours uuid := 'a9305700-0000-4000-8000-000000000011';
   inconnu uuid := 'a9305700-0000-4000-8000-000000000099';
   mission uuid := 'a9305700-0000-4000-8000-000000000101';
   en_cours uuid := 'a9305700-0000-4000-8000-000000000102';
@@ -50,12 +51,13 @@ BEGIN
     SELECT ('a9305700-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,
       '00000000-0000-0000-0000-000000000000','notation-rollback-'||i||'@example.invalid',
       'authenticated','authenticated',jsonb_build_object('role',
-        CASE WHEN i IN(2,3) THEN 'SOIGNANT' WHEN i IN(8,9) THEN 'ADMIN_PLATEFORME'
+        CASE WHEN i IN(2,3,11) THEN 'SOIGNANT' WHEN i IN(8,9) THEN 'ADMIN_PLATEFORME'
           WHEN i=7 THEN NULL ELSE 'ADMIN_ETABLISSEMENT' END,'is_test_playwright',true),now()
-    FROM generate_series(1,10) i;
+    FROM generate_series(1,11) i;
     INSERT INTO public.soignants(id,email,prenom,nom,profession,type_exercice,est_compte_test)
     VALUES(sal,'notation-rollback-2@example.invalid','Recette','Salarié','IDE','SALARIE',true),
-      (tiers,'notation-rollback-3@example.invalid','Recette','Tiers','IDE','SALARIE',true);
+      (tiers,'notation-rollback-3@example.invalid','Recette','Tiers','IDE','SALARIE',true),
+      (soignant_en_cours,'notation-rollback-11@example.invalid','Recette','En cours','IDE','SALARIE',true);
     INSERT INTO public.etablissements(id,nom,siret,type,adresse_rue,adresse_ville,adresse_code_postal,email_contact,est_compte_test)
     VALUES(etab,'Recette notation','99305700000001','CLINIQUE_PRIVEE','Test','Paris','75001','notation-rollback-1@example.invalid',true),
       (autre_etab,'Autre recette notation','99305700000005','CLINIQUE_PRIVEE','Test','Paris','75001','notation-rollback-5@example.invalid',true),
@@ -73,8 +75,24 @@ BEGIN
       etab,'Recette notation '||i,'IDE',now()+interval '20 years'+i*interval '1 day',
       now()+interval '20 years 4 hours'+i*interval '1 day',4,20,
       (CASE WHEN i=2 THEN 'EN_COURS' WHEN i=5 THEN 'OUVERTE' ELSE 'TERMINEE' END)::public.statut_mission,
-      CASE WHEN i IN(2,3,5) THEN NULL ELSE sal END,'SALARIE','SALARIE','BULLETIN_PAIE',false
+      CASE WHEN i=2 THEN soignant_en_cours WHEN i IN(3,5) THEN NULL ELSE sal END,
+      'SALARIE','SALARIE','BULLETIN_PAIE',false
     FROM generate_series(1,5) i;
+    -- Le trigger de cohérence normalise EN_COURS sans assignation en OUVERTE.
+    -- Ce soignant dédié préserve EN_COURS sans empêcher la suspension de sal.
+    IF EXISTS (
+      SELECT 1
+      FROM (VALUES
+        (mission,'TERMINEE'::public.statut_mission,sal),
+        (en_cours,'EN_COURS'::public.statut_mission,soignant_en_cours),
+        (sans_soignant,'TERMINEE'::public.statut_mission,NULL::uuid),
+        (mission_admin,'TERMINEE'::public.statut_mission,sal),
+        (ouverte,'OUVERTE'::public.statut_mission,NULL::uuid)
+      ) attendu(id,statut,soignant_id)
+      LEFT JOIN public.missions m ON m.id=attendu.id
+      WHERE m.id IS NULL OR m.statut IS DISTINCT FROM attendu.statut
+        OR m.soignant_assigne_id IS DISTINCT FROM attendu.soignant_id
+    ) THEN RAISE EXCEPTION 'Statuts ou affectations des cinq missions de recette altérés'; END IF;
     -- Dates futures imposées par le trigger anti-publication passée. Le statut
     -- synthétique termine le seed, pas un workflow métier de fin de mission.
     PERFORM set_config('jolene.admin_seed_override_reason','',true);
@@ -230,7 +248,8 @@ BEGIN
   END;
   -- L'annulation porte aussi sur les audits, scores et éventuelles files créées
   -- dans le sous-bloc : aucun DELETE métier ni purge d'audit pour nettoyer.
-  IF EXISTS(SELECT 1 FROM auth.users WHERE id IN(etab,sal,tiers,membre,autre_etab,membre_tiers,sans_profil,claim_admin,admin_valide,membre_avec_etab_propre))
+  IF EXISTS(SELECT 1 FROM auth.users WHERE id IN(etab,sal,tiers,membre,autre_etab,membre_tiers,sans_profil,claim_admin,admin_valide,membre_avec_etab_propre,soignant_en_cours))
+    OR EXISTS(SELECT 1 FROM public.soignants WHERE id IN(sal,tiers,soignant_en_cours))
     OR EXISTS(SELECT 1 FROM public.missions WHERE id IN(mission,en_cours,sans_soignant,mission_admin,ouverte))
     OR EXISTS(SELECT 1 FROM public.notations_missions WHERE mission_id IN(mission,en_cours,sans_soignant,mission_admin,ouverte))
     OR EXISTS(SELECT 1 FROM public.journaux_audit WHERE id_ressource IN(mission,en_cours,sans_soignant,mission_admin,ouverte,note_etab,note_sal)) THEN
