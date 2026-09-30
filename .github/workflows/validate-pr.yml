@@ -58,6 +58,9 @@ jobs:
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
+      - name: Isolation des migrations PR et du bootstrap staging
+        run: node --test tests/node/staging-migration-base.node.mjs
+
       - name: Journal et préflight fournisseurs hors réseau
         run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
 
@@ -239,9 +242,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Une PR sans migration ne peut pas modifier le schéma : ne pas la
-      # bloquer sur la disponibilité du projet de staging. Toute PR qui touche
-      # une migration conserve en revanche le contrôle transactionnel complet.
+      # Les migrations PR sont testées puis annulées. Seul le schéma de base
+      # main peut être synchronisé durablement ; ce job ne déploie pas la PR.
+      # Une PR sans migration ne dépend pas de la disponibilité du staging.
       - name: Déterminer si les migrations sont concernées
         id: migration_scope
         env:
@@ -287,18 +290,22 @@ jobs:
           git worktree add --detach "$BASE_WORKTREE" "$BASE_SHA"
           trap 'git worktree remove --force "$BASE_WORKTREE" >/dev/null 2>&1 || true' EXIT
 
-          # Une PR peut modifier une migration pending ou avoir déjà été
-          # déployée sur le staging de recette. Le worktree de base doit alors
-          # connaître aussi les versions ajoutées par la PR, sinon la CLI refuse
-          # la synchronisation dès qu'elle voit une version distante inconnue.
-          # Leur comportement reste testé sous ROLLBACK à l'étape suivante.
-          mapfile -t MIGRATIONS_PR < <(
-            git diff --name-only --diff-filter=AM "$BASE_SHA"...HEAD \
-              -- 'supabase/migrations/*.sql' | sort
-          )
-          for migration in "${MIGRATIONS_PR[@]}"; do
-            install -m 0644 "$migration" "$BASE_WORKTREE/$migration"
-          done
+          # Ne jamais copier les migrations PR ici : db push les persisterait
+          # avant le test rollback, y compris leurs RPC encore non approuvées.
+          # Un staging en avance sur cette base exige une réconciliation revue
+          # ou une actualisation de la PR, jamais une réparation automatique.
+          registry_code=$(curl -sS --connect-timeout 10 --max-time 60 \
+            -o "$RUNNER_TEMP/jolene-staging-registry.json" -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"query":"SELECT version FROM supabase_migrations.schema_migrations ORDER BY version"}')
+          if [ "$registry_code" -lt 200 ] || [ "$registry_code" -ge 300 ]; then
+            echo "::error::Lecture du registre staging impossible (HTTP $registry_code) : aucune synchronisation effectuée."
+            exit 1
+          fi
+          node scripts/ci/check-staging-migration-base.mjs \
+            "$BASE_WORKTREE" "$RUNNER_TEMP/jolene-staging-registry.json"
 
           SUPABASE_ACCESS_TOKEN="$STAGING_SUPABASE_ACCESS_TOKEN" \
             supabase link \
