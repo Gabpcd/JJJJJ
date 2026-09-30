@@ -387,6 +387,7 @@ jobs:
             tests/security/exploration-sans-profil.test.sql
             tests/security/alertes-recherches-etablissement.test.sql
             tests/security/debit-cron-alertes.test.sql
+            tests/security/auto-resolution-cron-propre.test.sql
             tests/security/decouverte-api-alertes.test.sql
             tests/security/rappels-quotidiens-file.test.sql
             tests/security/activation-inscriptions-publiques.test.sql
