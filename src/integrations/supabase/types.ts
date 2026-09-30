@@ -4828,7 +4828,7 @@ export type Database = {
           mis_a_jour_le: string
           mission_id: string
           notateur_anonymise: boolean
-          notateur_id: string
+          notateur_id: string | null
           note_id: string
           sens: Database["public"]["Enums"]["sens_notation"]
           signale: boolean
@@ -4847,7 +4847,7 @@ export type Database = {
           mis_a_jour_le?: string
           mission_id: string
           notateur_anonymise?: boolean
-          notateur_id: string
+          notateur_id?: string | null
           note_id: string
           sens: Database["public"]["Enums"]["sens_notation"]
           signale?: boolean
@@ -4866,7 +4866,7 @@ export type Database = {
           mis_a_jour_le?: string
           mission_id?: string
           notateur_anonymise?: boolean
-          notateur_id?: string
+          notateur_id?: string | null
           note_id?: string
           sens?: Database["public"]["Enums"]["sens_notation"]
           signale?: boolean

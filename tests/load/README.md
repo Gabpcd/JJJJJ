@@ -5,7 +5,7 @@ Destination unique : `https://mejpriaetwgtcstbgfid.supabase.co`. Les scripts ref
 Le document de référence est [docs/tests-charge.md](../../docs/tests-charge.md) : prérequis métier, paramètres, limites et état exact des scénarios.
 
 - C (`03-recherche-missions`) : lecture publique ; exige le catalogue quantifié visible au préflight (500 missions avec la préparation CI).
-- E (`05-dashboard-concurrent`) : lectures sur un profil soignant staging ; exige un vrai profil métier au préflight.
+- E (`05-dashboard-concurrent`) : lectures sur dix profils AS minimaux staging distincts ; exige chaque identité au préflight et chaque slot mesuré.
 - A/B : charge Auth ; A crée des comptes et nécessite une isolation préalable des envois email.
 - D/F : suspendus avec échec explicite avant toute requête, car les anciens scripts pouvaient annoncer un succès sans acte métier. `all` n’est donc pas une campagne verte attendue.
 
@@ -26,3 +26,9 @@ node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node
 ```
 
 Les sorties d’une campagne k6 réelle sont stockées sous `tests/load/results/` puis jointes aux artefacts GitHub. Une recette de scripts en mémoire n’est pas une mesure de performance du service.
+
+E10 : `prepare-dashboard-pool.mjs` réutilise les gardes du préparateur unitaire
+pour chacun des dix membres. `dashboard_fixture_only=true` dans le workflow E
+permet préparation/préflight/nettoyage sans k6. Pour une mesure, minimum dix VUs
+pour couvrir les dix profils ; cible comparative 100 VUs/1 min, seuils inchangés.
+Aucune navigation frontend réelle pendant charge n'est démontrée par ce banc.

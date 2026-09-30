@@ -72,7 +72,7 @@
     {"slug":"messagerie-validate","verify_jwt":false,"auth_class":"USER_OR_ADMIN_CUSTOM","guard_all":["auth.getUser","applyRateLimit"],"justification":"JWT participant/admin et limite avant modération."},
     {"slug":"process-externalisation-actions","verify_jwt":false,"auth_class":"CRON_SECRET","guard_all":["verifyCronServiceAuth","isCronAuthProbe"],"justification":"Secret cron dédié; seules actions rattachées à des comptes réels sont verrouillées."},
     {"slug":"sync-chorus-status","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Synchronisation fournisseur réservée admin/service."},
-    {"slug":"generate-contrat-mission-pdf","verify_jwt":false,"auth_class":"USER_OR_ADMIN_CUSTOM","guard_all":["auth.getUser"],"justification":"JWT partie/admin et rattachement mission avant génération."},
+    {"slug":"generate-contrat-mission-pdf","verify_jwt":false,"auth_class":"USER_OR_ADMIN_CUSTOM","guard_all":["auth.getUser","fn_contrat_storage_path"],"justification":"Compte actif, tenant canonique et lecture_contrats avant et après Storage ; original signé préservé."},
     {"slug":"psc-logout","verify_jwt":false,"auth_class":"USER_CUSTOM","guard_all":["verifyUserOrServiceRole"],"justification":"JWT utilisateur vérifié par le helper partagé avant révocation de session fournisseur."},
     {"slug":"psc-test-connexion","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Diagnostic PSC réservé admin/service."},
     {"slug":"notif-match","verify_jwt":false,"auth_class":"SERVICE_SECRET","guard_all":["fn_lire_secret_cron"],"justification":"Notification interne authentifiée par secret Vault/service."},

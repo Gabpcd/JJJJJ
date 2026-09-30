@@ -104,7 +104,10 @@ test('SOIGNANT — erreurs Documents et Parrainage puis récupération',async({p
 });
 
 test('SOIGNANT — Explorer peuplé, détail et retour sans candidature automatique',async({page},info)=>{
- const state=await simulerSoignant(page,'minimal');state.offers=true;await entrer(page,'inscription');await aller(page,'/soignant/recherche-missions');
+ const state=await simulerSoignant(page,'minimal');state.offers=true;await entrer(page,'inscription');
+ // L'inscription peut déjà ouvrir Explorer : conserver alors le document courant.
+ if(new URL(page.url()).pathname!=='/soignant/recherche-missions')await aller(page,'/soignant/recherche-missions');
+ await expect(page).toHaveURL(/\/soignant\/recherche-missions$/);
  await expect(page.getByRole('button',{name:/Mission IDE.*Toucher pour le détail/})).toBeVisible();await preuve(page,'explorer-peuple',info,true);
  await page.getByRole('button',{name:/Mission IDE.*Toucher pour le détail/}).click();await expect(page.getByRole('dialog')).toBeVisible();
  await expect(page.getByRole('dialog')).toContainText('Dates et horaires travaillés');await info.attach('swipe-detail-aria',{body:await page.getByRole('dialog').ariaSnapshot(),contentType:'text/plain'});

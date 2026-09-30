@@ -429,7 +429,7 @@ export function BlocConformite({ missionId, onResultat }: BlocConformiteProps) {
             → Tu peux continuer : l'option salariée restera bloquée en cas de dépassement, l'option libérale n'est pas concernée.
           </p>
         ) : peutContinuer ? (
-          <p className="text-xs text-success font-medium">→ Tout est conforme. Vous pouvez accepter cette mission.</p>
+          <p className="text-xs text-success font-medium">→ Ces horaires sont compatibles avec votre planning.</p>
         ) : (
           <div>
             <p className="text-xs text-destructive font-medium mb-2">

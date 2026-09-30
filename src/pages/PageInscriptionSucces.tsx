@@ -99,7 +99,7 @@ export default function PageInscriptionSucces() {
           )}
 
           <BoutonY2K onClick={() => navigate(target)} className="w-full" iconeDroite={<ArrowRight className="h-4 w-4" />}>
-            {role === 'etab' ? 'Publier ma première mission' : 'Compléter mon profil — 2 minutes'}
+            Accéder à mon espace
           </BoutonY2K>
         </div>
       </div>

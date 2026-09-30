@@ -25,12 +25,10 @@ import {
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-// Sprint 8 ter-G PR 1 — modales chargées à la demande (code splitting)
-const ModaleAnnulationMissionEtab = lazy(() =>
-  import('@/components/etablissement/ModaleAnnulationMissionEtab').then((m) => ({
-    default: m.ModaleAnnulationMissionEtab,
-  })),
-);
+// La page reste lazy ; ce second import dynamique préchargeait à nouveau
+// le bundle d'entrée déjà exécuté et déclenchait un warning WebKit.
+import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
+// L'évaluation reste chargée à la demande.
 const EvaluationPostMission = lazy(() =>
   import('@/components/EvaluationPostMission').then((m) => ({
     default: m.EvaluationPostMission,
@@ -1647,8 +1645,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </div>
       )}
 
-      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
-          Sprint 8 ter-G : lazy mount uniquement quand ouverte (code splitting) */}
+      {/* Modale d'annulation montée uniquement quand elle est ouverte. */}
       {modalAnnuler && (
         <Suspense fallback={null}>
           <ModaleAnnulationMissionEtab

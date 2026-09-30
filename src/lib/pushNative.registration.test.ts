@@ -1,16 +1,47 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ permission: 'granted', listeners: new Map<string, Function>(), rpc: vi.fn(), session: vi.fn() }));
+type PushCallback = (event: unknown) => unknown;
+const m = vi.hoisted(() => ({ permission: 'granted', platform: 'ios', requestPermission: vi.fn(), listeners: new Map<string, PushCallback>(), rpc: vi.fn(), session: vi.fn() }));
 vi.mock('./platform', () => ({ isNative: () => true }));
-vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => 'ios' } }));
+vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => m.platform } }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: { getSession: m.session }, rpc: m.rpc } }));
 vi.mock('@capacitor/push-notifications', () => ({ PushNotifications: {
-  checkPermissions: async () => ({ receive: m.permission }), requestPermissions: async () => ({ receive: m.permission }),
+  checkPermissions: async () => ({ receive: m.permission }), requestPermissions: m.requestPermission,
   removeAllListeners: async () => m.listeners.clear(),
-  addListener: async (name: string, callback: Function) => { m.listeners.set(name, callback); return { remove: async () => m.listeners.delete(name) }; },
+  addListener: async (name: string, callback: PushCallback) => { m.listeners.set(name, callback); return { remove: async () => m.listeners.delete(name) }; },
   register: async () => { m.listeners.get('registration')?.({ value: 'fixture-apns-token' }); },
 } }));
-beforeEach(() => { vi.resetModules(); m.permission = 'granted'; m.rpc.mockReset().mockResolvedValue({ error: null }); m.session.mockResolvedValue({ data: { session: { user: { id: 'user' } } } }); localStorage.clear(); });
+beforeEach(() => { vi.resetModules(); m.permission = 'granted'; m.platform = 'ios'; m.requestPermission.mockReset().mockImplementation(async () => ({ receive: m.permission })); m.rpc.mockReset().mockResolvedValue({ error: null }); m.session.mockResolvedValue({ data: { session: { user: { id: 'user' } } } }); localStorage.clear(); });
 afterEach(() => vi.clearAllMocks());
+
+it.each(['prompt', 'prompt-with-rationale'])('does not ask for %s permission on login or resume without a user action', async permission => {
+  m.permission = permission;
+  const push = await import('./pushNative');
+  await push.initNativePush('user');
+  await push.initNativePush('user', { actualiser: true });
+  expect(m.requestPermission).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(push.enregistrementPushConfirme('user')).toBe(false);
+});
+
+it('requests Android permission again after a retryable denial and confirms the server registration', async () => {
+  m.platform = 'android';
+  m.permission = 'prompt-with-rationale';
+  m.requestPermission.mockImplementation(async () => ({ receive: m.permission = 'granted' }));
+  const push = await import('./pushNative');
+  await expect(push.demanderPermissionNativePush('user')).resolves.toBe(true);
+  expect(m.requestPermission).toHaveBeenCalledTimes(1);
+  expect(m.rpc).toHaveBeenCalledWith('fn_upsert_token_push', { p_token: 'fixture-apns-token', p_plateforme: 'ANDROID' });
+  expect(push.enregistrementPushConfirme('user')).toBe(true);
+});
+
+it.each(['denied', 'prompt-with-rationale'])('does not claim registration when %s permission remains refused', async permission => {
+  m.permission = permission;
+  const push = await import('./pushNative');
+  await expect(push.demanderPermissionNativePush('user')).resolves.toBe(false);
+  expect(m.requestPermission).toHaveBeenCalledTimes(permission === 'denied' ? 0 : 1);
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(push.enregistrementPushConfirme('user')).toBe(false);
+});
 it('does not report push enabled when server registration fails despite granted permission', async () => {
   m.rpc.mockResolvedValue({ error: new Error('Offline') });
   const push = await import('./pushNative');

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import * as Sentry from '@sentry/react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
@@ -18,6 +17,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { PanneauxHealthcheck } from '@/components/admin/PanneauxHealthcheck';
+import { DiagnosticSentry } from '@/components/admin/DiagnosticSentry';
 
 type CronInfo = {
   jobid: number;
@@ -280,7 +280,7 @@ export default function AdminStatus() {
             ['Vercel', 'https://vercel.com/dashboard'],
             ['Stripe', 'https://dashboard.stripe.com'],
             ['Resend', 'https://resend.com/emails'],
-            ['Sentry', 'https://sentry.io/organizations/jolene'],
+            ['Sentry', 'https://jolene-z6.sentry.io/'],
             ['Twilio', 'https://console.twilio.com'],
           ].map(([label, url]) => (
             <a key={url} href={url} target="_blank" rel="noopener noreferrer"
@@ -299,34 +299,7 @@ export default function AdminStatus() {
           </CardY2KTitle>
         </CardY2KHeader>
         <CardY2KContent className="space-y-3">
-          <div>
-            <p className="text-xs text-muted-foreground mb-2">
-              Déclenche une exception volontaire avec tag <code className="bg-muted px-1.5 py-0.5 rounded">test=true</code> pour
-              vérifier la chaîne Sentry (DSN → release → sourcemaps → user context). À filtrer dans les alertes prod.
-            </p>
-            <BoutonY2K
-              size="sm"
-              variant="secondary"
-              className="border-warning/30 text-warning hover:bg-warning/5 gap-1.5"
-              iconeGauche={<Bug className="h-3.5 w-3.5" />}
-              onClick={() => {
-                try {
-                  Sentry.captureException(new Error('Sentry test event from /admin/status'), {
-                    tags: { test: 'true', source: 'admin-diagnostic' },
-                    level: 'info',
-                  });
-                  toast.success('Erreur test envoyée à Sentry. Vérifiez le dashboard.');
-                } catch (e: any) {
-                  toast.error(`Échec : ${e?.message || 'Sentry indisponible'}`);
-                }
-              }}
-            >
-              Déclencher erreur test Sentry
-            </BoutonY2K>
-          </div>
-          <p className="text-[11px] text-muted-foreground italic">
-            Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
-          </p>
+          <DiagnosticSentry />
         </CardY2KContent>
         </CardY2K>
 

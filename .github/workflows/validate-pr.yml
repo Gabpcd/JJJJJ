@@ -47,7 +47,7 @@ jobs:
         run: npx tsc -b
 
       - name: Contrats des scénarios de charge
-        run: node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/diagnose-load-fixtures.node.mjs tests/node/prepare-dashboard-fixture.node.mjs tests/node/wait-staging-schema.node.mjs
+        run: node --test tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/diagnose-load-fixtures.node.mjs tests/node/prepare-dashboard-fixture.node.mjs tests/node/prepare-dashboard-pool.node.mjs tests/node/dashboard-staging-ui.node.mjs tests/node/dashboard-preview.node.mjs tests/node/wait-staging-schema.node.mjs
 
       - name: Tests unitaires
         run: npm test -- --reporter=dot
@@ -59,7 +59,10 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Isolation des migrations PR et du bootstrap staging
-        run: node --test tests/node/staging-migration-base.node.mjs
+        run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
+
+      - name: Vérifier les empreintes inventaire explicites
+        run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
 
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
@@ -69,6 +72,9 @@ jobs:
 
       - name: Projection des statuts stores sans réseau ni secrets
         run: ruby scripts/mobile/store-status.test.rb
+
+      - name: Projection des sauvegardes sans réseau ni secrets
+        run: node --test tests/node/collect-backup-status.node.mjs
 
       - name: Remplacement contrôlé d’une soumission Apple sans réseau ni secrets
         run: ruby fastlane/ios_review_submission.test.rb
@@ -366,6 +372,28 @@ jobs:
             exit 1
           fi
 
+          # Réconciliation persistante et bornée de la base STAGING : le DO
+          # historique de routage salarié a été rejoué deux fois. Le script
+          # refuse tout autre corps/droit et reconstruit uniquement main.
+          # Les migrations PR suivantes restent entièrement sous ROLLBACK.
+          node scripts/ci/reconcile-staging-litige-base.mjs \
+            "$BASE_WORKTREE" "$RUNNER_TEMP/jolene-staging-registry.json" \
+            > "$RUNNER_TEMP/jolene-staging-litige-base.sql"
+          jq -Rs '{query: .}' "$RUNNER_TEMP/jolene-staging-litige-base.sql" \
+            > "$RUNNER_TEMP/jolene-staging-litige-base.json"
+          reconcile_code=$(curl -sS --connect-timeout 10 --max-time 60 \
+            -o "$RUNNER_TEMP/jolene-staging-litige-base-response.json" -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/jolene-staging-litige-base.json")
+          if [ "$reconcile_code" -lt 200 ] || [ "$reconcile_code" -ge 300 ]; then
+            echo "::error::Réconciliation bornée de la base staging refusée (HTTP $reconcile_code)."
+            jq -r '.message // .error // "Erreur SQL non détaillée"' \
+              "$RUNNER_TEMP/jolene-staging-litige-base-response.json" 2>/dev/null || true
+            exit 1
+          fi
+
           SUPABASE_ACCESS_TOKEN="$STAGING_SUPABASE_ACCESS_TOKEN" \
             supabase db push \
               --include-all \
@@ -419,17 +447,29 @@ jobs:
             tests/security/exploration-sans-profil.test.sql
             tests/security/alertes-recherches-etablissement.test.sql
             tests/security/debit-cron-alertes.test.sql
+            tests/security/auto-resolution-cron-propre.test.sql
             tests/security/decouverte-api-alertes.test.sql
             tests/security/rappels-quotidiens-file.test.sql
             tests/security/activation-inscriptions-publiques.test.sql
             tests/security/recherche-publique-comptage.test.sql
+            tests/security/apercu-marche-anonyme.test.sql
+            tests/security/notation-reverse-transactionnelle.test.sql
+            tests/security/notation-anonymisation-compte.test.sql
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/copies-bulletins-officiels.test.sql
+            tests/security/export-etablissement-sans-troncature.test.sql
+            tests/security/monitoring-chorus-plage-nocturne.test.sql
+            tests/security/contrat-storage-acces.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
+            tests/security/factures-numerotation-series.test.sql
+            tests/security/facturation-hebdomadaire-f1.test.sql
             tests/security/stripe-refund-identifiers.test.sql
+            tests/security/security-definer-inventory-explicit.test.sql
+            tests/security/cloture-mission-tenant.test.sql
+            tests/security/litige-resolveur-garde-initiale.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
@@ -513,6 +553,10 @@ jobs:
           python3 -m unittest discover -s tests/python -p 'test_resend_stripe_test_event.py' -v
           npm ci
           npx vitest run \
+            tests/admin/security/contrat-original-acces.test.ts \
+            src/lib/contratMissionUi.test.ts \
+            src/components/SignerContratOtp.continuite.test.tsx \
+            src/pages/ContratMission.continuite.test.tsx \
             tests/admin/security/copies-bulletins-handler.test.ts \
             tests/admin/security/copies-bulletins-pdf.test.ts \
             src/components/gains/PaiementsEscrowAVenir.test.tsx \

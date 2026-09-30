@@ -1,6 +1,7 @@
 # Incident response — Jolene
 
-Date : 2026-05-03
+Mise à jour : 2026-09-30. Les délais ci-dessous sont des objectifs internes ;
+leur respect suppose une couverture opérationnelle effectivement organisée.
 
 ## 1. Identifier un incident
 
@@ -10,7 +11,10 @@ Date : 2026-05-03
   - Alertes actives en haut
   - Crons en échec / retard
   - Stripe webhooks taux d'erreur
-- **Sentry front-end** (action Gabrielle pour activer projet) : erreurs JS utilisateur
+- **Sentry front-end** : le bundle public de production relu le 30/09/2026
+  contient un DSN. Ce constat ne prouve ni la réception d'événements, ni les
+  alertes, ni les droits d'accès au dashboard. Le diagnostic admin distingue
+  désormais configuration, tentative et réception restant à confirmer.
 - **Cron monitoring-health-check-hourly** : check toutes les heures, écrit dans `alertes_systeme`
 - **Logs Supabase** : `cron.job_run_details`, edge functions logs, postgres logs
 
@@ -60,7 +64,9 @@ L'équipe Jolene
 
 1. Reproduire localement si possible
 2. Code fix → tests → commit + push
-3. Pour DB : migration via MCP `apply_migration`
+3. Pour DB : migration versionnée, PR et déploiement via CI `deploy-supabase`.
+   L'exception de hotfix direct est limitée à un incident avéré, selon
+   `CLAUDE.md`, avec recapture et traçabilité le jour même.
 4. Pour edge function : commit + redéploiement (CLI `supabase functions deploy` ou Dashboard)
 5. Pour frontend : commit + push → redéploiement Vercel auto
 
@@ -162,8 +168,8 @@ Via SQL : `UPDATE alertes_systeme SET resolu_le = NOW() WHERE id = '<id>';`
 
 | Item | Action requise |
 |---|---|
-| Email envoi alertes critiques | Brancher `fn_emettre_alerte_monitoring` à un envoi email automatique (template `ALERTE_MONITORING_ADMIN` à créer dans send-email + cron qui pull alertes non envoyées) |
-| Sentry projet `jolene-frontend` | Action Gabrielle : créer projet sur https://sentry.io org `jolene` + configurer `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` en variables Vercel |
+| Alertes techniques hors cockpit | Vérifier le canal externe existant puis prouver réception et acquittement d'une alerte synthétique. La fonction générique `fn_emettre_alerte_monitoring` écrit en base ; le transport des tripwires financiers est distinct. Ne pas déduire la délivrance de la seule ligne `alertes_systeme`. |
+| Sentry | DSN présent dans le bundle production au 30/09/2026. Vérifier l'accès au projet existant, la réception d'un événement de test autorisé, sa release/trace, puis les règles et destinataires d'alerte. Les secrets d'upload de sourcemaps ne sont pas vérifiés par la lecture du bundle. |
 | Healthcheck Twilio | Pas de monitoring SMS automatique — à ajouter quand SMS volume > 10/jour |
 | Healthcheck Resend | Idem email — Resend Dashboard à check manuellement |
 | Logflare integration | Optionnel : centraliser tous les logs Supabase + edge functions |

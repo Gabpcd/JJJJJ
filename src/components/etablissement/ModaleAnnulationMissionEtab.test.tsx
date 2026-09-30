@@ -22,6 +22,7 @@ vi.mock('@/components/ui/DialogResponsive', () => ({
   DialogResponsiveContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogResponsiveHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogResponsiveTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+  DialogResponsiveDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
   DialogResponsiveBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogResponsiveFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));

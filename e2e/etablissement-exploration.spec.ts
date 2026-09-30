@@ -1,5 +1,6 @@
+import { test, isolerWebSocketsSimules } from './helpers/simulation-websocket-isolee';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { test, expect, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 // Parcours complets de plusieurs écrans ; chaque assertion garde son délai court.
 test.setTimeout(120_000);
@@ -7,6 +8,7 @@ test.setTimeout(120_000);
 const userId = '69000000-0000-4000-8000-000000000071';
 const missionId = '69000000-0000-4000-8000-000000000072';
 async function compteNeuf(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT', offres = false) {
+  await isolerWebSocketsSimules(page);
   const roleCompte = {role:'INCONNU',etablissement_id:null as string | null};
   const lecturesProtegees: string[] = [];
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
@@ -176,6 +178,7 @@ test('brouillon établissement : titre et horaires conservés après création d
   await page.getByLabel(`Fin du créneau 1 du ${date}`, {exact:true}).fill('19:00');
   await page.getByRole('button', {name:/^Publier la mission/}).click();
   await expect(page).toHaveURL(/inscription\/completer/);
+  await expect(page.getByRole('heading', {name:'Identifier votre établissement', exact:true})).toBeVisible();
 
   // La réponse serveur indique désormais un véritable rattachement, donc le
   // formulaire ne dépend plus du parcours incomplet pour rendre son introduction.

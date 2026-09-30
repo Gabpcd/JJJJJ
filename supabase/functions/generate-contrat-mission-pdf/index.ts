@@ -4,20 +4,19 @@
 // le stocke dans le bucket Supabase Storage `contrats-signes`, et met à
 // jour contrats_mission avec storage_path + hash_document SHA-256.
 //
-// MVP : stocke HTML (text/html). Le PDF binaire est généré côté frontend
-// via jspdf (déjà installé) au moment du téléchargement par l'utilisateur.
+// Stocke le document HTML (text/html), conservé comme original du rendu.
 // Le hash signé via OTP couvre le HTML rendu (preuve d'intégrité).
 //
 // Input  : POST { contrat_id: uuid }
 // Output : { success, storage_path, hash_document, signed_url, ttl }
 //
-// Auth : appelé soit par l'étab/soignant (vérification RPC), soit par le
-// trigger d'acceptation candidature (service_role). On utilise le client
+// Auth : utilisateur autorisé par RPC ; le bypass système historique exige
+// exactement la clé service configurée. On utilise le client
 // service_role pour bypasser RLS au moment du write (insertion Storage),
-// mais on garde une vérification d'autorisation par RPC `est_admin()` ou
-// `mon_etablissement_id()`.
+// avec une autorisation canonique obligatoire `fn_contrat_storage_path` pour
+// chaque utilisateur, renouvelée avant et après les opérations sensibles.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { corsHeaders } from '../_shared/cors.ts';
 
 const BUSINESS_TIME_ZONE = 'Europe/Paris';
@@ -135,131 +134,119 @@ ${htmlBody}
 </html>`;
 }
 
+function dejaSigne(contrat: any): boolean {
+  return /^SIGNE/.test(contrat.statut || '') || contrat.signature_soignant === true
+    || contrat.signature_etablissement === true || !!contrat.signature_soignant_le
+    || !!contrat.signature_etablissement_le;
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders(req) });
-  }
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
-  }
-
+  const headers = { ...corsHeaders(req), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+  const repondre = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers });
+  if (req.method === 'OPTIONS') return new Response(null, { headers });
+  if (req.method !== 'POST') return repondre(405, { error: 'Méthode interdite' });
   try {
-    const body = await req.json();
-    const contratId = body?.contrat_id as string | undefined;
-    if (!contratId) {
-      return new Response(JSON.stringify({ error: 'contrat_id requis' }),
-        { status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
+    const body = await req.json().catch(() => null);
+    const contratId = body?.contrat_id;
+    if (typeof contratId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contratId)) {
+      return repondre(400, { error: 'Identifiant de contrat invalide' });
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!supabaseUrl || !serviceKey || !anonKey) return repondre(503, { error: 'Service indisponible' });
     const authHeader = req.headers.get('Authorization') || '';
-
-    // Client utilisateur (RLS) pour la vérif d'autorisation
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
+    const options = { auth: { persistSession: false, autoRefreshToken: false } };
+    const userClient = createClient(supabaseUrl, anonKey, {
+      ...options, global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user } } = await userClient.auth.getUser();
-    const isService = !user && authHeader.includes(serviceKey);
-
-    if (!user && !isService) {
-      return new Response(JSON.stringify({ error: 'Non authentifié' }),
-        { status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
+    // L'appel système existant reste distinct ; un fragment de clé n'est jamais une preuve.
+    const isService = authHeader === `Bearer ${serviceKey}`;
+    if (!isService) {
+      const { data, error } = await userClient.auth.getUser();
+      if (error || !data.user) return repondre(401, { error: 'Non authentifié' });
     }
-
-    // Client service_role pour les writes Storage + table
-    const admin = createClient(supabaseUrl, serviceKey);
-
-    // Récupérer le contrat + mission + soignant + étab
-    const { data: contrat, error: contratErr } = await admin
-      .from('contrats_mission')
-      .select('*')
-      .eq('id', contratId)
-      .single();
-
-    if (contratErr || !contrat) {
-      return new Response(JSON.stringify({ error: 'Contrat introuvable' }),
-        { status: 404, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
-    }
-
-    // Vérif d'autorisation (sauf service)
-    if (!isService && user) {
-      const allowed = contrat.soignant_id === user.id || contrat.etablissement_id === user.id;
-      if (!allowed) {
-        // Si non, vérifier mon_etablissement_id via RPC
-        const { data: rpc } = await userClient.rpc('fn_contrat_storage_path' as any, { p_contrat_id: contratId });
-        if (!(rpc as any)?.success) {
-          return new Response(JSON.stringify({ error: 'Non autorisé' }),
-            { status: 403, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
-        }
+    const autoriser = async () => {
+      if (isService) return null;
+      const { data, error } = await userClient.rpc('fn_contrat_storage_path', { p_contrat_id: contratId });
+      if (error || data?.success !== true) throw new Error('CONTRAT_ACCES_REFUSE');
+      return data;
+    };
+    // Même garde pour propriétaire, soignant, membre et administrateur, avant toute lecture privilégiée.
+    await autoriser();
+    const admin = createClient(supabaseUrl, serviceKey, options);
+    const lireContrat = async () => {
+      const { data, error } = await admin.from('contrats_mission').select('*').eq('id', contratId).single();
+      if (error || !data) throw new Error('CONTRAT_INDISPONIBLE');
+      return data;
+    };
+    const repondreOriginal = async (contrat: any) => {
+      const acces = await autoriser();
+      if (!contrat.storage_path || !/^[a-f0-9]{64}$/.test(contrat.hash_document || '')) {
+        return repondre(409, { error: 'Le document original est indisponible. Aucune régénération automatique n’est possible.' });
       }
+      if (acces && (acces.storage_path !== contrat.storage_path || acces.hash_document !== contrat.hash_document)) {
+        return repondre(409, { error: 'Le contrat a changé. Rechargez la page.' });
+      }
+      const { data: signed, error } = await admin.storage.from('contrats-signes').createSignedUrl(contrat.storage_path, 24 * 3600);
+      if (error || !signed?.signedUrl) return repondre(503, { error: 'Le document original ne peut pas être ouvert. Réessayez.' });
+      // Une fermeture ou révocation pendant l'appel Storage interdit de livrer l'URL.
+      const apres = await autoriser();
+      if (apres && (apres.storage_path !== contrat.storage_path || apres.hash_document !== contrat.hash_document)) {
+        return repondre(409, { error: 'Le contrat a changé. Rechargez la page.' });
+      }
+      return repondre(200, { success: true, contrat_id: contratId, storage_path: contrat.storage_path,
+        hash_document: contrat.hash_document, signed_url: signed.signedUrl, ttl_seconds: 24 * 3600 });
+    };
+    const contrat = await lireContrat();
+    // Une preuve existante est relue, jamais rendue avec le template/profil courant.
+    if (dejaSigne(contrat) || contrat.storage_path || contrat.hash_document || contrat.contenu_html_rendu_le) {
+      return await repondreOriginal(contrat);
     }
-
+    if (['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut)) {
+      return repondre(409, { error: 'Ce contrat ne peut plus être préparé.' });
+    }
     const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
       admin.from('missions').select('*').eq('id', contrat.mission_id).maybeSingle(),
       admin.from('soignants').select('*').eq('id', contrat.soignant_id).maybeSingle(),
       admin.from('etablissements').select('*').eq('id', contrat.etablissement_id).maybeSingle(),
       admin.from('templates_contrat').select('contenu_html, nom, version')
-        .eq('type_contrat', contrat.type_contrat)
-        .eq('est_actif', true)
-        .order('version', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .eq('type_contrat', contrat.type_contrat).eq('est_actif', true)
+        .order('version', { ascending: false }).limit(1).maybeSingle(),
     ]);
-
-    if (!templateRes.data?.contenu_html) {
-      return new Response(JSON.stringify({
-        error: `Aucun template actif pour type_contrat=${contrat.type_contrat}`,
-      }), { status: 422, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
+    if ([missionRes, soignantRes, etabRes, templateRes].some(r => r.error)) {
+      return repondre(503, { error: 'La préparation du contrat a échoué. Réessayez.' });
     }
-
+    if (!missionRes.data || !soignantRes.data || !etabRes.data || !templateRes.data?.contenu_html) {
+      return repondre(422, { error: 'Les données nécessaires au contrat ne sont pas disponibles.' });
+    }
     const vars = buildVariables(contrat, missionRes.data, soignantRes.data, etabRes.data);
-    const corpsRendu = replaceTemplate(templateRes.data.contenu_html, vars);
-    const documentComplet = wrapInDocument(corpsRendu, contrat.numero_contrat || contrat.id);
+    const documentComplet = wrapInDocument(replaceTemplate(templateRes.data.contenu_html, vars), contrat.numero_contrat || contrat.id);
     const hash = await sha256Hex(documentComplet);
-
-    // Upload Storage
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const path = `${contratId}/${ts}.html`;
-    const { error: uploadErr } = await admin.storage
-      .from('contrats-signes')
-      .upload(path, new Blob([documentComplet], { type: 'text/html' }), {
-        contentType: 'text/html',
-        upsert: false,
-      });
-    if (uploadErr) {
-      return new Response(JSON.stringify({ error: 'Erreur upload : ' + uploadErr.message }),
-        { status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
-    }
-
-    // Update contrats_mission
-    await admin.from('contrats_mission').update({
-      contenu_html: documentComplet,
-      storage_path: path,
-      hash_document: hash,
-      template_slug: contrat.type_contrat,
-      contenu_html_rendu_le: new Date().toISOString(),
+    await autoriser();
+    const path = `${contratId}/${crypto.randomUUID()}.html`;
+    const { error: uploadErr } = await admin.storage.from('contrats-signes')
+      .upload(path, new Blob([documentComplet], { type: 'text/html' }), { contentType: 'text/html', upsert: false });
+    if (uploadErr) return repondre(503, { error: 'Le document n’a pas pu être enregistré. Réessayez.' });
+    await autoriser();
+    // Compare-and-set atomique : une signature, un autre rendu ou une réaffectation
+    // arrivés pendant Storage empêchent l'écrasement. Aucun cleanup d'objet incertain.
+    let update = admin.from('contrats_mission').update({
+      contenu_html: documentComplet, storage_path: path, hash_document: hash,
+      template_slug: contrat.type_contrat, contenu_html_rendu_le: new Date().toISOString(),
     }).eq('id', contratId);
-
-    // Generate signed URL (24h)
-    const { data: signed } = await admin.storage
-      .from('contrats-signes')
-      .createSignedUrl(path, 24 * 3600);
-
-    return new Response(JSON.stringify({
-      success: true,
-      contrat_id: contratId,
-      storage_path: path,
-      hash_document: hash,
-      signed_url: signed?.signedUrl,
-      ttl_seconds: 24 * 3600,
-      template_nom: templateRes.data.nom,
-      template_version: templateRes.data.version,
-    }), { status: 200, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
-
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || 'Erreur interne' }),
-      { status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
+    for (const champ of ['statut', 'soignant_id', 'etablissement_id', 'mission_id', 'type_contrat',
+      'signature_soignant', 'signature_etablissement', 'signature_soignant_le', 'signature_etablissement_le',
+      'storage_path', 'hash_document', 'contenu_html_rendu_le', 'contenu_html']) {
+      update = contrat[champ] == null ? update.is(champ, null) : update.eq(champ, contrat[champ]);
+    }
+    const { data: enregistre, error: updateErr } = await update.select('id, storage_path, hash_document').maybeSingle();
+    if (updateErr) return repondre(503, { error: 'L’enregistrement du contrat n’a pas été confirmé. Réessayez.' });
+    if (!enregistre) return repondre(409, { error: 'Le contrat a changé pendant sa préparation. Rechargez la page.' });
+    return await repondreOriginal(enregistre);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'CONTRAT_ACCES_REFUSE') return repondre(403, { error: 'Accès au contrat refusé.' });
+    if (error instanceof Error && error.message === 'CONTRAT_INDISPONIBLE') return repondre(404, { error: 'Contrat indisponible.' });
+    return repondre(503, { error: 'Le service contrat est indisponible. Réessayez.' });
   }
 });
