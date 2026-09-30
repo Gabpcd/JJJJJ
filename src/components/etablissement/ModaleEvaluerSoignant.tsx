@@ -8,6 +8,7 @@ import {
   DialogResponsiveContent,
   DialogResponsiveHeader,
   DialogResponsiveTitle,
+  DialogResponsiveDescription,
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
@@ -106,6 +107,9 @@ export function ModaleEvaluerSoignant({ mission, onFermer, onEvaluee }: Props) {
       <DialogResponsiveContent maxWidth="lg">
         <DialogResponsiveHeader>
           <DialogResponsiveTitle>Évaluer le soignant</DialogResponsiveTitle>
+          <DialogResponsiveDescription className="sr-only">
+            Attribuez une note aux quatre critères et ajoutez un commentaire si vous le souhaitez.
+          </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-4">
           {/* Récap */}
