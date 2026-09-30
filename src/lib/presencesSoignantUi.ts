@@ -64,3 +64,8 @@ export function construireHistoriqueEffectifsSansPresence({
     }];
   });
 }
+
+/** Une mesure absente n’est pas une distance nulle. */
+export function mesureGpsDisponible(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}

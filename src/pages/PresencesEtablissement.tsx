@@ -203,7 +203,7 @@ function PresencesEtablissementContent() {
     !p.valide_par_etablissement
     && (p.missions?.planning_indisponible || !synthesePresence(p).validationPossible)
   ));
-  const alertes = presences.filter(p => p.alerte_teleportation || !p.perimetre_gps_valide);
+  const alertes = presences.filter(p => p.alerte_teleportation || p.perimetre_gps_valide === false);
   const nombreAlertes = alertes.length + missionsSansPointage.length;
 
   const presencesSansAlerte = aValider.filter(p =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { construireHistoriqueEffectifsSansPresence } from './presencesSoignantUi';
+import { construireHistoriqueEffectifsSansPresence, mesureGpsDisponible } from './presencesSoignantUi';
 
 describe('historique des présences soignant', () => {
   it('rend visible une mission historique alimentée uniquement par les segments effectifs', () => {
@@ -49,4 +49,12 @@ describe('historique des présences soignant', () => {
 
     expect(resultat).toEqual([]);
   });
+});
+
+// Une distance nulle est une vraie mesure ; une absence n’en est pas une.
+it('distingue les mesures GPS finies de données absentes ou invalides', () => {
+  for (const value of [0, 0.2, 700]) expect(mesureGpsDisponible(value)).toBe(true);
+  for (const value of [null, undefined, '', '0', false, -1, NaN, Infinity]) {
+    expect(mesureGpsDisponible(value)).toBe(false);
+  }
 });

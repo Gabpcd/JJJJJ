@@ -58,12 +58,12 @@ export function ListeReglages({ sections }: { sections: SectionReglages[] }) {
                 >
                   <span
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                      danger ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
+                      danger ? 'bg-destructive/10 text-destructive dark:text-red-400' : 'bg-primary/10 text-primary'
                     }`}
                   >
                     <Icone className="h-[18px] w-[18px]" />
                   </span>
-                  <span className={`flex-1 text-[15px] font-medium ${danger ? 'text-destructive' : 'text-foreground'}`}>
+                  <span className={`flex-1 text-[15px] font-medium ${danger ? 'text-destructive dark:text-red-400' : 'text-foreground'}`}>
                     {l.label}
                   </span>
                   {typeof l.badge === 'number' && l.badge > 0 && (

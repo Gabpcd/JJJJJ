@@ -45,6 +45,80 @@ const previsionnels = effectifs.map((creneau) => ({
 }));
 
 describe('construireExportPaiePeriode', () => {
+  for (const nbCreneaux of [0, 1]) {
+    for (const statut of ['TERMINEE', 'EN_COURS']) {
+      it(`isole deux missions ${statut} avec nb_creneaux=${nbCreneaux}`, () => {
+        const missions = [8, 4].map((heures, index): MissionExportPaieSource => ({
+          ...missionLongue,
+          id: `mission-${index}`,
+          statut,
+          nb_creneaux: nbCreneaux,
+          debut_le: `2026-07-0${index + 6}T06:00:00.000Z`,
+          fin_le: `2026-07-0${index + 6}T${String(6 + heures).padStart(2, '0')}:00:00.000Z`,
+          total_brut: heures * 50,
+        }));
+        const prevus = missions.map(m => ({
+          mission_id: m.id, debut: m.debut_le!, fin: m.fin_le!,
+          est_pause: false, type_creneau: 'PREVISIONNEL',
+        }));
+        const pointages = statut === 'EN_COURS' ? prevus.map((c, index) => ({
+          ...c,
+          fin: `2026-07-0${index + 6}T${index === 0 ? '10' : '08'}:00:00.000Z`,
+          type_creneau: 'EFFECTIF',
+        })) : [];
+        // Même lot SQL pour les deux missions.
+        const creneaux = [...prevus, ...pointages];
+        const resultat = construireExportPaiePeriode(missions, creneaux, 2026, 7);
+        expect(resultat.map(m => ({
+          id: m.id, heures: m.duree_heures, brut: m.total_brut,
+          ratio: m.ratio_periode, source: m.planning_source,
+          creneaux: m.creneaux_export.map(c => [c.debut, c.fin]),
+        }))).toEqual(missions.map((m, index) => ({
+          id: m.id,
+          heures: (index === 0 ? 8 : 4) * (statut === 'EN_COURS' ? 0.5 : 1),
+          brut: (index === 0 ? 400 : 200) * (statut === 'EN_COURS' ? 0.5 : 1),
+          ratio: statut === 'EN_COURS' ? 0.5 : 1,
+          source: statut === 'EN_COURS' ? 'EFFECTIF' : 'PREVISIONNEL_VALIDE',
+          creneaux: [[m.debut_le, (statut === 'EN_COURS' ? pointages : prevus)[index].fin]],
+        })));
+        expect(construireExportPaiePeriode(missions, [...creneaux].reverse(), 2026, 7)).toEqual(resultat);
+        expect(construireExportPaiePeriode(missions, [
+          ...creneaux, { ...prevus[0], mission_id: undefined, fin: null },
+        ], 2026, 7)).toEqual(resultat);
+      });
+    }
+
+    it(`conserve le repli ponctuel propre à chaque mission sans ligne avec nb_creneaux=${nbCreneaux}`, () => {
+      const ponctuelle = { ...missionLongue, id: 'ponctuelle', nb_creneaux: nbCreneaux,
+        debut_le: effectifs[0].debut, fin_le: effectifs[0].fin, total_brut: 400 };
+      const [resultat] = construireExportPaiePeriode([ponctuelle], previsionnels, 2026, 7);
+      expect(resultat.creneaux_export).toEqual([{ debut: ponctuelle.debut_le, fin: ponctuelle.fin_le, duree_heures: 8 }]);
+      expect(resultat.total_brut).toBe(400);
+      expect(resultat.ratio_periode).toBe(1);
+    });
+  }
+
+  for (const statut of ['TERMINEE', 'EN_COURS']) {
+    it(`un créneau étranger ne complète pas le planning manquant d’une mission ${statut}`, () => {
+      expect(() => construireExportPaiePeriode([{ ...missionLongue, statut }], [
+        previsionnels[0],
+        { ...previsionnels[1], mission_id: 'autre-mission' },
+        ...(statut === 'EN_COURS' ? [effectifs[0]] : []),
+      ], 2026, 7)).toThrow(/planning exact.*incomplet/);
+    });
+  }
+
+  it('conserve la priorité d’un effectif partiel terminé sans emprunter le planning d’une autre mission', () => {
+    const [resultat] = construireExportPaiePeriode([missionLongue], [
+      ...previsionnels, effectifs[0],
+      { ...previsionnels[0], mission_id: 'autre-mission', fin: null },
+    ], 2026, 7);
+    expect(resultat.planning_source).toBe('EFFECTIF');
+    expect(resultat.duree_heures).toBe(8);
+    expect(resultat.total_brut).toBe(500);
+    expect(resultat.ratio_periode).toBe(0.5);
+  });
+
   it('ventile une mission intermittente sur ses créneaux effectifs du mois', () => {
     const [juillet] = construireExportPaiePeriode([missionLongue], effectifs, 2026, 7);
 

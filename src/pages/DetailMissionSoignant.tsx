@@ -580,10 +580,10 @@ export default function DetailMissionSoignant() {
   const badgeLitige = statutLitigeNormalise ? statutBadgeV2(statutLitigeNormalise) : null;
   // Le régime financier se lit sur la mission, jamais sur le statut général du
   // profil. Un même soignant peut enchaîner des missions salariées et libérales.
-  // En l'absence de valeur explicite, le défaut de sécurité reste SALARIE.
-  const typeContratEffectif = mission.type_contrat_applique
-    ?? (mission.type_contrat_recherche === 'LIBERAL' ? 'LIBERAL' : 'SALARIE');
+  // Sans régime choisi, le texte reste neutre ; les garde-fous métier restent côté serveur.
+  const typeContratEffectif = mission.type_contrat_applique ?? mission.type_contrat_recherche;
   const missionEstLiberale = typeContratEffectif === 'LIBERAL';
+  const missionEstSalariee = typeContratEffectif === 'SALARIE';
   const planningCandidat = construirePlanningCandidat({
     ...mission,
     creneaux_planifies: creneauxPlanifies,
@@ -943,7 +943,11 @@ export default function DetailMissionSoignant() {
           <p className="text-xs text-muted-foreground italic text-center">
             {missionEstLiberale && estTerminee
               ? 'Récapitulatif contractuel. Après pointage ou litige, seuls les documents officiels ci-dessous font foi.'
-              : 'Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.'}
+              : missionEstLiberale
+                ? 'Honoraires indiqués à titre prévisionnel. Le montant facturé est détaillé sur la facture d’honoraires.'
+                : missionEstSalariee
+                  ? 'Simulation salariale indicative avant prélèvement à la source. Le net exact figure sur le bulletin officiel établi par l’employeur.'
+                  : 'Montant brut indicatif tant que le régime de la mission n’est pas choisi.'}
           </p>
           )}
 
@@ -963,7 +967,7 @@ export default function DetailMissionSoignant() {
               <p className="text-xs text-muted-foreground text-center">
                 Payée après règlement de l'établissement (~30 à 60 jours).
               </p>
-            ) : etabSafe?.jour_paie_habituel != null ? (
+            ) : missionEstSalariee && etabSafe?.jour_paie_habituel != null ? (
               <p className="text-xs text-muted-foreground text-center">
                 💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
               </p>

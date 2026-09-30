@@ -112,16 +112,18 @@ function planningReference(
   dureeTotale: number;
   source: 'EFFECTIF' | 'PREVISIONNEL_VALIDE';
 } {
-  const effectifs = creneaux.filter((creneau) => (
-    creneau.mission_id === mission.id
-    && creneau.type_creneau === 'EFFECTIF'
+  // Le lot chargé contient plusieurs missions ; le calcul du planning attend
+  // uniquement les lignes de la mission courante, prévisionnelles comme effectives.
+  const creneauxMission = creneaux.filter((creneau) => creneau.mission_id === mission.id);
+  const effectifs = creneauxMission.filter((creneau) => (
+    creneau.type_creneau === 'EFFECTIF'
     && !creneau.est_pause
   ));
   const effectifsFermes = effectifs.filter((creneau) => Boolean(creneau.fin));
   const effectifsOuverts = effectifs.filter((creneau) => !creneau.fin);
 
   if (mission.statut === 'EN_COURS') {
-    const planningPrevisionnel = construirePlanningCandidat(mission, creneaux);
+    const planningPrevisionnel = construirePlanningCandidat(mission, creneauxMission);
     if (!planningPrevisionnel.exact) {
       throw new Error(`Le planning exact de la mission « ${String(mission.intitule ?? mission.id)} » est incomplet.`);
     }
@@ -136,7 +138,7 @@ function planningReference(
     };
   }
 
-  const planningPrevisionnel = construirePlanningCandidat(mission, creneaux);
+  const planningPrevisionnel = construirePlanningCandidat(mission, creneauxMission);
   const attendus = Number(mission.nb_creneaux ?? 0);
 
   // Dès qu'un pointage EFFECTIF existe, le planning théorique ne doit jamais

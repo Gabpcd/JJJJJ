@@ -28,6 +28,8 @@ import {
   memeJourParis,
 } from '@/lib/date-heure-paris';
 
+import { mesureGpsDisponible } from '@/lib/presencesSoignantUi';
+
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
@@ -548,7 +550,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                   return (
                     <div key={effectif.id ?? `${effectif.debut}-${idx}`} className={`rounded-xl border p-3 space-y-2 ${
                       presenceReference?.alerte_teleportation ? 'border-destructive/40 bg-destructive/5' :
-                      presenceReference?.perimetre_gps_valide === false && presenceReference?.distance_etablissement_m !== null ? 'border-warning/40 bg-warning/5' :
+                      presenceReference?.perimetre_gps_valide === false && mesureGpsDisponible(presenceReference?.distance_etablissement_m) ? 'border-warning/40 bg-warning/5' :
                       presenceReference?.valide_par_etablissement ? 'border-success/30 bg-success/5' :
                       'border-border'
                     }`}>
@@ -660,20 +662,20 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
         <div className="card-base mb-6">
           <h2 className="font-semibold text-foreground mb-3">Contrôles du pointage</h2>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            {presenceReference.distance_etablissement_m !== null && (
-              <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
+            {mesureGpsDisponible(presenceReference.distance_etablissement_m) && (
+              <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide === true ? 'text-success' : presenceReference.perimetre_gps_valide === false ? 'text-warning' : 'text-muted-foreground'}`}>
                 <MapPin className="h-3.5 w-3.5" />
                 Première arrivée : {Math.round(presenceReference.distance_etablissement_m)}m
-                {presenceReference.perimetre_gps_valide ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                {presenceReference.perimetre_gps_valide === true ? <CheckCircle className="h-3 w-3" /> : presenceReference.perimetre_gps_valide === false ? <XCircle className="h-3 w-3" /> : null}
               </span>
             )}
-            {presenceReference.arrivee_precision_gps_m && (
+            {mesureGpsDisponible(presenceReference.arrivee_precision_gps_m) && (
               <span className="flex items-center gap-1">
                 <Radio className="h-3.5 w-3.5" />
                 Précision première arrivée : {Math.round(presenceReference.arrivee_precision_gps_m)}m
               </span>
             )}
-            {presenceReference.depart_precision_gps_m && (
+            {mesureGpsDisponible(presenceReference.depart_precision_gps_m) && (
               <span className="flex items-center gap-1">
                 <Radio className="h-3.5 w-3.5" />
                 Précision dernier départ : {Math.round(presenceReference.depart_precision_gps_m)}m
@@ -693,7 +695,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {role === 'SOIGNANT' && presenceEnAttente && (
         <div className="card-base border-warning/30 bg-warning/5">
           <p className="text-sm text-foreground font-medium mb-1">⏳ Tes présences attendent la validation de l'établissement</p>
-          <p className="text-xs text-muted-foreground mb-3">Le paiement se débloque à la validation (automatique sous 72h). Tu peux envoyer un rappel.</p>
+          <p className="text-xs text-muted-foreground mb-3">La validation des heures (automatique sous 72 h) est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission. Tu peux envoyer un rappel.</p>
           <BoutonY2K variant="secondary" size="sm" onClick={relancerEtablissement} disabled={relancing}>
             {relancing ? 'Envoi…' : 'Relancer l\'établissement'}
           </BoutonY2K>

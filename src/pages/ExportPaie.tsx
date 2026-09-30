@@ -374,7 +374,7 @@ function VariablesPaieContent() {
       )}
 
       <p className="text-xs text-muted-foreground italic mt-4">
-        ⚠️ Simulation à titre indicatif. Les heures proviennent des créneaux exacts validés ; les montants des missions couvrant plusieurs mois sont ventilés au prorata de ces heures. L’export est bloqué si des majorations ne peuvent pas être attribuées avec certitude. Seuls les montants calculés par le moteur de paie font foi.
+        ⚠️ Simulation à titre indicatif. Les heures proviennent des créneaux exacts validés ; les montants des missions couvrant plusieurs mois sont ventilés au prorata de ces heures. L’export est bloqué si des majorations ne peuvent pas être attribuées avec certitude. Ces montants servent à préparer la paie ; le bulletin officiel est établi par l’employeur ou son service paie.
       </p>
     </div>
   );

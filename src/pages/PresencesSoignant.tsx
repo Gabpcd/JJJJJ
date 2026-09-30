@@ -36,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
-import { construireHistoriqueEffectifsSansPresence } from '@/lib/presencesSoignantUi';
+import { construireHistoriqueEffectifsSansPresence, mesureGpsDisponible } from '@/lib/presencesSoignantUi';
 
 export default function PresencesSoignant() {
   usePageTitle('Présences');
@@ -418,10 +418,14 @@ export default function PresencesSoignant() {
 
     if (!consentementGPS) {
       afficherNotification({ type: 'info', message: '✅ Arrivée pointée. Sans localisation, l\'établissement la validera manuellement — rien à faire de ton côté.' });
-    } else if (perimetreOk) {
-      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Tu es à ${Math.round(distanceM || 0)}m de l'établissement.` });
+    } else if (!mesureGpsDisponible(distanceM)) {
+      afficherNotification({ type: 'info', message: '✅ Arrivée pointée. La distance GPS est indisponible.' });
+    } else if (perimetreOk === true) {
+      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Tu es à ${Math.round(distanceM)}m de l'établissement.` });
+    } else if (perimetreOk === false) {
+      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais tu es à ${Math.round(distanceM)}m (périmètre : 500m).` });
     } else {
-      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais tu es à ${Math.round(distanceM || 0)}m (périmètre : 500m).` });
+      afficherNotification({ type: 'info', message: `✅ Arrivée pointée à ${Math.round(distanceM)}m. La vérification du périmètre est indisponible.` });
     }
 
     if (alerteTeleportation) {
@@ -541,7 +545,7 @@ export default function PresencesSoignant() {
   const getMethodeLabel = (m: string | null) => {
     if (!m) return '—';
     if (m === 'GPS') return '📍 GPS';
-    if (m === 'CODE') return '🔢 Code';
+    if (m === 'CODE' || m === 'CODE_ROTATIF') return '🔢 Code';
     if (m === 'QR') return '🔢 Code';
     return m;
   };
@@ -710,7 +714,7 @@ export default function PresencesSoignant() {
         <TabsContent value="historique">
           {filtreAValider && (
             <div className="mb-3 rounded-xl bg-warning/10 border border-warning/30 p-3 text-sm text-warning font-medium">
-              ⏳ Présences en attente de validation par l'établissement. Le paiement est débloqué dès la validation (automatique sous 72h).
+              ⏳ Présences en attente de validation par l'établissement (validation automatique sous 72 h). La validation des heures est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission.
             </div>
           )}
           {historiqueAffiche.length > 0 ? (
@@ -759,16 +763,16 @@ export default function PresencesSoignant() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                       <div>
                         <span className="font-medium text-foreground">Arrivée :</span>{' '}
                         {arrivee ? formatParis(arrivee, "d MMM · HH'h'mm") : '—'}
-                        <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_arrivee)}</span>
+                        <span className="block text-[10px] mt-0.5">{getMethodeLabel(p.methode_pointage_arrivee)}</span>
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Départ :</span>{' '}
                         {depart ? formatParis(depart, "d MMM · HH'h'mm") : '—'}
-                        <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
+                        <span className="block text-[10px] mt-0.5">{getMethodeLabel(p.methode_pointage_depart)}</span>
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Heures :</span>{' '}
