@@ -433,6 +433,7 @@ jobs:
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
             tests/security/factures-numerotation-series.test.sql
+            tests/security/facturation-hebdomadaire-f1.test.sql
             tests/security/stripe-refund-identifiers.test.sql
             tests/security/security-definer-inventory-explicit.test.sql
             tests/security/cloture-mission-tenant.test.sql
