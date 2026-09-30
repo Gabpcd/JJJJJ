@@ -22,7 +22,8 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
     });
     const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
     try {
-      const options={expect,capturer:async(etape: string)=>{if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});}};
+      const diagnostic=diagnosticD();
+      const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});}};
       if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
     }finally{await context.close();}
   }
@@ -43,5 +44,12 @@ test('runner D2 : erreurs navigateur projetées sans divulgation et toujours blo
     expect(resultat.erreursNavigateur.map(e=>e.categorie).sort()).toEqual(['chargement_reseau','requete_abandonnee','websocket']);
     expect(resultat.erreursNavigateur.every(e=>e.slotEmetteur===0&&e.slotPhase===1)).toBe(true);
     expect(JSON.stringify(resultat)).not.toMatch(/CANARI|SECRET_JWT|PASSWORD|IDENTITE/);
+    diagnostic.action('mission_titre');let erreurCapturee=false;
+    try{await expect(page.getByText('CANARI_IDENTITE_ABSENTE',{exact:true})).toBeVisible({timeout:50});}
+    catch(error){erreurCapturee=true;diagnostic.exceptionFinale(error);}
+    expect(erreurCapturee).toBe(true);
+    const fin=diagnostic.resultat();expect(fin.erreurs).toBe(3);
+    expect(fin.erreurFinale).toMatchObject({source:'exception_finale',action:'mission_titre',categorie:'delai_attente',emplacement:null});
+    expect(JSON.stringify(fin)).not.toMatch(/CANARI|SECRET_JWT|PASSWORD|IDENTITE/);
   }finally{await context.close();}
 });
