@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { creerCandidaturesDeuxAs, identifiants, maintenant } from './helpers/recette-candidatures-deux-as';
-import { deposerCandidatureD, relireCandidaturesD, observerErreursNavigateurD, diagnosticD } from '../scripts/ci/recette-candidatures-staging.mjs';
+import { deposerCandidatureD, relireCandidaturesD, observerErreursNavigateurD, diagnosticD, projeterErreurNavigateurD } from '../scripts/ci/recette-candidatures-staging.mjs';
 import { requeteFrontendD, STAGING_URL } from '../scripts/ci/candidatures-ui-contract.mjs';
 
 test('runner D2 : boutons réels, deux candidatures, recharges et relecture établissement sous garde réseau', async ({ browser }, info) => {
   const simulation=creerCandidaturesDeuxAs(),{state}=simulation;
+  // Le seed réel donne le même marker à la mission et à son établissement.
+  state.etablissement.nom=state.mission.intitule;
   const m={missionId:identifiants.mission,marker:state.mission.intitule,debut:state.mission.debut_le,fin:state.mission.fin_le,
     membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom})),
       {slot:2,userId:identifiants.etablissement,email:'clinique@example.invalid',prenom:'Clinique',nom:'Simulation'}]};
@@ -42,6 +44,29 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   expect(state.candidatures).toHaveLength(2);
   expect(state.candidatures.every(c=>c.message===m.marker&&c.statut==='EN_ATTENTE')).toBe(true);
   expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toHaveLength(2);
+});
+
+test('runner D2 : titre mission unique même lorsque le nom établissement est identique',async({browser},info)=>{
+  const simulation=creerCandidaturesDeuxAs(),{state}=simulation;
+  state.etablissement.nom=state.mission.intitule;
+  const context=await browser.newContext({...info.project.use});
+  await simulation.installer(context,'as1');const page=await context.newPage();
+  await page.clock.setFixedTime(new Date(maintenant));
+  try {
+    await page.goto(`/soignant/missions/${identifiants.mission}`);
+    const titres=page.getByRole('heading',{name:state.mission.intitule,exact:true});
+    await expect(titres).toHaveCount(2);
+    let erreur:unknown;
+    try{await expect(titres).toBeVisible();}catch(e){erreur=e;}
+    expect(erreur).toBeInstanceOf(Error);
+    expect((erreur as Error).message).toContain('strict mode violation');
+    const projection=projeterErreurNavigateurD({source:'exception_finale',texte:(erreur as Error).message,classe:(erreur as Error).name});
+    expect(projection.categorie).toBe('strict_mode');
+    const titreMission=page.getByRole('heading',{level:1,name:state.mission.intitule,exact:true});
+    await expect(titreMission).toHaveCount(1);await expect(titreMission).toBeVisible();
+    await info.attach('matcher-ambigu-projete',{body:JSON.stringify({headings:2,h1:1,projection}),contentType:'application/json'});
+    simulation.verifierBornes();expect(state.candidatures).toEqual([]);
+  }finally{await context.close();}
 });
 
 test('runner D2 : erreurs navigateur projetées sans divulgation et toujours bloquantes', async ({ browser }, info) => {

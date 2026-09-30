@@ -26,7 +26,7 @@ export function projeterErreurNavigateurD({source,texte,classe,location,stack,co
     :/navigation[\s\S]*interrupted[\s\S]*navigation/i.test(cause)?'navigation_interrompue'
     :/access control|Access-Control-Allow-Origin|cross-origin|\bCORS\b/i.test(cause)?'controle_origine'
     :/Load failed|Failed to fetch|Failed to load resource|NetworkError|Network request failed|Fetch API cannot load|XMLHttpRequest cannot load/i.test(cause)?'chargement_reseau'
-    :react?'react_minifie':/\btimeout\b|timed out/i.test(cause)?'delai_attente':/^expect\(/.test(message)?'assertion':'autre';
+    :react?'react_minifie':/strict mode violation/i.test(cause)?'strict_mode':/\btimeout\b|timed out/i.test(cause)?'delai_attente':/^expect\(/.test(message)?'assertion':'autre';
   const candidates=location?[location]:[];
   if(typeof stack==='string')for(const url of stack.match(/https?:\/\/[^\s)]+/g)||[]){
     const match=url.match(/^(.*):(\d+):(\d+)$/);if(match)candidates.push({url:match[1],lineNumber:Number(match[2]),columnNumber:Number(match[3])});
@@ -92,7 +92,7 @@ export async function lireBackendD(query, env, fetchImpl=fetch) {
 const heureParis = value => new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)).replace(':','h');
 export async function deposerCandidatureD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;},action=etape=>{void etape;}}) {
   phase('mission');action('mission_navigation');await page.goto(`/soignant/missions/${m.missionId}`);
-  action('mission_titre');await expect(page.getByRole('heading',{name:m.marker,exact:true})).toBeVisible();
+  action('mission_titre');await expect(page.getByRole('heading',{level:1,name:m.marker,exact:true})).toBeVisible();
   action('candidature_message');await page.getByPlaceholder('Présente-toi brièvement…').fill(m.marker);
   action('candidature_bouton_actif');await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeEnabled();
   action('candidature_ouvrir_dialogue');await page.getByRole('button',{name:/Vérifier et postuler/}).click();

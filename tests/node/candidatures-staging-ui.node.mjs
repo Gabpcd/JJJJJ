@@ -168,6 +168,13 @@ test('actions fermées et classes finales connues, aucune URL extraite du messag
   d.phase('reload',0);assert.equal(d.resultat().action,null);
   assert.equal(projeterErreurNavigateurD({source:'exception_finale',texte:'expect(locator).toBeVisible() failed',classe:'AssertionError'}).categorie,'assertion');
 });
+test('une violation stricte reste distincte du timeout mentionné par le matcher',()=>{
+  const r=projeterErreurNavigateurD({source:'exception_finale',classe:'Error',texte:
+    'expect(locator).toBeVisible() failed\nTimeout: 5000ms\nError: strict mode violation: CANARI_IDENTITE https://secret.invalid/?jwt=CANARI_SECRET resolved to 2 elements'});
+  assert.equal(r.categorie,'strict_mode');assert.equal(r.emplacement,null);
+  assert.doesNotMatch(JSON.stringify(r),/CANARI|secret\.invalid|jwt=|5000/);
+  assert.equal(projeterErreurNavigateurD({source:'exception_finale',classe:'Error',texte:'expect(locator).toBeVisible() failed: Timeout 5000ms'}).categorie,'delai_attente');
+});
 test('audits exacts conservés : trois connexions, consultation établissement, aucun effet présence/email/push',()=>{
   verifierAuditsD(audits('avant'),'avant');verifierAuditsD(audits('apres'),'apres',audits('avant'));verifierAuditsD(audits('cleanup'),'cleanup',audits('apres'));
   for(const change of [{total:2},{connexions:0},{presences:1},{emails:1},{push:1},{activite:false},{activite_empreinte:'a'.repeat(32)}])assert.throws(()=>verifierAuditsD([{...audits('apres')[0],...change},...audits('apres').slice(1)],'apres',audits('avant')));
