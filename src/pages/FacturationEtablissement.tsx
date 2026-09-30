@@ -225,6 +225,7 @@ function FacturationEtablissementContent() {
   const [declarerReference, setDeclarerReference] = useState<string>('');
   const [declarerDatePaiement, setDeclarerDatePaiement] = useState<string>('');
   const [declarerAttestation, setDeclarerAttestation] = useState<boolean>(false);
+  const [erreurDeclaration, setErreurDeclaration] = useState<string | null>(null);
   const [declaringId, setDeclaringId] = useState<string | null>(null);
   const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
   const [generatingFacture, setGeneratingFacture] = useState(false);
@@ -438,6 +439,7 @@ function FacturationEtablissementContent() {
   // ── Handlers dialogs paiement ──
   const ouvrirDialogDeclarer = (mission: any) => {
     if (!canManagePayments) return;
+    setErreurDeclaration(null);
     setDeclarerDialogMission(mission);
     // Un montant salarié remonté par la plateforme reste une estimation
     // avant paie/PAS. Ne jamais le préremplir comme s'il s'agissait du net
@@ -461,30 +463,31 @@ function FacturationEtablissementContent() {
   };
 
   const validerDeclarationPaiement = async () => {
-    if (!declarerDialogMission || !canManagePayments) return;
+    if (!declarerDialogMission || !canManagePayments || declaringId) return;
+    setErreurDeclaration(null);
     const missionId = declarerDialogMission.mission_id;
     const montantNum = Number(declarerMontant);
     const estSalarie = declarerDialogMission.type_contrat_applique === 'SALARIE';
     const montantDuNum = estSalarie ? Number(declarerMontantDu) : montantNum;
     if (!montantNum || montantNum <= 0) {
-      toast.error('Montant invalide');
+      setErreurDeclaration('Montant invalide');
       return;
     }
     if (!montantDuNum || montantDuNum <= 0) {
-      toast.error('Indiquez le total net dû selon le bulletin officiel.');
+      setErreurDeclaration('Indiquez le total net dû selon le bulletin officiel.');
       return;
     }
     if (estSalarie && Math.abs(montantNum - montantDuNum) > 0.005) {
-      toast.error('Le montant versé doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.');
+      setErreurDeclaration('Le montant versé doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.');
       return;
     }
     const refRequired = declarerMethode !== 'BULLETIN_PAIE';
     if (refRequired && !isRefValid(declarerReference)) {
-      toast.error('La référence doit contenir au moins 5 caractères dont un chiffre.');
+      setErreurDeclaration('La référence doit contenir au moins 5 caractères dont un chiffre.');
       return;
     }
     if (!declarerAttestation) {
-      toast.error('Vous devez cocher l\'attestation sur l\'honneur.');
+      setErreurDeclaration('Vous devez cocher l\'attestation sur l\'honneur.');
       return;
     }
 
@@ -522,7 +525,7 @@ function FacturationEtablissementContent() {
       if (error) throw error;
       const res = data as any;
       if (res?.error === 'ATTESTATION_REQUISE') {
-        toast.error('Attestation sur l\'honneur obligatoire');
+        setErreurDeclaration('Attestation sur l\'honneur obligatoire');
         return;
       }
       if (res?.error === 'use_stripe_connect') {
@@ -534,7 +537,7 @@ function FacturationEtablissementContent() {
 
       // Invoke send-email PAIEMENT_SOIGNANT_DECLARE (non-bloquant)
       try {
-        await supabase.functions.invoke('send-email', {
+        const { data: resultatEmail, error: erreurEmail } = await supabase.functions.invoke('send-email', {
           body: {
             type: 'PAIEMENT_SOIGNANT_DECLARE',
             destinataire_id: res.soignant_id,
@@ -554,15 +557,20 @@ function FacturationEtablissementContent() {
             },
           },
         });
-      } catch (emailErr) {
-        console.error('send-email PAIEMENT_SOIGNANT_DECLARE failed:', emailErr);
+        if (erreurEmail || resultatEmail?.success !== true) {
+          logger.warn('Déclaration de paiement enregistrée ; envoi email non confirmé.');
+        } else if (resultatEmail.skipped || resultatEmail.pending) {
+          logger.info('Déclaration de paiement enregistrée ; envoi email ignoré ou en attente.');
+        }
+      } catch {
+        logger.warn('Déclaration de paiement enregistrée ; envoi email non confirmé.');
       }
 
-      toast.success('Paiement déclaré — le soignant a été notifié pour confirmation');
+      toast.success('Paiement déclaré — en attente de confirmation du soignant');
       fermerDialogDeclarer();
       charger();
     } catch (e: any) {
-      toast.error(extraireMessageErreur(e));
+      setErreurDeclaration(extraireMessageErreur(e));
     } finally {
       setDeclaringId(null);
     }
@@ -2004,7 +2012,7 @@ function FacturationEtablissementContent() {
 
       {/* Dialog Déclaration paiement soignant (form complet OF-11, fullscreen mobile) */}
       {canManagePayments && declarerDialogMission && (
-        <DialogResponsive open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
+        <DialogResponsive open={!!declarerDialogMission} onOpenChange={(open) => { if (!open && !declaringId) fermerDialogDeclarer(); }}>
           <DialogResponsiveContent>
             <DialogResponsiveHeader>
               <DialogResponsiveTitle>Déclarer un paiement au soignant</DialogResponsiveTitle>
@@ -2019,6 +2027,7 @@ function FacturationEtablissementContent() {
                   <Label htmlFor="declarer-montant-du">Total net dû selon le bulletin officiel</Label>
                   <Input
                     id="declarer-montant-du"
+                    disabled={Boolean(declaringId)}
                     type="number"
                     step="0.01"
                     min="0.01"
@@ -2039,6 +2048,7 @@ function FacturationEtablissementContent() {
                 </Label>
                 <Input
                   id="declarer-montant"
+                  disabled={Boolean(declaringId)}
                   type="number"
                   step="0.01"
                   value={declarerMontant}
@@ -2064,6 +2074,7 @@ function FacturationEtablissementContent() {
               <div>
                 <Label htmlFor="declarer-methode">Méthode de paiement</Label>
                 <Select
+                  disabled={Boolean(declaringId)}
                   value={declarerMethode}
                   onValueChange={(v) => setDeclarerMethode(v as MethodePaiement)}
                 >
@@ -2085,6 +2096,7 @@ function FacturationEtablissementContent() {
                 </Label>
                 <Input
                   id="declarer-reference"
+                  disabled={Boolean(declaringId)}
                   value={declarerReference}
                   onChange={(e) => setDeclarerReference(e.target.value)}
                   placeholder={
@@ -2100,6 +2112,7 @@ function FacturationEtablissementContent() {
                 <Label htmlFor="declarer-date">Date du paiement</Label>
                 <Input
                   id="declarer-date"
+                  disabled={Boolean(declaringId)}
                   type="date"
                   value={declarerDatePaiement}
                   max={new Date().toISOString().split('T')[0]}
@@ -2111,6 +2124,7 @@ function FacturationEtablissementContent() {
                 <div className="flex items-start gap-2">
                   <Checkbox
                     id="declarer-attestation"
+                    disabled={Boolean(declaringId)}
                     checked={declarerAttestation}
                     onCheckedChange={(c) => setDeclarerAttestation(c === true)}
                     className="mt-0.5"
@@ -2129,27 +2143,34 @@ function FacturationEtablissementContent() {
               </div>
             </DialogResponsiveBody>
 
-            <DialogResponsiveFooter className="gap-2">
-              <BoutonY2K variant="secondary" onClick={fermerDialogDeclarer}>
-                Annuler
-              </BoutonY2K>
-              <BoutonY2K
-                onClick={validerDeclarationPaiement}
-                disabled={
-                  !declarerAttestation ||
-                  declaringId === declarerDialogMission.mission_id ||
-                  !declarerMontant ||
-                  Number(declarerMontant) <= 0 ||
-                  (declarerDialogMission.type_contrat_applique === 'SALARIE' && (
-                    !declarerMontantDu ||
-                    Number(declarerMontantDu) <= 0 ||
-                    Number(declarerMontant) > Number(declarerMontantDu)
-                  )) ||
-                  (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
-                }
-              >
-                {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
-              </BoutonY2K>
+            <DialogResponsiveFooter className="flex-col sm:flex-col">
+              {erreurDeclaration && (
+                <p role="alert" className="w-full rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {erreurDeclaration}
+                </p>
+              )}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <BoutonY2K variant="secondary" onClick={fermerDialogDeclarer} disabled={Boolean(declaringId)}>
+                  Annuler
+                </BoutonY2K>
+                <BoutonY2K
+                  onClick={validerDeclarationPaiement}
+                  disabled={
+                    !declarerAttestation ||
+                    Boolean(declaringId) ||
+                    !declarerMontant ||
+                    Number(declarerMontant) <= 0 ||
+                    (declarerDialogMission.type_contrat_applique === 'SALARIE' && (
+                      !declarerMontantDu ||
+                      Number(declarerMontantDu) <= 0 ||
+                      Number(declarerMontant) > Number(declarerMontantDu)
+                    )) ||
+                    (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
+                  }
+                >
+                  {declaringId ? 'Envoi…' : 'Valider la déclaration'}
+                </BoutonY2K>
+              </div>
             </DialogResponsiveFooter>
           </DialogResponsiveContent>
         </DialogResponsive>

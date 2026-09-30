@@ -9,12 +9,18 @@ for(const role of ['ADMIN_ETABLISSEMENT','SOIGNANT'] as const) {
     state.mission.statut='TERMINEE';state.mission.soignant_assigne_id=ids.soignant;
     state.mission.type_contrat_applique='LIBERAL';
     await simulation.installer(context,role);
+    // Capacité explicitement absente dans ce banc sans push/PWA. Le blocage
+    // Playwright reste actif ; aucun avertissement de console n'est filtré.
+    await context.addInitScript(()=>{
+      if(!Reflect.deleteProperty(Object.getPrototypeOf(navigator),'serviceWorker') || 'serviceWorker' in navigator)
+        throw new Error('La simulation exige un navigateur sans Service Worker.');
+    });
     // Police externe remplacée par une CSS locale vide : aucun appel Google.
     await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
     await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
     page.setDefaultTimeout(12_000);
-    const erreursConsole:string[]=[];
-    page.on('console',message=>{if(message.type()==='error')erreursConsole.push(message.text());});
+    const erreursConsole:string[]=[];const avertissementsConsole:string[]=[];
+    page.on('console',message=>{if(message.type()==='error')erreursConsole.push(message.text());if(message.type()==='warning')avertissementsConsole.push(message.text());});
     let autorise=false;let enregistre=false;
     const tentatives:Record<string,unknown>[]=[];
     const sens=role==='SOIGNANT'?'SOIGNANT_VERS_ETAB':'ETAB_VERS_SOIGNANT';
@@ -78,9 +84,9 @@ for(const role of ['ADMIN_ETABLISSEMENT','SOIGNANT'] as const) {
       expect(tentatives).toHaveLength(2);
       await resultat.scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath(`notation-${role}-apres-reload.png`)});
-      expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);expect(state.external).toEqual([]);expect(erreursConsole).toEqual([]);
+      expect(state.unknown).toEqual([]);expect(state.errors).toEqual([]);expect(state.external).toEqual([]);expect(erreursConsole).toEqual([]);expect(avertissementsConsole).toEqual([]);
     } finally {
-      await info.attach('preuve-notation',{body:JSON.stringify({role,sens,autorise,enregistre,tentatives,errors:state.errors,unknown:state.unknown,external:state.external,erreursConsole}),contentType:'application/json'});
+      await info.attach('preuve-notation',{body:JSON.stringify({role,sens,autorise,enregistre,tentatives,errors:state.errors,unknown:state.unknown,external:state.external,erreursConsole,avertissementsConsole}),contentType:'application/json'});
     }
   });
 }

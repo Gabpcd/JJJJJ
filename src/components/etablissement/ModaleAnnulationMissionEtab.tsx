@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Loader2, AlertCircle, AlertTriangle, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { extraireMessageErreur } from '@/lib/erreurs';
 import { useNotification } from '@/contexts/NotificationContext';
 import {
   DialogResponsive,
   DialogResponsiveContent,
   DialogResponsiveHeader,
   DialogResponsiveTitle,
+  DialogResponsiveDescription,
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
@@ -72,6 +74,7 @@ export function ModaleAnnulationMissionEtab({
   const [motif, setMotif] = useState('');
   const [texte, setTexte] = useState('');
   const [accepte, setAccepte] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [indemnite, setIndemnite] = useState<IndemniteCalc | null>(null);
   const [pointageEnCours, setPointageEnCours] = useState<boolean>(false);
@@ -145,16 +148,18 @@ export function ModaleAnnulationMissionEtab({
   const revueForceMajeure = motif === 'CAS_FORCE_MAJEURE' && mission.statut !== 'OUVERTE';
 
   async function confirmer() {
+    if (loading) return;
+    setErreur(null);
     if (!motif) {
-      afficherNotification({ type: 'erreur', message: 'Sélectionnez un motif.' });
+      setErreur('Sélectionnez un motif.');
       return;
     }
     if (texte.trim().length < 10) {
-      afficherNotification({ type: 'erreur', message: 'Texte libre obligatoire (min 10 caractères).' });
+      setErreur('Texte libre obligatoire (min 10 caractères).');
       return;
     }
     if (!accepte && bucket.points < 0) {
-      afficherNotification({ type: 'erreur', message: 'Veuillez cocher la case de confirmation des conséquences.' });
+      setErreur('Veuillez cocher la case de confirmation des conséquences.');
       return;
     }
     setLoading(true);
@@ -170,7 +175,7 @@ export function ModaleAnnulationMissionEtab({
         if (error) throw error;
         const result = data as any;
         if (!result?.success) {
-          afficherNotification({ type: 'erreur', message: result?.error || 'La demande de revue n’a pas pu être ouverte.' });
+          setErreur(result?.error || 'La demande de revue n’a pas pu être ouverte.');
           return;
         }
         afficherNotification({
@@ -190,7 +195,7 @@ export function ModaleAnnulationMissionEtab({
       if (!result?.success) {
         const code = result?.error_code;
         const message = result?.error || codeErreurFr(code) || 'Erreur lors de l\'annulation.';
-        afficherNotification({ type: 'erreur', message });
+        setErreur(message);
         return;
       }
       const msg = result?.indemnite_montant > 0
@@ -200,7 +205,7 @@ export function ModaleAnnulationMissionEtab({
       onAnnulee?.();
       onFermer();
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau.' });
+      setErreur(extraireMessageErreur(err));
     } finally {
       setLoading(false);
     }
@@ -211,6 +216,9 @@ export function ModaleAnnulationMissionEtab({
       <DialogResponsiveContent maxWidth="xl">
         <DialogResponsiveHeader>
           <DialogResponsiveTitle>Annuler cette mission</DialogResponsiveTitle>
+          <DialogResponsiveDescription className="sr-only">
+            Consultez les conséquences, choisissez un motif et expliquez votre demande.
+          </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-4">
           {/* Récap mission */}
@@ -288,21 +296,30 @@ export function ModaleAnnulationMissionEtab({
             <AlertCircle className="h-4 w-4 shrink-0" />
             <p>{revueForceMajeure
               ? 'La force majeure sera examinée avant toute annulation, pénalité ou indemnité. Le dossier reste modifiable pendant la revue.'
-              : 'Le soignant sera notifié immédiatement (push + email). L’impact sur votre score établissement est contestable depuis votre page score.'}</p>
+              : mission.statut === 'OUVERTE'
+                ? 'La mission ne sera plus proposée aux soignants.'
+                : 'Le soignant pourra consulter l’annulation dans son suivi de mission. L’impact sur votre score établissement est contestable depuis votre page score.'}</p>
           </div>
         </DialogResponsiveBody>
-        <DialogResponsiveFooter>
-          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">
-            Garder la mission
-          </button>
-          <button
-            onClick={confirmer}
-            disabled={loading || calculLoading || !motif || texte.trim().length < 10 || (bucket.points < 0 && !accepte)}
-            className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {revueForceMajeure ? 'Demander la revue' : 'Confirmer l’annulation'}
-          </button>
+        <DialogResponsiveFooter className="flex-col sm:flex-col">
+          {erreur && (
+            <p role="alert" className="w-full rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {erreur}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">
+              Garder la mission
+            </button>
+            <button
+              onClick={confirmer}
+              disabled={loading || calculLoading || !motif || texte.trim().length < 10 || (bucket.points < 0 && !accepte)}
+              className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {revueForceMajeure ? 'Demander la revue' : 'Confirmer l’annulation'}
+            </button>
+          </div>
         </DialogResponsiveFooter>
       </DialogResponsiveContent>
     </DialogResponsive>
