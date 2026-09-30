@@ -29,6 +29,7 @@ import { sha256Hex } from '@/lib/crypto-hash';
 import {
   choisirContenuContratAffiche,
   contratNecessiteRenduServeur,
+  contratPossedeSignature,
   contientVariablesContratNonRendues,
 } from '@/lib/contratMissionUi';
 
@@ -247,11 +248,11 @@ export default function ContratMission() {
   // sur un hash calculé localement.
   useEffect(() => {
     const contenuServeurIncomplet = contientVariablesContratNonRendues(contrat?.contenu_html);
-    if (contrat?.hash_document && !contenuServeurIncomplet) {
+    if (contrat?.hash_document && (contratPossedeSignature(contrat) || !contenuServeurIncomplet)) {
       setHashContratAffiche(contrat.hash_document);
       return;
     }
-    const html = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml);
+    const html = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat?.storage_path);
     if (!html) {
       setHashContratAffiche(null);
       return;
@@ -263,15 +264,14 @@ export default function ContratMission() {
       if (!cancelled) setHashContratAffiche(null);
     });
     return () => { cancelled = true; };
-  }, [contrat?.contenu_html, contrat?.hash_document, fallbackHtml]);
+  }, [contrat, fallbackHtml]);
 
   // Auto-trigger : si le contrat n'a pas encore été figé en Storage,
-  // appelle l'edge function pour le rendre (idempotent côté serveur grâce
-  // à upsert: false sur le path timestamped).
+  // appelle l’Edge pour le rendre. Les signatures et rendus existants sont préservés.
   useEffect(() => {
     if (!contrat?.id) return;
     if (contrat.statut === 'ANNULE' || contrat.statut === 'EXPIRE' || contrat.statut === 'REFUSE') return;
-    const renduNecessaire = contratNecessiteRenduServeur(contrat.contenu_html, contrat.storage_path);
+    const renduNecessaire = contratNecessiteRenduServeur(contrat.contenu_html, contrat.storage_path, contrat);
     if (!renduNecessaire) return;
     let cancelled = false;
     setRenduContratEnCours(true);
@@ -307,10 +307,10 @@ export default function ContratMission() {
       if (!cancelled) setRenduContratEnCours(false);
     });
     return () => { cancelled = true; };
-  }, [contrat?.contenu_html, contrat?.id, contrat?.storage_path, contrat?.statut]);
+  }, [contrat]);
 
   const handleDownloadContract = async () => {
-    const contractHtml = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml);
+    const contractHtml = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat?.storage_path);
     if (!contractHtml) {
       afficherNotification({ type: 'erreur', message: 'Aucun contrat téléchargeable pour le moment.' });
       return;
@@ -420,7 +420,7 @@ export default function ContratMission() {
 
   const isSoignant = contrat.soignant_id === user?.id;
   const dejaSigneParMoi = isSoignant ? contrat.signature_soignant : contrat.signature_etablissement;
-  const contractHtml = choisirContenuContratAffiche(contrat.contenu_html, fallbackHtml);
+  const contractHtml = choisirContenuContratAffiche(contrat.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat.storage_path);
   const contratServeurPret = !!contrat.storage_path
     && !!contrat.hash_document
     && !contientVariablesContratNonRendues(contrat.contenu_html)
@@ -513,7 +513,9 @@ export default function ContratMission() {
           {contractHtml ? (
             <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(contractHtml) }} className="prose prose-sm max-w-none text-foreground" />
           ) : (
-            <p className="text-center text-muted-foreground py-8">Le contenu du contrat n'est pas encore disponible.</p>
+            <p className="text-center text-muted-foreground py-8">{contratPossedeSignature(contrat)
+              ? 'Le document signé d’origine est indisponible. Aucune reconstitution automatique n’est effectuée.'
+              : "Le contenu du contrat n'est pas encore disponible."}</p>
           )}
         </div>
 
@@ -626,6 +628,7 @@ export default function ContratMission() {
                 {modeSignature === 'OTP_SMS' ? (
                   <SignerContratOtp
                     contratId={contrat.id}
+                    documentPret={contratServeurPret && !!contractHtml}
                     hashDocument={hashContratAffiche}
                     onSigne={async () => {
                       // Refresh contrat après signature

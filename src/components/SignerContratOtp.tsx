@@ -6,6 +6,8 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface Props {
   contratId: string;
+  /** Le document original affiché doit être disponible et figé avant tout OTP. */
+  documentPret: boolean;
   /** Hash SHA-256 du contenu HTML/PDF affiché à l'utilisateur (preuve d'intégrité). */
   hashDocument?: string | null;
   /** Image base64 de la signature manuscrite (optionnel, complément). */
@@ -51,10 +53,10 @@ function messageDepuisCode(code: string | undefined, fallback: string | undefine
  */
 export function SignerContratOtp(props: Props) {
   // Le consentement et le code ne concernent que cette version du document.
-  return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}`} {...props} />;
+  return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}:${props.documentPret}`} {...props} />;
 }
 
-function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne }: Props) {
+function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureImage, onSigne }: Props) {
   const actif = useRef(true);
   const operationEnCours = useRef(false);
   useEffect(() => {
@@ -99,7 +101,7 @@ function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne 
   }
 
   async function envoyerOtp() {
-    if (operationEnCours.current || !accepte || erreurBloquante) return;
+    if (!documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
     operationEnCours.current = true;
     setLoading(true);
     setTentativesRestantes(null);
@@ -132,7 +134,7 @@ function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne 
   }
 
   async function signer() {
-    if (operationEnCours.current || erreurBloquante || otpExpire) return;
+    if (!documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
     if (!/^[0-9]{6}$/.test(otp)) {
       afficherNotification({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;
@@ -239,7 +241,7 @@ function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne 
         <button
           type="button"
           onClick={envoyerOtp}
-          disabled={!accepte || loading || !!erreurBloquante}
+          disabled={!documentPret || !hashDocument || !accepte || loading || !!erreurBloquante}
           className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -290,7 +292,7 @@ function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne 
             <button
               type="button"
               onClick={envoyerOtp}
-              disabled={loading || smsRestants === 0 || !!erreurBloquante || !accepte}
+              disabled={!documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}
               title={smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
@@ -299,7 +301,7 @@ function SessionSignatureOtp({ contratId, hashDocument, signatureImage, onSigne 
             <button
               type="button"
               onClick={signer}
-              disabled={!accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
+              disabled={!documentPret || !hashDocument || !accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}

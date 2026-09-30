@@ -394,6 +394,7 @@ jobs:
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/copies-bulletins-officiels.test.sql
+            tests/security/contrat-storage-acces.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
@@ -481,6 +482,10 @@ jobs:
           python3 -m unittest discover -s tests/python -p 'test_resend_stripe_test_event.py' -v
           npm ci
           npx vitest run \
+            tests/admin/security/contrat-original-acces.test.ts \
+            src/lib/contratMissionUi.test.ts \
+            src/components/SignerContratOtp.continuite.test.tsx \
+            src/pages/ContratMission.continuite.test.tsx \
             tests/admin/security/copies-bulletins-handler.test.ts \
             tests/admin/security/copies-bulletins-pdf.test.ts \
             src/components/gains/PaiementsEscrowAVenir.test.tsx \
