@@ -3,34 +3,21 @@ import { createPortal } from 'react-dom';
 import { Bell, X, ExternalLink } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useFluxNotifications, type NotificationItem } from '@/hooks/useFluxNotifications';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { normaliserLienJolene } from '@/lib/nativeLinks';
 
-interface NotificationItem {
-  id: string;
-  titre: string;
-  corps: string;
-  type: string;
-  lue: boolean;
-  lien: string | null;
-  cree_le: string;
-}
-
 interface PanneauNotificationsProps {
   open: boolean;
   onClose: () => void;
-  onUnreadCountChange?: React.Dispatch<React.SetStateAction<number>>;
+  flux: ReturnType<typeof useFluxNotifications>;
 }
 
-export function PanneauNotifications({ open, onClose, onUnreadCountChange }: PanneauNotificationsProps) {
-  const { user } = useAuth();
+export function PanneauNotifications({ open, onClose, flux }: PanneauNotificationsProps) {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { notifications, loading, error, actualiser, marquerLues } = flux;
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -86,63 +73,14 @@ export function PanneauNotifications({ open, onClose, onUnreadCountChange }: Pan
   }, [open]);
 
   useEffect(() => {
-    if (!user || !open) return;
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      const { data, error: loadError } = await supabase
-        .from('notifications')
-        .select('id, titre, corps, type, lue, lien, cree_le')
-        .eq('destinataire_id', user.id)
-        .order('cree_le', { ascending: false })
-        .limit(50);
-      if (cancelled) return;
-      if (loadError) {
-        setError('Impossible de charger les notifications. Réessayez dans un instant.');
-        setLoading(false);
-        return;
-      }
-      const loaded = (data as unknown as NotificationItem[]) || [];
-      setNotifications(loaded);
-      onUnreadCountChange?.(loaded.filter((notification) => !notification.lue).length);
-      setLoading(false);
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [user, open, onUnreadCountChange]);
-
-  // Realtime
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel('notifications-realtime')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `destinataire_id=eq.${user.id}`,
-      }, (payload) => {
-        setNotifications(prev => [payload.new as NotificationItem, ...prev]);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
+    if (open) void actualiser();
+  }, [open, actualiser]);
 
   const marquerToutLu = async () => {
-    if (!user) return;
     const ids = notifications.filter(n => !n.lue).map(n => n.id);
-    if (ids.length === 0) return;
-    const { error: updateError } = await supabase.from('notifications')
-      .update({ lue: true, lue_le: new Date().toISOString() } as any)
-      .in('id', ids);
-    if (updateError) {
+    if (ids.length && await marquerLues(ids) === false) {
       toast.error('Impossible de marquer les notifications comme lues');
-      return;
     }
-    const idsMarques = new Set(ids);
-    setNotifications(prev => prev.map(n => idsMarques.has(n.id) ? { ...n, lue: true } : n));
-    onUnreadCountChange?.(prev => Math.max(0, prev - ids.length));
   };
 
   const handleClick = (n: NotificationItem) => {
@@ -152,17 +90,9 @@ export function PanneauNotifications({ open, onClose, onUnreadCountChange }: Pan
     }
 
     if (!n.lue) {
-      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
-      onUnreadCountChange?.(prev => Math.max(0, prev - 1));
-      void supabase.from('notifications')
-        .update({ lue: true, lue_le: new Date().toISOString() } as any)
-        .eq('id', n.id)
-        .then(({ error: updateError }) => {
-          if (!updateError) return;
-          setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: false } : x));
-          onUnreadCountChange?.(prev => prev + 1);
-          toast.error('Impossible de marquer cette notification comme lue');
-        });
+      void marquerLues([n.id])?.then(success => {
+        if (success === false) toast.error('Impossible de marquer cette notification comme lue');
+      });
     }
 
     if (route) {
@@ -214,11 +144,17 @@ export function PanneauNotifications({ open, onClose, onUnreadCountChange }: Pan
           aria-busy={loading}
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground text-sm" role="status">Chargement...</div>
-          ) : error ? (
-            <div className="p-8 text-center text-destructive text-sm" role="alert">{error}</div>
-          ) : notifications.length === 0 ? (
+          {error && (
+            <div className="p-4 text-sm" role="alert">
+              <p>{error}</p>
+              <button type="button" onClick={() => void actualiser()} disabled={loading}
+                className="mt-2 min-h-[44px] rounded-lg px-3 font-medium text-primary hover:underline disabled:opacity-50">
+                Réessayer
+              </button>
+            </div>
+          )}
+          {loading && <div className="p-4 text-center text-muted-foreground text-sm" role="status">Actualisation...</div>}
+          {notifications.length === 0 && !loading && !error ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Aucune notification</div>
           ) : (
             <div className="divide-y divide-border">
@@ -271,9 +207,13 @@ function playNotifSound() {
 
 export function BadgeNotification() {
   const { user } = useAuth();
-  
+  // Une nouvelle identité ne doit jamais afficher l'état ni reprendre les callbacks du compte précédent.
+  return <BadgeNotificationCompte key={user?.id ?? 'anonyme'} userId={user?.id} />;
+}
+
+function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
   const location = useLocation();
-  const [count, setCount] = useState(0);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [bouncing, setBouncing] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -285,77 +225,40 @@ export function BadgeNotification() {
     try { localStorage.setItem('notif_sound', soundEnabled ? 'on' : 'off'); } catch { /* stockage indisponible (Safari privé) — préférence non persistée */ }
   }, [soundEnabled]);
 
-  // Load count + realtime
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const { count: c } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('destinataire_id', user.id)
-        .eq('lue', false);
-      setCount(c || 0);
-    };
-    load();
-
-    const channel = supabase
-      .channel('notif-count')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `destinataire_id=eq.${user.id}`,
-      }, (payload) => {
-        setCount(prev => prev + 1);
-        setBouncing(true);
-        setTimeout(() => setBouncing(false), 350);
-        if (document.visibilityState === 'visible' && soundEnabled) {
-          playNotifSound();
-        }
-        const n = payload.new as any;
-        toast.info(n.titre, { description: n.corps?.substring(0, 80) });
-        if (document.visibilityState !== 'visible' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(n.titre || 'Nouveau message', {
-            body: n.corps || '',
-          });
-          notification.onclick = () => {
-            window.focus();
-            const route = typeof n.lien === 'string' ? normaliserLienJolene(n.lien) : null;
-            if (route) {
-              window.location.href = route;
-            }
-            notification.close();
-          };
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, soundEnabled]);
-
-  // Reset count when visiting /notifications
-  useEffect(() => {
-    if (!user) return;
-    if (location.pathname.endsWith('/notifications')) {
-      setCount(0);
-      supabase
-        .from('notifications')
-        .update({ lue: true, lue_le: new Date().toISOString() } as any)
-        .eq('destinataire_id', user.id)
-        .eq('lue', false)
-        .then();
+  const flux = useFluxNotifications(userId, n => {
+    // Les en-têtes mobile et desktop sont montés ensemble ; seul le visible alerte.
+    if (!buttonRef.current?.getClientRects().length) return;
+    setBouncing(true);
+    setTimeout(() => setBouncing(false), 350);
+    if (document.visibilityState === 'visible' && soundEnabled) playNotifSound();
+    toast.info(n.titre, { description: n.corps?.substring(0, 80) });
+    if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(n.titre || 'Nouveau message', { body: n.corps || '' });
+      notification.onclick = () => {
+        window.focus();
+        const route = n.lien ? normaliserLienJolene(n.lien) : null;
+        if (route) window.location.href = route;
+        notification.close();
+      };
     }
-  }, [location.pathname, user]);
+  });
+  const { count, error, marquerLues } = flux;
+  useEffect(() => {
+    if (userId && location.pathname.endsWith('/notifications')) void marquerLues();
+  }, [location.pathname, userId, marquerLues]);
 
   return (
     <>
       <button
+        ref={buttonRef}
         onClick={() => setOpen(true)}
-        aria-label={count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}
+        aria-label={`${count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}${error ? ', actualisation nécessaire' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2"
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
+        {error && <span aria-hidden="true" className="absolute -right-1 -bottom-1 text-destructive font-bold">!</span>}
         {count > 0 && (
           <span className={`absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] flex items-center justify-center rounded-full bg-[#EF4444] text-white text-[10px] font-bold px-1 leading-none ${bouncing ? 'animate-bounce-badge' : ''}`}>
             {count > 9 ? '9+' : count}
@@ -365,7 +268,7 @@ export function BadgeNotification() {
       <PanneauNotifications
         open={open}
         onClose={() => setOpen(false)}
-        onUnreadCountChange={setCount}
+        flux={flux}
       />
     </>
   );
