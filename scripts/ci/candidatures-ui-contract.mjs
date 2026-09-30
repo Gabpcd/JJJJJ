@@ -5,7 +5,8 @@ export { STAGING_REF, STAGING_URL };
 export { ORIGINE_UI } from './dashboard-ui-contract.mjs';
 import { ORIGINE_UI } from './dashboard-ui-contract.mjs';
 
-export function configurationFrontendD(env, now = Date.now()) {
+export function configurationFrontendD(env, now = Date.now(), action = 'run') {
+  if (!['check','catalogue','verify-preview','prepare','run','snapshot','cleanup','verify-cleanup'].includes(action)) throw new Error('Action UI D2 inconnue.');
   if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REPOSITORY !== 'Gabpcd/JJJJJ') throw new Error('D2 UI manuel uniquement.');
   if (env.LOAD_D_FRONTEND_ONLY !== 'true' || env.LOAD_D_SQL_ONLY !== 'false' || env.LOAD_D_SQL_JOUR
     || env.LOAD_TEST_SCENARIO !== '04-candidatures-simultanees' || env.DASHBOARD_FIXTURE_ONLY !== 'false'
@@ -13,9 +14,13 @@ export function configurationFrontendD(env, now = Date.now()) {
   if (env.STAGING_SUPABASE_PROJECT_REF !== STAGING_REF || env.STAGING_SUPABASE_URL !== STAGING_URL) throw new Error('Staging D2 exact requis.');
   if (!/^[1-9][0-9]{0,19}$/.test(env.GITHUB_RUN_ID || '') || !/^[1-9][0-9]{0,5}$/.test(env.GITHUB_RUN_ATTEMPT || '')
     || !/^[a-f0-9]{40}$/.test(env.GITHUB_SHA || '') || !isAbsolute(env.RUNNER_TEMP || '')) throw new Error('Run et dossier privé CI requis.');
+  if (typeof env.LOAD_D_JOUR !== 'string') throw new Error('Jour D2 ISO explicite requis.');
   const m = manifesteD(`ui-d2-ci-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`, env.LOAD_D_JOUR);
   const debut = Date.parse(m.debut);
-  if (!Number.isFinite(now) || debut <= now + 86400000 || debut > now + 31 * 86400000) throw new Error('Jour D2 futur entre un et 31 jours requis.');
+  // La fenêtre protège la création et le parcours. Un lot déjà lancé doit
+  // rester nettoyable après cette borne, avec les mêmes IDs et jour exacts.
+  const reprise = ['snapshot','cleanup','verify-cleanup'].includes(action);
+  if (!Number.isFinite(now) || (!reprise && (debut <= now + 86400000 || debut > now + 31 * 86400000))) throw new Error('Jour D2 futur entre un et 31 jours requis.');
   return { m, env: { ...env, LOAD_TEST_RUN_ID: m.runId, LOAD_D_MANIFEST: join(env.RUNNER_TEMP, 'd2-frontend-manifest.json'), LOAD_D_EXECUTION_APPROUVEE: 'DEUX_PROFILS' } };
 }
 export function identitesFrontendD(env, m) {

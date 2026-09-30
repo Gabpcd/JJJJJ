@@ -21,6 +21,49 @@ test('refus paramètres avant tout accès, aucune identité de repli ni volume c
   const c=configurationFrontendD({...env,LOAD_D_MANIFEST:'tests/load/results/secret.json',LOAD_TEST_RUN_ID:'autre'},now);
   assert.equal(c.env.LOAD_TEST_RUN_ID,'ui-d2-ci-555-2');assert.equal(c.env.LOAD_D_MANIFEST,'/private/tmp/d2-test/d2-frontend-manifest.json');
 });
+test('fenêtre temporelle : création et parcours refusés à 24h, nettoyage exact encore permis',()=>{
+  const borne=Date.parse(m.debut)-86400000;
+  for(const action of ['check','catalogue','verify-preview','prepare','run']) {
+    assert.deepEqual(configurationFrontendD(env,borne-1,action).m,m);
+    for(const instant of [borne,borne+1,Date.parse(m.fin)+7*86400000])assert.throws(()=>configurationFrontendD(env,instant,action));
+    assert.throws(()=>configurationFrontendD(env,Date.parse(m.debut)-31*86400000-1,action));
+  }
+  for(const action of ['snapshot','cleanup','verify-cleanup'])for(const instant of [borne-1,borne,borne+1,Date.parse(m.fin)+7*86400000]) {
+    const c=configurationFrontendD(env,instant,action);assert.deepEqual(c.m,m);
+    assert.equal(c.env.LOAD_TEST_RUN_ID,m.runId);assert.equal(c.env.LOAD_D_MANIFEST,'/private/tmp/d2-test/d2-frontend-manifest.json');
+  }
+});
+test('reprise tardive : contexte, date ISO, types et action restent stricts avant effets',async()=>{
+  const tard=Date.parse(m.fin)+7*86400000;
+  for(const action of ['snapshot','cleanup','verify-cleanup']) {
+    for(const delta of [{LOAD_D_JOUR:'2026-02-30'},{LOAD_D_JOUR:'2026-10-07T09:00:00Z'},{LOAD_D_JOUR:true},{LOAD_D_JOUR:20261007},
+      {GITHUB_RUN_ID:'autre'},{GITHUB_RUN_ATTEMPT:'0'},{GITHUB_SHA:'main'},{RUNNER_TEMP:'relative'},
+      {STAGING_SUPABASE_PROJECT_REF:'flripxtsyegjshnhzjkz'},{STAGING_SUPABASE_URL:'https://prod.invalid'},
+      {LOAD_D_FRONTEND_ONLY:'false'},{LOAD_D_SQL_ONLY:'true'},{LOAD_TEST_VUS:'2'},{GITHUB_EVENT_NAME:'push'}]) {
+      let effets=0;const effet=async()=>{effets++;};
+      await assert.rejects(()=>executerFrontendD({action,env:{...env,...delta},now:tard,fixture:effet,sql:effet,naviguer:effet,save:()=>{effets++;}}));
+      assert.equal(effets,0);
+    }
+    for(const instant of [NaN,Infinity,'2026-10-15',null])assert.throws(()=>configurationFrontendD(env,instant,action));
+  }
+  for(const action of ['autre','CLEANUP',null,{},true])assert.throws(()=>configurationFrontendD(env,now,action));
+});
+test('snapshot, cleanup et vérification restent orchestrés après franchissement de la borne',async()=>{
+  const zero={auth:0,profils:0,etablissements:0,missions:0,creneaux:0,preferences:0,notifications:0,limites:0,sessions:0,identites:0,candidatures:[],audits_conserves:6,recu_cleanup:1,inattendus:0};
+  for(const instant of [Date.parse(m.debut)-86400000,Date.parse(m.fin)+7*86400000]) {
+    const saved={},sqls=[];let nettoyages=0;
+    const common={env,now:instant,save:(k,v)=>saved[k]=v,read:()=>audits('apres'),
+      sql:async query=>{sqls.push(query);return query===sqlAuditsFrontendD(m)?audits('cleanup'):[zero];},
+      fixture:async({action,env:recu})=>{assert.equal(action,'cleanup');assert.equal(recu.LOAD_D_JOUR,m.jour);assert.equal(recu.LOAD_TEST_RUN_ID,m.runId);nettoyages++;return {skipped:false};},
+      naviguer:async()=>{throw Error('Aucun navigateur en cleanup');}};
+    assert.deepEqual(await executerFrontendD({...common,action:'snapshot'}),{snapshot:true});
+    assert.deepEqual(await executerFrontendD({...common,action:'cleanup'}),{nettoye:true});
+    assert.deepEqual(await executerFrontendD({...common,action:'verify-cleanup'}),{zeros:true,audits_conserves:true});
+    assert.equal(nettoyages,1);assert.equal(sqls.length,3);assert.deepEqual(saved['cleanup-verifie'],{zeros:true,audits_conserves:true});
+    for(const action of ['prepare','run'])await assert.rejects(()=>executerFrontendD({...common,action}));
+    assert.equal(nettoyages,1);assert.equal(sqls.length,3);
+  }
+});
 test('trois identités privées exactes, sans mot de passe partagé, champ extra ou autre run',()=>{
   assert.deepEqual(identitesFrontendD(prive,m),identites);
   for(const modifier of [d=>d.identites.pop(),d=>d.identites[1].password=d.identites[0].password,d=>d.identites[1].userId=d.identites[0].userId,d=>d.runId='autre',d=>d.identites[0].access_token='CANARI',d=>d.identites[2].role='SOIGNANT']){
@@ -229,6 +272,28 @@ test('succès orchestré exige corrélation UI/backend et audit avancé, rapport
     assert.equal(saved.resultat.succes,!voisin);assert.doesNotMatch(JSON.stringify(saved),/CANARI|access_token|password/);
     for(const a of identites)assert.ok(!JSON.stringify(saved).includes(a.userId));
   }
+});
+test('erreur du dernier contexte pendant fermeture interdit le succès malgré backend valide',async()=>{
+  const saved={};let lecture=0,fermetures=0;
+  const cands=m.membres.slice(0,2).map((a,slot)=>({slot,id:slot?m.preuveId:m.nettoyageId}));
+  await assert.rejects(()=>executerFrontendD({action:'run',env:prive,now,save:(k,v)=>saved[k]=v,
+    sql:async()=>audits(lecture++?'apres':'avant'),
+    naviguer:async({diagnostic})=>{
+      try{return {preuves:[],candidatures:cands};}
+      finally {
+        diagnostic.phase('etablissement',2);diagnostic.action('contexte_fermer');
+        await Promise.resolve();fermetures++;
+        diagnostic.erreurNavigateur(2,projeterErreurNavigateurD({source:'pageerror',classe:'TypeError',texte:'Failed to fetch CANARI_FERMETURE'}));
+      }
+    },
+    fixture:async({action})=>action==='catalogue'?{}:{notifications:4,candidatures:cands.map(c=>({id:c.id,soignant_id:m.membres[c.slot].userId}))},
+  }),/Anomalie UI D2/);
+  assert.equal(fermetures,1);assert.equal(saved.resultat.succes,false);assert.equal(saved.resultat.diagnostic.erreurs,1);
+  assert.equal(saved.resultat.diagnostic.erreursNavigateur[0].phase,'etablissement');
+  assert.equal(saved.resultat.diagnostic.erreursNavigateur[0].slotPhase,2);
+  assert.equal(saved.resultat.diagnostic.erreursNavigateur[0].action,'contexte_fermer');
+  assert.equal(saved.resultat.diagnostic.erreursNavigateur[0].slotEmetteur,2);
+  assert.doesNotMatch(JSON.stringify(saved),/CANARI/);
 });
 const workflow=parse(readFileSync('.github/workflows/load-tests.yml','utf8'));
 const defaults=Object.fromEntries(Object.entries(workflow.on.workflow_dispatch.inputs).map(([k,v])=>[k,v.default]));

@@ -88,3 +88,51 @@ Le run `36742521457`, SHA `a419fd47`, échoue au titre de la mission du premier 
 Un refus missions conserve maintenant uniquement les classes fermées projection/sélecteur, l'unicité des paramètres et leurs clés connues (toute autre clé devient `autre`). Aucune valeur, ID, URL ou clé libre ne sort. Le test injecte un canari dans une vraie interception simulée et exige refus avant fetch, compteur bloquant et absence de divulgation. Les délais, budgets, erreurs et cleanup restent inchangés.
 
 Validation : 23/23 Node, 17 gardes, `tsc -b`, typecheck E2E isolé, ESLint/syntaxe/diffcheck verts ; 10/10 simulations cinq formats, zéro retry/skip, cinq captures relues et serveur arrêté. Le diagnostic fermé, ajouté après cette passe UI sans changer le parcours, est couvert par Node. Deux tentatives précédentes ont signalé des mocks incomplets (référentiel documentaire, classification de la lecture onboarding) et restent conservées. Preuves filtrées `audits/2026-09-30-preparation-nationale/d2-dashboard-metadata-local`, manifeste SHA256 `e4687c2b52e89da99d69ae55f6a0377368ebfb23bb171cf70f09a274e35321f9`. Relecture croisée bornée sans P1/P2, distincte de B8. Aucun succès frontend staging complet ni nouveau dispatch revendiqué.
+
+## Pilote 9 et deux corrections après revue globale
+
+Le run [36756662211](https://github.com/Gabpcd/JJJJJ/actions/runs/36756662211),
+tête `837a5f253025575adc839abc0a17bc8ef09feb07`, réussit le 30 septembre à 18:12:38 UTC :
+trois connexions formulaire et recharges, deux candidatures corrélées au
+backend, quatre notifications, 212 réponses HTTP 200, zéro erreur navigateur ou
+refus réseau. Les SELECT indépendants après cleanup confirment zéro résidu,
+six audits conservés et catalogue inchangé. Archive filtrée dans
+`audits/2026-09-30-preparation-nationale/preuves/d2-frontend-staging-36756662211/`,
+manifeste SHA256 `0d83c5612a665801fc51adc3e690f0cafead07b1929d7067edfbf952495b1d4e`.
+Ce succès demeure limité à cette tête et à son catalogue. Il ne couvre pas
+le produit final après intégration PR1000, la charge ou les appareils physiques.
+
+La revue globale a ensuite démontré deux défauts du banc non observés dans
+ce pilote :
+
+1. La fenêtre future supérieure à 24 h s'appliquait aussi à snapshot/cleanup/
+   verify-cleanup. Son franchissement empêchait ces étapes malgré `always()`.
+   Seules ces trois actions sont désormais exemptées de la fenêtre relative ;
+   contexte CI manuel, modes, staging, run, date ISO explicite et horloge finie
+   restent requis. Création et parcours gardent strictement les bornes 24 h/31 j.
+   Le préparateur conserve la validation exacte du manifeste avant toute
+   suppression ; un autre jour, run ou ID ne devient pas acceptable.
+2. Une pageerror arrivée pendant la fermeture du dernier contexte pouvait
+   être comptée après le dernier garde puis accompagnée de `succes:true`.
+   Un garde final après le retour de navigation et ses fermetures, avant le
+   verdict, refuse désormais toute erreur comptée. Aucun filtre ou compteur
+   n'est retiré ; le contexte d'origine de l'événement reste projeté.
+
+Quatre nouveaux tests sont rouges sur l'ancien code : borne/reprise tardive,
+actions invalides, orchestration du cleanup après borne et succès interdit
+malgré des corrélations backend valides. Après correction, les deux suites
+Node UI/préparateur passent 46/46 : frontière à −1/0/+1 ms, reprise après la date,
+création/exécution tardives refusées, validations invalides sans effets,
+jour/mission altérés dans le vrai lecteur de manifeste refusés avant réseau,
+événement injecté en phase établissement/slot 2/contexte_fermer toujours bloquant.
+Les preuves rouges restent dans `/private/tmp/jolene-d2-frontiere-fermeture-20260930/`.
+Aucun nouveau pilote distant n'est requis pour attribuer au run 9 une erreur
+qu'il n'a pas observée : son diagnostic conservé contient bien zéro erreur.
+
+Validation finale : 46/46 Node, `tsc -b` et diff-check verts ; 5/5 simulations
+complètes (les trois identités sur chacun des cinq formats), zéro skip/retry,
+sans modification de la spec UI. Le build local F1 conservé est réutilisé avec
+réponses fictives et garde réseau stricte ; aucun nouveau build ou pilote réel.
+La capture établissement iPad après recharge a été inspectée. Le serveur est
+arrêté, le build et toutes les preuves sont conservés. Archive compacte par
+hardlinks sous `audits/2026-09-30-preparation-nationale/preuves/d2-frontiere-fermeture/`.

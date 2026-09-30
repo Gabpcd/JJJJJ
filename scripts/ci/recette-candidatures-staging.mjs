@@ -219,7 +219,7 @@ export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlay
   }
 }
 export async function executerFrontendD({action,env=process.env,now=Date.now(),fixture=executerD,sql=lireBackendD,naviguer=parcourirFrontendD,save=sauver,read=nom=>JSON.parse(readFileSync(`${dossier}/${nom}.json`,'utf8'))}={}) {
-  const config=configurationFrontendD(env,now),m=config.m;const sauver=save;
+  const config=configurationFrontendD(env,now,action),m=config.m;const sauver=save;
   env=config.env;
   if(action==='check')return {parametres:true};
   if(action==='catalogue')return fixture({action:'catalogue',env});
@@ -243,6 +243,9 @@ export async function executerFrontendD({action,env=process.env,now=Date.now(),f
     diagnostic.action('backend_verifier');const etat=await fixture({action:'verify',env});
     diagnostic.action('backend_correlation');if(candidatures.length!==2||candidatures.some(c=>!etat.candidatures.some(e=>e.id===c.id&&e.soignant_id===m.membres[c.slot]?.userId)))throw Error('Candidatures UI/backend non corrélées.');
     diagnostic.action('audits_apres');sauver('apres',verifierAuditsD(await sql(sqlAuditsFrontendD(m),env),'apres',before));
+    // naviguer ne rend la main qu'après fermeture des contextes et du browser.
+    // Une erreur reçue pendant ces fermetures reste bloquante pour le verdict.
+    if(diagnostic.resultat().erreurs)throw Error('Anomalie UI D2.');
     resultat={version:1,mode:'D2_FRONTEND_STAGING',succes:true,sha:env.GITHUB_SHA,runId:m.runId,jour:m.jour,preuves,candidatures:2,notifications:etat.notifications,k6:false,concurrenceDB:false,diagnostic:diagnostic.resultat()};
   }catch(error){
     diagnostic.exceptionFinale(error);throw error;
