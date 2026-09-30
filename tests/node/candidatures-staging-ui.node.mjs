@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { configurationFrontendD,identitesFrontendD,requeteFrontendD,budgetEcrituresD,sqlAuditsFrontendD,verifierAuditsD,STAGING_REF,STAGING_URL,ORIGINE_UI } from '../../scripts/ci/candidatures-ui-contract.mjs';
-import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD,projeterErreurNavigateurD,observerErreursNavigateurD } from '../../scripts/ci/recette-candidatures-staging.mjs';
+import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD,projeterErreurNavigateurD,observerErreursNavigateurD,deposerCandidatureD } from '../../scripts/ci/recette-candidatures-staging.mjs';
 const now=Date.parse('2026-09-30T12:00:00Z');
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_RUN_ID:'555',GITHUB_RUN_ATTEMPT:'2',GITHUB_SHA:'a'.repeat(40),RUNNER_TEMP:'/private/tmp/d2-test',
   LOAD_D_FRONTEND_ONLY:'true',LOAD_D_JOUR:'2026-10-07',LOAD_D_SQL_ONLY:'false',LOAD_D_SQL_JOUR:'',LOAD_TEST_SCENARIO:'04-candidatures-simultanees',DASHBOARD_FIXTURE_ONLY:'false',DIAGNOSTIC_SQL:'false',STAGING_SUPABASE_PROJECT_REF:STAGING_REF,STAGING_SUPABASE_URL:STAGING_URL,STAGING_SUPABASE_ACCESS_TOKEN:'CANARI_MANAGEMENT'};
@@ -94,6 +94,27 @@ test('projection bornée : la saturation conserve le total bloquant et compte le
   d.erreurNavigateur(1,projeterErreurNavigateurD({source:'console_error',texte:'CANARI_0'}));
   const r=d.resultat();assert.equal(r.erreurs,41);assert.equal(r.erreursNavigateur.length,32);assert.equal(r.erreursNavigateurTronquees,8);assert.equal(r.erreursNavigateur[0].nombre,2);assert.doesNotMatch(JSON.stringify(r),/CANARI/);
 });
+test('exception finale : chaque échec injecté dans le vrai parcours conserve son action et remonte intact',async()=>{
+  for(const cible of ['mission_navigation','mission_titre','candidature_bouton_actif','candidature_debut','candidature_envoyer','recharge_attente']) {
+    let action;const saved={},erreur=new Error('expect(CANARI_IDENTITE).toBeVisible failed: Timeout 5000ms password=CANARI_SECRET');
+    const fail=async()=>{if(action===cible)throw erreur;};
+    const locator={fill:fail,click:fail,getByRole:()=>locator};
+    const page={goto:fail,reload:fail,waitForLoadState:fail,getByRole:()=>locator,getByPlaceholder:()=>locator,getByText:()=>locator};
+    const expect=()=>({toBeVisible:fail,toBeHidden:fail,toBeEnabled:fail,toContainText:fail});
+    await assert.rejects(()=>executerFrontendD({action:'run',env:prive,now,save:(k,v)=>saved[k]=v,fixture:async()=>({}),sql:async()=>audits('avant'),
+      naviguer:async({diagnostic})=>deposerCandidatureD(page,m,{expect,phase:p=>diagnostic.phase(p,0),action:n=>{diagnostic.action(n);action=n;}})}),e=>e===erreur);
+    assert.equal(saved.resultat.succes,false);const d=saved.resultat.diagnostic;
+    assert.equal(d.action,cible);assert.equal(d.erreurFinale.action,cible);assert.equal(d.erreurFinale.slot,0);assert.equal(d.erreurFinale.source,'exception_finale');assert.equal(d.erreurFinale.categorie,'delai_attente');
+    assert.equal(d.erreurs,0);assert.doesNotMatch(JSON.stringify(saved),/CANARI|password=/);
+  }
+});
+test('actions fermées et classes finales connues, aucune URL extraite du message',()=>{
+  const d=diagnosticD();assert.throws(()=>d.action('CANARI_LIBRE'));d.phase('mission',0);d.action('mission_navigation');
+  d.exceptionFinale(Object.assign(new Error('Navigation to https://secret.invalid/CANARI is interrupted by another navigation'),{name:'CANARI_CLASSE'}));
+  const p=d.resultat().erreurFinale;assert.equal(p.categorie,'navigation_interrompue');assert.equal(p.classe,'autre');assert.equal(p.emplacement,null);assert.doesNotMatch(JSON.stringify(p),/CANARI|https?:/);
+  d.phase('reload',0);assert.equal(d.resultat().action,null);
+  assert.equal(projeterErreurNavigateurD({source:'exception_finale',texte:'expect(locator).toBeVisible() failed',classe:'AssertionError'}).categorie,'assertion');
+});
 test('audits exacts conservés : trois connexions, consultation établissement, aucun effet présence/email/push',()=>{
   verifierAuditsD(audits('avant'),'avant');verifierAuditsD(audits('apres'),'apres',audits('avant'));verifierAuditsD(audits('cleanup'),'cleanup',audits('apres'));
   for(const change of [{total:2},{connexions:0},{presences:1},{emails:1},{push:1},{activite:false},{activite_empreinte:'a'.repeat(32)}])assert.throws(()=>verifierAuditsD([{...audits('apres')[0],...change},...audits('apres').slice(1)],'apres',audits('avant')));
@@ -105,8 +126,9 @@ test('lecture backend refus réseau/JSON/HTTP ne fuit jamais le corps, zéro ret
 });
 test('échec navigateur conserve résultat fermé ; snapshot et cleanup restent appelables sans credentials UI',async()=>{
   const saved={};const common={env:prive,now,save:(k,v)=>saved[k]=v};let closed=false;
-  await assert.rejects(()=>executerFrontendD({...common,action:'run',fixture:async()=>({}),sql:async()=>audits('avant'),naviguer:async()=>{try{throw Error('CANARI_NAV');}finally{closed=true;}}}));
+  await assert.rejects(()=>executerFrontendD({...common,action:'run',fixture:async()=>({}),sql:async()=>audits('avant'),naviguer:async({diagnostic})=>{try{diagnostic.phase('login',0);diagnostic.action('connexion_motdepasse');throw Error('email=CANARI_EMAIL@example.invalid password=CANARI_PASSWORD url=https://secret.invalid/?token=CANARI_JWT');}finally{closed=true;}}}));
   assert.equal(closed,true);assert.equal(saved.resultat.succes,false);assert.doesNotMatch(JSON.stringify(saved),/CANARI/);
+  assert.equal(saved.resultat.diagnostic.erreurFinale.action,'connexion_motdepasse');assert.doesNotMatch(JSON.stringify(saved),/example\.invalid|https?:|password=/);
   await executerFrontendD({...common,env,action:'snapshot',sql:async()=>audits('avant')});
   let cleanup=0;await executerFrontendD({...common,env,action:'cleanup',fixture:async({action})=>{assert.equal(action,'cleanup');cleanup++;return{skipped:false};}});assert.equal(cleanup,1);
 });

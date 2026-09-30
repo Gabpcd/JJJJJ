@@ -18,8 +18,9 @@ export function projeterErreurNavigateurD({source,texte,classe,location,stack,co
   const categorie=contexteFerme||/Target (?:page, context or browser|closed)|context (?:has been )?closed/i.test(message)?'contexte_ferme'
     :/WebSocket/i.test(message)?'websocket'
     :/\babort(?:ed|error)?\b|cancelled|canceled/i.test(message)?'requete_abandonnee'
+    :/navigation[\s\S]*interrupted[\s\S]*navigation/i.test(message)?'navigation_interrompue'
     :/Load failed|Failed to fetch|Failed to load resource|NetworkError|Network request failed/i.test(message)?'chargement_reseau'
-    :react?'react_minifie':'autre';
+    :react?'react_minifie':/\btimeout\b|timed out/i.test(message)?'delai_attente':/^expect\(/.test(message)?'assertion':'autre';
   const candidates=location?[location]:[];
   if(typeof stack==='string')for(const url of stack.match(/https?:\/\/[^\s)]+/g)||[]){
     const match=url.match(/^(.*):(\d+):(\d+)$/);if(match)candidates.push({url:match[1],lineNumber:Number(match[2]),columnNumber:Number(match[3])});
@@ -31,7 +32,7 @@ export function projeterErreurNavigateurD({source,texte,classe,location,stack,co
       emplacement={asset:u.pathname,ligne:entier(l.lineNumber),colonne:entier(l.columnNumber)};break;
     }catch{/* Aucun chemin ou texte libre n'est conservé. */}
   }
-  return {source:source==='pageerror'?'pageerror':'console_error',classe:['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AbortError','NetworkError'].includes(classe)?classe:'autre',
+  return {source:['pageerror','exception_finale'].includes(source)?source:'console_error',classe:['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AbortError','NetworkError','TimeoutError','AssertionError'].includes(classe)?classe:'autre',
     categorie,code:react?Number(react[1]):null,emplacement,empreinte:createHash('sha256').update(message).digest('hex')};
 }
 export function observerErreursNavigateurD(context,slot,diagnostic,assetsConnus=new Set()) {
@@ -41,11 +42,20 @@ export function observerErreursNavigateurD(context,slot,diagnostic,assetsConnus=
   });
 }
 export function diagnosticD() {
-  let phase='preflight',slot=null,erreurs=0,erreursNavigateurTronquees=0; const reseau=new Map(),erreursNavigateur=new Map();
+  let phase='preflight',slot=null,action=null,erreurFinale=null,erreurs=0,erreursNavigateurTronquees=0; const reseau=new Map(),erreursNavigateur=new Map();
   const noms=new Set([...rpcEcritureD,...rpcLectureD,...rpcParametresD,...tablesLectureD]);
-  return { phase(p,s=null) { if(!['preflight','preview','browser','login','mission','postuler','reload','etablissement','backend','cleanup'].includes(p)||![null,0,1,2].includes(s))throw Error('Phase D2 invalide.');phase=p;slot=s; },
+  const actions=new Set(['preview_html','preview_assets','preview_demarrer','navigateur_lancer','contexte_creer','reseau_installer','page_creer',
+    'connexion_navigation','connexion_email','connexion_motdepasse','connexion_envoyer','connexion_url','connexion_audit','connexion_reseau','connexion_drain',
+    'mission_navigation','mission_titre','candidature_message','candidature_bouton_actif','candidature_ouvrir_dialogue','candidature_dialogue_visible','candidature_debut','candidature_fin',
+    'candidature_envoyer','candidature_dialogue_ferme','candidature_attente','candidature_rappel','candidature_documents','candidature_reseau','candidature_capture',
+    'recharge_navigation','recharge_attente','recharge_bouton_absent','recharge_reseau','recharge_capture',
+    'etablissement_navigation','etablissement_compteur','etablissement_attente','etablissement_nom_visible','etablissement_nom_exact','etablissement_documents','etablissement_boutons','etablissement_reseau','etablissement_capture',
+    'contexte_drain','contexte_budget','contexte_fermer','identites','catalogue','audits_avant','backend_verifier','backend_correlation','audits_apres']);
+  return { phase(p,s=null) { if(!['preflight','preview','browser','login','mission','postuler','reload','etablissement','backend','cleanup'].includes(p)||![null,0,1,2].includes(s))throw Error('Phase D2 invalide.');phase=p;slot=s;action=null; },
+    action(n) { if(!actions.has(n))throw Error('Action D2 inconnue.');action=n; },
+    exceptionFinale(error) { erreurFinale={phase,slot,action,...projeterErreurNavigateurD({source:'exception_finale',texte:error?.message,classe:error?.name})}; },
     erreur() { erreurs++; }, erreurNavigateur(slotEmetteur,projection) {
-      erreurs++;const r={phase,slotPhase:slot,slotEmetteur,...projection},k=JSON.stringify(r);
+      erreurs++;const r={phase,action,slotPhase:slot,slotEmetteur,...projection},k=JSON.stringify(r);
       if(erreursNavigateur.size<32||erreursNavigateur.has(k))erreursNavigateur.set(k,{...r,nombre:(erreursNavigateur.get(k)?.nombre||0)+1});else erreursNavigateurTronquees++;
     }, reseau(url,method,status) {
       let origine='invalide',chemin='autre';
@@ -53,7 +63,7 @@ export function diagnosticD() {
         const nom=u.pathname.split('/').pop();chemin=origine==='preview'?'local':origine!=='staging'?'externe':noms.has(nom)?nom:['/auth/v1/token','/auth/v1/user'].includes(u.pathname)?`auth-${nom}`:'autre'; }catch{/* Projection fermée. */}
       const r={phase,slot,origine,chemin,methode:['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE'].includes(method)?method:'autre',statut:Number.isInteger(status)&&status>=100&&status<=599?status:['refus','transport','ferme'].includes(status)?status:'autre'};
       const k=JSON.stringify(r); if(reseau.size<128||reseau.has(k))reseau.set(k,{...r,nombre:(reseau.get(k)?.nombre||0)+1});else erreurs++;
-    }, resultat() { return {phase,slot,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
+    }, resultat() { return {phase,slot,action,erreurFinale,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
 }
 export async function lireBackendD(query, env, fetchImpl=fetch) {
   if(env.STAGING_SUPABASE_PROJECT_REF!==STAGING_REF||env.STAGING_SUPABASE_URL!==STAGING_URL||!env.STAGING_SUPABASE_ACCESS_TOKEN)throw Error('Lecture D2 staging refusée.');
@@ -63,42 +73,44 @@ export async function lireBackendD(query, env, fetchImpl=fetch) {
   try{return await response.json();}catch{throw Error('Lecture D2 JSON invalide.');}
 }
 const heureParis = value => new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)).replace(':','h');
-export async function deposerCandidatureD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;}}) {
-  phase('mission'); await page.goto(`/soignant/missions/${m.missionId}`);
-  await expect(page.getByRole('heading',{name:m.marker,exact:true})).toBeVisible();
-  await page.getByPlaceholder('Présente-toi brièvement…').fill(m.marker);
-  await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeEnabled();
-  await page.getByRole('button',{name:/Vérifier et postuler/}).click();
+export async function deposerCandidatureD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;},action=etape=>{void etape;}}) {
+  phase('mission');action('mission_navigation');await page.goto(`/soignant/missions/${m.missionId}`);
+  action('mission_titre');await expect(page.getByRole('heading',{name:m.marker,exact:true})).toBeVisible();
+  action('candidature_message');await page.getByPlaceholder('Présente-toi brièvement…').fill(m.marker);
+  action('candidature_bouton_actif');await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeEnabled();
+  action('candidature_ouvrir_dialogue');await page.getByRole('button',{name:/Vérifier et postuler/}).click();
   const dialogue=page.getByRole('dialog',{name:'Vérifie ton engagement'});
-  await expect(dialogue).toBeVisible();await expect(dialogue).toContainText(heureParis(m.debut));await expect(dialogue).toContainText(heureParis(m.fin));
-  phase('postuler');await dialogue.getByRole('button',{name:'Envoyer ma candidature',exact:true}).click();
-  await expect(dialogue).toBeHidden();
-  await expect(page.getByText('✅ Candidature envoyée — En attente de réponse',{exact:true})).toBeVisible();
-  await expect(page.getByText('Candidature envoyée ! Valide tes documents pour pouvoir être accepté.',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Mes documents',exact:true})).toBeVisible();
-  await page.waitForLoadState('networkidle');await capturer('candidature');
-  phase('reload');await page.reload();
-  await expect(page.getByText('✅ Candidature envoyée — En attente de réponse',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeHidden();
-  await page.waitForLoadState('networkidle');await capturer('recharge');
+  action('candidature_dialogue_visible');await expect(dialogue).toBeVisible();
+  action('candidature_debut');await expect(dialogue).toContainText(heureParis(m.debut));
+  action('candidature_fin');await expect(dialogue).toContainText(heureParis(m.fin));
+  phase('postuler');action('candidature_envoyer');await dialogue.getByRole('button',{name:'Envoyer ma candidature',exact:true}).click();
+  action('candidature_dialogue_ferme');await expect(dialogue).toBeHidden();
+  action('candidature_attente');await expect(page.getByText('✅ Candidature envoyée — En attente de réponse',{exact:true})).toBeVisible();
+  action('candidature_rappel');await expect(page.getByText('Candidature envoyée ! Valide tes documents pour pouvoir être accepté.',{exact:true})).toBeVisible();
+  action('candidature_documents');await expect(page.getByRole('button',{name:'Mes documents',exact:true})).toBeVisible();
+  action('candidature_reseau');await page.waitForLoadState('networkidle');action('candidature_capture');await capturer('candidature');
+  phase('reload');action('recharge_navigation');await page.reload();
+  action('recharge_attente');await expect(page.getByText('✅ Candidature envoyée — En attente de réponse',{exact:true})).toBeVisible();
+  action('recharge_bouton_absent');await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeHidden();
+  action('recharge_reseau');await page.waitForLoadState('networkidle');action('recharge_capture');await capturer('recharge');
 }
-export async function relireCandidaturesD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;}}) {
-  phase('etablissement');await page.goto(`/etablissement/missions/${m.missionId}`);
+export async function relireCandidaturesD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;},action=etape=>{void etape;}}) {
+  phase('etablissement');action('etablissement_navigation');await page.goto(`/etablissement/missions/${m.missionId}`);
   for(const recharge of [false,true]) {
-    if(recharge){phase('reload');await page.reload();}
-    await expect(page.getByRole('heading',{name:'Candidatures (2)',exact:true})).toBeVisible();
-    await expect(page.getByText('En attente (2)',{exact:true})).toBeVisible();
+    if(recharge){phase('reload');action('recharge_navigation');await page.reload();}
+    action('etablissement_compteur');await expect(page.getByRole('heading',{name:'Candidatures (2)',exact:true})).toBeVisible();
+    action('etablissement_attente');await expect(page.getByText('En attente (2)',{exact:true})).toBeVisible();
     for(const a of m.membres.slice(0,2)) {
       const nom=page.locator('p').filter({hasText:new RegExp(`👤\\s+${RegExp.escape(a.prenom)} ${RegExp.escape(a.nom)}`)});
-      await expect(nom).toBeVisible();
+      action('etablissement_nom_visible');await expect(nom).toBeVisible();
       // Les badges sont des enfants du même paragraphe : comparer exactement
       // ses nœuds texte propres, sans inclure profession/statut documentaire.
-      const texte=await nom.evaluate(element=>Array.from(element.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').replace(/\s+/g,' ').trim());
+      action('etablissement_nom_exact');const texte=await nom.evaluate(element=>Array.from(element.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').replace(/\s+/g,' ').trim());
       expect(texte).toBe(`👤 ${a.prenom} ${a.nom}`);
     }
-    await expect(page.getByText('📄 Documents en vérification',{exact:true})).toHaveCount(2);
-    await expect(page.getByRole('button',{name:'Accepter cette candidature',exact:true})).toHaveCount(2);
-    await page.waitForLoadState('networkidle');await capturer(recharge?'recharge':'candidatures');
+    action('etablissement_documents');await expect(page.getByText('📄 Documents en vérification',{exact:true})).toHaveCount(2);
+    action('etablissement_boutons');await expect(page.getByRole('button',{name:'Accepter cette candidature',exact:true})).toHaveCount(2);
+    action('etablissement_reseau');await page.waitForLoadState('networkidle');action('etablissement_capture');await capturer(recharge?'recharge':'candidatures');
   }
 }
 export function verifierReponseFrontendD({path,data},a,m) {
@@ -146,33 +158,33 @@ export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcri
 export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlaywright=()=>import('@playwright/test'),previewFn=demarrerPreview,lireAssets=()=>new Set(readdirSync(resolve('dist/assets'),{withFileTypes:true}).filter(f=>f.isFile()&&/^[A-Za-z0-9_-]+\.js$/.test(f.name)).map(f=>`/assets/${f.name}`)),preparerBuild=()=>{const index=resolve('dist/index.html');writeFileSync(index,preparerHtmlPreview(readFileSync(index,'utf8')));}}={}) {
   let browser,preview;const contextes=[],preuves=[],candidatures=[];
   try {
-    diagnostic.phase('preview');preparerBuild();const assetsConnus=lireAssets();
-    preview=await previewFn({env,observer:etat=>sauver('preview',etat)});
+    diagnostic.phase('preview');diagnostic.action('preview_html');preparerBuild();diagnostic.action('preview_assets');const assetsConnus=lireAssets();
+    diagnostic.action('preview_demarrer');preview=await previewFn({env,observer:etat=>sauver('preview',etat)});
     const {webkit,devices,expect}=await chargerPlaywright();diagnostic.phase('browser');
     // Les clés serveur et le JSON privé restent dans le runner Node ; le
     // processus navigateur ne reçoit que les variables système nécessaires.
     const envNavigateur=Object.fromEntries(['PATH','HOME','TMPDIR','XDG_RUNTIME_DIR','DISPLAY','WAYLAND_DISPLAY'].filter(k=>typeof env[k]==='string').map(k=>[k,env[k]]));
-    browser=await webkit.launch({env:envNavigateur});
+    diagnostic.action('navigateur_lancer');browser=await webkit.launch({env:envNavigateur});
     for(const [slot,appareil]of ['iPhone 13','iPad Pro 11','iPad Pro 11'].entries()) {
       const a=identites[slot];diagnostic.phase('browser',slot);
-      const context=await browser.newContext({...devices[appareil],baseURL:ORIGINE_UI,locale:'fr-FR',timezoneId:'Europe/Paris',serviceWorkers:'block'});contextes.push(context);
-      const reseau=await installerReseauD(context,a,m,diagnostic,{assetsConnus});const page=await context.newPage();page.setDefaultTimeout(20000);page.setDefaultNavigationTimeout(25000);
-      diagnostic.phase('login',slot);await page.goto('/connexion');
-      await page.getByLabel('Email',{exact:true}).fill(a.email);await page.getByLabel('Mot de passe',{exact:true}).fill(a.password);
-      await page.getByRole('button',{name:'Se connecter',exact:true}).click();
-      await expect(page).toHaveURL(slot<2?/\/soignant\/tableau-de-bord$/:/\/etablissement\/tableau-de-bord$/);
+      diagnostic.action('contexte_creer');const context=await browser.newContext({...devices[appareil],baseURL:ORIGINE_UI,locale:'fr-FR',timezoneId:'Europe/Paris',serviceWorkers:'block'});contextes.push(context);
+      diagnostic.action('reseau_installer');const reseau=await installerReseauD(context,a,m,diagnostic,{assetsConnus});diagnostic.action('page_creer');const page=await context.newPage();page.setDefaultTimeout(20000);page.setDefaultNavigationTimeout(25000);
+      diagnostic.phase('login',slot);diagnostic.action('connexion_navigation');await page.goto('/connexion');
+      diagnostic.action('connexion_email');await page.getByLabel('Email',{exact:true}).fill(a.email);diagnostic.action('connexion_motdepasse');await page.getByLabel('Mot de passe',{exact:true}).fill(a.password);
+      diagnostic.action('connexion_envoyer');await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+      diagnostic.action('connexion_url');await expect(page).toHaveURL(slot<2?/\/soignant\/tableau-de-bord$/:/\/etablissement\/tableau-de-bord$/);
       // Attendre aussi l'audit automatique du dashboard établissement avant de
       // quitter son écran : aucune navigation précipitée qui annule une écriture.
-      await expect.poll(()=>reseau.budget.projection()[slot<2?'fn_maj_activite_soignant':'fn_ecrire_audit_safe']).toBe(1);
-      await page.waitForLoadState('networkidle');await reseau.drainer();
-      const options={expect,phase:p=>diagnostic.phase(p,slot),capturer:async etape=>{
+      diagnostic.action('connexion_audit');await expect.poll(()=>reseau.budget.projection()[slot<2?'fn_maj_activite_soignant':'fn_ecrire_audit_safe']).toBe(1);
+      diagnostic.action('connexion_reseau');await page.waitForLoadState('networkidle');diagnostic.action('connexion_drain');await reseau.drainer();
+      const options={expect,phase:p=>diagnostic.phase(p,slot),action:n=>diagnostic.action(n),capturer:async etape=>{
         await reseau.drainer();if(diagnostic.resultat().erreurs)throw Error('Anomalie UI D2.');
         await page.locator('main').screenshot({path:`${dossier}/slot-${slot}-${etape}.png`,animations:'disabled'});
       }};
       if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
-      await reseau.drainer();if(!reseau.budget.complet()||diagnostic.resultat().erreurs)throw Error('Budget ou navigateur D2 incomplet.');
+      diagnostic.action('contexte_drain');await reseau.drainer();diagnostic.action('contexte_budget');if(!reseau.budget.complet()||diagnostic.resultat().erreurs)throw Error('Budget ou navigateur D2 incomplet.');
       candidatures.push(...reseau.candidatures);preuves.push({slot,appareil,connexion_formulaire:true,recharge:true,ecritures:reseau.budget.projection()});
-      await context.close();contextes.pop();
+      diagnostic.action('contexte_fermer');await context.close();contextes.pop();
     }
     return {preuves,candidatures};
   }finally{
@@ -199,14 +211,16 @@ export async function executerFrontendD({action,env=process.env,now=Date.now(),f
   if(action!=='run')throw Error('Action UI D2 inconnue.');
   const diagnostic=diagnosticD();let resultat;
   try{
-    const identites=identitesFrontendD(env,m);
-    await fixture({action:'catalogue',env});
-    const before=verifierAuditsD(await sql(sqlAuditsFrontendD(m),env),'avant');sauver('avant',before);
+    diagnostic.action('identites');const identites=identitesFrontendD(env,m);
+    diagnostic.action('catalogue');await fixture({action:'catalogue',env});
+    diagnostic.action('audits_avant');const before=verifierAuditsD(await sql(sqlAuditsFrontendD(m),env),'avant');sauver('avant',before);
     const {preuves,candidatures}=await naviguer({m,identites,env,diagnostic});diagnostic.phase('backend');
-    const etat=await fixture({action:'verify',env});
-    if(candidatures.length!==2||candidatures.some(c=>!etat.candidatures.some(e=>e.id===c.id&&e.soignant_id===m.membres[c.slot]?.userId)))throw Error('Candidatures UI/backend non corrélées.');
-    sauver('apres',verifierAuditsD(await sql(sqlAuditsFrontendD(m),env),'apres',before));
+    diagnostic.action('backend_verifier');const etat=await fixture({action:'verify',env});
+    diagnostic.action('backend_correlation');if(candidatures.length!==2||candidatures.some(c=>!etat.candidatures.some(e=>e.id===c.id&&e.soignant_id===m.membres[c.slot]?.userId)))throw Error('Candidatures UI/backend non corrélées.');
+    diagnostic.action('audits_apres');sauver('apres',verifierAuditsD(await sql(sqlAuditsFrontendD(m),env),'apres',before));
     resultat={version:1,mode:'D2_FRONTEND_STAGING',succes:true,sha:env.GITHUB_SHA,runId:m.runId,jour:m.jour,preuves,candidatures:2,notifications:etat.notifications,k6:false,concurrenceDB:false,diagnostic:diagnostic.resultat()};
+  }catch(error){
+    diagnostic.exceptionFinale(error);throw error;
   }finally{
     sauver('resultat',resultat||{version:1,mode:'D2_FRONTEND_STAGING',succes:false,sha:env.GITHUB_SHA,diagnostic:diagnostic.resultat()});
   }
