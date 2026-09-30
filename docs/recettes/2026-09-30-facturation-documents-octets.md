@@ -12,7 +12,8 @@ Il complète la [recette SQL F1](2026-09-30-facturation-f1-sql.md), dont les
 références documentaires fictives ne prouvaient pas la génération des fichiers.
 Aucun SQL, compte cloud, fichier Storage réel, email ou fournisseur n'est appelé.
 L'ancien script `test-generate-invoice.ts`, avec son fallback production, n'est
-pas utilisé. Aucune dépendance n'a été installée ou modifiée.
+pas utilisé. Les dépendances partagées locales sont restées intactes ; fontkit
+est acquis dans un dossier externe et ajouté au manifeste/lock pour la CI.
 
 ## Défaut observé et correction bornée
 
@@ -24,6 +25,29 @@ pied de page et, si nécessaire, reporte le bloc sur une nouvelle page portant
 le numéro du document. Les tampons existants concernent toutes les pages.
 Le texte, les règles, les calculs, les destinataires, le XML et les IO métier
 restent inchangés. Aucun backfill ou régénération de document existant.
+
+Un second témoin sur le vrai handler a confirmé une réponse500 pour les
+prénoms `Łukasz` et `İpek` pourtant acceptés par l'inscription : Helvetica ne
+peut pas les encoder en WinAnsi. Le PDF utilise désormais Noto Sans Regular et
+Bold embarquées, via `npm:@pdf-lib/fontkit@1.1.1` (MIT). Les fichiers Noto
+originaux, sous SIL OFL1.1, sont figés au commit
+`ffebf8c1ee449e544955a7e813c54f9b73848eac` ; leurs sources, tailles et SHA256
+sont dans [provenance.json](../../supabase/functions/generate-invoice/fonts/provenance.json).
+Les 1 144 948 octets TTF sont encodés dans un module TS (~1,6Mo), vérifiés par
+SHA256 et incorporés en sous-ensembles dans chaque PDF. Aucun téléchargement
+de police à l'exécution. Ce choix conserve les déploiements `--use-api`, qui
+[ne prennent pas en charge static_files](https://supabase.com/docs/guides/functions/limits).
+
+Les deux styles possèdent les mêmes 2841 points de code : blocs Latin étenduA
+128/128, B208/208, grec121/144, grec étendu233/256, cyrillique256/256 (ces
+dénominateurs incluent les positions réservées). Ce n'est pas Unicode universel :
+`李` et `😀` sont notamment absents. Un caractère absent provoque422 avec le
+code `CARACTERE_PDF_NON_PRIS_EN_CHARGE` ; une police vide/corrompue provoque500
+`POLICE_PDF_INVALIDE`. Aucun nom n'est translittéré, supprimé ou remplacé par
+un carré. Le contrôle intervient avant consommation du numéro pour une nouvelle
+facture, et sur les snapshots canoniques avant upload lors d'une régénération.
+La réparation idempotente d'une commission existante reste possible même si
+le profil courant contient ensuite un nom non pris en charge.
 
 Avant édition, lecture seule de la fonction LIVE `generate-invoice` v676,
 ACTIVE : les trois fichiers étaient strictement identiques à la base
@@ -46,6 +70,12 @@ revue et merge. Ce lot local ne prouve pas son déploiement.
 - Quatre uploads fictifs avec MIME exacts, clés sans écrasement, deux registres
   liés aux bons IDs/chemins, SHA256 des vrais octets PDF/XML. Panne d'upload XML :
   réponse500 et `ERREUR_GENERATION`, aucune émission/notification ni registre.
+- Unicode : facture et avoir avec `Łukasz İpek D'Été`, adresse grecque et
+  établissement cyrillique, texte exact extrait du PDF normal/gras et du XML.
+  Refus des caractères absents et octets de polices vides/corrompus : aucun
+  numéro, insert/update, upload, registre, émission, commission ou email.
+  Régénération sur snapshots conservés et refus sans remplacer les documents ;
+  doublon existant testé séparément pour préserver sa réparation de commission.
 - PDF extrait et rendu par PDF.js installé : titre, numéros, identités, SIRET,
   dates, période/quantités, totaux, référence de l'avoir et mention subrogative
   complète identique au XML. Géométrie horizontale/verticale dans la page.
@@ -71,7 +101,7 @@ locales sont autorisées. Aucun polyfill ni analyseur n'est injecté dans l'app.
 
 ## Résultats et reproduction
 
-Sur la source corrigée : **4/4 Node, 10/10 parcours frontend**, sans retry,
+Sur la source corrigée avec Noto : **9/9 Node, 15/15 parcours frontend**, sans retry,
 skip, erreur console/page ou requête inconnue. `tsc -b`, typecheck E2E isolé,
 17guards et actionlint passent. Le build neuf utilise uniquement une URL
 Supabase loopback et une clé publique fictive ; aucun upload Sentry.
@@ -83,14 +113,27 @@ VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_PUBLISHABLE_KEY=recette-f
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:18481 RECETTE_RESULTS_DIR=/private/tmp/jolene-f1-documents-ui-valide node_modules/.bin/playwright test -c e2e/playwright.recette-complete.config.ts e2e/recette-complete-facturation-documents.spec.ts --trace=off --workers=1
 ```
 
-Le workflow `validate-pr` ajoute uniquement l'exécution Node hors réseau.
-Aucun changement au routage SQL, aux suites staging ou aux fixtures v11.
+Dans ce checkout aux dépendances partagées non modifiables, préfixer Node et
+Playwright par `NODE_PATH=/private/tmp/jolene-f1-unicode-deps-20260930/node_modules`.
+Sur une installation CI normale, fontkit1.1.1 provient du lockfile.
+
+Le workflow `validate-pr` ajoute l'exécution Node et un contrôle Deno2.9.7,
+[version publiée](https://github.com/denoland/deno/releases/tag/v2.9.7), avec
+setup-deno figé au SHA22d081ff2d3a40755e97629de92e3bcbfa7cf2ed. Une étape acquiert
+uniquement les modules npm sans credentials ; le test suivant utilise le cache
+seul et refuse les permissions net/env/read/write/run/ffi/sys. Il charge le
+vrai index en capturant `Deno.serve`, exerce OPTIONS et incorpore les deux
+fontes dans un PDF minimal. C'est un contrôle de chargement/embedding, distinct
+de l'exécution complète du handler par Node. **Deno absent localement : ce
+contrôle doit encore passer en CI**, sans bootstrap ni base cloud. Aucun
+changement au routage SQL, aux suites staging ou aux fixtures v11.
 
 Les [preuves compactes](../../recette/2026-09-30/facturation-documents/) contiennent
 les résultats par format, ARIA avant/après, écrans iPhone/ordinateur et rendus
-PDF avant/après. Les pages de facture, avoir, commission et pagination ont été
+PDF avant/après, témoin500 Unicode et rendus Noto. Les pages de facture, avoir, commission et pagination ont été
 inspectées visuellement. Les fichiers complets restent dans
-`/private/tmp/jolene-f1-documents-ui-valide` ; le témoin rouge géométrique dans
+`/private/tmp/jolene-f1-documents-unicode-ui` (15 cas actuels), et la première
+recette sans Noto dans `/private/tmp/jolene-f1-documents-ui-valide` ; le témoin rouge géométrique dans
 `/private/tmp/jolene-f1-documents-ui-debordement-rouge`. Les tentatives précédentes
 ont identifié le routage local de PDF.js, son API de fermeture, un taux fictif
 exprimé initialement en ratio au lieu de pourcentage, et la limite WebKit ;
@@ -99,10 +142,12 @@ elles ne sont pas comptées comme validations produit.
 ## Limites explicites
 
 Ce sont des IO simulées autour des vrais générateurs et composants, sans
-intégration Deno/Supabase réelle, RLS, Storage cloud, cron, envoi email ou appareil
+intégration Supabase réelle, RLS, Storage cloud, cron, envoi email ou appareil
 physique. Le partage natif Filesystem/Share et les autres écrans de téléchargement
 ne sont pas prouvés ici. Aucun bouton XML n'existe dans ces interfaces : le XML
 est contrôlé directement depuis les octets produits par le handler.
+La commission client jsPDF garde sa police actuelle : sa couverture Unicode
+hors noms testés ici n'est pas prouvée par la correction du générateur serveur.
 
 Les PDF et XML sont **deux fichiers séparés**. Le profil déclaré dans le XML
 n'est pas une certification Factur-X ; aucun validateur XSD/Schematron/PDF-A-3

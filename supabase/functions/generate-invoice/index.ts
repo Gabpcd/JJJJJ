@@ -13,7 +13,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
-import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { chargerPolicesFacture, verifierCaracteresFacture, ErreurPoliceFacture, fontkit } from './fonts.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
@@ -501,10 +502,13 @@ async function generateInvoicePdf(inv: {
   statut?: string;
   replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
+  await verifierCaracteresFacture(Object.values(inv));
+  const polices = await chargerPolicesFacture();
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   let page = pdfDoc.addPage([595, 842]); // A4
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const font = await pdfDoc.embedFont(polices.regular, { subset: true });
+  const fontBold = await pdfDoc.embedFont(polices.bold, { subset: true });
   const fontSize = 9;
   const titleSize = 14;
   const sectionSize = 10;
@@ -931,6 +935,14 @@ Deno.serve(async (req) => {
         siret_liberal: sellerSiret,
       }, facture.date_emission);
 
+      // Validate the canonical snapshots before generating or replacing files.
+      await verifierCaracteresFacture([
+        facture.numero_facture, facture.date_emission, facture.date_echeance,
+        sellerName, sellerProfession, sellerSiret, sellerProfessionalNumber, sellerAddress,
+        buyerName, buyerSiret, buyerAddress, description, subrogationMention,
+        facture.mandat_version, precedingNumero, precedingDate, motifAvoir, replacedByNumero,
+      ]);
+
       const xmlCii = generateCiiXml({
         invoiceNumber: facture.numero_facture,
         issueDate: facture.date_emission,
@@ -1349,6 +1361,15 @@ Deno.serve(async (req) => {
     }
 
     // 5. Générer le numéro de facture
+    // Validate all dynamic PDF text before consuming a number. The existing
+    // idempotent commission repair above does not regenerate a document.
+    await verifierCaracteresFacture([
+      soignant.prenom, soignant.nom, soignant.profession, soignant.siret_liberal,
+      soignant.numero_rpps, soignant.numero_adeli, soignant.adresse_rue,
+      soignant.adresse_code_postal, soignant.adresse_ville, soignant.mandat_facturation_version,
+      etab.nom, etab.siret, etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville,
+      mission.intitule, mission.service,
+    ]);
     const { data: invoiceNumber, error: numErr } = await supabaseAdmin.rpc('next_invoice_number', {
       p_soignant_id: soignant.id,
     });
@@ -1732,6 +1753,9 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error('generate-invoice error:', err);
+    if (err instanceof ErreurPoliceFacture) {
+      return json(req, { error: err.message, code: err.code }, err.code === 'CARACTERE_PDF_NON_PRIS_EN_CHARGE' ? 422 : 500);
+    }
     return json(req, { error: err instanceof Error ? err.message : 'Erreur interne' }, 500);
   }
 });

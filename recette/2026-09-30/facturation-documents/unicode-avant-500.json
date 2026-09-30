@@ -1,0 +1,52 @@
+{
+  "sha": "593e31b817a8b86fa0cb8be6059b284380971b2b",
+  "mode": "handler réel, IO exclusivement fictives ; aucun cloud",
+  "preuves": [
+    {
+      "prenom": "Łukasz",
+      "nom": "L'Été",
+      "status": 500,
+      "body": {
+        "error": "WinAnsi cannot encode \"Ł\" (0x0141)"
+      },
+      "logs": [
+        {
+          "level": "log",
+          "message": "[generate-invoice] service_role call: reason=\"ops_test_octets_locaux\""
+        },
+        {
+          "level": "error",
+          "message": "generate-invoice error: Error: WinAnsi cannot encode \"Ł\" (0x0141)"
+        }
+      ],
+      "requêtesInconnues": [],
+      "documents": 0,
+      "factures": 0,
+      "emissions": 0,
+      "emails": 0
+    },
+    {
+      "prenom": "İpek",
+      "nom": "L'Été",
+      "status": 500,
+      "body": {
+        "error": "WinAnsi cannot encode \"İ\" (0x0130)"
+      },
+      "logs": [
+        {
+          "level": "log",
+          "message": "[generate-invoice] service_role call: reason=\"ops_test_octets_locaux\""
+        },
+        {
+          "level": "error",
+          "message": "generate-invoice error: Error: WinAnsi cannot encode \"İ\" (0x0130)"
+        }
+      ],
+      "requêtesInconnues": [],
+      "documents": 0,
+      "factures": 0,
+      "emissions": 0,
+      "emails": 0
+    }
+  ]
+}

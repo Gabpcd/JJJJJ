@@ -130,8 +130,9 @@ async function aria(page: Page, info: TestInfo, nom: string) {
   await info.attach(nom, { body: await page.locator('main').ariaSnapshot(), contentType: 'text/plain' });
 }
 
-test('Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge', async ({ page, analyse }, info) => {
-  const banc = await genererDocuments(), etat = await simulerSoignant(page), reseau = await encadrer(page, banc);
+for (const unicode of [false, true]) test(`Documents F1 soignant${unicode ? ' Unicode' : ''} : facture et avoir générés, téléchargés et cohérents après recharge`, async ({ page, analyse }, info) => {
+  const banc = await genererDocuments({ unicode }), etat = await simulerSoignant(page), reseau = await encadrer(page, banc);
+  const nom = `${banc.soignant.prenom} ${banc.soignant.nom}`;
   Object.assign(etat.profile, { type_exercice: 'LIBERAL', statut_liberal: 'EN_COURS', rpps_verifie: false, tous_documents_valides: false });
   const rows = banc.factures.map(f => ({ ...f, mission_intitule: banc.mission.intitule, etablissement_nom: banc.etablissement.nom, statut_litige: 'NORMAL' }));
   etat.overrides.set('fn_mes_factures_honoraires', rows); etat.tables.set('factures_honoraires', rows);
@@ -149,8 +150,12 @@ test('Documents F1 soignant : facture et avoir générés, téléchargés et coh
       expect(sha256(bytes)).toBe(sha256(banc.documents.get(f.pdf_s3_key).bytes));
       if (!reload) {
         const texte = await analyserPdf(analyse, bytes, info, f.numero_facture);
-        expect(texte).toContain(f.numero_facture); expect(texte).toContain("Élodie L'Été");
-        expect(texte).toContain('Clinique fictive F1 & Santé');
+        expect(texte).toContain(f.numero_facture); expect(texte).toContain(nom);
+        expect(texte).toContain(banc.etablissement.nom);
+        expect(texte).toContain(banc.soignant.adresse_rue);
+        // The exact identity appears in bold in the seller block and in the
+        // normal font in the subrogation text; both fonts must preserve it.
+        expect(texte.split(nom).length - 1).toBeGreaterThanOrEqual(2);
         const total = ((f.type_document === 'AVOIR' ? -1 : 1) * f.montant_ttc).toFixed(2);
         expect(texte).toContain(`TOTAL ${total} EUR 0.00 EUR ${total} EUR`);
         expect(texte).toContain(`Quantite : ${f.quantite_heures_snapshot.toFixed(2)} h`);
@@ -159,7 +164,7 @@ test('Documents F1 soignant : facture et avoir générés, téléchargés et coh
         expect(texte).toContain('SIRET : 11111111111111'); expect(texte).toContain('SIRET : 22222222222222');
         expect(texte).toContain("Date d'emission : 2026-09-30"); expect(texte).toContain("Date d'echeance : 2026-10-30");
         expect(texte).toContain(verifierXml(banc.documents.get(f.facturx_xml_url).bytes, f,
-          f.type_document === 'AVOIR' ? rows[0] : undefined).mention);
+          f.type_document === 'AVOIR' ? rows[0] : undefined, nom, banc.etablissement.nom).mention);
         if (f.type_document === 'AVOIR') expect(texte).toContain(`Avoir emis sur facture n. ${rows[0].numero_facture} du 2026-09-30`);
         else expect(texte).toContain('Periode du 2026-09-21 au 2026-09-27');
       }
@@ -178,13 +183,14 @@ test('Documents F1 soignant : facture et avoir générés, téléchargés et coh
   // description existante. Le handler doit conserver la mention entière et le
   // pied de page, y compris lorsqu'une seconde page devient nécessaire.
   if (info.project.name === 'ordinateur') {
-    const long = await genererDocuments({ pagination: true });
+    const long = await genererDocuments({ pagination: true, unicode });
     for (const f of long.factures) {
       const texte = await analyserPdf(analyse, long.documents.get(f.pdf_s3_key).bytes, info, `pagination-${f.type_document}`);
-      expect(texte).toContain("Élodie L'Été de la Vallée de Saint-Martin");
+      const nomLong = `${long.soignant.prenom} ${long.soignant.nom}`;
+      expect(texte).toContain(nomLong);
       expect(texte).toContain('Jolene SASU - Mandataire de facturation');
       expect(texte).toContain(verifierXml(long.documents.get(f.facturx_xml_url).bytes, f,
-        f.type_document === 'AVOIR' ? long.factures[0] : undefined, "Élodie L'Été de la Vallée de Saint-Martin").mention);
+        f.type_document === 'AVOIR' ? long.factures[0] : undefined, nomLong, long.etablissement.nom).mention);
     }
   }
 });

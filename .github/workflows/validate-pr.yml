@@ -61,6 +61,21 @@ jobs:
       - name: Documents facturation réels avec IO fictives
         run: node --test tests/node/facturation-documents.node.mjs
 
+      - name: Deno figé pour le chargement des polices Edge
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: '2.9.7'
+
+      # Acquisition du graphe npm uniquement, avant le runtime sans droits.
+      # Aucun credential Supabase, aucune base ou fonction distante.
+      - name: Précharger les imports du contrôle Deno
+        run: deno cache --no-config --no-lock --node-modules-dir=none tests/deno/facturation-polices.test.ts supabase/functions/generate-invoice/index.ts
+
+      - name: Polices et module Edge sous Deno sans IO
+        run: |
+          deno check --no-config --no-lock --node-modules-dir=none --cached-only supabase/functions/generate-invoice/fonts.ts
+          deno test --no-config --no-lock --node-modules-dir=none --cached-only --no-check --no-prompt --deny-net --deny-env --deny-read --deny-write --deny-run --deny-ffi --deny-sys tests/deno/facturation-polices.test.ts
+
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 

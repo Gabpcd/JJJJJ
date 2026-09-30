@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createHash, webcrypto } from 'node:crypto';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import ts from 'typescript';
 import * as pdfLib from 'pdf-lib';
 import { createClient } from '@supabase/supabase-js';
 import { DOMParser } from '@xmldom/xmldom';
+const fontkit = createRequire(import.meta.url)('@pdf-lib/fontkit');
 
 export const ids = Object.freeze({
   mission: 'f1300003-3000-4000-8000-000000000003',
@@ -24,7 +26,7 @@ export const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 // Execute the whole current Edge module, never a copied/extracted renderer.
 // Only Deno's host boundary and the Supabase client's HTTP transport change.
-function chargerHandler(fetchFictif, logs) {
+function chargerHandler(fetchFictif, logs, pannePolice) {
   let handler;
   const env = Object.freeze({ SUPABASE_URL: origin, SUPABASE_SERVICE_ROLE_KEY: secretFictif,
     SUPABASE_ANON_KEY: 'anon-recette-sans-acces', JOLENE_SIRET: '00000000000000' });
@@ -35,7 +37,7 @@ function chargerHandler(fetchFictif, logs) {
   }
   const contexte = {
     Request, Response, Headers, Blob, FormData, URL, URLSearchParams, TextEncoder, TextDecoder,
-    Uint8Array, ArrayBuffer, crypto: webcrypto, Date: DateFixe,
+    Uint8Array, ArrayBuffer, atob, crypto: webcrypto, Date: DateFixe,
     console: Object.fromEntries(['log', 'warn', 'error'].map(level => [level, (...args) => logs.push({ level, message: args.join(' ') })])),
     Deno: { env: { get(name) { assert(Object.hasOwn(env, name), `Unknown env: ${name}`); return env[name]; } },
       serve(fn) { assert.equal(handler, undefined); handler = fn; } },
@@ -43,13 +45,23 @@ function chargerHandler(fetchFictif, logs) {
   };
   function charger(relative) {
     assert(['supabase/functions/generate-invoice/index.ts', 'supabase/functions/_shared/cors.ts',
-      'supabase/functions/_shared/rate-limit.ts'].includes(relative), `Unknown module: ${relative}`);
+      'supabase/functions/_shared/rate-limit.ts', 'supabase/functions/generate-invoice/fonts.ts',
+      'supabase/functions/generate-invoice/fonts/noto-sans-data.ts'].includes(relative), `Unknown module: ${relative}`);
     if (modules.has(relative)) return modules.get(relative);
     const module = { exports: {} }; modules.set(relative, module.exports);
     const source = readFileSync(new URL(relative, root), 'utf8');
     const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     const requireFerme = name => {
       if (name === 'npm:pdf-lib@1.17.1') return pdfLib;
+      if (name === 'npm:@pdf-lib/fontkit@1.1.1') return { default: fontkit };
+      if (name === './fonts.ts') return charger('supabase/functions/generate-invoice/fonts.ts');
+      if (name === './fonts/noto-sans-data.ts') {
+        const assets = charger('supabase/functions/generate-invoice/fonts/noto-sans-data.ts');
+        if (!pannePolice) return assets;
+        // Fault only the asset boundary, never the real decoder or generator.
+        const key = pannePolice.startsWith('gras') ? 'NOTO_BOLD_BASE64' : 'NOTO_REGULAR_BASE64';
+        return { ...assets, [key]: pannePolice.endsWith('absente') ? '' : 'AA==' };
+      }
       if (name === 'npm:@supabase/supabase-js@2.99.2') return { createClient(url, key, options) {
         assert.equal(url, origin); assert.equal(key, secretFictif);
         return createClient(url, key, { ...options, global: { ...options?.global, fetch: fetchFictif } });
@@ -69,7 +81,7 @@ function chargerHandler(fetchFictif, logs) {
   return handler;
 }
 
-export function creerBanc({ panneXml = false, pagination = false } = {}) {
+export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '' } = {}) {
   const documents = new Map(), factures = [], versions = [], appels = [], inconnus = [], logs = [];
   const soignant = { id: ids.soignant, prenom: 'Élodie', nom: pagination ? "L'Été de la Vallée de Saint-Martin" : "L'Été", profession: 'IDE',
     numero_rpps: '00000000001', siret_liberal: '11111111111111', email: 'camille@example.invalid',
@@ -77,6 +89,11 @@ export function creerBanc({ panneXml = false, pagination = false } = {}) {
     mandat_facturation_signe: true, mandat_facturation_version: '1.4', statut_tva_honoraires: 'FRANCHISE_EN_BASE' };
   const etablissement = { id: ids.etab, nom: 'Clinique fictive F1 & Santé', siret: '22222222222222',
     adresse_rue: '2 rue Fictive', adresse_code_postal: '75002', adresse_ville: 'Paris', est_secteur_public: false };
+  if (unicode) {
+    soignant.prenom = 'Łukasz İpek'; soignant.nom = pagination ? "D'Été de la Vallée de Saint-Martin" : "D'Été";
+    soignant.adresse_rue = '1 rue Αλέξανδρος';
+    etablissement.nom = 'Clinique fictive Жанна & Santé';
+  }
   const mission = { id: ids.mission, intitule: 'Mission hebdomadaire fictive F1', service: 'Simulation',
     soignant_assigne_id: ids.soignant, etablissement_id: ids.etab, statut: 'EN_COURS', type_contrat_applique: 'LIBERAL',
     strategie_facturation: 'HEBDO_ET_FINALE', debut_le: '2026-09-21T08:00:00Z', fin_le: '2026-10-04T12:00:00Z',
@@ -133,6 +150,7 @@ export function creerBanc({ panneXml = false, pagination = false } = {}) {
           if (table === 'factures_honoraires') {
             if (id) { const f = factures.find(f => f.id === id); assert(f); return json(f); }
             assert.equal(url.searchParams.get('mission_id'), `eq.${ids.mission}`);
+            if (url.searchParams.has('numero_semaine_iso') && factures.length) return json(factures[0]);
             return json([]);
           }
         }
@@ -149,7 +167,7 @@ export function creerBanc({ panneXml = false, pagination = false } = {}) {
       throw new Error(`Unknown IO ${req.method} ${path}${url.search}`);
     } catch (error) { inconnus.push(String(error)); throw error; }
   };
-  const handler = chargerHandler(fetchFictif, logs);
+  const handler = chargerHandler(fetchFictif, logs, pannePolice);
   const invoquer = body => handler(new Request(`${origin}/functions/v1/generate-invoice`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secretFictif}` },
     body: JSON.stringify({ ...body, service_role_reason: 'ops_test_octets_locaux' }),
@@ -167,7 +185,7 @@ export function creerBanc({ panneXml = false, pagination = false } = {}) {
   };
 }
 
-export function verifierXml(bytes, facture, original, vendeur = "Élodie L'Été") {
+export function verifierXml(bytes, facture, original, vendeur = "Élodie L'Été", acheteur = 'Clinique fictive F1 & Santé') {
   const erreurs = [];
   const doc = new DOMParser({ errorHandler: { warning: m => erreurs.push(m), error: m => erreurs.push(m), fatalError: m => erreurs.push(m) } }).parseFromString(bytes.toString('utf8'), 'application/xml');
   assert.deepEqual(erreurs, []);
@@ -190,7 +208,7 @@ export function verifierXml(bytes, facture, original, vendeur = "Élodie L'Été
   assert.equal(one(all('SpecifiedTradeProduct')[0], 'Name'), facture.description_prestation_snapshot);
   if (!original) assert.match(facture.description_prestation_snapshot, /Periode du 2026-09-21 au 2026-09-27/);
   assert.equal(one(all('SellerTradeParty')[0], 'Name'), vendeur);
-  assert.equal(one(all('BuyerTradeParty')[0], 'Name'), 'Clinique fictive F1 & Santé');
+  assert.equal(one(all('BuyerTradeParty')[0], 'Name'), acheteur);
   assert.equal(one(all('SellerTradeParty')[0].getElementsByTagNameNS('*', 'SpecifiedLegalOrganization')[0], 'ID'), '111111111');
   assert.equal(one(all('BuyerTradeParty')[0].getElementsByTagNameNS('*', 'SpecifiedLegalOrganization')[0], 'ID'), '222222222');
   assert.equal(all('BilledQuantity')[0].getAttribute('unitCode'), 'HUR');
@@ -228,7 +246,7 @@ export async function genererDocuments(options = {}) {
     assert.equal(banc.versions[index].facturx_xml_url, facture.facturx_xml_url);
     assert.equal(banc.versions[index].pdf_sha256, sha256(pdf.bytes));
     assert.equal(banc.versions[index].xml_sha256, sha256(xml.bytes));
-    verifierXml(xml.bytes, facture, index ? banc.factures[0] : undefined, `${banc.soignant.prenom} ${banc.soignant.nom}`);
+    verifierXml(xml.bytes, facture, index ? banc.factures[0] : undefined, `${banc.soignant.prenom} ${banc.soignant.nom}`, banc.etablissement.nom);
   }
   return banc;
 }
