@@ -52,7 +52,11 @@ SELECT public.fn_test_seed_mission(jsonb_build_object(
  'soignant_assigne_id','9c100000-0000-4000-8000-000000000001',
  'type_contrat_recherche','SALARIE','type_contrat_applique','SALARIE'));
 INSERT INTO public.mission_creneaux(mission_id,debut,fin,ordre,type_creneau,est_pause)
-VALUES('9c100000-0000-4000-8000-000000000030', now()-interval '45 minutes', now()-interval '15 minutes', 1,'EFFECTIF',false);
+-- Le helper crée déjà le prévisionnel ; l'ordre est unique par mission,
+-- tous types de créneaux confondus. Ajouter l'effectif sans le remplacer.
+SELECT '9c100000-0000-4000-8000-000000000030', now()-interval '45 minutes', now()-interval '15 minutes',
+  COALESCE(max(ordre),0)+1,'EFFECTIF',false
+FROM public.mission_creneaux WHERE mission_id='9c100000-0000-4000-8000-000000000030';
 -- Les GUC de seed ne doivent pas participer aux autorisations testées.
 SELECT set_config('app.internal_operation', '', true);
 SELECT set_config('jolene.creer_mission_context', '', true);

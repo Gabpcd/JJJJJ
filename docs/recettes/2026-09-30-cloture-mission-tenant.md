@@ -106,3 +106,11 @@ aucune erreur n'est retirée du journal ni de l'assertion.
 Aucun déploiement, appel métier LIVE, push, livraison mobile ou fournisseur
 réel. Appareils physiques, SQL réel et concurrence à deux connexions ne sont pas
 validés par cette recette locale.
+
+## Première exécution SQL dans l’intégration
+
+Le run `36697227662` a arrêté la préparation de la fixture sur la contrainte
+`uq_mission_creneau_ordre` : le helper avait déjà créé le prévisionnel d’ordre 1.
+L’effectif synthétique utilise désormais l’ordre suivant de cette seule mission,
+sans remplacer le prévisionnel ni supprimer la contrainte. La transaction a été
+annulée ; les assertions métier de cette suite restent à exécuter au prochain run.
