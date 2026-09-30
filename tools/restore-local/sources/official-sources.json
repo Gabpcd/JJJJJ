@@ -1,0 +1,71 @@
+{
+  "commit": "3fc8af387ec4dfb449510828a938e1f6e57a9575",
+  "sources": [
+    {
+      "path": "docker/docker-compose.yml",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/docker-compose.yml",
+      "sha256": "46b00ea67dfa4bb0360ab0cd0eb8fdae914a6e77c2e75e1ab49f55ff6ae35c09",
+      "bytes": 21304
+    },
+    {
+      "path": "docker/docker-compose.kong.yml",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/docker-compose.kong.yml",
+      "sha256": "267c18cea5e41b8549a2c7a09ebd1d4e3b6851f22bcbe8f94ff3d4d119a96446",
+      "bytes": 2054
+    },
+    {
+      "path": "docker/volumes/db/roles.sql",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/db/roles.sql",
+      "sha256": "3ad717b225daa38aa982da26750f35641eb404e1eb5e69a763c22236ab96c1b2",
+      "bytes": 379
+    },
+    {
+      "path": "docker/volumes/db/jwt.sql",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/db/jwt.sql",
+      "sha256": "c1d3f5c01e44646c2e533c5a1c111821cc49cb5a4c2534e08cddad61d8fb0339",
+      "bytes": 98
+    },
+    {
+      "path": "docker/volumes/db/_supabase.sql",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/db/_supabase.sql",
+      "sha256": "9dce462adc04137d6afabcf28efa60a6c355270a4b32d7af58891ac4eb964c5f",
+      "bytes": 83
+    },
+    {
+      "path": "docker/volumes/db/webhooks.sql",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/db/webhooks.sql",
+      "sha256": "05a61316b899374253891cbba66ce073d9273f33983c3f47961eda3aa26c2823",
+      "bytes": 9070
+    },
+    {
+      "path": "docker/volumes/api/kong.yml",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/api/kong.yml",
+      "sha256": "c55d3f8064560188b12f2bdd0aa01ced36cd6cab3734b539c01604977b33ddc9",
+      "bytes": 14142
+    },
+    {
+      "path": "changelog.md",
+      "url": "https://supabase.com/changelog.md",
+      "sha256": "9c74cb64f0176a6dfffb5dace0f084a18f843fcb7ac8d5c00dd95be86b737bce",
+      "bytes": 97726
+    },
+    {
+      "path": "docker-doc.md",
+      "url": "https://supabase.com/docs/guides/self-hosting/docker.md",
+      "sha256": "8fef5f9985cfbe637d480c7ccaa7a6b17ea577dfb9a4689bf6c226c7be9aee40",
+      "bytes": 29862
+    },
+    {
+      "path": "docker/volumes/api/kong-entrypoint.sh",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/volumes/api/kong-entrypoint.sh",
+      "sha256": "aacdadade6adde6284163ea79e0d88decce0276796ae4749a15f018d56eda933",
+      "bytes": 3752
+    },
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/supabase/supabase/3fc8af387ec4dfb449510828a938e1f6e57a9575/LICENSE",
+      "sha256": "c29468abcd629e248c2f76848155c386b733872bcabcc4cf65ef1e7c61431042",
+      "bytes": 11338
+    }
+  ]
+}

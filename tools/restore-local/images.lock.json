@@ -1,0 +1,46 @@
+{
+  "official_commit": "3fc8af387ec4dfb449510828a938e1f6e57a9575",
+  "platform": "linux/amd64",
+  "images": [
+    {
+      "repository": "supabase/gotrue",
+      "tag": "v2.196.0",
+      "index_digest": "sha256:c0c25187a6b835e65a6f6e6c6b39d090e832d40e6de5186f2c038e0411944232",
+      "linux_amd64_digest": "sha256:7e813221b93fbf54b515036438550e483bfaf057b9db52fe9bc1ce91c47e817e",
+      "reference": "supabase/gotrue@sha256:7e813221b93fbf54b515036438550e483bfaf057b9db52fe9bc1ce91c47e817e",
+      "source_compose": "docker-compose.yml"
+    },
+    {
+      "repository": "postgrest/postgrest",
+      "tag": "v14.17",
+      "index_digest": "sha256:c9dc201e555f5d8e37e7f39cdd4df0229774996e213bfd7de8d10ac609030f2c",
+      "linux_amd64_digest": "sha256:aa7e96af2d01219a09bc00c75de28171b1f9fda17ea455a931e4fb6d317089e0",
+      "reference": "postgrest/postgrest@sha256:aa7e96af2d01219a09bc00c75de28171b1f9fda17ea455a931e4fb6d317089e0",
+      "source_compose": "docker-compose.yml"
+    },
+    {
+      "repository": "supabase/storage-api",
+      "tag": "v1.74.0",
+      "index_digest": "sha256:f1546fac6d1c7e345428ac904bfaa7be7cecd50a1f549fe1cf38c628a7b15c85",
+      "linux_amd64_digest": "sha256:63da55733ce9d7592d860739acb94f0b6189d880b7565d247ee5b195be854db1",
+      "reference": "supabase/storage-api@sha256:63da55733ce9d7592d860739acb94f0b6189d880b7565d247ee5b195be854db1",
+      "source_compose": "docker-compose.yml"
+    },
+    {
+      "repository": "supabase/postgres",
+      "tag": "17.6.1.136",
+      "index_digest": "sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00",
+      "linux_amd64_digest": "sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b",
+      "reference": "supabase/postgres@sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b",
+      "source_compose": "docker-compose.yml"
+    },
+    {
+      "repository": "kong/kong",
+      "tag": "3.9.3",
+      "index_digest": "sha256:9a2ae6699a2ce0d60592eb176555d3594a22782c20cc6557a61ff3a7e8b559a3",
+      "linux_amd64_digest": "sha256:61591af560fc9ba4d1e2fcc8be87f28e374c4b2f4a8f0e637702ee12dcaddade",
+      "reference": "kong/kong@sha256:61591af560fc9ba4d1e2fcc8be87f28e374c4b2f4a8f0e637702ee12dcaddade",
+      "source_compose": "docker-compose.kong.yml"
+    }
+  ]
+}

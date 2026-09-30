@@ -1,0 +1,40 @@
+{
+  "method": "Public OCI manifests and config blobs only; SHA256 verified; no layers",
+  "images": [
+    {
+      "repository": "supabase/gotrue",
+      "config_digest": "sha256:688edbb786f6d736edaa478438f23c7044a22a6a5f19502a7138d38caca6c2f6",
+      "user": "supabase",
+      "volumes": null,
+      "architecture": "amd64"
+    },
+    {
+      "repository": "postgrest/postgrest",
+      "config_digest": "sha256:fc3d286fec899d5a5bebbb98eac771ced1ccaa44deac8ce2fc23fe5d262eb3d9",
+      "user": "1000",
+      "volumes": null,
+      "architecture": "amd64"
+    },
+    {
+      "repository": "supabase/storage-api",
+      "config_digest": "sha256:cbd50858d9a1d085d301f10a5f4ab5c3214e44674cfa111f2a1226cc391c1ad9",
+      "user": null,
+      "volumes": null,
+      "architecture": "amd64"
+    },
+    {
+      "repository": "supabase/postgres",
+      "config_digest": "sha256:f519727303f0af6862882be2a30f420e28710d4209226e681aaddb2c01d12d9b",
+      "user": null,
+      "volumes": null,
+      "architecture": "amd64"
+    },
+    {
+      "repository": "kong/kong",
+      "config_digest": "sha256:6d4c2325ad063b075cc10b36cef0d6660cba17e171111f148936daec82bc5c78",
+      "user": "kong",
+      "volumes": null,
+      "architecture": "amd64"
+    }
+  ]
+}
