@@ -12,12 +12,27 @@ const recevoir = () => screen.getByRole('button', { name: 'Recevoir le code SMS 
 describe('Signature OTP — continuité du contrat affiché', () => {
   beforeEach(() => { mocks.rpc.mockReset(); mocks.notifier.mockReset(); });
 
+  it('bloque un document indisponible et ignore un OTP devenu sans objet', async () => {
+    let resoudre!: (value: typeof sms) => void;
+    mocks.rpc.mockReturnValue(new Promise(resolve => { resoudre = resolve; }));
+    const { rerender } = render(<SignerContratOtp documentPret={false} contratId="a" hashDocument="hash-a" />);
+    fireEvent.click(consentement()); fireEvent.click(recevoir());
+    expect(recevoir()).toBeDisabled(); expect(mocks.rpc).not.toHaveBeenCalled();
+    rerender(<SignerContratOtp documentPret contratId="a" hashDocument="hash-a" />);
+    fireEvent.click(consentement()); fireEvent.click(recevoir());
+    rerender(<SignerContratOtp documentPret={false} contratId="a" hashDocument="hash-a" />);
+    await act(async () => resoudre(sms));
+    expect(recevoir()).toBeDisabled(); expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox', { name: 'Code SMS à 6 chiffres' })).not.toBeInTheDocument();
+    expect(mocks.notifier).not.toHaveBeenCalled();
+  });
+
   it('redemande le consentement et un code lorsque le contrat affiché change', async () => {
     mocks.rpc.mockResolvedValue(sms);
-    const { rerender } = render(<SignerContratOtp contratId="contrat-a" hashDocument="hash-a" />);
+    const { rerender } = render(<SignerContratOtp documentPret contratId="contrat-a" hashDocument="hash-a" />);
     fireEvent.click(consentement()); fireEvent.click(recevoir());
     fireEvent.change(await screen.findByRole('textbox', { name: 'Code SMS à 6 chiffres' }), { target: { value: '123456' } });
-    rerender(<SignerContratOtp contratId="contrat-b" hashDocument="hash-b" />);
+    rerender(<SignerContratOtp documentPret contratId="contrat-b" hashDocument="hash-b" />);
     expect(consentement()).not.toBeChecked();
     expect(screen.queryByRole('textbox', { name: 'Code SMS à 6 chiffres' })).not.toBeInTheDocument();
     expect(recevoir()).toBeDisabled();
@@ -27,9 +42,9 @@ describe('Signature OTP — continuité du contrat affiché', () => {
   it('ignore la réponse du précédent document si son hash change pendant l’envoi', async () => {
     let resoudre!: (value: typeof sms) => void;
     mocks.rpc.mockReturnValue(new Promise(resolve => { resoudre = resolve; }));
-    const { rerender } = render(<SignerContratOtp contratId="contrat-a" hashDocument="hash-a" />);
+    const { rerender } = render(<SignerContratOtp documentPret contratId="contrat-a" hashDocument="hash-a" />);
     fireEvent.click(consentement()); fireEvent.click(recevoir());
-    rerender(<SignerContratOtp contratId="contrat-a" hashDocument="hash-b" />);
+    rerender(<SignerContratOtp documentPret contratId="contrat-a" hashDocument="hash-b" />);
     await act(async () => resoudre(sms));
     expect(screen.queryByRole('textbox', { name: 'Code SMS à 6 chiffres' })).not.toBeInTheDocument();
     expect(consentement()).not.toBeChecked();
@@ -38,7 +53,7 @@ describe('Signature OTP — continuité du contrat affiché', () => {
 
   it('bloque tout nouvel envoi et signature après un refus pour document modifié', async () => {
     mocks.rpc.mockResolvedValueOnce(sms).mockResolvedValue({ data: { success: false, error_code: 'HASH_DOCUMENT_CHANGE' }, error: null });
-    render(<SignerContratOtp contratId="contrat-a" hashDocument="hash-a" />);
+    render(<SignerContratOtp documentPret contratId="contrat-a" hashDocument="hash-a" />);
     fireEvent.click(consentement()); fireEvent.click(recevoir());
     fireEvent.change(await screen.findByRole('textbox', { name: 'Code SMS à 6 chiffres' }), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Signer' }));
@@ -52,7 +67,7 @@ describe('Signature OTP — continuité du contrat affiché', () => {
     const onSigne = vi.fn();
     if (etape === 'signature') mocks.rpc.mockResolvedValueOnce(sms);
     mocks.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } });
-    render(<SignerContratOtp contratId="contrat-a" hashDocument="hash-a" onSigne={onSigne} />);
+    render(<SignerContratOtp documentPret contratId="contrat-a" hashDocument="hash-a" onSigne={onSigne} />);
     fireEvent.click(consentement()); fireEvent.click(recevoir());
     if (etape === 'signature') {
       fireEvent.change(await screen.findByRole('textbox', { name: 'Code SMS à 6 chiffres' }), { target: { value: '123456' } });
