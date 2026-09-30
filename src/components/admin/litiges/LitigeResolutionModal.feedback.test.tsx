@@ -48,6 +48,41 @@ beforeEach(() => { vi.resetAllMocks(); });
 afterEach(cleanup);
 
 describe('Résolution — retours dans le dialogue', () => {
+  it.each(['SALARIE', 'LIBERAL'])('%s : ouvre et ferme l’information sans résoudre ni fermer le litige', async contrat => {
+    const initialProps = props(litige(contrat));
+    render(<LitigeResolutionModal {...initialProps} />);
+    const heures = screen.getByRole('spinbutton', { name: 'Ajuster les heures' });
+    fireEvent.change(heures, { target: { value: '9' } });
+    const information = screen.getByRole('button', { name: 'Information sur les cotisations sociales' });
+    expect(information).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(information);
+    const panneau = await screen.findByRole('dialog', { name: 'Information sur les cotisations sociales' });
+    expect(information).toHaveAttribute('aria-expanded', 'true');
+    expect(information).toHaveAttribute('aria-controls', panneau.id);
+    expect(panneau).toHaveAccessibleDescription();
+    // Safari refocalise le dialogue avant de délivrer le clic sur le déclencheur.
+    fireEvent.focus(screen.getByRole('dialog', { name: 'Résoudre le litige' }));
+    expect(panneau).toBeInTheDocument();
+    fireEvent.click(information);
+    await waitFor(() => expect(panneau).not.toBeInTheDocument());
+    fireEvent.click(information);
+    const panneauRouvert = await screen.findByRole('dialog', { name: 'Information sur les cotisations sociales' });
+    fireEvent.click(within(panneauRouvert).getByRole('button', { name: 'Fermer l’information' }));
+    await waitFor(() => expect(panneauRouvert).not.toBeInTheDocument());
+    expect(information).toHaveFocus();
+    fireEvent.click(information);
+    await screen.findByRole('dialog', { name: 'Information sur les cotisations sociales' });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(information).toHaveAttribute('aria-expanded', 'false'));
+    expect(information).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Résoudre le litige' })).toBeVisible();
+    expect(heures).toHaveValue(9);
+    expect(initialProps.onOpenChange).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(resolved).not.toHaveBeenCalled();
+  });
+
   it.each(['SALARIE', 'LIBERAL'])('%s : refus accessible, saisie conservée et réessai immédiat sans toast', async contrat => {
     rpc.mockResolvedValueOnce({ data: { success: false, error: 'Administrateur requis.' }, error: null })
       .mockResolvedValueOnce({ data: { success: true, action_financiere: 'AUCUNE' }, error: null });

@@ -51,9 +51,48 @@ for (const contrat of ['SALARIE', 'LIBERAL']) {
     await page.goto(`/admin/litiges?litige=${litigeId}`);
     await expect(page.getByRole('heading', { name: 'Litiges — Supervision admin' })).toBeVisible();
     await activer(page.getByRole('button', { name: 'Résoudre (financier + statut)', exact: true }));
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: 'Résoudre le litige', exact: true });
     await expect(dialog.getByRole('heading', { name: 'Résoudre le litige' })).toBeVisible();
     await expect(dialog.getByTestId('action-paie-salariee')).toHaveCount(contrat === 'SALARIE' ? 1 : 0);
+    // Le renseignement social doit être consultable au toucher, sans action sur le litige.
+    const heures = dialog.getByRole('spinbutton', { name: 'Ajuster les heures', exact: true });
+    await heures.fill('9');
+    await stabiliserLectures(page);
+    const lecturesAvant = [...etat.appels];
+    const operationsAvant = [...etat.operations];
+    const information = dialog.getByRole('button', { name: 'Information sur les cotisations sociales', exact: true });
+    const panneau = page.getByRole('dialog', { name: 'Information sur les cotisations sociales', exact: true });
+    await expect(information).toHaveAttribute('aria-expanded', 'false');
+    await activer(information);
+    await expect(panneau).toBeVisible();
+    await expect(panneau).toHaveAccessibleDescription(/\S/);
+    await expect(information).toHaveAttribute('aria-expanded', 'true');
+    await expect(information).toHaveAttribute('aria-controls', await panneau.getAttribute('id') as string);
+    await activer(panneau.getByRole('button', { name: 'Fermer l’information', exact: true }));
+    await expect(panneau).toHaveCount(0);
+    await expect(information).toBeFocused();
+    // Safari déplace parfois le focus vers le dialogue avant le deuxième tap.
+    await activer(information); await expect(panneau).toBeVisible();
+    await activer(information); await expect(panneau).toHaveCount(0);
+    await activer(information); await expect(panneau).toBeVisible();
+    await activer(dialog.getByRole('textbox', { name: 'Résolution', exact: true }));
+    await expect(panneau).toHaveCount(0);
+    if (!isMobile) {
+      await heures.click(); await heures.press('Shift+Tab');
+      await expect(information).toBeFocused();
+      await information.press('Enter'); await expect(panneau).toBeVisible();
+      await expect(panneau.getByRole('button', { name: 'Fermer l’information', exact: true })).toBeFocused();
+      await page.keyboard.press('Escape'); await expect(panneau).toHaveCount(0);
+      await expect(information).toBeFocused();
+    }
+    await expect(dialog).toBeVisible();
+    await expect(heures).toHaveValue('9');
+    await stabiliserLectures(page);
+    expect(etat.appels).toEqual(lecturesAvant);
+    expect(etat.operations).toEqual(operationsAvant);
+    expect(appels).toBe(0);
+    await heures.fill('');
+    await expect(information).toHaveCount(0);
     await dialog.getByRole('textbox', { name: 'Résolution', exact: true }).fill('Décision fictive sans changement financier.');
     await activer(dialog.getByRole('combobox', { name: 'En faveur de' }));
     await activer(page.getByRole('option', { name: 'Neutre', exact: true }));
