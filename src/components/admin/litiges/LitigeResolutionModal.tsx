@@ -25,6 +25,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Info, AlertTriangle } from 'lucide-react';
+import { Close as PopoverClose } from '@radix-ui/react-popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { LitigesSimilairesPanel } from './LitigesSimilairesPanel';
@@ -138,6 +140,7 @@ function LitigeResolutionForm({
   const [factureLoading, setFactureLoading] = useState(false);
   const [factureErreur, setFactureErreur] = useState<string | null>(null);
   const feedbackId = useId();
+  const cotisationsDescriptionId = useId();
   const feedbackRef = useRef<HTMLParagraphElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const envoiEnCours = useRef(false);
@@ -621,30 +624,40 @@ function LitigeResolutionForm({
                 <div className="mb-1.5 flex items-center gap-1">
                   <Label>Ajuster les heures</Label>
                   {disclaimerURSSAF && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                    <Popover>
+                      <PopoverTrigger asChild>
                         <button
                           type="button"
-                          aria-label="Disclaimer URSSAF/Carpimko"
-                          className="text-warning"
+                          aria-label="Information sur les cotisations sociales"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           data-testid="urssaf-disclaimer"
                         >
                           <AlertTriangle className="h-3.5 w-3.5" />
                         </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs text-xs">
-                        {missionSalariee
-                          ? 'Toute correction recalcule la simulation de paie, les cotisations et la commission. Si un paiement existe déjà, une régularisation explicite sera signalée.'
-                          : (
-                            <>
-                              Ajuster les heures à la hausse déclenche une
-                              régularisation sociale URSSAF / Carpimko côté soignant
-                              libéral. Un email{' '}
-                              <code>REGULARISATION_SOCIALE_REQUISE</code> sera poussé.
-                            </>
-                          )}
-                      </TooltipContent>
-                    </Tooltip>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        aria-label="Information sur les cotisations sociales"
+                        aria-describedby={cotisationsDescriptionId}
+                        className="max-w-[calc(100vw-2rem)] text-xs"
+                        collisionPadding={16}
+                        // Safari peut refocaliser le dialogue parent avant le clic tactile.
+                        onFocusOutside={(event) => event.preventDefault()}
+                      >
+                        <p id={cotisationsDescriptionId}>
+                          {missionSalariee
+                            ? 'Toute correction recalcule la simulation de paie, les cotisations et la commission. Si un paiement existe déjà, une régularisation explicite sera signalée.'
+                            : 'Une correction peut nécessiter une mise à jour des déclarations du soignant selon sa profession et sa situation. Vérifiez ce point auprès des organismes compétents ou de votre comptable.'}
+                        </p>
+                        <PopoverClose asChild>
+                          <button
+                            type="button"
+                            className="mt-3 min-h-11 rounded-md px-3 text-sm font-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            Fermer l’information
+                          </button>
+                        </PopoverClose>
+                      </PopoverContent>
+                    </Popover>
                   )}
                 </div>
                 <Input
