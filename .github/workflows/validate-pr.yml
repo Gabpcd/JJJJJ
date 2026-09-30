@@ -398,6 +398,7 @@ jobs:
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/copies-bulletins-officiels.test.sql
             tests/security/export-etablissement-sans-troncature.test.sql
+            tests/security/monitoring-chorus-plage-nocturne.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
