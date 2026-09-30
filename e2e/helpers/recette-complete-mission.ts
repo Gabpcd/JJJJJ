@@ -9,7 +9,7 @@ export const ids = {
   contrat: '71000000-0000-4000-8000-000000000005',
   presence: '71000000-0000-4000-8000-000000000006',
 };
-export type RoleRecette = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT';
+export type RoleRecette = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 export const now = '2026-09-24T06:55:00.000Z';
 export const hash = 'a'.repeat(64);
 

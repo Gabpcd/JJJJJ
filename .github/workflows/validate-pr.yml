@@ -398,6 +398,7 @@ jobs:
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
             tests/security/stripe-refund-identifiers.test.sql
+            tests/security/cloture-mission-tenant.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
