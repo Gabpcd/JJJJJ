@@ -3,13 +3,14 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { configurationFrontendD,identitesFrontendD,requeteFrontendD,budgetEcrituresD,sqlAuditsFrontendD,verifierAuditsD,STAGING_REF,STAGING_URL,ORIGINE_UI } from '../../scripts/ci/candidatures-ui-contract.mjs';
-import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD,projeterErreurNavigateurD,observerErreursNavigateurD,deposerCandidatureD } from '../../scripts/ci/recette-candidatures-staging.mjs';
+import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD,projeterErreurNavigateurD,observerErreursNavigateurD,deposerCandidatureD,concurrenceCandidaturesD,verifierConcurrenceD,envoyerCandidaturesConcurrentesD } from '../../scripts/ci/recette-candidatures-staging.mjs';
 const now=Date.parse('2026-09-30T12:00:00Z');
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_RUN_ID:'555',GITHUB_RUN_ATTEMPT:'2',GITHUB_SHA:'a'.repeat(40),RUNNER_TEMP:'/private/tmp/d2-test',
   LOAD_D_FRONTEND_ONLY:'true',LOAD_D_JOUR:'2026-10-07',LOAD_D_SQL_ONLY:'false',LOAD_D_SQL_JOUR:'',LOAD_TEST_SCENARIO:'04-candidatures-simultanees',DASHBOARD_FIXTURE_ONLY:'false',DIAGNOSTIC_SQL:'false',STAGING_SUPABASE_PROJECT_REF:STAGING_REF,STAGING_SUPABASE_URL:STAGING_URL,STAGING_SUPABASE_ACCESS_TOKEN:'CANARI_MANAGEMENT'};
 const m=configurationFrontendD(env,now).m;
 const identites=m.membres.map(a=>({...a,password:`CANARI_MOT_DE_PASSE_32_CARACTERES_${a.slot}`}));
 const prive={...env,LOAD_CANDIDATURES_JSON:JSON.stringify({...m,identites})};
+const concurrenceHTTP={slots:[{slot:0,debutMs:10,receptionMs:30},{slot:1,debutMs:11,receptionMs:31}],chevauchementMs:19};
 const audits=phase=>m.membres.map(a=>({slot:a.slot,total:phase==='avant'?0:a.slot===2?2:1,connexions:phase==='avant'?0:1,consultation:phase==='avant'||a.slot<2?0:1,activite:phase==='cleanup'||a.slot===2?null:true,activite_empreinte:phase==='cleanup'||a.slot===2?null:(phase==='avant'?'a':'b').repeat(32),presences:0,push:0,emails:0}));
 test('refus paramètres avant tout accès, aucune identité de repli ni volume configurable',async()=>{
   for(const delta of [{GITHUB_ACTIONS:'false'},{GITHUB_EVENT_NAME:'push'},{GITHUB_REPOSITORY:'autre/repo'},{GITHUB_SHA:'main'},{GITHUB_RUN_ATTEMPT:'0'},
@@ -266,7 +267,7 @@ test('succès orchestré exige corrélation UI/backend et audit avancé, rapport
     const saved={};let lecture=0,ferme=false;
     const cands=m.membres.slice(0,2).map((a,slot)=>({slot,id:slot?m.preuveId:m.nettoyageId}));
     const resultat=()=>executerFrontendD({action:'run',env:prive,now,save:(k,v)=>saved[k]=v,
-      sql:async()=>audits(lecture++?'apres':'avant'),naviguer:async()=>{ferme=true;return{preuves:[],candidatures:cands};},
+      sql:async()=>audits(lecture++?'apres':'avant'),naviguer:async()=>{ferme=true;return{preuves:[],candidatures:cands,concurrenceHTTP};},
       fixture:async({action})=>{if(action==='catalogue')return{};assert.equal(ferme,true);return{notifications:4,candidatures:cands.map(c=>({id:c.id,soignant_id:m.membres[voisin?1-c.slot:c.slot].userId}))};}});
     if(voisin)await assert.rejects(resultat);else assert.deepEqual(await resultat(),{succes:true,candidatures:2});
     assert.equal(saved.resultat.succes,!voisin);assert.doesNotMatch(JSON.stringify(saved),/CANARI|access_token|password/);
@@ -279,7 +280,7 @@ test('erreur du dernier contexte pendant fermeture interdit le succès malgré b
   await assert.rejects(()=>executerFrontendD({action:'run',env:prive,now,save:(k,v)=>saved[k]=v,
     sql:async()=>audits(lecture++?'apres':'avant'),
     naviguer:async({diagnostic})=>{
-      try{return {preuves:[],candidatures:cands};}
+      try{return {preuves:[],candidatures:cands,concurrenceHTTP};}
       finally {
         diagnostic.phase('etablissement',2);diagnostic.action('contexte_fermer');
         await Promise.resolve();fermetures++;
@@ -312,4 +313,115 @@ test('workflow ordonne check/catalogue/build/preview/prepare/UI/snapshot/cleanup
   assert.equal(steps[ix('cleanup')].if,"always() && steps.prepare.outcome != 'skipped'");assert.equal(steps[ix('snapshot')].if,steps[ix('cleanup')].if);
   assert.equal(steps.at(-1).with.path,'tests/load/results/d2-frontend/');
   assert.doesNotMatch(JSON.stringify(job),/k6 run|apply.*migration|db push|deploy-supabase|recordHar|storageState/);
+});
+
+const differee=()=>{let resolve,reject;const promise=new Promise((oui,non)=>{resolve=oui;reject=non;});return {promise,resolve,reject};};
+test('barrière : aucun transport avant les deux interfaces, puis deux appels réellement en vol',async()=>{
+  let temps=100,actifs=0,maximum=0;const b=concurrenceCandidaturesD({temps:()=>temps}),reponses=[differee(),differee()],debuts=[];
+  const transport=slot=>b.transporter(slot,async()=>{debuts.push(slot);maximum=Math.max(maximum,++actifs);try{return await reponses[slot].promise;}finally{actifs--;}});
+  const p0=transport(0);await Promise.resolve();assert.deepEqual(debuts,[]);
+  temps=110;const p1=transport(1);await Promise.resolve();assert.deepEqual(debuts,[0,1]);assert.equal(maximum,2);
+  temps=120;reponses[0].resolve('zero');await p0;assert.equal(actifs,1);
+  temps=125;reponses[1].resolve('un');await p1;
+  assert.deepEqual(b.verifier(),{slots:[{slot:0,debutMs:10,receptionMs:20},{slot:1,debutMs:10,receptionMs:25}],chevauchementMs:10});
+  await assert.rejects(()=>transport(0));assert.equal(debuts.length,2);b.annuler();
+});
+test('preuve temporelle : séquentiel, borne touchée, durée nulle, slot dupliqué, temps libre ou incomplet refusés',()=>{
+  for(const rows of [[],[{slot:0,debutMs:1,receptionMs:3}],
+    [{slot:0,debutMs:1,receptionMs:3},{slot:1,debutMs:4,receptionMs:6}],
+    [{slot:0,debutMs:1,receptionMs:3},{slot:1,debutMs:3,receptionMs:6}],
+    [{slot:0,debutMs:1,receptionMs:1},{slot:1,debutMs:0,receptionMs:6}],
+    concurrenceHTTP.slots.map(r=>({...r,slot:0})),concurrenceHTTP.slots.map(r=>({...r,receptionMs:null})),
+    concurrenceHTTP.slots.map(r=>({...r,debutMs:-1})),concurrenceHTTP.slots.map(r=>({...r,debutMs:NaN})),
+    concurrenceHTTP.slots.map(r=>({...r,receptionMs:1800001})),concurrenceHTTP.slots.map(r=>({...r,libre:'CANARI'}))])assert.throws(()=>verifierConcurrenceD(rows));
+});
+test('participant absent, inconnu ou annulé : zéro transport, aucun rejeu et délai borné',async()=>{
+  let n=0;const transport=()=>{n++;};const b=concurrenceCandidaturesD({delaiMs:5});
+  await assert.rejects(()=>b.transporter(2,transport));
+  await assert.rejects(()=>b.transporter(0,transport),/interrompue/);
+  await assert.rejects(()=>b.transporter(1,transport));assert.equal(n,0);assert.throws(()=>b.verifier());
+  const c=concurrenceCandidaturesD();const attente=c.transporter(0,transport);c.annuler();await assert.rejects(()=>attente);assert.equal(n,0);
+  for(const delaiMs of [0,-1,NaN,20001])assert.throws(()=>concurrenceCandidaturesD({delaiMs}));
+});
+test('deux clics : allSettled conserve le premier échec et attend le second avant tout retour',async()=>{
+  const suite=differee(),erreur=new Error('CANARI_SECRET'),ordre=[];
+  const participants=[0,1].map(slot=>{
+    const loc={getByRole:()=>loc,click:async()=>{ordre.push(`clic-${slot}`);if(slot===0)throw erreur;await suite.promise;ordre.push('second-fini');}};
+    return {slot,page:{getByRole:()=>loc,getByText:()=>loc},options:{expect:()=>({toBeHidden:async()=>{},toBeVisible:async()=>{}}),echec:()=>ordre.push(`echec-${slot}`)}};
+  });
+  let fini=false;const p=envoyerCandidaturesConcurrentesD(participants,{annuler:()=>ordre.push('annuler'),verifier:()=>{throw Error('Ne doit pas valider');}}).finally(()=>{fini=true;});
+  await Promise.resolve();await Promise.resolve();assert.equal(fini,false);assert.deepEqual(ordre.slice(0,2),['clic-0','clic-1']);
+  suite.resolve();await assert.rejects(()=>p,e=>e===erreur);assert.equal(ordre.includes('second-fini'),true);assert.equal(fini,true);
+  await assert.rejects(()=>envoyerCandidaturesConcurrentesD([participants[0],participants[0]],{}));
+});
+test('diagnostic concurrent : phases/actions/réseau liés au bon contexte et exception conservée sans secrets',()=>{
+  let temps=100;const d=diagnosticD({temps:()=>temps}),a=d.pourSlot(0),b=d.pourSlot(1);
+  a.phase('postuler');a.action('candidature_envoyer');temps=110;b.phase('mission');b.action('mission_titre');
+  a.reseau(STAGING_URL+'/rest/v1/rpc/fn_confirmer_action_planning_v1','POST',200);
+  a.erreurNavigateur(0,projeterErreurNavigateurD({source:'pageerror',texte:'AbortError CANARI_EMAIL'}));
+  b.reseau(STAGING_URL+'/rest/v1/missions','GET',200);
+  a.exceptionFinale(new Error('CANARI_PASSWORD'));d.exceptionFinale(new Error('CANARI_JWT'));
+  const r=d.resultat();assert.deepEqual(r.reseau.map(x=>[x.slot,x.phase]),[[0,'postuler'],[1,'mission']]);
+  assert.equal(r.erreursNavigateur[0].slotPhase,0);assert.equal(r.erreursNavigateur[0].action,'candidature_envoyer');assert.equal(r.erreurs,1);
+  assert.equal(r.erreurFinale.slot,0);assert.equal(r.erreurFinale.action,'candidature_envoyer');
+  assert.throws(()=>a.phase('postuler',1));assert.throws(()=>d.pourSlot(3));assert.doesNotMatch(JSON.stringify(r),/CANARI|https?:|password/);
+});
+test('vraies interceptions : budgets avant barrière, drain attend les deux transports, fermeture refuse les écritures tardives',async()=>{
+  const handlers=[],reseaux=[],reponses=[differee(),differee()],departs=[],d=diagnosticD();let temps=0,aborts=0;
+  const b=concurrenceCandidaturesD({temps:()=>temps});
+  for(const slot of [0,1])reseaux.push(await installerReseauD({addInitScript:async()=>{},routeWebSocket:async()=>{},on:()=>{},route:async(_,h)=>{handlers[slot]=h;}},identites[slot],m,d.pourSlot(slot),{concurrence:b}));
+  const route=slot=>({request:()=>({url:()=>STAGING_URL+'/rest/v1/rpc/fn_confirmer_action_planning_v1',method:()=>'POST',postData:()=>'yes',postDataJSON:()=>postuler}),
+    fetch:async options=>{assert.deepEqual(options,{maxRedirects:0,maxRetries:0,timeout:25000});departs.push(slot);return reponses[slot].promise;},fulfill:async()=>{},abort:async()=>{aborts++;}});
+  const p0=handlers[0](route(0));assert.deepEqual(reseaux[0].budget.projection(),{fn_confirmer_action_planning_v1:1});assert.deepEqual(departs,[]);
+  const p1=handlers[1](route(1));await Promise.resolve();await Promise.resolve();assert.deepEqual(departs,[0,1]);
+  for(const r of reseaux)r.fermer();let fini=false;const drains=Promise.allSettled(reseaux.map(r=>r.drainer())).then(()=>{fini=true;});
+  await handlers[0](route(0));assert.equal(aborts,1);assert.deepEqual(departs,[0,1]);assert.equal(fini,false);
+  const response=slot=>({status:()=>200,ok:()=>true,json:async()=>({success:true,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:true,candidature_id:slot?m.preuveId:m.nettoyageId})});
+  temps=10;reponses[0].resolve(response(0));await p0;assert.equal(fini,false);
+  temps=20;reponses[1].resolve(response(1));await p1;await drains;assert.equal(fini,true);
+  assert.equal(b.verifier().chevauchementMs,10);assert.deepEqual(reseaux.map(r=>r.candidatures[0].slot),[0,1]);assert.equal(d.resultat().erreurs,1);
+});
+test('échec transport : aucune réponse perdue rejouée, pair en vol attendu et preuve refusée',async()=>{
+  const r0=differee(),r1=differee(),b=concurrenceCandidaturesD();let fini=false;
+  const p0=b.transporter(0,()=>r0.promise),p1=b.transporter(1,()=>r1.promise);
+  const issues=Promise.allSettled([p0,p1]).then(r=>{fini=true;return r;});await Promise.resolve();
+  r0.reject(Error('CANARI_PROVIDER'));await assert.rejects(()=>p0);assert.equal(fini,false);
+  r1.resolve('ok');const result=await issues;assert.equal(result[1].status,'fulfilled');assert.throws(()=>b.verifier());
+});
+test('résultat : deux IDs distincts et chevauchement requis même si le backend accepte les corrélations',async()=>{
+  for(const defect of ['double-id','double-slot','slot-etablissement','sans-mesure','sequentiel']){
+    let lectures=0;const saved={};const cs=[{slot:0,id:m.preuveId},{slot:1,id:defect==='double-id'?m.preuveId:m.nettoyageId}];if(defect==='double-slot')cs[1].slot=0;if(defect==='slot-etablissement')cs[1].slot=2;
+    const mesure=defect==='sans-mesure'?undefined:defect==='sequentiel'?{slots:[{slot:0,debutMs:0,receptionMs:1},{slot:1,debutMs:2,receptionMs:3}]}:concurrenceHTTP;
+    await assert.rejects(()=>executerFrontendD({action:'run',env:prive,now,save:(k,v)=>saved[k]=v,sql:async()=>audits(lectures++?'apres':'avant'),
+      naviguer:async()=>({preuves:[],candidatures:cs,concurrenceHTTP:mesure}),fixture:async()=>({notifications:4,candidatures:cs.map(c=>({id:c.id,soignant_id:m.membres[c.slot].userId}))})}));
+    assert.equal(saved.resultat.succes,false);
+  }
+});
+test('finally réel avec deux envois : aucun contexte ni cleanup ne finit avant les deux transports pendants',async()=>{
+  const ordre=[],departs=[],reponses=[differee(),differee()],deuxDeparts=differee(),handlers=[],transports=[];let n=0;
+  const erreur=Error('CANARI_ECHEC_INTERFACE');
+  const browser={newContext:async()=>{
+    const slot=n++;
+    const loc=(name='')=>({slot,name,fill:async()=>{},getByRole:(_,o)=>loc(o?.name),click:async()=>{
+      if(name!=='Envoyer ma candidature')return;
+      transports[slot]=handlers[slot]({request:()=>({url:()=>STAGING_URL+'/rest/v1/rpc/fn_confirmer_action_planning_v1',method:()=>'POST',postData:()=>'yes',postDataJSON:()=>postuler}),
+        fetch:async()=>{departs.push(slot);if(departs.length===2)deuxDeparts.resolve();return reponses[slot].promise;},fulfill:async()=>ordre.push(`reponse-${slot}`),abort:async()=>ordre.push(`abort-${slot}`)});
+      await deuxDeparts.promise;
+    }});
+    const page={setDefaultTimeout:()=>{},setDefaultNavigationTimeout:()=>{},goto:async()=>{},waitForLoadState:async()=>{},
+      getByLabel:()=>loc(),getByRole:(_,o)=>loc(o?.name),getByPlaceholder:()=>loc(),getByText:name=>loc(name)};
+    return {addInitScript:async()=>{},routeWebSocket:async()=>{},on:()=>{},route:async(_,h)=>{handlers[slot]=h;},newPage:async()=>page,close:async()=>ordre.push(`fermer-${slot}`)};
+  },close:async()=>ordre.push('browser')};
+  const expect=loc=>({toHaveURL:async()=>{},toBeEnabled:async()=>{},toContainText:async()=>{},toBeHidden:async()=>{},toBeVisible:async()=>{
+    if(loc.name==='✅ Candidature envoyée — En attente de réponse'){
+      if(loc.slot===0)throw erreur;await transports[1];
+    }
+  }});expect.poll=()=>({toBe:async()=>{}});
+  let fini=false;const p=parcourirFrontendD({m,identites,env,diagnostic:diagnosticD(),preparerBuild:()=>{},lireAssets:()=>new Set(),previewFn:async()=>({kill:()=>ordre.push('preview')}),
+    chargerPlaywright:async()=>({webkit:{launch:async()=>browser},devices:{},expect})}).finally(()=>{fini=true;});
+  await deuxDeparts.promise;await Promise.resolve();assert.equal(fini,false);assert.deepEqual(ordre,[]);
+  const response=slot=>({status:()=>200,ok:()=>true,json:async()=>({success:true,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:true,candidature_id:slot?m.preuveId:m.nettoyageId})});
+  reponses[1].resolve(response(1));await transports[1];await Promise.resolve();assert.equal(fini,false);assert.deepEqual(ordre,['reponse-1']);
+  reponses[0].resolve(response(0));await assert.rejects(()=>p,e=>e===erreur);
+  ordre.push('cleanup-possible');assert.deepEqual(ordre,['reponse-1','reponse-0','fermer-0','fermer-1','browser','preview','cleanup-possible']);
 });
