@@ -48,6 +48,16 @@ on:
         type: boolean
         required: false
         default: false
+      candidatures_frontend_only:
+        description: "D2 seulement : trois connexions UI et deux candidatures, sans k6"
+        type: boolean
+        required: false
+        default: false
+      candidatures_frontend_date:
+        description: "D2 UI seulement : jour explicite YYYY-MM-DD, entre 1 et 31 jours dans le futur"
+        type: string
+        required: false
+        default: ''
       candidatures_sql_only:
         description: "D2 seulement : preuve SQL annulée, sans Auth HTTP ni k6"
         type: boolean
@@ -65,7 +75,7 @@ concurrency:
 
 jobs:
   load-tests:
-    if: ${{ !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && (!inputs.dashboard_fixture_only || inputs.scenario != '05-dashboard-concurrent') }}
+    if: ${{ !inputs.candidatures_frontend_only && inputs.candidatures_frontend_date == '' && !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && (!inputs.dashboard_fixture_only || inputs.scenario != '05-dashboard-concurrent') }}
     name: Run k6 scenario(s)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -229,7 +239,7 @@ jobs:
 
   dashboard-frontend:
     name: E10 — deux identités frontend staging, sans charge
-    if: ${{ !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent' }}
+    if: ${{ !inputs.candidatures_frontend_only && inputs.candidatures_frontend_date == '' && !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent' }}
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
@@ -302,7 +312,7 @@ jobs:
     name: D2 — preuve SQL sous ROLLBACK uniquement
     # Une date sans drapeau sélectionne aussi ce job, qui la refuse : pas de
     # repli silencieux vers k6. Toute combinaison D2 exclut les deux autres jobs.
-    if: ${{ inputs.candidatures_sql_only || inputs.candidatures_sql_date != '' }}
+    if: ${{ !inputs.candidatures_frontend_only && inputs.candidatures_frontend_date == '' && (inputs.candidatures_sql_only || inputs.candidatures_sql_date != '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -338,4 +348,97 @@ jobs:
           name: d2-sql-rollback-${{ github.run_id }}-${{ github.run_attempt }}
           path: tests/load/results/d2-sql-rollback.json
           if-no-files-found: error
+          retention-days: 7
+
+
+  candidatures-frontend:
+    name: D2 — deux candidatures frontend staging, sans k6
+    # Toute entrée UI sélectionne ce job : date seule et modes combinés sont
+    # refusés par check AVANT résolution des clés, build ou accès distant.
+    if: ${{ inputs.candidatures_frontend_only || inputs.candidatures_frontend_date != '' }}
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      LOAD_D_FRONTEND_ONLY: ${{ inputs.candidatures_frontend_only }}
+      LOAD_D_JOUR: ${{ inputs.candidatures_frontend_date }}
+      LOAD_D_SQL_ONLY: ${{ inputs.candidatures_sql_only }}
+      LOAD_D_SQL_JOUR: ${{ inputs.candidatures_sql_date }}
+      LOAD_TEST_SCENARIO: ${{ inputs.scenario }}
+      LOAD_TEST_VUS: ${{ inputs.vus_override }}
+      LOAD_TEST_DURATION: ${{ inputs.duration_override }}
+      DASHBOARD_FIXTURE_ONLY: ${{ inputs.dashboard_fixture_only }}
+      DIAGNOSTIC_SQL: ${{ inputs.diagnostic_sql }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      STAGING_SUPABASE_URL: https://mejpriaetwgtcstbgfid.supabase.co
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Refuser modes combinés et paramètres invalides avant accès distant
+        id: check
+        run: node scripts/ci/recette-candidatures-staging.mjs check
+      - name: Vérifier le catalogue figé avant tout compte Auth
+        run: node scripts/ci/recette-candidatures-staging.mjs catalogue
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - run: npm ci
+      - name: Résoudre les accès du staging uniquement
+        run: node scripts/ci/prepare-staging-api-env.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Construire le frontend staging sans télémétrie
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ env.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ''
+          VITE_TURNSTILE_SITE_KEY: ''
+          VITE_ENV: test
+          SENTRY_UPLOAD_ENABLED: 'false'
+      - name: Vérifier la preview avant toute création Auth
+        run: node scripts/ci/recette-candidatures-staging.mjs verify-preview
+      - name: Préparer exactement deux AS et un établissement
+        id: prepare
+        timeout-minutes: 3
+        run: node scripts/ci/recette-candidatures-staging.mjs prepare
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Connexions, deux dépôts puis relecture établissement et recharges
+        timeout-minutes: 5
+        run: node scripts/ci/recette-candidatures-staging.mjs run
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Compter les audits après fermeture des navigateurs même sur échec UI
+        if: always() && steps.prepare.outcome != 'skipped'
+        run: node scripts/ci/recette-candidatures-staging.mjs snapshot
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Nettoyer le manifeste privé exact et conserver tous les audits
+        if: always() && steps.prepare.outcome != 'skipped'
+        timeout-minutes: 5
+        run: node scripts/ci/recette-candidatures-staging.mjs cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Vérifier les zéros et les audits conservés
+        if: always() && steps.prepare.outcome == 'success'
+        run: node scripts/ci/recette-candidatures-staging.mjs verify-cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Preuves filtrées sans manifeste privé ni session
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d2-frontend-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tests/load/results/d2-frontend/
           retention-days: 7
