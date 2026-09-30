@@ -65,7 +65,7 @@ l'exécution, y compris après intégration de nouvelles migrations.
 - `node --test tests/node/contrat-v11-sql-proof.node.mjs tests/node/staging-migration-base.node.mjs` : 20/20.
 - `node --check scripts/ci/contrat-v11-sql-proof.mjs`, actionlint et diff check : verts.
 - `bash tests/non-regression/guards.sh` : 17/17.
-- Assemblage réel local 97 051 octets : pglast 49 instructions SQL, 14 corps
+- Assemblage réel local 98 212 octets : pglast 49 instructions SQL, 14 corps
   PLpgSQL, un BEGIN/savepoint/rollback-to/release/ROLLBACK, aucun COMMIT.
 
 Les mocks transport couvrent mauvais contexte/destination, altération des
@@ -109,3 +109,43 @@ contexte ACL d'origine, passe sur la correction et compare la séquence des
 appels métier/rôles à fd5be121 : appels préparation, signature, consultation et
 anonymisation inchangés, seul le refus de consultation anonyme reste sous anon.
 Ce test local structurel ne prétend pas remplacer l'exécution PostgreSQL.
+
+## Deuxième pilote et identité de l'édition synthétique
+
+Run `36757290961`, job `110030636079`, head `4009da54` : nouveau refus à
+18:15:52.871 UTC, SQLSTATE `42501`, dans
+`fn_protect_etablissement_storage_paths()` ligne 11. L'édition du nom du profil
+suivait le négatif LECTURE_SEULE : `RESET ROLE` rétablit le rôle SQL mais conserve
+les claims du membre, donc le trigger refuse correctement `profil_etab`.
+
+Le test conserve désormais ce refus comme assertion explicite (code et message
+attendus, nom inchangé), puis remet les deux claims sur l'identité propriétaire
+`etab` avant l'édition. Il contrôle la permission et la nouvelle valeur. Aucun
+override, effacement d'identité, GRANT ou changement de trigger n'est ajouté.
+Le négatif immédiatement suivant vérifie également qu'une préparation reste
+immuable avec les claims de son propriétaire.
+
+Les 20 UPDATE/DELETE sont relus avec le couple rôle SQL/claims. Les éditions du
+profil et négatifs préparation/signature utilisent l'identité `etab` ; les tests
+Storage conservent `service_role` et cette identité, les hard-delete de fixture
+restent sous postgres sans sub. Les deux modifications Auth sont des opérations
+de fixture postgres ; le préflight continue d'interdire tout trigger Auth
+INSERT/UPDATE métier. Tous les autres contextes sont comparés à `4009da54` par
+AST, sans changement. Les RPC métier restent sous les acteurs précédents.
+
+Validation locale de ce delta : 3 contrôles AST, 10 tests Node du runner,
+17 garde-fous, `tsc -b`, syntaxe Node et parsing SQL/PLpgSQL verts. Le témoin
+`4009da54` présente encore l'édition du nom sous claims lecture seule ; le
+contrôle local le distingue du couple refus/édition corrigé. Seule l'empreinte
+de la suite change dans le runner ; DDL draft, catalogue, attendu, workflow et
+confinement restent identiques. Aucun frontend modifié ni simulation rejouée.
+
+Le contrôle indépendant du runner est vert ; un SELECT distinct à
+18:22:51.965926 UTC confirme le catalogue exact et les 26 compteurs à zéro,
+objets draft absents et zéro cron. Staging est encore à `20260929163917` à cet
+instant, après merge PR1000 mais avant installation visible de son schéma.
+L'archive de ce deuxième échec reste dans
+`/private/tmp/jolene-contrat-v11-sql-36757290961` (14 Ko). Une évolution ultérieure
+du staging doit être examinée, jamais simplement ré-empreintée. La prochaine
+exécution SQL réelle reste la validation déterminante ; aucun succès complet
+n'est revendiqué et aucun workflow n'est relancé par ce correctif.

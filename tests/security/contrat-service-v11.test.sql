@@ -113,7 +113,23 @@ BEGIN
   EXECUTE 'RESET ROLE';
   SELECT to_jsonb(s) INTO legacy FROM public.contrats_service_signatures s WHERE etablissement_id=autre;
   IF legacy->>'preparation_id' IS NOT NULL THEN RAISE EXCEPTION 'Preuve legacy reconstruite'; END IF;
+  -- RESET ROLE conserve les claims : le vrai trigger doit encore refuser le
+  -- membre LECTURE_SEULE, puis accepter l'identité propriétaire de la fixture.
+  refuse := false;
+  BEGIN UPDATE public.etablissements SET nom='Modification interdite' WHERE id=etab;
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM IS DISTINCT FROM 'Permission profil etablissement requise' THEN RAISE; END IF;
+    refuse := true;
+  END;
+  IF NOT refuse OR (SELECT nom FROM public.etablissements WHERE id=etab) IS DISTINCT FROM 'Recette contrat'
+  THEN RAISE EXCEPTION 'Membre lecture seule a modifié le profil'; END IF;
+  PERFORM set_config('request.jwt.claim.sub',etab::text,true);
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',etab,'role','authenticated')::text,true);
+  IF auth.uid() IS DISTINCT FROM etab OR public.fn_a_permission_etablissement('profil_etab',etab) IS DISTINCT FROM true
+  THEN RAISE EXCEPTION 'Propriétaire de fixture absent avant édition'; END IF;
   UPDATE public.etablissements SET nom='Identité actualisée' WHERE id=etab;
+  IF (SELECT nom FROM public.etablissements WHERE id=etab) IS DISTINCT FROM 'Identité actualisée'
+  THEN RAISE EXCEPTION 'Édition du propriétaire non appliquée'; END IF;
   refuse := false;
   BEGIN UPDATE public.contrats_service_preparations SET contenu_texte='remplacé' WHERE id=(p->>'preparation_id')::uuid;
   EXCEPTION WHEN insufficient_privilege THEN refuse := true; END;
