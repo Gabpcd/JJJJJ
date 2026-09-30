@@ -9,10 +9,10 @@ SET LOCAL app.test_mode='true';
 DO $d_lock$ BEGIN PERFORM pg_advisory_xact_lock(${BigInt('0x'+createHash('sha256').update('D2:'+m.runId).digest('hex').slice(0,15))}::bigint); END $d_lock$;
 LOCK TABLE auth.users, public.soignants, public.etablissements, public.missions, public.mission_creneaux, public.candidatures, public.notifications, public.preferences_notifications, public.rate_limits IN SHARE ROW EXCLUSIVE MODE;
 `;
-const guard=`SELECT * INTO c FROM (${sqlCatalogueD}) c0;
-IF c.fonctions<>${q(catalogueD.fonctions)} OR c.triggers<>${q(catalogueD.triggers)} OR c.schema IS DISTINCT FROM ${q(catalogueD.schema)} OR c.crons_actifs<>0 OR c.audit_fk<>0 OR c.fonctions IS NULL OR c.triggers IS NULL THEN RAISE EXCEPTION 'Catalogue D non conforme'; END IF;
+const guard=`SELECT * INTO v_catalogue_d FROM (${sqlCatalogueD}) c0;
+IF v_catalogue_d.fonctions<>${q(catalogueD.fonctions)} OR v_catalogue_d.triggers<>${q(catalogueD.triggers)} OR v_catalogue_d.schema IS DISTINCT FROM ${q(catalogueD.schema)} OR v_catalogue_d.crons_actifs<>0 OR v_catalogue_d.audit_fk<>0 OR v_catalogue_d.fonctions IS NULL OR v_catalogue_d.triggers IS NULL THEN RAISE EXCEPTION 'Catalogue D non conforme'; END IF;
 IF auth.uid() IS NOT NULL OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)) THEN RAISE EXCEPTION 'Management sans identité requis'; END IF;`;
-export function sqlAvantD(m) {return `${header(m)}DO $d_guard$ DECLARE c record; BEGIN ${guard}
+export function sqlAvantD(m) {return `${header(m)}DO $d_guard$ DECLARE v_catalogue_d record; BEGIN ${guard}
 IF ${q(m.debut)}::timestamptz <= now()+interval '1 day' OR ${q(m.debut)}::timestamptz > now()+interval '31 days' THEN RAISE EXCEPTION 'Mission D future bornée requise'; END IF;
 IF EXISTS(SELECT 1 FROM auth.users WHERE id=ANY(${ids(m)}) OR email=ANY(ARRAY[${m.membres.map(a=>q(a.email)).join(',')}]))
  OR EXISTS(SELECT 1 FROM public.soignants WHERE id=ANY(${ids(m)})) OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=ANY(${ids(m)}))
@@ -21,7 +21,7 @@ IF EXISTS(SELECT 1 FROM auth.users WHERE id=ANY(${ids(m)}) OR email=ANY(ARRAY[${
 END $d_guard$; ROLLBACK; SELECT true AS pret;`;}
 const fingerprint=(table,where,ignore="'derniere_activite_le'")=>`(SELECT coalesce(jsonb_object_agg(x.id::text,md5((to_jsonb(x)-${ignore})::text)),'{}'::jsonb) FROM ${table} x WHERE ${where})`;
 const snapshot=m=>`jsonb_build_object('soignants',${fingerprint('public.soignants',`id=ANY(${soignants(m)})`)},'etablissement',${fingerprint('public.etablissements',`id=${q(m.membres[2].userId)}::uuid`)},'mission',${fingerprint('public.missions',`id=${q(m.missionId)}::uuid`)},'creneau',${fingerprint('public.mission_creneaux',`id=${q(m.creneauId)}::uuid`)})`;
-export function sqlSeedD(m) {const e=m.membres[2];return `${header(m)}DO $d_seed$ DECLARE c record; BEGIN ${guard}
+export function sqlSeedD(m) {const e=m.membres[2];return `${header(m)}DO $d_seed$ DECLARE v_catalogue_d record; BEGIN ${guard}
 IF EXISTS(SELECT 1 FROM public.journaux_audit WHERE id IN (${q(m.preuveId)}::uuid,${q(m.nettoyageId)}::uuid)) THEN RAISE EXCEPTION 'Run D déjà préparé/nettoyé : seed tardif refusé'; END IF;
 ${m.membres.map(a=>`IF NOT EXISTS(SELECT 1 FROM auth.users u WHERE ${belongs(m,a)} AND coalesce(u.raw_app_meta_data->'load_cleanup_pending','false'::jsonb)<>'true'::jsonb) THEN RAISE EXCEPTION 'Auth D non confirmé'; END IF;`).join('\n')}
 INSERT INTO public.soignants(id,prenom,nom,email,profession,type_exercice,date_naissance,telephone,est_compte_test,source_acquisition,sms_actif,sms_alertes_actives,identite_verifiee,diplome_verifie,rpps_verifie,tous_documents_valides)
@@ -74,7 +74,7 @@ FOR fk IN SELECT c.conrelid::regclass AS enfant,c.confrelid::regclass AS parent,
  IF n>0 THEN RAISE EXCEPTION 'Dépendance hors lot D : %',fk.enfant; END IF;
 END LOOP;
 IF EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id=ANY(${ids(m)}) OR data->>'mission_id'=${q(m.missionId)}) OR EXISTS(SELECT 1 FROM public.tokens_push WHERE utilisateur_id=ANY(${ids(m)})) OR EXISTS(SELECT 1 FROM public.presence_status WHERE user_id=ANY(${ids(m)})) OR EXISTS(SELECT 1 FROM public.notifications WHERE id_ressource=${q(m.missionId)}::uuid AND NOT(destinataire_id=ANY(${ids(m)}))) THEN RAISE EXCEPTION 'Effet D hors lot'; END IF;`;}
-export function sqlEtatD(m,nettoyer=false) { const e=m.membres[2];return `${header(m)}DO $d_check$ DECLARE c record;preuve jsonb;fk record;lot uuid[];n bigint; BEGIN ${guard}
+export function sqlEtatD(m,nettoyer=false) { const e=m.membres[2];return `${header(m)}DO $d_check$ DECLARE v_catalogue_d record;preuve jsonb;fk record;lot uuid[];n bigint; BEGIN ${guard}
 ${controle(m)}
 ${nettoyer?`UPDATE auth.users SET raw_app_meta_data=raw_app_meta_data||'{"load_cleanup_pending":true}'::jsonb WHERE id=ANY(${ids(m)});
 DELETE FROM public.notifications WHERE destinataire_id=ANY(${ids(m)});
