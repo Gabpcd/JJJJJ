@@ -56,8 +56,10 @@ test SQL local ancien n'est présenté comme une nouvelle exécution.
 
 Aucun appel staging, compte réel de recette ni charge n'a été lancé pour ce lot.
 Le workflow est manuel. Après revue et validation des volumes par le responsable,
-une première exécution E avec `dashboard_fixture_only=true` prépare, préflighte
-et nettoie les dix membres **sans k6**. Une mesure distincte E100/1 min pourra
+une première exécution E avec `dashboard_fixture_only=true` prépare, préflighte,
+exerce deux identités dans le frontend puis nettoie les dix membres **sans k6**.
+Le [pilote frontend](2026-09-30-dashboard-frontend-staging.md) détaille les audits
+conservés et les contrôles supplémentaires. Une mesure distincte E100/1 min pourra
 suivre, en consignant révision, seuils, dix compteurs et cleanup. Un smoke E10
 nécessite dix VUs minimum, afin d'exercer tous les slots.
 
@@ -72,12 +74,10 @@ conserver les manifests non sensibles disponibles et reprendre le cleanup exact
 avec la même révision/run et les accès staging existants. Ne pas marquer le run
 vert sur la seule disparition du job, ni relancer sa préparation.
 
-**Limite frontend intégrée :** aucune navigation de deux utilisateurs réels
-staging pendant k6 n'est prouvée. Il faut une preview reliée au staging, les deux
-sessions éphémères du lot et le contrôle des écritures d'audit/activité suscitées
-par le vrai frontend avant de les ajouter au nettoyage. Le workflow k6 actuel
-n'installe ni ne lance un navigateur connecté ; les simulations locales ne
-remplacent pas cette preuve. Aucun appareil physique n'a été testé ici.
+**Limite frontend intégrée :** le pilote de deux utilisateurs réels staging est
+préparé mais pas encore exécuté ; sa simulation locale et son contrôle catalogue
+en lecture seule ne remplacent pas cette preuve. Il s'exécute sans k6 ; aucune
+navigation pendant la charge ni aucun appareil physique n'est prouvé ici.
 
 Le résultat attendu reste une mesure de dix profils sans historique. Ni le
 passage des tests locaux ni un éventuel E100 vert ne garantissent une capacité
