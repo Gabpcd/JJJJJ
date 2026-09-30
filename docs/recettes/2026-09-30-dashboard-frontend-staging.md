@@ -43,7 +43,8 @@ exactement un audit conforme par slot. Les dix membres restent contrôlés par
 le cleanup E10. Toute anomalie laisse le job en échec.
 
 Les preuves filtrées sont dans `tests/load/results/dashboard-ui/` : `avant.json`,
-`apres.json`, `cleanup.json`, `resultat.json` et quatre captures. Elles ne
+`apres.json`, `cleanup.json`, `diagnostic-cleanup.json`, `resultat.json` et,
+uniquement si les contrôles réussissent, quatre captures. Elles ne
 contiennent ni IP, navigateur d'audit, identifiant de session, mot de passe ou
 JWT. Le workflow conserve ces preuves et les manifests sept jours.
 
@@ -78,16 +79,51 @@ Résultats : `/private/tmp/jolene-dashboard-staging-font-node.txt`,
 relié à une API fictive a servi ces simulations. Le build connecté staging sera
 produit dans le job, avant toute création de fixture.
 
-## Exécution restant à autoriser et à prouver
+## Premier pilote réel et diagnostic
 
-Aucune création, connexion UI, navigation réelle ni charge staging n'a été
-exécutée pour ce complément. Après revue et validation du responsable, lancer
-le workflow manuel E avec `dashboard_fixture_only=true`, puis examiner les deux
-audits conservés, les preuves UI et tous les zéros de cleanup avant une campagne
-de charge distincte. Le nominal ajoute au cycle préparation/nettoyage E10 deux
+Le premier pilote manuel staging, run `36690131977` du 30 septembre 2026 sur
+`9e8db63e`, a échoué avant de valider sa première identité frontend. Les dix
+manifests sont `cleaned`. La lecture SQL finale des deux slots confirme zéro
+Auth, profil, préférence, session, identité, notification et présence, mais aussi
+zéro audit. La vérification finale reste donc en échec : les deux connexions et
+leurs audits attendus ne sont pas prouvés. Aucun écran validé n'a été enregistré.
+
+L'ancien rapport ne conservait pas le point d'arrêt. Les POST agrégés observés
+sur le projet staging ne sont pas attribuables à ce navigateur ; ils ne prouvent
+ni un appel de présence par le dashboard ni la cause de l'échec. La RPC
+`fn_update_presence` reste interdite dans ce pilote. Elle écrit une présence et
+le cleanup refuse toujours toute dépendance hors de son allowlist existante.
+
+Le complément de diagnostic conserve la dernière phase et sa progression parmi
+`backend`, `preview`, `browser`, `page`, `login`, `dashboard`, `reload`, `cleanup`,
+avec le seul numéro de slot 0/1. Les réponses, refus et erreurs de transport sont
+agrégés par méthode, catégorie d'origine/chemin et statut. Les listes sont bornées
+et les observations omises sont comptées. Aucun chemin arbitraire, query, corps,
+header, message d'exception ou pile n'est sérialisé. Une exception avant le
+lancement du navigateur conserve également sa phase.
+
+Le bilan cleanup publie séparément `donnees_absentes` et les nombres d'audits
+attendus/observés. Il ne transforme pas une connexion interrompue en succès et ne
+supprime aucun journal. Les simulations locales contrôlent les deux identités
+avec recharge, un dashboard 503 restant visible après recharge et un POST de
+présence refusé avant transport ; des canaris de secrets vérifient la projection.
+
+Après revue de ce complément, une nouvelle exécution fixture-only nécessite la
+validation du responsable. Examiner les phases, les deux audits conservés, les
+preuves UI et tous les zéros de cleanup avant une campagne de charge distincte.
+Le nominal ajoute au cycle préparation/nettoyage E10 deux
 logins UI, quatre appels dashboard, quatre écritures RPC et quatre lectures SQL
 de contrôle ; les autres lectures frontend sont consignées par chemin seulement.
 
 Ce pilote ne navigue pas pendant k6 et ne valide aucun appareil physique. Même
 vert, il ne mesure ni charge métier mixte, ni comptes avec historique, ni capacité
 nationale. Les scénarios D/F restent suspendus.
+
+
+Validation du complément : 63/63 tests Node ciblés, 20/20 simulations frontend
+sur les cinq formats, TypeScript et ESLint ciblé passent.
+
+Preuves du complément diagnostic : `/private/tmp/jolene-dashboard-diagnostic-node.txt`
+et `/private/tmp/jolene-dashboard-diagnostic-ui/results.json`. Ces tests restent
+entièrement simulés ; ils ne déterminent pas rétroactivement la cause du premier
+échec staging et ne prouvent pas une connexion staging réussie.

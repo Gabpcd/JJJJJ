@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { configurationUI, contratEcritures, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from '../../scripts/ci/dashboard-ui-contract.mjs';
+import { creerDiagnosticUI, bilanCleanupUI } from '../../scripts/ci/dashboard-ui-diagnostic.mjs';
 import { dashboardUIValide, preparerHtmlPreview } from '../../scripts/ci/recette-dashboard-staging.mjs';
 import { manifestePoolDashboard } from '../../scripts/ci/prepare-dashboard-pool.mjs';
 import { STAGING_REF, STAGING_URL } from '../../scripts/ci/prepare-load-fixtures.mjs';
@@ -124,4 +125,51 @@ test('préflight accepte le contrat des triggers versionnés puis refuse dérive
     d=>d.triggers.dec_age_minimum.type=21,d=>d.triggers.dec_age_minimum.enabled='A']){
     const modifie=structuredClone(data);changer(modifie);assert.throws(()=>verifierGardeUI(modifie));
   }
+});
+
+
+test('diagnostic fermé : phases, refus et statuts utiles sans canaris de mot de passe, URL, corps ou pile', () => {
+  const d = creerDiagnosticUI();
+  for (const phase of ['preview','browser','page','login','dashboard','reload','backend','cleanup']) d.phase(phase,0);
+  const secret = 'canari-JWT-password-email-UUID-stack';
+  d.requete({url:STAGING_URL+'/auth/v1/token?grant_type=password&secret='+secret,method:'POST',statut:200,body:{password:secret},stack:secret});
+  d.requete({url:STAGING_URL+'/rest/v1/rpc/fn_update_presence?jwt='+secret,method:'POST',statut:'refusee'});
+  d.requete({url:STAGING_URL+'/rest/v1/rpc/'+secret,method:secret,statut:secret});
+  d.requete({url:'https://'+secret+'.invalid/'+secret+'?q='+secret,method:'GET',statut:'transport'});
+  d.requete({url:secret,method:'GET',statut:500});
+  d.javascript(new Error(secret));
+  const r=d.resultat();
+  assert.equal(r.phase,'cleanup'); assert.equal(r.erreurs_javascript,1);
+  assert.deepEqual(r.progression.map(x=>x.phase),['preview','browser','page','login','dashboard','reload','backend','cleanup']);
+  assert.ok(r.reseau.some(x=>x.chemin==='auth-token'&&x.statut===200));
+  assert.ok(r.reseau.some(x=>x.chemin==='fn_update_presence'&&x.statut==='refusee'));
+  assert.ok(r.reseau.some(x=>x.chemin==='rpc-autre'&&x.methode==='AUTRE'&&x.statut==='inconnu'));
+  assert.doesNotMatch(JSON.stringify(r),new RegExp(secret+'|https?://|grant_type|password|stack'));
+  assert.throws(()=>d.phase(secret,0)); assert.throws(()=>d.phase('login',secret));
+  r.progression[0].phase=secret;r.reseau[0].chemin=secret;
+  assert.doesNotMatch(JSON.stringify(d.resultat()),new RegExp(secret));
+});
+test('diagnostic borné : agrège les répétitions et compte explicitement les observations omises', () => {
+  const d=creerDiagnosticUI();
+  for(let i=0;i<100;i++) d.requete({url:STAGING_URL+'/auth/v1/token',method:'POST',statut:200});
+  assert.equal(d.resultat().reseau.length,1);assert.equal(d.resultat().reseau[0].nombre,100);
+  for(let statut=300;statut<400;statut++) d.requete({url:STAGING_URL+'/auth/v1/token',method:'POST',statut});
+  assert.equal(d.resultat().reseau.length,64);assert.equal(d.resultat().observations_omises,37);
+});
+test('cleanup distingue les zéros des audits absents après connexion interrompue sans rendre la recette verte', () => {
+  const zeros=avant.map(r=>({...r,auth:0,profils:0,preferences:0,sessions:0,identites:0}));
+  assert.deepEqual(bilanCleanupUI(zeros),{donnees_absentes:true,audits_connexion_attendus:2,audits_observes:0,audits_connexion_observes:0});
+  assert.throws(()=>verifierEtatUI(zeros,avant,true));
+  assert.equal(bilanCleanupUI([{...zeros[0],presences:1},zeros[1]]).donnees_absentes,false);
+  assert.equal(bilanCleanupUI(zeros.slice(0,1)).donnees_absentes,false);
+  assert.equal(bilanCleanupUI([{...zeros[0],audits:'canari'},zeros[1]]).audits_observes,null);
+  const valides=zeros.map(r=>({...r,audits:1,audits_connexion:1}));
+  verifierEtatUI(valides,avant,true);assert.equal(bilanCleanupUI(valides).audits_connexion_observes,2);
+});
+test('forme réelle Auth gotrue_meta_security acceptée ; champs supplémentaires et corps étrangers refusés', () => {
+  const m=membres[0], requete={url:STAGING_URL+'/auth/v1/token?grant_type=password',method:'POST',
+    body:{email:m.email,password:m.password,gotrue_meta_security:{}}};
+  assert.equal(requeteUIAutorisee(requete,m),true);
+  for(const body of [{...requete.body,redirect_to:'https://canari.invalid'}, {...requete.body,email:membres[1].email},null,{}])
+    assert.equal(requeteUIAutorisee({...requete,body},m),false);
 });
