@@ -14,13 +14,19 @@ const dossier = resolve('tests/load/results/d2-frontend');
 const sauver = (nom, value) => { mkdirSync(dossier,{recursive:true}); writeFileSync(`${dossier}/${nom}.json`, JSON.stringify(value,null,2)+'\n',{mode:0o600}); };
 export function projeterErreurNavigateurD({source,texte,classe,location,stack,contexteFerme=false},assetsConnus=new Set()) {
   const message=typeof texte==='string'?texte:'';
-  const react=message.match(/Minified React error #(\d{1,4})\b/);
-  const categorie=contexteFerme||/Target (?:page, context or browser|closed)|context (?:has been )?closed/i.test(message)?'contexte_ferme'
-    :/WebSocket/i.test(message)?'websocket'
-    :/\babort(?:ed|error)?\b|cancelled|canceled/i.test(message)?'requete_abandonnee'
-    :/navigation[\s\S]*interrupted[\s\S]*navigation/i.test(message)?'navigation_interrompue'
-    :/Load failed|Failed to fetch|Failed to load resource|NetworkError|Network request failed/i.test(message)?'chargement_reseau'
-    :react?'react_minifie':/\btimeout\b|timed out/i.test(message)?'delai_attente':/^expect\(/.test(message)?'assertion':'autre';
+  // WebKit/Playwright place parfois tout le préfixe précédant le premier
+  // deux-points (y compris le début d'une URL) dans name. Ne jamais l'exporter.
+  const nom=typeof classe==='string'?classe:'',cause=nom?`${nom}: ${message}`:message;
+  const classes=new Set(['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AbortError','NetworkError','TimeoutError','AssertionError']);
+  const typeNom=classes.has(nom)?'classe_connue':!nom?'absent':/^(?:Fetch API cannot load|XMLHttpRequest cannot load|WebSocket connection to|Failed to load resource|Unhandled Promise Rejection|Origin\s)/i.test(nom)?'prefixe_webkit':'autre';
+  const react=cause.match(/Minified React error #(\d{1,4})\b/);
+  const categorie=contexteFerme||/Target (?:page, context or browser|closed)|context (?:has been )?closed/i.test(cause)?'contexte_ferme'
+    :/WebSocket/i.test(cause)?'websocket'
+    :/\babort(?:ed|error)?\b|cancelled|canceled/i.test(cause)?'requete_abandonnee'
+    :/navigation[\s\S]*interrupted[\s\S]*navigation/i.test(cause)?'navigation_interrompue'
+    :/access control|Access-Control-Allow-Origin|cross-origin|\bCORS\b/i.test(cause)?'controle_origine'
+    :/Load failed|Failed to fetch|Failed to load resource|NetworkError|Network request failed|Fetch API cannot load|XMLHttpRequest cannot load/i.test(cause)?'chargement_reseau'
+    :react?'react_minifie':/\btimeout\b|timed out/i.test(cause)?'delai_attente':/^expect\(/.test(message)?'assertion':'autre';
   const candidates=location?[location]:[];
   if(typeof stack==='string')for(const url of stack.match(/https?:\/\/[^\s)]+/g)||[]){
     const match=url.match(/^(.*):(\d+):(\d+)$/);if(match)candidates.push({url:match[1],lineNumber:Number(match[2]),columnNumber:Number(match[3])});
@@ -32,8 +38,8 @@ export function projeterErreurNavigateurD({source,texte,classe,location,stack,co
       emplacement={asset:u.pathname,ligne:entier(l.lineNumber),colonne:entier(l.columnNumber)};break;
     }catch{/* Aucun chemin ou texte libre n'est conservé. */}
   }
-  return {source:['pageerror','exception_finale'].includes(source)?source:'console_error',classe:['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AbortError','NetworkError','TimeoutError','AssertionError'].includes(classe)?classe:'autre',
-    categorie,code:react?Number(react[1]):null,emplacement,empreinte:createHash('sha256').update(message).digest('hex')};
+  return {source:['pageerror','exception_finale'].includes(source)?source:'console_error',classe:classes.has(nom)?nom:'autre',typeNom,
+    categorie,code:react?Number(react[1]):null,emplacement,empreinte:createHash('sha256').update(message).digest('hex'),empreinteNom:createHash('sha256').update(nom).digest('hex')};
 }
 export function observerErreursNavigateurD(context,slot,diagnostic,assetsConnus=new Set()) {
   context.on('page',page=>{
@@ -41,8 +47,10 @@ export function observerErreursNavigateurD(context,slot,diagnostic,assetsConnus=
     page.on('console',message=>{if(message.type()==='error')diagnostic.erreurNavigateur(slot,projeterErreurNavigateurD({source:'console_error',texte:message.text(),location:message.location(),contexteFerme:page.isClosed()},assetsConnus));});
   });
 }
-export function diagnosticD() {
-  let phase='preflight',slot=null,action=null,erreurFinale=null,erreurs=0,erreursNavigateurTronquees=0; const reseau=new Map(),erreursNavigateur=new Map();
+export function diagnosticD({temps=()=>performance.now()}={}) {
+  const origine=temps();let dernierTemps=0;
+  const relatif=()=>{const valeur=temps()-origine;if(Number.isFinite(valeur))dernierTemps=Math.max(dernierTemps,Math.min(1_800_000,Math.max(0,Math.floor(valeur))));return dernierTemps;};
+  let phase='preflight',slot=null,action=null,actionDepuisMs=0,erreurFinale=null,erreurs=0,erreursNavigateurTronquees=0; const reseau=new Map(),erreursNavigateur=new Map();
   const noms=new Set([...rpcEcritureD,...rpcLectureD,...rpcParametresD,...tablesLectureD]);
   const actions=new Set(['preview_html','preview_assets','preview_demarrer','navigateur_lancer','contexte_creer','reseau_installer','page_creer',
     'connexion_navigation','connexion_email','connexion_motdepasse','connexion_envoyer','connexion_url','connexion_audit','connexion_reseau','connexion_drain',
@@ -51,19 +59,20 @@ export function diagnosticD() {
     'recharge_navigation','recharge_attente','recharge_bouton_absent','recharge_reseau','recharge_capture',
     'etablissement_navigation','etablissement_compteur','etablissement_attente','etablissement_nom_visible','etablissement_nom_exact','etablissement_documents','etablissement_boutons','etablissement_reseau','etablissement_capture',
     'contexte_drain','contexte_budget','contexte_fermer','identites','catalogue','audits_avant','backend_verifier','backend_correlation','audits_apres']);
-  return { phase(p,s=null) { if(!['preflight','preview','browser','login','mission','postuler','reload','etablissement','backend','cleanup'].includes(p)||![null,0,1,2].includes(s))throw Error('Phase D2 invalide.');phase=p;slot=s;action=null; },
-    action(n) { if(!actions.has(n))throw Error('Action D2 inconnue.');action=n; },
-    exceptionFinale(error) { erreurFinale={phase,slot,action,...projeterErreurNavigateurD({source:'exception_finale',texte:error?.message,classe:error?.name})}; },
+  return { phase(p,s=null) { if(!['preflight','preview','browser','login','mission','postuler','reload','etablissement','backend','cleanup'].includes(p)||![null,0,1,2].includes(s))throw Error('Phase D2 invalide.');phase=p;slot=s;action=null;actionDepuisMs=relatif(); },
+    action(n) { if(!actions.has(n))throw Error('Action D2 inconnue.');action=n;actionDepuisMs=relatif(); },
+    exceptionFinale(error) { erreurFinale={phase,slot,action,actionDepuisMs,tempsMs:relatif(),...projeterErreurNavigateurD({source:'exception_finale',texte:error?.message,classe:error?.name})}; },
     erreur() { erreurs++; }, erreurNavigateur(slotEmetteur,projection) {
       erreurs++;const r={phase,action,slotPhase:slot,slotEmetteur,...projection},k=JSON.stringify(r);
-      if(erreursNavigateur.size<32||erreursNavigateur.has(k))erreursNavigateur.set(k,{...r,nombre:(erreursNavigateur.get(k)?.nombre||0)+1});else erreursNavigateurTronquees++;
+      const precedent=erreursNavigateur.get(k),ms=relatif();
+      if(erreursNavigateur.size<32||precedent)erreursNavigateur.set(k,{...r,nombre:(precedent?.nombre||0)+1,actionDepuisMs,premierMs:precedent?.premierMs??ms,dernierMs:ms});else erreursNavigateurTronquees++;
     }, reseau(url,method,status) {
       let origine='invalide',chemin='autre';
       try { const u=new URL(url);origine=u.origin===ORIGINE_UI?'preview':u.origin===STAGING_URL?'staging':'externe';
         const nom=u.pathname.split('/').pop();chemin=origine==='preview'?'local':origine!=='staging'?'externe':noms.has(nom)?nom:['/auth/v1/token','/auth/v1/user'].includes(u.pathname)?`auth-${nom}`:'autre'; }catch{/* Projection fermée. */}
       const r={phase,slot,origine,chemin,methode:['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE'].includes(method)?method:'autre',statut:Number.isInteger(status)&&status>=100&&status<=599?status:['refus','transport','ferme'].includes(status)?status:'autre'};
-      const k=JSON.stringify(r); if(reseau.size<128||reseau.has(k))reseau.set(k,{...r,nombre:(reseau.get(k)?.nombre||0)+1});else erreurs++;
-    }, resultat() { return {phase,slot,action,erreurFinale,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
+      const k=JSON.stringify(r),precedent=reseau.get(k),ms=relatif(); if(reseau.size<128||precedent)reseau.set(k,{...r,nombre:(precedent?.nombre||0)+1,premierMs:precedent?.premierMs??ms,dernierMs:ms});else erreurs++;
+    }, resultat() { return {phase,slot,action,actionDepuisMs,tempsMs:relatif(),erreurFinale,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
 }
 export async function lireBackendD(query, env, fetchImpl=fetch) {
   if(env.STAGING_SUPABASE_PROJECT_REF!==STAGING_REF||env.STAGING_SUPABASE_URL!==STAGING_URL||!env.STAGING_SUPABASE_ACCESS_TOKEN)throw Error('Lecture D2 staging refusée.');

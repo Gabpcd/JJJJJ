@@ -38,17 +38,19 @@ test('runner D2 : erreurs navigateur projetées sans divulgation et toujours blo
   await context.route('**/*',route=>route.abort());await context.routeWebSocket('**/*',socket=>socket.close());
   observerErreursNavigateurD(context,0,diagnostic);const page=await context.newPage();diagnostic.phase('postuler',1);
   try {
-    await page.evaluate(()=>{console.error('WebSocket CANARI_SECRET_JWT');console.error('The operation was aborted CANARI_PASSWORD');setTimeout(()=>{throw new TypeError('Failed to fetch CANARI_IDENTITE');},0);});
-    await expect.poll(()=>diagnostic.resultat().erreurs).toBe(3);
+    await page.evaluate(()=>{console.error('WebSocket CANARI_SECRET_JWT');console.error('The operation was aborted CANARI_PASSWORD');setTimeout(()=>{throw new TypeError('Failed to fetch CANARI_IDENTITE');},0);
+      setTimeout(()=>{const error=new Error('/CANARI_PASSWORD@api.invalid/path?jwt=CANARI_SECRET_JWT due to access control checks.');error.name='Fetch API cannot load https';throw error;},0);});
+    await expect.poll(()=>diagnostic.resultat().erreurs).toBe(4);
     const resultat=diagnostic.resultat();expect(resultat.erreurs).toBeGreaterThan(0);
-    expect(resultat.erreursNavigateur.map(e=>e.categorie).sort()).toEqual(['chargement_reseau','requete_abandonnee','websocket']);
+    expect(resultat.erreursNavigateur.map(e=>e.categorie).sort()).toEqual(['chargement_reseau','controle_origine','requete_abandonnee','websocket']);
     expect(resultat.erreursNavigateur.every(e=>e.slotEmetteur===0&&e.slotPhase===1)).toBe(true);
+    expect(resultat.erreursNavigateur.every(e=>Number.isInteger(e.premierMs)&&e.premierMs>=0&&e.dernierMs>=e.premierMs&&e.dernierMs<=1_800_000)).toBe(true);
     expect(JSON.stringify(resultat)).not.toMatch(/CANARI|SECRET_JWT|PASSWORD|IDENTITE/);
     diagnostic.action('mission_titre');let erreurCapturee=false;
     try{await expect(page.getByText('CANARI_IDENTITE_ABSENTE',{exact:true})).toBeVisible({timeout:50});}
     catch(error){erreurCapturee=true;diagnostic.exceptionFinale(error);}
     expect(erreurCapturee).toBe(true);
-    const fin=diagnostic.resultat();expect(fin.erreurs).toBe(3);
+    const fin=diagnostic.resultat();expect(fin.erreurs).toBe(4);
     expect(fin.erreurFinale).toMatchObject({source:'exception_finale',action:'mission_titre',categorie:'delai_attente',emplacement:null});
     expect(JSON.stringify(fin)).not.toMatch(/CANARI|SECRET_JWT|PASSWORD|IDENTITE/);
   }finally{await context.close();}
