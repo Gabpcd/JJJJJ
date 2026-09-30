@@ -12,7 +12,7 @@ Les tests API historiques masquaient par un skip une erreur de colonne (`soignan
 
 ## Périmètre du correctif
 
-- `20260930145136` : compte actif, identité métier et tenant avant lecture de mission ; appartenance filtrée avec comparaisons NULL sûres ; refus uniforme mission tierce/absente ; auteur établissement égal à celui de la mission, y compris pour un admin valide membre d'un autre tenant. Le sens NULL est refusé explicitement.
+- `20260930145136` : compte actif, identité métier et tenant avant lecture de mission ; appartenance filtrée avec comparaisons NULL sûres ; refus uniforme mission tierce/absente ; auteur établissement égal à celui de la mission, y compris pour un admin valide sans tenant. Le sens NULL est refusé explicitement.
 - `20260930145933` : exclusion des notes du tenant canonique dans la liste, fenêtre de 60 jours inchangée.
 - Aucune modification de GRANT, des critères, du seuil tardif de 30 jours, de la publication réciproque ou du cron de publication différée. Aucun contrat, paiement, profil professionnel ou règle juridique modifié.
 - Formulaire établissement : un refus reste annoncé dans le dialogue (`role=alert`), sans toast extérieur qui ferme la modale lors de son retrait. Les notes/commentaires sont conservés pour le réessai, les envois restent désactivés pendant la requête et le succès existant est conservé. Erreurs réseau et session expirée sont traduites, y compris lorsque Supabase les renvoie dans `error`.
@@ -27,7 +27,7 @@ ACL observée et conservée : propriétaire postgres ; EXECUTE postgres, authent
 
 ## Preuve métier préparée
 
-`tests/security/notation-reverse-transactionnelle.test.sql` appelle les vraies RPC sous `SET LOCAL ROLE authenticated` avec des claims de fixtures : tiers soignant, membre d'autre établissement, profil absent avec rôle NULL, claim admin sans équipe, UID inexistant, UID NULL, propriétaire, membre RH et membre ayant aussi son propre établissement, admin réellement validé membre d'un autre tenant. Le test conserve les triggers. Le membre RH représente le prescripteur existant ; aucune valeur « PRESCRIPTEUR » n'est ajoutée au schéma.
+`tests/security/notation-reverse-transactionnelle.test.sql` appelle les vraies RPC sous `SET LOCAL ROLE authenticated` avec des claims de fixtures : tiers soignant, membre d'autre établissement, profil absent avec rôle NULL, claim admin sans équipe, UID inexistant, UID NULL, propriétaire, membre RH et membre ayant aussi son propre établissement, admin réellement validé sans tenant. Le test conserve les triggers. Le membre RH représente le prescripteur existant ; aucune valeur « PRESCRIPTEUR » n'est ajoutée au schéma.
 
 Les refus sont comparés sur mission terminée, en cours, ouverte, sans soignant, absente et NULL. Le test vérifie la liste avant/après notation, l'auteur et la cible, le doublon refusé, la note cachée au destinataire avant réciprocité (RLS et RPC), la publication simultanée, la lecture des deux côtés, le refus d'un tiers et le signalement par la cible. Fermeture publique, suspension Auth et révocation d'un membre restent refusées.
 
@@ -64,3 +64,7 @@ RECETTE_RESULTS_DIR=/private/tmp/notation-resultats PLAYWRIGHT_BASE_URL=http://1
 La preview doit être compilée avec API loopback et clés fictives ; cette configuration de simulation n'exécute aucun setup Auth distant. Le SQL est raccordé par `validate-pr.yml` au runner transactionnel staging, distinct de ces simulations.
 
 Preuves durables compactes : workspace Jolene `audits/2026-09-30-preparation-nationale/preuves/notation-autorisation/` (reports, validation, captures représentatives, patch et manifeste SHA256). Les traces initiales restent dans `/private/tmp/jolene-notation-ui-20260930/` ; elles ne sont pas recopiées. Relecture croisée de l'agent `revue_export_201` : aucun P1/P2 restant sur migrations/SQL et interface, six tests modale rejoués verts ; cette lecture ne remplace pas la revue B8 à contexte vierge.
+
+## Correction de fixture après exécution SQL réelle
+
+Le run de validation `36741233648` sur `dc0457af` a refusé correctement l’appartenance d’un compte de famille ADMIN à un établissement (`23514`, `fn_protect_famille_compte_membre_etablissement`). Ce scénario de préparation était incompatible avec les gardes existantes, avant les assertions de notation. La fixture emploie désormais un vrai administrateur sans tenant, vérifie explicitement cet état et conserve l’assertion d’auteur canonique de la mission. Les membres RH, membre avec établissement propre, refus tiers et contrôles de rollback restent inchangés. Aucun trigger ni garde produit n’est modifié.

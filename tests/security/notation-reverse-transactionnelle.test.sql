@@ -65,7 +65,7 @@ BEGIN
     -- Prescripteur = membre RH existant ; aucune nouvelle valeur d'énumération.
     INSERT INTO public.membres_etablissement(etablissement_id,user_id,role,actif)
     VALUES(etab,membre,'RH',true),(autre_etab,membre_tiers,'RH',true),
-      (autre_etab,admin_valide,'RH',true),(etab,membre_avec_etab_propre,'RH',true);
+      (etab,membre_avec_etab_propre,'RH',true);
     INSERT INTO public.equipe_admin(user_id,nom,prenom,email,actif,acces_groupes)
     VALUES(admin_valide,'Recette','Admin','notation-rollback-9@example.invalid',true,
       ARRAY['Dashboard','Utilisateurs','Missions','Litiges & contrats','Finances','Messagerie','Conformité & Technique','Fondateur']::text[]);
@@ -192,11 +192,12 @@ BEGIN
     r:=public.fn_signaler_notation(note_etab,'Signalement synthétique annulé');
     IF r->>'success' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Signalement cible refusé : %',r; END IF;
 
-    -- Admin réel, lui-même membre d'un autre tenant : il conserve son accès,
-    -- mais n'attribue pas à cet autre tenant la note de la mission contrôlée.
+    -- La famille ADMIN ne peut pas devenir membre d'un établissement.
+    -- L'admin réel sans tenant conserve son accès : l'auteur doit être
+    -- l'établissement de la mission contrôlée, jamais l'UID de l'admin.
     PERFORM set_config('request.jwt.claim.sub',admin_valide::text,true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',admin_valide,'role','authenticated')::text,true);
-    IF public.est_admin() IS NOT TRUE OR public.mon_etablissement_id() IS DISTINCT FROM autre_etab THEN RAISE EXCEPTION 'Fixture admin invalide'; END IF;
+    IF public.est_admin() IS NOT TRUE OR public.mon_etablissement_id() IS NOT NULL THEN RAISE EXCEPTION 'Fixture admin sans tenant invalide'; END IF;
     r:=public.fn_creer_notation_mission(mission_admin,'ETAB_VERS_SOIGNANT',5,5,5,5,'Recette admin');
     IF r->>'success' IS DISTINCT FROM 'true' OR NOT EXISTS (
       SELECT 1 FROM public.notations_missions WHERE id=(r->>'id')::uuid AND notateur_id=etab AND note_id=sal AND publie_le IS NULL
