@@ -38,6 +38,11 @@ on:
         type: string
         required: false
         default: ''
+      dashboard_fixture_only:
+        description: "E seulement : préparer/contrôler/nettoyer dix profils, sans k6"
+        type: boolean
+        required: false
+        default: false
       diagnostic_sql:
         description: "Avant C/all : six sondes SQL staging en lecture seule sur le catalogue préparé"
         type: boolean
@@ -50,6 +55,7 @@ concurrency:
 
 jobs:
   load-tests:
+    if: ${{ !inputs.dashboard_fixture_only || inputs.scenario != '05-dashboard-concurrent' }}
     name: Run k6 scenario(s)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -57,7 +63,18 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v5
 
+      - name: Vérifier le périmètre du mode sans charge
+        env:
+          FIXTURE_ONLY: ${{ inputs.dashboard_fixture_only }}
+          SCENARIO: ${{ inputs.scenario }}
+        run: |
+          if [ "$FIXTURE_ONLY" = "true" ] && [ "$SCENARIO" != "05-dashboard-concurrent" ]; then
+            echo "::error::Le contrôle sans charge est réservé au scénario E."
+            exit 1
+          fi
+
       - name: Install k6
+        if: ${{ !inputs.dashboard_fixture_only }}
         uses: grafana/setup-k6-action@v1
 
       - uses: actions/setup-node@v5
@@ -71,6 +88,7 @@ jobs:
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
       - name: Verify k6 installation
+        if: ${{ !inputs.dashboard_fixture_only }}
         run: k6 version
 
       - name: Sanity check — staging URL répond
@@ -106,15 +124,16 @@ jobs:
           LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           LOAD_FIXTURE_COUNT: '500'
 
-      - name: Préparer une identité dashboard éphémère sur staging
+      - name: Préparer dix identités dashboard éphémères sur staging
         if: inputs.scenario == '05-dashboard-concurrent' || inputs.scenario == 'all'
-        run: node scripts/ci/prepare-dashboard-fixture.mjs prepare
+        run: node scripts/ci/prepare-dashboard-pool.mjs prepare
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Run scenario
+        if: ${{ !inputs.dashboard_fixture_only }}
         env:
           LOAD_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
           LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -152,9 +171,9 @@ jobs:
             run_one "tests/load/scenarios/${LOAD_TEST_SCENARIO}.js"
           fi
 
-      - name: Nettoyer exclusivement l’identité dashboard du manifeste
+      - name: Nettoyer exclusivement les dix identités dashboard du manifeste
         if: always() && (inputs.scenario == '05-dashboard-concurrent' || inputs.scenario == 'all')
-        run: node scripts/ci/prepare-dashboard-fixture.mjs cleanup
+        run: node scripts/ci/prepare-dashboard-pool.mjs cleanup
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
@@ -179,15 +198,90 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+          FIXTURE_ONLY: ${{ inputs.dashboard_fixture_only }}
         run: |
-          echo "### Load test ${{ inputs.scenario }} sur staging" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -d tests/load/results ]; then
-            for f in tests/load/results/*.json; do
-              [ -f "$f" ] || continue
-              echo "- \`$(basename "$f")\` ($(stat -c %s "$f") bytes)" >> "$GITHUB_STEP_SUMMARY"
-            done
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Métriques détaillées : artifacts \`k6-results-*\`." >> "$GITHUB_STEP_SUMMARY"
-          echo "Cibles + interprétation : voir \`docs/tests-charge.md\`." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Load test $SCENARIO sur staging"
+            echo "Mode contrôle fixtures sans k6 : $FIXTURE_ONLY"
+            echo ""
+            if [ -d tests/load/results ]; then
+              for f in tests/load/results/*.json; do
+                [ -f "$f" ] || continue
+                echo "- \`$(basename "$f")\` ($(stat -c %s "$f") bytes)"
+              done
+            fi
+            echo ""
+            echo "Métriques détaillées : artifacts \`k6-results-*\`."
+            echo "Cibles + interprétation : voir \`docs/tests-charge.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dashboard-frontend:
+    name: E10 — deux identités frontend staging, sans charge
+    if: inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent'
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Résoudre les accès du staging uniquement
+        run: node scripts/ci/prepare-staging-api-env.mjs
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      - name: Construire le frontend connecté au staging, sans télémétrie
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ env.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ''
+          VITE_TURNSTILE_SITE_KEY: ''
+          VITE_ENV: test
+          SENTRY_UPLOAD_ENABLED: 'false'
+      - name: Préparer les dix identités après le build
+        id: prepare
+        timeout-minutes: 4
+        run: node scripts/ci/prepare-dashboard-pool.mjs prepare
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Deux connexions UI réelles, dashboard et rechargement
+        id: recette_ui
+        timeout-minutes: 4
+        run: node scripts/ci/recette-dashboard-staging.mjs run
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Nettoyer les manifests exacts sans supprimer les audits
+        if: always()
+        timeout-minutes: 6
+        run: node scripts/ci/prepare-dashboard-pool.mjs cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Confirmer les zéros après cleanup et les audits conservés
+        if: always() && steps.prepare.outcome == 'success'
+        run: node scripts/ci/recette-dashboard-staging.mjs verify-cleanup
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Preuves filtrées, sans sessions ni traces réseau
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-ui-staging-${{ github.run_id }}
+          path: tests/load/results/
+          retention-days: 7

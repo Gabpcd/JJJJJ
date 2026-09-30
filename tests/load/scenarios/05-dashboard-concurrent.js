@@ -8,21 +8,24 @@ import { creerOptionsCharge } from '../helpers/options.js';
  *
  * Cible : 100% succès, p95 < 2s.
  *
- * Stratégie : 1 setup() login du profil AS minimal éphémère de ce run.
- * Son JWT est réutilisé pour tous les VUs : une seule identité et aucun dossier
- * vérifié. Cette mesure ne représente pas 100 utilisateurs distincts.
- *
- * Lancer :
- *   k6 run tests/load/scenarios/05-dashboard-concurrent.js \
- *     -e STAGING_SUPABASE_URL=... -e STAGING_SUPABASE_ANON_KEY=... \
- *     -e LOAD_DASHBOARD_EMAIL=... -e LOAD_DASHBOARD_PASSWORD=... \
- *     -e LOAD_DASHBOARD_USER_ID=... -e LOAD_TEST_RUN_ID=...
+ * Dix identités AS minimales éphémères, chacune affectée à dix VUs sur E100.
+ * Les mots de passe transitent via LOAD_DASHBOARD_POOL_JSON privé ; aucun
+ * identifiant/secret ne devient un tag ou un champ de résumé.
+ * Profils non vérifiés sans historique : aucune capacité nationale déduite.
  */
 
 import http from 'k6/http';
+import { Counter, Trend } from 'k6/metrics';
+import { lirePoolDashboard, NOMBRE_PROFILS_DASHBOARD, slotDashboard } from '../helpers/dashboard-pool.js';
 import { check, sleep } from 'k6';
 import { SUPABASE_URL, authedHeaders, loginDashboardFixture } from '../helpers/auth.js';
 import { dashboardFixtureValide, exigerDashboardMetier } from '../helpers/contrats.js';
+
+const reponsesParProfil = new Counter('dashboard_reponses_profil');
+const latencesParProfil = Array.from({ length: NOMBRE_PROFILS_DASHBOARD }, (_, slot) =>
+  new Trend(`dashboard_duree_profil_${slot}`, true));
+const seuilsProfils = Object.fromEntries(Array.from({ length: NOMBRE_PROFILS_DASHBOARD }, (_, slot) =>
+  [`dashboard_reponses_profil{slot:${slot}}`, ['count>0']]));
 
 export const options = creerOptionsCharge('dashboard_concurrent', {
   executor: 'ramping-vus',
@@ -34,46 +37,62 @@ export const options = creerOptionsCharge('dashboard_concurrent', {
   ],
   gracefulRampDown: '15s',
 }, {
+  ...seuilsProfils,
   'http_req_failed{name:rpc_dashboard}': ['rate<0.01'],
   'http_req_duration{name:rpc_dashboard}': ['p(95)<2000', 'p(99)<3500'],
 }, __ENV);
 
+const execution = options.scenarios.dashboard_concurrent;
+const vus = execution.vus || Math.max(...execution.stages.map(s => s.target));
+if (vus < NOMBRE_PROFILS_DASHBOARD) throw new Error('E10 exige au moins dix VUs pour mesurer chaque profil.');
+
 export function setup() {
-  const session = loginDashboardFixture();
-  const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`, '{}', {
-    headers: authedHeaders(session.access_token), tags: { name: 'dashboard_preflight' }, timeout: '15s',
+  // Valider le lot entier avant le premier login. Aucun repli vers un compte fixe.
+  const pool = lirePoolDashboard(__ENV.LOAD_DASHBOARD_POOL_JSON, __ENV.LOAD_TEST_RUN_ID);
+  const sessions = pool.map(identite => {
+    const session = loginDashboardFixture(identite);
+    const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`, '{}', {
+      headers: authedHeaders(session.access_token), tags: { name: 'dashboard_preflight' }, timeout: '15s',
+    });
+    if (res.status !== 200) throw new Error(`Préflight E : dashboard indisponible (HTTP ${res.status}).`);
+    const dashboard = res.json();
+    exigerDashboardMetier(dashboard);
+    if (!dashboardFixtureValide(dashboard, session.user.id)) throw new Error('Préflight E : profil AS minimal du run attendu.');
+    return { jwt: session.access_token, userId: session.user.id, slot: identite.slot };
   });
-  if (res.status !== 200) throw new Error(`Préflight E : dashboard indisponible (HTTP ${res.status}).`);
-  const dashboard = res.json();
-  exigerDashboardMetier(dashboard);
-  if (!dashboardFixtureValide(dashboard, session.user.id)) throw new Error('Préflight E : profil AS minimal du run attendu.');
-  console.log('Préflight E : profil soignant et structure métier présents ; charge sur un seul compte, aucune mutation métier.');
-  return { jwt: session.access_token, userId: session.user.id };
+  console.log('Préflight E : dix profils AS minimaux distincts contrôlés ; aucune mutation métier pendant la charge.');
+  return { sessions };
 }
 
 export default function (data) {
-  const url = `${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`;
-  const res = http.post(url, '{}', {
-    headers: authedHeaders(data.jwt),
-    tags: { name: 'rpc_dashboard' },
-    timeout: '15s',
+  const slot = slotDashboard(__VU);
+  const session = data?.sessions?.[slot];
+  if (data?.sessions?.length !== NOMBRE_PROFILS_DASHBOARD || session?.slot !== slot || !session.jwt) {
+    throw new Error('Pool de sessions E10 incomplet.');
+  }
+  const res = http.post(`${SUPABASE_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`, '{}', {
+    headers: authedHeaders(session.jwt), tags: { name: 'rpc_dashboard' }, timeout: '15s',
   });
-  check(res, {
-    'dashboard 200': (r) => r.status === 200,
-    'dashboard profil et contrat metier valides': (r) => {
-      try { return dashboardFixtureValide(r.json(), data.userId); } catch { return false; }
+  // Latence de toutes les réponses, même erronées ; dix séries bornées sans
+  // identité dans leur nom. Les seuils historiques agrégés restent inchangés.
+  latencesParProfil[slot].add(res.timings.duration);
+  const valide = check(res, {
+    'dashboard 200': r => r.status === 200,
+    'dashboard profil et contrat metier valides': r => {
+      try { return dashboardFixtureValide(r.json(), session.userId); } catch { return false; }
     },
   });
+  if (valide) reponsesParProfil.add(1, { slot: String(slot) });
   sleep(0.5);
 }
 
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, 'E — Dashboard concurrent'),
-    'tests/load/results/05-dashboard-concurrent.json': JSON.stringify(donneesRapportCharge(data), null, 2),
+    'tests/load/results/05-dashboard-concurrent.json': JSON.stringify({ ...donneesRapportCharge(data), profils_attendus: NOMBRE_PROFILS_DASHBOARD }, null, 2),
   };
 }
 
 function textSummary(data, label) {
-  return resumeCharge(data, label, 'rpc_dashboard', options);
+  return resumeCharge(data, label, 'rpc_dashboard', options) + '\nDix profils minimaux attendus ; chaque compteur dashboard_reponses_profil{slot:0..9} doit être positif.\n';
 }

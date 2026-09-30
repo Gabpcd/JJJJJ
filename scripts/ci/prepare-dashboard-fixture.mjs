@@ -142,7 +142,7 @@ export function sqlConfirmerNettoyageDashboard(m) {
 }
 
 export async function executerFixtureDashboard({ action, env=process.env, fetchImpl=fetch, log=console.log,
-  genererMotDePasse=()=>`Aa1!${randomBytes(36).toString('base64url')}` }={}) {
+  genererMotDePasse=()=>`Aa1!${randomBytes(36).toString('base64url')}`, transmettreIdentite }={}) {
   if (!['prepare','cleanup'].includes(action)) throw new Error('Action dashboard attendue : prepare ou cleanup.');
   const c=configurationDashboard(env); const m=manifesteDashboard(c);
   const management=env.STAGING_SUPABASE_ACCESS_TOKEN, service=env.STAGING_SUPABASE_SERVICE_ROLE_KEY, anon=env.STAGING_SUPABASE_ANON_KEY;
@@ -201,7 +201,8 @@ export async function executerFixtureDashboard({ action, env=process.env, fetchI
   const dashboard=await request(`${STAGING_URL}/rest/v1/rpc/fn_dashboard_soignant_complet`,{method:'POST',body:{},auth:session.access_token,apikey:anon});
   exigerDashboardMetier(dashboard);
   if (!dashboardFixtureValide(dashboard,m.userId)) throw new Error('Profil de recette minimal du run attendu.');
-  for (const [name,value] of Object.entries({LOAD_DASHBOARD_EMAIL:m.email,LOAD_DASHBOARD_PASSWORD:password,LOAD_DASHBOARD_USER_ID:m.userId})) {
+  if (transmettreIdentite) transmettreIdentite({runId:m.runId,userId:m.userId,email:m.email,password});
+  else for (const [name,value] of Object.entries({LOAD_DASHBOARD_EMAIL:m.email,LOAD_DASHBOARD_PASSWORD:password,LOAD_DASHBOARD_USER_ID:m.userId})) {
     appendFileSync(env.GITHUB_ENV,`${name}=${value}\n`);
   }
   save('prepared'); log('Fixture E prête : un seul profil AS minimal non vérifié ; aucun compte fixe utilisé.');
