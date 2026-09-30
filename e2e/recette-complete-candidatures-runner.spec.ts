@@ -8,14 +8,21 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   // Le seed réel donne le même marker à la mission et à son établissement.
   state.etablissement.nom=state.mission.intitule;
   const m={missionId:identifiants.mission,marker:state.mission.intitule,debut:state.mission.debut_le,fin:state.mission.fin_le,
-    membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom})),
+    membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom,password:'Mot-de-passe-fictif-recette-D2'})),
       {slot:2,userId:identifiants.etablissement,email:'clinique@example.invalid',prenom:'Clinique',nom:'Simulation'}]};
   const refus: string[]=[],metadonneesDashboard: number[]=[];
   for(const [slot,acteur]of (['as1','as2','etablissement'] as const).entries()) {
     const context=await browser.newContext({...info.project.use});
     await simulation.installer(context,acteur);
+    let activites=0,audits=0,documents=0;
+    await context.addInitScript(()=>{if(location.pathname==='/connexion')sessionStorage.removeItem('sb-127-auth-token');});
+    await context.route('**/rest/v1/rpc/{fn_audit_connexion,fn_maj_activite_soignant}',route=>{
+      if(new URL(route.request().url()).pathname.endsWith('/fn_audit_connexion'))audits++;else activites++;
+      return route.fulfill({json:{success:true}});
+    });
     await context.route('**/*',async route=>{
       const r=route.request(),u=new URL(r.url());
+      if(r.resourceType()==='document'&&r.isNavigationRequest())documents++;
       if(/^\/(auth|rest|functions|storage)\//.test(u.pathname)) {
         const autorisee=requeteFrontendD({url:STAGING_URL+u.pathname+u.search,method:r.method(),body:r.postData()?r.postDataJSON():undefined},m.membres[slot],m);
         if(!autorisee){refus.push(`${r.method()} ${u.pathname}`);return route.abort();}
@@ -29,13 +36,21 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
     const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
     try {
       if(slot<2) {
-        await page.goto('/soignant/tableau-de-bord');
-        await expect(page.getByRole('heading',{name:`Bonjour, ${m.membres[slot].prenom}`,exact:true})).toBeVisible();
-        await expect(page.getByText('1 mission près de chez toi — tu peux déjà postuler.',{exact:true})).toBeVisible();
+        // Même point de départ que le pilote : vrai formulaire puis dashboard
+        // asynchrone. Le lien de mission assure la barrière de rendu utile.
+        await page.goto('/connexion');
+        await page.getByLabel('Email',{exact:true}).fill(m.membres[slot].email);
+        await page.getByLabel('Mot de passe',{exact:true}).fill('Mot-de-passe-fictif-recette-D2');
+        await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+        await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
+        await expect.poll(()=>activites).toBe(1);
         await page.waitForLoadState('networkidle');
       }
       const diagnostic=diagnosticD();
-      const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});}};
+      const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{
+        if(slot<2){expect(documents).toBe(etape==='recharge'?2:1);expect(audits).toBe(1);expect(activites).toBe(1);}
+        if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});
+      }};
       if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
     }finally{await context.close();}
   }
@@ -60,7 +75,7 @@ test('runner D2 : titre mission unique même lorsque le nom établissement est i
     try{await expect(titres).toBeVisible();}catch(e){erreur=e;}
     expect(erreur).toBeInstanceOf(Error);
     expect((erreur as Error).message).toContain('strict mode violation');
-    const projection=projeterErreurNavigateurD({source:'exception_finale',texte:(erreur as Error).message,classe:(erreur as Error).name});
+    const projection=projeterErreurNavigateurD({source:'exception_finale',texte:(erreur as Error).message,classe:(erreur as Error).name,location:undefined,stack:undefined});
     expect(projection.categorie).toBe('strict_mode');
     const titreMission=page.getByRole('heading',{level:1,name:state.mission.intitule,exact:true});
     await expect(titreMission).toHaveCount(1);await expect(titreMission).toBeVisible();
