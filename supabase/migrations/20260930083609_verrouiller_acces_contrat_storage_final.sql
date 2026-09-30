@@ -34,3 +34,10 @@ END;
 $fonction$;
 REVOKE ALL ON FUNCTION public.fn_contrat_storage_path(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_contrat_storage_path(uuid) TO authenticated, service_role;
+
+-- Seul corps revu dans cette migration. Catégorie MIXTE_TENANT_ADMIN conservée.
+UPDATE private.security_definer_inventory
+SET definition_md5 = 'c57310a89e7a01f85849f648db433776',
+    justification = 'Lecture du contrat : compte actif obligatoire, soignant concerné ou tenant canonique avec lecture_contrats ; élévation administrateur valide conservée.',
+    recense_le = now()
+WHERE signature = 'fn_contrat_storage_path(uuid)';

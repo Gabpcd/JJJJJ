@@ -2,15 +2,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignerContratOtp } from './SignerContratOtp';
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), notifier: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mocks.rpc } }));
-vi.mock('@/contexts/NotificationContext', () => ({ useNotification: () => ({ afficherNotification: mocks.notifier }) }));
 const sms = { data: { success: true, telephone_masked: 'numéro fictif', sms_restants: 2, expire_dans_minutes: 10 }, error: null };
 const consentement = () => screen.getByRole('checkbox', { name: /J'ai lu l'intégralité du contrat/ });
 const recevoir = () => screen.getByRole('button', { name: 'Recevoir le code SMS pour signer' });
 
 describe('Signature OTP — continuité du contrat affiché', () => {
-  beforeEach(() => { mocks.rpc.mockReset(); mocks.notifier.mockReset(); });
+  beforeEach(() => { mocks.rpc.mockReset(); });
 
   it('bloque un document indisponible et ignore un OTP devenu sans objet', async () => {
     let resoudre!: (value: typeof sms) => void;
@@ -24,7 +23,8 @@ describe('Signature OTP — continuité du contrat affiché', () => {
     await act(async () => resoudre(sms));
     expect(recevoir()).toBeDisabled(); expect(mocks.rpc).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('textbox', { name: 'Code SMS à 6 chiffres' })).not.toBeInTheDocument();
-    expect(mocks.notifier).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('redemande le consentement et un code lorsque le contrat affiché change', async () => {
@@ -48,7 +48,23 @@ describe('Signature OTP — continuité du contrat affiché', () => {
     await act(async () => resoudre(sms));
     expect(screen.queryByRole('textbox', { name: 'Code SMS à 6 chiffres' })).not.toBeInTheDocument();
     expect(consentement()).not.toBeChecked();
-    expect(mocks.notifier).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('annonce en ligne le code envoyé et le succès, sans double RPC', async () => {
+    const onSigne = vi.fn();
+    mocks.rpc.mockResolvedValueOnce(sms).mockResolvedValue({ data: { success: true, role: 'SOIGNANT', contrat_complet: true }, error: null });
+    render(<SignerContratOtp documentPret contratId="a" hashDocument="hash-a" onSigne={onSigne} />);
+    fireEvent.click(consentement()); fireEvent.click(recevoir()); fireEvent.click(recevoir());
+    expect(await screen.findByRole('status')).toHaveTextContent('Code envoyé au numéro fictif. Valide 10 min.');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code SMS à 6 chiffres' }), { target: { value: '123456' } });
+    const signer = screen.getByRole('button', { name: 'Signer' });
+    fireEvent.click(screen.getByRole('status'));
+    expect(mocks.rpc).toHaveBeenCalledTimes(1); expect(onSigne).not.toHaveBeenCalled();
+    fireEvent.click(signer); fireEvent.click(signer);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Contrat signé ✅ — Mission confirmée par les 2 parties.'));
+    expect(onSigne).toHaveBeenCalledTimes(1); expect(mocks.rpc).toHaveBeenCalledTimes(2);
   });
 
   it('bloque tout nouvel envoi et signature après un refus pour document modifié', async () => {
@@ -73,9 +89,9 @@ describe('Signature OTP — continuité du contrat affiché', () => {
       fireEvent.change(await screen.findByRole('textbox', { name: 'Code SMS à 6 chiffres' }), { target: { value: '123456' } });
       fireEvent.click(screen.getByRole('button', { name: 'Signer' }));
     }
-    await waitFor(() => expect(mocks.notifier).toHaveBeenLastCalledWith({
-      type: 'erreur', message: 'Votre session a expiré ou n’est plus valide. Reconnectez-vous puis réessayez.',
-    }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(
+      'Votre session a expiré ou n’est plus valide. Reconnectez-vous puis réessayez.',
+    ));
     expect(onSigne).not.toHaveBeenCalled();
   });
 });

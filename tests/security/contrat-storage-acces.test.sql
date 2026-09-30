@@ -15,6 +15,13 @@ DECLARE
   r jsonb; acteur uuid;
 
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM private.security_definer_inventory i
+    JOIN pg_catalog.pg_proc p ON p.oid='public.fn_contrat_storage_path(uuid)'::regprocedure
+    WHERE i.signature='fn_contrat_storage_path(uuid)'
+      AND i.categorie='MIXTE_TENANT_ADMIN'
+      AND i.definition_md5=pg_catalog.md5(p.prosrc)
+  ) THEN RAISE EXCEPTION 'Inventaire du corps contrat absent ou périmé'; END IF;
   -- Sentinelle : rend aussi le test autonome face aux wrappers CI qui retirent
   -- les BEGIN/ROLLBACK externes. Aucun effet ne sort de ce sous-bloc.
   BEGIN
