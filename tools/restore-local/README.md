@@ -55,7 +55,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/restore/schema-audit.test.py
 python3 scripts/restore/schema-audit.py /chemin/supabase/schema/public.sql # exit3 attendu : incomplet
 ```
 
-**41/41 tests Node** (33 initiaux et 8 de diagnostic), **5/5 tests Python**, `node --check` et parse des3SQL par pglast réussis. Ils couvrent génération réelle de fichiers privés, refus de destinations/egress/configurations dangereuses, inventaire de nettoyage, non-divulgation des credentials et refus de SQL hors dump. Les objets inspectés par les tests unitaires sont synthétiques : aucune prétention de test Docker.
+**42/42 tests Node** (33 initiaux, 8 de diagnostic et 1 sur loopback TCP réel), **5/5 tests Python**, `node --check` et parse des3SQL par pglast réussis. Ils couvrent génération réelle de fichiers privés, refus de destinations/egress/configurations dangereuses, inventaire de nettoyage, non-divulgation des credentials et refus de SQL hors dump. Les objets inspectés par les tests unitaires sont synthétiques : aucune prétention de test Docker.
 
 Préflight réel local exécuté : `DOCKER_UNAVAILABLE`, exit1. Aucun moteur Docker installé, aucune image téléchargée ou conteneur créé. Pas d'exécution de `docker compose config`, migrations internes, AuthHTTP, Storage ou SQL runtime. Les échecs ENOSPC de préparation n'ont pas été comptés comme succès.
 
@@ -74,7 +74,7 @@ Le workflow `.github/workflows/restore-local-bootstrap.yml` et les scripts `tool
 
 Les manifests/configs OCI des cinq images ont été lus et leurs SHA256 recalculés, sans couche téléchargée localement : aucune image ne déclare de volume anonyme. La config Kong confirme USER kong ; les seules gateways utilisent explicitement `user:0:0` pour lire leurs binds0600 sans ouvrir les permissions. Cela ne donne aucun privilège host, socket, port publié ni bind sensible supplémentaire. L'inspection du réseau et des montages reste obligatoire.
 
-Validation locale complémentaire : actionlint vert ; 41 tests Node (dont refus d’événements/identités/SHA, absence indépendante et non-divulgation diagnostique). Docker reste absent ici. La prochaine preuve attendue reste **l’infrastructure vanille**, pas une connexion utilisateur Auth ni l’exercice de restauration. Les déclenchements appartiennent à l’agent principal ; aucun rerun n’a été effectué par cet agent.
+Validation locale complémentaire : actionlint vert ; 42 tests Node (dont refus d’événements/identités/SHA, absence indépendante et non-divulgation diagnostique). Docker reste absent ici. La prochaine preuve attendue reste **l’infrastructure vanille**, pas une connexion utilisateur Auth ni l’exercice de restauration. Les déclenchements appartiennent à l’agent principal ; aucun rerun n’a été effectué par cet agent.
 
 ## Premier essai CI et complément d'observation
 
@@ -89,3 +89,11 @@ Run `36773252346`, head `9c2261ea0787cc9f3f6e2f233d202ab3183ac36c`, merge testé
 Deux nettoyages puis absence indépendante à20:35:10UTC : **0conteneur,0volume,0réseau**. Artifact3406octets et métadonnées conservés dans `/private/tmp/jolene-restore-bootstrap-run-36773252346`. Les preuves du premier échec restent intactes.
 
 Comparaison officielle : [compose épinglé](https://github.com/supabase/supabase/blob/3fc8af387ec4dfb449510828a938e1f6e57a9575/docker/docker-compose.yml#L343) utilise le même `wget --spider`, mais `http://storage:5000/status` au lieu de notre `localhost`. La [configuration Storage v1.74.0](https://github.com/supabase/storage/blob/v1.74.0/src/config.ts#L377) écoute par défaut `0.0.0.0`, et [la route](https://github.com/supabase/storage/blob/v1.74.0/src/app.ts#L107) retourne200 sur GET `/status`. Une résolution localhost vers IPv6 est une **hypothèse**, sans preuve de cette destination dans l’artefact. Aucun changement de healthcheck/configuration n’est fait. Le complément local classifie uniquement la dernière sortie de sonde avant nettoyage ; aucune sonde nouvelle, lecture de corps HTTP, relance ou exception aux gardes.
+
+## Troisième essai CI : destination IPv6 refusée, sonde corrigée en IPv4
+
+Run `36774670334`, head `ec10a07cd6d0a775edff545f683bbb9021daf6a8`, merge testé `02073cd39bafd5266453fd16d7b52ecb4cdc1298`. Entre20:44:56 et20:47:19UTC le30septembre2026, les deux Storage restent `running/unhealthy` (health exit1, 24échecs), mais la sortie filtrée établit maintenant `connection_refused` et `loopback_family:ipv6` pour chacun. DB/Auth/REST restent `healthy`, gateways `created`. Aucun timeout, signal ou OOM. Deux nettoyages puis absence indépendante à20:47:21UTC : **0conteneur,0volume,0réseau**. Artifact3645octets conservé dans `/private/tmp/jolene-restore-bootstrap-run-36774670334` ; les deux essais rouges antérieurs sont préservés.
+
+La sonde `localhost` tente donc le loopback IPv6, alors que la configuration officielle Storage épinglée utilise par défaut l’écoute IPv4 `0.0.0.0`. Le correctif remplace seulement son hôte par **`127.0.0.1`**, pour les deux piles. Même `wget --spider`, même port5000, même route `/status`, mêmes délais/retries, mêmes dépendances et contrôles HTTP stricts via Kong ; aucune santé forcée, aucun retrait de garde. Ce diagnostic ne prouve pas encore que Storage retourne200 en IPv4 : le prochain essai Docker devra le démontrer.
+
+Un test local ouvre réellement un serveur HTTP synthétique limité à127.0.0.1 sur port éphémère : HEAD `/status` via les deux adresses générées retourne200, le même port sur `::1` refuse la connexion,503 reste503 et le serveur arrêté refuse IPv4. Ce test valide l’adresse et le transport local, **pas l’exécutable wget de l’image ni le service Storage**. Première tentative sous sandbox refusée `listen EPERM`, conservée puis exécution autorisée hors sandbox :42/42 Node verts, sans saut ; syntaxe/actionlint/diff-check verts. Aucune image, instance distante ou fixture Auth créée localement ; aucun rerun automatique. Le bootstrap complet et la restauration restent non prouvés.

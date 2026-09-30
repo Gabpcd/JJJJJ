@@ -4,6 +4,7 @@ import {readFileSync,mkdtempSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {createServer,request} from 'node:http';
 import {makePlan,validatePlan,validateInspection,gateway,runName,main,FORBIDDEN,verifySources,assertAbsent,projectContainers,projectProcessFailure,publicFailure,classifyHealthOutput} from './bootstrap.mjs';
 const run='jolene-restore-drill-unittest',lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
 const secrets={source:{password:'SOURCE_PASSWORD_CANARY',jwt:'SOURCE_JWT_CANARY'},target:{password:'TARGET_PASSWORD_CANARY',jwt:'TARGET_JWT_CANARY'}};
@@ -22,6 +23,25 @@ test('actual pinned sources verify; generation creates only ten digest-pinned in
  assert.notEqual(p.services['source-auth'].environment.GOTRUE_JWT_SECRET,p.services['target-auth'].environment.GOTRUE_JWT_SECRET);
  assert.equal(p.services['source-auth'].environment.GOTRUE_SMTP_HOST,'127.0.0.1');
  assert.equal(p.services['source-auth'].environment.API_EXTERNAL_URL,'http://'+run+'-source-api:8000/auth/v1');
+});
+test('Storage health URL reaches an actual IPv4-only listener and retains failure responses',async t=>{
+ const p=plan(),probes=['source','target'].map(side=>p.services[side+'-storage'].healthcheck);
+ for(const probe of probes){
+  assert.deepEqual(probe.test.slice(0,-1),['CMD','wget','--no-verbose','--tries=1','--spider']);
+  const u=new URL(probe.test.at(-1));assert.equal(u.protocol,'http:');assert.equal(u.hostname,'127.0.0.1');assert.equal(u.port,'5000');assert.equal(u.pathname,'/status');
+ }
+ let status=200;const observed=[];
+ const server=createServer((req,res)=>{observed.push({method:req.method,path:req.url});res.writeHead(status);res.end();});
+ await new Promise((ok,no)=>{server.once('error',no);server.listen(0,'127.0.0.1',ok);});
+ t.after(()=>new Promise(ok=>server.listening?server.close(ok):ok()));
+ const port=server.address().port;
+ const getStatus=host=>new Promise((ok,no)=>{const q=request({hostname:host,port,path:'/status',method:'HEAD',timeout:1000},r=>{r.resume();r.once('end',()=>ok(r.statusCode));});q.on('error',no);q.on('timeout',()=>q.destroy(new Error('LOCAL_PROBE_TIMEOUT')));q.end();});
+ // Only the ephemeral port is substituted. The generated address, path and HEAD semantics are exercised over real loopback TCP.
+ for(const probe of probes)assert.equal(await getStatus(new URL(probe.test.at(-1)).hostname),200);
+ assert.deepEqual(observed,[{method:'HEAD',path:'/status'},{method:'HEAD',path:'/status'}]);
+ await assert.rejects(getStatus('::1'),{code:'ECONNREFUSED'});
+ status=503;assert.equal(await getStatus('127.0.0.1'),503);
+ await new Promise(ok=>server.close(ok));await assert.rejects(getStatus('127.0.0.1'),{code:'ECONNREFUSED'});
 });
 test('all known project references and arbitrary remote run names refuse',()=>{
  for(const ref of FORBIDDEN)assert.throws(()=>runName('jolene-restore-drill-'+ref),/RUN_INVALID/);

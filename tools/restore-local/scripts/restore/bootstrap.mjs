@@ -90,7 +90,7 @@ export function makePlan(run,dir,lock,secrets){
   services[side+'-storage']={...base(side,'storage','supabase/storage-api'),depends_on:{...depends_on,[side+'-rest']:{condition:'service_healthy'}},
    environment:{ANON_KEY:anon,SERVICE_KEY:service,POSTGREST_URL:'http://'+name(run,side,'rest')+':3000',AUTH_JWT_SECRET:s.jwt,
     DATABASE_URL:'postgres://supabase_storage_admin:'+s.password+'@'+db+':5432/postgres',STORAGE_PUBLIC_URL:api,REQUEST_ALLOW_X_FORWARDED_PATH:'true',FILE_SIZE_LIMIT:'1048576',STORAGE_BACKEND:'file',GLOBAL_S3_BUCKET:'stub',FILE_STORAGE_BACKEND_PATH:'/var/lib/storage',TENANT_ID:run+'-'+side,REGION:'local',ENABLE_IMAGE_TRANSFORMATION:'false',LOG_LEVEL:'error'},
-   volumes:[{type:'volume',source:side+'-files',target:'/var/lib/storage'}],healthcheck:health(['CMD','wget','--no-verbose','--tries=1','--spider','http://localhost:5000/status'])};
+   volumes:[{type:'volume',source:side+'-files',target:'/var/lib/storage'}],healthcheck:health(['CMD','wget','--no-verbose','--tries=1','--spider','http://127.0.0.1:5000/status'])};
   services[side+'-api']={...base(side,'api','kong/kong'),user:'0:0',depends_on:{[side+'-auth']:{condition:'service_healthy'},[side+'-rest']:{condition:'service_healthy'},[side+'-storage']:{condition:'service_healthy'}},
    environment:{KONG_DATABASE:'off',KONG_DECLARATIVE_CONFIG:'/home/kong/local.json',KONG_ROUTER_FLAVOR:'traditional_compatible',KONG_PROXY_LISTEN:'0.0.0.0:8000',KONG_ADMIN_LISTEN:'off',KONG_STATUS_LISTEN:'off',KONG_PLUGINS:'cors,key-auth,acl,request-transformer',KONG_PROXY_ACCESS_LOG:'off',KONG_PROXY_ERROR_LOG:'/dev/null',KONG_DNS_ORDER:'LAST,A,CNAME'},
    volumes:[bind(resolve(dir,side+'-gateway.private.json'),'/home/kong/local.json')],healthcheck:health(['CMD','kong','health'])};
