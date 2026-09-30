@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { creerCandidaturesDeuxAs, identifiants, maintenant } from './helpers/recette-candidatures-deux-as';
-import { deposerCandidatureD, relireCandidaturesD } from '../scripts/ci/recette-candidatures-staging.mjs';
+import { deposerCandidatureD, relireCandidaturesD, observerErreursNavigateurD, diagnosticD } from '../scripts/ci/recette-candidatures-staging.mjs';
 import { requeteFrontendD, STAGING_URL } from '../scripts/ci/candidatures-ui-contract.mjs';
 
 test('runner D2 : boutons réels, deux candidatures, recharges et relecture établissement sous garde réseau', async ({ browser }, info) => {
@@ -30,4 +30,18 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   expect(state.candidatures).toHaveLength(2);
   expect(state.candidatures.every(c=>c.message===m.marker&&c.statut==='EN_ATTENTE')).toBe(true);
   expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toHaveLength(2);
+});
+
+test('runner D2 : erreurs navigateur projetées sans divulgation et toujours bloquantes', async ({ browser }, info) => {
+  const context=await browser.newContext({...info.project.use}),diagnostic=diagnosticD();
+  await context.route('**/*',route=>route.abort());await context.routeWebSocket('**/*',socket=>socket.close());
+  observerErreursNavigateurD(context,0,diagnostic);const page=await context.newPage();diagnostic.phase('postuler',1);
+  try {
+    await page.evaluate(()=>{console.error('WebSocket CANARI_SECRET_JWT');console.error('The operation was aborted CANARI_PASSWORD');setTimeout(()=>{throw new TypeError('Failed to fetch CANARI_IDENTITE');},0);});
+    await expect.poll(()=>diagnostic.resultat().erreurs).toBe(3);
+    const resultat=diagnostic.resultat();expect(resultat.erreurs).toBeGreaterThan(0);
+    expect(resultat.erreursNavigateur.map(e=>e.categorie).sort()).toEqual(['chargement_reseau','requete_abandonnee','websocket']);
+    expect(resultat.erreursNavigateur.every(e=>e.slotEmetteur===0&&e.slotPhase===1)).toBe(true);
+    expect(JSON.stringify(resultat)).not.toMatch(/CANARI|SECRET_JWT|PASSWORD|IDENTITE/);
+  }finally{await context.close();}
 });

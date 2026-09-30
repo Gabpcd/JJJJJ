@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { demarrerPreview } from './dashboard-ui-preview.mjs';
@@ -11,17 +12,48 @@ import { ORIGINE_UI, STAGING_REF, STAGING_URL, configurationFrontendD, identites
 
 const dossier = resolve('tests/load/results/d2-frontend');
 const sauver = (nom, value) => { mkdirSync(dossier,{recursive:true}); writeFileSync(`${dossier}/${nom}.json`, JSON.stringify(value,null,2)+'\n',{mode:0o600}); };
+export function projeterErreurNavigateurD({source,texte,classe,location,stack,contexteFerme=false},assetsConnus=new Set()) {
+  const message=typeof texte==='string'?texte:'';
+  const react=message.match(/Minified React error #(\d{1,4})\b/);
+  const categorie=contexteFerme||/Target (?:page, context or browser|closed)|context (?:has been )?closed/i.test(message)?'contexte_ferme'
+    :/WebSocket/i.test(message)?'websocket'
+    :/\babort(?:ed|error)?\b|cancelled|canceled/i.test(message)?'requete_abandonnee'
+    :/Load failed|Failed to fetch|Failed to load resource|NetworkError|Network request failed/i.test(message)?'chargement_reseau'
+    :react?'react_minifie':'autre';
+  const candidates=location?[location]:[];
+  if(typeof stack==='string')for(const url of stack.match(/https?:\/\/[^\s)]+/g)||[]){
+    const match=url.match(/^(.*):(\d+):(\d+)$/);if(match)candidates.push({url:match[1],lineNumber:Number(match[2]),columnNumber:Number(match[3])});
+  }
+  let emplacement=null;
+  for(const l of candidates){
+    try{const u=new URL(l.url);if(u.origin!==ORIGINE_UI||u.username||u.password||!assetsConnus.has(u.pathname))continue;
+      const entier=v=>Number.isSafeInteger(v)&&v>=0&&v<=10_000_000?v:null;
+      emplacement={asset:u.pathname,ligne:entier(l.lineNumber),colonne:entier(l.columnNumber)};break;
+    }catch{/* Aucun chemin ou texte libre n'est conservé. */}
+  }
+  return {source:source==='pageerror'?'pageerror':'console_error',classe:['Error','TypeError','ReferenceError','SyntaxError','RangeError','URIError','EvalError','AbortError','NetworkError'].includes(classe)?classe:'autre',
+    categorie,code:react?Number(react[1]):null,emplacement,empreinte:createHash('sha256').update(message).digest('hex')};
+}
+export function observerErreursNavigateurD(context,slot,diagnostic,assetsConnus=new Set()) {
+  context.on('page',page=>{
+    page.on('pageerror',error=>diagnostic.erreurNavigateur(slot,projeterErreurNavigateurD({source:'pageerror',texte:error.message,classe:error.name,stack:error.stack,contexteFerme:page.isClosed()},assetsConnus)));
+    page.on('console',message=>{if(message.type()==='error')diagnostic.erreurNavigateur(slot,projeterErreurNavigateurD({source:'console_error',texte:message.text(),location:message.location(),contexteFerme:page.isClosed()},assetsConnus));});
+  });
+}
 export function diagnosticD() {
-  let phase='preflight',slot=null,erreurs=0; const reseau=new Map();
+  let phase='preflight',slot=null,erreurs=0,erreursNavigateurTronquees=0; const reseau=new Map(),erreursNavigateur=new Map();
   const noms=new Set([...rpcEcritureD,...rpcLectureD,...rpcParametresD,...tablesLectureD]);
   return { phase(p,s=null) { if(!['preflight','preview','browser','login','mission','postuler','reload','etablissement','backend','cleanup'].includes(p)||![null,0,1,2].includes(s))throw Error('Phase D2 invalide.');phase=p;slot=s; },
-    erreur() { erreurs++; }, reseau(url,method,status) {
+    erreur() { erreurs++; }, erreurNavigateur(slotEmetteur,projection) {
+      erreurs++;const r={phase,slotPhase:slot,slotEmetteur,...projection},k=JSON.stringify(r);
+      if(erreursNavigateur.size<32||erreursNavigateur.has(k))erreursNavigateur.set(k,{...r,nombre:(erreursNavigateur.get(k)?.nombre||0)+1});else erreursNavigateurTronquees++;
+    }, reseau(url,method,status) {
       let origine='invalide',chemin='autre';
       try { const u=new URL(url);origine=u.origin===ORIGINE_UI?'preview':u.origin===STAGING_URL?'staging':'externe';
         const nom=u.pathname.split('/').pop();chemin=origine==='preview'?'local':origine!=='staging'?'externe':noms.has(nom)?nom:['/auth/v1/token','/auth/v1/user'].includes(u.pathname)?`auth-${nom}`:'autre'; }catch{/* Projection fermée. */}
       const r={phase,slot,origine,chemin,methode:['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE'].includes(method)?method:'autre',statut:Number.isInteger(status)&&status>=100&&status<=599?status:['refus','transport','ferme'].includes(status)?status:'autre'};
       const k=JSON.stringify(r); if(reseau.size<128||reseau.has(k))reseau.set(k,{...r,nombre:(reseau.get(k)?.nombre||0)+1});else erreurs++;
-    }, resultat() { return {phase,slot,erreurs,reseau:[...reseau.values()].map(r=>({...r}))}; } };
+    }, resultat() { return {phase,slot,erreurs,erreursNavigateur:[...erreursNavigateur.values()].map(r=>({...r})),erreursNavigateurTronquees,reseau:[...reseau.values()].map(r=>({...r}))}; } };
 }
 export async function lireBackendD(query, env, fetchImpl=fetch) {
   if(env.STAGING_SUPABASE_PROJECT_REF!==STAGING_REF||env.STAGING_SUPABASE_URL!==STAGING_URL||!env.STAGING_SUPABASE_ACCESS_TOKEN)throw Error('Lecture D2 staging refusée.');
@@ -78,7 +110,7 @@ export function verifierReponseFrontendD({path,data},a,m) {
   if(rpc==='fn_mon_profil_soignant_complet'&&data?.id!==a.userId)throw Error('Profil UI D2 étranger.');
   if(rpc==='fn_mon_etablissement_complet'&&data?.id!==m.membres[2].userId)throw Error('Établissement UI D2 étranger.');
 }
-export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcrituresD(a)}={}) {
+export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcrituresD(a),assetsConnus=new Set()}={}) {
   const enCours=new Set();const candidatures=[];
   await context.addInitScript(()=>{
     localStorage.setItem('cookie-consent','refused');
@@ -87,7 +119,7 @@ export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcri
     Object.defineProperty(window,'Stripe',{value:()=>{throw Error('Paiement interdit dans la recette D2.');}});
   });
   await context.routeWebSocket('**/*',socket=>socket.close());
-  context.on('page',page=>{page.on('pageerror',()=>diagnostic.erreur());page.on('console',message=>{if(message.type()==='error')diagnostic.erreur();});});
+  observerErreursNavigateurD(context,a.slot,diagnostic,assetsConnus);
   await context.route('**/*',async route=>{
     const execution=(async()=>{
       const request=route.request();let body;
@@ -111,10 +143,10 @@ export async function installerReseauD(context,a,m,diagnostic,{budget=budgetEcri
   });
   return {budget,candidatures,async drainer(){await Promise.all([...enCours]);},enCours:()=>enCours.size};
 }
-export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlaywright=()=>import('@playwright/test'),previewFn=demarrerPreview,preparerBuild=()=>{const index=resolve('dist/index.html');writeFileSync(index,preparerHtmlPreview(readFileSync(index,'utf8')));}}={}) {
+export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlaywright=()=>import('@playwright/test'),previewFn=demarrerPreview,lireAssets=()=>new Set(readdirSync(resolve('dist/assets'),{withFileTypes:true}).filter(f=>f.isFile()&&/^[A-Za-z0-9_-]+\.js$/.test(f.name)).map(f=>`/assets/${f.name}`)),preparerBuild=()=>{const index=resolve('dist/index.html');writeFileSync(index,preparerHtmlPreview(readFileSync(index,'utf8')));}}={}) {
   let browser,preview;const contextes=[],preuves=[],candidatures=[];
   try {
-    diagnostic.phase('preview');preparerBuild();
+    diagnostic.phase('preview');preparerBuild();const assetsConnus=lireAssets();
     preview=await previewFn({env,observer:etat=>sauver('preview',etat)});
     const {webkit,devices,expect}=await chargerPlaywright();diagnostic.phase('browser');
     // Les clés serveur et le JSON privé restent dans le runner Node ; le
@@ -124,7 +156,7 @@ export async function parcourirFrontendD({m,identites,env,diagnostic,chargerPlay
     for(const [slot,appareil]of ['iPhone 13','iPad Pro 11','iPad Pro 11'].entries()) {
       const a=identites[slot];diagnostic.phase('browser',slot);
       const context=await browser.newContext({...devices[appareil],baseURL:ORIGINE_UI,locale:'fr-FR',timezoneId:'Europe/Paris',serviceWorkers:'block'});contextes.push(context);
-      const reseau=await installerReseauD(context,a,m,diagnostic);const page=await context.newPage();page.setDefaultTimeout(20000);page.setDefaultNavigationTimeout(25000);
+      const reseau=await installerReseauD(context,a,m,diagnostic,{assetsConnus});const page=await context.newPage();page.setDefaultTimeout(20000);page.setDefaultNavigationTimeout(25000);
       diagnostic.phase('login',slot);await page.goto('/connexion');
       await page.getByLabel('Email',{exact:true}).fill(a.email);await page.getByLabel('Mot de passe',{exact:true}).fill(a.password);
       await page.getByRole('button',{name:'Se connecter',exact:true}).click();
