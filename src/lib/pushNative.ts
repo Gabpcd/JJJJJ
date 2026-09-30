@@ -101,7 +101,9 @@ export async function initNativePush(
     if (generation !== generationPush) return;
 
     let permission = await PushNotifications.checkPermissions();
-    if (permission.receive === 'prompt' && autoriserDemande) {
+    // Android can allow a new request after a first refusal. Keep both prompt
+    // states tied to the user's action, never to login or an ordinary resume.
+    if (autoriserDemande && (permission.receive === 'prompt' || permission.receive === 'prompt-with-rationale')) {
       permission = await PushNotifications.requestPermissions();
     }
     if (permission.receive !== 'granted') {
