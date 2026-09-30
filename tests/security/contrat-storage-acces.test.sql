@@ -12,7 +12,7 @@ DECLARE
   pointage uuid := '88900000-0000-4000-8000-000000000008';
   mission1 uuid := '88900000-0000-4000-8000-000000000011';
   contrat1 uuid := '88900000-0000-4000-8000-000000000021';
-  r jsonb; acteur uuid;
+  r jsonb; refus jsonb; acteur uuid; cible uuid;
 
 BEGIN
   IF NOT EXISTS (
@@ -71,6 +71,13 @@ BEGIN
   r := public.fn_contrat_storage_path(contrat1);
     IF r->>'success' IS DISTINCT FROM 'false' OR r ? 'storage_path' OR r ? 'hash_document' THEN
       RAISE EXCEPTION 'Acteur non habilité accepté : % %',acteur,r; END IF;
+    refus := r;
+    FOREACH cible IN ARRAY ARRAY['88900000-0000-4000-8000-000000000099'::uuid,NULL::uuid] LOOP
+      r := public.fn_contrat_storage_path(cible);
+      IF r IS DISTINCT FROM refus THEN
+        RAISE EXCEPTION 'Existence du contrat révélée à un acteur non habilité : %',acteur;
+      END IF;
+    END LOOP;
   END LOOP;
   EXECUTE 'RESET ROLE';
   -- Préparation suivante : RESET ROLE ne réinitialise pas les claims JWT.

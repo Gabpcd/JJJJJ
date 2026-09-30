@@ -11,20 +11,20 @@ BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
-  IF NOT public.fn_compte_auth_actif() THEN
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
 
   SELECT storage_path, hash_document, contenu_html_rendu_le, soignant_id, etablissement_id
-  INTO v_cm FROM public.contrats_mission WHERE id = p_contrat_id;
+  INTO v_cm FROM public.contrats_mission
+  WHERE id = p_contrat_id
+    AND (public.est_admin() IS TRUE
+      OR soignant_id = v_uid
+      OR (etablissement_id = public.mon_etablissement_id()
+        AND public.fn_a_permission_etablissement('lecture_contrats', etablissement_id) IS TRUE));
+  -- Un contrat absent et un contrat étranger sont indiscernables : aucune
+  -- métadonnée ni preuve d'existence n'est révélée avant l'autorisation.
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Contrat introuvable');
-  END IF;
-
-  IF NOT COALESCE(public.est_admin()
-    OR v_cm.soignant_id = v_uid
-    OR (v_cm.etablissement_id = public.mon_etablissement_id()
-      AND public.fn_a_permission_etablissement('lecture_contrats', v_cm.etablissement_id)), false) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
   RETURN jsonb_build_object('success', true,
@@ -37,7 +37,7 @@ GRANT EXECUTE ON FUNCTION public.fn_contrat_storage_path(uuid) TO authenticated,
 
 -- Seul corps revu dans cette migration. Catégorie MIXTE_TENANT_ADMIN conservée.
 UPDATE private.security_definer_inventory
-SET definition_md5 = 'c57310a89e7a01f85849f648db433776',
+SET definition_md5 = '69ae0378704ad8110ada1cbbf0c0b6ef',
     justification = 'Lecture du contrat : compte actif obligatoire, soignant concerné ou tenant canonique avec lecture_contrats ; élévation administrateur valide conservée.',
     recense_le = now()
 WHERE signature = 'fn_contrat_storage_path(uuid)';

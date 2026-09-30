@@ -8,6 +8,13 @@ L’Edge acceptait directement un propriétaire Auth encore présent même aprè
 
 Tous les utilisateurs passent maintenant par `fn_contrat_storage_path`, qui exige le compte actif, le tenant canonique et la permission de lecture (ou le soignant concerné / administrateur valide). La décision est renouvelée avant/après Storage ; aucun lien n’est retourné après révocation. Le bypass système historique compare exactement la clé configurée.
 
+La RPC filtre le contrat par les droits dès sa lecture. Un utilisateur non habilité
+reçoit exactement le même refus pour un contrat existant étranger, un identifiant
+inexistant ou NULL : la réponse ne permet plus de distinguer leur existence.
+L’Edge conserve son refus HTTP 403, déjà exercé dans les dix simulations frontend.
+La suite SQL compare les trois réponses pour chaque acteur non habilité, y compris
+une identité absente ; son exécution réelle reste attendue en CI.
+
 Un document déjà stocké ou signé, même partiellement, est relu sans génération ni écrasement de son hash. Un original absent/incomplet produit une erreur explicite. Le premier rendu utilise un nom unique et une mise à jour conditionnelle : une signature, un rendu ou un changement de parties concurrent empêche la publication du résultat devenu obsolète.
 
 L’écran conserve le contenu historique et ne remplace pas un original signé manquant par un nouveau template. La recette a également révélé que le bouton OTP restait actif avec un document indisponible : OTP et canvas exigent désormais le document figé affiché. Un changement de disponibilité réinitialise la session OTP et ignore sa réponse tardive.
