@@ -1,3 +1,4 @@
+import k6Execution from 'k6/execution';
 import { donneesRapportCharge, resumeCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
@@ -79,5 +80,5 @@ export function handleSummary(data) {
 }
 
 function textSummary(data, label) {
-  return resumeCharge(data, label, 'rpc_recherche', options);
+  return resumeCharge(data, label, 'rpc_recherche', k6Execution.test.options);
 }
