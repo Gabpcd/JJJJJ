@@ -33,7 +33,7 @@ en migrations. `db push` from-scratch crashe sur la 1re migration
 4. Apply les 2 dumps sur staging via `psql` direct (db.$REF.supabase.co:5432)
 5. Re-exécute la migration `20260503050000_playwright_seed_test_accounts.sql`
    pour seeder les comptes test (le dump exclut le schéma `auth` par défaut)
-6. Optionnel : seed 500 missions [loadtest] via `tests/load/seed/seed-staging.sql`
+6. Le seed historique de charge est retiré ; aucun lot F n’est créé.
 
 **Aucune donnée prod n'est copiée** — uniquement le schéma (tables, fonctions,
 RLS, triggers, types).
@@ -72,7 +72,7 @@ Actions → **Deploy Supabase STAGING (bootstrap from prod schema dump)** → Ru
 Inputs (1re exécution) :
 - `reset_first` = `true` (DESTRUCTIF : DROP/recreate `public` + `supabase_migrations`)
 - `skip_functions` = `false` (déployer aussi les 40 edge functions)
-- `seed_load_test_data` = `true` (seed les 500 missions pour scenario F)
+- `seed_load_test_data` = `false` (option dépréciée ; `true` interrompt le workflow avant tout accès DB)
 
 Durée attendue : 5-10 min.
 
@@ -91,7 +91,7 @@ synchroniser staging :
 
 Actions → **Deploy Supabase STAGING** → Run workflow avec :
 - `reset_first` = `true` (recommandé pour partir d'un état propre)
-- `seed_load_test_data` = `true` si on veut re-seed les missions test
+- `seed_load_test_data` = `false` ; aucun re-seed historique autorisé
 - `skip_functions` = `false` (re-deploy edge fns)
 
 ### 3. Lancer les tests de charge
@@ -114,7 +114,7 @@ Si staging part en cacahuète et qu'on veut tout reset :
 **Option 1 — via le workflow** (recommandé) :
 
 Actions → **Deploy Supabase STAGING** → Run workflow avec
-`reset_first=true` + `seed_load_test_data=true`. Le workflow fait :
+`reset_first=true` + `seed_load_test_data=false` (réinitialisation distincte, jamais un prérequis d’une recette de charge). Le workflow fait :
 ```sql
 DROP SCHEMA IF EXISTS public CASCADE;
 DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
@@ -130,27 +130,16 @@ Dashboard staging → Project Settings → Pause project → Delete project →
 recréer un projet `jolene-staging`. Mettre à jour les secrets GitHub avec
 les nouveaux credentials. Puis re-run le workflow.
 
-Note : l'auth schema (auth.users, auth.identities) n'est PAS reset par
-l'option 1 — si des comptes pourrissent, supprimer manuellement via
-SQL Editor :
-```sql
-DELETE FROM auth.users WHERE email LIKE 'loadtest-%@jolene.app' OR email LIKE 'playwright-%@jolene.app';
-```
-(la migration de seed les recréera proprement).
+Le reset ne constitue pas un nettoyage de campagne. Ne pas purger Auth par préfixe.
 
 ## Cleanup post-tests
 
-Après une campagne de tests, nettoyer pour éviter d'empiler les `[loadtest]` :
-
-Dashboard staging → SQL Editor → Run le contenu de `tests/load/seed/cleanup-staging.sql`.
-
-Cela supprime :
-- Toutes les missions/candidatures/factures `[loadtest]%`
-- Tous les comptes `loadtest-*@jolene.app`
-
-Préserve :
-- `playwright-soignant@jolene.app`, `playwright-etab@jolene.app` (comptes test fixes)
-- Le schéma + edge functions
+Utiliser exclusivement le manifeste du run et son préparateur dédié C/E. Les
+scripts historiques `seed/seed-staging.sql` et `seed/cleanup-staging.sql`
+refusent explicitement toute exécution ; ils ne suppriment aucune donnée.
+Le banc D minimal est distinct et reste soumis à sa revue de préflight avant
+la première fixture distante. F demeure suspendu ; ni reset ni bootstrap
+ne permettent de lever sa suspension.
 
 ## Sécurité
 
@@ -185,5 +174,5 @@ désactiver/ré-écrire vers no-op pour ne pas polluer les mesures de tests.
 | Edge fn deploy fail "permission denied" | `STAGING_SUPABASE_ACCESS_TOKEN` insuffisant | Régénérer un token avec scope full |
 | k6 fail "401 Unauthorized" | `STAGING_SUPABASE_ANON_KEY` faux | Re-copier depuis dashboard staging → API |
 | Scenario D fail "playwright-etab non seedé" | Step "Re-execute playwright seed migration" a planté | Re-run deploy-staging — vérifier que la migration 20260503050000 finit OK |
-| Scenario F fail "0 missions seedées" | `seed_load_test_data=false` au bootstrap | Re-run deploy-staging avec `seed_load_test_data=true` |
+| Scénario F suspendu | Lot facturable et transports non isolés | Conserver le refus ; préparer un banc dédié, sans seed/reset/cron global |
 | `duplicate key violates unique constraint` au step apply schema | Staging déjà bootstrap — re-run sans `reset_first` | Lancer avec `reset_first=true` pour partir propre |
