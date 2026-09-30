@@ -15,3 +15,11 @@ Simulation frontend : dix scénarios réussis (salarié et libéral sur iPhone/W
 Première tentative ordinateur : deux échecs du sélecteur Fermer, qui désignait à la fois le bouton du formulaire et la croix du dialogue. Sélecteur précisé, sans changement produit ni attente artificielle ; les artefacts initiaux sont conservés dans `/private/tmp/jolene-litige-garde-recette-ordinateur`. Preuves finales : `/private/tmp/jolene-litige-garde-recette-5formats/results.json` et captures/ARIA voisines. Le binaire agent-browser étant absent, Playwright installé a effectué la vérification ; aucune dépendance installée.
 
 À confirmer avant intégration validée : revue indépendante et CI SQL réelle (dont la création des fixtures sous les triggers actuels). Aucune modification distante, push, revue CLI, merge ou livraison mobile effectués dans ce lot.
+
+Complément d’intégration : le run `36697713126` a validé les suites précédentes,
+dont la clôture, puis refusé la fixture litige sur `chk_type_contrat_recherche`.
+Le catalogue staging confirme `TOUS`, `SALARIE`, `LIBERAL` pour une mission ;
+`MIXTE` décrit le profil, pas ce champ mission. Les six missions synthétiques
+utilisent désormais le même mode recherché que leur mode appliqué. La contrainte
+et le code produit restent inchangés. Les assertions de cette suite sont encore
+à exécuter ; la transaction échouée a été annulée.

@@ -24,7 +24,7 @@ INSERT INTO public.missions(id,etablissement_id,intitule,profession_requise,debu
 SELECT ('aba93000-0000-4000-8000-'||lpad((100+n)::text,12,'0'))::uuid,
  'aba93000-0000-4000-8000-000000000002','Fixture garde '||n,'MEDECIN',
  now()+interval '20 years'+n*interval '1 day',now()+interval '20 years 8 hours'+n*interval '1 day',8,20,'TERMINEE',
- 'aba93000-0000-4000-8000-000000000001','MIXTE',
+ 'aba93000-0000-4000-8000-000000000001',CASE WHEN n<=3 THEN 'SALARIE' ELSE 'LIBERAL' END,
  (CASE WHEN n<=3 THEN 'SALARIE' ELSE 'LIBERAL' END)::public.type_contrat_applique_enum
 FROM generate_series(1,6) n;
 INSERT INTO public.litiges(id,mission_id,soignant_id,etablissement_id,initie_par,motif,type_litige,statut)
