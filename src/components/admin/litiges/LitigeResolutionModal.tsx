@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,6 @@ import {
 import { Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
-import { toast } from 'sonner';
 import { LitigesSimilairesPanel } from './LitigesSimilairesPanel';
 import {
   ACTIONS_FINANCIERES,
@@ -114,7 +113,13 @@ function formatDateAccord(value: unknown): string | null {
   });
 }
 
-export function LitigeResolutionModal({
+export function LitigeResolutionModal(props: Props) {
+  // Chaque ouverture/dossier possède sa saisie et ses retours. Une réponse
+  // tardive de l'ancien formulaire ne peut pas contaminer le suivant.
+  return <LitigeResolutionForm key={`${props.litige?.id ?? 'aucun'}:${props.open}`} {...props} />;
+}
+
+function LitigeResolutionForm({
   litige,
   open,
   onOpenChange,
@@ -126,11 +131,32 @@ export function LitigeResolutionModal({
   const [ajusterTaux, setAjusterTaux] = useState('');
   const [actionFinanciere, setActionFinanciere] = useState<ActionFinanciere>('AUTO');
   const [submitting, setSubmitting] = useState(false);
+  const [erreurResolution, setErreurResolution] = useState<string | null>(null);
   const [resultat, setResultat] = useState<ResolutionResult | null>(null);
   const [factureCible, setFactureCible] = useState<FactureCible | null>(null);
   const [soldeCorrection, setSoldeCorrection] = useState<SoldeCorrection | null>(null);
   const [factureLoading, setFactureLoading] = useState(false);
   const [factureErreur, setFactureErreur] = useState<string | null>(null);
+  const feedbackId = useId();
+  const feedbackRef = useRef<HTMLParagraphElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const envoiEnCours = useRef(false);
+  const formulaireActif = useRef(true);
+
+  useEffect(() => {
+    formulaireActif.current = true;
+    return () => { formulaireActif.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (erreurResolution) {
+      feedbackRef.current?.focus({ preventScroll: true });
+    }
+    if (erreurResolution || resultat?.success === true) {
+      // Montrer le retour et le bouton ensemble, même dans un dialogue défilant.
+      actionsRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [erreurResolution, resultat?.success]);
 
   useEffect(() => {
     let actif = true;
@@ -314,45 +340,48 @@ export function LitigeResolutionModal({
     setAjusterTaux('');
     setActionFinanciere('AUTO');
     setResultat(null);
+    setErreurResolution(null);
   };
 
   const handleClose = (nextOpen: boolean) => {
+    // Garder le même verrou tant que la décision financière est en cours.
+    if (!nextOpen && envoiEnCours.current) return;
     if (!nextOpen) reset();
     onOpenChange(nextOpen);
   };
 
   const submit = async () => {
-    if (!litige) return;
+    if (!litige || envoiEnCours.current || resultat?.success === true) return;
     if (accordValidationDediee) {
-      toast.error('Utilisez « Valider l’accord et exécuter » pour appliquer cet accord exact.');
+      setErreurResolution('Utilisez « Valider l’accord et exécuter » pour appliquer cet accord exact.');
       return;
     }
     if (!resolutionText.trim() || resolutionText.trim().length < 10) {
-      toast.error('La résolution doit contenir au moins 10 caractères.');
+      setErreurResolution('La résolution doit contenir au moins 10 caractères.');
       return;
     }
     if (!enFaveurDe) {
-      toast.error('Veuillez choisir en faveur de qui trancher.');
+      setErreurResolution('Veuillez choisir en faveur de qui trancher.');
       return;
     }
     if (heuresInvalides) {
-      toast.error('Les heures doivent être strictement positives et limitées à 168 h.');
+      setErreurResolution('Les heures doivent être strictement positives et limitées à 168 h.');
       return;
     }
     if (tauxInvalide) {
-      toast.error('Le taux doit être strictement positif et limité à 1 000 €.');
+      setErreurResolution('Le taux doit être strictement positif et limité à 1 000 €.');
       return;
     }
     if (factureContextInvalide) {
-      toast.error('La facture exacte doit être chargée avant toute résolution.');
+      setErreurResolution('La facture exacte doit être chargée avant toute résolution.');
       return;
     }
     if (factureLoading) {
-      toast.error('Attendez le chargement du solde corrigé avant de valider.');
+      setErreurResolution('Attendez le chargement du solde corrigé avant de valider.');
       return;
     }
     if (ajustementReferenceIncomplet) {
-      toast.error(
+      setErreurResolution(
         aDejaDesCorrections
           ? 'Cette facture a déjà été corrigée : renseignez les heures et le taux finaux pour éviter de reprendre une ancienne base.'
           : 'Renseignez les heures et le taux : la facture ne contient pas toute la base historique.',
@@ -360,61 +389,66 @@ export function LitigeResolutionModal({
       return;
     }
 
+    envoiEnCours.current = true;
     setSubmitting(true);
+    setErreurResolution(null);
     setResultat(null);
 
-    // Une Checkout Session ouverte contient les anciens montants. Elle doit
-    // être expirée avant de remplacer une facture non payée ; le serveur ne
-    // touche qu'à la tentative de la facture exacte liée à ce litige.
-    if (factureCible && ['EMISE', 'EN_RETARD'].includes(factureCible.statut)) {
-      const { data: expiration, error: expirationError } = await supabase.functions.invoke(
-        'expire-invoice-checkout-for-dispute',
-        { body: { litige_id: litige.id } },
-      );
-      if (expirationError || expiration?.error) {
-        logger.error('expire-invoice-checkout-for-dispute error', expirationError || expiration);
-        toast.error(
-          expiration?.message
-            || 'Impossible de sécuriser la tentative de paiement en cours. Rechargez le litige avant de réessayer.',
+    try {
+      // Une Checkout Session ouverte contient les anciens montants. Elle doit
+      // être expirée avant de remplacer une facture non payée ; le serveur ne
+      // touche qu'à la tentative de la facture exacte liée à ce litige.
+      if (factureCible && ['EMISE', 'EN_RETARD'].includes(factureCible.statut)) {
+        const { data: expiration, error: expirationError } = await supabase.functions.invoke(
+          'expire-invoice-checkout-for-dispute',
+          { body: { litige_id: litige.id } },
         );
-        setSubmitting(false);
+        if (expirationError || expiration?.error) {
+          logger.error('expire-invoice-checkout-for-dispute error', expirationError || expiration);
+          if (formulaireActif.current) setErreurResolution(
+            expiration?.message
+              || 'Impossible de sécuriser la tentative de paiement en cours. Rechargez le litige avant de réessayer.',
+          );
+          return;
+        }
+      }
+
+      const payload = {
+        p_litige_id: litige.id,
+        p_resolution: resolutionText.trim(),
+        p_en_faveur_de: enFaveurDe,
+        p_ajuster_heures: heuresEffectives ?? undefined,
+        p_ajuster_taux: tauxEffectif ?? undefined,
+        p_action_financiere: actionFinanciere,
+      };
+
+      const { data, error } = await supabase.rpc(
+        'fn_admin_resoudre_litige_intelligent',
+        payload,
+      );
+      if (!formulaireActif.current) return;
+
+      if (error) {
+        logger.error('fn_admin_resoudre_litige_intelligent error', error);
+        setErreurResolution('Erreur lors de la résolution.');
         return;
       }
-    }
 
-    const payload = {
-      p_litige_id: litige.id,
-      p_resolution: resolutionText.trim(),
-      p_en_faveur_de: enFaveurDe,
-      p_ajuster_heures: heuresEffectives ?? undefined,
-      p_ajuster_taux: tauxEffectif ?? undefined,
-      p_action_financiere: actionFinanciere,
-    };
+      const result = data as ResolutionResult | null;
+      if (result?.error || result?.success !== true) {
+        setErreurResolution(result?.error || 'La résolution n’a pas été confirmée. Rechargez le dossier avant de réessayer.');
+        return;
+      }
 
-    const { data, error } = await supabase.rpc(
-      'fn_admin_resoudre_litige_intelligent',
-      payload,
-    );
-
-    if (error) {
-      logger.error('fn_admin_resoudre_litige_intelligent error', error);
-      toast.error(error.message || 'Erreur lors de la résolution.');
-      setSubmitting(false);
-      return;
-    }
-
-    const result = data as ResolutionResult | null;
-    if (result?.error) {
-      toast.error(result.error);
       setResultat(result);
-      setSubmitting(false);
-      return;
+      onResolved?.();
+    } catch (error) {
+      logger.error('LitigeResolutionModal resolution error', error);
+      if (formulaireActif.current) setErreurResolution('Erreur lors de la résolution.');
+    } finally {
+      envoiEnCours.current = false;
+      if (formulaireActif.current) setSubmitting(false);
     }
-
-    toast.success('Litige résolu avec succès.');
-    setResultat(result);
-    setSubmitting(false);
-    onResolved?.();
   };
 
   if (!litige) return null;
@@ -703,7 +737,7 @@ export function LitigeResolutionModal({
               </div>
             )}
 
-            {resultat && !resultat.error && (
+            {resultat?.success === true && (
               <div
                 className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs"
                 data-testid="result-json"
@@ -768,28 +802,49 @@ export function LitigeResolutionModal({
           </div>
         </TooltipProvider>
 
-        <DialogFooter>
-          <BoutonY2K variant="ghost" onClick={() => handleClose(false)}>
-            Fermer
-          </BoutonY2K>
-          <BoutonY2K
-            onClick={submit}
-            disabled={
-              submitting ||
-              resolutionText.trim().length < 10 ||
-              !enFaveurDe ||
-              heuresInvalides ||
-              tauxInvalide ||
-              factureLoading ||
-              factureContextInvalide ||
-              ajustementReferenceIncomplet
-              || accordValidationDediee
-            }
-            loading={submitting}
-          >
-            {submitting ? 'Résolution…' : 'Valider la résolution'}
-          </BoutonY2K>
-        </DialogFooter>
+        <div ref={actionsRef} className="space-y-4">
+          {erreurResolution && (
+            <p
+              id={feedbackId}
+              ref={feedbackRef}
+              role="alert"
+              aria-atomic="true"
+              tabIndex={-1}
+              className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive outline-none"
+            >
+              {erreurResolution}
+            </p>
+          )}
+          {resultat?.success === true && (
+            <p id={feedbackId} role="status" aria-atomic="true" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              Litige résolu avec succès.
+            </p>
+          )}
+
+          <DialogFooter>
+            <BoutonY2K variant="ghost" disabled={submitting} onClick={() => handleClose(false)}>
+              Fermer
+            </BoutonY2K>
+            <BoutonY2K
+              onClick={submit}
+              aria-describedby={erreurResolution || resultat?.success === true ? feedbackId : undefined}
+              disabled={
+                submitting || resultat?.success === true ||
+                resolutionText.trim().length < 10 ||
+                !enFaveurDe ||
+                heuresInvalides ||
+                tauxInvalide ||
+                factureLoading ||
+                factureContextInvalide ||
+                ajustementReferenceIncomplet
+                || accordValidationDediee
+              }
+              loading={submitting}
+            >
+              {submitting ? 'Résolution…' : 'Valider la résolution'}
+            </BoutonY2K>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

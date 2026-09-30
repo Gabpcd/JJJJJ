@@ -36,7 +36,8 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
   if(request.isNavigationRequest()&&request.resourceType()==='document')reseau.dernierMouvement=Date.now();
   if(/\/(auth|rest|functions|storage)\/v1\//.test(request.url())){reseau.enCours.add(request);reseau.dernierMouvement=Date.now();}
  });
- for(const event of ['requestfinished','requestfailed'] as const) page.on(event,request=>{if(reseau.enCours.delete(request))reseau.dernierMouvement=Date.now();});
+ page.on('requestfinished',request=>{if(reseau.enCours.delete(request))reseau.dernierMouvement=Date.now();});
+ page.on('requestfailed',request=>{if(reseau.enCours.delete(request))reseau.dernierMouvement=Date.now();});
  const state = { mode, authExpired:false, offers: false, profile: { ...profil } as Row, unknown: [] as string[], errors: [] as string[], calls: [] as {name:string;method:string;body:any;url:string}[], failures: new Set<string>(), overrides: new Map<string,unknown>(), tables: new Map<string,Row[]>(), preferences: {global:{canal_email:true,canal_push:true,canal_sms:false,canal_in_app:true},par_evenement:[] as any[]} };
  const parcours = { user_id: ids.user, type_compte: 'SOIGNANT', donnees: { profession: 'IDE' } as Row, modifie_le: new Date().toISOString() };
  const liberal = { id: 'recette-parcours', soignant_id: ids.user, demarre_le: new Date().toISOString(), termine_le: null, parcours_kine: null, etapes: {} as Row, cree_le: new Date().toISOString(), mis_a_jour_le: new Date().toISOString() };

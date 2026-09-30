@@ -335,6 +335,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exportingRgpd, setExportingRgpd] = useState(false);
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
@@ -1138,7 +1139,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           <Download className="h-4 w-4" /> {exportingRgpd ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
         </button>
         <button
-          onClick={() => setShowDeleteModal(true)}
+          onClick={() => { setDeleteError(null); setShowDeleteModal(true); }}
           className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
         >
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
@@ -1162,15 +1163,18 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
               <input
                 id="etablissement-confirmation-suppression"
                 value={deleteConfirmText}
+                disabled={deleting}
                 onChange={e => setDeleteConfirmText(e.target.value)}
                 placeholder="SUPPRIMER"
                 className="input-base"
                 autoFocus
               />
             </div>
+            {deleteError && <p role="alert" className="text-sm text-destructive">{deleteError}</p>}
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
+                disabled={deleting}
                 onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
                 className="px-4 py-2 text-sm rounded-xl border border-border text-foreground hover:bg-muted transition"
               >
@@ -1180,17 +1184,20 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                 type="button"
                 disabled={deleteConfirmText !== 'SUPPRIMER' || deleting}
                 onClick={async () => {
+                  if (deleting) return;
+                  setDeleteError(null);
                   setDeleting(true);
                   try {
                     const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', { body: {} });
                     if (error) throw error;
-                    if (data?.error || data?.success !== true) { afficherNotification({ type: 'erreur', message: data?.error || 'Suppression impossible.' }); setDeleting(false); return; }
+                    if (data?.error || data?.success !== true) { setDeleteError(data?.error || 'Suppression impossible.'); return; }
                     afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });
                     await supabase.auth.signOut({ scope: 'local' });
                     navigate('/');
                   } catch (err: unknown) {
                     capturerErreurSentry(err, 'ProfilEtablissement', 'supprimer_compte');
-                    afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+                    setDeleteError(extraireMessageErreur(err));
+                  } finally {
                     setDeleting(false);
                   }
                 }}

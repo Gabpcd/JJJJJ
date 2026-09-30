@@ -75,6 +75,7 @@ describe('BlocConformite — plafond salarié', () => {
     expect(await screen.findByText('Vérification indisponible')).toBeInTheDocument();
     expect(onResultat).toHaveBeenCalledWith(false);
     expect(onResultat).not.toHaveBeenCalledWith(true);
+    expect(screen.queryByText(/Ces horaires sont compatibles avec votre planning/)).not.toBeInTheDocument();
   });
 
   it('ne bloque ni ne compte une mission candidate libérale', async () => {
@@ -131,6 +132,8 @@ describe('BlocConformite — plafond salarié', () => {
     render(<BlocConformite missionId="candidate" onResultat={onResultat} />);
 
     expect(await screen.findByText('Semaine du 20/07 : 0h + 8h = 8h / 48h')).toBeInTheDocument();
+    expect(screen.getByText('→ Ces horaires sont compatibles avec votre planning.')).toBeInTheDocument();
+    expect(screen.queryByText(/Tout est conforme|Vous pouvez accepter cette mission/)).not.toBeInTheDocument();
     await waitFor(() => expect(onResultat).toHaveBeenLastCalledWith(true));
   });
 
@@ -183,6 +186,7 @@ describe('BlocConformite — plafond salarié', () => {
 
     expect(await screen.findByText('⚠️ Plafond 48h selon le contrat')).toBeInTheDocument();
     expect(screen.getByText(/Dépassement si contrat salarié ; le régime libéral n'est pas concerné/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Ces horaires sont compatibles avec votre planning/)).not.toBeInTheDocument();
     await waitFor(() => expect(onResultat).toHaveBeenLastCalledWith(true));
   });
 
@@ -294,5 +298,6 @@ describe('BlocConformite — plafond salarié', () => {
     render(<BlocConformite missionId="candidate" onResultat={vi.fn()} />);
 
     expect(await screen.findByText(/Seulement 8.0h de repos après/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Ces horaires sont compatibles avec votre planning/)).not.toBeInTheDocument();
   });
 });

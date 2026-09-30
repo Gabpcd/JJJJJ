@@ -1,0 +1,46 @@
+name: Sauvegardes — état en lecture seule
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-status-read-only
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Tester la projection sans réseau ni secrets
+        run: node --test tests/node/collect-backup-status.node.mjs
+      - name: Lire les métadonnées de sauvegarde
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/ops/collect-backup-status.mjs "$RUNNER_TEMP/backup-status"
+      - name: Joindre le résumé filtré
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/backup-status/backup-status.md" ]; then
+            cat "$RUNNER_TEMP/backup-status/backup-status.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-status-read-only
+          path: ${{ runner.temp }}/backup-status/backup-status.*
+          if-no-files-found: warn
+          retention-days: 14

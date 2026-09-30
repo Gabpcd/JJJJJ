@@ -1,0 +1,51 @@
+{
+  "base": "a215788777d94a1f6225e9b46a8795d273763e24",
+  "fixtures_commit": "41e056d0198b98125f026d276f5ce3b136d93676",
+  "level": "simulation locale avec réponses strictement simulées",
+  "vitest": {
+    "tests": 6,
+    "failed": 0
+  },
+  "typecheck": "tsc -b et typecheck E2E : exit 0",
+  "scenarios_distincts_passed": 15,
+  "journaux_sans_appel_externe_inconnu_ou_erreur_js": 15,
+  "reports": [
+    {
+      "path": "/private/tmp/jolene-message-compatibilite-5formats-20260930/results.json",
+      "sha256": "9d12ed052a331617b195e70a8986088f816e0e7c5064d5cdce2f7425d7ec163d",
+      "stats": {
+        "startTime": "2026-09-30T10:15:48.214Z",
+        "duration": 349428.863,
+        "expected": 13,
+        "skipped": 0,
+        "unexpected": 2,
+        "flaky": 0
+      }
+    },
+    {
+      "path": "/private/tmp/jolene-message-compatibilite-reprise-iphone-20260930/results.json",
+      "sha256": "34120b2b42c25df5a06a045c52129c710cbc2ce14e1fb7bb83824ae04ed6e70d",
+      "stats": {
+        "startTime": "2026-09-30T10:22:15.340Z",
+        "duration": 6495.2880000000005,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    },
+    {
+      "path": "/private/tmp/jolene-message-compatibilite-reprise-android-20260930/results.json",
+      "sha256": "1ea6c0d74302ae3f67f4b3bfcca3f19a8fe762184615ff2028eadb7bffa5a9dc",
+      "stats": {
+        "startTime": "2026-09-30T10:22:34.358Z",
+        "duration": 16257.847999999998,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    }
+  ],
+  "incident": "Première passe 13 verts, 2 ENOSPC ; reprises ciblées iPhone tiers et Android deux AS vertes, aucun changement code/test entre les passes."
+}

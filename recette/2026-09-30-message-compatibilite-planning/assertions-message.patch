@@ -1,0 +1,32 @@
+--- a/e2e/recette-complete-candidatures-deux-as.spec.ts
++++ b/e2e/recette-complete-candidatures-deux-as.spec.ts
+@@ -5,6 +5,10 @@
+ const chemin = `/soignant/missions/${identifiants.mission}`;
+ const envoye = '✅ Candidature envoyée — En attente de réponse';
+ const rappel = 'Candidature envoyée ! Valide tes documents pour pouvoir être accepté.';
++async function verifierMessagePlanning(page: Page) {
++  await expect(page.getByText('→ Ces horaires sont compatibles avec votre planning.', { exact: true })).toBeVisible();
++  await expect(page.getByText(/Tout est conforme|Vous pouvez accepter cette mission/)).toHaveCount(0);
++}
+ async function confirmer(page: Page) {
+   await expect(page.getByRole('button', { name: /Vérifier et postuler/ })).toBeEnabled();
+   await page.getByRole('button', { name: /Vérifier et postuler/ }).click();
+@@ -28,15 +32,18 @@
+     for (const [index, acteur] of [page, as2].entries()) {
+       await acteur.goto(chemin);
+       await expect(acteur.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
++      await verifierMessagePlanning(acteur);
+       await acteur.getByPlaceholder('Présente-toi brièvement…').fill(`Candidature fictive AS ${index + 1}, disponible sur tous les horaires.`);
+       await confirmer(acteur);
+       await expect(acteur.getByText(envoye, { exact: true })).toBeVisible();
+       await expect(acteur.getByText(rappel, { exact: true })).toBeVisible();
+       await expect(acteur.getByRole('button', { name: 'Mes documents', exact: true })).toBeVisible();
++      await verifierMessagePlanning(acteur);
+       await preuveMission(acteur, info, `as${index + 1}-documents-et-attente`);
+       await acteur.reload();
+       await expect(acteur.getByText(envoye, { exact: true })).toBeVisible();
+       await expect(acteur.getByRole('button', { name: /Vérifier et postuler/ })).toBeHidden();
++      await verifierMessagePlanning(acteur);
+     }
+     expect(state.candidatures.map(c => c.soignant_id)).toEqual([identifiants.as1, identifiants.as2]);
+     const envois = state.calls.filter(c => c.name === 'fn_confirmer_action_planning_v1');

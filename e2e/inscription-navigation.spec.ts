@@ -1,9 +1,11 @@
+import { test, isolerWebSocketsSimules } from './helpers/simulation-websocket-isolee';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 const userId = '69000000-0000-4000-8000-000000000071';
 const missionId = '69000000-0000-4000-8000-000000000072';
 async function compteNeuf(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT', offres = false) {
+  await isolerWebSocketsSimules(page);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('cookie-consent', 'refused'));
   // Ces comptes sont simulés : aucune télémétrie de fixture ne part vers Sentry.

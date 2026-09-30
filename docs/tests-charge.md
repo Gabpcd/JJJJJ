@@ -12,7 +12,7 @@ Le durcissement du 25 septembre est validé par des **tests des scripts avec un 
 | B — connexion | Rampe vers 50 VUs, plateau 1 min | Password grant sur les deux comptes fixes staging | Disponible ; deux identités répétées, pas 50 utilisateurs distincts. |
 | C — recherche publique | Rampe vers 200 VUs, plateau 90 s | Réponses JSON valides, HTTP et latence de la RPC publique | Lecture seule, préflight peuplé obligatoire. |
 | D — candidatures simultanées | Ancienne cible : 50 soignants sur une mission | Candidatures effectivement créées, unicité, refus justifiés | **Suspendu : échec explicite avant toute requête.** |
-| E — dashboard | Rampe vers 100 VUs, plateau 1 min | Profil AS fictif non vérifié, identité du run et données métier valides, HTTP et latence de la RPC | Lecture métier après connexion sur une identité éphémère ; préparation/nettoyage isolés en CI. |
+| E — dashboard | Rampe vers 100 VUs, plateau 1 min | Profil AS fictif non vérifié, identité du run et données métier valides, HTTP et latence de la RPC | Lecture métier après connexion sur dix identités éphémères ; préparation/nettoyage isolés en CI. |
 | F — facturation hebdomadaire | Ancienne cible : 500 missions | Factures exactes du lot après un traitement isolé | **Suspendu : échec explicite avant toute requête.** |
 
 `all` inclut D et F et doit donc échouer tant que leur isolation n’est pas rétablie. Pour les premières mesures, lancer C puis E individuellement. Aucun faux résultat vert n’est substitué aux scénarios suspendus.
@@ -53,19 +53,69 @@ Définition live lue sur production et staging le 25 septembre : recherche ident
 
 Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP échoué < 1 %, p50 < 400 ms, p95 < 1 s et p99 < 2 s.
 
-## E — dashboard avec profil métier
+## E — dix profils minimaux distincts
 
-`scripts/ci/prepare-dashboard-fixture.mjs` crée une identité Auth éphémère propre au run sur staging, avec métadonnées privées de test et email fictif `example.invalid`. Son profil AS reste non vérifié, sans document, mission assignée ni finance. Les préférences de notification sont désactivées. Le mot de passe aléatoire est masqué et transmis seulement par `GITHUB_ENV`, jamais par le manifeste ou un argument shell. Les comptes fixes ne sont ni utilisés ni modifiés par E.
+`scripts/ci/prepare-dashboard-pool.mjs` prépare dix identités Auth éphémères,
+chacune via les gardes du préparateur unitaire existant. Leur run membre est
+`<run>-d00` à `<run>-d09` ; les UUID et emails `example.invalid` sont déterministes.
+Le run global est borné à 75 caractères. Chaque profil AS/SALARIÉ reste non
+vérifié, sans document, mission assignée ni finance ; notifications désactivées,
+aucun téléphone. Auth Admin utilise `email_confirm=true`, sans signup/invite.
+Tous les crons staging doivent rester inactifs et les empreintes de triggers
+attendues doivent correspondre ; aucun trigger ou contrôle métier n'est contourné.
 
-`05-dashboard-concurrent.js` se connecte avec cette identité et vérifie `fn_dashboard_soignant_complet()` avant la charge. UUID et métadonnées du login doivent correspondre au run. Le RPC actuel ne projette pas l’identifiant dans `profil` : le prénom fictif et le nom contenant l’UUID sont donc comparés à la fixture **à chaque réponse**, avec la profession AS et les validations désactivées. Un profil d’un autre compte, un compte Auth sans profil, un objet `{error: ...}`, `null` ou une structure incomplète échouent explicitement.
+Le manifeste global version 2 existe avant tout appel Auth. Les dix manifests
+membres sont écrits individuellement avant leur POST, avec leurs états exacts.
+`not-started` signifie qu'aucun POST de création n'a eu lieu. Un état `planned`
+avec compte absent reste ambigu et n'est jamais déclaré nettoyé. Le lot n'est
+pas rejoué automatiquement après échec ; conserver ses manifests pour contrôle
+et reprise du cleanup avec le même run et la même révision.
 
-Le même JWT utilisateur est réutilisé par les VUs. Cela mesure des lectures concurrentes d’un seul profil minimal ; cela **ne représente pas cent profils distincts**, ni un compte avec historique chargé. Le login de setup crée une session d’authentification ; aucune mutation de mission, contrat, présence ou paiement n’est exécutée.
+Les dix mots de passe aléatoires sont masqués et transmis uniquement dans
+`LOAD_DASHBOARD_POOL_JSON` via `GITHUB_ENV`, après préparation complète du lot.
+Ni les manifests ni les rapports ne contiennent de mot de passe, clé ou JWT.
+La préparation effectue dix logins et dix préflights RPC séquentiels ; k6 refait
+ces vingt contrôles au setup. Une seule identité ou réponse incohérente empêche
+le démarrage des VUs. Chaque profil est reconnu par son prénom et son nom
+contenant l'UUID : la RPC actuelle ne projette pas `profil.id`.
 
-Le cleanup `always()` exige le manifeste déterministe, le même UUID/email, les métadonnées privées et la cohorte test. Il refuse toute dépendance métier, y compris une FK configurée en cascade, puis retire explicitement préférences/profil avant de supprimer l’identité via Auth Admin. Les triggers et FK restent actifs. Un marqueur privé et le verrou SQL commun empêchent un seed de profil retardé après le cleanup. Une création Auth dont la réponse a été perdue et dont l’identité est encore absente n’est jamais déclarée nettoyée : le manifeste est conservé et le workflow échoue pour contrôle ultérieur.
+Pendant la charge, le slot vaut `(__VU - 1) % 10`. Cent VUs représentent donc
+**dix VUs par profil**, avec dix JWT distincts ; ce ne sont pas cent utilisateurs
+distincts. Chaque réponse doit correspondre au profil attendu et au contrat
+métier. Seule une réponse valide incrémente le compteur
+`dashboard_reponses_profil{slot:0..9}` correspondant. Les dix compteurs doivent
+être positifs : un slot non exercé invalide la mesure. Les tags sont limités à
+ces dix numéros, sans email ni UUID. Dix séries `dashboard_duree_profil_0` à `_9`
+mesurent aussi la latence par profil, réponses refusées incluses, sans changer
+les seuils agrégés. Les profils restent sans historique ; la
+diversité d'identités ne rend pas ce jeu représentatif de toute l'activité.
 
-Variables E requises : `LOAD_DASHBOARD_USER_ID`, `LOAD_DASHBOARD_EMAIL`, `LOAD_DASHBOARD_PASSWORD`, `LOAD_TEST_RUN_ID`, toutes préparées automatiquement en CI. Aucun repli vers `LOAD_TEST_PASSWORD` n’existe pour E. [Recette et limites du lot](recettes/2026-09-27-fixture-dashboard-charge.md).
+Le cleanup `always()` contrôle tout le manifeste avant la première suppression,
+refuse un membre modifié ou une dépendance métier même CASCADE, puis poursuit les
+autres membres sûrs. Un échec produit un état global `partial`, conserve les
+manifests et échoue le job. Chaque membre commencé doit constater zéro Auth,
+profil et préférence avant son état `cleaned` ; une reprise ne supprime pas une
+seconde fois une identité déjà absente. Le verrou SQL et le marqueur privé du
+préparateur unitaire continuent de bloquer un seed SQL tardif. Aucune suppression
+par préfixe ou modification des comptes fixes n'est permise.
 
-Seuils : zéro contrôle fonctionnel échoué, au moins une itération ; HTTP échoué < 1 %, p95 < 2 s et p99 < 3,5 s.
+Le workflow garde `jolene-supabase-staging-writes`, partagé avec le déploiement
+staging et le job SQL des PR. Les tests/build/simulations CI indépendants peuvent
+continuer en parallèle ; les écritures de ce staging sont sérialisées. L'option
+manuelle `dashboard_fixture_only=true`, réservée à E, prépare et nettoie les dix
+comptes sans installer ni lancer k6. Elle prouve le banc, aucune capacité.
+
+Volume nominal : dix créations Auth, dix profils/préférences, dix suppressions ;
+50 appels de préparation et 50 de cleanup, plus vingt appels de setup pour la
+mesure. Pas de charge Auth à 100 connexions simultanées. Un smoke E10 demande
+**10 VUs/10 s minimum**, puis la comparaison E100 peut utiliser 100 VUs/1 min,
+sans modifier les seuils : checks 100 %, HTTP échoué <1 %, p95 <2 s, p99 <3,5 s.
+Le démarrage reste entièrement mesuré.
+
+[Recette et limites E10](recettes/2026-09-30-dashboard-dix-profils.md). Les résultats
+historiques E100 sur une seule identité restent décrits dans la
+[recette du 27 septembre](recettes/2026-09-27-fixture-dashboard-charge.md) ; ils ne
+constituent pas une mesure du nouveau pool.
 
 ## Paramètres du workflow
 
@@ -77,7 +127,7 @@ Le workflow manuel `.github/workflows/load-tests.yml` fournit `LOAD_TEST_VUS` et
 - Sans paramètres, les rampes historiques sont conservées.
 - Les contrôles `checks: rate==1` et `iterations: count>0` sont obligatoires. Un `check()` faux rend la campagne rouge même si la réponse HTTP est 200.
 
-Pour un smoke prudent de C ou E : 2 VUs pendant 10 s. Ce smoke vérifie le banc et les contrats API ; ce n’est pas une mesure de capacité nationale. Augmenter ensuite selon le volume autorisé et conserver le nombre de VUs, la durée et le volume de données avec chaque résultat.
+Pour un smoke prudent de C : 2 VUs pendant 10 s ; de E10 : 10 VUs pendant 10 s. Ce smoke vérifie le banc et les contrats API ; ce n’est pas une mesure de capacité nationale. Augmenter ensuite selon le volume autorisé et conserver le nombre de VUs, la durée et le volume de données avec chaque résultat.
 
 ## Pourquoi D et F sont suspendus
 

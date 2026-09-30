@@ -25,6 +25,7 @@ export function SectionConfidentialite({ userId }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleExportRGPD = async (fmt: 'json' | 'csv') => {
     setExportLoading(true);
@@ -78,13 +79,14 @@ export function SectionConfidentialite({ userId }: Props) {
   };
 
   const handleSupprimerCompte = async () => {
+    if (deleteLoading) return;
+    setDeleteError(null);
     setDeleteLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', { body: {} });
       if (error) throw error;
       if (data?.error || data?.success !== true) {
-        afficherNotification({ type: 'erreur', message: data?.error || 'Suppression impossible.' });
-        setDeleteLoading(false);
+        setDeleteError(data?.error || 'Suppression impossible.');
         return;
       }
       afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection...' });
@@ -92,13 +94,14 @@ export function SectionConfidentialite({ userId }: Props) {
       // compte Auth. Cet appel efface la copie locale, meme si le JWT est deja
       // invalide cote serveur.
       await supabase.auth.signOut({ scope: 'local' });
+      setShowDeleteModal(false);
       navigate('/');
     } catch (err: unknown) {
       capturerErreurSentry(err, 'SectionConfidentialite', 'supprimer_compte');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      setDeleteError(extraireMessageErreur(err));
+    } finally {
+      setDeleteLoading(false);
     }
-    setDeleteLoading(false);
-    setShowDeleteModal(false);
   };
 
   return (
@@ -153,7 +156,7 @@ export function SectionConfidentialite({ userId }: Props) {
           La suppression de ton compte est irréversible. Tes données seront anonymisées conformément au RGPD.
         </p>
         <button
-          onClick={() => setShowDeleteModal(true)}
+          onClick={() => { setDeleteError(null); setShowDeleteModal(true); }}
           className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
         >
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
@@ -162,7 +165,7 @@ export function SectionConfidentialite({ userId }: Props) {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => { if (!deleteLoading) setShowDeleteModal(false); }} />
           <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
             <h3 className="text-lg font-bold text-destructive mb-2">🗑️ Supprimer mon compte</h3>
             <p className="text-sm text-muted-foreground mb-4">
@@ -170,12 +173,15 @@ export function SectionConfidentialite({ userId }: Props) {
             </p>
             <input
               value={deleteConfirmText}
+              disabled={deleteLoading}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Tape SUPPRIMER"
               className="input-base mb-4"
             />
+            {deleteError && <p role="alert" className="mb-4 text-sm text-destructive">{deleteError}</p>}
             <div className="flex gap-3 justify-end">
               <button
+                disabled={deleteLoading}
                 onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
                 className="btn-secondary text-sm px-4 py-2"
               >

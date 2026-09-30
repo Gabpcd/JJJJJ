@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { extraireMessageErreur } from '@/lib/erreurs';
 import { useNotification } from '@/contexts/NotificationContext';
 import {
   DialogResponsive,
   DialogResponsiveContent,
   DialogResponsiveHeader,
   DialogResponsiveTitle,
+  DialogResponsiveDescription,
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
@@ -62,6 +64,7 @@ export function WizardOuvertureLitige({
   const [etape, setEtape] = useState<1 | 2 | 3>(1);
   const [typeLitige, setTypeLitige] = useState<TypeLitige | null>(initialType ?? null);
   const [detail, setDetail] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [factures, setFactures] = useState<FactureContestable[]>([]);
   const [factureSelectionnee, setFactureSelectionnee] = useState(factureHonorairesId ?? '');
@@ -93,7 +96,8 @@ export function WizardOuvertureLitige({
   const peutAvancer2 = detail.trim().length >= 20;
 
   async function creerLitige() {
-    if (!typeLitige || detail.trim().length < 20) return;
+    if (creating || !typeLitige || detail.trim().length < 20) return;
+    setErreur(null);
 
     const motifStructure = `[${typeLitige}] ${detail.trim()}`;
 
@@ -113,34 +117,38 @@ export function WizardOuvertureLitige({
     if (factureSelectionnee) {
       params.p_facture_id = factureSelectionnee;
     }
-    const { data, error } = await supabase.rpc(
-      'fn_ouvrir_litige_rate_limited' as any,
-      params,
-    );
-    setCreating(false);
+    try {
+      const { data, error } = await supabase.rpc(
+        'fn_ouvrir_litige_rate_limited' as any,
+        params,
+      );
+      if (error) throw error;
+      if ((data as any)?.error) {
+        setErreur((data as any).error);
+        return;
+      }
 
-    if (error) {
-      afficherNotification({ type: 'erreur', message: error.message });
-      return;
+      afficherNotification({ type: 'succes', message: 'Litige ouvert. Vous pouvez suivre son traitement dans l’app.' });
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      setErreur(extraireMessageErreur(error));
+    } finally {
+      setCreating(false);
     }
-    if ((data as any)?.error) {
-      afficherNotification({ type: 'erreur', message: (data as any).error });
-      return;
-    }
-
-    afficherNotification({ type: 'succes', message: 'Litige ouvert. L\'établissement et l\'admin Jolene ont été notifiés.' });
-    onSuccess?.();
-    onClose();
   }
 
   return (
     <DialogResponsive open={true} onOpenChange={(o) => { if (!o && !creating) onClose(); }}>
-      <DialogResponsiveContent maxWidth="lg" aria-labelledby="wizard-litige-titre">
+      <DialogResponsiveContent maxWidth="lg">
         <DialogResponsiveHeader>
-          <DialogResponsiveTitle id="wizard-litige-titre" className="inline-flex items-center gap-2">
+          <DialogResponsiveTitle className="inline-flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-warning" />
             Signaler un problème
           </DialogResponsiveTitle>
+          <DialogResponsiveDescription className="sr-only">
+            Choisissez le type de problème, décrivez-le puis confirmez votre demande.
+          </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-4">
           {missionIntitule && (
@@ -262,7 +270,7 @@ export function WizardOuvertureLitige({
               <div className="rounded-lg bg-info/5 border border-info/30 p-3 text-[11px] text-foreground">
                 <p className="font-medium mb-1">Ce qui se passe après confirmation :</p>
                 <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-                  <li>L'établissement reçoit une notification + email immédiate</li>
+                  <li>Le suivi du litige est disponible dans l’app.</li>
                   <li>Un fil de discussion s'ouvre pour échanger et joindre des documents</li>
                   <li>L'admin Jolene peut intervenir en médiation après 72h sans accord</li>
                   <li>Aucune sanction automatique : tout est discutable</li>
@@ -271,48 +279,55 @@ export function WizardOuvertureLitige({
             </div>
           )}
         </DialogResponsiveBody>
-        <DialogResponsiveFooter className="sm:justify-between">
-          {etape > 1 ? (
-            <button
-              type="button"
-              onClick={() => setEtape((etape - 1) as 1 | 2)}
-              disabled={creating}
-              className="btn-secondary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
-            >
-              <ChevronLeft className="h-4 w-4" /> Précédent
-            </button>
-          ) : <div />}
-          {etape === 1 && (
-            <button
-              type="button"
-              onClick={() => setEtape(2)}
-              disabled={!peutAvancer1}
-              className="btn-primary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
-            >
-              Suivant <ChevronRight className="h-4 w-4" />
-            </button>
+        <DialogResponsiveFooter className="flex-col sm:flex-col">
+          {erreur && (
+            <p role="alert" className="w-full rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {erreur}
+            </p>
           )}
-          {etape === 2 && (
-            <button
-              type="button"
-              onClick={() => setEtape(3)}
-              disabled={!peutAvancer2}
-              className="btn-primary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
-            >
-              Suivant <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-          {etape === 3 && (
-            <button
-              type="button"
-              onClick={creerLitige}
-              disabled={creating}
-              className="btn-primary text-sm inline-flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
-            >
-              {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-              Confirmer l'ouverture du litige
-            </button>
-          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            {etape > 1 ? (
+              <button
+                type="button"
+                onClick={() => setEtape((etape - 1) as 1 | 2)}
+                disabled={creating}
+                className="btn-secondary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" /> Précédent
+              </button>
+            ) : <div />}
+            {etape === 1 && (
+              <button
+                type="button"
+                onClick={() => setEtape(2)}
+                disabled={!peutAvancer1}
+                className="btn-primary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
+              >
+                Suivant <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+            {etape === 2 && (
+              <button
+                type="button"
+                onClick={() => setEtape(3)}
+                disabled={!peutAvancer2}
+                className="btn-primary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
+              >
+                Suivant <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+            {etape === 3 && (
+              <button
+                type="button"
+                onClick={creerLitige}
+                disabled={creating}
+                className="btn-primary text-sm inline-flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
+              >
+                {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirmer l'ouverture du litige
+              </button>
+            )}
+          </div>
         </DialogResponsiveFooter>
       </DialogResponsiveContent>
     </DialogResponsive>

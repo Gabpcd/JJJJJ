@@ -169,12 +169,18 @@ test('signature OTP : session expirée, code incorrect, code expiré et reprise 
     await page.reload();
     await page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
     state.failOnce='fn_envoyer_otp_signature';await sms.click();
-    await expect(page.getByText('Une erreur est survenue. Veuillez réessayer.',{exact:true})).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveText('Une erreur est survenue. Veuillez réessayer.');
+    await expect(page.locator('[data-notification-type]')).toHaveCount(0);
     await sms.click();
+    await expect(page.getByRole('status')).toHaveText('Code envoyé au +33 6 ** ** ** 01. Valide 10 min.');
+    await expect(page.locator('[data-notification-type]')).toHaveCount(0);
     const code=page.getByRole('textbox',{name:'Code SMS à 6 chiffres'});
     const signer=page.getByRole('button',{name:'Signer',exact:true});
-    await code.fill('000000');await signer.click();
+    await code.fill('000000');
+    await Promise.all([page.waitForResponse(r=>r.url().endsWith('/rpc/fn_signer_contrat_otp')),signer.click()]);
+    await expect(page.getByRole('alert')).toHaveText('Code incorrect. Vérifiez votre SMS et réessayez.');
     await expect(page.getByText('Code incorrect. 4 tentatives restantes.',{exact:true})).toBeVisible();
+    await expect(page.locator('[data-notification-type]')).toHaveCount(0);
     expect(state.signatures).toHaveLength(0);
     state.otpError='OTP_EXPIRE';await code.fill('123456');await signer.click();
     await expect(page.getByText('Le code SMS a expiré (10 min). Demandez un nouveau code.',{exact:true})).toBeVisible();
@@ -184,6 +190,7 @@ test('signature OTP : session expirée, code incorrect, code expiré et reprise 
     await expect(code).toHaveValue('');
     await code.fill('123456');await signer.dblclick();
     await expect(page.getByText(/Soignant\(e\) : ✅ Signé/)).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('✅ Vous avez déjà signé ce contrat');
     expect(state.signatures).toHaveLength(1);
     expect(state.contrat.statut).toBe('SIGNE_SOIGNANT');
     expect(state.calls.filter(c=>c.name==='fn_signer_contrat_otp')).toHaveLength(3);

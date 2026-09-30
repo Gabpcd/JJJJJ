@@ -188,8 +188,8 @@ test('SQL garde tous les triggers/FK actifs, verrou commun et blocage de seed ta
 });
 test('workflow prépare E/all puis nettoie toujours avant artifact sans transmettre de password en paramètre shell',()=>{
   const workflow=readFileSync(new URL('../../.github/workflows/load-tests.yml',import.meta.url),'utf8');
-  assert.ok(workflow.indexOf('prepare-dashboard-fixture.mjs prepare')<workflow.indexOf('- name: Run scenario'));
-  assert.ok(workflow.indexOf('prepare-dashboard-fixture.mjs cleanup')>workflow.indexOf('- name: Run scenario'));
+  assert.ok(workflow.indexOf('prepare-dashboard-pool.mjs prepare')<workflow.indexOf('- name: Run scenario'));
+  assert.ok(workflow.indexOf('prepare-dashboard-pool.mjs cleanup')>workflow.indexOf('- name: Run scenario'));
   assert.match(workflow,/if: always\(\) && \(inputs\.scenario == '05-dashboard-concurrent' \|\| inputs\.scenario == 'all'\)/);
   assert.doesNotMatch(workflow,/run:.*LOAD_DASHBOARD_PASSWORD/);
 });

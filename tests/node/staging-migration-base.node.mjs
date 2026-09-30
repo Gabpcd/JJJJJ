@@ -57,6 +57,7 @@ function fixture(t, options = {}) {
   write(`supabase/migrations/${pending}`, 'CREATE TABLE public.pending_main(id int);\n');
   write('supabase/config.toml', 'project_id = "fixture"\n');
   write('scripts/ci/check-staging-migration-base.mjs', readFileSync(path.join(root, 'scripts/ci/check-staging-migration-base.mjs'), 'utf8'));
+  write('scripts/ci/reconcile-staging-litige-base.mjs', readFileSync(path.join(root, 'scripts/ci/reconcile-staging-litige-base.mjs'), 'utf8'));
   git('add', '.'); git('commit', '-qm', 'main fixture'); const baseSha = git('rev-parse', 'HEAD');
   write(`supabase/migrations/${proposed}`, 'CREATE TABLE public.unapproved_contract(id int);\n');
   if (options.modifyHistory) write(`supabase/migrations/${main}`, 'CREATE TABLE public.changed_history(id int);\n');
@@ -164,5 +165,5 @@ test('un fichier PR recopié dans le worktree main est refusé même sans versio
 });
 test('workflow conserve le verrou staging et exécute ces simulations en CI', () => {
   assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
-  assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs'));
+  assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs'));
 });

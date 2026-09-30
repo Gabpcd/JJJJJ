@@ -2,8 +2,8 @@
  * Lighthouse CI configuration for Jolene.
  *
  * Audite les pages publiques critiques (landing, inscription, connexion, aide,
- * accessibilité, 404). Échec si scores Performance / A11y / Best Practices /
- * SEO sous les thresholds.
+ * accessibilité, 404). Avertissements si les scores Performance / A11y /
+ * Best Practices / SEO passent sous les seuils configurés.
  *
  * Usage local : npx lhci autorun
  * Usage CI    : .github/workflows/lighthouse.yml

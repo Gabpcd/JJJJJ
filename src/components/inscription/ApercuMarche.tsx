@@ -34,22 +34,31 @@ export function ApercuMarche({
   rayonKm?: number | null;
   className?: string;
 }) {
-  const [apercu, setApercu] = useState<Apercu | null>(null);
+  const cle = JSON.stringify([profession || null, lat ?? null, lng ?? null, rayonKm ?? null]);
+  const [resultat, setResultat] = useState<{ cle: string; apercu: Apercu } | null>(null);
+  // Une réponse précédente ne doit jamais porter le libellé d'une nouvelle
+  // profession/zone pendant le délai de recherche, ni après un refus serveur.
+  const apercu = resultat?.cle === cle ? resultat.apercu : null;
 
   useEffect(() => {
     let annule = false;
     const t = setTimeout(async () => {
       const geo = lat != null && lng != null;
-      const { data, error } = await supabase.rpc('fn_apercu_marche_profession' as any, {
-        p_profession: profession || null,
-        p_lat: geo ? lat : null,
-        p_lng: geo ? lng : null,
-        p_rayon_km: geo ? (rayonKm ?? 30) : null,
-      });
-      if (!annule && !error && data) setApercu(data as unknown as Apercu);
+      try {
+        const { data, error } = await supabase.rpc('fn_apercu_marche_profession' as any, {
+          p_profession: profession || null,
+          p_lat: geo ? lat : null,
+          p_lng: geo ? lng : null,
+          p_rayon_km: geo ? (rayonKm ?? 30) : null,
+        });
+        if (!annule) setResultat(!error && data ? { cle, apercu: data as unknown as Apercu } : null);
+      } catch {
+        // L'aperçu est facultatif : une panne ne bloque pas l'inscription.
+        if (!annule) setResultat(null);
+      }
     }, 300);
     return () => { annule = true; clearTimeout(t); };
-  }, [profession, lat, lng, rayonKm]);
+  }, [profession, lat, lng, rayonKm, cle]);
 
   if (!apercu) return null;
 
@@ -77,8 +86,8 @@ export function ApercuMarche({
         <Building2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <p className="text-sm text-foreground">
           <strong>{apercu.nb_etablissements} établissement{apercu.nb_etablissements > 1 ? 's' : ''} de santé</strong>{' '}
-          {apercu.zone === 'rayon' ? 'près de chez vous' : 'déjà inscrits'} — complétez votre profil
-          pour être prévenu·e en premier dès qu'une mission est publiée.
+          {apercu.zone === 'rayon' ? 'près de chez vous' : 'déjà inscrits'} — découvrez les missions
+          et complétez votre dossier lorsque vous souhaitez candidater.
         </p>
       </div>
     );
