@@ -1,0 +1,112 @@
+[
+  {
+    "signature": "fn_admin_creer_litige_force(uuid,type_litige,text,text)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260903212000_reparer_creation_litige_admin.sql",
+        "merged_commit": "6ac4797d47f0b88f1274d4f37947dd713025e62a"
+      }
+    ],
+    "definition_md5": "6d05f57097fa2aff068b70a0de48b824"
+  },
+  {
+    "signature": "fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260903203000_resoudre_litiges_paie_salariee.sql",
+        "merged_commit": "daa570d9e15913f88c01224399ebf9e8018bcc01"
+      }
+    ],
+    "definition_md5": "139ca12a3fcbff5bd5f65074d3242b53"
+  },
+  {
+    "signature": "fn_capacite_alertes_recherches()",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925093121_alertes_recherches_etablissement_exactes.sql",
+        "merged_commit": "c0b4389785e5f8e90d9de9fcc5ca075ceb1567cd"
+      }
+    ],
+    "definition_md5": "9dc1e6aaacd4c1bc19aea8c13caa4ddf"
+  },
+  {
+    "signature": "fn_creer_filtre_sauvegarde(text,filtre_audience,jsonb,boolean,filtre_frequence_alerte)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925093121_alertes_recherches_etablissement_exactes.sql",
+        "merged_commit": "c0b4389785e5f8e90d9de9fcc5ca075ceb1567cd"
+      }
+    ],
+    "definition_md5": "e58c251bdecbe4f8a40c8916b89195dd"
+  },
+  {
+    "signature": "fn_missions_publiques_recherche(text,text)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925153200_recherche_missions_comptage_unique.sql",
+        "merged_commit": "746847dcf988cb57bcc27e4dedfdc45ebf3cc754"
+      }
+    ],
+    "definition_md5": "6b2201b85728a6541fc6a46bdd390fb0"
+  },
+  {
+    "signature": "fn_modifier_filtre_sauvegarde(uuid,text,boolean,filtre_frequence_alerte)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925093121_alertes_recherches_etablissement_exactes.sql",
+        "merged_commit": "c0b4389785e5f8e90d9de9fcc5ca075ceb1567cd"
+      }
+    ],
+    "definition_md5": "9fa49350ff5ed888e5bbdd29f7399dd6"
+  },
+  {
+    "signature": "fn_rechercher_soignants_etab(text,text[],text,integer,text,numeric,integer,integer,boolean,boolean,text,integer,integer)",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925093121_alertes_recherches_etablissement_exactes.sql",
+        "merged_commit": "c0b4389785e5f8e90d9de9fcc5ca075ceb1567cd"
+      }
+    ],
+    "definition_md5": "5a1fc4a4651f794ca8d95c3f6885195a"
+  },
+  {
+    "signature": "fn_supprimer_compte_etablissement_rate_limited()",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql",
+        "merged_commit": "b58393778d585251cd912309b339e3bb8afa74c2"
+      }
+    ],
+    "definition_md5": "db6d6e1ec53b7f743e4372810ed9d98c"
+  },
+  {
+    "signature": "fn_supprimer_compte_rate_limited()",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql",
+        "merged_commit": "b58393778d585251cd912309b339e3bb8afa74c2"
+      }
+    ],
+    "definition_md5": "f283e828e173bf12d8f633be28431c97"
+  },
+  {
+    "signature": "fn_supprimer_mon_compte()",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql",
+        "merged_commit": "b58393778d585251cd912309b339e3bb8afa74c2"
+      }
+    ],
+    "definition_md5": "71254d2065c67c11ce0460368f20d01f"
+  },
+  {
+    "signature": "fn_supprimer_mon_compte_etablissement()",
+    "sources": [
+      {
+        "path": "supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql",
+        "merged_commit": "b58393778d585251cd912309b339e3bb8afa74c2"
+      }
+    ],
+    "definition_md5": "8d1a6220cdc135d36d2d472fcde230ee"
+  }
+]
