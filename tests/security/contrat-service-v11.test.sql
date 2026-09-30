@@ -73,6 +73,9 @@ BEGIN
   IF p->>'version' IS DISTINCT FROM 'v1.1' OR p->>'success' IS DISTINCT FROM 'true' OR p->>'contenu_texte' NOT LIKE '%Recette contrat%'
     OR p->>'contenu_texte' NOT LIKE '%simulations indicatives%' THEN RAISE EXCEPTION 'Document serveur incorrect : %',p->>'error'; END IF;
   IF public.fn_preparer_contrat_service_v11() IS DISTINCT FROM p THEN RAISE EXCEPTION 'Préparation non idempotente'; END IF;
+  -- Résoudre les noms du schéma private pour inspecter les ACL nécessite
+  -- postgres. Les rôles visés restent explicitement ceux des clients.
+  EXECUTE 'RESET ROLE';
   IF has_table_privilege('authenticated','public.contrats_service_preparations','SELECT')
     OR has_table_privilege('service_role','public.contrats_service_preparations','UPDATE')
     OR has_table_privilege('authenticated','public.contrats_service_preparations','DELETE')
@@ -83,6 +86,7 @@ BEGIN
   IF NOT has_function_privilege('authenticated','public.fn_lire_contrat_service_signe()','EXECUTE')
     OR has_function_privilege('anon','public.fn_lire_contrat_service_signe()','EXECUTE')
     OR has_function_privilege('service_role','public.fn_lire_contrat_service_signe()','EXECUTE') THEN RAISE EXCEPTION 'ACL consultation incorrectes'; END IF;
+  EXECUTE 'SET LOCAL ROLE authenticated';
   EXECUTE 'RESET ROLE';
   EXECUTE 'SET LOCAL ROLE anon';
   refuse := false;

@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 export const STAGING_REF = 'mejpriaetwgtcstbgfid';
 export const DRAFT_SHA256 = '534a2efae44ba72270868cd182efd9f1b1e8246e2f413dbe1bb1391d735b169e';
-const SUITE_SHA256 = '77bdb3f563a5096af6e8b491c119e26defd5c6b7f3f736523703667aa5b7eceb';
+const SUITE_SHA256 = '148d9a791de12b4508f31f84ea4c11f617027e4f8ff6f2522c1dae94b9607205';
 const CATALOGUE_SHA256 = '526d2c57717bdc69684f1724c2bee1c9362fc0ff7225128129a61cc49ccf180f';
 const ATTENDU_SHA256 = 'dd73a31d3eb8868a9c7cb7af2f44e5160e57623acdd4ed626188b58d11c8266a';
 const ENDPOINT = `https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`;

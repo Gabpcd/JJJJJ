@@ -65,7 +65,7 @@ l'exécution, y compris après intégration de nouvelles migrations.
 - `node --test tests/node/contrat-v11-sql-proof.node.mjs tests/node/staging-migration-base.node.mjs` : 20/20.
 - `node --check scripts/ci/contrat-v11-sql-proof.mjs`, actionlint et diff check : verts.
 - `bash tests/non-regression/guards.sh` : 17/17.
-- Assemblage réel local 96 835 octets : pglast 49 instructions SQL, 14 corps
+- Assemblage réel local 97 051 octets : pglast 49 instructions SQL, 14 corps
   PLpgSQL, un BEGIN/savepoint/rollback-to/release/ROLLBACK, aucun COMMIT.
 
 Les mocks transport couvrent mauvais contexte/destination, altération des
@@ -81,3 +81,31 @@ est 30/30 simulations (six scénarios, cinq formats), non rejouée pour ce lot s
 changement UI. Cette recette teste les métadonnées Storage, pas les octets ni
 l'API Storage/Auth Admin ; elle ne prouve ni concurrence interconnexion ni
 appareil physique. Aucun circuit de paiement n'est repris.
+
+
+## Premier pilote et correction du contexte ACL
+
+Run `36755425612`, job `110024348959`, head `fd5be121` : préflight accepté,
+transaction refusée à 18:00:31.866 UTC, SQLSTATE `42501`, contexte
+`inline_code_block line 74 at IF`. L'assertion ACL utilisait le nom textuel du
+helper `private.fn_purger_preparations_contrat_non_signees` alors que le rôle
+courant était `authenticated`. Le SELECT de diagnostic confirme l'absence de
+USAGE sur `private`, avec USAGE sur `public` et accès au helper de catalogue.
+
+Le correctif encadre uniquement ces assertions par `RESET ROLE` puis
+`SET LOCAL ROLE authenticated`. Les rôles explicitement testés par
+`has_function_privilege` restent inchangés. Aucun GRANT, texte, DDL ou appel
+métier déplacé sous un rôle privilégié. Seule l'empreinte de la suite change
+dans le runner ; les trois autres empreintes sont inchangées.
+
+Le contrôle indépendant du premier run a confirmé les 26 compteurs à zéro et
+le catalogue exact. L'archive initiale reste conservée dans
+`/private/tmp/jolene-contrat-v11-sql-36755425612` ; elle n'est pas requalifiée en
+succès. La suite SQL complète reste à exécuter après revue.
+
+Régression locale : `python3 tests/security/check-contrat-v11-roles.py` utilise
+le pglast déjà disponible, sans installation. Le contrôle AST échoue sur le
+contexte ACL d'origine, passe sur la correction et compare la séquence des
+appels métier/rôles à fd5be121 : appels préparation, signature, consultation et
+anonymisation inchangés, seul le refus de consultation anonyme reste sous anon.
+Ce test local structurel ne prétend pas remplacer l'exécution PostgreSQL.
