@@ -11,7 +11,7 @@ Le document de référence est [docs/tests-charge.md](../../docs/tests-charge.md
 
 Le workflow manuel `Load tests (k6)` reçoit les overrides VUs et durée. Les scénarios actifs les appliquent via `helpers/options.js`. Pour une durée explicite, la charge utilise des VUs constants pendant cette durée totale (maximum 15 minutes), sans rampe supplémentaire.
 
-Les anciens `seed/seed-staging.sql` et `seed/cleanup-staging.sql` concernent des scénarios historiques : ils ne doivent pas être lancés automatiquement pour contourner les préflights.
+Les anciens `seed/seed-staging.sql` et `seed/cleanup-staging.sql` refusent explicitement toute exécution. L’input historique `seed_load_test_data=true` interrompt le bootstrap avant tout accès DB. Aucune purge par préfixe ni remise en service de F.
 
 Pour C, utiliser le nouveau `scripts/ci/prepare-load-fixtures.mjs prepare`, puis `cleanup` dans une étape CI `always()`. Il crée 100–1000 missions (500 par défaut), 10 établissements fictifs sans Auth, écrit les IDs avant le réseau et vérifie leur visibilité anonyme. Il refuse la production, les crons actifs et toute suppression hors manifeste ou avec dépendance tierce. Configuration détaillée dans le document de référence.
 

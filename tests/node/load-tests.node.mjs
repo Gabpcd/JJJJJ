@@ -1,3 +1,4 @@
+import { manifesteD } from '../../scripts/ci/candidatures-fixture-contract.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -77,6 +78,7 @@ async function charger(nom, env = {}) {
       verifications.push(...resultats); return resultats.every(r => r.ok);
     },
   };
+  globalThis[pont].http.get = (url, options) => globalThis[pont].http.post(url, null, options);
   globalThis[pont].Counter = class { constructor(name) { this.name = name; } add(value, tags) { compteurs.push({ name: this.name, value, tags }); } };
   globalThis[pont].Trend = class { constructor(name) { this.name = name; } add(value) { latences.push({ name: this.name, value }); } };
   const metricsUrl = urlCode(`export const Counter = globalThis.${pont}.Counter; export const Trend = globalThis.${pont}.Trend;`);
@@ -91,7 +93,7 @@ async function charger(nom, env = {}) {
   let source = await readFile(new URL(`scenarios/${nom}.js`, racineLoad), 'utf8');
   for (const [specifier, remplacement] of [
     ['k6/execution', executionUrl], ['k6/http', httpUrl], ['k6', k6Url], ['k6/metrics', metricsUrl], ['../helpers/auth.js', urlCode(auth)],
-    ...['options', 'contrats', 'data', 'resume', 'dashboard-pool'].map(n => [`../helpers/${n}.js`, new URL(`helpers/${n}.js`, racineLoad).href]),
+    ...['options', 'contrats', 'data', 'resume', 'dashboard-pool', 'candidatures-pool'].map(n => [`../helpers/${n}.js`, new URL(`helpers/${n}.js`, racineLoad).href]),
   ]) source = source.replaceAll(`'${specifier}'`, JSON.stringify(remplacement));
   const module = await import(urlCode(`${source}\n// ${pont}`));
   const optionsMoteur = structuredClone(module.options);
@@ -179,8 +181,8 @@ for (const [lettre, nom] of [['D', '04-candidatures-simultanees'], ['F', '06-cro
   test(`${lettre} échoue explicitement avant toute requête, y compris sans setup`, async () => {
     assert.throws(() => refuserScenarioNonIsole(lettre), /Aucune mutation exécutée/);
     const t = await charger(nom);
-    assert.throws(() => t.module.setup(), /Aucune mutation exécutée/);
-    assert.throws(() => t.module.default(), /Aucune mutation exécutée/);
+    assert.throws(() => t.module.setup(), lettre === 'D' ? /Banc D2 non préparé/ : /Aucune mutation exécutée/);
+    assert.throws(() => t.module.default(), lettre === 'D' ? /hors borne ou setup absent/ : /Aucune mutation exécutée/);
     assert.equal(t.appels.length, 0);
     const summary = JSON.parse(t.module.handleSummary({})[`tests/load/results/${nom}.json`]);
     assert.equal(summary.preuve_metier, false);
@@ -225,8 +227,8 @@ test('les rapports conservent les preuves agrégées et excluent les données de
     assert.equal(JSON.stringify(sorties).includes(secret), false, nom);
     for (const p of pool) assert.equal(JSON.stringify(sorties).includes(p.password), false, nom);
     const rapport = JSON.parse(sorties[`tests/load/results/${nom}.json`]);
-    const indisponible = nom.startsWith('04-') ? 'D' : nom.startsWith('06-') ? 'F' : null;
-    assert.deepEqual(rapport, indisponible ? { ...attendu, preuve_metier: false, scenario_indisponible: indisponible } : nom.startsWith('05-') ? { ...attendu, profils_attendus: 10 } : attendu, nom);
+    const indisponible = nom.startsWith('06-') ? 'F' : null;
+    assert.deepEqual(rapport, indisponible ? { ...attendu, preuve_metier: false, scenario_indisponible: indisponible } : nom.startsWith('04-') ? { ...attendu, profils_attendus:2, preuve_metier:false, verification_sql_et_cleanup_requis:true } : nom.startsWith('05-') ? { ...attendu, profils_attendus: 10 } : attendu, nom);
   }
   assert.equal(data.setup_data.jwt, secret, 'La session en mémoire ne doit pas être modifiée par le rapport');
 });
@@ -270,4 +272,59 @@ test('résumé : la projection des options moteur exclut env, tags et secrets im
     rampe:{executor:'ramping-vus',startVUs:0,stages:[{duration:'20s',target:100}]}});
   assert.deepEqual(options,avant);
   assert.match(resumeCharge({metrics:{}},'E','rpc_dashboard',{}),/Configuration effective : non disponible/);
+});
+
+const dManifeste=manifesteD('node-charge-1','2026-10-14');
+const dLot={...dManifeste,identites:dManifeste.membres.map((a,i)=>({...a,password:'Aa1!canari-D2-motdepasse-ne-pas-sortir-'+i}))};
+const dSession=a=>({access_token:'jeton-D2-'+a.slot,user:{id:a.userId,email:a.email,app_metadata:{role:a.role,est_compte_test:true,is_test_playwright:true,load_fixture_kind:'CANDIDATURES_D2',load_fixture_run:dLot.runId,...(a.slot===2?{etablissement_id:a.userId}:{})}}});
+function dPreflight(t){
+  for(const a of dLot.identites)t.reponses.push({body:dSession(a)});
+  for(const a of dLot.identites.slice(0,2))t.reponses.push(
+    {body:[{id:a.userId,profession:'AS',type_exercice:'SALARIE',est_compte_test:true,identite_verifiee:false,tous_documents_valides:false}]},
+    {body:[{id:dLot.missionId,etablissement_id:dLot.identites[2].userId,statut:'OUVERTE',est_urgente:false,soignant_assigne_id:null,type_contrat_recherche:'SALARIE',mode_attribution:'CANDIDATURE'}]},
+    {body:[{id:dLot.creneauId,debut:dLot.debut,fin:dLot.fin,type_creneau:'PREVISIONNEL',est_pause:false}]},{body:[]});
+}
+const dRow=i=>({id:`10000000-0000-4000-a000-00000000000${i+1}`,mission_id:dLot.missionId,soignant_id:dLot.identites[i].userId,statut:'EN_ATTENTE',type_contrat_choisi:'SALARIE',message:dLot.marker});
+test('D2 : pool invalide refusé avant Auth ; volume fixe et absence de setup fermée',async()=>{
+  for(const change of [p=>p.identites.pop(),p=>p.identites[1]=p.identites[0],p=>p.identites[0].email='playwright-soignant@jolene.app',p=>p.runId='autre',p=>p.fin=p.debut]){
+    const p=structuredClone(dLot);change(p);const t=await charger('04-candidatures-simultanees',{LOAD_CANDIDATURES_JSON:JSON.stringify(p)});assert.throws(()=>t.module.setup());assert.equal(t.appels.length,0);
+  }
+  for(const env of [{LOAD_TEST_VUS:'50'},{LOAD_TEST_DURATION:'1m'}])await assert.rejects(charger('04-candidatures-simultanees',env),/aucun override/);
+});
+test('D2 : chaque préflight identité/profil/mission/planning/compteur vide bloque avant candidature',async()=>{
+  for(const index of [0,1,2,3,4,5,6,7,8,9,10]){
+    const t=await charger('04-candidatures-simultanees',{LOAD_CANDIDATURES_JSON:JSON.stringify(dLot)});dPreflight(t);t.reponses[index]={body:{error:'canari-secret-provider'},status:index<3?429:200};assert.throws(()=>t.module.setup());assert.equal(t.appels.some(([u])=>u.includes('/rpc/fn_confirmer')),false);
+  }
+});
+test('D2 : deux POST frontend exacts, deux lignes propres, établissement voit deux, pas de secret résumé',async()=>{
+  const t=await charger('04-candidatures-simultanees',{LOAD_CANDIDATURES_JSON:JSON.stringify(dLot)});dPreflight(t);const data=t.module.setup();
+  assert.equal(JSON.stringify(data).includes(dLot.identites[0].password),false);
+  for(let i=0;i<2;i++){
+    globalThis.__VU=i+1;t.reponses.push({body:{success:true,candidature_id:dRow(i).id,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:true}},{body:[dRow(i)]});t.module.default(data);
+  }
+  t.reponses.push({body:[dRow(0),dRow(1)]});t.module.teardown(data);
+  assert.equal(t.compteurs.length,2);assert.equal(t.verifications.every(v=>v.ok),true);
+  const posts=t.appels.filter(([u])=>u.includes('/rpc/fn_confirmer'));assert.equal(posts.length,2);
+  for(const [,body]of posts)assert.deepEqual(JSON.parse(body),{p_mission_id:dLot.missionId,p_action:'POSTULER',p_creneaux_confirmes:[{debut:dLot.debut,fin:dLot.fin}],p_message:dLot.marker,p_choix_contrat:null,p_candidature_id:null});
+  globalThis.__ITER=1;assert.throws(()=>t.module.default(data));globalThis.__ITER=0;globalThis.__VU=3;assert.throws(()=>t.module.default(data));
+  const rapport=JSON.stringify(t.module.handleSummary({setup_data:data,metrics:{}}));assert.equal(rapport.includes('jeton-D2'),false);assert.equal(rapport.includes(dLot.marker),false);
+});
+test('D2 : faux 200, ligne autre soignant et total établissement vide ne peuvent réussir',async()=>{
+  for(const cas of ['error','autre']){
+    const t=await charger('04-candidatures-simultanees',{LOAD_CANDIDATURES_JSON:JSON.stringify(dLot)});dPreflight(t);const data=t.module.setup();globalThis.__VU=1;
+    t.reponses.push({body:cas==='error'?{error:'refus'}:{success:true,candidature_id:dRow(0).id,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:true}});
+    if(cas==='autre')t.reponses.push({body:[dRow(1)]});t.module.default(data);assert.equal(t.compteurs.length,0);assert.ok(t.verifications.some(v=>!v.ok));
+    t.reponses.push({body:[]});assert.throws(()=>t.module.teardown(data));
+  }
+});
+
+test('D2 accepte les quatre variantes UUID v4 serveur sans relâcher propriétaire/mission',async()=>{
+ const {candidatureDValide}=await import('../load/helpers/candidatures-pool.js');
+ for(const variant of ['8','9','a','b']){
+  const row={...dRow(0),id:`10000000-0000-4000-${variant}000-000000000001`};
+  assert.equal(candidatureDValide(row,dLot,dLot.identites[0],row.id),true);
+  assert.equal(candidatureDValide(row,dLot,dLot.identites[1],row.id),false);
+  assert.equal(candidatureDValide({...row,mission_id:dRow(1).id},dLot,dLot.identites[0],row.id),false);
+ }
+ for(const id of ['10000000-0000-4000-c000-000000000001','pas-un-uuid',dRow(0).id.replace('-4000-','-1000-')])assert.equal(candidatureDValide({...dRow(0),id},dLot,dLot.identites[0],id),false);
 });
