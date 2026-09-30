@@ -30,6 +30,8 @@ les assertions métier, les captures, `goBack`, la conservation de l’onglet Li
 l’absence de candidature automatique et les gardes `unknown=[]` / `errors=[]`
 sont identiques. Aucun filtre d’erreur, temporisation ou réessai ajouté. Le helper
 commun `entrer`/`aller` et la configuration Playwright restent inchangés.
+Le complément de typage décrit plus bas sépare uniquement deux abonnements
+équivalents dans ce helper.
 
 ## Vérification locale
 
@@ -61,8 +63,8 @@ Preuves :
 - `tsc -b` vert. Le contrôle TypeScript isolé spec/helper retourne TS2769
   sur le `page.on` à événements union du helper ligne 39, inchangé : même
   diagnostic reproduit sur les deux fichiers extraits de la base `a2157887`.
-  Ce défaut de typage préexistant n’est pas corrigé dans ce lot ; les logs
-  `...-e2e-types.txt` et `...-e2e-types-base.txt` sont conservés dans `/private/tmp` ;
+  Les logs initiaux `...-e2e-types.txt` et `...-e2e-types-base.txt` sont conservés ;
+  le complément ci-dessous corrige ce diagnostic sans modifier les gardes ;
 - `git diff --check` vert ; relecture croisée indépendante du diff, helper,
   trace et empreinte des résultats : aucun finding, sans relance de tests.
   Ce contrôle ciblé n’est pas une revue B8 fraîche.
@@ -70,3 +72,38 @@ Preuves :
 Il s’agit d’une simulation frontend locale, sans appareil physique ni backend
 réel. Un succès ciblé ne démontre pas la stabilité de toute la matrice CI ni
 l’explication profonde de l’incident WebKit original.
+
+## Complément : typage des deux événements réseau
+
+Le diagnostic TS2769 provenait du choix d’overload Playwright avec une union de
+noms d’événements. Deux appels littéraux `page.on('requestfinished', ...)` et
+`page.on('requestfailed', ...)` remplacent la boucle ; leurs callbacks sont
+strictement identiques à l’ancien corps. Le retrait d’une requête en cours et
+son horodatage restent exécutés pour les deux événements dans le même ordre.
+
+Aucun filtre, `any`, `ts-ignore`, écouteur d’erreur ou liste d’API autorisées
+n’est ajouté ou modifié. La comparaison exacte du helper contre `266f93d3`
+et une relecture croisée indépendante confirment cette substitution unique.
+Le spec Explorer est identique à celui du premier commit.
+
+Contrôle isolé désormais vert (exit 0) :
+
+```sh
+node_modules/.bin/tsc --noEmit --skipLibCheck --moduleResolution bundler --module ESNext --target ES2022 --types node e2e/recette-complete-soignant.spec.ts
+```
+
+Nouvelle exécution des cinq formats : **5/5, premier essai, 43,3 s**, mêmes
+compteurs 36/36/36/36/37, `errors=[]` et `unknown=[]` partout. Captures finales
+iPad portrait et Android relues, sans différence fonctionnelle relevée.
+Le serveur 18461 est arrêté. Aucun service distant ni appareil physique utilisé.
+
+Rapport complet local :
+`/private/tmp/jolene-explorer-typages-evenements-5formats/results.json`, SHA256
+`28b3a920a6d18e911fff0b0de85a8292b129485f9e6e7e314ea99e44bd44c028`.
+Résumé filtré : `/private/tmp/jolene-explorer-typages-evenements-validation.json`.
+
+Conservation durable :
+`audits/2026-09-30-preparation-nationale/preuves/explorer-navigation-conditionnelle/`
+dans la racine du projet Jolene. Ce dossier contient les rapports filtrés,
+le compte rendu, une capture Explorer finale par format et `SHA256SUMS`.
+Aucun ZIP, HAR, trace lourde ou corps API n’y est recopié.
