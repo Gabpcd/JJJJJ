@@ -1,0 +1,86 @@
+- link "Aller au contenu principal":
+  - /url: "#app-route-content"
+- banner:
+  - button "Retour":
+    - img
+  - button "Accueil": Jolene
+  - button "Notifications, actualisation nécessaire"
+- navigation "Navigation mobile":
+  - button "Accueil":
+    - img
+    - text: Accueil
+  - button "Missions":
+    - img
+    - text: Missions
+  - button "Publier":
+    - img
+    - text: Publier
+  - button "Messages":
+    - img
+    - text: Messages
+  - button "Menu":
+    - img
+    - text: Menu
+- main:
+  - heading "Facturation" [level=1]:
+    - img
+    - text: Facturation
+  - paragraph: Paiements soignants, commissions Jolene et exports comptables
+  - paragraph: 94,40 €
+  - paragraph: Total à régler
+  - button "— Soignants à régler · 0 mission":
+    - paragraph: —
+    - paragraph: Soignants à régler · 0 mission
+    - img
+  - button "— Commissions Jolene · 0 facture à régler":
+    - paragraph: —
+    - paragraph: Commissions Jolene · 0 facture à régler
+    - img
+  - button "À payer (1)"
+  - button "En attente"
+  - button "Commissions"
+  - button "Historique"
+  - button "Exports"
+  - button "Échéances à payer aux soignants (1)" [expanded]:
+    - heading "Échéances à payer aux soignants (1)" [level=3]:
+      - img
+      - text: Échéances à payer aux soignants (1)
+    - img
+  - button "Mission hebdomadaire fictive F1"
+  - text: 李 L'Été 1j
+  - paragraph: IDE · 4h pointées
+  - paragraph: 21/09/2026 → 27/09/2026
+  - text: Contrat libéral → Note d'honoraires (Stripe Connect)
+  - paragraph: 94,40 €
+  - paragraph: dont 14,40 € commission Jolene
+  - button "Payer via Stripe":
+    - img
+    - text: Payer via Stripe
+  - button "Paiements en attente (0)":
+    - heading "Paiements en attente (0)" [level=3]:
+      - img
+      - text: Paiements en attente (0)
+    - img
+  - button "Commissions Jolene (0)":
+    - heading "Commissions Jolene (0)" [level=3]:
+      - img
+      - text: Commissions Jolene (0)
+    - img
+  - button "Historique paiements (0 confirmé)":
+    - heading "Historique paiements (0 confirmé)" [level=3]:
+      - img
+      - text: Historique paiements (0 confirmé)
+    - img
+  - button "Exports comptables":
+    - heading "Exports comptables" [level=3]:
+      - img
+      - text: Exports comptables
+    - img
+- region "Notifications alt+T":
+  - list:
+    - listitem:
+      - button "Close toast":
+        - img
+      - img
+      - text: "La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité."
+- region "Notifications"

@@ -5,7 +5,7 @@ type Polices = { regular: Uint8Array; bold: Uint8Array; caracteres: ReadonlySet<
 let polices: Promise<Polices> | undefined;
 
 export class ErreurPoliceFacture extends Error {
-  constructor(public readonly code: 'POLICE_PDF_INVALIDE' | 'CARACTERE_PDF_NON_PRIS_EN_CHARGE', detail = '') {
+  constructor(public readonly code: 'POLICE_PDF_INVALIDE' | 'CARACTERE_PDF_NON_PRIS_EN_CHARGE', public readonly detail = '') {
     super(detail ? `${code}: ${detail}` : code);
   }
 }

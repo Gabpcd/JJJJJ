@@ -48,6 +48,10 @@ un carré. Le contrôle intervient avant consommation du numéro pour une nouvel
 facture, et sur les snapshots canoniques avant upload lors d'une régénération.
 La réparation idempotente d'une commission existante reste possible même si
 le profil courant contient ensuite un nom non pris en charge.
+La réponse sépare `error`/`code` stables, `message` français exploité par
+`stripeMissionPay` et le point de code technique dans `details`. Le message
+demande de contacter l'assistance sans modifier l'identité ; il n'affiche pas
+le code Unicode brut. Une police invalide possède un message distinct.
 
 Avant édition, lecture seule de la fonction LIVE `generate-invoice` v676,
 ACTIVE : les trois fichiers étaient strictement identiques à la base
@@ -89,9 +93,19 @@ revue et merge. Ce lot local ne prouve pas son déploiement.
   générateur client jsPDF produit la commission de période : assiette80€,
   HT12€, TVA2,40€, TTC14,40€. Même parcours après rechargement. Cette commission
   est générée côté client ; elle n'est pas un PDF serveur archivé dans ce banc.
+- Refus expliqué : depuis Facturation, clic réel « Payer via Stripe » ; le
+  premier appel Edge **simulé** répond `FACTURE_NON_GENEREE`, puis la réponse422
+  issue du vrai handler fictif est renvoyée à `generate-invoice`. Le toast
+  affiche le français attendu, l'identité reste exacte et aucun nouvel appel
+  de paiement/checkout n'est effectué. Même refus après rechargement. Le témoin
+  avant correction échouait sur le message absent. Aucun paiement Stripe n'est
+  lancé : les deux endpoints locaux sont interceptés et les autres interdits.
 - Cinq formats : iPhone390×844, Android Pixel7, iPad820×1180 et1180×820,
   ordinateur1440×900. Erreurs page/console, requêtes inconnues et opérations
-  métier inattendues bloquantes. Stripe est un stub qui lève si utilisé.
+  métier inattendues bloquantes. Le cas de refus accepte seulement les messages
+  navigateur de ressource correspondant aux deux URL locales exactes et aux
+  statuts409/422 attendus ; aucune erreur applicative n'est filtrée.
+  Stripe est un stub qui lève si utilisé.
   WebSockets fermés, HTTP extérieur et redirections de navigation interdits.
 
 Les téléchargements WebKit sont bien réalisés par WebKit. PDF.js6 nécessite
@@ -101,8 +115,8 @@ locales sont autorisées. Aucun polyfill ni analyseur n'est injecté dans l'app.
 
 ## Résultats et reproduction
 
-Sur la source corrigée avec Noto : **9/9 Node, 15/15 parcours frontend**, sans retry,
-skip, erreur console/page ou requête inconnue. `tsc -b`, typecheck E2E isolé,
+Sur la source corrigée avec Noto et message français : **9/9 Node, 20/20 parcours frontend**, sans retry,
+skip, erreur console/page inattendue ou requête inconnue. `tsc -b`, typecheck E2E isolé,
 17guards et actionlint passent. Le build neuf utilise uniquement une URL
 Supabase loopback et une clé publique fictive ; aucun upload Sentry.
 
@@ -132,12 +146,19 @@ Les [preuves compactes](../../recette/2026-09-30/facturation-documents/) contien
 les résultats par format, ARIA avant/après, écrans iPhone/ordinateur et rendus
 PDF avant/après, témoin500 Unicode et rendus Noto. Les pages de facture, avoir, commission et pagination ont été
 inspectées visuellement. Les fichiers complets restent dans
-`/private/tmp/jolene-f1-documents-unicode-ui` (15 cas actuels), et la première
+`/private/tmp/jolene-f1-documents-final-ui` (20 cas actuels), le témoin de message
+absent dans `/private/tmp/jolene-f1-documents-erreur-rouge`, les premiers 15 cas
+Unicode dans `/private/tmp/jolene-f1-documents-unicode-ui`, et la première
 recette sans Noto dans `/private/tmp/jolene-f1-documents-ui-valide` ; le témoin rouge géométrique dans
 `/private/tmp/jolene-f1-documents-ui-debordement-rouge`. Les tentatives précédentes
 ont identifié le routage local de PDF.js, son API de fermeture, un taux fictif
 exprimé initialement en ratio au lieu de pourcentage, et la limite WebKit ;
 elles ne sont pas comptées comme validations produit.
+
+Les cinq scénarios de refus ont ensuite repassé avec une assertion supplémentaire
+sur la visibilité complète du message après animation, avant capture :
+`/private/tmp/jolene-f1-documents-erreur-final` (5/5). Les captures de refus
+commitées proviennent de ce dernier contrôle.
 
 ## Limites explicites
 

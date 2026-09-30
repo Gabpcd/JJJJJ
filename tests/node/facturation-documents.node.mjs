@@ -42,7 +42,9 @@ test('caractère absent : refus explicite avant numéro ou écriture, sans alté
     else banc.soignant.adresse_rue = '1 rue 😀';
     const response = await banc.genererFacture(), body = await response.json();
     assert.equal(response.status, 422); assert.equal(body.code, 'CARACTERE_PDF_NON_PRIS_EN_CHARGE');
-    assert.match(body.error, /U\+(674E|1F600)$/); sansEffet(banc);
+    assert.equal(body.error, body.code); assert.match(body.details.codepoint, /^U\+(674E|1F600)$/);
+    assert.equal(body.message, 'La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité.');
+    sansEffet(banc);
     assert.equal(banc.documents.size, 0); assert.equal(banc.factures.length, 0); assert.equal(banc.versions.length, 0);
   }
 });
@@ -50,7 +52,8 @@ test('caractère absent : refus explicite avant numéro ou écriture, sans alté
 test('police normale ou grasse absente/corrompue : échec fermé avant tout effet', async () => {
   for (const pannePolice of ['normale-absente', 'normale-corrompue', 'gras-absente', 'gras-corrompue']) {
     const banc = creerBanc({ pannePolice }), response = await banc.genererFacture();
-    assert.equal(response.status, 500); assert.deepEqual(await response.json(), { error: 'POLICE_PDF_INVALIDE', code: 'POLICE_PDF_INVALIDE' });
+    assert.equal(response.status, 500); assert.deepEqual(await response.json(), { error: 'POLICE_PDF_INVALIDE', code: 'POLICE_PDF_INVALIDE',
+      message: 'Le PDF de la facture ne peut pas être généré pour le moment. Contactez l’assistance.' });
     sansEffet(banc); assert.equal(banc.documents.size, 0); assert.equal(banc.factures.length, 0);
   }
 });

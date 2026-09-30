@@ -1,0 +1,13 @@
+{
+  "sha": "aa3b7c5e005744bb6957d6ad161891f311a23eb2",
+  "stats": {
+    "startTime": "2026-09-30T21:55:30.832Z",
+    "duration": 16621.258,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "motif": "Le message français attendu est absent au clic réel Payer via Stripe ; réponse422 réelle du handler aa3 simulée dans le navigateur, sans appel distant.",
+  "preuve_complete_locale": "/private/tmp/jolene-f1-documents-erreur-rouge/results.json"
+}

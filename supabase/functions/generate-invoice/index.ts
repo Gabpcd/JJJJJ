@@ -1754,7 +1754,15 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('generate-invoice error:', err);
     if (err instanceof ErreurPoliceFacture) {
-      return json(req, { error: err.message, code: err.code }, err.code === 'CARACTERE_PDF_NON_PRIS_EN_CHARGE' ? 422 : 500);
+      const caractereNonPrisEnCharge = err.code === 'CARACTERE_PDF_NON_PRIS_EN_CHARGE';
+      return json(req, {
+        error: err.code,
+        code: err.code,
+        message: caractereNonPrisEnCharge
+          ? 'La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité.'
+          : 'Le PDF de la facture ne peut pas être généré pour le moment. Contactez l’assistance.',
+        ...(err.detail ? { details: { codepoint: err.detail } } : {}),
+      }, caractereNonPrisEnCharge ? 422 : 500);
     }
     return json(req, { error: err instanceof Error ? err.message : 'Erreur interne' }, 500);
   }

@@ -1,7 +1,7 @@
 import { test as base, expect, chromium, type Page, type Locator, type TestInfo } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { genererDocuments, verifierXml, sha256, ids } from '../tests/helpers/facturation-documents-harness.mjs';
+import { creerBanc, genererDocuments, verifierXml, sha256, ids } from '../tests/helpers/facturation-documents-harness.mjs';
 import { simulerSoignant, entrer as entrerSoignant, aller, recharger } from './helpers/recette-complete-soignant';
 import { simulerEtablissement, entrer as entrerEtablissement, allerA, stabiliserLectures, ids as idsEtab, etablissement } from './helpers/recette-complete-etablissement';
 
@@ -33,9 +33,16 @@ const test = base.extend<{ analyse: Page }>({ analyse: async ({}, use) => {
     expect(inconnus).toEqual([]); expect(erreurs).toEqual([]);
   } finally { await browser.close(); }
 } });
-async function encadrer(page: Page, banc: Banc) {
+async function encadrer(page: Page, banc: Banc, refusHttpAttendus: Record<string, number> = {}) {
   const interdits: string[] = [], erreurs: string[] = [], lectures: string[] = [];
-  page.on('console', message => { if (message.type() === 'error') erreurs.push(message.text()); });
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    // Browsers report the deliberate HTTP refusal as a resource error. Match
+    // only its exact fake endpoint/status; application errors still fail.
+    const url = message.location().url, status = refusHttpAttendus[url];
+    if (status && /^Failed to load resource:/.test(message.text()) && message.text().includes(String(status))) return;
+    erreurs.push(message.text());
+  });
   await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
   await page.addInitScript(() => Object.defineProperty(window, 'Stripe', { value: () => { throw Error('Paiement interdit dans cette recette'); } }));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -225,6 +232,62 @@ test('Documents F1 établissement : commission réelle de période téléchargé
   }
   await aria(page, info, 'apres-commission-et-recharge');
   await page.screenshot({ path: info.outputPath('etablissement-commission.png'), fullPage: false, scale: 'css' });
+  expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
+  reseau.verifier();
+});
+
+test('Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge', async ({ page }, info) => {
+  const banc = creerBanc(); banc.soignant.prenom = '李';
+  const refus = await banc.genererFacture(), payload = await refus.json();
+  expect(refus.status).toBe(422); expect(banc.documents.size).toBe(0); expect(banc.factures).toEqual([]);
+  expect(banc.appels.filter(a => a.method !== 'GET' && a.path !== '/rest/v1/rpc/fn_verifier_pre_facturation')).toEqual([]);
+  const { etat } = await simulerEtablissement(page);
+  const origin = 'http://127.0.0.1:54321', pay = '/functions/v1/stripe-connect-pay-mission', generate = '/functions/v1/generate-invoice';
+  const reseau = await encadrer(page, banc, { [`${origin}${pay}`]: 409, [`${origin}${generate}`]: 422 });
+  const appels: string[] = [];
+  await page.route('**/functions/v1/*', async route => {
+    const req = route.request(), url = new URL(req.url());
+    if (url.origin !== origin || ![pay, generate].includes(url.pathname)) return route.fallback();
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    expect(req.method()).toBe('POST'); expect(req.postDataJSON()).toEqual({ mission_id: ids.mission });
+    const attendu = appels.length % 2 === 0 ? pay : generate;
+    expect(url.pathname, 'Aucune relance de paiement après le refus de génération').toBe(attendu);
+    appels.push(url.pathname);
+    return route.fulfill({ status: url.pathname === pay ? 409 : refus.status, headers,
+      json: url.pathname === pay ? { error: 'FACTURE_NON_GENEREE' } : payload });
+  });
+  etat.overrides.set('fn_mon_etablissement_complet', { ...etablissement, type: 'CLINIQUE_PRIVEE', est_compte_test: true });
+  etat.overrides.set('fn_obligations_financieres', { total_du: 94.4, factures_impayees: [], missions_non_payees: [{
+    mission_id: ids.mission, intitule: banc.mission.intitule, type_contrat_applique: 'LIBERAL',
+    soignant_stripe_connect: true, soignant_nom: "李 L'Été", soignant_profession: 'IDE',
+    heures: 4, net_a_payer: 80, montant_commission_ttc: 14.4, jours_depuis_fin: 1,
+    debut_le: '2026-09-21', fin_le: '2026-09-27',
+  }] });
+  await entrerEtablissement(page, 'connexion'); await allerA(page, '/etablissement/facturation?tab=payer');
+  await expect(page.getByRole('button', { name: 'Payer via Stripe', exact: true })).toBeVisible();
+  await aria(page, info, 'avant-refus-generation');
+  const message = 'La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité.';
+  for (const reload of [false, true]) {
+    if (reload) { await stabiliserLectures(page); await page.reload(); }
+    const bouton = page.getByRole('button', { name: 'Payer via Stripe', exact: true });
+    await expect(bouton).toBeVisible(); await bouton.click();
+    const notification = page.getByText(message, { exact: true });
+    await expect(notification).toBeVisible();
+    await expect.poll(async () => {
+      const box = await notification.boundingBox(), viewport = page.viewportSize();
+      return !!box && !!viewport && box.x >= 0 && box.y >= 0
+        && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+    }, { message: 'Message entier visible après son animation d’entrée' }).toBe(true);
+    await expect(bouton).toBeEnabled();
+    await expect(page.getByText("李 L'Été", { exact: true })).toBeVisible();
+    await expect(page.getByText(/U\+674E|Facture honoraires générée automatiquement|Paiement confirmé/)).toHaveCount(0);
+    expect(appels).toHaveLength(reload ? 4 : 2);
+  }
+  await info.attach('apres-refus-et-recharge', { body: await page.locator('body').ariaSnapshot(), contentType: 'text/plain' });
+  await info.attach('refus-reel-handler', { body: JSON.stringify(payload, null, 2), contentType: 'application/json' });
+  await page.screenshot({ path: info.outputPath('refus-caractere.png'), fullPage: false, scale: 'css', animations: 'disabled' });
+  expect(appels).toEqual([pay, generate, pay, generate]);
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
   reseau.verifier();
 });

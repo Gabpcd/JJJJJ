@@ -1,0 +1,288 @@
+{
+  "base": "aa3b7c5e005744bb6957d6ad161891f311a23eb2",
+  "stats": {
+    "startTime": "2026-09-30T21:56:48.467Z",
+    "duration": 111350.894,
+    "expected": 20,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6272,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4780,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4813,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4224,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5040,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4636,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 3574,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 3674,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5707,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4925,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 7524,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5014,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 7603,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6909,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4386,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4259,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6356,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6063,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4397,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : refus de caractère expliqué, sans relance de paiement, après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4309,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    }
+  ],
+  "node": {
+    "passes": 9,
+    "echoues": 0
+  },
+  "mode": "Vrais générateurs/composants ; IO exclusivement simulées ; aucun paiement/provider/cloud",
+  "deno": "Contrôle CI ajouté, non exécuté localement",
+  "visibilite_complete_message_5formats": {
+    "startTime": "2026-09-30T22:00:07.390Z",
+    "duration": 26831.319,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "preuve_visibilite_locale": "/private/tmp/jolene-f1-documents-erreur-final/results.json"
+}
