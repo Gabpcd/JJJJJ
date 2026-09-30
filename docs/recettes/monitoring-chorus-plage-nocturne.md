@@ -49,6 +49,11 @@ n'est acquittée ou résolue par la migration.
 - Expression d'échéance exécutée en SQL `SELECT` pur : **9/9** cas conformes,
   minuit, nuit, 06:59, 07:00, borne 08:00, absence à 08:01, nouveau succès à 07 h,
   retard en journée et dernier passage du soir manqué.
+- Syntaxe SQL/PLpgSQL complète vérifiée avec `pglast 7.10` (parseur PostgreSQL
+  17.4) : migration, bloc de test, émetteur temporaire et fonction dynamique. Les
+  deux erreurs P1 de la revue fraîche (terminateur de fonction et parenthèses du
+  `CASE`) sont corrigées ; les versions fautives sont rejetées comme témoins
+  négatifs. Journal : `/private/tmp/jolene-chorus-syntaxe-corrigee.log`.
 - TypeScript vert, tests ciblés monitoring/inventaire **10/10**, guards **17/17**.
 - Playwright **5/5**, iPhone, Android, iPad portrait/paysage et ordinateur :
   pause nocturne sans alerte, rechargement, vrai retard, rechargement puis état

@@ -225,7 +225,7 @@ BEGIN
     'alertes_emises', v_alertes_emises
   );
 END;
-$function$
+$function$;
 
 UPDATE private.security_definer_inventory i
 SET definition_md5 = md5(p.prosrc),

@@ -93,7 +93,7 @@ BEGIN
     SELECT c INTO v_cron FROM jsonb_array_elements(v_result->'crons') c WHERE c->>'jobname'='sync-chorus-status-hourly';
     IF (v_cron->>'retard')::boolean IS DISTINCT FROM v_case.retard THEN RAISE EXCEPTION 'Retard Chorus incorrect : % / %', v_case.nom, v_cron; END IF;
     IF EXISTS(SELECT 1 FROM recette_cron_alertes WHERE source LIKE 'recette-cadence-%') THEN RAISE EXCEPTION 'Seuil autre cadence modifié'; END IF;
-    IF (SELECT count(*) FROM recette_cron_alertes WHERE source='sync-chorus-status-hourly') <> CASE WHEN v_case.retard OR v_case.statut='failed' THEN 1 ELSE 0 END THEN
+    IF (SELECT count(*) FROM recette_cron_alertes WHERE source='sync-chorus-status-hourly') <> (CASE WHEN v_case.retard OR v_case.statut='failed' THEN 1 ELSE 0 END) THEN
       RAISE EXCEPTION 'Émission alerte incorrecte : %',v_case.nom;
     END IF;
     IF v_case.statut='failed' AND NOT EXISTS(SELECT 1 FROM recette_cron_alertes WHERE type_alerte='CRON_FAILED') THEN RAISE EXCEPTION 'Échec masqué'; END IF;
