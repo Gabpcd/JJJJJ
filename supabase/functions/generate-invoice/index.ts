@@ -502,7 +502,7 @@ async function generateInvoicePdf(inv: {
   replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595, 842]); // A4
+  let page = pdfDoc.addPage([595, 842]); // A4
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontSize = 9;
@@ -667,11 +667,36 @@ async function generateInvoicePdf(inv: {
 
   // Subrogation
   if (inv.subrogationMention) {
+    const mentionLines: string[] = [];
+    let mentionLine = '';
+    for (const word of inv.subrogationMention.split(/\s+/)) {
+      const candidate = mentionLine ? `${mentionLine} ${word}` : word;
+      if (mentionLine && font.widthOfTextAtSize(candidate, 8) > w - 2 * margin) {
+        mentionLines.push(mentionLine);
+        mentionLine = word;
+      } else {
+        mentionLine = candidate;
+      }
+    }
+    if (mentionLine) mentionLines.push(mentionLine);
+    // Keep the complete mention, optional payee, payment terms and footer on
+    // the page. Long descriptions must not push this block below the margin.
+    const remainingHeight = 29 + mentionLines.length * 12
+      + (inv.factorName ? 12 : 0) + (inv.factorIban ? 12 : 0)
+      + 10 + (inv.isAvoir ? 0 : 32) + 25;
+    if (y - remainingHeight < margin) {
+      page = pdfDoc.addPage([595, 842]);
+      y = 800;
+      drawText(`Numero : ${inv.invoiceNumber}`, margin, y, { font: fontBold, size: sectionSize });
+      y -= 25;
+    }
     drawLine(y); y -= 15;
     drawText('MENTION SUBROGATIVE', margin, y, { font: fontBold, size: sectionSize });
     y -= 14;
-    drawText(inv.subrogationMention, margin, y, { size: 8 });
-    y -= 12;
+    for (const mentionPart of mentionLines) {
+      drawText(mentionPart, margin, y, { size: 8 });
+      y -= 12;
+    }
     if (inv.factorName) { drawText(`Paiement a l'ordre de : ${inv.factorName}`, margin, y, { size: 8 }); y -= 12; }
     if (inv.factorIban) { drawText(`IBAN : ${inv.factorIban}`, margin, y, { size: 8 }); y -= 12; }
     y -= 10;
@@ -704,19 +729,21 @@ async function generateInvoicePdf(inv: {
       : null;
     const rot = degrees(30);
     // Anchor tuned for visual centering of a diagonal stamp on A4 (595x842).
-    page.drawText(stampMain, {
-      x: 90, y: 320,
-      font: fontBold, size: 100,
-      color: stampColor, opacity: 0.35,
-      rotate: rot,
-    });
-    if (stampSub) {
-      page.drawText(stampSub, {
-        x: 170, y: 280,
-        font: fontBold, size: 22,
-        color: stampColor, opacity: 0.45,
+    for (const stampedPage of pdfDoc.getPages()) {
+      stampedPage.drawText(stampMain, {
+        x: 90, y: 320,
+        font: fontBold, size: 100,
+        color: stampColor, opacity: 0.35,
         rotate: rot,
       });
+      if (stampSub) {
+        stampedPage.drawText(stampSub, {
+          x: 170, y: 280,
+          font: fontBold, size: 22,
+          color: stampColor, opacity: 0.45,
+          rotate: rot,
+        });
+      }
     }
   }
 

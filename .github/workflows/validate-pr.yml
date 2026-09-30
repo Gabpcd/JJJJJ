@@ -58,6 +58,9 @@ jobs:
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
+      - name: Documents facturation réels avec IO fictives
+        run: node --test tests/node/facturation-documents.node.mjs
+
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 

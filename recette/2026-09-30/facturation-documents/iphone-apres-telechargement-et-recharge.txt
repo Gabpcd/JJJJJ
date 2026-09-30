@@ -1,0 +1,77 @@
+- main:
+  - heading "💰 Revenus" [level=1]
+  - paragraph: Tes gains, factures et documents de paie au même endroit
+  - tablist:
+    - tab "Aperçu":
+      - img
+      - text: Aperçu
+    - tab "Factures" [selected]:
+      - img
+      - text: Factures
+  - tabpanel "Factures":
+    - img
+    - paragraph: Mandat de facturation non signé
+    - paragraph: Pour que Jolene puisse produire automatiquement tes factures d'honoraires, tu dois d'abord signer le mandat de facturation.
+    - button "Signer le mandat"
+    - paragraph: Total net facturé
+    - paragraph: 60,00 €
+    - paragraph: Encaissé
+    - paragraph: 0,00 €
+    - paragraph: En attente
+    - paragraph: 80,00 €
+    - text: "Filtres :"
+    - combobox:
+      - option "Tous statuts" [selected]
+      - option "Brouillon"
+      - option "Génération en cours"
+      - option "Émise"
+      - option "En attente de paiement"
+      - option "En retard"
+      - option "Payée"
+      - option "Avance reçue"
+      - option "Annulée"
+      - option "Remplacée"
+      - option "Remboursée"
+    - combobox:
+      - option "Toutes années" [selected]
+      - option "2026"
+    - combobox:
+      - option "Tous mois" [selected]
+      - option "Janvier"
+      - option "Février"
+      - option "Mars"
+      - option "Avril"
+      - option "Mai"
+      - option "Juin"
+      - option "Juillet"
+      - option "Août"
+      - option "Septembre"
+      - option "Octobre"
+      - option "Novembre"
+      - option "Décembre"
+    - text: 2 / 2 documents
+    - list "Liste":
+      - listitem:
+        - text: F1-HONORAIRE-SEMAINE
+        - img
+        - text: Émise
+        - paragraph: Mission hebdomadaire fictive F1
+        - paragraph: Clinique fictive F1 & Santé
+        - paragraph: Émise le 30/09/2026 · Échéance 30/10/2026
+        - paragraph: 80,00 €
+        - paragraph: Soins exonérés de TVA
+        - button "Télécharger le PDF":
+          - img
+          - text: Télécharger le PDF
+      - listitem:
+        - text: F1-AVOIR-PARTIEL AVOIR
+        - img
+        - text: Émise
+        - paragraph: Mission hebdomadaire fictive F1
+        - paragraph: Clinique fictive F1 & Santé
+        - paragraph: Émise le 30/09/2026 · Échéance 30/10/2026
+        - paragraph: "-20,00 €"
+        - paragraph: Soins exonérés de TVA
+        - button "Télécharger le PDF":
+          - img
+          - text: Télécharger le PDF
