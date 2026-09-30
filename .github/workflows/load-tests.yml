@@ -48,6 +48,16 @@ on:
         type: boolean
         required: false
         default: false
+      candidatures_sql_only:
+        description: "D2 seulement : preuve SQL annulée, sans Auth HTTP ni k6"
+        type: boolean
+        required: false
+        default: false
+      candidatures_sql_date:
+        description: "D2 SQL seulement : jour explicite YYYY-MM-DD, entre 1 et 31 jours dans le futur"
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: jolene-supabase-staging-writes
@@ -55,7 +65,7 @@ concurrency:
 
 jobs:
   load-tests:
-    if: ${{ !inputs.dashboard_fixture_only || inputs.scenario != '05-dashboard-concurrent' }}
+    if: ${{ !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && (!inputs.dashboard_fixture_only || inputs.scenario != '05-dashboard-concurrent') }}
     name: Run k6 scenario(s)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -219,7 +229,7 @@ jobs:
 
   dashboard-frontend:
     name: E10 — deux identités frontend staging, sans charge
-    if: inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent'
+    if: ${{ !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent' }}
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
@@ -286,4 +296,46 @@ jobs:
         with:
           name: dashboard-ui-staging-${{ github.run_id }}
           path: tests/load/results/
+          retention-days: 7
+
+  candidatures-sql:
+    name: D2 — preuve SQL sous ROLLBACK uniquement
+    # Une date sans drapeau sélectionne aussi ce job, qui la refuse : pas de
+    # repli silencieux vers k6. Toute combinaison D2 exclut les deux autres jobs.
+    if: ${{ inputs.candidatures_sql_only || inputs.candidatures_sql_date != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      LOAD_D_SQL_ONLY: ${{ inputs.candidatures_sql_only }}
+      LOAD_D_SQL_JOUR: ${{ inputs.candidatures_sql_date }}
+      LOAD_TEST_SCENARIO: ${{ inputs.scenario }}
+      LOAD_TEST_VUS: ${{ inputs.vus_override }}
+      LOAD_TEST_DURATION: ${{ inputs.duration_override }}
+      DASHBOARD_FIXTURE_ONLY: ${{ inputs.dashboard_fixture_only }}
+      DIAGNOSTIC_SQL: ${{ inputs.diagnostic_sql }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      STAGING_SUPABASE_URL: https://mejpriaetwgtcstbgfid.supabase.co
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Refuser les combinaisons invalides avant tout accès distant
+        run: node scripts/ci/prove-candidatures-rollback.mjs check
+      - name: Catalogue figé puis transaction D2 annulée
+        run: node scripts/ci/prove-candidatures-rollback.mjs run
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Conserver uniquement le résultat filtré de la preuve SQL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d2-sql-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tests/load/results/d2-sql-rollback.json
+          if-no-files-found: error
           retention-days: 7

@@ -26,7 +26,9 @@ setup incomplet ne peut passer. Aucun accepter, contrat, pointage ou paiement.
 Le préparateur `scripts/ci/prepare-candidatures-fixture.mjs` expose `catalogue`
 (SELECT uniquement), puis `prepare`, `verify` et `cleanup`. Aucun raccord de
 préparation D dans `.github/workflows/load-tests.yml` n’est activé par ce lot.
-Le sélecteur D existant refuse sans lot privé ; F et all ne deviennent pas verts.
+Le sélecteur D ordinaire refuse sans lot privé ; F et all ne deviennent pas verts.
+Un mode manuel distinct de preuve SQL annulée est décrit ci-dessous : il ne
+prépare aucun compte Auth HTTP et ne lance ni navigateur ni k6.
 
 - Destination unique : staging `mejpriaetwgtcstbgfid`, URL exacte ; aucune
   valeur prod autorisée. Run explicite, nouveau, non réutilisé ; date de mission
@@ -185,6 +187,68 @@ DELETE Auth HTTP ; `load_cleanup_pending` est un marqueur de reprise, pas une
 garde métier. Avant un pilote, le runner doit être isolé et tous les appels
 terminés avant cleanup. La concurrence avec un appel encore en vol reste non
 validée et ne doit pas être annoncée comme couverte.
+
+## Mode manuel SQL seul, à exécuter après revue
+
+Le workflow existant `load-tests.yml` propose désormais
+`candidatures_sql_only=true`, exclusivement avec le scénario
+`04-candidatures-simultanees`, et exige `candidatures_sql_date=YYYY-MM-DD`.
+Une date sans drapeau, un autre scénario, le mode E, le diagnostic C ou des
+overrides sont refusés. Toute sélection D2 SQL exclut les deux jobs k6/E10,
+y compris lorsque les paramètres sont invalides. Le verrou global existant
+`jolene-supabase-staging-writes` reste détenu pendant le job ; aucune annulation
+automatique du run précédent n'est activée.
+
+Ce job vérifie ses paramètres hors réseau puis appelle
+`scripts/ci/prove-candidatures-rollback.mjs run`. Il ne charge aucune clé anon
+ou service_role, ne synchronise pas les migrations et n'appelle aucun endpoint
+Auth. Seul le token Management staging est injecté à l'étape d'exécution.
+L'URL et le projet staging sont imposés, les redirections refusées. Les deux
+requêtes envoyées à `database/query` sont le SELECT catalogue exact puis le
+texte exact de `generate-candidatures-rollback.mjs`, sans réessai automatique.
+Le suffixe `ci-GITHUB_RUN_ID-GITHUB_RUN_ATTEMPT` sépare chaque tentative. Le
+créneau à 09 h UTC doit être strictement après maintenant + 1 jour et au plus
+maintenant + 31 jours ; la même garde existe dans le SQL.
+
+Le succès exige exactement une ligne JSON
+`{"preuve":"D2_SQL_ROLLBACK","annule":true}` sans autre champ. HTTP 200,
+chaîne `"true"`, ligne supplémentaire, JSON invalide ou réponse perdue ne
+peuvent produire de succès. Le contrôle final des zéros, la sentinelle interne
+JD201 et le ROLLBACK externe sont conservés. Les lignes métier, notifications
+in-app et audits de cette preuve SQL synthétique sont créés puis annulés dans
+la transaction ; aucun message n'est expédié. Cela ne modifie pas la règle de
+conservation des audits d'un futur pilote Auth HTTP.
+
+Seul `tests/load/results/d2-sql-rollback.json` est téléversé : état fermé,
+run/SHA/date/staging, empreintes et SHA256 du SQL si réussite. Ni fichier SQL,
+identités, sessions, secrets ni corps d'erreur fournisseur ne sont publiés.
+Le job n'installe pas les dépendances de l'application et n'exécute aucun build.
+
+Exemple de commande **à ne lancer qu'après publication de la branche revue**,
+sans fusion requise, avec une date encore autorisée lors de l'exécution :
+
+```sh
+gh workflow run load-tests.yml --repo Gabpcd/JJJJJ --ref test/candidatures-deux-profils \
+  -f scenario=04-candidatures-simultanees \
+  -f candidatures_sql_only=true -f candidatures_sql_date=2026-10-07
+```
+
+Préflight SELECT effectué séparément le 30/09 à 14:03:57 UTC : les trois hashes
+versionnés correspondent, zéro cron actif, zéro FK audit, aucune des sept
+migrations #1000 persistée. Le mode peut donc fournir une preuve sur ce
+catalogue **avant** leur déploiement ; il n'applique aucune de ces migrations.
+Après synchronisation de #1000, sa garde peut refuser le nouveau catalogue :
+relire les définitions et justifier le delta, sans recapture automatique.
+
+Validation locale du raccord : 34 tests Node ciblés, puis banque complète
+séquentielle 146/146 ; 17 guards, syntaxe Node, ESLint ciblé, actionlint des deux
+workflows et `git diff --check` verts. Pglast accepte les 12 instructions SQL
+et les deux blocs PL/pgSQL du texte généré. Le test de routage E10 exige aussi
+son exclusion en mode D2 ; ses assertions de séquencement restent conservées.
+Les tests simulent les réponses Management ; aucune exécution PostgreSQL du
+générateur, aucun compte distant ou workflow lancé. Les 15 simulations frontend
+antérieures restent une preuve UI indépendante ; ce raccord sans modification
+produit n'en ajoute aucune.
 
 ## Ancien seed F fermé
 
