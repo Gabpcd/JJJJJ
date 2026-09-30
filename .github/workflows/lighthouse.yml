@@ -1,7 +1,7 @@
 name: Lighthouse CI (perf + a11y + best-practices + SEO)
 
 # Audit Lighthouse à chaque PR + push main.
-# Échec si scores en dessous des thresholds définis dans lighthouserc.cjs.
+# Les seuils produisent des avertissements ; les rapports restent consultables.
 
 on:
   pull_request:
@@ -44,5 +44,11 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: lighthouse-reports
-          path: .lighthouseci/
+          path: |
+            .lighthouseci/*.html
+            .lighthouseci/*.json
+          # Ce dossier caché contient les seuls rapports des routes publiques,
+          # sans session authentifiée ni en-tête privé dans lighthouserc.cjs.
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14
