@@ -28,6 +28,12 @@ métier, Edge Functions, Storage, signup, refresh et appels hors liste. La RPC d
 création d'un jeton calendrier est notamment interdite. Le realtime est fermé ;
 ce pilote ne valide donc pas la messagerie ni les notifications en temps réel.
 
+La preview éphémère retire ses hints DNS/TLS et la feuille Google Fonts. Elle
+utilise les polices de secours déjà définies dans le produit (`system-ui`,
+`-apple-system`, `sans-serif`). Le HTML source et le déploiement produit sont
+inchangés. Les autres ressources externes restent refusées et comptées comme
+anomalies : aucune erreur réseau n'est masquée pour rendre le pilote vert.
+
 Le nettoyage E10 est inchangé : il refuse toute dépendance hors de son allowlist
 Auth/préférences existante, poursuit les autres membres sûrs et conserve les
 manifests partiels. **Les deux journaux CONNEXION sont immuables et conservés**,
@@ -57,16 +63,20 @@ aucune FK audit ne cible Auth/profil. Preuve locale non sensible :
 `/private/tmp/jolene-dashboard-staging-catalogue-20260930.json`.
 Ce contrôle ne crée aucun compte et ne prouve pas encore le parcours connecté.
 
-Vérifications locales du complément : 95/95 tests Node du banc, 10/10 parcours
+Vérifications locales après correction de la feuille Google Fonts : 96/96 tests
+Node du banc, 10/10 parcours
 frontend **à réponses entièrement simulées** (deux identités × iPhone, Android,
 iPad portrait/paysage et ordinateur), TypeScript, ESLint ciblé et actionlint.
-La simulation utilise le même parcours navigateur et valide chaque requête
-observée contre la liste autorisée du pilote réel.
+La simulation utilise le même parcours navigateur, prépare le HTML réellement
+produit par le build et valide chaque requête avant le helper simulé contre la
+liste autorisée du pilote réel. L'ancien helper pouvait abandonner une ressource
+externe sans compter l'anomalie ; cette lacune de la simulation est corrigée.
 
-Résultats : `/private/tmp/jolene-dashboard-staging-pilote-node.txt` et
-`/private/tmp/jolene-dashboard-staging-pilote-ui-final/results.json`. Le produit n'est
-pas modifié ; le build local vérifié E10 a servi ces simulations. Le build
-connecté staging sera produit dans le job, avant toute création de fixture.
+Résultats : `/private/tmp/jolene-dashboard-staging-font-node.txt`,
+`/private/tmp/jolene-dashboard-staging-font-ui/results.json` et
+`/private/tmp/jolene-dashboard-staging-font-html.json`. Un nouveau build local
+relié à une API fictive a servi ces simulations. Le build connecté staging sera
+produit dans le job, avant toute création de fixture.
 
 ## Exécution restant à autoriser et à prouver
 

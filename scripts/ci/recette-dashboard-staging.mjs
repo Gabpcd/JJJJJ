@@ -9,6 +9,20 @@ import { configurationUI, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlE
 
 const dossier = resolve('tests/load/results/dashboard-ui');
 const sauver = (nom, valeur) => { mkdirSync(dossier, { recursive: true }); writeFileSync(`${dossier}/${nom}.json`, JSON.stringify(valeur, null, 2) + '\n'); };
+/** Preview isolée : police système de secours, sans modifier le HTML produit. */
+export function preparerHtmlPreview(html) {
+  return html.replace(/<link\b[^>]*>/gi, balise => {
+    const attribut = nom => {
+      const valeur = balise.match(new RegExp(`\\b${nom}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+      return valeur?.[1] ?? valeur?.[2] ?? valeur?.[3] ?? '';
+    };
+    const relations = attribut('rel').toLowerCase().split(/\s+/);
+    // Ces hints DNS/TLS échappent au routage HTTP du navigateur.
+    if (relations.some(rel => ['preconnect','dns-prefetch'].includes(rel))) return '';
+    if (relations.includes('stylesheet') && new URL(attribut('href'), ORIGINE_UI).origin === 'https://fonts.googleapis.com') return '';
+    return balise;
+  });
+}
 export function dashboardUIValide(data, membre) {
   return dashboardFixtureValide(data, membre.userId)
     && ['missions_ouvertes','mes_missions','documents','gains_6mois','missions_semaine_cal','propositions'].every(k => data[k].length === 0)
@@ -55,9 +69,9 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
   }
   const [gardes] = await lireSQL(sqlGardeUI, env); verifierGardeUI(gardes);
   const avant = await lireSQL(sqlEtatUI(membres), env); verifierEtatUI(avant); sauver('avant', projectionEtatUI(avant));
-  // Les hints DNS/TLS échappent au routage HTTP ; retirer ceux du build de recette.
+  // Seul le build éphémère de recette utilise la police système de secours.
   const index = resolve('dist/index.html');
-  writeFileSync(index, readFileSync(index, 'utf8').replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi, ''));
+  writeFileSync(index, preparerHtmlPreview(readFileSync(index, 'utf8')));
   const { webkit, devices, expect } = await import('@playwright/test');
   const preview = spawn(process.execPath, ['node_modules/vite/bin/vite.js','preview','--host','localhost','--port','5173','--strictPort'],
     { stdio: 'ignore', env: { PATH: env.PATH, HOME: env.HOME } });

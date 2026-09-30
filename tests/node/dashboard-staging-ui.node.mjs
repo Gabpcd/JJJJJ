@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { configurationUI, contratEcritures, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from '../../scripts/ci/dashboard-ui-contract.mjs';
-import { dashboardUIValide } from '../../scripts/ci/recette-dashboard-staging.mjs';
+import { dashboardUIValide, preparerHtmlPreview } from '../../scripts/ci/recette-dashboard-staging.mjs';
 import { manifestePoolDashboard } from '../../scripts/ci/prepare-dashboard-pool.mjs';
 import { STAGING_REF, STAGING_URL } from '../../scripts/ci/prepare-load-fixtures.mjs';
 const membres = manifestePoolDashboard('ui-123-1').membres.map(m => ({ slot:m.slot,userId:m.userId,email:m.email,runId:m.runId,password:`Aa1!canari-UI-prive-${m.slot}-aucun-artifact` }));
@@ -12,6 +12,22 @@ const env = { STAGING_SUPABASE_PROJECT_REF:STAGING_REF, STAGING_SUPABASE_URL:STA
 const avant = [0,1].map(slot => ({ slot,auth:1,profils:1,preferences:1,preferences_off:1,sessions:1,identites:1,
   profil_empreinte:'a'.repeat(32),activite:null,notifications:0,presences:0,audits:0,audits_connexion:0 }));
 const apres = avant.map(r => ({ ...r,sessions:2,activite:'2026-09-30T10:00:00Z',audits:1,audits_connexion:1 }));
+
+test('HTML de recette retire Google Fonts, conserve assets et erreurs externes sans élargir le routage', () => {
+  const html=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
+  assert.match(html,/<link[^>]+fonts\.googleapis\.com\/css2/);
+  const asset='<link crossorigin href="/assets/app.css" rel="stylesheet">';
+  const inconnu='<link rel="stylesheet" href="https://externe.invalid/test.css">';
+  const variante="<LINK HREF='https://fonts.googleapis.com/css?family=Inter' REL='stylesheet'>";
+  const recette=preparerHtmlPreview(html+asset+inconnu+variante);
+  assert.doesNotMatch(recette,/<link\b[^>]*(?:fonts\.googleapis\.com|preconnect|dns-prefetch)[^>]*>/i);
+  assert.ok(recette.includes(asset)); assert.ok(recette.includes(inconnu));
+  assert.ok(recette.includes('<script type="module" src="/src/main.tsx"></script>'));
+  assert.equal(preparerHtmlPreview(recette),recette);
+  for(const url of ['https://fonts.googleapis.com/css2?family=Inter','https://externe.invalid/test.css'])
+    assert.equal(requeteUIAutorisee({url,method:'GET'},membres[0]),false);
+  assert.equal(requeteUIAutorisee({url:ORIGINE_UI+'/assets/app.css',method:'GET'},membres[0]),true);
+});
 
 test('configuration UI strict staging + pool exact ; aucun repli compte fixe ou autre run', () => {
   assert.deepEqual(configurationUI(env), membres.slice(0,2));
