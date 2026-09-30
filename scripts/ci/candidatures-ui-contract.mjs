@@ -78,7 +78,14 @@ export function requeteFrontendD({ url, method, body }, a, m) {
   const eq = (cle,id) => u.searchParams.getAll(cle).length === 1 && u.searchParams.get(cle) === `eq.${id}`;
   const lot = (cle,ids) => eq(cle,ids[0]) || (u.searchParams.getAll(cle).length === 1 && /^in\.\(.+\)$/.test(u.searchParams.get(cle) || '') && u.searchParams.get(cle).slice(4,-1).split(',').every(id=>ids.includes(id.replaceAll('"',''))));
   if (['paliers_commission','documents_requis_par_profession'].includes(table)) return true;
-  if (table === 'missions') return eq('id',m.missionId) || eq('etablissement_id',m.membres[2].userId) || (a.slot<2 && eq('soignant_assigne_id',a.userId));
+  if (table === 'missions') {
+    // DashboardSoignant complète le planning après son RPC avec cette seule
+    // projection. Aucun autre ID, prédicat ou jeu de colonnes n'est admis ici.
+    const metadataDashboard = a.slot<2 && method==='GET' && u.searchParams.size===2
+      && u.searchParams.getAll('select').length===1 && u.searchParams.get('select')==='id,nb_creneaux'
+      && u.searchParams.getAll('id').length===1 && u.searchParams.get('id')===`in.(${m.missionId})`;
+    return metadataDashboard || eq('id',m.missionId) || eq('etablissement_id',m.membres[2].userId) || (a.slot<2 && eq('soignant_assigne_id',a.userId));
+  }
   if (['mission_creneaux','candidatures','contrats_mission'].includes(table)) return lot('mission_id',[m.missionId]);
   if (table === 'notifications') return eq('destinataire_id',a.userId);
   if (table === 'etablissements') return eq('id',m.membres[2].userId);

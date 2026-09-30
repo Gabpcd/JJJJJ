@@ -46,6 +46,15 @@ test('réseau : seul POSTULER exact par AS, aucun tiers/paiement/présence/réin
 test('budget consommé avant transport : aucun rejeu login/candidature, même si réponse perdue',()=>{
   for(const a of identites){const b=budgetEcrituresD(a);assert.equal(b.complet(),false);for(const n of ['auth-token','fn_audit_connexion',...(a.slot<2?['fn_maj_activite_soignant','fn_confirmer_action_planning_v1']:['fn_ecrire_audit_safe'])]){b.consommer(n);assert.throws(()=>b.consommer(n));}assert.equal(b.complet(),true);assert.throws(()=>b.consommer('fn_update_presence'));}
 });
+test('dashboard : métadonnées de la seule mission du manifeste, aucun ID supplémentaire/projection ou OR',()=>{
+  const path=`/rest/v1/missions?select=id%2Cnb_creneaux&id=in.%28${m.missionId}%29`;
+  assert.equal(req(path),true);
+  for(const p of [path.replace(m.missionId,m.preuveId),path.replace(m.missionId,`${m.missionId},${m.preuveId}`),path.replace(m.missionId,`${m.missionId},${m.missionId}`),
+    path.replace('id%2Cnb_creneaux','*'),path.replace('id%2Cnb_creneaux','id%2Cnb_creneaux%2Cdescription'),path+'&or=(statut.eq.OUVERTE)',
+    path+'&select=id%2Cnb_creneaux',path+'&id=in.('+m.missionId+')',path+'&order=id',path.replace(m.missionId,'')])assert.equal(req(p),false);
+  for(const method of ['HEAD','POST','PATCH','DELETE'])assert.equal(req(path,method),false);
+  assert.equal(req(path,'GET',undefined,identites[2]),false);
+});
 test('créneaux PostgREST +00:00 : mêmes instants acceptés, fuseau absent/voisin/microseconde ou clé extra refusés',()=>{
   const c={debut:'2026-10-07T09:00:00+00:00',fin:'2026-10-07T13:00:00+00:00'};
   assert.equal(req('/rest/v1/rpc/fn_confirmer_action_planning_v1','POST',{...postuler,p_creneaux_confirmes:[c]}),true);
@@ -64,6 +73,20 @@ test('réponses d’Auth et de candidature doivent confirmer la bonne identité,
   verifierReponseFrontendD({path:'/auth/v1/token',data:{access_token:'CANARI_JWT',user}},identites[0],m);
   assert.throws(()=>verifierReponseFrontendD({path:'/auth/v1/token',data:{access_token:'CANARI_JWT',user:{...user,id:identites[1].userId}}},identites[0],m));
   for(const data of [{success:false},{success:true},{success:true,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:false,candidature_id:m.preuveId}])assert.throws(()=>verifierReponseFrontendD({path:'/rest/v1/rpc/fn_confirmer_action_planning_v1',data},identites[0],m));
+});
+test('refus missions : projection fermée de la forme réelle, aucune valeur ni clé libre, toujours bloquant avant fetch',async()=>{
+  let handler,aborts=0;const d=diagnosticD(),secret='CANARI_PASSWORD_EMAIL_JWT';
+  await installerReseauD({addInitScript:async()=>{},routeWebSocket:async()=>{},on:()=>{},route:async(p,h)=>{handler=h;}},identites[0],m,d);
+  const path=STAGING_URL+`/rest/v1/missions?select=id,nb_creneaux&id=in.(${m.missionId})&${secret}=${secret}`;
+  await handler({request:()=>({url:()=>path,method:()=>'GET',postData:()=>null}),fetch:async()=>{throw Error('Ne doit pas transporter');},abort:async()=>{aborts++;}});
+  assert.equal(aborts,1);assert.equal(d.resultat().erreurs,1);
+  assert.deepEqual(d.resultat().reseau[0].requeteMission,{projection:'id_nb_creneaux',selecteur:'in_manifeste',parametresUniques:true,cles:['autre','id','select']});
+  d.reseau(STAGING_URL+`/rest/v1/missions?select=${secret}&id=eq.${m.missionId}&id=eq.${secret}`,'GET','refus',m.missionId);
+  assert.deepEqual(d.resultat().reseau[1].requeteMission,{projection:'autre',selecteur:'autre',parametresUniques:false,cles:['id','select']});
+  d.reseau(STAGING_URL+`/rest/v1/missions?id=eq.${m.missionId}`,'GET','refus',m.missionId);
+  assert.equal(d.resultat().reseau[2].requeteMission.selecteur,'eq_manifeste');
+  d.reseau(path,'GET',200,m.missionId);assert.equal(d.resultat().reseau[3].requeteMission,undefined);
+  assert.doesNotMatch(JSON.stringify(d.resultat()),new RegExp(`${secret}|${m.missionId}|https?:`));
 });
 test('erreurs navigateur : aucun texte, stack, URL, query ou classe libre ne sort de la projection',()=>{
   const assets=new Set(['/assets/index-public123.js']),secret='CANARI_PASSWORD_JWT_DONNEE';
