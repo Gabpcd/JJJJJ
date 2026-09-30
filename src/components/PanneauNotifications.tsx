@@ -77,8 +77,7 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
   }, [open, actualiser]);
 
   const marquerToutLu = async () => {
-    const ids = notifications.filter(n => !n.lue).map(n => n.id);
-    if (ids.length && await marquerLues(ids) === false) {
+    if (flux.count > 0 && await marquerLues() === false) {
       toast.error('Impossible de marquer les notifications comme lues');
     }
   };
@@ -123,7 +122,7 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
             <button
               type="button"
               onClick={marquerToutLu}
-              disabled={!notifications.some((notification) => !notification.lue)}
+              disabled={flux.count === 0}
               className="min-h-[44px] rounded-lg px-2 text-xs text-primary font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               Tout marquer comme lu
