@@ -78,6 +78,12 @@ for (const {parcours,role} of [
         await dialog.getByRole('button',{name:'Suivant',exact:true}).click();
       }else {
         await expect(dialog.getByText('La mission ne sera plus proposée aux soignants.',{exact:true})).toBeVisible();
+        // Une modale chargée depuis une page lazy ne doit pas précharger
+        // à nouveau le script d'entrée qui a déjà lancé cette page.
+        expect(await page.evaluate(()=>{
+          const entrees=new Set([...document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')].map(script=>script.src));
+          return [...document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"]')].filter(link=>entrees.has(link.href)).map(link=>link.href);
+        })).toEqual([]);
         await expect(dialog.getByText(/notifié immédiatement|push \+ email/)).toHaveCount(0);
         await dialog.getByLabel(/Motif de l'annulation/).selectOption('AUTRE');
         await dialog.getByLabel(/Explication détaillée/).fill(detail);
