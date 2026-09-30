@@ -84,6 +84,22 @@ le TS2769 du helper déjà corrigé séparément par941d04e1 ; ce correctif n'es
 dupliqué ici. Rejouer le typecheck et les10 cas sur le SHA d'intégration annoncé
 avant de déclarer les cinq formats validés pour F1.
 
+### Validation compilée sur l'intégration
+
+Le 30 septembre à17:01UTC, les10 cas passent sur `c33fa55d`, sans retry, skip,
+erreur console/page ni requête inconnue. Le typecheck E2E isolé passe également.
+La compilation utilise une URL API locale et des valeurs fictives, uploads
+désactivés. Les deux rôles passent par la connexion, leur onglet de factures,
+puis le rechargement. Aucun endpoint de paiement, d'émission ou fournisseur
+n'est appelé. Cette preuve concerne les écrans, pas l'exécution SQL ci-dessus.
+
+Résultats et captures : dossier racine
+`audits/2026-09-30-preparation-nationale/f1-frontend-compile-c33fa55d/`.
+SHA256 du manifeste :
+`720c8d69d4da87f8fa21f2b0ab2ed7f29795af7d66802edeffe2d5e4b959e04e`.
+Les assertions vérifient la ligne de facture ; certaines captures mobiles
+montrent le récapitulatif, la ligne se trouvant plus bas dans la page.
+
 Préparation filtrée : dossier racine
 `audits/2026-09-30-preparation-nationale/f1-sql-preparation/`, avec manifeste
 SHA256. Aucun push, dispatch ou nouvelle exécution staging n'est effectué.
