@@ -114,7 +114,11 @@ export async function deposerCandidatureD(page,m,{expect,capturer=async etape=>{
   action('recharge_reseau');await page.waitForLoadState('networkidle');action('recharge_capture');await capturer('recharge');
 }
 export async function relireCandidaturesD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;},action=etape=>{void etape;}}) {
-  phase('etablissement');action('etablissement_navigation');await page.goto(`/etablissement/missions/${m.missionId}`);
+  // Le dashboard déclenche encore ses cartes après l'audit : suivre son bouton
+  // React conserve leurs lectures, sans interrompre le document connecté.
+  phase('etablissement');action('etablissement_navigation');
+  const carte=page.locator('.card-base').filter({has:page.getByRole('heading',{level:3,name:m.marker,exact:true})});
+  await expect(carte).toHaveCount(1);await carte.getByRole('button',{name:'Voir détail',exact:true}).click();
   for(const recharge of [false,true]) {
     if(recharge){phase('reload');action('recharge_navigation');await page.reload();}
     action('etablissement_compteur');await expect(page.getByRole('heading',{name:'Candidatures (2)',exact:true})).toBeVisible();

@@ -49,6 +49,7 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
       const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{
         if(slot<2){expect(documents).toBe(etape==='recharge'?2:1);expect(audits).toBe(1);expect(activites).toBe(1);}
         else {
+          expect(documents).toBe(etape==='recharge'?2:1);
           expect(audits).toBe(1);expect(consultations).toBe(1);expect(activites).toBe(0);
           for(const s of state.soignants)await expect(page.getByText(`${s.prenom} ${s.nom}`,{exact:false})).toHaveCount(0);
         }
@@ -62,6 +63,56 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
   expect(state.candidatures).toHaveLength(2);
   expect(state.candidatures.every(c=>c.message===m.marker&&c.statut==='EN_ATTENTE')).toBe(true);
   expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toHaveLength(2);
+});
+
+test('runner D2 : navigation établissement préserve deux lectures dashboard tardives',async({browser},info)=>{
+  const simulation=creerCandidaturesDeuxAs(),{state}=simulation;
+  state.etablissement.nom=state.mission.intitule;
+  for(const [i,s] of state.soignants.entries())state.candidatures.push({id:`dc300000-0000-4000-8000-00000000003${i+1}`,
+    mission_id:state.mission.id,soignant_id:s.id,message:'RECETTE D simulation tardive',statut:'EN_ATTENTE',cree_le:maintenant,choix_contrat:'SALARIE'});
+  const m={missionId:identifiants.mission,marker:state.mission.intitule,membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom})),
+    {slot:2,userId:identifiants.etablissement,email:'etablissement@example.invalid',password:'Mot-de-passe-fictif-recette-D2'}]};
+  const context=await browser.newContext({...info.project.use});await simulation.installer(context,'etablissement');
+  await context.addInitScript(()=>{if(location.pathname==='/connexion')sessionStorage.removeItem('sb-127-auth-token');});
+  let liberer!:()=>void;const reponses=new Promise<void>(resolve=>{liberer=resolve;});
+  const debuts:string[]=[],fins:string[]=[],refus:string[]=[];let documents=0,audits=0,consultations=0;
+  await context.route('**/rest/v1/rpc/{fn_audit_connexion,fn_ecrire_audit_safe}',route=>{
+    if(new URL(route.request().url()).pathname.endsWith('fn_audit_connexion'))audits++;else consultations++;
+    return route.fulfill({json:{success:true}});
+  });
+  await context.route('**/rest/v1/rpc/{fn_mon_score_etab,fn_bfa_info}',async route=>{
+    const nom=new URL(route.request().url()).pathname.split('/').pop()!;debuts.push(nom);
+    await reponses;await route.fallback();fins.push(nom);
+  });
+  await context.route('**/*',route=>{
+    const r=route.request(),u=new URL(r.url());
+    if(r.resourceType()==='document'&&r.isNavigationRequest())documents++;
+    if(/^\/(auth|rest|functions|storage)\//.test(u.pathname)&&!requeteFrontendD({url:STAGING_URL+u.pathname+u.search,method:r.method(),body:r.postData()?r.postDataJSON():undefined},m.membres[2],m)){
+      refus.push(`${r.method()} ${u.pathname}`);return route.abort();
+    }
+    return route.fallback();
+  });
+  const diagnostic=diagnosticD();observerErreursNavigateurD(context,2,diagnostic);
+  const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
+  try {
+    await page.goto('/connexion');await page.getByLabel('Email',{exact:true}).fill(m.membres[2].email);
+    await page.getByLabel('Mot de passe',{exact:true}).fill('Mot-de-passe-fictif-recette-D2');
+    await page.getByRole('button',{name:'Se connecter',exact:true}).click();await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
+    await expect.poll(()=>consultations).toBe(1);
+    // Stress explicite : ces réponses restent en vol pendant le vrai clic.
+    // Aucun sleep ni accélération du réseau ne remplace cette barrière.
+    await expect.poll(()=>debuts.length).toBe(2);expect(fins).toEqual([]);
+    await relireCandidaturesD(page,m,{expect,action:nom=>{
+      if(nom==='etablissement_compteur'&&fins.length===0){expect(documents).toBe(1);liberer();}
+    },capturer:async etape=>{
+      await expect.poll(()=>fins.length).toBe(2);expect(documents).toBe(etape==='recharge'?2:1);
+      expect(diagnostic.resultat().erreurs).toBe(0);
+    }});
+    expect(debuts.sort()).toEqual(['fn_bfa_info','fn_mon_score_etab']);expect(fins.sort()).toEqual(debuts);
+    expect(audits).toBe(1);expect(consultations).toBe(1);expect(refus).toEqual([]);simulation.verifierBornes();
+    expect(state.candidatures).toHaveLength(2);expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toEqual([]);
+    await info.attach('lectures-dashboard-conservees',{body:JSON.stringify({debuts,fins,documents,audits,consultations,diagnostic:diagnostic.resultat()}),contentType:'application/json'});
+  }finally{liberer();await context.close();}
 });
 
 test('runner D2 : titre mission unique même lorsque le nom établissement est identique',async({browser},info)=>{
