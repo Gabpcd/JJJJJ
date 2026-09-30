@@ -64,6 +64,9 @@ jobs:
       - name: Projection des statuts stores sans réseau ni secrets
         run: ruby scripts/mobile/store-status.test.rb
 
+      - name: Projection des sauvegardes sans réseau ni secrets
+        run: node --test tests/node/collect-backup-status.node.mjs
+
       - name: Remplacement contrôlé d’une soumission Apple sans réseau ni secrets
         run: ruby fastlane/ios_review_submission.test.rb
 
