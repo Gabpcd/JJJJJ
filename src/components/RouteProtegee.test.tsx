@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouteProtegee } from './RouteProtegee';
 
 const mocks = vi.hoisted(() => ({
+  connecte: true,
   retry: vi.fn(),
   deconnexion: vi.fn(),
   roleState: {
@@ -16,8 +17,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'utilisateur' },
-    session: { user: { id: 'utilisateur', email_confirmed_at: '2026-07-01T00:00:00Z' } },
+    user: mocks.connecte ? { id: 'utilisateur' } : null,
+    session: mocks.connecte ? { user: { id: 'utilisateur', email_confirmed_at: '2026-07-01T00:00:00Z' } } : null,
     loading: false,
     deconnexion: mocks.deconnexion,
   }),
@@ -42,12 +43,24 @@ function rendre() {
 describe('RouteProtegee — reprise de session native', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.connecte = true;
     Object.assign(mocks.roleState, {
       role: 'SOIGNANT',
       loading: false,
       resolved: true,
       error: null,
     });
+  });
+
+  it('conserve seulement une fiche mission canonique après expiration de session', () => {
+    mocks.connecte = false;
+    const mission = '/etablissement/missions/71000000-0000-4000-8000-000000000003';
+    function Destination() { const l = useLocation(); return <output>{l.pathname + l.search}</output>; }
+    render(<MemoryRouter initialEntries={[mission]}><Routes>
+      <Route path="/connexion" element={<Destination />} />
+      <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><p>Mission</p></RouteProtegee>} />
+    </Routes></MemoryRouter>);
+    expect(screen.getByRole('status')).toHaveTextContent('/connexion?return=' + encodeURIComponent(mission));
   });
 
   it('ouvre l’espace avec un rôle résolu', () => {
