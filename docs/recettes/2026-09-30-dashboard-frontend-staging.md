@@ -43,7 +43,8 @@ exactement un audit conforme par slot. Les dix membres restent contrôlés par
 le cleanup E10. Toute anomalie laisse le job en échec.
 
 Les preuves filtrées sont dans `tests/load/results/dashboard-ui/` : `avant.json`,
-`apres.json`, `cleanup.json`, `diagnostic-cleanup.json`, `resultat.json` et,
+`apres.json`, `cleanup.json`, `diagnostic-cleanup.json`, `preview.json`,
+`resultat.json` et,
 uniquement si les contrôles réussissent, quatre captures. Elles ne
 contiennent ni IP, navigateur d'audit, identifiant de session, mot de passe ou
 JWT. Le workflow conserve ces preuves et les manifests sept jours.
@@ -127,3 +128,39 @@ Preuves du complément diagnostic : `/private/tmp/jolene-dashboard-diagnostic-no
 et `/private/tmp/jolene-dashboard-diagnostic-ui/results.json`. Ces tests restent
 entièrement simulés ; ils ne déterminent pas rétroactivement la cause du premier
 échec staging et ne prouvent pas une connexion staging réussie.
+
+
+## Second pilote : échec avant le navigateur
+
+Le run `36692399113` sur `5fa0f32b` s'arrête en phase `preview`, slot nul,
+sans aucun événement réseau navigateur. WebKit n'a pas été lancé. Les dix
+manifests sont `cleaned` ; le bilan SQL des deux slots indique
+`donnees_absentes=true`, avec zéro audit et donc une recette non conforme.
+Cette preuve localise l'échec avant la connexion, sans déterminer son code
+réseau : l'ancienne boucle avalait les erreurs de disponibilité.
+
+Le démarrage local avec le seul environnement enfant `PATH`/`HOME` répond HTTP
+200 ; aucune variable `VITE_*` supplémentaire n'est requise par la config
+preview. Une différence de résolution IPv4/IPv6 dans le conteneur reste une
+hypothèse, pas une cause démontrée du run. Le correctif emploie désormais une
+origine numérique unique `http://127.0.0.1:5173` pour l'écoute Vite, le fetch de
+disponibilité et le contexte navigateur. L'ancienne origine `localhost` n'est
+pas ajoutée à l'allowlist : une seule origine locale précise reste permise.
+
+Le workflow exécute `verify-preview` après le build et **avant toute création de
+fixture**. Ce mode ne lit pas le pool ni la base, n'ouvre aucun navigateur et ne
+connecte aucun compte. Le runner utilise le même démarrage lors de la recette.
+`preview.json` conserve uniquement le nombre de tentatives, le statut HTTP, un
+code réseau parmi une liste fermée et le code de sortie enfant. Aucun stderr,
+stdout, message d'exception, URL, secret ou nouvel environnement enfant n'est
+exporté. Les 60 tentatives et leur délai restent bornés ; un échec stoppe le
+serveur et la recette, sans contourner les gardes distantes.
+
+Preuves locales de ce correctif : `/private/tmp/jolene-dashboard-preview-node.txt`,
+`/private/tmp/jolene-dashboard-preview-ui/results.json` et
+`/private/tmp/jolene-dashboard-preview-local.json`. Le préflight a répondu 200
+sans clé ni fixture. Les simulations ne prouvent pas encore la correction dans
+le conteneur GitHub ; une nouvelle exécution staging relève du responsable.
+
+Validation locale : 105/105 tests Node du banc CI, 20/20 simulations frontend
+sur cinq formats, TypeScript, ESLint et actionlint des deux workflows passent.

@@ -1,8 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
-import { setTimeout as attendre } from 'node:timers/promises';
+import { demarrerPreview } from './dashboard-ui-preview.mjs';
 import { creerDiagnosticUI, bilanCleanupUI } from './dashboard-ui-diagnostic.mjs';
 import { STAGING_REF, STAGING_URL } from './prepare-load-fixtures.mjs';
 import { dashboardFixtureValide } from '../../tests/load/helpers/contrats.js';
@@ -65,6 +64,14 @@ async function lireSQL(query, env) {
 }
 export async function executerRecetteDashboard({ action = 'run', env = process.env } = {}) {
   const diagnostic = creerDiagnosticUI();
+  if (action === 'verify-preview') {
+    diagnostic.phase('preview');
+    let preview;
+    try {
+      preview = await demarrerPreview({ env, observer: etat => sauver('preview', etat) });
+    } finally { preview?.kill('SIGTERM'); }
+    return;
+  }
   const membres = configurationUI(env);
   if (!['run','verify-cleanup'].includes(action)) throw new Error('Action UI inconnue.');
   if (action === 'verify-cleanup') {
@@ -88,14 +95,7 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
     const index = resolve('dist/index.html');
     writeFileSync(index, preparerHtmlPreview(readFileSync(index, 'utf8')));
     const { webkit, devices, expect } = await import('@playwright/test');
-    preview = spawn(process.execPath, ['node_modules/vite/bin/vite.js','preview','--host','localhost','--port','5173','--strictPort'],
-      { stdio: 'ignore', env: { PATH: env.PATH, HOME: env.HOME } });
-    for (let i = 0; i < 60; i++) {
-      if (preview.exitCode !== null) throw new Error('Preview UI indisponible.');
-      try { if ((await fetch(ORIGINE_UI, { signal: AbortSignal.timeout(500) })).ok) break; } catch { /* lancement borné */ }
-      if (i === 59) throw new Error('Preview UI non démarrée.');
-      await attendre(200);
-    }
+    preview = await demarrerPreview({ env, observer: etat => sauver('preview', etat) });
     diagnostic.phase('browser');
     browser = await webkit.launch();
     for (const [slot, appareil] of ['iPhone 13','iPad Pro 11'].entries()) {
@@ -145,6 +145,9 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  executerRecetteDashboard({ action: process.argv[2] }).then(() => console.log('Contrôle frontend staging confirmé.'))
+  const action = process.argv[2];
+  executerRecetteDashboard({ action }).then(() => console.log(action === 'verify-preview'
+    ? 'Preview locale disponible ; aucune connexion UI effectuée.'
+    : action === 'verify-cleanup' ? 'Nettoyage et audits frontend confirmés.' : 'Contrôle frontend staging confirmé.'))
     .catch(() => { console.error('Contrôle frontend staging non confirmé ; détails sensibles non publiés. Consulter les preuves structurées et le cleanup.'); process.exitCode = 1; });
 }

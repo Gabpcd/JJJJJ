@@ -247,6 +247,8 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ''
           VITE_ENV: test
           SENTRY_UPLOAD_ENABLED: 'false'
+      - name: Vérifier la preview locale avant toute création de compte
+        run: node scripts/ci/recette-dashboard-staging.mjs verify-preview
       - name: Préparer les dix identités après le build
         id: prepare
         timeout-minutes: 4
