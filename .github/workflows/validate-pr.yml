@@ -61,6 +61,9 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs
 
+      - name: Vérifier les empreintes inventaire explicites
+        run: node --test tests/node/security-definer-inventory.node.mjs
+
       - name: Journal et préflight fournisseurs hors réseau
         run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
 
@@ -405,6 +408,7 @@ jobs:
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
             tests/security/stripe-refund-identifiers.test.sql
+            tests/security/security-definer-inventory-explicit.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
 
