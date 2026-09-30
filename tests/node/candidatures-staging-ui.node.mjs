@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { configurationFrontendD,identitesFrontendD,requeteFrontendD,budgetEcrituresD,sqlAuditsFrontendD,verifierAuditsD,STAGING_REF,STAGING_URL,ORIGINE_UI } from '../../scripts/ci/candidatures-ui-contract.mjs';
-import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD } from '../../scripts/ci/recette-candidatures-staging.mjs';
+import { executerFrontendD,diagnosticD,lireBackendD,verifierReponseFrontendD,installerReseauD,parcourirFrontendD,projeterErreurNavigateurD,observerErreursNavigateurD } from '../../scripts/ci/recette-candidatures-staging.mjs';
 const now=Date.parse('2026-09-30T12:00:00Z');
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_RUN_ID:'555',GITHUB_RUN_ATTEMPT:'2',GITHUB_SHA:'a'.repeat(40),RUNNER_TEMP:'/private/tmp/d2-test',
   LOAD_D_FRONTEND_ONLY:'true',LOAD_D_JOUR:'2026-10-07',LOAD_D_SQL_ONLY:'false',LOAD_D_SQL_JOUR:'',LOAD_TEST_SCENARIO:'04-candidatures-simultanees',DASHBOARD_FIXTURE_ONLY:'false',DIAGNOSTIC_SQL:'false',STAGING_SUPABASE_PROJECT_REF:STAGING_REF,STAGING_SUPABASE_URL:STAGING_URL,STAGING_SUPABASE_ACCESS_TOKEN:'CANARI_MANAGEMENT'};
@@ -65,6 +65,35 @@ test('réponses d’Auth et de candidature doivent confirmer la bonne identité,
   assert.throws(()=>verifierReponseFrontendD({path:'/auth/v1/token',data:{access_token:'CANARI_JWT',user:{...user,id:identites[1].userId}}},identites[0],m));
   for(const data of [{success:false},{success:true},{success:true,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:false,candidature_id:m.preuveId}])assert.throws(()=>verifierReponseFrontendD({path:'/rest/v1/rpc/fn_confirmer_action_planning_v1',data},identites[0],m));
 });
+test('erreurs navigateur : aucun texte, stack, URL, query ou classe libre ne sort de la projection',()=>{
+  const assets=new Set(['/assets/index-public123.js']),secret='CANARI_PASSWORD_JWT_DONNEE';
+  const p=projeterErreurNavigateurD({source:'pageerror',texte:`Failed to fetch ${secret}`,classe:'TypeError',
+    stack:`TypeError: ${secret}\nfn@${ORIGINE_UI}/assets/index-public123.js?token=${secret}:12:34`},assets);
+  assert.equal(p.categorie,'chargement_reseau');assert.equal(p.classe,'TypeError');assert.deepEqual(p.emplacement,{asset:'/assets/index-public123.js',ligne:12,colonne:34});assert.match(p.empreinte,/^[a-f0-9]{64}$/);
+  assert.equal(p.empreinte,projeterErreurNavigateurD({texte:`Failed to fetch ${secret}`}).empreinte);
+  assert.notEqual(p.empreinte,projeterErreurNavigateurD({texte:'Failed to fetch autre'}).empreinte);
+  for(const url of [`https://externe.invalid/assets/index-public123.js?${secret}`,`${ORIGINE_UI}/assets/${secret}.js`,`${ORIGINE_UI}/soignant/${secret}`,`http://user:${secret}@127.0.0.1:4173/assets/index-public123.js`]){
+    const other=projeterErreurNavigateurD({source:'console_error',texte:`Minified React error #418; ${secret}`,classe:secret,location:{url,lineNumber:5,columnNumber:6}},assets);
+    assert.equal(other.emplacement,null);assert.equal(other.classe,'autre');assert.equal(other.code,418);assert.equal(other.categorie,'react_minifie');assert.doesNotMatch(JSON.stringify(other),/CANARI|https?:|token|stack/);
+  }
+  assert.doesNotMatch(JSON.stringify(p),/CANARI|https?:|token|stack/);
+});
+test('listeners réels : slot du contexte conservé après changement de phase, aucune erreur filtrée',()=>{
+  const d=diagnosticD(),events=new Map();let pageCreated;
+  observerErreursNavigateurD({on:(event,fn)=>{assert.equal(event,'page');pageCreated=fn;}},0,d);
+  pageCreated({on:(event,fn)=>events.set(event,fn),isClosed:()=>false});d.phase('postuler',1);
+  events.get('pageerror')(new TypeError('Load failed CANARI_1'));
+  for(const text of ['The operation was aborted CANARI_2','WebSocket connection failed CANARI_3','Target page, context or browser has been closed CANARI_4','message non classé CANARI_5'])
+    events.get('console')({type:()=> 'error',text:()=>text,location:()=>({url:'https://secret.invalid/CANARI_6',lineNumber:1})});
+  const r=d.resultat();assert.equal(r.erreurs,5);assert.deepEqual(r.erreursNavigateur.map(e=>e.categorie),['chargement_reseau','requete_abandonnee','websocket','contexte_ferme','autre']);
+  assert.ok(r.erreursNavigateur.every(e=>e.slotEmetteur===0&&e.slotPhase===1&&e.phase==='postuler'));assert.doesNotMatch(JSON.stringify(r),/CANARI|secret\.invalid/);
+  events.get('console')({type:()=> 'warning',text:()=>{throw Error('Les autres niveaux n’étaient pas capturés.');}});assert.equal(d.resultat().erreurs,5);
+});
+test('projection bornée : la saturation conserve le total bloquant et compte les entrées non détaillées',()=>{
+  const d=diagnosticD();for(let i=0;i<40;i++)d.erreurNavigateur(1,projeterErreurNavigateurD({source:'console_error',texte:`CANARI_${i}`}));
+  d.erreurNavigateur(1,projeterErreurNavigateurD({source:'console_error',texte:'CANARI_0'}));
+  const r=d.resultat();assert.equal(r.erreurs,41);assert.equal(r.erreursNavigateur.length,32);assert.equal(r.erreursNavigateurTronquees,8);assert.equal(r.erreursNavigateur[0].nombre,2);assert.doesNotMatch(JSON.stringify(r),/CANARI/);
+});
 test('audits exacts conservés : trois connexions, consultation établissement, aucun effet présence/email/push',()=>{
   verifierAuditsD(audits('avant'),'avant');verifierAuditsD(audits('apres'),'apres',audits('avant'));verifierAuditsD(audits('cleanup'),'cleanup',audits('apres'));
   for(const change of [{total:2},{connexions:0},{presences:1},{emails:1},{push:1},{activite:false},{activite_empreinte:'a'.repeat(32)}])assert.throws(()=>verifierAuditsD([{...audits('apres')[0],...change},...audits('apres').slice(1)],'apres',audits('avant')));
@@ -86,7 +115,7 @@ test('échec page : le vrai finally ferme contexte puis navigateur et preview av
   const context={addInitScript:async()=>{},routeWebSocket:async()=>{},on:()=>{},route:async()=>{},close:async()=>ordre.push('contexte-ferme'),
     newPage:async()=>({setDefaultTimeout:()=>{},setDefaultNavigationTimeout:()=>{},goto:async()=>{ordre.push('page');throw Error('CANARI_PAGE');}})};
   const browser={newContext:async()=>context,close:async()=>ordre.push('navigateur-ferme')};
-  await assert.rejects(()=>parcourirFrontendD({m,identites,env,diagnostic:diagnosticD(),preparerBuild:()=>ordre.push('build'),previewFn:async()=>({kill:()=>ordre.push('preview-stop')}),
+  await assert.rejects(()=>parcourirFrontendD({m,identites,env,diagnostic:diagnosticD(),lireAssets:()=>new Set(),preparerBuild:()=>ordre.push('build'),previewFn:async()=>({kill:()=>ordre.push('preview-stop')}),
     chargerPlaywright:async()=>({webkit:{launch:async options=>{assert.deepEqual(options.env,{});assert.doesNotMatch(JSON.stringify(options),/CANARI|SUPABASE|LOAD_CANDIDATURES/);return browser;}},devices:{},expect:{}})}));
   ordre.push('cleanup-possible');assert.deepEqual(ordre,['build','page','contexte-ferme','navigateur-ferme','preview-stop','cleanup-possible']);
 });
