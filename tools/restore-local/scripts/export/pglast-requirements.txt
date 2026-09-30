@@ -1,0 +1,2 @@
+# Official PyPI wheel: CPython 3.12, Linux x86_64; no source builds/dependencies.
+pglast==7.10 --hash=sha256:b89c6bf904b4043752431564ce5c6bacf5d54cb6d6bc487a175cab9a47f18436

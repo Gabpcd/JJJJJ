@@ -1,0 +1,123 @@
+name: Restore schema export (read-only encrypted quarantine)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/restore-schema-export.yml'
+      - 'tools/restore-local/scripts/export/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-restore-schema-read-only-export
+  cancel-in-progress: false
+
+env:
+  RESTORE_EXPORT_APPROVED_HEAD: ${{ vars.RESTORE_EXPORT_APPROVED_HEAD }}
+  RESTORE_EXPORT_CATALOGUE_MD5: ${{ vars.RESTORE_EXPORT_CATALOGUE_MD5 }}
+  RESTORE_EXPORT_EXPIRES_AT: ${{ vars.RESTORE_EXPORT_EXPIRES_AT }}
+  RESTORE_EXPORT_RECIPIENT_PUBLIC_KEY: ${{ vars.RESTORE_EXPORT_RECIPIENT_PUBLIC_KEY }}
+  RESTORE_EXPORT_RECIPIENT_SHA256: ${{ vars.RESTORE_EXPORT_RECIPIENT_SHA256 }}
+
+jobs:
+  local-guards:
+    if: github.repository == 'Gabpcd/JJJJJ'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Local guards only (no credentials, no database)
+        run: node --test tools/restore-local/scripts/export/export-schema.test.mjs tools/restore-local/scripts/export/ci-export.test.mjs
+
+  approved-main-head:
+    needs: local-guards
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'Gabpcd/JJJJJ' && github.ref == 'refs/heads/main' && github.sha == vars.RESTORE_EXPORT_APPROVED_HEAD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Refuse any unapproved main SHA, expiry or recipient before credentials
+        run: node tools/restore-local/scripts/export/ci-export.mjs identity
+
+  export-quarantine:
+    needs: approved-main-head
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.sha == vars.RESTORE_EXPORT_APPROVED_HEAD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PROOF_DIR: /tmp/jolene-ddl-${{ github.run_id }}-${{ github.run_attempt }}-proof
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Recheck exact approval before preparing tools
+        run: node tools/restore-local/scripts/export/ci-export.mjs identity
+      - name: Pinned offline AST scanner (no source build)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+          python3 -m venv "$RUNNER_TEMP/jolene-ddl-scanner"
+          "$RUNNER_TEMP/jolene-ddl-scanner/bin/python3" -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes -r tools/restore-local/scripts/export/pglast-requirements.txt
+          echo "$RUNNER_TEMP/jolene-ddl-scanner/bin" >> "$GITHUB_PATH"
+      - name: Prepare exact PG17 clients (no database connection)
+        run: node tools/restore-local/scripts/export/ci-export.mjs prepare
+      - name: Read-only catalogue and official schema-only dump to private quarantine
+        shell: bash
+        env:
+          RESTORE_SCHEMA_SOURCE_REF: flripxtsyegjshnhzjkz
+          PGHOST: ${{ vars.RESTORE_EXPORT_PGHOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: postgres.flripxtsyegjshnhzjkz
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          node tools/restore-local/scripts/export/ci-export.mjs collect > "$PROOF_DIR/collect.json" 2>&1
+      - name: Encrypt scanned DDL for exact approved recipient (never cleartext upload)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/restore-local/scripts/export/ci-export.mjs seal > "$PROOF_DIR/seal.json" 2>&1
+      - name: Always delete only exact export containers and private files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PROOF_DIR"
+          node tools/restore-local/scripts/export/ci-export.mjs cleanup > "$PROOF_DIR/cleanup.json" 2>&1
+      - name: Closed report and encrypted quarantine only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: restore-ddl-quarantine-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PROOF_DIR }}/collect.json
+            ${{ env.PROOF_DIR }}/seal.json
+            ${{ env.PROOF_DIR }}/manifest.json
+            ${{ env.PROOF_DIR }}/cleanup.json
+            ${{ env.PROOF_DIR }}/ddl-quarantine.encrypted.json
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: false

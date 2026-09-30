@@ -5,11 +5,12 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'no
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {projectExtensions} from './extensions.mjs';
 export const FORBIDDEN=['flripxtsyegjshnhzjkz','mejpriaetwgtcstbgfid','wnepopwygokbhlqghydb'];
 const HERE=dirname(fileURLToPath(import.meta.url)), ROOT=resolve(HERE,'../..');
 const LABEL='org.jolene.restore-drill', SIDES=['source','target'], ROLES=['db','auth','rest','storage','api'];
 const SAFE_ERROR=Symbol('bootstrap-safe-error');
-const PHASES=new Set(['plan','read_plan','docker_context','preload','image_preflight','compose_config','resource_preflight','compose_up','inspection','diagnostic','empty_sql_source','empty_sql_target','api_health_source','api_health_target','cleanup_inventory','cleanup_containers','cleanup_volumes','cleanup_network','verify_absence']);
+const PHASES=new Set(['plan','read_plan','docker_context','preload','image_preflight','compose_config','resource_preflight','compose_up','inspection','diagnostic','empty_sql_source','empty_sql_target','api_health_source','api_health_target','cleanup_inventory','cleanup_containers','cleanup_volumes','cleanup_network','verify_absence','extensions_source','extensions_target']);
 let currentPhase='read_plan';
 const fail=(code,detail)=>{const e=new Error(code);e[SAFE_ERROR]=true;e.detail=detail;throw e},sha=b=>createHash('sha256').update(b).digest('hex');
 export function projectProcessFailure(result){
@@ -230,7 +231,7 @@ export function main(args){
   write(resolve(dir,'manifest.json'),JSON.stringify(manifest,null,2));return {result:'LOCAL_PLAN_ONLY',run,containers:10,schema_imported:false};
  }
  if(cmd==='absent'){currentPhase='docker_context';localDocker();return assertAbsent(runName(dirArg??''));}
- if(!['preload','preflight','up','inspect','diagnose','down'].includes(cmd))fail('COMMAND_INVALID');
+ if(!['preload','preflight','up','inspect','diagnose','extensions','down'].includes(cmd))fail('COMMAND_INVALID');
  const {m,plan,file}=readRun(dir);verifySources();currentPhase='docker_context';localDocker();
  const locked=new Set(read(resolve(ROOT,'images.lock.json')).images.map(x=>x.reference));
  if(Object.values(plan.services).some(s=>!locked.has(s.image)))fail('IMAGE_NOT_LOCKED');
@@ -258,6 +259,10 @@ export function main(args){
   currentPhase='compose_up';invoke([...base,'up','--detach','--pull','never','--wait','--wait-timeout','180']);
  }
  currentPhase=cmd==='down'?'cleanup_inventory':'inspection';const state=inspect(plan,cmd==='down');
+ if(cmd==='extensions'){
+  const inventories=SIDES.map(side=>{currentPhase='extensions_'+side;const result=JSON.parse(invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],readFileSync(resolve(HERE,'preflight-extensions.sql'),'utf8')));return {side,...projectExtensions(result)};});
+  return {result:'EXTENSION_CATALOGUE_ONLY',run:m.run,inventories,extensions_changed:false,schema_imported:false};
+ }
  if(cmd==='down'){
   currentPhase='cleanup_containers';for(const c of state.containers)invoke(['rm','--force',c.Id]);
   currentPhase='cleanup_volumes';for(const v of state.volumes)invoke(['volume','rm',v.Name]);
