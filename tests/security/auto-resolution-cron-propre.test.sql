@@ -116,7 +116,8 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM private.security_definer_inventory i JOIN pg_proc p
         ON p.oid='public.fn_auto_resoudre_alertes_crons()'::regprocedure
-      WHERE i.signature='fn_auto_resoudre_alertes_crons()' AND i.definition_md5=md5(p.prosrc)
+      WHERE i.signature='fn_auto_resoudre_alertes_crons()'
+        AND i.categorie='SERVICE_ONLY_REVOQUE' AND i.definition_md5=md5(p.prosrc)
     ) THEN RAISE EXCEPTION 'Empreinte inventaire non actualisée'; END IF;
 
     RAISE EXCEPTION 'ROLLBACK_AUTO_RESOLUTION' USING ERRCODE='ZX231';

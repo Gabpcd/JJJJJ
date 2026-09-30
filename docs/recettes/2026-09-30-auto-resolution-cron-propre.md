@@ -50,3 +50,11 @@ Aucun cron réel, acquittement production, nouvelle session Auth distante ou
 mouvement financier n'a été lancé. Après déploiement, seule une lecture de la
 prochaine exécution normale et de l'état des alertes pourra confirmer l'effet
 réel. Une CI verte ne prouve pas à elle seule cette reprise en production.
+
+Première exécution SQL intégrée : run `36692538105`, job `109812832785`.
+Les assertions métier ont passé, puis la vérification d’inventaire a échoué :
+la fonction réservée au service était absente de l’inventaire LIVE et l’ancien
+`UPDATE` n’écrivait donc aucune ligne. La migration recense désormais cette
+seule signature, dans la catégorie `SERVICE_ONLY_REVOQUE`, avec l’empreinte
+littérale du corps corrigé. L’assertion est conservée et vérifie aussi la catégorie.
+Toute la transaction a été annulée ; une nouvelle exécution CI reste requise.

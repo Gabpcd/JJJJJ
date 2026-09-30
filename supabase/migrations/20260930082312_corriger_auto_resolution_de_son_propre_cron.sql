@@ -54,8 +54,18 @@ END;
 $function$;
 
 
-UPDATE private.security_definer_inventory
-SET definition_md5 = md5(p.prosrc)
-FROM pg_proc p
-WHERE p.oid = 'public.fn_auto_resoudre_alertes_crons()'::regprocedure
-  AND signature = 'fn_auto_resoudre_alertes_crons()';
+-- Cette fonction réservée au service était absente de l'inventaire LIVE.
+-- Recenser uniquement son corps exact, sans classement dynamique des autres RPC.
+INSERT INTO private.security_definer_inventory
+  (signature, categorie, definition_md5, justification, recense_le)
+VALUES (
+  'fn_auto_resoudre_alertes_crons()', 'SERVICE_ONLY_REVOQUE',
+  '1ec5fcaf9a2f1ac2ccc3e243fc89f2f3',
+  'EXECUTE réservé au service, garde cron/admin interne ; résolution uniquement après succès postérieur, dernier run terminé pour le propre cron.',
+  now()
+)
+ON CONFLICT (signature) DO UPDATE SET
+  categorie = EXCLUDED.categorie,
+  definition_md5 = EXCLUDED.definition_md5,
+  justification = EXCLUDED.justification,
+  recense_le = EXCLUDED.recense_le;
