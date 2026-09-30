@@ -122,6 +122,8 @@ async function preparer(page: Page, statutTransport = 200) {
 for (const statut of configure ? [200, 500] : [null]) {
   test(`admin — Sentry ${statut === null ? 'non configuré' : `tentative avec transport simulé ${statut}`} et reprise`, async ({ page }, info) => {
     const { etat } = await preparer(page, statut ?? 200);
+    const consoleSentry = page.getByRole('link', { name: 'Sentry', exact: true });
+    await expect(consoleSentry).toHaveAttribute('href', 'https://jolene-z6.sentry.io/');
     const diagnostic = page.getByRole('region', { name: 'Diagnostic Sentry' });
     const bouton = diagnostic.getByRole('button', { name: 'Tester Sentry', exact: true });
     const carte = page.getByText('Sentry Monitoring', { exact: true }).locator('../..');
@@ -146,6 +148,7 @@ for (const statut of configure ? [200, 500] : [null]) {
     await expect(carte).toContainText('Non vérifié');
     await stabiliserLectures(page);
     await page.reload();
+    await expect(consoleSentry).toHaveAttribute('href', 'https://jolene-z6.sentry.io/');
     await expect(bouton).toBeVisible();
     await expect(diagnostic.getByRole('status')).toBeEmpty();
     await expect(page.getByRole('button', { name: 'Revérifier', exact: true })).toBeEnabled();

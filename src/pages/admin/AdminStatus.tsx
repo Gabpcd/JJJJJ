@@ -280,7 +280,7 @@ export default function AdminStatus() {
             ['Vercel', 'https://vercel.com/dashboard'],
             ['Stripe', 'https://dashboard.stripe.com'],
             ['Resend', 'https://resend.com/emails'],
-            ['Sentry', 'https://sentry.io/organizations/jolene'],
+            ['Sentry', 'https://jolene-z6.sentry.io/'],
             ['Twilio', 'https://console.twilio.com'],
           ].map(([label, url]) => (
             <a key={url} href={url} target="_blank" rel="noopener noreferrer"
