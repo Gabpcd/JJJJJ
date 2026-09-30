@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { resultatTestSms } from '@/lib/resultatTestSms';
+import { etatDiagnosticSentry } from '@/lib/diagnosticSentry';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
@@ -12,7 +13,7 @@ import { CardY2K } from '@/components/y2k/CardY2K';
 interface ServiceStatus {
   name: string;
   icon: LucideIcon;
-  status: 'ok' | 'error' | 'loading' | 'degraded';
+  status: 'ok' | 'error' | 'loading' | 'degraded' | 'unverified';
   latency?: number;
   detail?: string;
 }
@@ -212,11 +213,9 @@ export function PanneauxHealthcheck() {
       results.push({ name: 'Annuaire Santé (FINESS)', icon: Landmark, status: 'error', latency: Date.now() - finessStart, detail: msg });
     }
 
-    // 12. Sentry — masqué si DSN non configurée.
-    const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-    if (sentryDsn) {
-      results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'ok', detail: 'DSN configuré' });
-    }
+    // 12. La configuration locale ne prouve jamais la réception chez Sentry.
+    const sentry = etatDiagnosticSentry();
+    results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'unverified', detail: sentry.detail });
 
     setServices(results);
     setLastCheck(new Date());
@@ -338,7 +337,7 @@ export function PanneauxHealthcheck() {
       {totalCount > 0 && (
         <CardY2K hoverLift={false} className={`p-4 border-l-4 ${okCount === totalCount ? 'border-success bg-success/5' : okCount > totalCount / 2 ? 'border-warning bg-warning/5' : 'border-destructive bg-destructive/5'}`}>
           <p className="text-sm font-bold text-foreground">
-            {okCount === totalCount ? 'Tous les services sont opérationnels' : `${totalCount - okCount} service(s) en alerte`}
+            {okCount === totalCount ? 'Tous les services sont opérationnels' : `${totalCount - okCount} service(s) à vérifier`}
           </p>
         </CardY2K>
       )}
@@ -355,11 +354,11 @@ export function PanneauxHealthcheck() {
               <div className="flex items-center gap-2">
                 <StatusIcon className={`h-4 w-4 ${statusColor(svc.status)}`} />
                 <span className={`text-xs font-medium ${statusColor(svc.status)}`}>
-                  {svc.status === 'ok' ? 'Opérationnel' : svc.status === 'degraded' ? 'Dégradé' : svc.status === 'error' ? 'Erreur' : 'Vérification…'}
+                  {svc.status === 'ok' ? 'Opérationnel' : svc.status === 'degraded' ? 'Dégradé' : svc.status === 'error' ? 'Erreur' : svc.status === 'unverified' ? 'Non vérifié' : 'Vérification…'}
                 </span>
                 {svc.latency != null && <span className="text-[10px] text-muted-foreground ml-auto">{svc.latency}ms</span>}
               </div>
-              {svc.detail && <p className="text-[10px] text-muted-foreground mt-1 truncate">{svc.detail}</p>}
+              {svc.detail && <p className="text-[10px] text-muted-foreground mt-1 break-words">{svc.detail}</p>}
             </CardY2K>
           );
         })}
