@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { setTimeout as attendre } from 'node:timers/promises';
+import { creerDiagnosticUI, bilanCleanupUI } from './dashboard-ui-diagnostic.mjs';
 import { STAGING_REF, STAGING_URL } from './prepare-load-fixtures.mjs';
 import { dashboardFixtureValide } from '../../tests/load/helpers/contrats.js';
 import { configurationUI, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from './dashboard-ui-contract.mjs';
@@ -29,17 +30,21 @@ export function dashboardUIValide(data, membre) {
     && data.heures_semaine === 0 && data.notifs_non_lues === 0
     && ['nb_missions','brut_total','net_total'].every(k => data.gains_mois[k] === 0);
 }
-export async function parcourirDashboard(page, membre, { expect, verifierReponse, capturer = async () => {} }) {
+export async function parcourirDashboard(page, membre, { expect, verifierReponse, capturer = async () => {}, marquerPhase = () => {} }) {
   const reponseDashboard = () => page.waitForResponse(r => r.url().endsWith('/rest/v1/rpc/fn_dashboard_soignant_complet') && r.request().method() === 'POST');
+  marquerPhase('page');
   await page.goto('/connexion');
+  marquerPhase('login');
   await page.getByLabel('Email', { exact: true }).fill(membre.email);
   await page.getByLabel('Mot de passe', { exact: true }).fill(membre.password);
   const [premiere] = await Promise.all([reponseDashboard(), page.getByRole('button', { name: 'Se connecter', exact: true }).click()]);
+  marquerPhase('dashboard');
   await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
   await verifierReponse(premiere, membre);
   await expect(page.locator('main').getByRole('heading', { level: 1 })).toContainText('Recette');
   await page.waitForLoadState('networkidle');
   await capturer('dashboard');
+  marquerPhase('reload');
   const [deuxieme] = await Promise.all([reponseDashboard(), page.reload()]);
   await verifierReponse(deuxieme, membre);
   await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
@@ -59,32 +64,42 @@ async function lireSQL(query, env) {
   try { return await response.json(); } catch { throw new Error('Lecture backend UI invalide.'); }
 }
 export async function executerRecetteDashboard({ action = 'run', env = process.env } = {}) {
+  const diagnostic = creerDiagnosticUI();
   const membres = configurationUI(env);
   if (!['run','verify-cleanup'].includes(action)) throw new Error('Action UI inconnue.');
   if (action === 'verify-cleanup') {
-    const apres = await lireSQL(sqlEtatUI(membres), env);
-    sauver('cleanup', { conforme: false, profils: projectionEtatUI(apres) });
-    const avant = JSON.parse(readFileSync(`${dossier}/avant.json`, 'utf8'));
-    verifierEtatUI(apres, avant, true); sauver('cleanup', { conforme: true, profils: projectionEtatUI(apres) }); return;
+    diagnostic.phase('cleanup');
+    try {
+      const apres = await lireSQL(sqlEtatUI(membres), env);
+      const bilan = bilanCleanupUI(apres);
+      sauver('cleanup', { conforme: false, ...bilan, profils: projectionEtatUI(apres) });
+      const avant = JSON.parse(readFileSync(`${dossier}/avant.json`, 'utf8'));
+      verifierEtatUI(apres, avant, true);
+      sauver('cleanup', { conforme: true, ...bilan, profils: projectionEtatUI(apres) });
+    } finally { sauver('diagnostic-cleanup', diagnostic.resultat()); }
+    return;
   }
-  const [gardes] = await lireSQL(sqlGardeUI, env); verifierGardeUI(gardes);
-  const avant = await lireSQL(sqlEtatUI(membres), env); verifierEtatUI(avant); sauver('avant', projectionEtatUI(avant));
-  // Seul le build éphémère de recette utilise la police système de secours.
-  const index = resolve('dist/index.html');
-  writeFileSync(index, preparerHtmlPreview(readFileSync(index, 'utf8')));
-  const { webkit, devices, expect } = await import('@playwright/test');
-  const preview = spawn(process.execPath, ['node_modules/vite/bin/vite.js','preview','--host','localhost','--port','5173','--strictPort'],
-    { stdio: 'ignore', env: { PATH: env.PATH, HOME: env.HOME } });
-  let browser; const preuves = []; let succes = false;
+  let browser, preview; const preuves = []; let succes = false;
   try {
+    const [gardes] = await lireSQL(sqlGardeUI, env); verifierGardeUI(gardes);
+    const avant = await lireSQL(sqlEtatUI(membres), env); verifierEtatUI(avant); sauver('avant', projectionEtatUI(avant));
+    diagnostic.phase('preview');
+    // Seul le build éphémère de recette utilise la police système de secours.
+    const index = resolve('dist/index.html');
+    writeFileSync(index, preparerHtmlPreview(readFileSync(index, 'utf8')));
+    const { webkit, devices, expect } = await import('@playwright/test');
+    preview = spawn(process.execPath, ['node_modules/vite/bin/vite.js','preview','--host','localhost','--port','5173','--strictPort'],
+      { stdio: 'ignore', env: { PATH: env.PATH, HOME: env.HOME } });
     for (let i = 0; i < 60; i++) {
       if (preview.exitCode !== null) throw new Error('Preview UI indisponible.');
       try { if ((await fetch(ORIGINE_UI, { signal: AbortSignal.timeout(500) })).ok) break; } catch { /* lancement borné */ }
       if (i === 59) throw new Error('Preview UI non démarrée.');
       await attendre(200);
     }
+    diagnostic.phase('browser');
     browser = await webkit.launch();
     for (const [slot, appareil] of ['iPhone 13','iPad Pro 11'].entries()) {
+      diagnostic.phase('browser', slot);
       const membre = membres[slot], anomalies = [], lectures = [];
       // Contextes privés en mémoire : aucun storageState, trace, vidéo ou HAR.
       const contexte = await browser.newContext({ ...devices[appareil], baseURL: ORIGINE_UI, locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block' });
@@ -93,16 +108,18 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
         await contexte.routeWebSocket('**/*', socket => socket.close()); // Aucun parcours messagerie/realtime dans cette recette.
         await contexte.route('**/*', async route => {
           const r = route.request(); let body;
-          try { body = r.postData() ? r.postDataJSON() : undefined; } catch { anomalies.push('body'); return route.abort(); }
-          if (!requeteUIAutorisee({ url: r.url(), method: r.method(), body }, membre)) { anomalies.push('requete-refusee'); return route.abort(); }
+          try { body = r.postData() ? r.postDataJSON() : undefined; } catch { anomalies.push('body'); diagnostic.requete({ url: r.url(), method: r.method(), statut: 'corps-invalide' }); return route.abort(); }
+          if (!requeteUIAutorisee({ url: r.url(), method: r.method(), body }, membre)) { anomalies.push('requete-refusee'); diagnostic.requete({ url: r.url(), method: r.method(), statut: 'refusee' }); return route.abort(); }
           const u = new URL(r.url());
           if (u.origin === STAGING_URL) lectures.push({ methode: r.method(), endpoint: u.pathname });
           return route.continue();
         });
+        contexte.on('response', response => diagnostic.requete({ url: response.url(), method: response.request().method(), statut: response.status() }));
+        contexte.on('requestfailed', request => diagnostic.requete({ url: request.url(), method: request.method(), statut: 'transport' }));
         const page = await contexte.newPage();
         page.setDefaultTimeout(20_000); page.setDefaultNavigationTimeout(25_000);
-        page.on('pageerror', () => anomalies.push('javascript')); // Ne jamais sérialiser une exception navigateur.
-        await parcourirDashboard(page, membre, { expect,
+        page.on('pageerror', () => { anomalies.push('javascript'); diagnostic.javascript(); }); // Ne jamais sérialiser une exception navigateur.
+        await parcourirDashboard(page, membre, { expect, marquerPhase: phase => diagnostic.phase(phase, slot),
           verifierReponse: async response => {
             if (response.status() !== 200 || !dashboardUIValide(await response.json(), membre)) throw new Error('Dashboard réel différent du profil minimal attendu.');
           },
@@ -118,11 +135,13 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
           lectures: [...new Set(lectures.map(r => `${r.methode} ${r.endpoint}`))].sort() });
       } finally { await contexte.close(); }
     }
+    diagnostic.phase('backend', null);
     const apres = await lireSQL(sqlEtatUI(membres), env); sauver('apres', projectionEtatUI(apres)); verifierEtatUI(apres, avant);
-    sauver('resultat', { mode: 'staging-reel', succes: true, preuves }); succes = true;
+    sauver('resultat', { mode: 'staging-reel', succes: true, preuves, diagnostic: diagnostic.resultat() }); succes = true;
   } finally {
-    await browser?.close(); preview.kill('SIGTERM');
-    if (!succes) sauver('resultat', { mode: 'staging-reel', succes: false, profils_valides: preuves.length });
+    // Écrire avant la fermeture pour conserver la phase même si le navigateur tombe.
+    if (!succes) sauver('resultat', { mode: 'staging-reel', succes: false, profils_valides: preuves.length, diagnostic: diagnostic.resultat() });
+    try { await browser?.close(); } finally { preview?.kill('SIGTERM'); }
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
