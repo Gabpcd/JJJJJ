@@ -1,5 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { creerMissionSimulee, ids, now, preuveMission } from './helpers/recette-complete-mission';
+
+async function verifierMontantsLisibles(page: Page) {
+  const montants = page.getByText('12,00 €', { exact: true });
+  const detailsTva = page.getByText('10,00 € HT + 2,00 € TVA', { exact: true });
+  await expect(montants).toHaveCount(3);
+  await expect(detailsTva).toHaveCount(3);
+  for (const montant of [...await montants.all(), ...await detailsTva.all()]) {
+    await montant.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await expect(montant).toBeVisible();
+    await expect.poll(() => montant.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const texte = range.getBoundingClientRect();
+      let gauche = 0;
+      let droite = document.documentElement.clientWidth;
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (['hidden', 'clip', 'auto', 'scroll'].includes(getComputedStyle(parent).overflowX)) {
+          const rect = parent.getBoundingClientRect();
+          gauche = Math.max(gauche, rect.left);
+          droite = Math.min(droite, rect.right);
+        }
+      }
+      const visible = document.elementFromPoint((texte.left + texte.right) / 2, (texte.top + texte.bottom) / 2);
+      return texte.left >= gauche && texte.right <= droite && (visible === element || element.contains(visible));
+    }), { message: 'Le texte complet du montant doit rester visible dans la carte et le viewport.' }).toBe(true);
+  }
+}
 
 // Simulation UI uniquement : les factures ci-dessous sont des réponses fictives.
 // Le trigger PostgreSQL est exercé séparément par factures-numerotation-series.test.sql.
@@ -63,6 +90,7 @@ for (const role of ['ADMIN_ETABLISSEMENT', 'SOIGNANT'] as const) {
         indisponible = false;
         await page.getByRole('button', { name: 'Réessayer', exact: true }).click();
         for (const facture of commissions) await expect(page.getByText(facture.numero_facture, { exact: true })).toBeVisible();
+        await verifierMontantsLisibles(page);
         expect(lectures).toBe(avantReprise + 1);
         await page.getByRole('button', { name: 'Commissions Jolene (3)', exact: true }).click();
         await expect(page.getByText(commissions[0].numero_facture, { exact: true })).toBeHidden();
@@ -79,6 +107,10 @@ for (const role of ['ADMIN_ETABLISSEMENT', 'SOIGNANT'] as const) {
       for (const numero of role === 'ADMIN_ETABLISSEMENT' ? commissions.map(f => f.numero_facture) : [state.facture.numero_facture]) {
         await expect(page.getByText(numero, { exact: true })).toBeVisible();
       }
+      if (role === 'ADMIN_ETABLISSEMENT') await verifierMontantsLisibles(page);
+      // La capture pleine page part du haut pour replacer les barres fixes.
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       await preuveMission(page, info, 'factures-apres-rechargement');
       expect(state.unknown).toEqual([]);
       expect(state.external).toEqual([]);

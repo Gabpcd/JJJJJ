@@ -58,6 +58,11 @@ profil, préférences et factures. La suite est ajoutée à la liste SQL de
 ROLLBACK/SAVEPOINT. Aucun appel d'émission, Stripe, HTTP, mission ou contrat
 n'est nécessaire. Les branches de parrainage sortent immédiatement pour
 BROUILLON ; les préférences de la fixture désactivent tous les canaux.
+Le corps catalogue de `fn_trg_init_preferences_notifications()` fait
+`ON CONFLICT (utilisateur_id) DO NOTHING` : le profil n'écrase donc pas les quatre
+préférences false préinsérées. `fn_auto_code_parrainage_etab` et le classifieur
+d'acquisition reçoivent des champs explicites. Les factures sans mission ni
+honoraires ne déclenchent aucun workflow métier ; aucun passage à PAYEE n'a lieu.
 
 La suite traverse le saut de séquence sans refus ni renumérotation. Le WARNING
 est conservé dans le corps ; ses notices ne sont pas capturées par les assertions
@@ -102,10 +107,26 @@ injectées sont présentes et vérifiées exactement. Rapport temporaire :
 `audits/2026-09-30-preparation-nationale/numerotation-factures/` dans le workspace
 racine, avec manifeste SHA256 ; rapports initiaux conservés séparément.
 
-**Limite visuelle découverte, signalée à root** : sur iPhone, le montant à droite
-des cartes de commission est rogné avec les longs numéros H/HC/HR. Le contrôle
-de largeur globale ne détecte pas ce débordement masqué. Les interactions/reprise
-sont vérifiées, mais cette présentation n'est pas déclarée entièrement validée.
-Le correctif SQL ne touche pas ce composant ni la règle financière.
+## Correction d'affichage dans un deuxième commit
+
+L'inspection visuelle de cette première matrice a révélé un montant rogné sur
+iPhone pour les longs numéros H/HC/HR. Le contrôle de largeur globale ne détectait
+pas le débordement masqué. Une nouvelle assertion de visibilité du texte complet
+échoue sur l'ancienne compilation :
+`/private/tmp/jolene-numerotation-montant-avant/results.json` (un échec attendu).
+
+La carte commission autorise désormais le retour à la ligne de ses deux blocs
+et du numéro. Le delta produit contient uniquement trois changements de classes
+dans `FacturationEtablissement.tsx`, sans montant, tarif, règle, RPC ni payload
+modifié. Les douze tests de périmètre financier existants et TypeScript passent.
+
+Le test vérifie chaque montant TTC et chaque détail HT/TVA des trois factures
+H/HC/HR avant et après rechargement : rectangle du texte via Range, limites des
+ancêtres qui masquent le débordement, limites du viewport, et absence d'élément
+superposé à son centre. Ces assertions ont passé la matrice de dix scénarios
+sur cinq formats. Les captures pleine page repartent ensuite du haut afin que
+les barres fixes ne soient pas dessinées au milieu de la capture composite.
+Rapport final : `/private/tmp/jolene-numerotation-montant-verifie/results.json`.
+Les limites d'intégration SQL et fournisseur décrites plus haut restent valables.
 
 Aucun push, merge ou déploiement effectué par ce lot.
