@@ -61,6 +61,9 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs
 
+      - name: Isolation du draft contrat SQL sans réseau
+        run: node --test tests/node/contrat-v11-sql-proof.node.mjs
+
       - name: Journal et préflight fournisseurs hors réseau
         run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
 
@@ -256,6 +259,35 @@ jobs:
           else
             echo "has_migrations=true" >> "$GITHUB_OUTPUT"
           fi
+
+          if git diff --quiet "$BASE_SHA"...HEAD -- \
+            'tests/fixtures/contrat-service-v11/**' \
+            'tests/security/contrat-service-v11.test.sql' \
+            'scripts/ci/contrat-v11-sql-proof.mjs' \
+            'tests/node/contrat-v11-sql-proof.node.mjs'; then
+            echo "has_contract_fixture=false" >> "$GITHUB_OUTPUT"
+          else
+            # Une preuve de draft ne doit jamais déclencher le bootstrap.
+            if ! git diff --quiet "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql'; then
+              echo "::error::La recette contrat doit rester sans migration produit."
+              exit 1
+            fi
+            echo "has_contract_fixture=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node pour la fixture contrat annulée
+        if: steps.migration_scope.outputs.has_contract_fixture == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Contrat v1.1 draft — preuve SQL seulement, puis contrôle indépendant
+        if: steps.migration_scope.outputs.has_contract_fixture == 'true'
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci/contrat-v11-sql-proof.mjs
 
       - name: Setup Supabase CLI
         if: steps.migration_scope.outputs.has_migrations == 'true'
