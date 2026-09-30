@@ -1,8 +1,10 @@
+import { isolerWebSocketsSimules } from './simulation-websocket-isolee';
 import type { Page } from '@playwright/test';
 
 const userId = '69000000-0000-4000-8000-000000000071';
 export const missionId = '69000000-0000-4000-8000-000000000072';
 export async function compteNeuf(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT', offres = false, nombreOffres = 1) {
+  await isolerWebSocketsSimules(page);
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
     return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.continue() : route.abort();

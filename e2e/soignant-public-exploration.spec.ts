@@ -1,5 +1,6 @@
+import { test, isolerWebSocketsSimules } from './helpers/simulation-websocket-isolee';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { test, expect, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 // Parcours complets de plusieurs écrans ; chaque assertion garde son délai court.
 test.setTimeout(120_000);
@@ -7,6 +8,7 @@ test.setTimeout(120_000);
 const userId = '69000000-0000-4000-8000-000000000071';
 const missionId = '69000000-0000-4000-8000-000000000072';
 async function compteNeuf(page: Page, type: 'SOIGNANT' | 'ETABLISSEMENT', offres = false) {
+  await isolerWebSocketsSimules(page);
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
     return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.continue() : route.abort();

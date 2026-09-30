@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test } from './helpers/simulation-websocket-isolee';
+import { expect, type Page } from '@playwright/test';
 import { compteNeuf, inscrire, missionId } from './helpers/exploration-simulee';
 
 // Même budget lorsque ce fichier est découvert par la configuration CI générale.
