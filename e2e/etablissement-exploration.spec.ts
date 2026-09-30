@@ -178,6 +178,7 @@ test('brouillon établissement : titre et horaires conservés après création d
   await page.getByLabel(`Fin du créneau 1 du ${date}`, {exact:true}).fill('19:00');
   await page.getByRole('button', {name:/^Publier la mission/}).click();
   await expect(page).toHaveURL(/inscription\/completer/);
+  await expect(page.getByRole('heading', {name:'Identifier votre établissement', exact:true})).toBeVisible();
 
   // La réponse serveur indique désormais un véritable rattachement, donc le
   // formulaire ne dépend plus du parcours incomplet pour rendre son introduction.

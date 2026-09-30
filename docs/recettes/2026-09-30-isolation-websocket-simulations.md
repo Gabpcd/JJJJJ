@@ -91,9 +91,26 @@ que `ParcoursInscription` ait fini son chargement et affiché son enfant. La tra
 iPhone indique explicitement que le `goto` vers la création de mission est
 interrompu par une navigation vers `/inscription/completer`. Les traces iPad
 montrent la même concurrence. Cela ne démontre pas un défaut produit ni sa cause
-profonde WebKit. Une attente du titre visible « Identifier votre établissement »
-est prévue dans un commit séparé, avec nouvelle recette ciblée des cinq formats.
+profonde WebKit. Un commit séparé ajoute l'attente du titre visible exact
+« Identifier votre établissement », avant la mutation du rôle simulé et le `goto`.
+Les cinq exécutions ciblées après cette modification réussissent au premier essai
+(23,6 secondes), avec erreurs JS et mutations vides, aucune échappée WS, et titre,
+dates et horaires du brouillon préservés. Aucun sleep, retry ou filtre ajouté.
+Les cinq captures finales ont été inspectées. La couverture finale est donc de
+130 scénarios distincts avec dernière exécution réussie ; cela ne transforme pas
+la première matrice en 130 réussites au premier essai.
 Les échecs initiaux et leurs traces sont conservés ; aucun réessai automatique.
+
+La recette ciblée est conservée dans
+`/private/tmp/jolene-isolation-websocket-brouillon-apres-attente-20260930`.
+La commande Playwright ci-dessous, sans `--project` et avec
+`--grep 'brouillon établissement : titre'`, couvre les cinq formats.
+`validation-finale.json` et `manifest-complet-sha256.json` complètent le dossier
+de preuves (877 fichiers, SHA256 du manifeste complet
+`8408c86ef44904fb9dadfd15c3159bc39e591f6fec744215cac7498c200680f3`).
+Les deux typechecks et `git diff --check` sont de nouveau verts. La relecture
+croisée confirme que le delta du second commit est limité à cette assertion et
+à cette documentation ; toutes les autres assertions et captures sont préservées.
 
 `tsc -b`, le typecheck isolé des six specs, des deux helpers et de la configuration,
 ainsi que `git diff --check`, passent. Relectures croisées du périmètre : aucun
