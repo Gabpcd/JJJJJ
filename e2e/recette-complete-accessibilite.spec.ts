@@ -160,6 +160,19 @@ async function verifierCombobox(page: Page, nom: string) {
       await page.keyboard.press('Shift+Tab');
       await expect(recherche).toBeFocused();
     }
+    // Le focus peut précéder la fin d'installation du panneau. Vérifier sa
+    // stabilité et la réception des événements sans cliquer ni déplacer le focus.
+    await recherche.click({ trial: true });
+    await expect(recherche).toBeFocused();
+    await test.info().attach('profession-avant-fermeture', {
+      body: JSON.stringify(await recherche.evaluate(element => {
+        const panneau = element.closest('[role="dialog"]')!;
+        const style = getComputedStyle(panneau);
+        return { focusRecherche: document.activeElement === element, pointerEvents: style.pointerEvents,
+          animation: style.animationName, transition: style.transitionProperty,
+          animationsActives: panneau.getAnimations().map(animation => ({ etat: animation.playState, temps: animation.currentTime })) };
+      })), contentType: 'application/json',
+    });
   } else if (nom === 'Période des revenus') {
     await expect(page.getByRole('option', { name: 'Ce mois', exact: true })).toBeFocused();
   }
