@@ -1,3 +1,4 @@
+import k6Execution from 'k6/execution';
 import { donneesRapportCharge, resumeCharge } from '../helpers/resume.js';
 import { creerOptionsCharge } from '../helpers/options.js';
 /**
@@ -94,5 +95,5 @@ export function handleSummary(data) {
 }
 
 function textSummary(data, label) {
-  return resumeCharge(data, label, 'rpc_dashboard', options) + '\nDix profils minimaux attendus ; chaque compteur dashboard_reponses_profil{slot:0..9} doit être positif.\n';
+  return resumeCharge(data, label, 'rpc_dashboard', k6Execution.test.options) + '\nDix profils minimaux attendus ; chaque compteur dashboard_reponses_profil{slot:0..9} doit être positif.\n';
 }

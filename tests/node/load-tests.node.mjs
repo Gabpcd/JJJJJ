@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { donneesRapportCharge, resumeCharge } from '../load/helpers/resume.js';
+import { donneesRapportCharge, resumeCharge, scenariosPourRapport } from '../load/helpers/resume.js';
 import { creerOptionsCharge } from '../load/helpers/options.js';
 import { lirePoolDashboard, slotDashboard, runDashboardMembre } from '../load/helpers/dashboard-pool.js';
 import { dashboardValide, rechercheValide, exigerRecherchePeuplee, exigerDashboardMetier, refuserScenarioNonIsole } from '../load/helpers/contrats.js';
@@ -80,16 +80,23 @@ async function charger(nom, env = {}) {
   globalThis[pont].Counter = class { constructor(name) { this.name = name; } add(value, tags) { compteurs.push({ name: this.name, value, tags }); } };
   globalThis[pont].Trend = class { constructor(name) { this.name = name; } add(value) { latences.push({ name: this.name, value }); } };
   const metricsUrl = urlCode(`export const Counter = globalThis.${pont}.Counter; export const Trend = globalThis.${pont}.Trend;`);
+  globalThis[pont].execution = { test: { get options() {
+    assert.ok(globalThis[pont].optionsMoteur, 'Les options moteur ne sont pas accessibles au contexte init');
+    return globalThis[pont].optionsMoteur;
+  } } };
+  const executionUrl = urlCode(`export default globalThis.${pont}.execution;`);
   const httpUrl = urlCode(`export default globalThis.${pont}.http;`);
   const k6Url = urlCode(`export const check = globalThis.${pont}.check; export function sleep() {}`);
   const auth = (await readFile(new URL('helpers/auth.js', racineLoad), 'utf8')).replaceAll("'k6/http'", JSON.stringify(httpUrl)).replaceAll("'k6'", JSON.stringify(k6Url));
   let source = await readFile(new URL(`scenarios/${nom}.js`, racineLoad), 'utf8');
   for (const [specifier, remplacement] of [
-    ['k6/http', httpUrl], ['k6', k6Url], ['k6/metrics', metricsUrl], ['../helpers/auth.js', urlCode(auth)],
+    ['k6/execution', executionUrl], ['k6/http', httpUrl], ['k6', k6Url], ['k6/metrics', metricsUrl], ['../helpers/auth.js', urlCode(auth)],
     ...['options', 'contrats', 'data', 'resume', 'dashboard-pool'].map(n => [`../helpers/${n}.js`, new URL(`helpers/${n}.js`, racineLoad).href]),
   ]) source = source.replaceAll(`'${specifier}'`, JSON.stringify(remplacement));
   const module = await import(urlCode(`${source}\n// ${pont}`));
-  return { module, appels, verifications, reponses, compteurs, latences };
+  const optionsMoteur = structuredClone(module.options);
+  globalThis[pont].optionsMoteur = optionsMoteur;
+  return { module, appels, verifications, reponses, compteurs, latences, optionsMoteur };
 }
 
 for (const nom of ['01-inscription-bloc', '02-login-simultane', '03-recherche-missions', '05-dashboard-concurrent']) {
@@ -232,4 +239,35 @@ test('C vérifie le catalogue quantifié au préflight et pendant les recherches
   t.reponses.push({ body: catalogue }); t.module.setup();
   t.reponses.push({ body: [mission] }); t.module.default();
   assert.equal(t.verifications.find(c => c.nom === 'recherche sans filtre peuplee')?.ok, false);
+});
+
+
+test('résumé C/E : options moteur conservées lorsque k6 remplace les scénarios exportés par un objet natif vide', async () => {
+  for (const nom of ['03-recherche-missions','05-dashboard-concurrent']) {
+    const t=await charger(nom,{LOAD_TEST_VUS:'100',LOAD_TEST_DURATION:'1m'});
+    const seuils=structuredClone(t.module.options.thresholds);
+    // Le moteur applique ses valeurs consolidées ; le rapport ne doit pas
+    // reconstruire les paramètres depuis __ENV ou l'export JS réinjecté.
+    const moteur=Object.values(t.optionsMoteur.scenarios)[0];
+    moteur.duration='1m0s';moteur.gracefulStop='15s';
+    const attendu=structuredClone(t.optionsMoteur.scenarios);
+    t.module.options.scenarios={};
+    assert.equal(JSON.stringify(t.module.options.scenarios),'{}');
+    const rapport=t.module.handleSummary({metrics:{}}).stdout;
+    const ligne=rapport.split('\n').find(l=>l.startsWith('Configuration effective : '));
+    assert.deepEqual(JSON.parse(ligne.slice('Configuration effective : '.length)),attendu,nom);
+    assert.deepEqual(t.module.options.thresholds,seuils);assert.equal(t.appels.length,0);
+  }
+});
+test('résumé : la projection des options moteur exclut env, tags et secrets imbriqués sans modifier les sources', () => {
+  const secret='canari-token-password-options';
+  const options={env:{token:secret},scenarios:{dashboard_concurrent:{executor:'constant-vus',vus:100,duration:'1m0s',gracefulStop:'15s',
+    env:{password:secret},tags:{session:secret},options:{browser:{secret}},futur_champ:secret},
+    rampe:{executor:'ramping-vus',startVUs:0,stages:[{duration:'20s',target:100,env:{password:secret}}]}}};
+  const avant=structuredClone(options);const rapport=resumeCharge({metrics:{}},'E','rpc_dashboard',options);
+  assert.doesNotMatch(rapport,new RegExp(secret));
+  assert.deepEqual(scenariosPourRapport(options),{dashboard_concurrent:{executor:'constant-vus',vus:100,duration:'1m0s',gracefulStop:'15s'},
+    rampe:{executor:'ramping-vus',startVUs:0,stages:[{duration:'20s',target:100}]}});
+  assert.deepEqual(options,avant);
+  assert.match(resumeCharge({metrics:{}},'E','rpc_dashboard',{}),/Configuration effective : non disponible/);
 });
