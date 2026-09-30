@@ -1,19 +1,21 @@
 import { test, expect } from '@playwright/test';
 import { creerCandidaturesDeuxAs, identifiants, maintenant } from './helpers/recette-candidatures-deux-as';
-import { deposerCandidatureD, relireCandidaturesD, observerErreursNavigateurD, diagnosticD, projeterErreurNavigateurD } from '../scripts/ci/recette-candidatures-staging.mjs';
-import { requeteFrontendD, STAGING_URL } from '../scripts/ci/candidatures-ui-contract.mjs';
+import { deposerCandidatureD, preparerCandidatureD, rechargerCandidatureD, concurrenceCandidaturesD, envoyerCandidaturesConcurrentesD, relireCandidaturesD, observerErreursNavigateurD, diagnosticD, projeterErreurNavigateurD } from '../scripts/ci/recette-candidatures-staging.mjs';
+import { requeteFrontendD, budgetEcrituresD, rpcEcritureD, STAGING_URL } from '../scripts/ci/candidatures-ui-contract.mjs';
 
-test('runner D2 : boutons réels, deux candidatures, recharges et relecture établissement sous garde réseau', async ({ browser }, info) => {
+test('runner D2 : deux interfaces concurrentes, deux candidatures, recharges et relecture établissement sous garde réseau', async ({ browser }, info) => {
   const simulation=creerCandidaturesDeuxAs(),{state}=simulation;
   // Le seed réel donne le même marker à la mission et à son établissement.
   state.etablissement.nom=state.mission.intitule;
   const m={missionId:identifiants.mission,marker:state.mission.intitule,debut:state.mission.debut_le,fin:state.mission.fin_le,
     membres:[...state.soignants.map((s,slot)=>({slot,userId:s.id,email:s.email,prenom:s.prenom,nom:s.nom,password:'Mot-de-passe-fictif-recette-D2'})),
       {slot:2,userId:identifiants.etablissement,email:'etablissement@example.invalid',prenom:'Clinique',nom:'Simulation',password:'Mot-de-passe-fictif-recette-D2'}]};
-  const refus: string[]=[],metadonneesDashboard: number[]=[];
-  for(const [slot,acteur]of (['as1','as2','etablissement'] as const).entries()) {
-    const context=await browser.newContext({...info.project.use});
-    await simulation.installer(context,acteur);
+  const refus: string[]=[],metadonneesDashboard: number[]=[],contextes: import('@playwright/test').BrowserContext[]=[];
+  const diagnostic=diagnosticD(),concurrence=concurrenceCandidaturesD();let actifs=0,maximum=0;
+  const ouvrir=async(slot:number)=>{
+    const acteur=(['as1','as2','etablissement'] as const)[slot],d=diagnostic.pourSlot(slot),budget=budgetEcrituresD(m.membres[slot]);
+    const context=await browser.newContext({...info.project.use});contextes.push(context);
+    await simulation.installer(context,acteur);observerErreursNavigateurD(context,slot,d);
     let activites=0,audits=0,consultations=0,documents=0;
     await context.addInitScript(()=>{if(location.pathname==='/connexion')sessionStorage.removeItem('sb-127-auth-token');});
     await context.route('**/rest/v1/rpc/{fn_audit_connexion,fn_maj_activite_soignant,fn_ecrire_audit_safe}',route=>{
@@ -27,6 +29,21 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
       if(/^\/(auth|rest|functions|storage)\//.test(u.pathname)) {
         const autorisee=requeteFrontendD({url:STAGING_URL+u.pathname+u.search,method:r.method(),body:r.postData()?r.postDataJSON():undefined},m.membres[slot],m);
         if(!autorisee){refus.push(`${r.method()} ${u.pathname}`);return route.abort();}
+        const rpc=u.pathname.split('/').pop()!;
+        if(r.method()==='POST'&&(rpcEcritureD.has(rpc)||u.pathname==='/auth/v1/token'))budget.consommer(u.pathname==='/auth/v1/token'?'auth-token':rpc);
+        if(r.method()==='POST'&&rpc==='fn_confirmer_action_planning_v1')return concurrence.transporter(slot,async()=>{
+          maximum=Math.max(maximum,++actifs);
+          try{
+            // La réponse simulée est livrée directement : fallback() rend la
+            // main avant le handler suivant et ne mesure pas son transport.
+            const body=r.postDataJSON();state.calls.push({acteur,name:rpc,method:r.method(),body});
+            expect(state.candidatures.some(c=>c.soignant_id===m.membres[slot].userId)).toBe(false);
+            const candidature={id:`dc300000-0000-4000-8000-00000000003${slot+1}`,mission_id:m.missionId,
+              soignant_id:m.membres[slot].userId,message:body.p_message,statut:'EN_ATTENTE',cree_le:maintenant,choix_contrat:'SALARIE'};
+            state.candidatures.push(candidature);
+            await route.fulfill({json:{success:true,candidature_id:candidature.id,choix_contrat:'SALARIE',profession_requise:'AS',docs_a_completer:true,documents_requis_pour:'SALARIE'}});
+          }finally{actifs--;}
+        });
         if(u.pathname==='/rest/v1/missions'&&u.searchParams.get('id')?.startsWith('in.')) {
           expect(r.method()).toBe('GET');expect([...u.searchParams.keys()].sort()).toEqual(['id','select']);
           expect(u.searchParams.get('id')).toBe(`in.(${m.missionId})`);expect(u.searchParams.get('select')).toBe('id,nb_creneaux');metadonneesDashboard.push(slot);
@@ -35,7 +52,7 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
       return route.fallback();
     });
     const page=await context.newPage();await page.clock.setFixedTime(new Date(maintenant));
-    try {
+    {
       // Les trois identités passent par le formulaire et leur vrai dashboard,
       // comme le pilote ; aucune session préinjectée sur cette page.
       await page.goto('/connexion');
@@ -45,22 +62,35 @@ test('runner D2 : boutons réels, deux candidatures, recharges et relecture éta
       await expect(page).toHaveURL(slot<2?/\/soignant\/tableau-de-bord$/:/\/etablissement\/tableau-de-bord$/);
       await expect.poll(()=>slot<2?activites:consultations).toBe(1);
       await page.waitForLoadState('networkidle');
-      const diagnostic=diagnosticD();
-      const options={expect,phase:(p: string)=>diagnostic.phase(p,slot),action:(a: string)=>diagnostic.action(a),capturer:async(etape: string)=>{
+      const options={expect,phase:(p: string)=>d.phase(p),action:(a: string)=>d.action(a),echec:(error:Error)=>d.exceptionFinale(error),capturer:async(etape: string)=>{
         if(slot<2){expect(documents).toBe(etape==='recharge'?2:1);expect(audits).toBe(1);expect(activites).toBe(1);}
         else {
           expect(documents).toBe(etape==='recharge'?2:1);
           expect(audits).toBe(1);expect(consultations).toBe(1);expect(activites).toBe(0);
           for(const s of state.soignants)await expect(page.getByText(`${s.prenom} ${s.nom}`,{exact:false})).toHaveCount(0);
         }
-        if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled'});
+        expect(diagnostic.resultat().erreurs).toBe(0);
+        if(etape==='recharge')await page.locator('main').screenshot({path:info.outputPath(`slot-${slot}-recharge.png`),animations:'disabled',scale:'css'});
       }};
-      if(slot<2)await deposerCandidatureD(page,m,options);else await relireCandidaturesD(page,m,options);
-    }finally{await context.close();}
-  }
+      return {slot,page,context,options,budget};
+    }
+  };
+  try {
+    const participants=[];
+    for(const slot of [0,1]){const p=await ouvrir(slot);participants.push(p);await preparerCandidatureD(p.page,m,p.options);}
+    expect(state.candidatures).toHaveLength(0);expect(actifs).toBe(0);
+    const preuve=await envoyerCandidaturesConcurrentesD(participants,concurrence);
+    expect(maximum).toBe(2);expect(preuve.chevauchementMs).toBeGreaterThan(0);expect(preuve.slots.map(r=>r.slot)).toEqual([0,1]);
+    await info.attach('chevauchement-simule.json',{body:JSON.stringify(preuve),contentType:'application/json'});
+    for(const p of participants){await rechargerCandidatureD(p.page,p.options);expect(p.budget.complet()).toBe(true);await p.context.close();}
+    const etab=await ouvrir(2);await relireCandidaturesD(etab.page,m,etab.options);expect(etab.budget.complet()).toBe(true);await etab.context.close();
+  }finally{concurrence.annuler();await Promise.allSettled(contextes.map(c=>c.close()));}
+  expect(diagnostic.resultat().erreurs).toBe(0);
   expect(refus).toEqual([]);simulation.verifierBornes();
   expect(metadonneesDashboard).toEqual([0,1]);
   expect(state.candidatures).toHaveLength(2);
+  expect(new Set(state.candidatures.map(c=>c.id)).size).toBe(2);
+  for(const soignant of state.soignants)expect(state.candidatures.filter(c=>c.soignant_id===soignant.id)).toHaveLength(1);
   expect(state.candidatures.every(c=>c.message===m.marker&&c.statut==='EN_ATTENTE')).toBe(true);
   expect(state.calls.filter(c=>c.name==='fn_confirmer_action_planning_v1')).toHaveLength(2);
 });
