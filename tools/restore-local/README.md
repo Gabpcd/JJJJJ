@@ -1,4 +1,4 @@
-# Bootstrap local de restauration — premier essai CI en échec, cleanup prouvé
+# Bootstrap local de restauration — infrastructure vide vérifiée en CI
 
 Le candidat produit deux piles Supabase **vides** : source et cible, cinq services chacune (PostgreSQL/Auth/REST/Storage/Kong), six volumes nommés, un réseau Docker interne unique. Aucun port publié, aucune connexion à un projet Supabase, aucun schéma Jolene importé, aucun compte/fichier créé. Ce lot n'est pas une preuve de restauration ni un test frontend.
 
@@ -97,3 +97,11 @@ Run `36774670334`, head `ec10a07cd6d0a775edff545f683bbb9021daf6a8`, merge testé
 La sonde `localhost` tente donc le loopback IPv6, alors que la configuration officielle Storage épinglée utilise par défaut l’écoute IPv4 `0.0.0.0`. Le correctif remplace seulement son hôte par **`127.0.0.1`**, pour les deux piles. Même `wget --spider`, même port5000, même route `/status`, mêmes délais/retries, mêmes dépendances et contrôles HTTP stricts via Kong ; aucune santé forcée, aucun retrait de garde. Ce diagnostic ne prouve pas encore que Storage retourne200 en IPv4 : le prochain essai Docker devra le démontrer.
 
 Un test local ouvre réellement un serveur HTTP synthétique limité à127.0.0.1 sur port éphémère : HEAD `/status` via les deux adresses générées retourne200, le même port sur `::1` refuse la connexion,503 reste503 et le serveur arrêté refuse IPv4. Ce test valide l’adresse et le transport local, **pas l’exécutable wget de l’image ni le service Storage**. Première tentative sous sandbox refusée `listen EPERM`, conservée puis exécution autorisée hors sandbox :42/42 Node verts, sans saut ; syntaxe/actionlint/diff-check verts. Aucune image, instance distante ou fixture Auth créée localement ; aucun rerun automatique. Le bootstrap complet et la restauration restent non prouvés.
+
+## Quatrième essai CI : infrastructure vide validée
+
+Le [run 36775840767](https://github.com/Gabpcd/JJJJJ/actions/runs/36775840767), head `c5d9abed5b39b2a751942920b74c3ead91a84a81`, a réussi le 30 septembre 2026 à 20:56:03 UTC. Le merge testé `ebc14cad82fe7220fef1af80a5383c7ed9f25f3a` a pour parents main `ed402c32` et le head attendu.
+
+Les dix services sont healthy. Les six réponses HTTP via Kong sont 200 lors du démarrage puis à la seconde inspection ; les deux piles refusent la sortie HTTPS à chaque passe. Les contrôles SQL confirment PostgreSQL 17 et l’absence de données applicatives. Le second démarrage est refusé ; les deux nettoyages puis le contrôle indépendant confirment **zéro conteneur, volume et réseau résiduel**. Les 42 tests Node passent sans saut.
+
+Les petits artefacts filtrés sont conservés dans `/private/tmp/jolene-restore-bootstrap-run-36775840767/`, manifeste SHA256 `db0eac942cafad5c7db7e268788c46d66db3c3f483fc9b337106c4c4c9c4cffe`. Les trois essais rouges restent conservés et expliqués ci-dessus. Cette réussite ferme uniquement le démarrage de l’infrastructure vide : aucun schéma Jolene, compte Auth, fichier Storage, backup/restore ou parcours frontend restauré n’a été vérifié.

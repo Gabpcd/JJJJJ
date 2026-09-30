@@ -278,4 +278,3 @@ export function main(args){
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  try{console.log(JSON.stringify(main(process.argv.slice(2))));}catch(e){console.error(JSON.stringify(publicFailure(e)));process.exitCode=1;}
 }
-
