@@ -92,8 +92,8 @@ test('dashboard reçu : propre identité minimale, tableaux vides avant toute ca
 });
 test('workflow fixture-only construit avant de créer et exécute UI avant cleanup, sans k6 dans ce job', () => {
   const source=readFileSync(new URL('../../.github/workflows/load-tests.yml',import.meta.url),'utf8');
-  const job=source.slice(source.indexOf('  dashboard-frontend:'));
-  assert.match(job,/if: inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent'/);
+  const job=source.slice(source.indexOf('  dashboard-frontend:')).split(/\n  [a-z][a-z-]+:\n/)[0];
+  assert.ok(job.includes("if: ${{ !inputs.candidatures_frontend_only && inputs.candidatures_frontend_date == '' && !inputs.candidatures_sql_only && inputs.candidatures_sql_date == '' && inputs.dashboard_fixture_only && inputs.scenario == '05-dashboard-concurrent' }}"));
   assert.ok(job.indexOf('npm run build')<job.indexOf('prepare-dashboard-pool.mjs prepare'));
   assert.ok(job.indexOf('recette-dashboard-staging.mjs run')<job.indexOf('prepare-dashboard-pool.mjs cleanup'));
   assert.match(job,/if: always\(\)/);assert.doesNotMatch(job,/k6 run|storageState|recordHar|trace:/);

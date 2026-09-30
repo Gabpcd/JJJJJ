@@ -13,7 +13,7 @@ name: Deploy Supabase STAGING (bootstrap from prod schema dump)
 #   4. Réconciliation des dépendances auth/storage/realtime/crons hors dump.
 #   5. Re-exécution de la migration `20260503050000_playwright_seed_test_accounts.sql`
 #      pour seeder les comptes test (auth schema exclu du dump par défaut).
-#   6. Optionnel : seed 500 missions [loadtest] pour scenario F.
+#   6. Ancien seed F retiré : input true refusé avant accès DB.
 #
 # Trigger MANUEL uniquement (workflow_dispatch).
 #
@@ -38,7 +38,7 @@ on:
         required: false
         default: false
       seed_load_test_data:
-        description: "Seeder les 500 missions [loadtest] pour scenario F (cron)"
+        description: "DÉPRÉCIÉ : true est refusé avant tout accès DB ; scénario F suspendu"
         type: boolean
         required: false
         default: false
@@ -67,6 +67,12 @@ jobs:
     # Garder une marge bornée pour les assertions et les migrations suivantes.
     timeout-minutes: 45
     steps:
+      - name: Refuser le seed F historique avant tout accès DB
+        if: inputs.seed_load_test_data
+        run: |
+          echo "::error::Seed F historique interdit : lot non isolé. Voir docs/tests-charge.md."
+          exit 1
+
       - name: Checkout repo
         uses: actions/checkout@v5
 
@@ -601,17 +607,9 @@ jobs:
           set -e
           # Cette migration crée playwright-soignant@jolene.app et
           # playwright-etab@jolene.app dans auth.users (idempotent via DO blocks).
-          # Indispensable pour scenarios B/D/E qui en dépendent.
+          # Comptes historiques du scénario B ; D/E utilisent des lots dédiés.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
             -f db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql
-
-      # ─── 4. Seed load test data (optional) ──────────────────────────
-      - name: Seed [loadtest] missions
-        if: inputs.seed_load_test_data
-        run: |
-          set -e
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
-            -f tests/load/seed/seed-staging.sql
 
       # ─── 5. Verify ──────────────────────────────────────────────────
       - name: Verify staging bootstrap
@@ -636,14 +634,6 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ inputs.seed_load_test_data }}" = "true" ]; then
-            LOADTEST=$(psql "$URL" -t -A -c "SELECT count(*) FROM public.missions WHERE intitule LIKE '[loadtest]%' AND statut='TERMINEE';")
-            echo "Missions [loadtest]  : $LOADTEST"
-            if [ "$LOADTEST" -lt 500 ]; then
-              echo "::error::Seed loadtest incomplet ($LOADTEST/500)"
-              exit 1
-            fi
-          fi
 
           echo "::notice::Bootstrap staging OK : $TABLES tables, $MIGRATIONS migrations trackées, $PLAYWRIGHT_USERS comptes test"
 
@@ -833,21 +823,20 @@ jobs:
 
       - name: Summary
         run: |
-          echo "### Deploy Supabase STAGING ✅" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Stratégie : dump prod schema → psql staging" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Schéma prod dumpé (public + custom) et appliqué" >> "$GITHUB_STEP_SUMMARY"
-          echo "- supabase_migrations tracking restauré" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Comptes test Playwright re-seedés" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ inputs.seed_load_test_data }}" = "true" ]; then
-            echo "- 500 missions [loadtest] seedées (scenario F)" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ "${{ inputs.skip_functions }}" != "true" ]; then
-            echo "- Edge functions déployées" >> "$GITHUB_STEP_SUMMARY"
-            echo "- 8 sondes auth-only réussies ; 9 crons staging laissés inactifs" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Projet staging : \`${{ secrets.STAGING_SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Prochaine étape : Actions → \"Load tests (k6)\"." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Deploy Supabase STAGING ✅"
+            echo ""
+            echo "Stratégie : dump prod schema → psql staging"
+            echo ""
+            echo "- Schéma prod dumpé (public + custom) et appliqué"
+            echo "- supabase_migrations tracking restauré"
+            echo "- Comptes test Playwright re-seedés"
+            if [ "${{ inputs.skip_functions }}" != "true" ]; then
+              echo "- Edge functions déployées"
+              echo "- 8 sondes auth-only réussies ; 9 crons staging laissés inactifs"
+            fi
+            echo ""
+            echo "Projet staging : \`${{ secrets.STAGING_SUPABASE_PROJECT_REF }}\`"
+            echo ""
+            echo "Prochaine étape : Actions → \"Load tests (k6)\"."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,266 @@
+{
+  "base_sha": "1e898d4ba9bcf9714568818039ac743d6743333c",
+  "kind": "frontend_simulation_only",
+  "fixtures": "Fictives, indépendantes du préparateur SQL lot D; 09–13 Paris, 07–11 UTC.",
+  "server": "Vite local18460 depuis source base exacte, API locale8891 interceptée",
+  "results_path": "/private/tmp/jolene-candidatures-deux-as-5formats-final/results.json",
+  "results_sha256": "5947982e1a8ab200cd555ae748620f724ab07af6102c7b1ce080f7c74b5c37f5",
+  "stats": {
+    "startTime": "2026-09-30T09:54:02.033Z",
+    "duration": 174492.133,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "typecheck_build_exit": 0,
+  "typecheck_e2e_exit": 0,
+  "source_sha256": {
+    "e2e/helpers/recette-candidatures-deux-as.ts": "ad3ba3b37c5243eeaf93f9ee9902112ed28fe0657ab5132ec3a3fbbb3e0c3ae7",
+    "e2e/recette-complete-candidatures-deux-as.spec.ts": "ff4f37077f1f570a3f652ee751a5c8dbf4f8355a12ff70ef56aa6daa51feaa68"
+  },
+  "tests": [
+    {
+      "project": "ipad-portrait",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "status": "expected",
+      "duration_ms": 21705
+    },
+    {
+      "project": "ipad-portrait",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "status": "expected",
+      "duration_ms": 11401
+    },
+    {
+      "project": "ipad-portrait",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "status": "expected",
+      "duration_ms": 4442
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "status": "expected",
+      "duration_ms": 24693
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "status": "expected",
+      "duration_ms": 11649
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "status": "expected",
+      "duration_ms": 5466
+    },
+    {
+      "project": "iphone",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "status": "expected",
+      "duration_ms": 20541
+    },
+    {
+      "project": "iphone",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "status": "expected",
+      "duration_ms": 9009
+    },
+    {
+      "project": "iphone",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "status": "expected",
+      "duration_ms": 3616
+    },
+    {
+      "project": "android",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "status": "expected",
+      "duration_ms": 14968
+    },
+    {
+      "project": "android",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "status": "expected",
+      "duration_ms": 8002
+    },
+    {
+      "project": "android",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "status": "expected",
+      "duration_ms": 3013
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "status": "expected",
+      "duration_ms": 11772
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "status": "expected",
+      "duration_ms": 8467
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "status": "expected",
+      "duration_ms": 3634
+    }
+  ],
+  "journals": [
+    {
+      "project": "ipad-portrait",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 2,
+      "postuler": 2,
+      "planning_refusals": 0
+    },
+    {
+      "project": "ipad-portrait",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 1,
+      "postuler": 3,
+      "planning_refusals": 1
+    },
+    {
+      "project": "ipad-portrait",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 0,
+      "postuler": 0,
+      "planning_refusals": 0
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 2,
+      "postuler": 2,
+      "planning_refusals": 0
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 1,
+      "postuler": 3,
+      "planning_refusals": 1
+    },
+    {
+      "project": "ipad-paysage",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 0,
+      "postuler": 0,
+      "planning_refusals": 0
+    },
+    {
+      "project": "iphone",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 2,
+      "postuler": 2,
+      "planning_refusals": 0
+    },
+    {
+      "project": "iphone",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 1,
+      "postuler": 3,
+      "planning_refusals": 1
+    },
+    {
+      "project": "iphone",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 0,
+      "postuler": 0,
+      "planning_refusals": 0
+    },
+    {
+      "project": "android",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 2,
+      "postuler": 2,
+      "planning_refusals": 0
+    },
+    {
+      "project": "android",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 1,
+      "postuler": 3,
+      "planning_refusals": 1
+    },
+    {
+      "project": "android",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 0,
+      "postuler": 0,
+      "planning_refusals": 0
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "deux AS non vérifiés candidatent : planning exact, rappel documents et deux dossiers en attente après reload",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 2,
+      "postuler": 2,
+      "planning_refusals": 0
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "candidature : panne persistante, réessai, planning périmé refusé puis recharge explicite",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 1,
+      "postuler": 3,
+      "planning_refusals": 1
+    },
+    {
+      "project": "ordinateur",
+      "scenario": "établissement tiers : aucune mission ni candidature visible, y compris après recharge",
+      "unknown": 0,
+      "external": 0,
+      "js_errors": 0,
+      "candidatures": 0,
+      "postuler": 0,
+      "planning_refusals": 0
+    }
+  ]
+}

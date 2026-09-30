@@ -129,13 +129,13 @@ Le workflow manuel `.github/workflows/load-tests.yml` fournit `LOAD_TEST_VUS` et
 
 Pour un smoke prudent de C : 2 VUs pendant 10 s ; de E10 : 10 VUs pendant 10 s. Ce smoke vérifie le banc et les contrats API ; ce n’est pas une mesure de capacité nationale. Augmenter ensuite selon le volume autorisé et conserver le nombre de VUs, la durée et le volume de données avec chaque résultat.
 
-## Pourquoi D et F sont suspendus
+## D2 préparé localement ; F reste suspendu
 
-D créait des comptes Auth sans garantir de profils soignants éligibles, ignorait des logins échoués puis pouvait conclure à « zéro doublon » sur **zéro candidature**. Le script faisait aussi des créations/suppressions hors d’un lot identifié par run. Sa remise en service nécessite un lot de profils métier contrôlés, une mission isolée, des requêtes de candidature correspondant au frontend courant, et un contrôle du nombre exact de candidatures créé par rapport aux tentatives attendues. Un refus total ne peut pas prouver une course de candidatures réussie.
+D créait des comptes Auth sans garantir de profils soignants éligibles, ignorait des logins échoués puis pouvait conclure à « zéro doublon » sur **zéro candidature**. Le script faisait aussi des créations/suppressions hors d’un lot identifié par run. Le banc D2 local ajoute exactement deux AS salariés test, un établissement test et une mission non urgente, avec le RPC planning du frontend et un contrôle exact des candidatures. Son préparateur n’est pas raccordé au workflow de charge : sans lot privé préparé, il refuse avant Auth. Premier pilote distant interdit tant que son préflight n’est pas revu ; voir `docs/recettes/2026-09-30-banc-candidatures-d2.md`. Un refus total ne peut pas prouver une course de candidatures réussie.
 
 F acceptait zéro mission, invoquait le cron global de facturation, puis lisait le nombre total de factures sans le relier au lot. Sa remise en service nécessite une sélection exacte des missions réellement facturables, un état avant/après par identifiant, et l’isolation des envois email/paiement des prestataires. Le script actuel échoue avant tout appel de cron, y compris si `setup` est désactivé. Aucun succès n’est annoncé et le JSON porte `preuve_metier: false`.
 
-Le seed SQL historique n’est pas une preuve de dossier éligible ou de mission facturable. Ne pas l’exécuter automatiquement pour lever cette suspension : il doit être revu séparément avec le schéma courant et les garde-fous métier.
+Le seed SQL et le cleanup historiques sont retirés : ces fichiers lèvent une exception sans mutation. L’input `seed_load_test_data=true` du bootstrap échoue avant checkout et accès DB. Un reset ou une purge par préfixe ne lève aucune suspension.
 
 ## Vérification locale sans réseau
 

@@ -4351,28 +4351,35 @@ COMMENT ON FUNCTION "public"."dec_verifier_moyenne_44h_12_semaines"() IS 'Contr�
 CREATE OR REPLACE FUNCTION "public"."dec_verifier_numerotation_facture"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
-    AS $$
+    AS $_$
 DECLARE
     v_dernier_numero TEXT;
-    v_dernier_seq INTEGER;
-    v_nouveau_seq INTEGER;
+    v_dernier_seq NUMERIC;
+    v_nouveau_seq NUMERIC;
+    v_mois TEXT := TO_CHAR(NOW(), 'YYYYMM');
 BEGIN
-    -- Extraire le séquentiel du dernier numéro
+    -- Seule la série mensuelle numérique SD/JOL partage ce compteur.
+    -- H, HC, HR, avoirs et autres formats conservent leurs générateurs propres.
+    IF NEW.numero_facture IS NULL OR
+       NEW.numero_facture !~ ('^(SD|JOL)-' || v_mois || '-[0-9]+$') THEN
+        RETURN NEW;
+    END IF;
+
     SELECT numero_facture INTO v_dernier_numero
     FROM factures
-    WHERE numero_facture LIKE 'SD-' || TO_CHAR(NOW(), 'YYYYMM') || '-%'
+    WHERE numero_facture ~ ('^(SD|JOL)-' || v_mois || '-[0-9]+$')
     ORDER BY cree_le DESC LIMIT 1;
 
     IF v_dernier_numero IS NOT NULL THEN
-        v_dernier_seq := SPLIT_PART(v_dernier_numero, '-', 3)::INTEGER;
-        v_nouveau_seq := SPLIT_PART(NEW.numero_facture, '-', 3)::INTEGER;
+        v_dernier_seq := SPLIT_PART(v_dernier_numero, '-', 3)::NUMERIC;
+        v_nouveau_seq := SPLIT_PART(NEW.numero_facture, '-', 3)::NUMERIC;
         IF v_nouveau_seq != v_dernier_seq + 1 THEN
             RAISE WARNING 'Saut de numérotation facture détecté : % → %', v_dernier_numero, NEW.numero_facture;
         END IF;
     END IF;
     RETURN NEW;
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."dec_verifier_numerotation_facture"() OWNER TO "postgres";
@@ -14147,6 +14154,10 @@ DECLARE
   v_taux_apres numeric;
   v_ajustement_demande boolean;
 BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Administrateur requis.');
+  END IF;
+
   IF v_action NOT IN ('AUTO', 'AUCUNE', 'RECALCUL', 'ANNULER_REEMETTRE', 'AVOIR', 'COMPLEMENT') THEN
     RETURN jsonb_build_object('success', false, 'error', 'Action financière invalide.');
   END IF;
@@ -19969,7 +19980,18 @@ BEGIN
                   WHERE resolu_le IS NULL AND type_alerte LIKE 'CRON%' LOOP
     SELECT true, d.status, d.start_time INTO v_job_exists, v_last_status, v_last_run
     FROM cron.job j
-    LEFT JOIN LATERAL (SELECT status, start_time FROM cron.job_run_details WHERE jobid = j.jobid ORDER BY start_time DESC LIMIT 1) d ON true
+    LEFT JOIN LATERAL (
+      SELECT status, start_time
+      FROM cron.job_run_details
+      WHERE jobid = j.jobid
+        -- Pendant sa propre exécution, pg_cron affiche toujours « running ».
+        -- Seul ce job utilise donc sa dernière exécution TERMINÉE : un ancien
+        -- échec ne disparaît qu'après un succès ultérieur, jamais sur « running ».
+        AND (j.jobname <> 'jolene_auto_resoudre_alertes'
+          OR (status IN ('succeeded', 'failed') AND end_time IS NOT NULL))
+      ORDER BY start_time DESC, runid DESC
+      LIMIT 1
+    ) d ON true
     WHERE j.jobname = v_alerte.source
     LIMIT 1;
 
@@ -22742,6 +22764,10 @@ BEGIN
     IF v_cron.dernier_statut IN ('starting', 'running') THEN
       v_retard := v_cron.dernier_demarrage IS NOT NULL
         AND v_cron.dernier_demarrage < pg_catalog.now() - v_intervalle_attendu;
+    ELSIF v_cron.jobname = 'sync-chorus-status-hourly'
+      AND v_cron.dernier_run IS NOT NULL THEN
+      v_retard := pg_catalog.now() >
+        private.fn_echeance_cron_chorus(v_cron.schedule, v_cron.dernier_run);
     ELSE
       v_retard := (
         v_cron.dernier_run IS NOT NULL
@@ -24882,7 +24908,7 @@ ALTER FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif
 
 CREATE OR REPLACE FUNCTION "public"."fn_contrat_storage_path"("p_contrat_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_uid uuid := auth.uid();
@@ -24891,28 +24917,25 @@ BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
-
-  SELECT storage_path, hash_document, contenu_html_rendu_le,
-         soignant_id, etablissement_id
-  INTO v_cm
-  FROM public.contrats_mission WHERE id = p_contrat_id;
-
-  IF v_cm IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Contrat introuvable');
-  END IF;
-
-  IF NOT (est_admin()
-          OR v_cm.soignant_id = v_uid
-          OR v_cm.etablissement_id = mon_etablissement_id()) THEN
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
 
-  RETURN jsonb_build_object(
-    'success', true,
-    'storage_path', v_cm.storage_path,
-    'hash_document', v_cm.hash_document,
-    'rendu_le', v_cm.contenu_html_rendu_le
-  );
+  SELECT storage_path, hash_document, contenu_html_rendu_le, soignant_id, etablissement_id
+  INTO v_cm FROM public.contrats_mission
+  WHERE id = p_contrat_id
+    AND (public.est_admin() IS TRUE
+      OR soignant_id = v_uid
+      OR (etablissement_id = public.mon_etablissement_id()
+        AND public.fn_a_permission_etablissement('lecture_contrats', etablissement_id) IS TRUE));
+  -- Un contrat absent et un contrat étranger sont indiscernables : aucune
+  -- métadonnée ni preuve d'existence n'est révélée avant l'autorisation.
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
+  END IF;
+  RETURN jsonb_build_object('success', true,
+    'storage_path', v_cm.storage_path, 'hash_document', v_cm.hash_document,
+    'rendu_le', v_cm.contenu_html_rendu_le);
 END;
 $$;
 
@@ -26229,7 +26252,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "
     AS $$
 DECLARE
   v_uid UUID := auth.uid();
-  v_etab_id UUID := mon_etablissement_id();
+  v_etab_id UUID;
+  v_admin BOOLEAN;
   v_mission RECORD;
   v_sens public.sens_notation;
   v_notateur_id UUID;
@@ -26237,15 +26261,37 @@ DECLARE
   v_id UUID;
   v_tardive BOOLEAN := false;
   v_litige_actif_count INT;
+  v_audit JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
 
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Compte suspendu, supprimé ou désactivé');
+  END IF;
+  v_admin := public.est_admin() IS TRUE;
+  v_etab_id := public.mon_etablissement_id();
+
   BEGIN v_sens := UPPER(TRIM(p_sens))::public.sens_notation;
   EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', 'Sens invalide');
   END;
+
+  IF v_sens IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sens invalide');
+  END IF;
+
+  -- Un claim ne crée ni établissement canonique ni profil soignant.
+  -- Refuser le rôle absent avant toute lecture de mission ou de litige.
+  IF NOT v_admin AND (
+    (v_sens = 'ETAB_VERS_SOIGNANT' AND v_etab_id IS NULL)
+    OR (v_sens = 'SOIGNANT_VERS_ETAB' AND NOT EXISTS (
+      SELECT 1 FROM public.soignants s WHERE s.id = v_uid AND s.supprime_le IS NULL
+    ))
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Accès non autorisé à cette mission.');
+  END IF;
 
   IF p_critere_1 NOT BETWEEN 1 AND 5 OR p_critere_2 NOT BETWEEN 1 AND 5
      OR p_critere_3 NOT BETWEEN 1 AND 5 OR p_critere_4 NOT BETWEEN 1 AND 5 THEN
@@ -26256,10 +26302,17 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Commentaire max 2000 caractères');
   END IF;
 
-  SELECT id, etablissement_id, soignant_assigne_id, statut, fin_le INTO v_mission
-  FROM missions WHERE id = p_mission_id;
-  IF v_mission IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Mission introuvable');
+  -- Filtrer l'appartenance avant d'exposer statut, présence ou litige.
+  -- Les identifiants NULL ne peuvent pas neutraliser le refus.
+  SELECT m.id, m.etablissement_id, m.soignant_assigne_id, m.statut, m.fin_le INTO v_mission
+  FROM public.missions m WHERE m.id = p_mission_id
+    AND (v_admin OR NOT (
+      (v_sens = 'ETAB_VERS_SOIGNANT' AND m.etablissement_id IS DISTINCT FROM v_etab_id)
+      OR (v_sens = 'SOIGNANT_VERS_ETAB' AND m.soignant_assigne_id IS DISTINCT FROM v_uid)
+    ));
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error',
+      CASE WHEN v_admin THEN 'Mission introuvable' ELSE 'Accès non autorisé à cette mission.' END);
   END IF;
 
   -- 7b-C : TERMINEE, ou EN_COURS avec départ pointé (check-out fait, le cron
@@ -26269,12 +26322,12 @@ BEGIN
        SELECT 1 FROM presences pr
        WHERE pr.mission_id = p_mission_id AND pr.pointage_depart_le IS NOT NULL
      ))
-     AND NOT est_admin() THEN
+     AND NOT v_admin THEN
     RETURN jsonb_build_object('success', false, 'error', 'Seules les missions TERMINEE peuvent être notées');
   END IF;
 
   -- Itération 1 fix B.8 : bloquer notation pendant litige actif (médiation/arbitrage)
-  IF NOT est_admin() THEN
+  IF NOT v_admin THEN
     SELECT COUNT(*) INTO v_litige_actif_count FROM litiges
     WHERE mission_id = p_mission_id
       AND statut IN ('MEDIATION_EN_COURS', 'REVUE_ADMIN');
@@ -26285,18 +26338,12 @@ BEGIN
   END IF;
 
   IF v_sens = 'ETAB_VERS_SOIGNANT' THEN
-    IF NOT est_admin() AND v_mission.etablissement_id <> v_etab_id THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Vous n''êtes pas l''établissement de cette mission');
-    END IF;
     IF v_mission.soignant_assigne_id IS NULL THEN
       RETURN jsonb_build_object('success', false, 'error', 'Mission sans soignant assigné');
     END IF;
-    v_notateur_id := COALESCE(v_etab_id, v_mission.etablissement_id);
+    v_notateur_id := v_mission.etablissement_id;
     v_note_id := v_mission.soignant_assigne_id;
   ELSE
-    IF NOT est_admin() AND v_mission.soignant_assigne_id <> v_uid THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Vous n''êtes pas le soignant de cette mission');
-    END IF;
     v_notateur_id := v_uid;
     v_note_id := v_mission.etablissement_id;
   END IF;
@@ -26331,23 +26378,33 @@ BEGIN
     WHERE mission_id = p_mission_id AND publie_le IS NULL;
   END IF;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_notateur_id,
-    p_type_acteur := CASE WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
-    p_action := 'NOTATION_DONNEE',
+  v_audit := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE WHEN v_admin THEN 'ADMIN_PLATEFORME'
+      WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'mission',
     p_id_ressource := p_mission_id,
-    p_details := jsonb_build_object('notation_id', v_id, 'sens', v_sens::text, 'note_id', v_note_id, 'tardive', v_tardive)
+    p_details := jsonb_build_object('evenement', 'NOTATION_DONNEE', 'notation_id', v_id,
+      'sens', v_sens::text, 'note_id', v_note_id, 'tardive', v_tardive)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'La notation n’a pas pu être enregistrée. Veuillez réessayer.';
+  END IF;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_note_id,
-    p_type_acteur := CASE WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'SOIGNANT' ELSE 'ADMIN_ETABLISSEMENT' END,
-    p_action := 'NOTATION_RECUE',
+  v_audit := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE WHEN v_admin THEN 'ADMIN_PLATEFORME'
+      WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'mission',
     p_id_ressource := p_mission_id,
-    p_details := jsonb_build_object('notation_id', v_id, 'sens', v_sens::text)
+    p_details := jsonb_build_object('evenement', 'NOTATION_RECUE', 'notation_id', v_id,
+      'sens', v_sens::text, 'note_id', v_note_id)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'La notation n’a pas pu être enregistrée. Veuillez réessayer.';
+  END IF;
 
   RETURN jsonb_build_object('success', true, 'id', v_id, 'tardive', v_tardive);
 END;
@@ -35032,34 +35089,36 @@ COMMENT ON FUNCTION "public"."fn_export_fec"("p_annee" integer) IS 'Nom historiq
 
 CREATE OR REPLACE FUNCTION "public"."fn_exporter_rgpd_etablissement"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 DECLARE
-    v_etab_id UUID := mon_etablissement_id();
-    v_result JSONB;
+    v_etab_id uuid := public.mon_etablissement_id();
+    v_result jsonb;
 BEGIN
-    IF v_etab_id IS NULL THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
+    IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() OR v_etab_id IS NULL THEN
+        RETURN jsonb_build_object('error', 'Accès refusé');
+    END IF;
 
     SELECT jsonb_build_object(
         'etablissement', (SELECT row_to_json(e) FROM (
-            SELECT nom, type::TEXT, siret, finess, email_contact, telephone_contact,
+            SELECT nom, type::text, siret, finess, email_contact, telephone_contact,
                 adresse_rue, adresse_code_postal, adresse_ville, convention_collective,
                 cree_le, modifie_le
-            FROM etablissements WHERE id = v_etab_id
+            FROM public.etablissements WHERE id = v_etab_id
         ) e),
         'missions', (SELECT COALESCE(jsonb_agg(row_to_json(m)), '[]') FROM (
-            SELECT id, intitule, statut::TEXT, debut_le, fin_le, taux_horaire_base, total_brut, cree_le
-            FROM missions WHERE etablissement_id = v_etab_id ORDER BY cree_le DESC LIMIT 200
+            SELECT id, intitule, statut::text, debut_le, fin_le, taux_horaire_base, total_brut, cree_le
+            FROM public.missions WHERE etablissement_id = v_etab_id ORDER BY cree_le DESC, id DESC
         ) m),
         'factures', (SELECT COALESCE(jsonb_agg(row_to_json(f)), '[]') FROM (
             SELECT numero_facture, montant_ht, montant_ttc, statut, date_emission, date_paiement
-            FROM factures WHERE etablissement_id = v_etab_id ORDER BY date_emission DESC
+            FROM public.factures WHERE etablissement_id = v_etab_id ORDER BY date_emission DESC, id DESC
         ) f),
         'contrats', (SELECT COALESCE(jsonb_agg(row_to_json(c)), '[]') FROM (
             SELECT type_contrat, statut, cree_le, modifie_le
-            FROM contrats_mission WHERE etablissement_id = v_etab_id ORDER BY cree_le DESC LIMIT 200
+            FROM public.contrats_mission WHERE etablissement_id = v_etab_id ORDER BY cree_le DESC, id DESC
         ) c),
-        'export_date', NOW()
+        'export_date', now()
     ) INTO v_result;
 
     RETURN v_result;
@@ -38846,7 +38905,7 @@ BEGIN
       SELECT 1 FROM public.notations_missions nm
       WHERE nm.mission_id = m.id
         AND nm.sens = 'ETAB_VERS_SOIGNANT'
-        AND nm.notateur_id = v_uid
+        AND nm.notateur_id = v_etab_id
     )
     AND m.fin_le > NOW() - INTERVAL '60 days';
 
@@ -42583,12 +42642,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_modifier_notation_mission"("p_notation_i
     AS $$
 DECLARE
   v_uid UUID := auth.uid();
-  v_etab_id UUID := mon_etablissement_id();
+  v_etab_id UUID;
+  v_admin BOOLEAN;
   v_notation RECORD;
+  v_audit JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
+
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Compte suspendu, supprimé ou désactivé');
+  END IF;
+  v_etab_id := public.mon_etablissement_id();
+  v_admin := public.est_admin() IS TRUE;
 
   IF p_critere_1 NOT BETWEEN 1 AND 5 OR p_critere_2 NOT BETWEEN 1 AND 5
      OR p_critere_3 NOT BETWEEN 1 AND 5 OR p_critere_4 NOT BETWEEN 1 AND 5 THEN
@@ -42599,15 +42666,18 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Commentaire max 2000 caractères');
   END IF;
 
-  SELECT * INTO v_notation FROM notations_missions WHERE id = p_notation_id;
-  IF v_notation IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Notation introuvable');
-  END IF;
-
-  IF NOT est_admin() THEN
-    IF v_notation.notateur_id NOT IN (v_uid, COALESCE(v_etab_id, '00000000-0000-0000-0000-000000000000'::uuid)) THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
-    END IF;
+  -- Un auteur anonymisé ne confère aucun droit à un tiers. Le verrou évite
+  -- qu'une anonymisation concurrente change l'auteur entre contrôle et écriture.
+  SELECT n.* INTO v_notation FROM public.notations_missions n
+  WHERE n.id = p_notation_id AND (
+    v_admin OR (n.notateur_id IS NOT NULL AND (
+      n.notateur_id IS NOT DISTINCT FROM v_uid
+      OR (v_etab_id IS NOT NULL AND n.notateur_id IS NOT DISTINCT FROM v_etab_id)
+    ))
+  ) FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error',
+      CASE WHEN v_admin THEN 'Notation introuvable' ELSE 'Accès refusé' END);
   END IF;
 
   IF v_notation.cree_le < NOW() - INTERVAL '7 days' THEN
@@ -42621,14 +42691,19 @@ BEGIN
     mis_a_jour_le = NOW()
   WHERE id = p_notation_id;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_notation.notateur_id,
-    p_type_acteur := CASE WHEN v_notation.sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
-    p_action := 'NOTATION_DONNEE',
+  v_audit := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE WHEN v_admin THEN 'ADMIN_PLATEFORME'
+      WHEN v_notation.sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'mission',
     p_id_ressource := v_notation.mission_id,
-    p_details := jsonb_build_object('notation_id', p_notation_id, 'sens', v_notation.sens::text, 'modification', true)
+    p_details := jsonb_build_object('evenement', 'NOTATION_DONNEE', 'notation_id', p_notation_id,
+      'sens', v_notation.sens::text, 'modification', true)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'La notation n’a pas pu être modifiée. Veuillez réessayer.';
+  END IF;
 
   RETURN jsonb_build_object('success', true);
 END;
@@ -54285,20 +54360,27 @@ CREATE OR REPLACE FUNCTION "public"."fn_signaler_notation"("p_notation_id" "uuid
     AS $$
 DECLARE
   v_uid UUID := auth.uid();
-  v_etab_id UUID := mon_etablissement_id();
+  v_etab_id UUID;
   v_notation RECORD;
+  v_audit JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
 
-  SELECT * INTO v_notation FROM notations_missions WHERE id = p_notation_id;
-  IF v_notation IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Notation introuvable');
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Compte suspendu, supprimé ou désactivé');
   END IF;
+  v_etab_id := public.mon_etablissement_id();
 
-  -- Seule la cible (note_id) peut signaler — soit soignant, soit étab via mon_etablissement_id()
-  IF v_notation.note_id <> v_uid AND v_notation.note_id <> COALESCE(v_etab_id, '00000000-0000-0000-0000-000000000000'::uuid) THEN
+  -- Seule la cible canonique peut signaler, y compris après anonymisation
+  -- de l'auteur. Aucun privilège supplémentaire pour un administrateur.
+  SELECT n.* INTO v_notation FROM public.notations_missions n
+  WHERE n.id = p_notation_id AND n.note_id IS NOT NULL AND (
+    n.note_id IS NOT DISTINCT FROM v_uid
+    OR (v_etab_id IS NOT NULL AND n.note_id IS NOT DISTINCT FROM v_etab_id)
+  ) FOR UPDATE;
+  IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Vous ne pouvez signaler que les notations vous concernant');
   END IF;
 
@@ -54309,14 +54391,19 @@ BEGIN
   UPDATE notations_missions SET signale = true, mis_a_jour_le = NOW()
   WHERE id = p_notation_id;
 
-  PERFORM public.fn_ecrire_audit_safe(
+  v_audit := public.fn_ecrire_audit_safe(
     p_acteur_id := v_uid,
-    p_type_acteur := CASE WHEN v_etab_id IS NOT NULL THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
-    p_action := 'NOTATION_SIGNALE',
+    p_type_acteur := CASE WHEN public.est_admin() IS TRUE THEN 'ADMIN_PLATEFORME'
+      WHEN v_notation.sens = 'SOIGNANT_VERS_ETAB' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'notation',
     p_id_ressource := p_notation_id,
-    p_details := jsonb_build_object('motif', p_motif, 'mission_id', v_notation.mission_id)
+    p_details := jsonb_build_object('evenement', 'NOTATION_SIGNALE', 'motif', p_motif,
+      'mission_id', v_notation.mission_id)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'Le signalement n’a pas pu être enregistré. Veuillez réessayer.';
+  END IF;
 
   RETURN jsonb_build_object('success', true);
 END;
@@ -58078,7 +58165,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid")
     AS $$
 DECLARE
   v_mission record;
-  v_est_admin boolean := public.est_admin();
+  v_uid uuid := auth.uid();
+  v_est_admin boolean := public.est_admin() IS TRUE;
+  v_etablissement_id uuid;
   v_nb_presences integer := 0;
   v_nb_departs integer := 0;
   v_nb_segments_ouverts integer := 0;
@@ -58088,16 +58177,30 @@ DECLARE
   v_litige_id uuid;
   v_cloture_anticipee boolean := false;
 BEGIN
-  SELECT * INTO v_mission
-  FROM public.missions
-  WHERE id = p_mission_id;
-
-  IF v_mission IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Mission introuvable');
+  -- Pas de lecture de mission avant la validation de l'identité et du rôle.
+  -- Aucun appel interne/cron ne dépend de cette RPC utilisateur (audit 30/09).
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
   END IF;
 
-  IF NOT v_est_admin
-     AND v_mission.etablissement_id <> public.mon_etablissement_id() THEN
+  IF NOT v_est_admin THEN
+    v_etablissement_id := public.mon_etablissement_id();
+    IF v_etablissement_id IS NULL
+       OR public.fn_a_permission_etablissement('missions', v_etablissement_id) IS NOT TRUE THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
+    END IF;
+  END IF;
+
+  -- Le filtre tenant appartient à la lecture elle-même. Une mission étrangère
+  -- et une mission absente produisent le même refus, sans révéler leur statut.
+  -- Le verrou sérialise deux clôtures afin de ne pas notifier deux fois.
+  SELECT * INTO v_mission
+  FROM public.missions
+  WHERE id = p_mission_id
+    AND (v_est_admin OR etablissement_id = v_etablissement_id)
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
   END IF;
 
@@ -66973,7 +67076,7 @@ ALTER TABLE "public"."evaluations" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."notations_missions" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "mission_id" "uuid" NOT NULL,
-    "notateur_id" "uuid" NOT NULL,
+    "notateur_id" "uuid",
     "note_id" "uuid" NOT NULL,
     "sens" "public"."sens_notation" NOT NULL,
     "critere_1" integer NOT NULL,
@@ -66989,6 +67092,7 @@ CREATE TABLE IF NOT EXISTS "public"."notations_missions" (
     "mis_a_jour_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "notateur_anonymise" boolean DEFAULT false NOT NULL,
     "publie_le" timestamp with time zone,
+    CONSTRAINT "notations_missions_auteur_anonymise_check" CHECK ((("notateur_id" IS NOT NULL) OR ("notateur_anonymise" IS TRUE))),
     CONSTRAINT "notations_missions_commentaire_check" CHECK ((("commentaire" IS NULL) OR ("length"("commentaire") <= 2000))),
     CONSTRAINT "notations_missions_critere_1_check" CHECK ((("critere_1" >= 1) AND ("critere_1" <= 5))),
     CONSTRAINT "notations_missions_critere_2_check" CHECK ((("critere_2" >= 1) AND ("critere_2" <= 5))),
@@ -78865,6 +78969,7 @@ REVOKE ALL ON FUNCTION "public"."fn_anti_seed_mission"() FROM PUBLIC;
 REVOKE ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "anon";
 
 
 

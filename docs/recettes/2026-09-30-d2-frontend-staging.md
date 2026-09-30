@@ -1,0 +1,138 @@
+# D2 — préparation du parcours frontend staging
+
+Lot distinct de #1000, construit sur le banc D2 `483e8bca`. Le SQL réel annulé a réussi dans le run [36729455524](https://github.com/Gabpcd/JJJJJ/actions/runs/36729455524), avec sentinelle et SELECT indépendants zéro résidu ; il ne prouve ni Auth HTTP ni navigateur. Ce nouveau mode est préparé localement, sans dispatch ni nouvelle fixture distante.
+
+## Périmètre et ordre
+
+Entrées `candidatures_frontend_only=true`, scénario `04-candidatures-simultanees`, `candidatures_frontend_date` explicite entre un et 31 jours dans le futur. Les modes SQL D2, E10, diagnostic, all et tout override volume/durée sont refusés avant accès. Une date UI seule sélectionne aussi le job UI pour y être refusée, sans repli vers k6. Le verrou global `jolene-supabase-staging-writes`, sans annulation du run précédent, couvre tout le workflow.
+
+1. Vérifier contexte manuel/repository/SHA/destination staging exacte, puis les trois empreintes D2 figées et zéro cron actif/FK audit. Les migrations de #1000 ne sont jamais appliquées par ce job ; une dérive de catalogue bloque avant Auth.
+2. Résoudre les clés staging, construire sans DSN/Turnstile et vérifier la preview locale E10 avant la création de comptes. Aucune installation ou compilation supplémentaire n'a été effectuée localement pour cette préparation ; la CI emploie son `npm ci` habituel.
+3. Réutiliser `prepare-candidatures-fixture.mjs` inchangé : deux AS SALARIE non vérifiés, un établissement EN_ATTENTE incapable de publier, une mission OUVERTE non urgente et un créneau 09:00–13:00 UTC. `email_confirm:true`, trois mots de passe distincts et trois password grants préparatoires. Canaux de préférences tous fermés dans le seed. La console Auth du 30 septembre ne montrait aucun hook personnalisé ni SMTP custom (`audits/.../auth-staging-console-20260930.md`) ; ce constat ne désactive pas le service email intégré.
+4. Trois connexions par formulaire dans des contextes WebKit indépendants : AS1 iPhone, AS2 iPad, établissement iPad. Chacun suit d'abord son dashboard normal. Les deux AS déposent successivement, via le dialogue réel, un POSTULER exactement lié au manifeste ; chacun vérifie rappel documentaire, attente et recharge. L'établissement relit les deux noms/EN_ATTENTE/documents non validés et recharge. Aucun accepter/refuser, messagerie, paiement, k6 ou test de concurrence DB.
+5. Fermer chaque contexte puis le navigateur avant de rendre la main au job. Vérifier la corrélation exacte des deux IDs retournés avec le backend et les quatre notifications attendues. Même en échec UI : snapshot des audits après fermeture, cleanup du manifeste exact, puis zéros et conservation des audits. Les gardes du préparateur/SQL restent inchangées.
+
+## Écritures UI inventoriées
+
+| Écriture | Limite avant réseau | Preuve attendue |
+| --- | --- | --- |
+| Password grant UI | 1 par identité, email/password exacts | user.id/email/rôle/marqueurs du manifeste + jeton présent, jamais sérialisé |
+| `fn_audit_connexion` | 1 CONNEXION par identité | 3 audits exacts, conservés après cleanup |
+| `fn_maj_activite_soignant` | 1 corps vide par AS | empreinte du timestamp d'activité changée depuis avant ; la valeur DEFAULT now() n'est pas une preuve d'avancement |
+| `fn_ecrire_audit_safe` | 1 pour le seul établissement, action DONNEES_PERSO_CONSULTATION et page dashboard_etablissement | 1 audit de consultation exact conservé |
+| `fn_confirmer_action_planning_v1` | 1 POSTULER par AS, mission/message/créneau du manifeste, choix_contrat et candidature_id null | 2 candidatures EN_ATTENTE/SALARIE + 4 notifications exactes via le vérificateur D2 existant |
+
+L'audit de consultation est automatique dans `DashboardEtablissement.tsx:363` après la connexion. La définition LIVE de `fn_ecrire_audit_safe`, lue sans exécution, a le MD5 `04cc44127e325b434445113e88ce38b7` et insère seulement le journal. Le catalogue global figé couvre ce corps et son trigger d'audit. Aucun journal n'est supprimé. Les timestamps/IP/user-agent et corps réseau ne sont pas exportés ; seule l'empreinte d'activité permet de vérifier le changement.
+
+`fn_update_presence` reste interdit. Le hook ne se monte que via PageMessagerie ou ChatConversation ; dans les deux détails mission, le chat exige un statut assigné ou ultérieur et un soignant assigné. D2 reste OUVERTE sans assignation. Les gardes existantes continuent de refuser présence, email_queue, tokens_push, conversation et toute dépendance inconnue. La cloche peut donc montrer la perte de connexion realtime attendue dans ce banc.
+
+## Réseau et secrets
+
+L'interception est installée avant la première page. Seuls preview locale et staging exact sont autorisés ; RPC de lecture inventoriées, tables en lecture avec filtres liés au manifeste, aucune Edge/Storage/fournisseur. Les WebSockets sont fermés sans `connectToServer`. L'import Stripe du détail établissement reçoit uniquement un stub local qui jette s'il est invoqué ; aucun SDK Stripe n'est téléchargé. La preview éphémère retire la feuille Google Fonts et utilise la police de secours existante, sans modifier le produit.
+
+Les écritures ont chacune un budget unitaire consommé avant transport : une réponse perdue n'autorise aucun second POST. Le créneau accepte les deux représentations ISO strictes du même instant (`.000Z` et `+00:00`), avec fuseau explicite et aucune perte de précision ; les dates locales, heures voisines ou clés supplémentaires sont refusées.
+
+Le manifeste avec ses états reste dans `$RUNNER_TEMP/d2-frontend-manifest.json`, hors artefacts. Les mots de passe ne passent que par le canal privé GITHUB_ENV déjà utilisé par le préparateur. Le processus navigateur reçoit seulement PATH/HOME/TMPDIR et les variables système d'affichage, aucun secret serveur dans son environnement. Aucun storageState/HAR/trace/vidéo/session n'est écrit. Seul `tests/load/results/d2-frontend/` est téléversé : compteurs, diagnostic de phases/origines/routes connues/statuts, captures de main après vérifications. Une disparition du runner avant cleanup exige une investigation des IDs déterministes et des états ; ne pas recréer les comptes ou fabriquer un manifeste « cleaned ».
+
+## Commande à soumettre à revue avant toute exécution
+
+```sh
+gh workflow run load-tests.yml -R Gabpcd/JJJJJ --ref test/candidatures-deux-profils \
+  -f scenario=04-candidatures-simultanees \
+  -f candidatures_frontend_only=true -f candidatures_frontend_date=2026-10-07 \
+  -f candidatures_sql_only=false -f dashboard_fixture_only=false -f diagnostic_sql=false
+```
+
+Vérifier le SHA exact du run avant d'interpréter les résultats. Garder les dates SQL et overrides vides. Aucun dispatch n'est effectué par ce lot. Si la date sort de la fenêtre, choisir explicitement une autre date après revue ; ne pas contourner le garde.
+
+## Validation locale et limites
+
+Le test Node couvre le routage exclusif, les refus avant accès, les canaris secrets, les écritures unitaires, les réponses Auth/POSTULER, la corrélation backend, l'activité inchangée refusée, les audits conservés et la fermeture effective sur exception. Les conditions workflow imposent snapshot et cleanup même après échec du navigateur.
+
+`recette-complete-candidatures-runner.spec.ts` appelle les mêmes fonctions de parcours et la même garde réseau sur le frontend local, avec réponses/sessions simulées et horloge fixe. Il vérifie les cinq formats ; le mock existant conserve son créneau indépendant 09:00–13:00 Paris et ses noms fictifs. Cela ne remplace pas les trois connexions ni les effets backend réels du futur run. Les simulations initiales ont signalé un sélecteur qui incluait les badges dans le nom ; le runner compare maintenant les nœuds texte propres du paragraphe, sans relâcher l'identité attendue. Résultats chiffrés et SHA256 sont conservés dans le dossier durable d'audit associé au commit.
+
+Validation terminée le 30 septembre : 160/160 contrats Node (dont 14 nouveaux), 17 gardes, `tsc -b`, typecheck E2E isolé, ESLint ciblé, actionlint sur les deux workflows, trois contrôles pglast de portée catalogue et parse du SELECT d'audit. Simulation : iPad portrait 1/1 puis iPad paysage/iPhone/Android/ordinateur 4/4, zéro retry/skip. Une tentative locale a rencontré ENOSPC avant capture ; les quatre formats restants ont ensuite tous passé. Les sept captures retenues (cinq établissement, deux soignant) et rapports filtrés sont dans le dossier racine `audits/2026-09-30-preparation-nationale/d2-frontend-local`, manifeste SHA256 `0099fce28c2a6706416dfdb0fb701f212025375a9081b4e89fd67661658c1aba`. Le serveur local a été arrêté. Les textes produit du socle antérieur, notamment BlocConformite, ne sont pas modifiés par ce banc.
+
+## Premier pilote et diagnostic complémentaire
+
+Le run staging `36735437993`, SHA `51d0c992`, échoue après le POSTULER du second AS. Le premier AS iPhone a réellement postulé et rechargé ; le second POSTULER répond HTTP200 et passe le contrat de réponse, mais sa capture/recharge et le parcours établissement ne sont pas atteints. Quatre erreurs navigateur sont comptées, sans refus réseau ni erreur HTTP. Leur nature n'était pas conservée : aucune cause produit ou fixture n'est prouvée. Cleanup et vérification sont verts ; SELECT indépendants confirment les zéros du lot, les deux audits CONNEXION plus PREPARE/CLEANUP conservés et le catalogue inchangé. Preuves racine `audits/2026-09-30-preparation-nationale/d2-frontend-staging-36735437993`, manifeste SHA256 `5dd50a0e4d5670dc037c1de037531de36e3cbc3af8a2c9d5ab8ef89c1a1dcb04`.
+
+Le complément conserve chaque pageerror/console.error comme erreur bloquante et ajoute une projection fermée : source, classe connue, catégorie réseau/abandon/contexte fermé/WebSocket/React/autre, code React numérique et SHA256 du texte. Aucun texte brut, stack, URL complète, query ou fragment n'est exporté. L'emplacement éventuel se limite à un fichier JavaScript réellement inventorié dans `dist/assets`, sur l'origine preview exacte, avec ligne/colonne numériques. Le slot émetteur est fixé lors de l'installation du contexte ; le slot de phase courant est séparé pour attribuer une erreur tardive. L'agrégation est bornée à32 entrées et le nombre d'entrées non détaillées est conservé ; le total reste bloquant.
+
+Validation du complément : 17/17 tests Node, `tsc -b`, typecheck E2E isolé, ESLint ciblé et syntaxe Node verts ; 10/10 simulations (parcours D2 et injection de vraies erreurs navigateur sur chacun des cinq formats), zéro retry/skip. Les erreurs injectées restent comptées et ne divulguent aucun canari. Les cinq captures établissement après reload sont relues. Preuves racine `audits/2026-09-30-preparation-nationale/d2-frontend-diagnostic-local`, manifeste SHA256 `07ed24e8297a12946955f95de0b5bca29085a2796ce73198449ac7fcf60b8dfa`. Contrat réseau, budgets de mutation, parcours et nettoyage restent inchangés. Aucune relance distante n'est effectuée par ce complément.
+
+## Second pilote et exception finale
+
+Le run `36737366642`, SHA `56706e86`, échoue en phase mission du premier AS, avant POSTULER. Le diagnostic conserve zéro erreur navigateur et 21 groupes réseau, tous HTTP200 ; il ne reproduit donc pas les quatre erreurs du premier pilote. L'exception finale du parcours n'était pas projetée : l'étape exacte parmi navigation, titre, message, bouton et dialogue reste indéterminée. Aucun défaut produit, Auth ou navigateur n'est déduit de cet arrêt. Snapshot, cleanup et vérification passent ; quatre SELECT indépendants du 30 septembre à 15:33:40 UTC confirment les zéros des objets du manifeste, zéro email/push/présence et le catalogue inchangé. Trois audits sont conservés : CONNEXION du premier AS, PREPARE et CLEANUP. Preuves racine `audits/2026-09-30-preparation-nationale/d2-frontend-staging-36737366642`, manifeste SHA256 `d3c08e5989e12181961deab80f3bd0b70dbd86ad4215a81f224d8b783a7cf818`.
+
+Le nouveau complément marque chaque action existante par une valeur issue d'une liste fermée. L'exception finale conserve phase, slot, action et projection fermée de sa classe/catégorie/empreinte ; aucun message, stack ou emplacement n'est fourni à cette projection. Les catégories précisent désormais délai d'attente, assertion et navigation interrompue. L'exception est toujours relancée et le résultat sauvegardé reste `succes:false` ; elle n'est pas comptée comme erreur navigateur. Les opérations, délais, assertions, garde réseau, budgets et cleanup restent inchangés. Aucune capture supplémentaire sur échec n'est ajoutée.
+
+Validation locale : 19/19 tests Node, 17 gardes, `tsc -b`, typecheck E2E isolé, ESLint ciblé et syntaxe Node verts. Six exceptions injectées dans la vraie fonction de parcours vérifient l'action exacte, la sauvegarde en échec et la propagation de l'erreur ; des canaris email/password/jeton/URL sont absents du diagnostic. Les 10/10 simulations finales passent sur iPhone, Android, iPad portrait/paysage et ordinateur, zéro retry/skip : parcours complet avec marqueurs réels, puis erreurs navigateur et assertion Playwright volontaire pour contrôler la projection. Preuves filtrées et cinq captures établissement après reload dans `audits/2026-09-30-preparation-nationale/d2-frontend-actions-local`, manifeste SHA256 `bb468baa3cb5797ba18e80dcc4e9829111e30ecf74b6298e386333293a04f5e9`. Le serveur local est arrêté. Relecture croisée bornée sans P1/P2 ; elle ne constitue pas une revue B8 ni une réussite frontend staging. Aucune relance distante n'est effectuée par ce complément.
+
+## Troisième pilote : erreurs lors de la navigation du second AS
+
+Le run `36739983394`, SHA `6ff132cc`, échoue avant la capture du second AS, au garde « Anomalie UI D2. » dont l'empreinte correspond exactement au texte local. Les assertions après son POSTULER200 ont passé ; sa recharge et la vue établissement ne sont pas atteintes. Trois pageerror sont attribuées à `mission_navigation`, slot1, sans erreur HTTP/refus/transport ; classe et catégorie étaient `autre`. Le premier AS a réellement déposé et rechargé. Cleanup, vérification et quatre SELECT indépendants à15:55:49 UTC confirment les zéros du lot, quatre audits conservés et le catalogue inchangé. Preuves racine `audits/2026-09-30-preparation-nationale/d2-frontend-staging-36739983394`, manifeste SHA256 `28430a630f2f56b76492459858631e5e5ace78178fcbadeed3092d45b7d3a600`.
+
+Le code Playwright WebKit coupe les textes moteur au premier deux-points pour construire `error.name` et `error.message`. Un préfixe réseau suivi d'une URL peut donc se retrouver dans `name`, traité précédemment comme classe inconnue ; catégoriser seulement `message` perd une information utile. Le projecteur examine maintenant les deux champs en mémoire, puis exporte seulement classe autorisée, type de nom fermé, catégorie et empreintes. Aucun nom libre/URL/message/stack ne sort. Il conserve aussi le début d'action et les instants relatifs des erreurs/réceptions, arrondis à la milliseconde, monotones et saturés à30min. Les agrégations gardent premier/dernier instant et nombre. Les temps réseau indiquent la réception dans `route.fetch`, sans prouver que le document a consommé la réponse. Toutes les erreurs restent bloquantes ; aucun délai ou garde n'est modifié.
+
+Une expérience distincte WebKit iPad sur deux serveurs loopback compare six cas synthétiques, sans staging : deux transports (navigateur ou route.fetch) et réponse consommée avant/libérée pendant/après navigation. Les deux témoins consommés donnent zéro erreur ; les quatre requêtes encore en cours donnent chacune une pageerror et conservent un garde rouge (exit1), malgré HTTP200 et zéro refus/exception transport. L'empreinte locale correspond à `TypeError: Load failed` et diffère des trois empreintes staging. Cela démontre un mécanisme possible, sans établir leur cause. Aucun quatrième dispatch n'est effectué.
+
+Validation du projecteur et de l'horloge : 21/21 tests Node, 17 gardes, `tsc -b`, typecheck E2E isolé, ESLint/syntaxe/diffcheck verts ; 10/10 simulations cinq formats, zéro retry/skip. Les canaris dans le nom moteur, URL avec identifiants/query, message et classe inconnue restent absents des sorties. Les cinq captures établissement après reload ont été relues et le serveur local est arrêté. Script de reproduction, résultats positifs/négatifs, limites et preuves filtrées dans `audits/2026-09-30-preparation-nationale/d2-frontend-webkit-local`, manifeste SHA256 `0de93f93818423d45bc9ba29231ddd539cfd8fb4d2c85095fefdac63ce525b44`.
+
+## Quatrième pilote : lecture de métadonnées au dashboard
+
+Le run `36742521457`, SHA `a419fd47`, échoue au titre de la mission du premier AS : un GET missions est refusé, puis un GET mission_creneaux termine en transport ; zéro erreur navigateur, aucun POSTULER. La query n'était pas journalisée : ce résultat ne prouve pas que le refus correspond exactement à la requête corrigée ci-dessous. Cleanup et quatre SELECT distincts à16:18:29 UTC confirment les zéros du lot, trois audits conservés et le catalogue inchangé. Preuves `audits/2026-09-30-preparation-nationale/d2-frontend-staging-36742521457`, manifeste SHA256 `abdeade5d78c768b810de45f66b7b342010c7e8d85972db625f5a7f34b6fbcb1`.
+
+`DashboardSoignant` lit `id,nb_creneaux` avec `.in('id',missionIds)` après sa RPC. La garde du banc ne reconnaissait que les filtres `eq`. Elle accepte désormais uniquement cette projection GET pour un AS, avec les deux paramètres uniques `select` et `id`, et la liste contenant exactement l'ID mission du manifeste. Autre ID, projection, OR, paramètre, doublon, méthode ou acteur établissement restent refusés. La simulation commence désormais au dashboard de chaque AS et exige les deux lectures exactes avant les actions du runner. Les lectures locales du dashboard sont simulées, notamment GET stripe_connect_onboarding ; cela n'autorise aucun appel Stripe ni paiement.
+
+Un refus missions conserve maintenant uniquement les classes fermées projection/sélecteur, l'unicité des paramètres et leurs clés connues (toute autre clé devient `autre`). Aucune valeur, ID, URL ou clé libre ne sort. Le test injecte un canari dans une vraie interception simulée et exige refus avant fetch, compteur bloquant et absence de divulgation. Les délais, budgets, erreurs et cleanup restent inchangés.
+
+Validation : 23/23 Node, 17 gardes, `tsc -b`, typecheck E2E isolé, ESLint/syntaxe/diffcheck verts ; 10/10 simulations cinq formats, zéro retry/skip, cinq captures relues et serveur arrêté. Le diagnostic fermé, ajouté après cette passe UI sans changer le parcours, est couvert par Node. Deux tentatives précédentes ont signalé des mocks incomplets (référentiel documentaire, classification de la lecture onboarding) et restent conservées. Preuves filtrées `audits/2026-09-30-preparation-nationale/d2-dashboard-metadata-local`, manifeste SHA256 `e4687c2b52e89da99d69ae55f6a0377368ebfb23bb171cf70f09a274e35321f9`. Relecture croisée bornée sans P1/P2, distincte de B8. Aucun succès frontend staging complet ni nouveau dispatch revendiqué.
+
+## Pilote 9 et deux corrections après revue globale
+
+Le run [36756662211](https://github.com/Gabpcd/JJJJJ/actions/runs/36756662211),
+tête `837a5f253025575adc839abc0a17bc8ef09feb07`, réussit le 30 septembre à 18:12:38 UTC :
+trois connexions formulaire et recharges, deux candidatures corrélées au
+backend, quatre notifications, 212 réponses HTTP 200, zéro erreur navigateur ou
+refus réseau. Les SELECT indépendants après cleanup confirment zéro résidu,
+six audits conservés et catalogue inchangé. Archive filtrée dans
+`audits/2026-09-30-preparation-nationale/preuves/d2-frontend-staging-36756662211/`,
+manifeste SHA256 `0d83c5612a665801fc51adc3e690f0cafead07b1929d7067edfbf952495b1d4e`.
+Ce succès demeure limité à cette tête et à son catalogue. Il ne couvre pas
+le produit final après intégration PR1000, la charge ou les appareils physiques.
+
+La revue globale a ensuite démontré deux défauts du banc non observés dans
+ce pilote :
+
+1. La fenêtre future supérieure à 24 h s'appliquait aussi à snapshot/cleanup/
+   verify-cleanup. Son franchissement empêchait ces étapes malgré `always()`.
+   Seules ces trois actions sont désormais exemptées de la fenêtre relative ;
+   contexte CI manuel, modes, staging, run, date ISO explicite et horloge finie
+   restent requis. Création et parcours gardent strictement les bornes 24 h/31 j.
+   Le préparateur conserve la validation exacte du manifeste avant toute
+   suppression ; un autre jour, run ou ID ne devient pas acceptable.
+2. Une pageerror arrivée pendant la fermeture du dernier contexte pouvait
+   être comptée après le dernier garde puis accompagnée de `succes:true`.
+   Un garde final après le retour de navigation et ses fermetures, avant le
+   verdict, refuse désormais toute erreur comptée. Aucun filtre ou compteur
+   n'est retiré ; le contexte d'origine de l'événement reste projeté.
+
+Quatre nouveaux tests sont rouges sur l'ancien code : borne/reprise tardive,
+actions invalides, orchestration du cleanup après borne et succès interdit
+malgré des corrélations backend valides. Après correction, les deux suites
+Node UI/préparateur passent 46/46 : frontière à −1/0/+1 ms, reprise après la date,
+création/exécution tardives refusées, validations invalides sans effets,
+jour/mission altérés dans le vrai lecteur de manifeste refusés avant réseau,
+événement injecté en phase établissement/slot 2/contexte_fermer toujours bloquant.
+Les preuves rouges restent dans `/private/tmp/jolene-d2-frontiere-fermeture-20260930/`.
+Aucun nouveau pilote distant n'est requis pour attribuer au run 9 une erreur
+qu'il n'a pas observée : son diagnostic conservé contient bien zéro erreur.
+
+Validation finale : 46/46 Node, `tsc -b` et diff-check verts ; 5/5 simulations
+complètes (les trois identités sur chacun des cinq formats), zéro skip/retry,
+sans modification de la spec UI. Le build local F1 conservé est réutilisé avec
+réponses fictives et garde réseau stricte ; aucun nouveau build ou pilote réel.
+La capture établissement iPad après recharge a été inspectée. Le serveur est
+arrêté, le build et toutes les preuves sont conservés. Archive compacte par
+hardlinks sous `audits/2026-09-30-preparation-nationale/preuves/d2-frontiere-fermeture/`.
