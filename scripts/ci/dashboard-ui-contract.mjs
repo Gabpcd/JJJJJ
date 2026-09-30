@@ -3,7 +3,7 @@ import { STAGING_REF, STAGING_URL } from './prepare-load-fixtures.mjs';
 import { manifestePoolDashboard } from './prepare-dashboard-pool.mjs';
 import { lirePoolDashboard } from '../../tests/load/helpers/dashboard-pool.js';
 
-export const ORIGINE_UI = 'http://localhost:5173';
+export const ORIGINE_UI = 'http://127.0.0.1:5173';
 export const contratEcritures = JSON.parse(readFileSync(new URL('./dashboard-ui-write-contract.json', import.meta.url), 'utf8'));
 const triggers = {
   dec_age_minimum: ['soignants', 23, 'dec_verifier_age_minimum'],
