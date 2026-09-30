@@ -120,12 +120,14 @@ export async function relireCandidaturesD(page,m,{expect,capturer=async etape=>{
     action('etablissement_compteur');await expect(page.getByRole('heading',{name:'Candidatures (2)',exact:true})).toBeVisible();
     action('etablissement_attente');await expect(page.getByText('En attente (2)',{exact:true})).toBeVisible();
     for(const a of m.membres.slice(0,2)) {
-      const nom=page.locator('p').filter({hasText:new RegExp(`👤\\s+${RegExp.escape(a.prenom)} ${RegExp.escape(a.nom)}`)});
+      // Candidature seule, sans affectation : le RPC masque le nom de famille.
+      const nomAffiche=`${a.prenom} ${Array.from(a.nom)[0]||''}.`;
+      const nom=page.locator('p').filter({hasText:new RegExp(`👤\\s+${RegExp.escape(nomAffiche)}`)});
       action('etablissement_nom_visible');await expect(nom).toBeVisible();
       // Les badges sont des enfants du même paragraphe : comparer exactement
       // ses nœuds texte propres, sans inclure profession/statut documentaire.
       action('etablissement_nom_exact');const texte=await nom.evaluate(element=>Array.from(element.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').replace(/\s+/g,' ').trim());
-      expect(texte).toBe(`👤 ${a.prenom} ${a.nom}`);
+      expect(texte).toBe(`👤 ${nomAffiche}`);
     }
     action('etablissement_documents');await expect(page.getByText('📄 Documents en vérification',{exact:true})).toHaveCount(2);
     action('etablissement_boutons');await expect(page.getByRole('button',{name:'Accepter cette candidature',exact:true})).toHaveCount(2);

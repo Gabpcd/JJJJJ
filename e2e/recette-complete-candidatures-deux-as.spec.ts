@@ -48,8 +48,9 @@ test('deux AS non vérifiés candidatent : planning exact, rappel documents et d
       if (rechargement) await etab.reload();
       await expect(etab.getByRole('heading', { name: 'Candidatures (2)', exact: true })).toBeVisible();
       await expect(etab.getByText('En attente (2)', { exact: true })).toBeVisible();
-      await expect(etab.getByText(/Aline Simulation/)).toBeVisible();
-      await expect(etab.getByText(/Basile Simulation/)).toBeVisible();
+      await expect(etab.getByText(/Aline S\./)).toBeVisible();
+      await expect(etab.getByText(/Basile S\./)).toBeVisible();
+      await expect(etab.getByText(/Aline Simulation|Basile Simulation/)).toHaveCount(0);
       await expect(etab.getByText('📄 Documents en vérification', { exact: true })).toHaveCount(2);
       await expect(etab.getByRole('button', { name: 'Accepter cette candidature', exact: true })).toHaveCount(2);
     }
@@ -72,7 +73,9 @@ test('candidature : panne persistante, réessai, planning périmé refusé puis 
     state.indisponible = null; await page.getByRole('button', { name: 'Réessayer', exact: true }).click();
     await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
     state.indisponible = 'postuler'; await confirmer(page);
-    await expect(page.getByText('Erreur: Service temporairement indisponible. Réessayez.', { exact: true })).toBeVisible();
+    // En build compilé, les détails HTTP inconnus passent par le message
+    // utilisateur générique ; le préfixe « Erreur: » est réservé au mode DEV.
+    await expect(page.getByText('Une erreur est survenue. Veuillez réessayer.', { exact: true })).toBeVisible();
     await expect(page.getByText(envoye, { exact: true })).toBeHidden(); expect(state.candidatures).toHaveLength(0);
     await preuveMission(page, info, 'candidature-erreur-sans-succes');
     state.indisponible = null;

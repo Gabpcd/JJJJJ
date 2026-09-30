@@ -31,7 +31,7 @@ export function identitesFrontendD(env, m) {
 }
 export const rpcLectureD = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_messages_non_lus','fn_dashboard_soignant_complet',
   'fn_mon_profil_soignant_complet','fn_mon_etablissement_complet','fn_stats_dashboard_etablissement','fn_mes_soignants_etablissement']);
-export const rpcParametresD = new Set(['fn_etablissement_public','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_mes_permissions_etab','fn_note_moyenne','fn_mode_exercice','fn_est_bloque']);
+export const rpcParametresD = new Set(['fn_etablissement_public','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_mes_permissions_etab','fn_note_moyenne','fn_mode_exercice','fn_est_bloque','fn_mon_score_etab','fn_bfa_info']);
 export const rpcEcritureD = new Set(['fn_audit_connexion','fn_maj_activite_soignant','fn_ecrire_audit_safe','fn_confirmer_action_planning_v1']);
 export const tablesLectureD = new Set(['soignants','etablissements','missions','mission_creneaux','candidatures','notifications','contrats_mission',
   'documents_soignants','stripe_connect_onboarding','litiges','parcours_inscription','notations_missions','evaluations','paliers_commission','documents_requis_par_profession']);
@@ -46,6 +46,11 @@ export function requeteFrontendD({ url, method, body }, a, m) {
   if (u.origin !== STAGING_URL) return false;
   const rpc = u.pathname.startsWith('/rest/v1/rpc/') ? u.pathname.slice('/rest/v1/rpc/'.length) : null;
   const table = u.pathname.startsWith('/rest/v1/') ? u.pathname.slice('/rest/v1/'.length) : null;
+  // Deux cartes du dashboard, auditées LIVE : lectures STABLE du tenant
+  // courant. Aucun paramètre, année libre ou accès depuis un slot soignant.
+  if (rpc === 'fn_mon_score_etab' || rpc === 'fn_bfa_info') {
+    return a.slot === 2 && !u.search && (method === 'OPTIONS' ? body === undefined : method === 'POST' && egal(body, {}));
+  }
   if (method === 'OPTIONS') return ['/auth/v1/token','/auth/v1/user'].includes(u.pathname) || rpcLectureD.has(rpc) || rpcParametresD.has(rpc) || rpcEcritureD.has(rpc) || tablesLectureD.has(table);
   if (u.pathname === '/auth/v1/token') return method === 'POST' && u.search === '?grant_type=password' && body?.email === a.email && body?.password === a.password
     && Object.keys(body).every(k => ['email','password','gotrue_meta_security'].includes(k)) && (body.gotrue_meta_security === undefined || exact(body.gotrue_meta_security, {}));

@@ -100,10 +100,19 @@ export function creerCandidaturesDeuxAs() {
           case 'fn_dashboard_soignant_complet': return json({ profil, missions_ouvertes:[mission], mes_missions:[], documents:[], heures_semaine:0,
             gains_mois:{net_total:0,brut_total:0,nb_missions:0}, gains_6mois:[], missions_semaine_cal:[], propositions:[], heures_totales_terminees:0, missions_oubliees_count:0, notifs_non_lues:0 });
           case 'fn_mon_etablissement_complet': return json({ ...etablissement, id: identifiants[acteur] });
+          case 'fn_stats_dashboard_etablissement': return json({ missions_ouvertes: 1, candidatures_en_attente: state.candidatures.length });
+          case 'fn_mes_soignants_etablissement': return json([]); // Aucun soignant affecté.
+          case 'fn_mon_score_etab': return json({ score_qualite: null, niveau: null, composantes: { notation_pct: null, nb_notations: 0, paiement_pct: null, nb_factures: 0, nb_litiges_perdus: 0 } });
+          case 'fn_bfa_info': return json({ eligible: false }); // Aucun groupe dans cette fixture.
           case 'fn_etablissement_public': return json(null); // Les comptes test sont exclus de la fiche publique.
           case 'fn_etablissement_pour_mission': return json(etablissement);
           case 'fn_etablissements_safe': return json([etablissement]);
-          case 'fn_soignant_pour_etablissement': return json(acteur === 'etablissement' ? soignants.find(s => s.id === body.p_soignant_id) ?? null : null);
+          case 'fn_soignant_pour_etablissement': {
+            const candidat = acteur === 'etablissement' ? soignants.find(s => s.id === body.p_soignant_id) : null;
+            // Le RPC LIVE conserve le prénom mais masque le nom et le téléphone
+            // tant qu'aucune relation contractuelle n'existe avec l'établissement.
+            return json(candidat ? { ...candidat, nom: candidat.nom.slice(0, 1) + '.', nom_anonymise: true, telephone: null } : null);
+          }
           case 'fn_mes_permissions_etab': return json({ success: true, role: 'PROPRIETAIRE', etablissement_id: identifiants[acteur],
             permissions: Object.fromEntries(['lecture', 'missions', 'candidatures', 'contrats', 'lecture_contrats', 'profil_etab'].map(p => [p, true])) });
           case 'fn_messages_non_lus': return json(0);
@@ -137,7 +146,7 @@ export function creerCandidaturesDeuxAs() {
           candidatures: visible ? state.candidatures.filter(c => !estSoignant || c.soignant_id === user.id) : [],
           soignants: profil ? [profil] : [], etablissements: [{ ...etablissement, id: identifiants[acteur] }],
           contrats_mission: [], contrats_travail_missions: [], parcours_inscription: [], notifications: [],
-          documents_soignants: [], favoris: [], notations_missions: [], evaluations: [],
+          documents_soignants: [], favoris: [], notations_missions: [], evaluations: [], paliers_commission: [],
           stripe_connect_onboarding: [], litiges: [],
           documents_requis_par_profession: [{profession:'AS',type_document:'CARTE_IDENTITE',est_critique:true,type_exercice_requis:'TOUS'}],
         };
@@ -147,6 +156,10 @@ export function creerCandidaturesDeuxAs() {
             if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
             if (value.startsWith('neq.')) return String(row[key]) !== value.slice(4);
             if (value.startsWith('in.(')) return value.slice(4, -1).split(',').map(v => v.replaceAll('"', '')).includes(String(row[key]));
+            if (['debut_le', 'fin_le'].includes(key) && /^(gte|lte)\./.test(value)) {
+              const borne = Date.parse(value.slice(4)), instant = Date.parse(String(row[key]));
+              return Number.isFinite(borne) && Number.isFinite(instant) && (value.startsWith('gte.') ? instant >= borne : instant <= borne);
+            }
             if (value === 'is.null') return row[key] == null;
             state.unknown.push(`Filtre non géré ${name}.${key}=${value}`); return false;
           }));
