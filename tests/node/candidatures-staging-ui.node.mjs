@@ -89,6 +89,36 @@ test('listeners réels : slot du contexte conservé après changement de phase, 
   assert.ok(r.erreursNavigateur.every(e=>e.slotEmetteur===0&&e.slotPhase===1&&e.phase==='postuler'));assert.doesNotMatch(JSON.stringify(r),/CANARI|secret\.invalid/);
   events.get('console')({type:()=> 'warning',text:()=>{throw Error('Les autres niveaux n’étaient pas capturés.');}});assert.equal(d.resultat().erreurs,5);
 });
+test('WebKit : le découpage au premier deux-points conserve la cause par enum sans exporter name ni URL',()=>{
+  // Même découpage que Playwright WebKit splitErrorMessage, URL à deux-points.
+  const split=text=>{const i=text.indexOf(':');return {classe:i<0?'':text.slice(0,i),texte:i>=0&&i+2<=text.length?text.slice(i+2):text};};
+  for(const [text,categorie]of [
+    ['Fetch API cannot load https://CANARI_EMAIL:CANARI_PASSWORD@api.invalid/private?jwt=CANARI_JWT due to access control checks.','controle_origine'],
+    ['WebSocket connection to https://CANARI_EMAIL:CANARI_PASSWORD@api.invalid/private?jwt=CANARI_JWT failed','websocket'],
+    ['Failed to load resource: The network connection was lost. CANARI_JWT','chargement_reseau'],
+    ['AbortError: CANARI_PASSWORD','requete_abandonnee'],
+    ['CANARI_CUSTOM_CLASS: CANARI_IDENTITE','autre']]) {
+    const p=projeterErreurNavigateurD({source:'pageerror',...split(text)});
+    assert.equal(p.categorie,categorie);assert.match(p.empreinteNom,/^[a-f0-9]{64}$/);
+    if(text.startsWith('Fetch API')||text.startsWith('WebSocket')||text.startsWith('Failed to'))assert.equal(p.typeNom,'prefixe_webkit');
+    assert.doesNotMatch(JSON.stringify(p),/CANARI|api\.invalid|https?:|jwt=|private\?/);
+  }
+  const p=projeterErreurNavigateurD({source:'pageerror',classe:'AbortError',texte:'CANARI'});
+  assert.equal(p.typeNom,'classe_connue');assert.equal(p.classe,'AbortError');
+});
+test('horloge relative : ordre erreur/réception et agrégation conservés, recul/NaN/grande valeur bornés',()=>{
+  let temps=1000;const d=diagnosticD({temps:()=>temps});
+  temps=1010;d.phase('mission',1);d.action('mission_navigation');
+  temps=1012;const p=projeterErreurNavigateurD({source:'pageerror',classe:'AbortError',texte:'CANARI'});d.erreurNavigateur(1,p);
+  temps=1015;d.reseau(STAGING_URL+'/rest/v1/rpc/fn_note_moyenne','POST',200);
+  temps=1020;d.erreurNavigateur(1,p);d.reseau(STAGING_URL+'/rest/v1/rpc/fn_note_moyenne','POST',200);
+  const r=d.resultat();assert.equal(r.actionDepuisMs,10);assert.equal(r.erreurs,2);assert.equal(r.erreursNavigateur.length,1);
+  assert.deepEqual([r.erreursNavigateur[0].premierMs,r.erreursNavigateur[0].dernierMs,r.erreursNavigateur[0].nombre],[12,20,2]);
+  assert.deepEqual([r.reseau[0].premierMs,r.reseau[0].dernierMs,r.reseau[0].nombre],[15,20,2]);
+  temps=0;assert.equal(d.resultat().tempsMs,20);temps=NaN;assert.equal(d.resultat().tempsMs,20);
+  temps=Number.MAX_SAFE_INTEGER;d.exceptionFinale(new Error('CANARI'));assert.equal(d.resultat().erreurFinale.tempsMs,1_800_000);
+  assert.doesNotMatch(JSON.stringify(d.resultat()),/CANARI|1970-|2026-/);
+});
 test('projection bornée : la saturation conserve le total bloquant et compte les entrées non détaillées',()=>{
   const d=diagnosticD();for(let i=0;i<40;i++)d.erreurNavigateur(1,projeterErreurNavigateurD({source:'console_error',texte:`CANARI_${i}`}));
   d.erreurNavigateur(1,projeterErreurNavigateurD({source:'console_error',texte:'CANARI_0'}));
