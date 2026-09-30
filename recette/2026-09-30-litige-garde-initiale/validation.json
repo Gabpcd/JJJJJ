@@ -1,0 +1,20 @@
+{
+  "base": "58fda7df712cbc5637e41a9dc06a639288a05554",
+  "body_md5_before": "1d1a6d0593e1899ff2c58c48a38f3a4d",
+  "body_md5_after": "5a13493bf67426d968d0d75aad16b86c",
+  "node_tests_passed": 17,
+  "tsc_no_emit": "passed",
+  "sql_and_plpgsql_parsing": "passed pglast 7.10",
+  "sql_execution": "pending transactional staging CI",
+  "frontend": "responses mocked; no provider or business RPC call",
+  "frontend_results": {
+    "startTime": "2026-09-30T09:18:25.769Z",
+    "duration": 67405.159,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "artifacts": "/private/tmp/jolene-litige-garde-recette-5formats",
+  "first_desktop_attempt": "2 failures caused by ambiguous Fermer locator (footer button and dialog cross). Corrected selector; no product change."
+}
