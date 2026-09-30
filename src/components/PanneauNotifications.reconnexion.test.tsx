@@ -154,3 +154,32 @@ it('les deux en-têtes utilisent des canaux distincts et seul le visible émet u
   await screen.findByRole('button', { name: 'Notifications, 2 non lues' });
   expect(m.info).toHaveBeenCalledTimes(1);
 });
+
+it('une lecture actualise aussi le badge caché avant de changer de breakpoint sans rechargement', async () => {
+  const responsive = (desktop: boolean) => <MemoryRouter future={{v7_startTransition:true,v7_relativeSplatPath:true}}>
+    <div hidden={desktop}><BadgeNotification /></div><div hidden={!desktop}><BadgeNotification /></div>
+  </MemoryRouter>;
+  const view = render(responsive(false));
+  await waitFor(() => expect(screen.getAllByLabelText('Notifications, 1 non lue')).toHaveLength(2));
+  await open(); fireEvent.click(screen.getByRole('button', { name: /^Notification initiale Non lue/ }));
+  await waitFor(() => expect(bell(0)).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Fermer les notifications' }));
+  view.rerender(responsive(true));
+  await waitFor(() => expect(bell(0)).toBeInTheDocument());
+  expect(m.channels).toHaveLength(2); // aucun remontage / aucune reconnexion pour sauver le compteur.
+});
+
+it.each([0, 50])('tout marquer comme lu couvre 60 lignes dont %s déjà lues, sans toucher un autre destinataire', async dejaLues => {
+  m.rows = Array.from({ length: 60 }, (_, i) => ({ ...row(`n${i}`), lue: i < dejaLues }));
+  m.rows.push(row('étrangère', 'compte-b'));
+  render(app()); await screen.findByRole('button', { name: `Notifications, ${60 - dejaLues} non lues` });
+  fireEvent.click(bell(60 - dejaLues)); await screen.findByText('Notification n0');
+  expect(screen.queryByText('Notification n59')).toBeNull();
+  const tout = screen.getByRole('button', { name: 'Tout marquer comme lu' });
+  expect(tout).not.toBeDisabled(); fireEvent.click(tout);
+  await waitFor(() => expect(bell(0)).toBeInTheDocument());
+  expect(m.rows.filter(n => n.destinataire_id === 'compte-a' && !n.lue)).toHaveLength(0);
+  expect(m.rows.find(n => n.id === 'étrangère').lue).toBe(false);
+  const mutation = m.reads.find(r => r.update);
+  expect(mutation.filters).toEqual({ destinataire_id: 'compte-a', lue: false });
+});

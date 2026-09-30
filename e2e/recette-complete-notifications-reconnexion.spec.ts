@@ -39,6 +39,14 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
     });
     await context.route('**/rest/v1/notifications?**', async route => {
       const request = route.request(), url = new URL(request.url());
+      if (request.method() === 'PATCH') {
+        const idsFilter = url.searchParams.get('id');
+        const idsCibles = idsFilter?.startsWith('in.(') ? idsFilter.slice(4, -1).split(',').map(id => id.replaceAll('"', '')) : null;
+        state.notifications.filter(n => url.searchParams.get('destinataire_id') === `eq.${n.destinataire_id}`
+          && (url.searchParams.get('lue') !== 'eq.false' || !n.lue)
+          && (!idsCibles || idsCibles.includes(n.id))).forEach(n => n.lue = request.postDataJSON().lue);
+        return route.fulfill({ status: 200, json: null });
+      }
       if (!['GET', 'HEAD'].includes(request.method())) return route.fallback();
       if (failReads) { failedReads += 1; return route.fulfill({ status: 503, json: { message: 'Lecture indisponible, simulation locale' } }); }
       const rows = state.notifications.filter(n => url.searchParams.get('destinataire_id') === `eq.${n.destinataire_id}` && (url.searchParams.get('lue') !== 'eq.false' || !n.lue));
@@ -56,7 +64,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
         send(j, 'postgres_changes', { ids: [1], data: { type: 'INSERT', schema: 'public', table: 'notifications', commit_timestamp: now, record: row, old_record: {}, columns: [] } }, null);
       }
     };
-    const bell = (count: number, failed = false) => page.getByRole('button', { name: `Notifications, ${count} non lue${count > 1 ? 's' : ''}${failed ? ', actualisation nécessaire' : ''}`, exact: true }).filter({ visible: true });
+    const bell = (count: number, failed = false) => page.getByRole('button', { name: `${count ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}${failed ? ', actualisation nécessaire' : ''}`, exact: true }).filter({ visible: true });
     try {
       await page.goto(`/${prefix}/messagerie`);
       await expect(bell(1)).toBeVisible();
@@ -92,6 +100,30 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await expect(dialog.getByText('Notification après-erreur', { exact: true })).toHaveCount(1);
       await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
       await preuveMission(page, info, `${prefix}-notifications-rechargement`);
+      // Lecture individuelle puis changement du badge affiché, sans navigation ni reload.
+      await dialog.getByRole('button', { name: /^Notification fictive de recette Non lue/ }).click();
+      await expect(bell(3)).toBeVisible();
+      await dialog.getByRole('button', { name: 'Fermer les notifications' }).click();
+      const viewport = page.viewportSize()!;
+      await page.setViewportSize(viewport.width < 768 ? { width: 1180, height: 820 } : { width: 390, height: 844 });
+      await expect(bell(3)).toBeVisible();
+      await preuveMission(page, info, `${prefix}-notifications-lecture-breakpoint`);
+
+      // Le PATCH de la fixture respecte tous les filtres : 50 IDs seulement laisseraient 10 non lues.
+      state.notifications = Array.from({ length: 60 }, (_, i) => makeRow(`série-${i}`));
+      const autreUid = role === 'SOIGNANT' ? ids.etablissement : ids.soignant;
+      state.notifications.push({ ...makeRow('autre-compte'), destinataire_id: autreUid });
+      await bell(3).click(); await expect(bell(60)).toBeVisible();
+      await expect(dialog.getByText('Notification série-0', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Notification série-59', { exact: true })).toHaveCount(0);
+      await dialog.getByRole('button', { name: 'Tout marquer comme lu', exact: true }).click();
+      await expect(bell(0)).toBeVisible();
+      expect(state.notifications.filter(n => n.destinataire_id === uid && !n.lue)).toHaveLength(0);
+      expect(state.notifications.find(n => n.destinataire_id === autreUid)?.lue).toBe(false);
+      await dialog.getByRole('button', { name: 'Fermer les notifications' }).click();
+      await page.setViewportSize(viewport);
+      await expect(bell(0)).toBeVisible();
+      await preuveMission(page, info, `${prefix}-notifications-toutes-lues-breakpoint`);
       expect(pageErrors).toEqual([]); expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]);
       // Les erreurs 503 provoquées sont conservées et vérifiées, jamais filtrées ou masquées.
       expect(failedReads).toBeGreaterThan(0);

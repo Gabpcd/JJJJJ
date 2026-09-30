@@ -80,3 +80,38 @@ correspondant exactement aux quatre réponses 503 provoquées ; zéro pageerror,
 appel inconnu ou appel externe. ARIA et captures examinées sur les cinq formats.
 Les tests sont découverts par les jobs existants : `npm test` de Validate PR et
 `recette-complete-*.spec.ts` du workflow Playwright. Aucun workflow n'est modifié.
+
+## Complément : lecture et changement de format
+
+La relecture indépendante a identifié deux écarts supplémentaires, reproduits
+par trois tests rouges avant correction : le badge caché conservait son ancien
+compteur après lecture, et « Tout marquer comme lu » ne ciblait que les 50 lignes
+affichées (ou restait désactivé si elles étaient déjà lues).
+
+Après une mutation réussie, un registre local de callbacks, séparé par identité,
+fait relire tous les badges montés du même compte. Il ne conserve aucune donnée
+de notification et les callbacks sont retirés au démontage. L'action « Tout
+marquer comme lu » cible désormais toutes les notifications non lues du
+destinataire ; son activation dépend du compteur exact, pas des 50 lignes.
+
+La recette complète précédente est prolongée par une lecture individuelle,
+fermeture du panneau puis changement de breakpoint mobile/desktop sans
+rechargement : le nouveau badge doit afficher 3 non lues. Puis 60 notifications
+sont chargées, toutes sont marquées lues, le format initial est restauré sans
+rechargement et le compteur doit rester nul. Une notification d'un autre compte
+reste non lue. Le serveur HTTP simulé applique les filtres du PATCH : une
+mutation limitée à 50 IDs laisserait réellement 10 non lues et ferait échouer
+la recette.
+
+Commande identique, avec
+`RECETTE_RESULTS_DIR=/private/tmp/jolene-notifications-delta-final`.
+Les tests unitaires ciblés passent désormais **29/29**, dont la variante où les
+50 premières notifications sont déjà lues alors que 10 plus anciennes ne le
+sont pas. TypeScript et le build sont également vérifiés. Les preuves de ce
+complément sont conservées séparément de la première matrice.
+
+Matrice du complément : **10/10**, aucun skip/flaky/unexpected. Les dix ARIA
+confirment le compteur 3 après lecture puis resize, et zéro après tout-lu puis
+resize retour. Les quatre 503 provoqués et leurs quatre erreurs console restent
+conservés par scénario ; zéro pageerror, appel inconnu ou externe. Résumé lisible :
+`/private/tmp/jolene-notifications-delta-final/summary.json`.

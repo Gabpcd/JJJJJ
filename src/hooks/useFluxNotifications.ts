@@ -12,6 +12,9 @@ export interface NotificationItem {
 }
 
 const etatInitial = { notifications: [] as NotificationItem[], count: 0, loading: true, error: null as string | null };
+// Signaux de relecture locaux, sans données partagées entre comptes.
+const lecteursParCompte = new Map<string, Set<() => Promise<void>>>();
+
 const erreurLecture = 'Impossible d’actualiser les notifications. Les dernières données affichées sont conservées.';
 
 /** Liste et compteur relus ensemble ; aucun événement ancien n'est transformé en alerte. */
@@ -63,6 +66,9 @@ export function useFluxNotifications(userId: string | undefined, onLiveInsert: (
         setEtat(prev => ({ ...prev, loading: false, error: erreurLecture }));
       }
     };
+    const lecteurs = lecteursParCompte.get(userId) ?? new Set<() => Promise<void>>();
+    lecteurs.add(refresh);
+    lecteursParCompte.set(userId, lecteurs);
     controller.current = {
       refresh,
       markRead: async ids => {
@@ -75,7 +81,8 @@ export function useFluxNotifications(userId: string | undefined, onLiveInsert: (
           const { error } = await query;
           if (!active) return;
           if (error) return false;
-          await refresh();
+          // Mobile et desktop sont montés ensemble : chacun doit relire la mutation.
+          await Promise.all([...lecteurs].map(actualiser => actualiser()));
           return active ? true : undefined;
         } catch { return active ? false : undefined; }
       },
@@ -107,6 +114,8 @@ export function useFluxNotifications(userId: string | undefined, onLiveInsert: (
       active = false;
       version += 1;
       controller.current = null;
+      lecteurs.delete(refresh);
+      if (lecteurs.size === 0) lecteursParCompte.delete(userId);
       void supabase.removeChannel(channel);
     };
   }, [userId, channelId]);
