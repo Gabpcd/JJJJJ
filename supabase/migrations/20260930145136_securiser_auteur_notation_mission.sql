@@ -4,9 +4,22 @@
 DO $preflight$
 DECLARE p record;
 BEGIN
+  -- Catalogue staging du 30/09/2026 17:10 UTC : aucun changement du helper
+  -- global ni des actions autorisées. Refuser une dépendance d'audit inconnue.
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_proc WHERE oid =
+      'public.fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)'::regprocedure
+      AND md5(prosrc)='04cc44127e325b434445113e88ce38b7')
+    OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+      WHERE conrelid='public.journaux_audit'::regclass AND conname='journaux_audit_action_check'
+        AND convalidated AND md5(pg_get_constraintdef(oid))='5d8ca35986765f1530b47d63b9f8f432')
+    OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+      WHERE conrelid='public.journaux_audit'::regclass AND conname='journaux_audit_type_acteur_check'
+        AND convalidated AND md5(pg_get_constraintdef(oid))='cad0a04c75e18f5b5a2b25fe3fd6f5fe') THEN
+    RAISE EXCEPTION 'Notation : dépendances du journal audit inattendues';
+  END IF;
   SELECT * INTO p FROM pg_catalog.pg_proc WHERE oid =
     'public.fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'::regprocedure;
-  IF NOT FOUND OR md5(p.prosrc) NOT IN ('de8b4925694aa624a8e45c22e47416b0', '430c4e6bb8dce83da949ba41642f3590')
+  IF NOT FOUND OR md5(p.prosrc) NOT IN ('de8b4925694aa624a8e45c22e47416b0', '0a12aab3a7d9bfe89e3e4c0b51b68faa')
     OR p.prosecdef IS DISTINCT FROM true
     OR pg_get_userbyid(p.proowner) IS DISTINCT FROM 'postgres'
     OR p.proconfig IS DISTINCT FROM ARRAY['search_path=public, extensions']::text[]
@@ -16,7 +29,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM private.security_definer_inventory
     WHERE signature='fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'
       AND categorie='MIXTE_TENANT_ADMIN'
-      AND definition_md5 IN ('de8b4925694aa624a8e45c22e47416b0', '430c4e6bb8dce83da949ba41642f3590')) THEN
+      AND definition_md5 IN ('de8b4925694aa624a8e45c22e47416b0', '0a12aab3a7d9bfe89e3e4c0b51b68faa')) THEN
     RAISE EXCEPTION 'Notation : inventaire divergent';
   END IF;
 END;
@@ -39,6 +52,7 @@ DECLARE
   v_id UUID;
   v_tardive BOOLEAN := false;
   v_litige_actif_count INT;
+  v_audit JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
@@ -155,23 +169,33 @@ BEGIN
     WHERE mission_id = p_mission_id AND publie_le IS NULL;
   END IF;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_notateur_id,
-    p_type_acteur := CASE WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
-    p_action := 'NOTATION_DONNEE',
+  v_audit := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE WHEN v_admin THEN 'ADMIN_PLATEFORME'
+      WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'mission',
     p_id_ressource := p_mission_id,
-    p_details := jsonb_build_object('notation_id', v_id, 'sens', v_sens::text, 'note_id', v_note_id, 'tardive', v_tardive)
+    p_details := jsonb_build_object('evenement', 'NOTATION_DONNEE', 'notation_id', v_id,
+      'sens', v_sens::text, 'note_id', v_note_id, 'tardive', v_tardive)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'La notation n’a pas pu être enregistrée. Veuillez réessayer.';
+  END IF;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_note_id,
-    p_type_acteur := CASE WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'SOIGNANT' ELSE 'ADMIN_ETABLISSEMENT' END,
-    p_action := 'NOTATION_RECUE',
+  v_audit := public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE WHEN v_admin THEN 'ADMIN_PLATEFORME'
+      WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
+    p_action := 'EVALUATION',
     p_type_ressource := 'mission',
     p_id_ressource := p_mission_id,
-    p_details := jsonb_build_object('notation_id', v_id, 'sens', v_sens::text)
+    p_details := jsonb_build_object('evenement', 'NOTATION_RECUE', 'notation_id', v_id,
+      'sens', v_sens::text, 'note_id', v_note_id)
   );
+  IF v_audit->>'success' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'La notation n’a pas pu être enregistrée. Veuillez réessayer.';
+  END IF;
 
   RETURN jsonb_build_object('success', true, 'id', v_id, 'tardive', v_tardive);
 END;
@@ -180,16 +204,16 @@ $function$;
 DO $inventory$
 BEGIN
   IF md5((SELECT prosrc FROM pg_catalog.pg_proc WHERE oid =
-    'public.fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'::regprocedure)) IS DISTINCT FROM '430c4e6bb8dce83da949ba41642f3590' THEN
+    'public.fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'::regprocedure)) IS DISTINCT FROM '0a12aab3a7d9bfe89e3e4c0b51b68faa' THEN
     RAISE EXCEPTION 'Garde auteur notation non installée';
   END IF;
   UPDATE private.security_definer_inventory
-  SET definition_md5='430c4e6bb8dce83da949ba41642f3590',
+  SET definition_md5='0a12aab3a7d9bfe89e3e4c0b51b68faa',
       justification='Compte Auth actif, identité de rôle canonique avant lecture métier ; appartenance non NULL filtrée avant statut/litige. Admin validé par est_admin(), auteur établissement canonique de la mission. Double aveugle et droits inchangés. Source 20260930145136_securiser_auteur_notation_mission.sql.',
       recense_le=now()
   WHERE signature='fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'
     AND categorie='MIXTE_TENANT_ADMIN'
-    AND definition_md5 IN ('de8b4925694aa624a8e45c22e47416b0', '430c4e6bb8dce83da949ba41642f3590');
+    AND definition_md5 IN ('de8b4925694aa624a8e45c22e47416b0', '0a12aab3a7d9bfe89e3e4c0b51b68faa');
   IF NOT FOUND THEN RAISE EXCEPTION 'Inventaire notation divergent'; END IF;
 END;
 $inventory$;

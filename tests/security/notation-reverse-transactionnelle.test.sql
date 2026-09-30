@@ -24,11 +24,11 @@ DECLARE
   mission_admin uuid := 'a9305700-0000-4000-8000-000000000104';
   ouverte uuid := 'a9305700-0000-4000-8000-000000000105';
   absente uuid := 'a9305700-0000-4000-8000-000000000199';
-  acteur uuid; cible uuid; sens text; r jsonb; refus jsonb; note_etab uuid; note_sal uuid;
+  acteur uuid; cible uuid; sens text; r jsonb; refus jsonb; note_etab uuid; note_sal uuid; note_admin uuid;
   n integer; v_signature text; v_empreinte text; v_categorie text;
 BEGIN
   FOR v_signature,v_empreinte,v_categorie IN VALUES
-    ('fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)', '430c4e6bb8dce83da949ba41642f3590', 'MIXTE_TENANT_ADMIN'),
+    ('fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)', '0a12aab3a7d9bfe89e3e4c0b51b68faa', 'MIXTE_TENANT_ADMIN'),
     ('fn_lister_missions_a_noter_etab()', '0b3bff2c5588245287087d681698c2c9', 'RPC_UTILISATEUR_AUTH_INTERNE')
   LOOP
     IF NOT EXISTS (
@@ -133,6 +133,18 @@ BEGIN
     r:=public.fn_creer_notation_mission(mission,NULL,5,4,5,4,NULL);
     IF r->>'error' IS DISTINCT FROM 'Sens invalide' THEN RAISE EXCEPTION 'Sens NULL admis'; END IF;
 
+    -- Le journal n'est lisible que par admin : contrôler hors RLS utilisateur,
+    -- puis rétablir le rôle et les claims avant les vrais appels suivants.
+    EXECUTE 'RESET ROLE';
+    PERFORM set_config('request.jwt.claim.sub','',true);
+    PERFORM set_config('request.jwt.claim.role','service_role',true);
+    PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+    IF EXISTS(SELECT 1 FROM public.journaux_audit WHERE action='EVALUATION'
+      AND id_ressource IN(mission,en_cours,sans_soignant,ouverte,absente)) THEN
+      RAISE EXCEPTION 'Un refus initial a écrit un audit de notation'; END IF;
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claim.role','authenticated',true);
+
     -- Propriétaire, membre RH et membre possédant un autre établissement voient
     -- tous la même mission avant notation ; le tenant de membre est prioritaire.
     FOREACH acteur IN ARRAY ARRAY[etab,membre,membre_avec_etab_propre] LOOP
@@ -199,6 +211,7 @@ BEGIN
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',admin_valide,'role','authenticated')::text,true);
     IF public.est_admin() IS NOT TRUE OR public.mon_etablissement_id() IS NOT NULL THEN RAISE EXCEPTION 'Fixture admin sans tenant invalide'; END IF;
     r:=public.fn_creer_notation_mission(mission_admin,'ETAB_VERS_SOIGNANT',5,5,5,5,'Recette admin');
+    note_admin:=(r->>'id')::uuid;
     IF r->>'success' IS DISTINCT FROM 'true' OR NOT EXISTS (
       SELECT 1 FROM public.notations_missions WHERE id=(r->>'id')::uuid AND notateur_id=etab AND note_id=sal AND publie_le IS NULL
     ) THEN RAISE EXCEPTION 'Admin valide ou auteur canonique incorrect : %',r; END IF;
@@ -244,8 +257,32 @@ BEGIN
     PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
     IF (SELECT count(*) FROM public.notations_missions WHERE mission_id IN(mission,en_cours,sans_soignant,mission_admin,ouverte))<>3 THEN
       RAISE EXCEPTION 'Un refus a créé une notation'; END IF;
+    -- Trois créations = deux événements chacune, puis un seul signalement.
+    -- Les refus tiers/NULL/fermés/révoqués et les doublons ne les augmentent pas.
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND id_ressource IN(mission,en_cours,sans_soignant,mission_admin,ouverte,absente,note_etab,note_sal,note_admin))<>7 THEN
+      RAISE EXCEPTION 'Audits de notation manquants ou écrits pour un refus'; END IF;
+    IF EXISTS (
+      SELECT 1 FROM (VALUES
+        (note_etab,membre,'ADMIN_ETABLISSEMENT',mission,sal,'ETAB_VERS_SOIGNANT'),
+        (note_sal,sal,'SOIGNANT',mission,etab,'SOIGNANT_VERS_ETAB'),
+        (note_admin,admin_valide,'ADMIN_PLATEFORME',mission_admin,sal,'ETAB_VERS_SOIGNANT')
+      ) attendu(notation_id,acteur_id,type_acteur,mission_id,note_id,sens)
+      CROSS JOIN (VALUES ('NOTATION_DONNEE'),('NOTATION_RECUE')) evenement(nom)
+      WHERE (SELECT count(*) FROM public.journaux_audit j
+        WHERE j.action='EVALUATION' AND j.acteur_id=attendu.acteur_id AND j.type_acteur=attendu.type_acteur
+          AND j.type_ressource='mission' AND j.id_ressource=attendu.mission_id
+          AND j.details->>'notation_id'=attendu.notation_id::text
+          AND j.details->>'evenement'=evenement.nom AND j.details->>'sens'=attendu.sens
+          AND j.details->>'note_id'=attendu.note_id::text)<>1
+    ) THEN RAISE EXCEPTION 'Audit création : acteur réel, cible ou événement incorrect'; END IF;
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND acteur_id=sal AND type_acteur='SOIGNANT' AND type_ressource='notation' AND id_ressource=note_etab
+      AND details->>'evenement'='NOTATION_SIGNALE' AND details->>'mission_id'=mission::text)<>1 THEN
+      RAISE EXCEPTION 'Audit signalement cible manquant ou attribué à un tiers'; END IF;
     RAISE EXCEPTION USING ERRCODE='ZN501',MESSAGE='ROLLBACK_NOTATION_REVERSE';
-  EXCEPTION WHEN SQLSTATE 'ZN501' THEN NULL;
+  EXCEPTION WHEN SQLSTATE 'ZN501' THEN
+    IF SQLERRM IS DISTINCT FROM 'ROLLBACK_NOTATION_REVERSE' THEN RAISE; END IF;
   END;
   -- L'annulation porte aussi sur les audits, scores et éventuelles files créées
   -- dans le sous-bloc : aucun DELETE métier ni purge d'audit pour nettoyer.
@@ -253,7 +290,7 @@ BEGIN
     OR EXISTS(SELECT 1 FROM public.soignants WHERE id IN(sal,tiers,soignant_en_cours))
     OR EXISTS(SELECT 1 FROM public.missions WHERE id IN(mission,en_cours,sans_soignant,mission_admin,ouverte))
     OR EXISTS(SELECT 1 FROM public.notations_missions WHERE mission_id IN(mission,en_cours,sans_soignant,mission_admin,ouverte))
-    OR EXISTS(SELECT 1 FROM public.journaux_audit WHERE id_ressource IN(mission,en_cours,sans_soignant,mission_admin,ouverte,note_etab,note_sal)) THEN
+    OR EXISTS(SELECT 1 FROM public.journaux_audit WHERE id_ressource IN(mission,en_cours,sans_soignant,mission_admin,ouverte,note_etab,note_sal,note_admin)) THEN
     RAISE EXCEPTION 'Fixtures notation persistantes malgré la sentinelle'; END IF;
 END;
 $recette$;

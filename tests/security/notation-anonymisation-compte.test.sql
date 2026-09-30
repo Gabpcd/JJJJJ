@@ -29,8 +29,8 @@ BEGIN
       IS DISTINCT FROM 'c1075608a0b29574cd78451c8e9e703d'
   THEN RAISE EXCEPTION 'Schéma ou trigger anonymisation inattendu'; END IF;
   FOR v_signature,v_md5 IN VALUES
-    ('fn_modifier_notation_mission(uuid,integer,integer,integer,integer,text)','63f28d2ca3ad4580538aa7de55020edb'),
-    ('fn_signaler_notation(uuid,text)','4f58a286981573d8b1096568af11d2f8')
+    ('fn_modifier_notation_mission(uuid,integer,integer,integer,integer,text)','672ddae8f562fb4e57081d787aa0bc41'),
+    ('fn_signaler_notation(uuid,text)','990fb487cdacc8b26fb10be6993c8c2c')
   LOOP
     IF NOT EXISTS (SELECT 1 FROM private.security_definer_inventory i JOIN pg_proc p
       ON p.oid=to_regprocedure('public.'||i.signature)
@@ -99,6 +99,14 @@ BEGIN
       RAISE EXCEPTION 'Client autorisé à anonymiser lui-même une note';
     EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 
+    -- Avant anonymisation également, l'admin agit sous sa propre identité
+    -- d'audit, jamais sous celle du propriétaire de la notation.
+    PERFORM set_config('request.jwt.claim.sub',admin_reel::text,true);
+    PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',admin_reel,'role','authenticated')::text,true);
+    IF public.est_admin() IS NOT TRUE THEN RAISE EXCEPTION 'Fixture admin invalide'; END IF;
+    r:=public.fn_modifier_notation_mission(n1,5,5,5,5,NULL);
+    IF r->>'success' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Admin refusé avant anonymisation : %',r; END IF;
+
     -- Les refus tiers ne révèlent ni existence, ni âge, ni état signalé.
     FOREACH acteur IN ARRAY ARRAY[s2,e2,sans_profil] LOOP
       PERFORM set_config('request.jwt.claim.sub',acteur::text,true);
@@ -116,6 +124,15 @@ BEGIN
     PERFORM set_config('request.jwt.claim.sub','',true);
     PERFORM set_config('request.jwt.claim.role','service_role',true);
     PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND id_ressource IN(m1,m2,m3,n1,n2,n3,n4,n5,absente))<>12 THEN
+      RAISE EXCEPTION 'Audit absent ou créé par un refus avant anonymisation'; END IF;
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND acteur_id=admin_reel AND type_acteur='ADMIN_PLATEFORME'
+      AND type_ressource='mission' AND id_ressource=m1
+      AND details->>'evenement'='NOTATION_DONNEE' AND details->>'notation_id'=n1::text
+      AND details->>'modification'='true')<>1 THEN
+      RAISE EXCEPTION 'Modification admin avant anonymisation sans acteur audit réel'; END IF;
     BEGIN
       UPDATE public.notations_missions SET notateur_id=NULL,notateur_anonymise=false WHERE id=n3;
       RAISE EXCEPTION 'Auteur NULL non anonymisé accepté';
@@ -215,9 +232,43 @@ BEGIN
       OR NOT private.fn_anonymisation_compte_confirmee(s1,'SOIGNANT')
       OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(e1,s1) AND (deleted_at IS NOT NULL OR banned_until IS NOT NULL))
     THEN RAISE EXCEPTION 'Notes, cible, contenu, publication, témoin ou preuve de fermeture altérés'; END IF;
-    IF NOT EXISTS(SELECT 1 FROM public.journaux_audit WHERE acteur_id=admin_reel AND action='NOTATION_DONNEE'
-      AND details->>'notation_id'=n1::text AND details->>'modification'='true')
+    -- Cinq créations (10 événements), RH (1), admin avant/après (2), cible (1).
+    -- Tous les autres appels ci-dessus sont des refus et n'ajoutent aucun audit.
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND id_ressource IN(m1,m2,m3,n1,n2,n3,n4,n5,absente))<>14 THEN
+      RAISE EXCEPTION 'Audit absent ou créé par un refus après anonymisation'; END IF;
+    IF EXISTS (
+      SELECT 1 FROM (VALUES
+        (n1,e1,'ADMIN_ETABLISSEMENT',m1,s1,'ETAB_VERS_SOIGNANT'),
+        (n2,s1,'SOIGNANT',m1,e1,'SOIGNANT_VERS_ETAB'),
+        (n3,e2,'ADMIN_ETABLISSEMENT',m2,s2,'ETAB_VERS_SOIGNANT'),
+        (n4,s2,'SOIGNANT',m2,e2,'SOIGNANT_VERS_ETAB'),
+        (n5,e1,'ADMIN_ETABLISSEMENT',m3,s1,'ETAB_VERS_SOIGNANT')
+      ) attendu(notation_id,acteur_id,type_acteur,mission_id,note_id,sens)
+      CROSS JOIN (VALUES ('NOTATION_DONNEE'),('NOTATION_RECUE')) evenement(nom)
+      WHERE (SELECT count(*) FROM public.journaux_audit j
+        WHERE j.action='EVALUATION' AND j.acteur_id=attendu.acteur_id AND j.type_acteur=attendu.type_acteur
+          AND j.type_ressource='mission' AND j.id_ressource=attendu.mission_id
+          AND j.details->>'notation_id'=attendu.notation_id::text
+          AND j.details->>'evenement'=evenement.nom AND j.details->>'sens'=attendu.sens
+          AND j.details->>'note_id'=attendu.note_id::text AND NOT (j.details ? 'modification'))<>1
+    ) THEN RAISE EXCEPTION 'Audit création perdu ou attribué au mauvais acteur'; END IF;
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND acteur_id=membre AND type_acteur='ADMIN_ETABLISSEMENT'
+      AND type_ressource='mission' AND id_ressource=m1
+      AND details->>'evenement'='NOTATION_DONNEE' AND details->>'notation_id'=n1::text
+      AND details->>'modification'='true')<>1 THEN
+      RAISE EXCEPTION 'Modification RH attribuée au propriétaire au lieu du membre'; END IF;
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND acteur_id=admin_reel AND type_acteur='ADMIN_PLATEFORME'
+      AND type_ressource='mission' AND id_ressource=m1
+      AND details->>'evenement'='NOTATION_DONNEE' AND details->>'notation_id'=n1::text
+      AND details->>'modification'='true')<>2
     THEN RAISE EXCEPTION 'Modification admin anonymisée sans acteur audit'; END IF;
+    IF (SELECT count(*) FROM public.journaux_audit WHERE action='EVALUATION'
+      AND acteur_id=s1 AND type_acteur='SOIGNANT' AND type_ressource='notation' AND id_ressource=n1
+      AND details->>'evenement'='NOTATION_SIGNALE' AND details->>'mission_id'=m1::text)<>1 THEN
+      RAISE EXCEPTION 'Signalement après anonymisation sans acteur audit réel'; END IF;
     RAISE EXCEPTION USING ERRCODE='ZN581',MESSAGE='ROLLBACK_NOTATION_ANONYMISATION';
   EXCEPTION WHEN SQLSTATE 'ZN581' THEN
     IF SQLERRM IS DISTINCT FROM 'ROLLBACK_NOTATION_ANONYMISATION' THEN RAISE; END IF;

@@ -20,7 +20,7 @@ Les tests API historiques masquaient par un skip une erreur de colonne (`soignan
 
 | Fonction | OID LIVE observé | MD5 source LIVE | MD5 cible |
 | --- | --- | --- | --- |
-| `fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)` | 58514 | `de8b4925694aa624a8e45c22e47416b0` | `430c4e6bb8dce83da949ba41642f3590` |
+| `fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)` | 58514 | `de8b4925694aa624a8e45c22e47416b0` | `0a12aab3a7d9bfe89e3e4c0b51b68faa` |
 | `fn_lister_missions_a_noter_etab()` | 59809 | `4feea9884817ca0d5a702700d6f36fbd` | `0b3bff2c5588245287087d681698c2c9` |
 
 ACL observée et conservée : propriétaire postgres ; EXECUTE postgres, authenticated, service_role ; ni PUBLIC ni anon. Les deux fonctions sont SECURITY DEFINER. L'OID est une preuve de lecture, pas un identifiant imposé à staging.
