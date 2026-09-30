@@ -91,7 +91,9 @@ export async function lireBackendD(query, env, fetchImpl=fetch) {
 }
 const heureParis = value => new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)).replace(':','h');
 export async function deposerCandidatureD(page,m,{expect,capturer=async etape=>{void etape;},phase=etape=>{void etape;},action=etape=>{void etape;}}) {
-  phase('mission');action('mission_navigation');await page.goto(`/soignant/missions/${m.missionId}`);
+  // Le lien n'existe qu'après le chargement complet du planning dashboard.
+  // La navigation React préserve les lectures en cours du document connecté.
+  phase('mission');action('mission_navigation');await page.getByRole('link',{name:`Voir la mission ${m.marker}`,exact:true}).click();
   action('mission_titre');await expect(page.getByRole('heading',{level:1,name:m.marker,exact:true})).toBeVisible();
   action('candidature_message');await page.getByPlaceholder('Présente-toi brièvement…').fill(m.marker);
   action('candidature_bouton_actif');await expect(page.getByRole('button',{name:/Vérifier et postuler/})).toBeEnabled();
