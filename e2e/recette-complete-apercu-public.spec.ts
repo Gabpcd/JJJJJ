@@ -7,8 +7,15 @@ test('aperçu public : affichage, indisponibilité sans blocage et reprise aprè
     localStorage.setItem('cookie-consent', 'refused');
     sessionStorage.setItem('inscription_profession', 'IDE');
   });
-  const erreurs: string[] = [], inconnues: string[] = [];
+  const erreurs: string[] = [], inconnues: string[] = [], consoleInattendue: string[] = [];
   page.on('pageerror', () => erreurs.push('javascript'));
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    const refusSimule = message.location().url.includes('/rpc/fn_apercu_marche_profession')
+      && /503/.test(message.text());
+    if (!refusSimule) consoleInattendue.push(message.text());
+  });
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   let panne = false, missions = 3, appels = 0;
   await page.route('**/rest/v1/**', async route => {
     const req = route.request(), nom = new URL(req.url()).pathname.split('/').pop();
@@ -41,6 +48,11 @@ test('aperçu public : affichage, indisponibilité sans blocage et reprise aprè
   await expect(page.getByRole('status')).toContainText('complétez votre dossier lorsque vous souhaitez candidater');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(appels).toBe(3);
-  expect(inconnues).toEqual([]); expect(erreurs).toEqual([]);
-  await info.attach('preuve-apercu-public', { body: JSON.stringify({ simulation: true, appels, erreurs, inconnues, reprise: true }), contentType: 'application/json' });
+  // Sur ce parcours explicitement anonyme, l'accès à l'espace conduit à la
+  // connexion : vérifier l'action visible, sans fabriquer de session réelle.
+  await page.getByRole('button', { name: 'Accéder à mon espace' }).click();
+  await expect(page).toHaveURL(/\/connexion$/);
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  expect(inconnues).toEqual([]); expect(erreurs).toEqual([]); expect(consoleInattendue).toEqual([]);
+  await info.attach('preuve-apercu-public', { body: JSON.stringify({ simulation: true, appels, erreurs, inconnues, consoleInattendue, reprise: true, accesConnexion: true }), contentType: 'application/json' });
 });

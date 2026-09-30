@@ -421,6 +421,7 @@ jobs:
             tests/security/activation-inscriptions-publiques.test.sql
             tests/security/recherche-publique-comptage.test.sql
             tests/security/apercu-marche-anonyme.test.sql
+            tests/security/notation-reverse-transactionnelle.test.sql
             tests/security/otp-signature-routage-projet.test.sql
             tests/security/parrainage-attribution-protegee.test.sql
             tests/security/copies-bulletins-officiels.test.sql
