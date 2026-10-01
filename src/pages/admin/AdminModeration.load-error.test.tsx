@@ -73,4 +73,17 @@ describe('AdminModeration — échec de chargement', () => {
     fireEvent.click(screen.getByRole('button', { name: /Réessayer/i }));
     await waitFor(() => expect(mocks.rpc.mock.calls.length).toBeGreaterThan(appelsInitiaux));
   });
+
+  it('ouvre la revue Documents depuis le lien du détail utilisateur', async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    render(
+      <MemoryRouter initialEntries={['/admin/moderation?onglet=documents']}>
+        <AdminModeration />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('tab', { name: /^Documents/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Aucun document en attente')).toBeVisible();
+    expect(screen.getByRole('tab', { name: /^Litiges/ })).toHaveAttribute('aria-selected', 'false');
+  });
 });

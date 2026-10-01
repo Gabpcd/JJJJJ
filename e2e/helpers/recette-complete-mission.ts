@@ -99,7 +99,9 @@ export function creerMissionSimulee() {
         if(req.isNavigationRequest()&&req.resourceType()==='document') {
           // Les préconnexions DNS/TLS ne passent pas par l'interception HTTP.
           // Retirer uniquement ces hints évite aussi toute connexion anticipée externe.
-          const response=await route.fetch();
+          // Reprendre une seule rupture TCP du GET HTML local, jamais une écriture.
+          // Une erreur HTTP ou une deuxième coupure restent bloquantes pour la recette.
+          const response=await route.fetch({maxRetries:req.method()==='GET'?1:0,timeout:12_000});
           const html=(await response.text()).replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi,'');
           return route.fulfill({response,body:html});
         }
