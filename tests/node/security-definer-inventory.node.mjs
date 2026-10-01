@@ -8,10 +8,18 @@ const migration = read('supabase/migrations/20260930090822_inventorier_corps_sec
 const sqlTest = read('tests/security/security-definer-inventory-explicit.test.sql');
 const sources = JSON.parse(read('recette/2026-09-30-inventaire-security/sources.json'));
 const entries = JSON.parse(migration.split('$entries$')[1]);
+const suppressionMigration = read('supabase/migrations/20261001131013_conserver_historique_financier_suppression_soignant.sql');
+const suppressionSignature = 'fn_supprimer_mon_compte()';
+const suppressionAvant = '71254d2065c67c11ce0460368f20d01f';
+const suppressionApres = 'f3af23aeeb4e30aba07e422c0e819aeb';
+const replayEntries = entries.map(entry => entry.signature === suppressionSignature
+  ? { ...entry, old_md5: suppressionAvant, definition_md5: suppressionApres }
+  : entry);
 const md5 = body => createHash('md5').update(body).digest('hex');
 
 function sourceBody(sql, name) {
-  const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  const unquoted = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  const start = unquoted >= 0 ? unquoted : sql.indexOf(`CREATE OR REPLACE FUNCTION "public"."${name}"(`);
   assert.ok(start >= 0, `${name}: définition explicite absente`);
   const tail = sql.slice(start);
   const opening = /\bAS\s+(\$[a-zA-Z_0-9]*\$)/i.exec(tail);
@@ -52,11 +60,25 @@ test('aucun DDL, GRANT, recapture globale ou écriture hors inventaire', () => {
   assert.ok(skeleton.indexOf('END LOOP;') < skeleton.indexOf('INSERT INTO'));
 });
 
-test('le rejeu SQL teste exactement la migration et toutes les empreintes', () => {
+test('seul le successeur suppression vérifié remplace le corps historique après migration', () => {
+  const historical = entries.find(entry => entry.signature === suppressionSignature);
+  assert.equal(historical.definition_md5, suppressionAvant);
+  assert.equal(md5(sourceBody(read('supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql'), 'fn_supprimer_mon_compte')), suppressionAvant);
+  assert.equal(md5(sourceBody(suppressionMigration, 'fn_supprimer_mon_compte')), suppressionApres);
+  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), 'fn_supprimer_mon_compte')), suppressionApres);
+  assert.ok(suppressionMigration.includes(`('${suppressionSignature}', '${suppressionAvant}', '${suppressionApres}'`));
+  assert.deepEqual(replayEntries.filter(entry => entry.signature !== suppressionSignature), entries.filter(entry => entry.signature !== suppressionSignature));
+  assert.equal(replayEntries.find(entry => entry.signature === suppressionSignature).definition_md5, suppressionApres);
+});
+
+test('le rejeu conserve exactement la logique historique et exige le seul corps courant', () => {
   const body = migration.split('DO $inventory$')[1].split('$inventory$;')[0];
   const replay = sqlTest.split('AS $replay$\n')[1].split('$replay$;')[0];
-  assert.equal(replay, body);
-  assert.deepEqual(JSON.parse(sqlTest.split('$expected$')[1]), entries);
+  const historiqueSansManifeste = body.replace(/\$entries\$[\s\S]*?\$entries\$/, '$entries$MANIFESTE$entries$');
+  const rejeuSansManifeste = replay.replace(/\$entries\$[\s\S]*?\$entries\$/, '$entries$MANIFESTE$entries$');
+  assert.equal(rejeuSansManifeste, historiqueSansManifeste);
+  assert.deepEqual(JSON.parse(sqlTest.split('$entries$')[1]), replayEntries);
+  assert.deepEqual(JSON.parse(sqlTest.split('$expected$')[1]), replayEntries);
   assert.match(sqlTest, /SET definition_md5 = repeat\('0',32\)/);
   assert.match(sqlTest, /ROLLBACK;\s*$/);
   const workflow = read('.github/workflows/validate-pr.yml');

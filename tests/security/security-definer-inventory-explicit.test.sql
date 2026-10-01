@@ -1,4 +1,8 @@
 -- Staging uniquement ; fixtures de métadonnées et rollback intégral.
+-- Le rejeu conserve l’algorithme du 30/09. Son seul successeur explicite est
+-- fn_supprimer_mon_compte(), installé avant les suites par la migration
+-- 20261001131013 : corps courant f3af23ae… obligatoire, pas de repli vers 71254d….
+-- Le test Node lie les deux empreintes à la migration et au snapshot actuels.
 BEGIN;
 CREATE TEMP TABLE inventory_before AS SELECT * FROM private.security_definer_inventory;
 CREATE TEMP TABLE functions_before AS SELECT oid, prosrc, proacl, proconfig, prosecdef, proowner FROM pg_proc;
@@ -107,8 +111,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte()",
-    "old_md5": "6ef2d23196777974b1db5e9047ed6e63",
-    "definition_md5": "71254d2065c67c11ce0460368f20d01f",
+    "old_md5": "71254d2065c67c11ce0460368f20d01f",
+    "definition_md5": "f3af23aeeb4e30aba07e422c0e819aeb",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"
@@ -290,8 +294,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte()",
-    "old_md5": "6ef2d23196777974b1db5e9047ed6e63",
-    "definition_md5": "71254d2065c67c11ce0460368f20d01f",
+    "old_md5": "71254d2065c67c11ce0460368f20d01f",
+    "definition_md5": "f3af23aeeb4e30aba07e422c0e819aeb",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"
