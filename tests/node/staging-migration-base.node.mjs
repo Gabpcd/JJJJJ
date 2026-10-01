@@ -232,7 +232,7 @@ test('un fichier PR recopié dans le worktree main est refusé même sans versio
   assert.notEqual(result.status, 0); assert.match(result.stderr, /worktree de base ont été modifiées/);
 });
 test('workflow conserve le verrou staging et exécute ces simulations en CI', () => {
-  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
   assert.equal(sqlJob.steps.find(step => step.run === rollback).env.HAS_MIGRATIONS, '${{ steps.migration_scope.outputs.has_migrations }}');
   assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs'));
 });

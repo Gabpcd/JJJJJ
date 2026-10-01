@@ -301,7 +301,7 @@ const defaults=Object.fromEntries(Object.entries(workflow.on.workflow_dispatch.i
 const selection=inputs=>Object.entries(workflow.jobs).filter(([,job])=>Function('inputs',`return (${job.if.replace(/^\$\{\{\s*|\s*\}\}$/g,'')});`)(inputs)).map(([id])=>id);
 test('routage des entrées UI exclusif même date seule/combinations malformées, k6/SQL/E jamais simultanés',()=>{
   for(const scenario of ['all','04-candidatures-simultanees','05-dashboard-concurrent'])for(const flags of [{candidatures_frontend_only:true},{candidatures_frontend_date:'2026-10-07'},{candidatures_frontend_only:true,candidatures_sql_only:true,dashboard_fixture_only:true}])assert.deepEqual(selection({...defaults,scenario,...flags}),['candidatures-frontend']);
-  assert.deepEqual(workflow.concurrency,{group:'jolene-supabase-staging-writes','cancel-in-progress':false});
+  assert.deepEqual(workflow.concurrency,{group:'jolene-supabase-staging-writes',queue:'max','cancel-in-progress':false});
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);
 });
 test('workflow ordonne check/catalogue/build/preview/prepare/UI/snapshot/cleanup et exclut le manifeste privé des artifacts',()=>{
