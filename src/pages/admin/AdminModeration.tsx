@@ -71,7 +71,7 @@ const formatDate = (d?: string | null) =>
 export default function AdminModeration() {
   usePageTitle('Modération');
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<DocumentModerationEntry[]>([]);
@@ -93,9 +93,17 @@ export default function AdminModeration() {
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<string>(
-    searchParams.get('onglet') === 'documents' ? 'documents' : 'litiges',
-  );
+  const onglets = ['litiges', 'avoirs', 'legacy', 'evaluations', 'documents', 'incoherences'];
+  const ongletDemande = searchParams.get('onglet');
+  const activeTab = ongletDemande && onglets.includes(ongletDemande) ? ongletDemande : 'litiges';
+  const setActiveTab = (onglet: string) => {
+    if (!onglets.includes(onglet)) return;
+    setSearchParams(previous => {
+      const prochain = new URLSearchParams(previous);
+      prochain.set('onglet', onglet);
+      return prochain;
+    }, { replace: true });
+  };
 
   // Task 5 — masquer notation
   const [masquerNotationId, setMasquerNotationId] = useState<string | null>(null);
