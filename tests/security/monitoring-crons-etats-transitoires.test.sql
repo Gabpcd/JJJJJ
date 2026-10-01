@@ -25,7 +25,9 @@ BEGIN
     v_definition := replace(v_definition, 'cron.job ', 'pg_temp.recette_cron_jobs ');
     v_definition := replace(v_definition, 'private.cron_job_latest_run_cache', 'pg_temp.recette_cron_cache');
     v_definition := replace(v_definition, 'public.fn_emettre_alerte_monitoring', 'pg_temp.recette_emettre_alerte');
-    IF v_definition LIKE '%cron.job%' OR v_definition LIKE '%private.cron_job_latest_run_cache%'
+    -- La frontière d'identifiant exclut le RECORD v_cron.jobname/jobid,
+    -- tout en refusant toute référence restante au schéma cron.
+    IF v_definition ~ '(^|[^[:alnum:]_])cron[.]' OR v_definition LIKE '%private.cron_job_latest_run_cache%'
       OR v_definition LIKE '%public.fn_emettre_alerte_monitoring%' THEN RAISE EXCEPTION 'Isolation de recette incomplète'; END IF;
     EXECUTE v_definition;
 
