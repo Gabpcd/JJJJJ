@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "ready": false,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "protocolEnabled": false,
+  "capabilityEnabled": false,
+  "candidate": null,
+  "reviewedManifest": null,
+  "requiredCiRuns": [],
+  "expectedBefore": null,
+  "expectedAfter": null,
+  "reason": "Source intégrée et migration 20261001201055 à valider en CI PG17 ; empreintes et manifeste non pincés, aucune activation ni allocation financière autorisée"
+}
