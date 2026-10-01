@@ -408,7 +408,7 @@ export default function ProfilSoignant() {
           {ongletActif !== 'confidentialite' && loading && <ChargementPage />}
           {erreurChargement && (
             <div role="alert" className="card-base mb-4 space-y-3">
-              <p>Ton profil n’a pas pu être chargé. Tu peux réessayer ; tes données n’ont pas été modifiées.</p>
+              <p>Ton profil n’a pas pu être chargé. Tu peux réessayer.</p>
               <button type="button" onClick={() => setRefreshKey(key => key + 1)} className="btn-secondary">Réessayer</button>
             </div>
           )}

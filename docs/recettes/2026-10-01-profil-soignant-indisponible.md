@@ -59,3 +59,10 @@ sont archivées séparément des succès finaux. Le seuil de 5 Gio a été contr
 chaque nouvelle compilation/campagne ; les vérifications ont été séquentielles.
 
 Résultat final SHA256 : `9d9ed23dc324868526330038d5e3ba40ed5c147b198f95e00130afa3892d6ad8`.
+
+Complément après revue : le message final est « Ton profil n’a pas pu être chargé.
+Tu peux réessayer. ». Il ne nie pas un éventuel enregistrement déjà réussi avant
+un refresh en échec. Seule cette phrase produit a changé après la matrice 15/15.
+Typecheck et build sont repassés ; le parcours erreur iPhone est rejoué 1/1
+(Annuler, retry, reload), avec nouvelle capture. Les 30 captures précédentes sont
+conservées et montrent la version longue, distincte de cette capture finale.
