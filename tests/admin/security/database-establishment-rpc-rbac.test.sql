@@ -58,7 +58,7 @@ BEGIN
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
        NOT LIKE '%WHERE d.runid = cache.runid%'
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
-       NOT LIKE '%dernier_statut IN (''starting'', ''running'')%'
+       NOT LIKE '%dernier_statut IN (''starting'', ''connecting'', ''sending'', ''running'')%'
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
        LIKE '%ORDER BY end_time DESC LIMIT 1%'
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)

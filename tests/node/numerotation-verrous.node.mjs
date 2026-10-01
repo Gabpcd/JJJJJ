@@ -62,7 +62,18 @@ test('finaliseur : seul le verrou mission avant pièce/bail change', () => {
   const previous = read('tests/fixtures/numerotation-finaliseur-historique.sql').match(/CREATE OR REPLACE FUNCTION public.fn_terminer_generation_honoraires\([\s\S]*?\$terminer\$;/)[0];
   const prefix = `  -- Le trigger de période d'un complément lit aussi l'origine : sérialiser\n  -- avec les résolveurs avant de prendre la pièce, le bail et cet advisory.\n  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;\n  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;\n  SELECT * INTO v_f FROM public.factures_honoraires\n    WHERE id=p_facture_id AND mission_id IS NOT DISTINCT FROM v_m FOR UPDATE;`;
   assert.equal(current.replace('v_m uuid; v_resultat jsonb;', 'v_resultat jsonb;').replace(prefix, '  SELECT * INTO v_f FROM public.factures_honoraires WHERE id=p_facture_id FOR UPDATE;'), previous);
-  assert(snapshot.includes(current));
+  // pg_dump normalise l'enveloppe (quotage, dollar-tag, NULL typé), pas le corps.
+  const definition = source => {
+    const matches = [...source.matchAll(/CREATE OR REPLACE FUNCTION (?:"public"\."fn_terminer_generation_honoraires"|public\.fn_terminer_generation_honoraires)\(([\s\S]*?)\bAS\s+(\$\w*\$)([\s\S]*?)\2;/g)];
+    assert.equal(matches.length, 1, 'une seule définition du finaliseur');
+    return {
+      declaration: matches[0][1].replace(/"([a-z_]+)"/g, '$1').replace(/'([a-z_]+)'/g, '$1')
+        .replace(/\bNULL::jsonb\b/g, 'NULL').replace(/\s+/g, ' ').replace(/\s*([,()])\s*/g, '$1').trim(),
+      body: matches[0][3],
+    };
+  };
+  assert.deepEqual(definition(snapshot), definition(current), 'signature, SECURITY DEFINER, search_path et corps identiques');
+
 });
 
 test('pré-catalogue F1 : une seule empreinte selon les deux bases Git, référence invalide refusée', () => {

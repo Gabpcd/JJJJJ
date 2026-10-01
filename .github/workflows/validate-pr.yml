@@ -602,6 +602,7 @@ jobs:
             tests/security/copies-bulletins-officiels.test.sql
             tests/security/export-etablissement-sans-troncature.test.sql
             tests/security/monitoring-chorus-plage-nocturne.test.sql
+            tests/security/monitoring-crons-etats-transitoires.test.sql
             tests/security/contrat-storage-acces.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
@@ -620,6 +621,7 @@ jobs:
             tests/security/paiements-liberaux-facture.test.sql
             tests/security/numerotation-factures.test.sql
             tests/security/diagnostic-financier-documentaire.test.sql
+            tests/security/notification-remboursement-manuel.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.

@@ -29,6 +29,16 @@ type CronInfo = {
   echec: boolean;
 };
 
+const cronEnCours = (cron: CronInfo) =>
+  ['starting', 'connecting', 'sending', 'running'].includes(cron.dernier_statut ?? '');
+
+function StatutCron({ cron }: { cron: CronInfo }) {
+  if (cron.echec) return <BadgeY2K variant="error" size="sm" icone={<AlertCircle className="h-3 w-3" />}>Échec</BadgeY2K>;
+  if (cron.retard) return <BadgeY2K variant="warning" size="sm" icone={<AlertTriangle className="h-3 w-3" />}>Retard</BadgeY2K>;
+  if (cronEnCours(cron)) return <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>{cron.dernier_statut === 'running' ? 'En cours' : 'En démarrage'}</BadgeY2K>;
+  return <BadgeY2K variant="success" size="sm" icone={<CheckCircle className="h-3 w-3" />}>OK</BadgeY2K>;
+}
+
 type AlerteInfo = {
   id: string;
   type: string;
@@ -103,7 +113,8 @@ export default function AdminStatus() {
 
   const cronsCritiques = data.crons.crons.filter(c => c.echec);
   const cronsRetard = data.crons.crons.filter(c => c.retard && !c.echec);
-  const cronsOk = data.crons.crons.filter(c => !c.retard && !c.echec);
+  const cronsEnCours = data.crons.crons.filter(c => !c.retard && !c.echec && cronEnCours(c));
+  const cronsOk = data.crons.crons.filter(c => !c.retard && !c.echec && !cronEnCours(c));
 
   const severiteVariant = (s: string): 'error' | 'warning' | 'info' => s === 'CRITICAL' ? 'error'
     : s === 'WARNING' ? 'warning'
@@ -164,8 +175,9 @@ export default function AdminStatus() {
         <CardY2K noPadding>
           <CardY2KHeader className="pb-2"><CardY2KTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-info" /> Crons actifs</CardY2KTitle></CardY2KHeader>
           <CardY2KContent>
-            <div className="flex gap-2 text-xs">
+            <div className="flex flex-wrap gap-2 text-xs">
               <span className="text-success font-semibold">{cronsOk.length} OK</span>
+              {cronsEnCours.length > 0 && <span className="text-info font-semibold">{cronsEnCours.length} en cours</span>}
               {cronsRetard.length > 0 && <span className="text-warning font-semibold">{cronsRetard.length} retard</span>}
               {cronsCritiques.length > 0 && <span className="text-destructive font-semibold">{cronsCritiques.length} échec</span>}
             </div>
@@ -241,9 +253,7 @@ export default function AdminStatus() {
                       {c.dernier_run ? format(new Date(c.dernier_run), 'd MMM HH:mm', { locale: fr }) : '—'}
                     </td>
                     <td>
-                      {c.echec ? <BadgeY2K variant="error" size="sm" icone={<AlertCircle className="h-3 w-3" />}>Échec</BadgeY2K>
-                        : c.retard ? <BadgeY2K variant="warning" size="sm" icone={<AlertTriangle className="h-3 w-3" />}>Retard</BadgeY2K>
-                        : <BadgeY2K variant="success" size="sm" icone={<CheckCircle className="h-3 w-3" />}>OK</BadgeY2K>}
+                      <StatutCron cron={c} />
                     </td>
                   </tr>
                 ))}
@@ -257,9 +267,7 @@ export default function AdminStatus() {
               <div key={c.jobid} className="card-base space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-medium text-foreground flex-1 min-w-0">{c.jobname}</p>
-                  {c.echec ? <BadgeY2K variant="error" size="sm" icone={<AlertCircle className="h-3 w-3" />}>Échec</BadgeY2K>
-                    : c.retard ? <BadgeY2K variant="warning" size="sm" icone={<AlertTriangle className="h-3 w-3" />}>Retard</BadgeY2K>
-                    : <BadgeY2K variant="success" size="sm" icone={<CheckCircle className="h-3 w-3" />}>OK</BadgeY2K>}
+                  <StatutCron cron={c} />
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                   <span><code>{c.schedule}</code></span>
