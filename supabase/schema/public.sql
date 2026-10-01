@@ -531,7 +531,7 @@ CREATE TABLE IF NOT EXISTS "public"."externalisation_actions" (
     "cron_lock_par" "text",
     CONSTRAINT "externalisation_actions_source_check" CHECK (("source" = ANY (ARRAY['LITIGE_EXEC'::"text", 'ANNULATION_MISSION'::"text", 'AUTRE'::"text", 'CRON_ANTI_TRICHE'::"text", 'CRON_ALERTES'::"text", 'parrainage_soignant'::"text", 'remboursement_avoir'::"text"]))),
     CONSTRAINT "externalisation_actions_statut_check" CHECK (("statut" = ANY (ARRAY['PENDING'::"text", 'PROCESSING'::"text", 'DONE'::"text", 'ERROR'::"text", 'PENDING_AIFE'::"text", 'CANCELLED'::"text"]))),
-    CONSTRAINT "externalisation_actions_type_action_check" CHECK (("type_action" = ANY (ARRAY['STRIPE_REFUND_PARTIEL'::"text", 'STRIPE_REFUND_TOTAL'::"text", 'STRIPE_PAYMENT'::"text", 'STRIPE_PAYOUT'::"text", 'CHORUS_RECYCLER_FACTURE'::"text", 'CHORUS_RECYCLE_FACTURE'::"text", 'DPAE_ANNULATION'::"text", 'DPAE_ANNULATION_NOTIF'::"text", 'EMAIL_NOTIF'::"text", 'SMS_NOTIF'::"text", 'PUSH_NOTIF'::"text", 'AVOIR_PDF_GENERATION'::"text", 'RECOMPENSE_PARRAINAGE_SOIGNANT'::"text", 'REMBOURSEMENT_AVOIR_SWAN'::"text"])))
+    CONSTRAINT "externalisation_actions_type_action_check" CHECK (("type_action" = ANY (ARRAY['STRIPE_REFUND_PARTIEL'::"text", 'STRIPE_REFUND_TOTAL'::"text", 'STRIPE_PAYMENT'::"text", 'STRIPE_PAYOUT'::"text", 'CHORUS_RECYCLER_FACTURE'::"text", 'CHORUS_RECYCLE_FACTURE'::"text", 'DPAE_ANNULATION'::"text", 'DPAE_ANNULATION_NOTIF'::"text", 'EMAIL_NOTIF'::"text", 'SMS_NOTIF'::"text", 'PUSH_NOTIF'::"text", 'PUSH_CANDIDATURE_RECUE'::"text", 'AVOIR_PDF_GENERATION'::"text", 'RECOMPENSE_PARRAINAGE_SOIGNANT'::"text", 'REMBOURSEMENT_AVOIR_SWAN'::"text"])))
 );
 
 
@@ -5240,6 +5240,37 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p_action" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_acquerir_generation_honoraires"("p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE v_f public.factures_honoraires%ROWTYPE; v_m uuid; v_b private.generations_factures_honoraires%ROWTYPE; v_token uuid;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
+  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
+  SELECT * INTO v_f FROM public.factures_honoraires WHERE id=p_facture_id FOR UPDATE;
+  IF NOT FOUND OR v_f.mission_id IS DISTINCT FROM v_m THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
+  IF v_f.statut NOT IN('BROUILLON','EN_GENERATION','ERREUR_GENERATION') THEN
+    RETURN jsonb_build_object('acquise',false,'statut',v_f.statut,'facture_id',v_f.id); END IF;
+  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
+  IF FOUND AND v_b.resultat IS NULL AND v_b.expire_le>clock_timestamp() THEN
+    RETURN jsonb_build_object('acquise',false,'statut','EN_GENERATION','facture_id',v_f.id); END IF;
+  -- Le trigger de période et les index normaux refusent une autre pièce active.
+  UPDATE public.factures_honoraires SET statut='EN_GENERATION' WHERE id=p_facture_id AND statut<>'EN_GENERATION';
+  v_token:=gen_random_uuid();
+  INSERT INTO private.generations_factures_honoraires(facture_id,token,expire_le)
+    VALUES(p_facture_id,v_token,clock_timestamp()+interval '10 minutes')
+    ON CONFLICT(facture_id) DO UPDATE SET token=EXCLUDED.token,expire_le=EXCLUDED.expire_le,resultat=NULL,documents=NULL;
+  RETURN jsonb_build_object('acquise',true,'token',v_token,'facture_id',v_f.id,'statut','EN_GENERATION');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_acquerir_generation_honoraires"("p_facture_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") RETURNS integer
@@ -31712,6 +31743,7 @@ DECLARE
   v_choix text;
   v_swipe_id uuid;
   v_candidature_id uuid;
+  v_notification_id uuid;
   v_planning jsonb;
   v_warning text;
 BEGIN
@@ -31780,14 +31812,15 @@ BEGIN
     INSERT INTO public.candidatures(mission_id, soignant_id, message, statut, type_contrat_choisi)
     VALUES (p_mission_id, v_uid, NULL, 'EN_ATTENTE', v_choix)
     RETURNING id INTO v_candidature_id;
-    INSERT INTO public.notifications(destinataire_id, type_destinataire, type, titre, corps, lien)
+    INSERT INTO public.notifications(destinataire_id, type_destinataire, type, titre, corps, lien, type_ressource, id_ressource)
     VALUES (
       v_mission.etablissement_id, 'ETABLISSEMENT', 'CANDIDATURE_RECUE',
       '📋 Nouvelle candidature reçue',
       COALESCE(v_soignant.prenom, 'Un soignant') || ' a postulé à votre mission « ' ||
         public.fn_html_escape(v_mission.intitule) || ' ».',
-      '/etablissement/missions/' || p_mission_id
-    );
+      '/etablissement/missions/' || p_mission_id, 'candidature', v_candidature_id
+  ) RETURNING id INTO v_notification_id;
+  PERFORM private.fn_enfiler_push_candidature_recue(v_candidature_id, v_notification_id);
   END IF;
 
   RETURN jsonb_build_object(
@@ -35346,6 +35379,7 @@ BEGIN
        OR (a.statut = 'PROCESSING'
          AND a.cron_lock_at < now() - interval '10 minutes')
      )
+     AND a.type_action <> 'PUSH_CANDIDATURE_RECUE'
      AND private.fn_externalisation_est_reelle(a) IS FALSE;
 
   WITH selectionnees AS (
@@ -35359,7 +35393,8 @@ BEGIN
          OR (a.statut = 'PROCESSING'
            AND a.cron_lock_at < now() - interval '10 minutes')
        )
-       AND private.fn_externalisation_est_reelle(a) IS TRUE
+       AND a.type_action <> 'PUSH_CANDIDATURE_RECUE'
+     AND private.fn_externalisation_est_reelle(a) IS TRUE
      ORDER BY a.cree_le ASC
      LIMIT p_limit
      FOR UPDATE SKIP LOCKED
@@ -35382,7 +35417,8 @@ BEGIN
          count(*)
     INTO v_actions, v_count
     FROM public.externalisation_actions a
-   WHERE a.cron_lock_par = v_worker
+   WHERE a.type_action <> 'PUSH_CANDIDATURE_RECUE'
+     AND a.cron_lock_par = v_worker
      AND a.statut = 'PROCESSING'
      AND a.cron_lock_at > now() - interval '5 seconds';
 
@@ -35402,6 +35438,88 @@ ALTER FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_wo
 
 COMMENT ON FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text") IS 'Worker fail-closed : seules les actions rattachées par JOIN à un compte réel ou à un admin actif sont verrouillées.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text", "p_push_candidature_v1" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_actions jsonb;
+  v_count integer;
+  v_exclues_non_reelles integer;
+  v_worker text := COALESCE(
+    p_worker_id,
+    'worker_' || substring(md5(random()::text), 1, 8)
+  );
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role'
+  THEN RAISE EXCEPTION 'Accès refusé' USING ERRCODE='42501'; END IF;
+  SELECT count(*) INTO v_exclues_non_reelles
+    FROM public.externalisation_actions a
+   WHERE (
+       (a.statut = 'PENDING'
+         AND (a.next_retry_at IS NULL OR a.next_retry_at < now()))
+       OR (a.statut = 'PENDING_AIFE'
+         AND a.next_retry_at IS NOT NULL AND a.next_retry_at < now())
+       OR (a.statut = 'PROCESSING'
+         AND a.cron_lock_at < now() - interval '10 minutes')
+     )
+     AND (p_push_candidature_v1 IS TRUE OR a.type_action <> 'PUSH_CANDIDATURE_RECUE')
+     AND private.fn_externalisation_est_reelle(a) IS FALSE;
+
+  WITH selectionnees AS (
+    SELECT a.id
+      FROM public.externalisation_actions a
+     WHERE (
+         (a.statut = 'PENDING'
+           AND (a.next_retry_at IS NULL OR a.next_retry_at < now()))
+         OR (a.statut = 'PENDING_AIFE'
+           AND a.next_retry_at IS NOT NULL AND a.next_retry_at < now())
+         OR (a.statut = 'PROCESSING'
+           AND a.cron_lock_at < now() - interval '10 minutes')
+       )
+       AND (p_push_candidature_v1 IS TRUE OR a.type_action <> 'PUSH_CANDIDATURE_RECUE')
+     AND private.fn_externalisation_est_reelle(a) IS TRUE
+     ORDER BY a.cree_le ASC
+     LIMIT p_limit
+     FOR UPDATE SKIP LOCKED
+  )
+  UPDATE public.externalisation_actions a
+     SET statut = 'PROCESSING',
+         cron_lock_at = now(),
+         cron_lock_par = v_worker
+    FROM selectionnees s
+   WHERE a.id = s.id;
+
+  SELECT jsonb_agg(jsonb_build_object(
+           'id', a.id,
+           'type_action', a.type_action,
+           'payload', a.payload,
+           'source', a.source,
+           'source_id', a.source_id,
+           'tentatives', a.tentatives
+         )),
+         count(*)
+    INTO v_actions, v_count
+    FROM public.externalisation_actions a
+   WHERE (p_push_candidature_v1 IS TRUE OR a.type_action <> 'PUSH_CANDIDATURE_RECUE')
+     AND a.cron_lock_par = v_worker
+     AND a.statut = 'PROCESSING'
+     AND a.cron_lock_at > now() - interval '5 seconds';
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'worker_id', v_worker,
+    'count', COALESCE(v_count, 0),
+    'excluded_non_real', COALESCE(v_exclues_non_reelles, 0),
+    'actions', COALESCE(v_actions, '[]'::jsonb)
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text", "p_push_candidature_v1" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_factor_advances_modifie_le"() RETURNS "trigger"
@@ -46543,6 +46661,7 @@ DECLARE
   v_resolution jsonb;
   v_choix text;
   v_candidature_id uuid;
+  v_notification_id uuid;
   v_docs_ok boolean;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -46666,7 +46785,9 @@ BEGIN
     type,
     titre,
     corps,
-    lien
+    lien,
+    type_ressource,
+    id_ressource
   ) VALUES (
     v_mission.etablissement_id,
     'ETABLISSEMENT',
@@ -46676,8 +46797,9 @@ BEGIN
       || ' a postulé à votre mission « '
       || public.fn_html_escape(v_mission.intitule)
       || ' ».',
-    '/etablissement/missions/' || p_mission_id
-  );
+    '/etablissement/missions/' || p_mission_id, 'candidature', v_candidature_id
+  ) RETURNING id INTO v_notification_id;
+  PERFORM private.fn_enfiler_push_candidature_recue(v_candidature_id, v_notification_id);
 
   IF NOT v_docs_ok THEN
     INSERT INTO public.notifications (
@@ -47417,6 +47539,33 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "uuid", "p_date_naissance" "date", "p_sexe" "text", "p_lieu_naissance" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_push_candidature_recue"("p_action_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v_action public.externalisation_actions%ROWTYPE; v_resultat jsonb;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role'
+  THEN RAISE EXCEPTION 'Accès refusé' USING ERRCODE='42501'; END IF;
+  SELECT * INTO v_action FROM public.externalisation_actions WHERE id=p_action_id;
+  IF NOT FOUND OR v_action.type_action<>'PUSH_CANDIDATURE_RECUE' OR v_action.source<>'AUTRE'
+    OR v_action.statut<>'PROCESSING' OR v_action.payload->>'type_evenement' IS DISTINCT FROM 'CANDIDATURE_RECUE'
+    OR v_action.source_id IS NULL
+  THEN RAISE EXCEPTION 'PUSH_CANDIDATURE_ACTION_INVALIDE' USING ERRCODE='23514'; END IF;
+  v_resultat:=private.fn_payload_push_candidature_recue(v_action.source_id,
+    private.fn_json_uuid(v_action.payload#>>'{data,notification_id}'),
+    private.fn_json_uuid(v_action.payload->>'destinataire_id'));
+  IF v_resultat->'eligible'='true'::jsonb
+    AND v_action.payload IS DISTINCT FROM v_resultat->'payload'
+  THEN RAISE EXCEPTION 'PUSH_CANDIDATURE_PROVENANCE_INVALIDE' USING ERRCODE='23514'; END IF;
+  RETURN v_resultat;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preparer_push_candidature_recue"("p_action_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_preparer_rappels_quotidiens"() RETURNS "jsonb"
@@ -52471,6 +52620,180 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_facture_honoraires"("p_document" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE v_d public.factures_honoraires%ROWTYPE; v_m public.missions%ROWTYPE; v_f public.factures_honoraires%ROWTYPE;
+  v_ids uuid[]; v_numero text; v_bail jsonb;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  IF jsonb_typeof(p_document) IS DISTINCT FROM 'object' OR EXISTS(
+    SELECT 1 FROM jsonb_object_keys(p_document) k WHERE k<>ALL(ARRAY[
+      'soignant_id',
+      'etablissement_id',
+      'mission_id',
+      'montant_ht',
+      'montant_tva',
+      'montant_ttc',
+      'taux_tva',
+      'exoneration_tva',
+      'date_emission',
+      'date_echeance',
+      'mandat_version',
+      'template_version',
+      'is_public_sector',
+      'siret_client',
+      'service_code_chorus',
+      'periode_debut',
+      'periode_fin',
+      'numero_semaine_iso',
+      'annee_iso',
+      'est_facture_finale_mission',
+      'facture_precedente_id',
+      'regime_tva_snapshot',
+      'base_legale_tva_snapshot',
+      'nature_prestation_snapshot',
+      'description_prestation_snapshot',
+      'quantite_heures_snapshot',
+      'taux_horaire_snapshot',
+      'emetteur_identite_snapshot',
+      'emetteur_profession_snapshot',
+      'emetteur_siret_snapshot',
+      'emetteur_numero_professionnel_snapshot',
+      'emetteur_adresse_snapshot',
+      'emetteur_adresse_rue_snapshot',
+      'emetteur_adresse_code_postal_snapshot',
+      'emetteur_adresse_ville_snapshot',
+      'emetteur_email_snapshot',
+      'emetteur_numero_tva_snapshot',
+      'destinataire_nom_snapshot',
+      'destinataire_siret_snapshot',
+      'destinataire_adresse_rue_snapshot',
+      'destinataire_adresse_code_postal_snapshot',
+      'destinataire_adresse_ville_snapshot'
+    ]::text[])) THEN RAISE EXCEPTION 'FACTURE_RESERVATION_CHAMPS_INVALIDES' USING ERRCODE='22023'; END IF;
+  SELECT * INTO v_d FROM jsonb_populate_record(NULL::public.factures_honoraires,p_document);
+  SELECT * INTO v_m FROM public.missions WHERE id=v_d.mission_id FOR UPDATE;
+  IF NOT FOUND OR v_m.type_contrat_applique IS DISTINCT FROM 'LIBERAL'
+    OR v_m.soignant_assigne_id IS DISTINCT FROM v_d.soignant_id
+    OR v_m.etablissement_id IS DISTINCT FROM v_d.etablissement_id
+    OR v_d.periode_debut IS NULL OR v_d.periode_fin IS NULL OR v_d.periode_fin<v_d.periode_debut
+    OR v_d.est_facture_finale_mission IS NULL THEN
+    RAISE EXCEPTION 'FACTURE_RESERVATION_MISSION_INCOHERENTE' USING ERRCODE='23514'; END IF;
+  -- Un original/correctif déjà actif n'est jamais remplacé par une nouvelle émission.
+  SELECT array_agg(id) INTO v_ids FROM public.factures_honoraires
+  WHERE mission_id=v_d.mission_id AND type_document='FACTURE' AND nature_correction<>'COMPLEMENT'
+    AND statut NOT IN('ANNULEE','REMPLACEE')
+    AND (est_facture_finale_mission=v_d.est_facture_finale_mission AND
+      (v_d.est_facture_finale_mission OR (annee_iso=v_d.annee_iso AND numero_semaine_iso=v_d.numero_semaine_iso)));
+  IF cardinality(v_ids)>1 THEN RAISE EXCEPTION 'FACTURE_RESERVATION_HISTORIQUE_AMBIGU' USING ERRCODE='23514'; END IF;
+  IF cardinality(v_ids)=1 THEN
+    SELECT * INTO v_f FROM public.factures_honoraires WHERE id=v_ids[1] FOR UPDATE;
+    IF v_f.soignant_id IS DISTINCT FROM v_d.soignant_id OR v_f.etablissement_id IS DISTINCT FROM v_d.etablissement_id
+      OR v_f.periode_debut IS DISTINCT FROM v_d.periode_debut OR v_f.periode_fin IS DISTINCT FROM v_d.periode_fin THEN
+      RAISE EXCEPTION 'FACTURE_RESERVATION_PERIODE_DIFFERENTE' USING ERRCODE='23514'; END IF;
+    RETURN jsonb_build_object('cree',false,'facture_id',v_f.id,'numero_facture',v_f.numero_facture,'statut',v_f.statut,'nature_correction',v_f.nature_correction);
+  END IF;
+  v_numero:=public.next_invoice_number(v_d.soignant_id);
+  INSERT INTO public.factures_honoraires(numero_facture,statut,type_document,nature_correction,
+    soignant_id,
+    etablissement_id,
+    mission_id,
+    montant_ht,
+    montant_tva,
+    montant_ttc,
+    taux_tva,
+    exoneration_tva,
+    date_emission,
+    date_echeance,
+    mandat_version,
+    template_version,
+    is_public_sector,
+    siret_client,
+    service_code_chorus,
+    periode_debut,
+    periode_fin,
+    numero_semaine_iso,
+    annee_iso,
+    est_facture_finale_mission,
+    facture_precedente_id,
+    regime_tva_snapshot,
+    base_legale_tva_snapshot,
+    nature_prestation_snapshot,
+    description_prestation_snapshot,
+    quantite_heures_snapshot,
+    taux_horaire_snapshot,
+    emetteur_identite_snapshot,
+    emetteur_profession_snapshot,
+    emetteur_siret_snapshot,
+    emetteur_numero_professionnel_snapshot,
+    emetteur_adresse_snapshot,
+    emetteur_adresse_rue_snapshot,
+    emetteur_adresse_code_postal_snapshot,
+    emetteur_adresse_ville_snapshot,
+    emetteur_email_snapshot,
+    emetteur_numero_tva_snapshot,
+    destinataire_nom_snapshot,
+    destinataire_siret_snapshot,
+    destinataire_adresse_rue_snapshot,
+    destinataire_adresse_code_postal_snapshot,
+    destinataire_adresse_ville_snapshot
+  ) VALUES(v_numero,'EN_GENERATION','FACTURE','ORIGINALE',
+    v_d.soignant_id,
+    v_d.etablissement_id,
+    v_d.mission_id,
+    v_d.montant_ht,
+    v_d.montant_tva,
+    v_d.montant_ttc,
+    v_d.taux_tva,
+    v_d.exoneration_tva,
+    v_d.date_emission,
+    v_d.date_echeance,
+    v_d.mandat_version,
+    v_d.template_version,
+    v_d.is_public_sector,
+    v_d.siret_client,
+    v_d.service_code_chorus,
+    v_d.periode_debut,
+    v_d.periode_fin,
+    v_d.numero_semaine_iso,
+    v_d.annee_iso,
+    v_d.est_facture_finale_mission,
+    v_d.facture_precedente_id,
+    v_d.regime_tva_snapshot,
+    v_d.base_legale_tva_snapshot,
+    v_d.nature_prestation_snapshot,
+    v_d.description_prestation_snapshot,
+    v_d.quantite_heures_snapshot,
+    v_d.taux_horaire_snapshot,
+    v_d.emetteur_identite_snapshot,
+    v_d.emetteur_profession_snapshot,
+    v_d.emetteur_siret_snapshot,
+    v_d.emetteur_numero_professionnel_snapshot,
+    v_d.emetteur_adresse_snapshot,
+    v_d.emetteur_adresse_rue_snapshot,
+    v_d.emetteur_adresse_code_postal_snapshot,
+    v_d.emetteur_adresse_ville_snapshot,
+    v_d.emetteur_email_snapshot,
+    v_d.emetteur_numero_tva_snapshot,
+    v_d.destinataire_nom_snapshot,
+    v_d.destinataire_siret_snapshot,
+    v_d.destinataire_adresse_rue_snapshot,
+    v_d.destinataire_adresse_code_postal_snapshot,
+    v_d.destinataire_adresse_ville_snapshot
+  ) RETURNING * INTO v_f;
+  v_bail:=public.fn_acquerir_generation_honoraires(v_f.id);
+  IF (v_bail->>'acquise')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_RESERVATION_BAIL_REFUSE'; END IF;
+  RETURN v_bail||jsonb_build_object('cree',true,'numero_facture',v_numero);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_reserver_facture_honoraires"("p_document" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") RETURNS "jsonb"
@@ -58315,6 +58638,73 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_sync_mission_creneaux"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_terminer_generation_honoraires"("p_facture_id" "uuid", "p_token" "uuid", "p_documents" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $_$
+DECLARE v_f public.factures_honoraires%ROWTYPE; v_b private.generations_factures_honoraires%ROWTYPE;
+  v_m uuid; v_resultat jsonb; v_prefixe text; v_pdf text; v_xml text; v_uuid_regex constant text:='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  -- Le trigger de période d'un complément lit aussi l'origine : sérialiser
+  -- avec les résolveurs avant de prendre la pièce, le bail et cet advisory.
+  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
+  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
+  SELECT * INTO v_f FROM public.factures_honoraires
+    WHERE id=p_facture_id AND mission_id IS NOT DISTINCT FROM v_m FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
+  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
+  IF NOT FOUND OR p_token IS NULL OR v_b.token IS DISTINCT FROM p_token THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_TOKEN_PERIME' USING ERRCODE='23514'; END IF;
+  IF v_b.resultat IS NOT NULL THEN
+    IF p_documents IS NOT NULL AND p_documents IS DISTINCT FROM v_b.documents THEN
+      RAISE EXCEPTION 'FACTURE_GENERATION_REJEU_DIFFERENT' USING ERRCODE='23514'; END IF;
+    RETURN v_b.resultat;
+  END IF;
+  -- Un succès acquis reste rejouable ; un renderer expiré ne peut plus écrire.
+  IF v_b.expire_le<=clock_timestamp() THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_BAIL_EXPIRE' USING ERRCODE='23514'; END IF;
+  IF v_f.statut IS DISTINCT FROM 'EN_GENERATION' THEN RAISE EXCEPTION 'FACTURE_GENERATION_ETAT_INVALIDE' USING ERRCODE='23514'; END IF;
+  IF p_documents IS NULL THEN
+    UPDATE public.factures_honoraires SET statut='ERREUR_GENERATION' WHERE id=p_facture_id;
+    UPDATE private.generations_factures_honoraires SET expire_le=clock_timestamp() WHERE facture_id=p_facture_id;
+    RETURN jsonb_build_object('success',false,'statut','ERREUR_GENERATION','facture_id',p_facture_id);
+  END IF;
+  v_prefixe:=(CASE WHEN v_f.type_document='AVOIR' THEN 'avoirs/' ELSE 'invoices/' END)||v_f.soignant_id::text||'/'||v_f.numero_facture||'/';
+  v_pdf:=p_documents->>'pdf_s3_key'; v_xml:=p_documents->>'facturx_xml_url';
+  IF jsonb_typeof(p_documents) IS DISTINCT FROM 'object'
+    OR (SELECT count(*) FROM jsonb_object_keys(p_documents))<>4
+    OR v_pdf IS NULL OR v_xml IS NULL
+    OR left(v_pdf,length(v_prefixe))<>v_prefixe OR left(v_xml,length(v_prefixe))<>v_prefixe
+    OR substring(v_pdf from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.pdf$')
+    OR substring(v_xml from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.xml$')
+    OR COALESCE(p_documents->>'pdf_sha256','') !~ '^[a-f0-9]{64}$'
+    OR COALESCE(p_documents->>'xml_sha256','') !~ '^[a-f0-9]{64}$' THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_DOCUMENTS_INVALIDES' USING ERRCODE='23514'; END IF;
+  INSERT INTO public.factures_honoraires_documents(facture_honoraire_id,pdf_s3_key,facturx_xml_url,pdf_sha256,xml_sha256,motif_generation)
+    VALUES(p_facture_id,v_pdf,v_xml,p_documents->>'pdf_sha256',p_documents->>'xml_sha256',
+      CASE WHEN v_f.nature_correction='ORIGINALE' THEN 'EMISSION_INITIALE' ELSE 'EMISSION_DOCUMENT_CORRECTION' END);
+  IF v_f.type_document='AVOIR' THEN
+    UPDATE public.factures_honoraires cible
+      SET chorus_avoir_reference_invoice=origine.numero_facture
+      FROM public.factures_honoraires origine
+      WHERE cible.id=p_facture_id AND origine.id=v_f.facture_precedente_id
+        AND origine.mission_id=v_f.mission_id AND origine.soignant_id=v_f.soignant_id
+        AND origine.etablissement_id=v_f.etablissement_id AND origine.type_document='FACTURE';
+    IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_REFERENCE_INVALIDE' USING ERRCODE='23514'; END IF;
+  END IF;
+  v_resultat:=public.fn_emettre_document_facturation_honoraires(p_facture_id,v_pdf,v_xml);
+  IF (v_resultat->>'success')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_GENERATION_EMISSION_REFUSEE'; END IF;
+  UPDATE private.generations_factures_honoraires SET resultat=v_resultat,documents=p_documents WHERE facture_id=p_facture_id;
+  RETURN v_resultat;
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_terminer_generation_honoraires"("p_facture_id" "uuid", "p_token" "uuid", "p_documents" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -64893,9 +65283,10 @@ END; $$;
 ALTER FUNCTION "public"."next_avoir_commission_number"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION public.next_avoir_number(p_soignant_id uuid)
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public
-AS $numero$
+CREATE OR REPLACE FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
 DECLARE v_seq bigint; v_prefixe text;
 BEGIN
   IF p_soignant_id IS NULL THEN RAISE EXCEPTION 'Émetteur requis' USING ERRCODE='22004'; END IF;
@@ -64906,9 +65297,10 @@ BEGIN
   FROM public.factures_honoraires WHERE soignant_id=p_soignant_id AND numero_facture LIKE 'AV-%' AND type_document='AVOIR';
   RETURN 'AV-'||v_prefixe||'-'||to_char(CURRENT_DATE,'YYYY')||'-'||lpad(v_seq::text,greatest(5,length(v_seq::text)),'0');
 END;
-$numero$;
+$$;
 
-ALTER FUNCTION public.next_avoir_number(uuid) OWNER TO postgres;
+
+ALTER FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") OWNER TO "postgres";
 
 
 COMMENT ON FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") IS 'Séquence avoir par soignant, distincte de next_invoice_number. Format AV-{SIRET}-{YYYY}-{NNNNN}.';
@@ -64934,9 +65326,10 @@ END; $$;
 ALTER FUNCTION "public"."next_facture_complementaire_number"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION public.next_invoice_number(p_soignant_id uuid)
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public
-AS $numero$
+CREATE OR REPLACE FUNCTION "public"."next_invoice_number"("p_soignant_id" "uuid") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
 DECLARE v_seq bigint; v_prefixe text;
 BEGIN
   IF p_soignant_id IS NULL THEN RAISE EXCEPTION 'Émetteur requis' USING ERRCODE='22004'; END IF;
@@ -64947,9 +65340,10 @@ BEGIN
   FROM public.factures_honoraires WHERE soignant_id=p_soignant_id AND numero_facture LIKE 'JOL-%';
   RETURN 'JOL-'||v_prefixe||'-'||to_char(CURRENT_DATE,'YYYY')||'-'||lpad(v_seq::text,greatest(5,length(v_seq::text)),'0');
 END;
-$numero$;
+$$;
 
-ALTER FUNCTION public.next_invoice_number(uuid) OWNER TO postgres;
+
+ALTER FUNCTION "public"."next_invoice_number"("p_soignant_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."peut_exercer"("p_profession" "text", "p_type_exercice" "text", "p_type_etablissement" "text") RETURNS boolean
@@ -72917,6 +73311,10 @@ CREATE UNIQUE INDEX "uniq_paiements_soignant_stripe_transfer" ON "public"."paiem
 
 
 
+CREATE UNIQUE INDEX "uniq_push_candidature_destinataire" ON "public"."externalisation_actions" USING "btree" ("source_id", (("payload" ->> 'destinataire_id'::"text"))) WHERE (("type_action" = 'PUSH_CANDIDATURE_RECUE'::"text") AND ("source" = 'AUTRE'::"text") AND (("payload" ->> 'type_evenement'::"text") = 'CANDIDATURE_RECUE'::"text"));
+
+
+
 CREATE UNIQUE INDEX "uniq_rappel_mission_jour" ON "public"."rappels_contrat_travail" USING "btree" ("mission_id", "envoye_le");
 
 
@@ -73776,9 +74174,6 @@ CREATE OR REPLACE TRIGGER "trg_p0_rbac_missions" BEFORE INSERT OR DELETE OR UPDA
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_paiements_soignant" BEFORE INSERT OR DELETE OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
 
-CREATE OR REPLACE TRIGGER "trg_paiement_liberal_facture" BEFORE INSERT OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_paiement_liberal_facture"();
-
-
 
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_partages_rib" BEFORE DELETE OR UPDATE ON "public"."partages_rib" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
@@ -73789,6 +74184,10 @@ CREATE OR REPLACE TRIGGER "trg_p0_rbac_presences" BEFORE INSERT OR DELETE OR UPD
 
 
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_qr_codes" BEFORE INSERT OR DELETE OR UPDATE ON "public"."qr_codes_mission" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('pointage');
+
+
+
+CREATE OR REPLACE TRIGGER "trg_paiement_liberal_facture" BEFORE INSERT OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_paiement_liberal_facture"();
 
 
 
@@ -73825,9 +74224,6 @@ CREATE OR REPLACE TRIGGER "trg_preserver_rectification_facture_honoraires" BEFOR
 
 
 CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id", "mission_id" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"();
-
-
-CREATE OR REPLACE TRIGGER "trg_reservation_connect_paiement" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_reservation_connect"();
 
 
 
@@ -73996,6 +74392,10 @@ CREATE OR REPLACE TRIGGER "trg_recalculer_preuves_etudiant_profession" AFTER UPD
 
 
 CREATE OR REPLACE TRIGGER "trg_recompute_score_urgence" AFTER INSERT OR UPDATE ON "public"."candidatures" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_recompute_score_urgence"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_reservation_connect_paiement" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_reservation_connect"();
 
 
 
@@ -78278,6 +78678,11 @@ GRANT ALL ON FUNCTION "public"."fn_acces_copie_bulletin"("p_copie_id" "uuid", "p
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_acquerir_generation_honoraires"("p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acquerir_generation_honoraires"("p_facture_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") TO "service_role";
 
@@ -80421,6 +80826,11 @@ GRANT ALL ON FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text", "p_push_candidature_v1" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text", "p_push_candidature_v1" boolean) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_factor_advances_modifie_le"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_factor_advances_modifie_le"() TO "service_role";
 
@@ -81543,6 +81953,11 @@ GRANT ALL ON FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_preparer_push_candidature_recue"("p_action_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_push_candidature_recue"("p_action_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_preparer_rappels_quotidiens"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_preparer_rappels_quotidiens"() TO "service_role";
 
@@ -82029,6 +82444,11 @@ GRANT ALL ON FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_reserver_facture_honoraires"("p_document" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_facture_honoraires"("p_document" "jsonb") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") TO "service_role";
 
@@ -82491,6 +82911,11 @@ GRANT ALL ON FUNCTION "public"."fn_swan_webhook_reclamer"("p_event_id" "text", "
 
 REVOKE ALL ON FUNCTION "public"."fn_sync_mission_creneaux"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_sync_mission_creneaux"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_terminer_generation_honoraires"("p_facture_id" "uuid", "p_token" "uuid", "p_documents" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_terminer_generation_honoraires"("p_facture_id" "uuid", "p_token" "uuid", "p_documents" "jsonb") TO "service_role";
 
 
 
@@ -84063,293 +84488,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
-
-
-
--- Réservations privées de première émission : aucun accès client.
-CREATE TABLE private.generations_factures_honoraires (
-  facture_id uuid PRIMARY KEY REFERENCES public.factures_honoraires(id),
-  token uuid NOT NULL,
-  expire_le timestamptz NOT NULL,
-  resultat jsonb,
-  documents jsonb
-);
-ALTER TABLE private.generations_factures_honoraires OWNER TO postgres;
-ALTER TABLE private.generations_factures_honoraires ENABLE ROW LEVEL SECURITY;
-ALTER TABLE private.generations_factures_honoraires FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON private.generations_factures_honoraires FROM PUBLIC,anon,authenticated,service_role;
-
-
-CREATE OR REPLACE FUNCTION public.fn_acquerir_generation_honoraires(p_facture_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
-AS $bail$
-DECLARE v_f public.factures_honoraires%ROWTYPE; v_m uuid; v_b private.generations_factures_honoraires%ROWTYPE; v_token uuid;
-BEGIN
-  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
-    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
-  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
-  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
-  SELECT * INTO v_f FROM public.factures_honoraires WHERE id=p_facture_id FOR UPDATE;
-  IF NOT FOUND OR v_f.mission_id IS DISTINCT FROM v_m THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
-  IF v_f.statut NOT IN('BROUILLON','EN_GENERATION','ERREUR_GENERATION') THEN
-    RETURN jsonb_build_object('acquise',false,'statut',v_f.statut,'facture_id',v_f.id); END IF;
-  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
-  IF FOUND AND v_b.resultat IS NULL AND v_b.expire_le>clock_timestamp() THEN
-    RETURN jsonb_build_object('acquise',false,'statut','EN_GENERATION','facture_id',v_f.id); END IF;
-  -- Le trigger de période et les index normaux refusent une autre pièce active.
-  UPDATE public.factures_honoraires SET statut='EN_GENERATION' WHERE id=p_facture_id AND statut<>'EN_GENERATION';
-  v_token:=gen_random_uuid();
-  INSERT INTO private.generations_factures_honoraires(facture_id,token,expire_le)
-    VALUES(p_facture_id,v_token,clock_timestamp()+interval '10 minutes')
-    ON CONFLICT(facture_id) DO UPDATE SET token=EXCLUDED.token,expire_le=EXCLUDED.expire_le,resultat=NULL,documents=NULL;
-  RETURN jsonb_build_object('acquise',true,'token',v_token,'facture_id',v_f.id,'statut','EN_GENERATION');
-END;
-$bail$;
-
-CREATE OR REPLACE FUNCTION public.fn_reserver_facture_honoraires(p_document jsonb)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
-AS $reservation$
-DECLARE v_d public.factures_honoraires%ROWTYPE; v_m public.missions%ROWTYPE; v_f public.factures_honoraires%ROWTYPE;
-  v_ids uuid[]; v_numero text; v_bail jsonb;
-BEGIN
-  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
-    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
-  IF jsonb_typeof(p_document) IS DISTINCT FROM 'object' OR EXISTS(
-    SELECT 1 FROM jsonb_object_keys(p_document) k WHERE k<>ALL(ARRAY[
-      'soignant_id',
-      'etablissement_id',
-      'mission_id',
-      'montant_ht',
-      'montant_tva',
-      'montant_ttc',
-      'taux_tva',
-      'exoneration_tva',
-      'date_emission',
-      'date_echeance',
-      'mandat_version',
-      'template_version',
-      'is_public_sector',
-      'siret_client',
-      'service_code_chorus',
-      'periode_debut',
-      'periode_fin',
-      'numero_semaine_iso',
-      'annee_iso',
-      'est_facture_finale_mission',
-      'facture_precedente_id',
-      'regime_tva_snapshot',
-      'base_legale_tva_snapshot',
-      'nature_prestation_snapshot',
-      'description_prestation_snapshot',
-      'quantite_heures_snapshot',
-      'taux_horaire_snapshot',
-      'emetteur_identite_snapshot',
-      'emetteur_profession_snapshot',
-      'emetteur_siret_snapshot',
-      'emetteur_numero_professionnel_snapshot',
-      'emetteur_adresse_snapshot',
-      'emetteur_adresse_rue_snapshot',
-      'emetteur_adresse_code_postal_snapshot',
-      'emetteur_adresse_ville_snapshot',
-      'emetteur_email_snapshot',
-      'emetteur_numero_tva_snapshot',
-      'destinataire_nom_snapshot',
-      'destinataire_siret_snapshot',
-      'destinataire_adresse_rue_snapshot',
-      'destinataire_adresse_code_postal_snapshot',
-      'destinataire_adresse_ville_snapshot'
-    ]::text[])) THEN RAISE EXCEPTION 'FACTURE_RESERVATION_CHAMPS_INVALIDES' USING ERRCODE='22023'; END IF;
-  SELECT * INTO v_d FROM jsonb_populate_record(NULL::public.factures_honoraires,p_document);
-  SELECT * INTO v_m FROM public.missions WHERE id=v_d.mission_id FOR UPDATE;
-  IF NOT FOUND OR v_m.type_contrat_applique IS DISTINCT FROM 'LIBERAL'
-    OR v_m.soignant_assigne_id IS DISTINCT FROM v_d.soignant_id
-    OR v_m.etablissement_id IS DISTINCT FROM v_d.etablissement_id
-    OR v_d.periode_debut IS NULL OR v_d.periode_fin IS NULL OR v_d.periode_fin<v_d.periode_debut
-    OR v_d.est_facture_finale_mission IS NULL THEN
-    RAISE EXCEPTION 'FACTURE_RESERVATION_MISSION_INCOHERENTE' USING ERRCODE='23514'; END IF;
-  -- Un original/correctif déjà actif n'est jamais remplacé par une nouvelle émission.
-  SELECT array_agg(id) INTO v_ids FROM public.factures_honoraires
-  WHERE mission_id=v_d.mission_id AND type_document='FACTURE' AND nature_correction<>'COMPLEMENT'
-    AND statut NOT IN('ANNULEE','REMPLACEE')
-    AND (est_facture_finale_mission=v_d.est_facture_finale_mission AND
-      (v_d.est_facture_finale_mission OR (annee_iso=v_d.annee_iso AND numero_semaine_iso=v_d.numero_semaine_iso)));
-  IF cardinality(v_ids)>1 THEN RAISE EXCEPTION 'FACTURE_RESERVATION_HISTORIQUE_AMBIGU' USING ERRCODE='23514'; END IF;
-  IF cardinality(v_ids)=1 THEN
-    SELECT * INTO v_f FROM public.factures_honoraires WHERE id=v_ids[1] FOR UPDATE;
-    IF v_f.soignant_id IS DISTINCT FROM v_d.soignant_id OR v_f.etablissement_id IS DISTINCT FROM v_d.etablissement_id
-      OR v_f.periode_debut IS DISTINCT FROM v_d.periode_debut OR v_f.periode_fin IS DISTINCT FROM v_d.periode_fin THEN
-      RAISE EXCEPTION 'FACTURE_RESERVATION_PERIODE_DIFFERENTE' USING ERRCODE='23514'; END IF;
-    RETURN jsonb_build_object('cree',false,'facture_id',v_f.id,'numero_facture',v_f.numero_facture,'statut',v_f.statut,'nature_correction',v_f.nature_correction);
-  END IF;
-  v_numero:=public.next_invoice_number(v_d.soignant_id);
-  INSERT INTO public.factures_honoraires(numero_facture,statut,type_document,nature_correction,
-    soignant_id,
-    etablissement_id,
-    mission_id,
-    montant_ht,
-    montant_tva,
-    montant_ttc,
-    taux_tva,
-    exoneration_tva,
-    date_emission,
-    date_echeance,
-    mandat_version,
-    template_version,
-    is_public_sector,
-    siret_client,
-    service_code_chorus,
-    periode_debut,
-    periode_fin,
-    numero_semaine_iso,
-    annee_iso,
-    est_facture_finale_mission,
-    facture_precedente_id,
-    regime_tva_snapshot,
-    base_legale_tva_snapshot,
-    nature_prestation_snapshot,
-    description_prestation_snapshot,
-    quantite_heures_snapshot,
-    taux_horaire_snapshot,
-    emetteur_identite_snapshot,
-    emetteur_profession_snapshot,
-    emetteur_siret_snapshot,
-    emetteur_numero_professionnel_snapshot,
-    emetteur_adresse_snapshot,
-    emetteur_adresse_rue_snapshot,
-    emetteur_adresse_code_postal_snapshot,
-    emetteur_adresse_ville_snapshot,
-    emetteur_email_snapshot,
-    emetteur_numero_tva_snapshot,
-    destinataire_nom_snapshot,
-    destinataire_siret_snapshot,
-    destinataire_adresse_rue_snapshot,
-    destinataire_adresse_code_postal_snapshot,
-    destinataire_adresse_ville_snapshot
-  ) VALUES(v_numero,'EN_GENERATION','FACTURE','ORIGINALE',
-    v_d.soignant_id,
-    v_d.etablissement_id,
-    v_d.mission_id,
-    v_d.montant_ht,
-    v_d.montant_tva,
-    v_d.montant_ttc,
-    v_d.taux_tva,
-    v_d.exoneration_tva,
-    v_d.date_emission,
-    v_d.date_echeance,
-    v_d.mandat_version,
-    v_d.template_version,
-    v_d.is_public_sector,
-    v_d.siret_client,
-    v_d.service_code_chorus,
-    v_d.periode_debut,
-    v_d.periode_fin,
-    v_d.numero_semaine_iso,
-    v_d.annee_iso,
-    v_d.est_facture_finale_mission,
-    v_d.facture_precedente_id,
-    v_d.regime_tva_snapshot,
-    v_d.base_legale_tva_snapshot,
-    v_d.nature_prestation_snapshot,
-    v_d.description_prestation_snapshot,
-    v_d.quantite_heures_snapshot,
-    v_d.taux_horaire_snapshot,
-    v_d.emetteur_identite_snapshot,
-    v_d.emetteur_profession_snapshot,
-    v_d.emetteur_siret_snapshot,
-    v_d.emetteur_numero_professionnel_snapshot,
-    v_d.emetteur_adresse_snapshot,
-    v_d.emetteur_adresse_rue_snapshot,
-    v_d.emetteur_adresse_code_postal_snapshot,
-    v_d.emetteur_adresse_ville_snapshot,
-    v_d.emetteur_email_snapshot,
-    v_d.emetteur_numero_tva_snapshot,
-    v_d.destinataire_nom_snapshot,
-    v_d.destinataire_siret_snapshot,
-    v_d.destinataire_adresse_rue_snapshot,
-    v_d.destinataire_adresse_code_postal_snapshot,
-    v_d.destinataire_adresse_ville_snapshot
-  ) RETURNING * INTO v_f;
-  v_bail:=public.fn_acquerir_generation_honoraires(v_f.id);
-  IF (v_bail->>'acquise')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_RESERVATION_BAIL_REFUSE'; END IF;
-  RETURN v_bail||jsonb_build_object('cree',true,'numero_facture',v_numero);
-END;
-$reservation$;
-
-CREATE OR REPLACE FUNCTION public.fn_terminer_generation_honoraires(p_facture_id uuid,p_token uuid,p_documents jsonb DEFAULT NULL)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
-AS $terminer$
-DECLARE v_f public.factures_honoraires%ROWTYPE; v_b private.generations_factures_honoraires%ROWTYPE;
-  v_m uuid; v_resultat jsonb; v_prefixe text; v_pdf text; v_xml text; v_uuid_regex constant text:='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-BEGIN
-  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
-    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
-  -- Le trigger de période d'un complément lit aussi l'origine : sérialiser
-  -- avec les résolveurs avant de prendre la pièce, le bail et cet advisory.
-  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
-  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
-  SELECT * INTO v_f FROM public.factures_honoraires
-    WHERE id=p_facture_id AND mission_id IS NOT DISTINCT FROM v_m FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
-  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
-  IF NOT FOUND OR p_token IS NULL OR v_b.token IS DISTINCT FROM p_token THEN
-    RAISE EXCEPTION 'FACTURE_GENERATION_TOKEN_PERIME' USING ERRCODE='23514'; END IF;
-  IF v_b.resultat IS NOT NULL THEN
-    IF p_documents IS NOT NULL AND p_documents IS DISTINCT FROM v_b.documents THEN
-      RAISE EXCEPTION 'FACTURE_GENERATION_REJEU_DIFFERENT' USING ERRCODE='23514'; END IF;
-    RETURN v_b.resultat;
-  END IF;
-  -- Un succès acquis reste rejouable ; un renderer expiré ne peut plus écrire.
-  IF v_b.expire_le<=clock_timestamp() THEN
-    RAISE EXCEPTION 'FACTURE_GENERATION_BAIL_EXPIRE' USING ERRCODE='23514'; END IF;
-  IF v_f.statut IS DISTINCT FROM 'EN_GENERATION' THEN RAISE EXCEPTION 'FACTURE_GENERATION_ETAT_INVALIDE' USING ERRCODE='23514'; END IF;
-  IF p_documents IS NULL THEN
-    UPDATE public.factures_honoraires SET statut='ERREUR_GENERATION' WHERE id=p_facture_id;
-    UPDATE private.generations_factures_honoraires SET expire_le=clock_timestamp() WHERE facture_id=p_facture_id;
-    RETURN jsonb_build_object('success',false,'statut','ERREUR_GENERATION','facture_id',p_facture_id);
-  END IF;
-  v_prefixe:=(CASE WHEN v_f.type_document='AVOIR' THEN 'avoirs/' ELSE 'invoices/' END)||v_f.soignant_id::text||'/'||v_f.numero_facture||'/';
-  v_pdf:=p_documents->>'pdf_s3_key'; v_xml:=p_documents->>'facturx_xml_url';
-  IF jsonb_typeof(p_documents) IS DISTINCT FROM 'object'
-    OR (SELECT count(*) FROM jsonb_object_keys(p_documents))<>4
-    OR v_pdf IS NULL OR v_xml IS NULL
-    OR left(v_pdf,length(v_prefixe))<>v_prefixe OR left(v_xml,length(v_prefixe))<>v_prefixe
-    OR substring(v_pdf from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.pdf$')
-    OR substring(v_xml from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.xml$')
-    OR COALESCE(p_documents->>'pdf_sha256','') !~ '^[a-f0-9]{64}$'
-    OR COALESCE(p_documents->>'xml_sha256','') !~ '^[a-f0-9]{64}$' THEN
-    RAISE EXCEPTION 'FACTURE_GENERATION_DOCUMENTS_INVALIDES' USING ERRCODE='23514'; END IF;
-  INSERT INTO public.factures_honoraires_documents(facture_honoraire_id,pdf_s3_key,facturx_xml_url,pdf_sha256,xml_sha256,motif_generation)
-    VALUES(p_facture_id,v_pdf,v_xml,p_documents->>'pdf_sha256',p_documents->>'xml_sha256',
-      CASE WHEN v_f.nature_correction='ORIGINALE' THEN 'EMISSION_INITIALE' ELSE 'EMISSION_DOCUMENT_CORRECTION' END);
-  IF v_f.type_document='AVOIR' THEN
-    UPDATE public.factures_honoraires cible
-      SET chorus_avoir_reference_invoice=origine.numero_facture
-      FROM public.factures_honoraires origine
-      WHERE cible.id=p_facture_id AND origine.id=v_f.facture_precedente_id
-        AND origine.mission_id=v_f.mission_id AND origine.soignant_id=v_f.soignant_id
-        AND origine.etablissement_id=v_f.etablissement_id AND origine.type_document='FACTURE';
-    IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_REFERENCE_INVALIDE' USING ERRCODE='23514'; END IF;
-  END IF;
-  v_resultat:=public.fn_emettre_document_facturation_honoraires(p_facture_id,v_pdf,v_xml);
-  IF (v_resultat->>'success')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_GENERATION_EMISSION_REFUSEE'; END IF;
-  UPDATE private.generations_factures_honoraires SET resultat=v_resultat,documents=p_documents WHERE facture_id=p_facture_id;
-  RETURN v_resultat;
-END;
-$terminer$;
-
-ALTER FUNCTION public.next_invoice_number(uuid) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.next_invoice_number(uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.next_invoice_number(uuid) TO service_role;
-ALTER FUNCTION public.next_avoir_number(uuid) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.next_avoir_number(uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.next_avoir_number(uuid) TO service_role;
-ALTER FUNCTION public.fn_acquerir_generation_honoraires(uuid) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.fn_acquerir_generation_honoraires(uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.fn_acquerir_generation_honoraires(uuid) TO service_role;
-ALTER FUNCTION public.fn_reserver_facture_honoraires(jsonb) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.fn_reserver_facture_honoraires(jsonb) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.fn_reserver_facture_honoraires(jsonb) TO service_role;
-ALTER FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) TO service_role;
 
