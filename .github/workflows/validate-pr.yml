@@ -634,7 +634,12 @@ jobs:
             echo "SET LOCAL lock_timeout = '10s';"
             for file in "${MIGRATIONS[@]}"; do
               printf '\n-- migration: %s\n' "$file"
+              # Le COMMIT réel remet ces réglages locaux à leur valeur initiale.
+              # Sous ROLLBACK global, restaurer le contexte du banc évite qu’un
+              # search_path de migration rende les types des suites invisibles.
+              echo "SELECT pg_catalog.set_config('jolene.pr_validation_settings', pg_catalog.jsonb_build_object('search_path', pg_catalog.current_setting('search_path'), 'statement_timeout', pg_catalog.current_setting('statement_timeout'), 'lock_timeout', pg_catalog.current_setting('lock_timeout'), 'TimeZone', pg_catalog.current_setting('TimeZone'))::text, true);"
               sed -E '/^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
+              echo "SELECT pg_catalog.set_config(setting.key, setting.value, true) FROM pg_catalog.jsonb_each_text(pg_catalog.current_setting('jolene.pr_validation_settings')::jsonb) AS setting;"
             done
             test_index=0
             for file in "${SQL_TESTS[@]}"; do
