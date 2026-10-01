@@ -269,7 +269,8 @@ print('PANNE_REPRISE_TARDIVE_REPONSE_PERDUE_UNE_EMISSION', flush=True)
 seed()
 for n in ['JOL-ANCIEN-2026-00001', 'JOL-ANCIEN-2026-00002']:
     sql(direct(n))
-sql("UPDATE public.factures_honoraires SET annee_iso=2026,numero_semaine_iso=39")
+sql("UPDATE public.factures_honoraires SET annee_iso=2026,numero_semaine_iso=39,est_facture_finale_mission=false")
+assert sql("SELECT count(*)=2 AND bool_and(statut='ERREUR_GENERATION' AND est_facture_finale_mission=false AND annee_iso=2026 AND numero_semaine_iso=39) FROM public.factures_honoraires") == 't'
 refuse(reserve(), '23514', 'FACTURE_RESERVATION_HISTORIQUE_AMBIGU')
 assert sql('SELECT count(*) FROM private.generations_factures_honoraires') == '0'
 print('HISTORIQUE_ERREUR_AMBIGU_REFUSE', flush=True)

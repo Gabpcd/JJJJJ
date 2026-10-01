@@ -169,7 +169,7 @@ $inventory_test$;
 -- prouver le retour intégral aux quatre candidats AVANT les neuf cas métier.
 DO $inventory_successor$
 DECLARE
-  r record; p record; v_param text; v_previous text; v_definition text;
+  r record; v_proc record; v_param text; v_previous text; v_definition text;
   v_before jsonb; v_after jsonb; v_rolled_back boolean:=false;
   v_signatures constant text[]:=ARRAY[
     'fn_preparer_facture_commission_periode(uuid)',
@@ -193,19 +193,19 @@ BEGIN
     ('fn_preparer_commission_remplacement_honoraires(uuid)','c8b2603eda031d12d75a294ffb87d522','c793ac81eaef0fe18fb5920c9264c675','3a15006bb68a7a44801e429aa1fb3e58','c736c66d76001b64ba425484f77c6ea2'),
     ('fn_preparer_avoir_commission_honoraires(uuid)','9af2c8bd25c4db563c2d935ba99effd8','a65bb72885271a63de5b2dbcdbb7a6be','972bff7ed6b0beedc598d2cb815f2130','4afd9dca4fea1d23414a797342cd1180')
     ) AS attendu(signature,ancien_corps,ancienne_definition,nouveau_corps,nouvelle_definition) LOOP
-      SELECT * INTO p FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
-      IF md5(p.prosrc) IS DISTINCT FROM r.nouveau_corps
-        OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.nouvelle_definition
-        OR NOT p.prosecdef OR p.provolatile<>'v' OR pg_get_userbyid(p.proowner)<>'postgres'
-        OR p.proconfig IS DISTINCT FROM ARRAY['search_path=public, pg_temp']::text[]
-        OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[]
+      SELECT * INTO v_proc FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
+      IF md5(v_proc.prosrc) IS DISTINCT FROM r.nouveau_corps
+        OR md5(pg_get_functiondef(v_proc.oid)) IS DISTINCT FROM r.nouvelle_definition
+        OR NOT v_proc.prosecdef OR v_proc.provolatile<>'v' OR pg_get_userbyid(v_proc.proowner)<>'postgres'
+        OR v_proc.proconfig IS DISTINCT FROM ARRAY['search_path=public, pg_temp']::text[]
+        OR v_proc.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[]
         OR (SELECT count(*) FROM private.security_definer_inventory WHERE signature=r.signature
             AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=r.nouveau_corps)<>1
         OR EXISTS(SELECT 1 FROM private.security_definer_inventory WHERE signature='public.'||r.signature)
       THEN RAISE EXCEPTION 'F1 inventaire : successeur exact requis (%)',r.signature; END IF;
       v_param:=CASE WHEN r.signature='fn_preparer_avoir_commission_honoraires(uuid)'
         THEN 'p_avoir_honoraires_id' ELSE 'p_facture_honoraire_id' END;
-      v_previous:=replace(p.prosrc,E'  v_mission_verrou uuid;\n','');
+      v_previous:=replace(v_proc.prosrc,E'  v_mission_verrou uuid;\n','');
       v_previous:=replace(v_previous,
         E'  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.\n'
         ||E'  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.\n'
@@ -214,9 +214,9 @@ BEGIN
       v_previous:=replace(v_previous,E'    AND mission_id IS NOT DISTINCT FROM v_mission_verrou\n','');
       IF md5(v_previous) IS DISTINCT FROM r.ancien_corps
       THEN RAISE EXCEPTION 'F1 inventaire : corps historique exact non reconstruit (%)',r.signature; END IF;
-      v_definition:=replace(pg_get_functiondef(p.oid),p.prosrc,v_previous);
+      v_definition:=replace(pg_get_functiondef(v_proc.oid),v_proc.prosrc,v_previous);
       EXECUTE v_definition;
-      IF md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.ancienne_definition
+      IF md5(pg_get_functiondef(v_proc.oid)) IS DISTINCT FROM r.ancienne_definition
       THEN RAISE EXCEPTION 'F1 inventaire : définition historique inexacte (%)',r.signature; END IF;
       UPDATE private.security_definer_inventory SET definition_md5=r.ancien_corps
         WHERE signature=r.signature AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=r.nouveau_corps;

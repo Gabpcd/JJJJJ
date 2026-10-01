@@ -49,7 +49,9 @@ test('le rejeu inventaire annule quatre anciens corps avant la matrice métier',
     assert(wrapper.includes(md5(canonical(name, originals.get(name)))));
   }
   assert(wrapper.includes('md5(v_previous) IS DISTINCT FROM r.ancien_corps'));
-  assert(wrapper.includes('md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.ancienne_definition'));
+  assert(wrapper.includes('md5(pg_get_functiondef(v_proc.oid)) IS DISTINCT FROM r.ancienne_definition'));
+  assert(wrapper.includes('r record; v_proc record;'));
+  assert(!wrapper.includes('r record; p record;'));
   assert(wrapper.indexOf('PERFORM pg_temp.f1_inventory_test()') < wrapper.indexOf("USING ERRCODE='JF174'"));
   assert(wrapper.includes('v_after IS DISTINCT FROM v_before'));
   assert(sql.indexOf('$inventory_successor$;') < sql.indexOf('DO $f1$'));

@@ -145,3 +145,25 @@ La revue indépendante finale, le témoin PostgreSQL concurrent et le SQL stagin
 réel demeurent requis avant validation fonctionnelle backend. Le déploiement
 Edge doit suivre celui de la migration ; aucune génération production n’est
 incluse dans cette recette.
+
+## Première exécution CI du lot intégré
+
+Le SHA 90334e0f (PR 1014, run 36893332734) a réellement reproduit les collisions
+UUID/SIRET, appliqué la migration au PostgreSQL 17 éphémère et validé les quatre
+courses de réservation/reprise ainsi que le succès rejoué après perte de réponse.
+Le cas d’historique ambigu s’arrêtait ensuite : ses deux fixtures avaient gardé
+le défaut `est_facture_finale_mission=true` alors que la demande était hebdomadaire.
+Le témoin fixe désormais explicitement deux anciennes erreurs hebdomadaires et
+vérifie leur cardinalité avant d’exiger le même refus `23514`.
+
+Le SQL staging a atteint le wrapper historique puis rencontré `55000` : le record
+PLpgSQL `p` masquait l’alias SQL `pg_proc p` de sa photo initiale. Le record devient
+`v_proc`, sans changer les empreintes, les blocs historiques ni les attendus.
+Les cinq catalogues indépendants après erreur et le contrôle F1 sont restés
+identiques, sans résidu. Les deux journaux rouges sont conservés ; les cinq
+interblocages et l’exécution complète des 56 suites restent à acquérir.
+
+La même CI a aussi refusé un contrat source de non-régression qui exigeait
+l’ancien UPDATE direct `ERREUR_GENERATION`. Ce test exige maintenant l’appel
+de clôture avec l’ID, le token et des documents NULL sur erreur de stockage,
+ainsi que l’absence de cet UPDATE direct. Le handler n’est pas modifié.
