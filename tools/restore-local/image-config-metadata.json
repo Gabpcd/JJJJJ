@@ -24,7 +24,7 @@
     },
     {
       "repository": "supabase/postgres",
-      "config_digest": "sha256:f519727303f0af6862882be2a30f420e28710d4209226e681aaddb2c01d12d9b",
+      "config_digest": "sha256:c79f99fc0785881687a1669fb5af37ff57c8c9aac968555c71545f5ad71388fb",
       "user": null,
       "volumes": null,
       "architecture": "amd64"

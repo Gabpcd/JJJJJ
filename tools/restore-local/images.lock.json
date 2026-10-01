@@ -28,11 +28,12 @@
     },
     {
       "repository": "supabase/postgres",
-      "tag": "17.6.1.136",
-      "index_digest": "sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00",
-      "linux_amd64_digest": "sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b",
-      "reference": "supabase/postgres@sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b",
-      "source_compose": "docker-compose.yml"
+      "tag": "17.6.1.063",
+      "index_digest": "sha256:178f0976b54a39237096bfa310c1a352dbc82fb1b08dda45cdb8acb5d40c1426",
+      "linux_amd64_digest": "sha256:432d12926b09e10eb3317b0e2e9672c9ce8ea6bccb359857a31ff9f90683161d",
+      "reference": "supabase/postgres@sha256:432d12926b09e10eb3317b0e2e9672c9ce8ea6bccb359857a31ff9f90683161d",
+      "source_postgres_commit": "a431c10a356be4c700d2e3f2af8551e2fec5e250",
+      "source_dockerfile": "https://github.com/supabase/postgres/blob/a431c10a356be4c700d2e3f2af8551e2fec5e250/Dockerfile-17"
     },
     {
       "repository": "kong/kong",

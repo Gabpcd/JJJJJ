@@ -74,6 +74,11 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/restore/bootstrap.mjs extensions "$PRIVATE_DIR" > "$PROOF_DIR/extensions.json" 2>&1
+      - name: Require nine exact extension versions on both stacks
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          node scripts/restore/extensions.mjs compare "$PROOF_DIR/extensions.json" "$DRILL_RUN" > "$PROOF_DIR/extension-compatibility.json" 2>&1
       - name: Filtered container states before cleanup
         if: always()
         timeout-minutes: 1
