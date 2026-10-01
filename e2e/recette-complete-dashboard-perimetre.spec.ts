@@ -1,4 +1,4 @@
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect, type Page, type TestInfo, type Request } from '@playwright/test';
 import { simulerEtablissement, stabiliserLectures, ids, email } from './helpers/recette-complete-etablissement';
 
 const entetes = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
@@ -203,3 +203,85 @@ for (const mode of ['valide', 'indisponible', 'minimal', 'divergent'] as const) 
     }
   });
 }
+
+for (const navigation of ['onglet', 'document'] as const) {
+  test(`dashboard lecture abandonnée : ${navigation}, retour et rechargement`, async ({ page }, info) => {
+    const banc = await preparer(page, 'valide');
+    let requeteRetenue: Request | undefined;
+    let liberer!: () => void;
+    let terminee = false;
+    let lecturesStats = 0;
+    const retenue = new Promise<void>(resolve => { liberer = resolve; });
+    await page.route('**/rest/v1/rpc/fn_stats_dashboard_etablissement', async route => {
+      if (route.request().method() === 'OPTIONS') return route.fallback();
+      lecturesStats++;
+      if (lecturesStats > 1) return route.fallback();
+      requeteRetenue = route.request();
+      await retenue;
+      try {
+        await route.fulfill({ json: { missions_ouvertes: 123 }, headers: entetes });
+      } catch (error) {
+        if (!route.request().failure()) throw error;
+      } finally { terminee = true; }
+    });
+    try {
+      await connecter(page);
+      await expect.poll(() => Boolean(requeteRetenue)).toBe(true);
+      await expect(page.getByTestId('dashboard-etablissement-ready')).toHaveCount(0);
+      if (navigation === 'onglet') {
+        const sidebar = page.getByRole('navigation', { name: 'Sidebar', exact: true });
+        const barre = await sidebar.isVisible() ? sidebar : page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+        await barre.getByRole('button', { name: 'Missions', exact: true }).click();
+      } else {
+        // Reproduire aussi le remplacement complet qui a annulé la RPC en CI.
+        await page.goto('/etablissement/missions');
+      }
+      await expect(page).toHaveURL(/\/etablissement\/missions$/);
+      await expect.poll(() => Boolean(requeteRetenue?.failure()), { message: 'La lecture quittée doit être annulée' }).toBe(true);
+      liberer();
+      await expect.poll(() => terminee).toBe(true);
+      await stabiliserLectures(page);
+      await capturer(page, info, `depart-${navigation}`);
+      await page.goBack();
+      await pret(page);
+      expect(lecturesStats).toBeGreaterThanOrEqual(2);
+      await expect(page.getByText(/Certaines données n'ont pas pu être chargées/)).toHaveCount(0);
+      await page.reload();
+      await pret(page);
+      await capturer(page, info, `retour-${navigation}-recharge`);
+      expect(banc.consoleMessages.filter(m => m.type === 'error')).toEqual([]);
+      expect(banc.etat.erreurs).toEqual([]);
+      expect(banc.etat.inconnues).toEqual([]);
+      expect(banc.horsPage).toEqual([]);
+      expect(banc.refus).toEqual([]);
+    } finally {
+      liberer(); banc.libererLectures();
+      await info.attach('lecture-abandonnee', { body: JSON.stringify({ navigation, lecturesStats, annulation: requeteRetenue?.failure(), console: banc.consoleMessages, erreurs: banc.etat.erreurs }, null, 2), contentType: 'application/json' });
+    }
+  });
+}
+
+test('dashboard lecture active : une vraie panne reste visible puis se rétablit au rechargement', async ({ page }, info) => {
+  const banc = await preparer(page, 'valide');
+  banc.etat.pannes.add('fn_stats_dashboard_etablissement');
+  try {
+    await connecter(page);
+    await pret(page);
+    await expect(page.getByText(/Certaines données n'ont pas pu être chargées/)).toBeVisible();
+    await capturer(page, info, 'panne-stats-active');
+    const erreursAttendues = banc.consoleMessages.filter(m => m.type === 'error');
+    expect(erreursAttendues.some(m => m.texte.includes('[DashboardEtab] Erreur stats RPC') && m.texte.includes('Service de recette indisponible'))).toBe(true);
+    expect(erreursAttendues.filter(m => !m.texte.includes('[DashboardEtab] Erreur stats RPC') && !/Failed to load resource.*503/.test(m.texte))).toEqual([]);
+    banc.etat.pannes.delete('fn_stats_dashboard_etablissement');
+    const apresPanne = banc.consoleMessages.length;
+    await page.reload();
+    await pret(page);
+    await expect(page.getByText(/Certaines données n'ont pas pu être chargées/)).toHaveCount(0);
+    await capturer(page, info, 'panne-stats-reprise');
+    expect(banc.consoleMessages.slice(apresPanne).filter(m => m.type === 'error')).toEqual([]);
+    expect(banc.etat.erreurs).toEqual([]);
+    expect(banc.etat.inconnues).toEqual([]);
+    expect(banc.horsPage).toEqual([]);
+    expect(banc.refus).toEqual([]);
+  } finally { banc.libererLectures(); }
+});
