@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "ready": false,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "protocolEnabled": false,
+  "capabilityEnabled": false,
+  "candidate": null,
+  "reviewedManifest": null,
+  "requiredCiRuns": [],
+  "expectedBefore": null,
+  "expectedAfter": null,
+  "reason": "SHA1017 final et lot TEST à relire ; aucune activation ni allocation financière autorisée"
+}

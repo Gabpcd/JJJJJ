@@ -67,6 +67,9 @@ jobs:
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
 
+      - name: Tester la préparation Connect staging fermée sans réseau
+        run: node --test tests/node/connect-staging-closed.node.mjs
+
       - name: Contrats du pilote documentaire F1 sans réseau ni credentials
         run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
 
