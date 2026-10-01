@@ -1,3 +1,4 @@
+import { stagingConnectConfig, readStagingConnectCapacity, authorizeStagingCheckout, verifyStagingStripeIdentity, type StagingConnectCapacity } from "../_shared/stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
@@ -156,7 +157,16 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    if (etablissementTest.isTest || soignantTest.isTest) {
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    let testCapacity: StagingConnectCapacity | null = null;
+    if (testRuntime && etablissementTest.isTest && soignantTest.isTest) {
+      testCapacity = await readStagingConnectCapacity(supabaseAdmin, testRuntime, requestedFactureHonorairesId, true);
+      if (testCapacity.missionId !== mission_id || testCapacity.etablissementId !== mission.etablissement_id
+        || testCapacity.soignantId !== mission.soignant_assigne_id || auth.userId !== testCapacity.etablissementId) {
+        throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      }
+    }
+    if ((etablissementTest.isTest || soignantTest.isTest) && !testCapacity) {
       return new Response(JSON.stringify({
         error: "TEST_ACCOUNT_PAYMENT_DISABLED",
       }), {
@@ -164,6 +174,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    if (testRuntime && !testCapacity) throw new Error("CONNECT_STAGING_TEST_REFUSED");
 
     const { data: requestedFactureHonoraires, error: requestedFactureHonorairesError } =
       requestedFactureHonorairesId
@@ -347,6 +359,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (existingTransferError) {
       throw new Error(`Lecture paiement Connect impossible: ${existingTransferError.message}`);
+    }
+
+    // La capacité ne peut jamais adopter une tentative historique ni toucher
+    // une autre trace de la facture, même sur le projet staging.
+    if (testCapacity && existingTransfer && existingTransfer.stripe_checkout_session_id !== testCapacity.sessionId) {
+      throw new Error("CONNECT_STAGING_TEST_REFUSED");
     }
 
     const FENETRE_ORPHELIN_MINUTES = 15;
@@ -645,7 +663,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    const customerId = await ensureCanonicalEtablissementCustomer(
+    if (testCapacity) {
+      if (!testRuntime || testCapacity.factureCommissionId !== factureCommission?.id
+        || testCapacity.destinationId !== connectOnboarding.stripe_account_id
+        || testCapacity.customerId !== etab.stripe_customer_id || testCapacity.totalCents !== totalCents
+        || testCapacity.soignantCents !== soignantCents || testCapacity.commissionCents !== commissionCents) {
+        throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      }
+      await verifyStagingStripeIdentity(stripe, testRuntime);
+      const customer = await stripe.customers.retrieve(testCapacity.customerId);
+      if (customer.deleted || customer.livemode !== false || customer.metadata.etablissement_id !== etab.id) {
+        throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      }
+    }
+    // Le Customer de recette est préexistant et contrôlé : ce handler n'en crée
+    // aucun implicitement pour essayer de rendre admissible une capacité.
+    const customerId = testCapacity ? testCapacity.customerId : await ensureCanonicalEtablissementCustomer(
       stripe,
       supabaseAdmin,
       etab,
@@ -697,6 +730,7 @@ Deno.serve(async (req) => {
     const paymentFlowClaim = await acquireStripePaymentFlowClaim(
       supabaseAdmin,
       paymentFlowClaimExpected,
+      Boolean(testCapacity),
     );
     const recoveryPaiementFinal = Boolean(
       existingTransfer
@@ -1324,7 +1358,7 @@ Deno.serve(async (req) => {
     }
 
     // Create Checkout Session (embedded)
-    const origin = getApplicationReturnOrigin(req);
+    const origin = testCapacity && testRuntime ? testRuntime.returnOrigin : getApplicationReturnOrigin(req);
     const returnParams = new URLSearchParams({
       paiement: "succes",
       mission: mission_id,
@@ -1335,6 +1369,9 @@ Deno.serve(async (req) => {
       factureCommissionId: factureCommission?.id || "",
       attemptKey: checkoutIdempotencyKey,
     });
+    if (testCapacity && testRuntime) {
+      await authorizeStagingCheckout(supabaseAdmin, stripe, testRuntime, connectOperationId);
+    }
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       client_reference_id: mission_id,

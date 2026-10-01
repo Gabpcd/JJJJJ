@@ -235,10 +235,11 @@ export function assertConnectRefund(op: ConnectOperation, value: unknown): Recor
 export type ConnectRefundResult = { operationId: string; status: ConnectRefundStatus; refunded: boolean };
 
 export async function processConnectRefundBatch(sb: RpcClient, stripe: ConnectRefundStripe,
-  ownerToken: () => string): Promise<{ processed: number; succeeded: number; pending: number; failed: number; errors: string[] }> {
+  ownerToken: () => string, options: { testCapacityId?: string; beforeCreate?: (op: ConnectOperation) => Promise<void> } = {}): Promise<{ processed: number; succeeded: number; pending: number; failed: number; errors: string[] }> {
   // Budget additionnel explicite : deux intentions. La sélection historique
   // avoir/escrow (dix lignes) conserve son ordre et son budget.
-  const values = await rpc(sb, "fn_connect_remboursements_a_traiter", { p_limit: 2 });
+  if (options.testCapacityId !== undefined && !uuid.test(options.testCapacityId)) fail("CONNECT_TEST_SCOPE_REQUIRED");
+  const values = await rpc(sb, options.testCapacityId ? "fn_connect_remboursements_test_a_traiter" : "fn_connect_remboursements_a_traiter", { p_limit: 2, ...(options.testCapacityId ? { p_capacity_id: options.testCapacityId } : {}) });
   if (!Array.isArray(values) || values.length > 2) fail("CONNECT_REFUND_BATCH_INVALID");
   const operations = values.map(parseConnectOperation);
   if (new Set(operations.map(op => op.id)).size !== operations.length
@@ -247,7 +248,7 @@ export async function processConnectRefundBatch(sb: RpcClient, stripe: ConnectRe
   for (const op of operations) {
     report.processed++;
     try {
-      const result = await processConnectPretransferRefund(sb, stripe, op, ownerToken());
+      const result = await processConnectPretransferRefund(sb, stripe, op, ownerToken(), { allowCreate: true, beforeCreate: options.beforeCreate });
       if (result.refunded) report.succeeded++;
       else if (["FAILED", "CANCELED", "REVIEW"].includes(result.status)) report.failed++;
       else report.pending++;
@@ -263,7 +264,7 @@ export async function processConnectRefundBatch(sb: RpcClient, stripe: ConnectRe
 
 export async function processConnectPretransferRefund(
   sb: RpcClient, stripe: ConnectRefundStripe, expected: ConnectOperation, ownerToken: string,
-  options: { allowCreate: boolean } = { allowCreate: true },
+  options: { allowCreate: boolean; beforeCreate?: (op: ConnectOperation) => Promise<void> } = { allowCreate: true },
 ): Promise<ConnectRefundResult> {
   if (expected.orientation !== "REFUND" || !uuid.test(ownerToken)) fail("CONNECT_OPERATION_ORIENTATION");
   // Cette RPC relit l'exclusion canonique TEST et les liens métier, puis COMMIT
@@ -303,6 +304,7 @@ export async function processConnectPretransferRefund(
     if (transfers.some(t => objectId(t.source_transaction) === op.charge_id)) fail("CONNECT_REFUND_TRANSFER_PRESENT");
     // Le serveur fixe first_attempt_at UNE fois, autorise seulement 20 h depuis
     // cet instant et vérifie encore le bail. Au-delà : aucun nouveau POST.
+    await options.beforeCreate?.(op);
     const start = record(await rpc(sb, "fn_connect_remboursement_demarrer", { p_operation_id: op.id, p_owner_token: ownerToken }));
     if (start.operation_id !== op.id || start.owner_token !== ownerToken || start.create_allowed !== true) fail("CONNECT_REFUND_CREATE_WINDOW_CLOSED");
     refund = assertConnectRefund(op, await stripe.refunds.create({

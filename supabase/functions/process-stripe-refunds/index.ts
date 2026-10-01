@@ -1,3 +1,4 @@
+import { stagingConnectConfig, verifyStagingStripeIdentity, requireStagingRefundScope } from "../_shared/stripe-connect-staging-test.ts";
 // process-stripe-refunds — remboursements Stripe rapprochés exactement.
 //
 // Un appel refunds.create n'est pas un succès financier : un Refund peut
@@ -621,6 +622,18 @@ Deno.serve(async (req) => {
 
     assertStripeSecretMode(STRIPE_KEY);
     const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2026-02-25.clover" });
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    if (testRuntime) {
+      await verifyStagingStripeIdentity(stripe, testRuntime);
+      const pretransfer = await processConnectRefundBatch(sb, stripe, () => crypto.randomUUID(), {
+        testCapacityId: testRuntime.capabilityId,
+        beforeCreate: op => requireStagingRefundScope(sb, testRuntime, op),
+      });
+      const success = pretransfer.failed === 0 && pretransfer.errors.length === 0;
+      return new Response(JSON.stringify({ success, pretransfer, testOnly: true }), {
+        status: success ? 200 : 500, headers: { "Content-Type": "application/json" },
+      });
+    }
     const leaseBefore = new Date(Date.now() - LEASE_MS).toISOString();
     const { data: excluded, error: excludedError } = await sb.rpc(
       "fn_compter_files_finance_exclues_test",

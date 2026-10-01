@@ -1,3 +1,4 @@
+import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -576,7 +577,26 @@ export async function handleStripeWebhook(
 
     // Idempotence stricte par event.id (iter4 audit fix)
     // Empêche le re-traitement si Stripe renvoie le même webhook 2x.
-    const eventClaimRpc = event.type === "checkout.session.completed"
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    let stagingConnectEvent = false;
+    if (testRuntime && testClassification.isTest && verified.source === "PLATFORM"
+      && event.livemode === false && event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.type === "CONNECT_MISSION_PAYMENT") {
+        await verifyStagingStripeIdentity(stripe, testRuntime);
+        const cap = await readStagingConnectCapacity(supabaseAdmin, testRuntime, session.metadata.facture_honoraires_id || "");
+        if (!cap.operationId || cap.operationId !== session.metadata.connect_operation_id || cap.sessionId !== session.id
+          || cap.missionId !== session.client_reference_id || cap.etablissementId !== session.metadata.etablissement_id
+          || cap.soignantId !== session.metadata.soignant_id || session.livemode !== false) {
+          throw new Error("CONNECT_STAGING_TEST_REFUSED");
+        }
+        stagingConnectEvent = true;
+      }
+    }
+    const refundOptions = stagingConnectEvent && testRuntime
+      ? { allowCreate: true, beforeCreate: (op: Parameters<typeof requireStagingRefundScope>[2]) => requireStagingRefundScope(supabaseAdmin, testRuntime, op) }
+      : { allowCreate: true };
+    const eventClaimRpc = stagingConnectEvent ? "fn_stripe_webhook_event_claim_connect_test_v1" : event.type === "checkout.session.completed"
       && (event.data.object as Stripe.Checkout.Session).metadata?.type === "CONNECT_MISSION_PAYMENT"
       ? "fn_stripe_webhook_event_claim_connect_v1"
       : "fn_stripe_webhook_event_claim";
@@ -637,7 +657,7 @@ export async function handleStripeWebhook(
     // peuvent encore émettre des webhooks. Après claim idempotent mais avant
     // toute mutation métier, transfert, notification ou lecture Stripe
     // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
-    if (testClassification.isTest) {
+    if (testClassification.isTest && !stagingConnectEvent) {
       await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
@@ -1012,7 +1032,7 @@ export async function handleStripeWebhook(
         // avant les validations de paiement ordinaires, sans nouveau transfert.
         const existingOperation = await readConnectOperation(supabaseAdmin, session.id);
         if (existingOperation?.orientation === "REFUND") {
-          const result = await processConnectPretransferRefund(supabaseAdmin, stripe, existingOperation, crypto.randomUUID());
+          const result = await processConnectPretransferRefund(supabaseAdmin, stripe, existingOperation, crypto.randomUUID(), refundOptions);
           await markEventProcessed();
           return new Response(JSON.stringify({ received: true, refunded: result.refunded,
             refund_status: result.status, reason: "active_dispute" }), {
@@ -1267,8 +1287,9 @@ export async function handleStripeWebhook(
           && ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(validatedTransferClaim.statut));
         if (!transferAlreadyProven) {
           const operation = await arbitrateConnectOperation(supabaseAdmin, stripe, validatedTransferClaim!.id, session.id);
+          if (stagingConnectEvent && operation.orientation !== "REFUND") throw new Error("CONNECT_TEST_TRANSFER_FORBIDDEN");
           if (operation.orientation === "REFUND") {
-            const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID());
+            const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), refundOptions);
             await markEventProcessed();
             return new Response(JSON.stringify({ received: true, refunded: result.refunded,
               refund_status: result.status, reason: "active_dispute" }), {

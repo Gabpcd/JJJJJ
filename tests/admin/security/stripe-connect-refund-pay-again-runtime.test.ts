@@ -64,7 +64,12 @@ function simulation(status:string, activeDispute=false, denied=false, gateClosed
         if(name.endsWith('/test-account.ts'))return {resolveOperationalTestAccount:async()=>({ok:true,isTest:false})};
         if(name.startsWith('.'))return load(resolve(dirname(file),name));
         return forbid(`import:${name}`);
-      },Deno:{env:{get:(name:string)=>name==='SUPABASE_URL'?'https://simulation.invalid':'simulation'},serve:(fn:any)=>{handler=fn;}},
+      },Deno:{env:{get:(name:string)=>({
+        SUPABASE_URL:'https://simulation.invalid',
+        SUPABASE_ANON_KEY:'simulation',
+        SUPABASE_SERVICE_ROLE_KEY:'simulation',
+        STRIPE_SECRET_KEY:'simulation',
+      } as Record<string,string>)[name]},serve:(fn:any)=>{handler=fn;}},
       fetch:()=>forbid('fetch'),console:{log(){},info(){},warn(){},error(){}}});return exports;
   }
   load('supabase/functions/stripe-connect-pay-mission/index.ts');

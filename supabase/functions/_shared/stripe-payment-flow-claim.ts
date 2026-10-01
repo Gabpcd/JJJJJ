@@ -51,8 +51,10 @@ type SupabaseLike = {
 export async function acquireStripePaymentFlowClaim(
   supabase: SupabaseLike,
   expected: StripePaymentFlowClaimExpected,
+  stagingTest = false,
 ): Promise<{ acquired: boolean; claim: StripePaymentFlowClaim }> {
-  const claimRpc = expected.flow === "CONNECT_MISSION" || expected.flow === "CONNECT_INVOICE"
+  if (stagingTest && expected.flow !== "CONNECT_INVOICE") throw new Error("CONNECT_TEST_INVOICE_REQUIRED");
+  const claimRpc = stagingTest ? "fn_stripe_payment_flow_claim_connect_test_v1" : expected.flow === "CONNECT_MISSION" || expected.flow === "CONNECT_INVOICE"
     ? "fn_stripe_payment_flow_claim_connect_v1"
     : "fn_stripe_payment_flow_claim";
   const { data, error } = await supabase.rpc(claimRpc, {
