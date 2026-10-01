@@ -30258,6 +30258,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_diagnostic_coherence_financiere"() RETUR
 DECLARE
   v_missions jsonb;
   v_factures jsonb;
+  v_non_verifiables jsonb;
+  v_factures_verifiees bigint;
   v_transfers jsonb;
 BEGIN
   IF NOT public.est_admin() THEN
@@ -30281,39 +30283,51 @@ BEGIN
     ) ORDER BY intitule) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
   ) INTO v_missions FROM ecarts;
 
-  WITH attendus AS (
+  -- Une pièce rectifiée et une finale de période ne se comparent jamais
+  -- au planning courant ni au net global de la mission.
+  WITH pieces AS (
     SELECT fh.id, fh.numero_facture, fh.mission_id, fh.montant_ht,
       CASE
-        WHEN COALESCE(fh.est_facture_finale_mission, false) THEN m.net_a_payer
-        ELSE (
-          SELECT round(COALESCE(sum(
-            extract(epoch FROM (mc.fin_le - mc.debut_le)) / 3600.0
-            * COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base)
-          ), 0), 2)
-          FROM public.mission_creneaux mc
-          WHERE mc.mission_id = m.id
-            AND COALESCE(mc.type_creneau, 'PREVISIONNEL') = 'PREVISIONNEL'
-            AND mc.est_pause IS NOT TRUE
-            AND mc.debut_le::date BETWEEN fh.periode_debut AND fh.periode_fin
-        )
-      END AS attendu
+        WHEN fh.type_document = 'AVOIR' OR fh.nature_correction = 'COMPLEMENT'
+          THEN 'CORRECTION_MONETAIRE'
+        WHEN fh.quantite_heures_snapshot IS NULL OR fh.taux_horaire_snapshot IS NULL
+          THEN 'SNAPSHOTS_INDISPONIBLES'
+        WHEN fh.quantite_heures_snapshot <= 0 OR fh.taux_horaire_snapshot <= 0
+          OR fh.quantite_heures_snapshot::text IN ('NaN', 'Infinity', '-Infinity')
+          OR fh.taux_horaire_snapshot::text IN ('NaN', 'Infinity', '-Infinity')
+          THEN 'SNAPSHOTS_INVALIDES'
+        WHEN fh.montant_ht::text IN ('NaN', 'Infinity', '-Infinity')
+          THEN 'MONTANT_INVALIDE'
+        ELSE NULL
+      END AS motif,
+      round(fh.quantite_heures_snapshot * fh.taux_horaire_snapshot, 2) AS attendu
     FROM public.factures_honoraires fh
-    JOIN public.missions m ON m.id = fh.mission_id
-    WHERE COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-      AND fh.statut NOT IN ('BROUILLON', 'REMPLACEE', 'ANNULEE', 'ERREUR_GENERATION')
-  ), ecarts AS (
-    SELECT * FROM attendus
-    WHERE attendu IS NOT NULL AND attendu > 0
-      AND abs(montant_ht - attendu) > greatest(attendu * 0.01, 1.00)
+    WHERE fh.type_document IN ('FACTURE', 'AVOIR')
+      AND fh.statut NOT IN ('BROUILLON', 'EN_GENERATION', 'REMPLACEE', 'ANNULEE', 'ERREUR_GENERATION')
+  ), classes AS (
+    SELECT *, motif IS NULL
+      AND abs(montant_ht - attendu) > greatest(attendu * 0.01, 1.00) AS en_ecart
+    FROM pieces
   )
   SELECT jsonb_build_object(
-    'count', count(*),
-    'echantillon', COALESCE(jsonb_agg(jsonb_build_object(
+    'count', count(*) FILTER (WHERE en_ecart),
+    'echantillon', COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'facture_id', id, 'numero_facture', numero_facture,
       'mission_id', mission_id, 'montant_ht', montant_ht,
-      'mission_net', attendu, 'ecart', montant_ht - attendu
-    ) ORDER BY numero_facture) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
-  ) INTO v_factures FROM ecarts;
+      'attendu_ht', attendu, 'mission_net', attendu, 'ecart', montant_ht - attendu
+    ) ORDER BY numero_facture, id) FROM (
+      SELECT * FROM classes WHERE en_ecart ORDER BY numero_facture, id LIMIT 10
+    ) e), '[]'::jsonb)
+  ), jsonb_build_object(
+    'count', count(*) FILTER (WHERE motif IS NOT NULL),
+    'echantillon', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'facture_id', id, 'numero_facture', numero_facture,
+      'mission_id', mission_id, 'motif', motif
+    ) ORDER BY numero_facture, id) FROM (
+      SELECT * FROM classes WHERE motif IS NOT NULL ORDER BY numero_facture, id LIMIT 10
+    ) n), '[]'::jsonb)
+  ), count(*) FILTER (WHERE motif IS NULL)
+  INTO v_factures, v_non_verifiables, v_factures_verifiees FROM classes;
 
   WITH orphelins AS (
     SELECT st.id, st.mission_id, st.montant_total
@@ -30335,6 +30349,9 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success', true,
+    'controle_documentaire_version', 2,
+    'factures_verifiees', v_factures_verifiees,
+    'factures_non_verifiables', v_non_verifiables,
     'genere_le', now(),
     'missions_incoherentes', v_missions,
     'factures_ecart_mission', v_factures,

@@ -29,14 +29,12 @@ import {
   montantDocumentComptable,
 } from '@/lib/adminInvoiceAccounting';
 
-// Task 12 — diagnostic result type
-interface DiagResult {
-  success: boolean;
-  genere_le: string;
-  missions_incoherentes: { count: number; echantillon: Array<{ id: string; intitule: string; total_brut: number; attendu: number; ecart: number }> };
-  factures_ecart_mission: { count: number; echantillon: Array<{ facture_id: string; numero_facture: string; mission_id: string; montant_ht: number; mission_net: number; ecart: number }> };
-  stripe_transfers_orphelins: { count: number; echantillon: Array<{ transfer_id: string; mission_id: string; montant_total: number }> };
-}
+import {
+  ERREUR_DIAGNOSTIC_FINANCIER,
+  MOTIFS_DOCUMENT_NON_VERIFIABLE,
+  lireDiagnosticFinancier,
+  type DiagnosticFinancier,
+} from '@/lib/diagnosticFinancier';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -103,8 +101,9 @@ export default function AdminFinances() {
   const [dateFin, setDateFin] = useState<string>('');
 
   // Task 12
-  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
+  const [diagResult, setDiagResult] = useState<DiagnosticFinancier | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
@@ -353,17 +352,20 @@ export default function AdminFinances() {
   };
 
   const lancerDiagnostic = async () => {
+    if (diagLoading) return;
     setDiagLoading(true);
+    setDiagError(null);
+    setDiagResult(null);
     try {
       const { data, error } = await supabase.rpc('fn_diagnostic_coherence_financiere' as any);
       if (error) throw error;
-      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Diagnostic échoué.');
-      setDiagResult(data as DiagResult);
+      setDiagResult(lireDiagnosticFinancier(data));
       toast.success('Diagnostic terminé');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors du diagnostic.');
+    } catch {
+      setDiagError(ERREUR_DIAGNOSTIC_FINANCIER);
+    } finally {
+      setDiagLoading(false);
     }
-    setDiagLoading(false);
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Piloter les finances Jolene" /></LayoutAdmin>;
@@ -588,10 +590,13 @@ export default function AdminFinances() {
           <div className="space-y-4 border-t border-border p-4">
             <div className="flex justify-end">
               <BoutonY2K size="sm" variant="secondary" onClick={lancerDiagnostic} disabled={diagLoading} loading={diagLoading}>
-                {diagLoading ? 'Analyse en cours…' : 'Lancer le diagnostic'}
+                {diagLoading ? 'Analyse en cours…' : diagError ? 'Réessayer le diagnostic' : 'Lancer le diagnostic'}
               </BoutonY2K>
             </div>
-            {!diagResult && !diagLoading && (
+            {diagError && (
+              <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{diagError}</p>
+            )}
+            {!diagResult && !diagLoading && !diagError && (
               <p className="text-sm text-muted-foreground">Lancez l'analyse de cohérence entre missions, factures et transferts Stripe.</p>
             )}
             {diagResult && (
@@ -601,7 +606,7 @@ export default function AdminFinances() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: 'Missions incohérentes', count: diagResult.missions_incoherentes.count },
-                    { label: 'Factures avec écart mission', count: diagResult.factures_ecart_mission.count },
+                    { label: 'Pièces avec écart documentaire', count: diagResult.factures_ecart_mission.count },
                     { label: 'Transferts Stripe orphelins', count: diagResult.stripe_transfers_orphelins.count },
                   ].map((item) => (
                     <div key={item.label} className={`rounded-xl border p-3 flex items-center gap-3 ${item.count > 0 ? 'border-destructive/40 bg-destructive/5' : 'border-success/30 bg-success/5'}`}>
@@ -615,6 +620,20 @@ export default function AdminFinances() {
                     </div>
                   ))}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  {diagResult.factures_verifiees} pièce(s) contrôlée(s) à partir des heures et du taux figés sur chaque pièce. Le planning courant et le total de la mission ne sont pas utilisés pour ce contrôle.
+                </p>
+                {diagResult.factures_non_verifiables.count > 0 && (
+                  <div className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3">
+                    <p className="font-semibold text-foreground">Pièces non vérifiables : {diagResult.factures_non_verifiables.count}</p>
+                    <p className="text-sm text-muted-foreground">Leur montant n’est pas déclaré cohérent ou incohérent par ce contrôle.</p>
+                    {diagResult.factures_non_verifiables.echantillon.map(piece => (
+                      <p key={piece.facture_id} className="text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">{piece.numero_facture}</span> — {MOTIFS_DOCUMENT_NON_VERIFIABLE[piece.motif]}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {/* Echantillons */}
                 {diagResult.missions_incoherentes.count > 0 && diagResult.missions_incoherentes.echantillon.length > 0 && (
                   <div className="space-y-1">
@@ -631,12 +650,12 @@ export default function AdminFinances() {
                 )}
                 {diagResult.factures_ecart_mission.count > 0 && diagResult.factures_ecart_mission.echantillon.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-foreground">Factures avec écart (échantillon)</p>
+                    <p className="text-xs font-semibold text-foreground">Pièces avec écart documentaire (échantillon)</p>
                     {diagResult.factures_ecart_mission.echantillon.map((f) => (
                       <div key={f.facture_id} className="text-xs flex flex-wrap items-center gap-2 p-2 rounded-lg bg-muted/40">
                         <span className="font-mono text-foreground">{f.numero_facture}</span>
                         <span className="text-muted-foreground">HT {formatEur(f.montant_ht)}</span>
-                        <span className="text-muted-foreground">Mission net {formatEur(f.mission_net)}</span>
+                        <span className="text-muted-foreground">HT selon les données figées {formatEur(f.attendu_ht)}</span>
                         <span className="text-destructive font-bold">Écart {formatEur(f.ecart)}</span>
                       </div>
                     ))}
@@ -654,9 +673,9 @@ export default function AdminFinances() {
                     ))}
                   </div>
                 )}
-                {diagResult.missions_incoherentes.count === 0 && diagResult.factures_ecart_mission.count === 0 && diagResult.stripe_transfers_orphelins.count === 0 && (
+                {diagResult.missions_incoherentes.count === 0 && diagResult.factures_ecart_mission.count === 0 && diagResult.stripe_transfers_orphelins.count === 0 && diagResult.factures_non_verifiables.count === 0 && (
                   <p className="text-sm text-success inline-flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" /> Tout cohérent — aucune anomalie détectée.
+                    <CheckCircle2 className="h-4 w-4" /> Aucun écart détecté dans les contrôles effectués.
                   </p>
                 )}
               </div>
