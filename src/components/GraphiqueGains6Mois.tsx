@@ -4,9 +4,10 @@ import { cleMoisParis, formatParis } from '@/lib/date-heure-paris';
 
 interface Props {
   missions: { debut_le: string; net_a_payer: number | null }[];
+  estimationSalariale?: boolean;
 }
 
-export function GraphiqueGains6Mois({ missions }: Props) {
+export function GraphiqueGains6Mois({ missions, estimationSalariale = false }: Props) {
   const data = useMemo(() => {
     const [anneeCourante, moisCourant] = cleMoisParis(new Date()).split('-').map(Number);
     const result: { cle: string; mois: string; gains: number }[] = [];
@@ -22,19 +23,20 @@ export function GraphiqueGains6Mois({ missions }: Props) {
     return result;
   }, [missions]);
 
-  const hasData = data.some(d => d.gains > 0);
+  const hasData = data.some(d => d.gains !== 0);
   if (!hasData) return null;
 
   return (
     <div className="card-base mb-6">
-      <h2 className="text-base font-semibold text-foreground mb-4">📊 Gains des 6 derniers mois</h2>
+      <h2 className="text-base font-semibold text-foreground mb-2">{estimationSalariale ? 'Salaires nets estimés sur 6 mois' : 'Honoraires facturés sur 6 mois'}</h2>
+      <p className="text-xs text-muted-foreground mb-4">{estimationSalariale ? 'Estimations du planning ; le bulletin employeur indique le net exact.' : 'TTC selon la date d’émission, avoirs déduits ; distinct des paiements reçus.'}</p>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -15 }}>
             <XAxis dataKey="mois" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}€`} />
             <Tooltip
-              formatter={(v: number) => [`${v.toFixed(0)} €`, 'Net']}
+              formatter={(v: number) => [`${v.toFixed(2)} €`, estimationSalariale ? 'Net estimé' : 'Facturé TTC']}
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
               labelStyle={{ color: 'hsl(var(--foreground))' }}
               cursor={{ fill: 'hsl(var(--muted) / 0.3)' }}

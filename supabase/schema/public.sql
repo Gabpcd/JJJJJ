@@ -1147,9 +1147,15 @@ CREATE OR REPLACE FUNCTION "public"."dec_calculer_commission"() RETURNS "trigger
 DECLARE
     v_taux NUMERIC;
 BEGIN
-    IF NEW.statut = 'TERMINEE' AND NEW.net_a_payer IS NOT NULL THEN
+    -- Après dec_mission_z_finance, les colonnes mission décrivent le même
+    -- planning. Un delta de facture ne peut modifier uniquement sa commission.
+    -- Les pièces comptables restent calculées et payées indépendamment.
+    IF (NEW.statut = 'TERMINEE'
+        OR (NEW.statut = 'EN_COURS' AND NEW.type_contrat_applique = 'LIBERAL'))
+       AND NEW.net_a_payer IS NOT NULL THEN
         v_taux := COALESCE(
             NEW.taux_commission_fige,
+            CASE WHEN NEW.statut = 'EN_COURS' THEN NEW.taux_commission ELSE NULL END,
             (SELECT e.taux_commission_negocie FROM etablissements e WHERE e.id = NEW.etablissement_id),
             public.fn_param_num('commission_defaut_pct', 15)
         );
@@ -47151,7 +47157,11 @@ DECLARE
   v_mission public.missions%ROWTYPE;
   v_etab public.etablissements%ROWTYPE;
   v_existing public.factures%ROWTYPE;
-  v_total_precedent numeric := 0;
+  v_base_precedente numeric := 0;
+  v_commission_precedente numeric := 0;
+  v_nb_precedents integer := 0;
+  v_taux_commission numeric;
+  v_ht_piece numeric(10,2);
   v_ttc numeric(10,2);
   v_ht numeric(10,2);
   v_tva numeric(10,2);
@@ -47193,36 +47203,71 @@ BEGIN
      OR v_mission.type_contrat_applique <> 'LIBERAL'
      OR v_mission.soignant_assigne_id <> v_fh.soignant_id
      OR v_mission.etablissement_id <> v_fh.etablissement_id
-     OR COALESCE(v_mission.net_a_payer, 0) <= 0
-     OR COALESCE(v_mission.montant_commission_ttc, 0) <= 0 THEN
+     OR v_fh.montant_ht IS NULL OR v_fh.montant_ht <= 0
+     OR v_fh.montant_ht::text IN ('NaN', 'Infinity', '-Infinity') THEN
     RAISE EXCEPTION 'Mission incohérente pour la facture de commission' USING ERRCODE = '23514';
   END IF;
 
-  SELECT COALESCE(sum(f.montant_ttc), 0)
-  INTO v_total_precedent
-  FROM public.factures f
-  WHERE f.mission_id = v_mission.id
-    AND f.facture_honoraire_id IS NOT NULL
-    AND f.type_document = 'FACTURE'
-    AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION');
+  -- La mission reste une estimation du planning. Les honoraires émis sont
+  -- l'assiette de cette facture, y compris après un litige sur une autre période.
+  -- Le repli historique conserve le taux déjà stocké, jamais le ratio des montants.
+  v_taux_commission := COALESCE(v_mission.taux_commission_fige, v_mission.taux_commission);
+  IF v_taux_commission IS NULL OR v_taux_commission <= 0 OR v_taux_commission > 100
+     OR v_taux_commission::text IN ('NaN', 'Infinity', '-Infinity') THEN
+    RAISE EXCEPTION 'Taux de commission de mission absent ou incohérent' USING ERRCODE = '23514';
+  END IF;
+  v_ht_piece := round(v_fh.montant_ht * v_taux_commission / 100, 2);
+  v_ht := v_ht_piece;
 
   IF v_fh.est_facture_finale_mission THEN
-    v_ttc := round(GREATEST(v_mission.montant_commission_ttc - v_total_precedent, 0), 2);
-  ELSE
-    v_ttc := round(
-      LEAST(
-        v_mission.montant_commission_ttc - v_total_precedent,
-        v_mission.montant_commission_ttc * v_fh.montant_ttc / v_mission.net_a_payer
-      ),
-      2
-    );
-  END IF;
-  IF v_ttc <= 0 THEN
-    RAISE EXCEPTION 'Commission de période nulle ou déjà intégralement facturée' USING ERRCODE = '23514';
-  END IF;
+    -- La dernière pièce ne doit solder ni un budget prévisionnel ni une erreur
+    -- historique. Les remplacements exclus et les avoirs signés restent liés
+    -- à leurs propres commissions ; seuls les centimes d'arrondi sont lissés.
+    IF EXISTS (
+      SELECT 1 FROM public.factures_honoraires h
+      WHERE h.mission_id = v_mission.id AND h.id <> v_fh.id
+        AND h.statut IN ('EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE', 'REMBOURSE')
+        AND (h.soignant_id IS DISTINCT FROM v_fh.soignant_id
+          OR h.etablissement_id IS DISTINCT FROM v_fh.etablissement_id
+          OR h.montant_ht <= 0 OR h.montant_ht::text IN ('NaN', 'Infinity', '-Infinity')
+          OR (SELECT count(*) FROM public.factures f WHERE f.facture_honoraire_id = h.id
+            AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')) <> 1
+          OR NOT EXISTS (
+            SELECT 1 FROM public.factures f
+            WHERE f.facture_honoraire_id = h.id AND f.mission_id = v_mission.id
+              AND f.etablissement_id = v_fh.etablissement_id
+              AND f.type_document = h.type_document::text
+              AND f.montant_ht > 0 AND f.montant_ht::text NOT IN ('NaN', 'Infinity', '-Infinity')
+              AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+          ))
+    ) THEN
+      RAISE EXCEPTION 'Commission antérieure absente, ambiguë ou incohérente : facture finale suspendue' USING ERRCODE = '23514';
+    END IF;
 
-  v_ht := round(v_ttc / 1.20, 2);
-  v_tva := v_ttc - v_ht;
+    SELECT COALESCE(sum(CASE WHEN h.type_document = 'AVOIR' THEN -h.montant_ht ELSE h.montant_ht END), 0),
+           COALESCE(sum(CASE WHEN f.type_document = 'AVOIR' THEN -f.montant_ht ELSE f.montant_ht END), 0),
+           count(*)::integer
+      INTO v_base_precedente, v_commission_precedente, v_nb_precedents
+      FROM public.factures_honoraires h
+      JOIN public.factures f ON f.facture_honoraire_id = h.id AND f.type_document = h.type_document::text
+      WHERE h.mission_id = v_mission.id AND f.mission_id = v_mission.id AND h.id <> v_fh.id
+        AND h.soignant_id = v_fh.soignant_id AND h.etablissement_id = v_fh.etablissement_id
+        AND f.etablissement_id = v_fh.etablissement_id
+        AND h.statut IN ('EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE', 'REMBOURSE')
+        AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION');
+    v_ht := round((v_base_precedente + v_fh.montant_ht) * v_taux_commission / 100, 2)
+      - v_commission_precedente;
+    IF abs(v_ht - v_ht_piece) > v_nb_precedents * 0.01 THEN
+      RAISE EXCEPTION 'Historique de commission incohérent : écart hors arrondis' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  IF v_ht <= 0 OR v_ht::text IN ('NaN', 'Infinity', '-Infinity') THEN
+    RAISE EXCEPTION 'Commission de période nulle ou négative' USING ERRCODE = '23514';
+  END IF;
+  -- Même calcul par pièce que les commissions de remplacement/complément.
+  -- La TVA n'est pas compensée entre deux factures déjà émises.
+  v_tva := round(v_ht * 0.20, 2);
+  v_ttc := v_ht + v_tva;
   v_numero := 'JOL-' || to_char(CURRENT_DATE, 'YYYY') || '-H-' || upper(left(replace(v_fh.id::text, '-', ''), 10));
 
   INSERT INTO public.factures (

@@ -1,6 +1,7 @@
 -- Régression : commission globale après remplacement canonique d’une facture hebdomadaire.
 -- Source de seed : banc F1 rollback existant ; taux, heures seules et finale.
--- Le cas heures seules décrit la parité historique, pas une cohérence globale corrigée.
+-- Le cas heures seules conserve le planning 160 / 24 et les pièces corrigées 60 / 9.
+-- L’ancienne caractérisation 160 / 21 est conservée dans la preuve rouge pré-migration.
 -- Pas Edge/Storage. Les références PDF/XML ci-dessous sont fictives.
 -- Le pg_net notify-support éventuel reste dans une transaction jamais commitée.
 -- Les claims administrateur sont synthétiques : aucune preuve de login/MFA.
@@ -90,14 +91,13 @@ BEGIN
   IF v_jour_passe IS NULL OR v_jour_futur IS NULL OR v_semaine+6>=current_date
   THEN RAISE EXCEPTION 'F1 : calendrier de fixture indisponible'; END IF;
 
-  -- Les deux premiers cas caractérisent les chemins partagés AVANT la
-  -- régression de taux hebdomadaire. Atteindre celle-ci prouve leur passage.
-  -- Pour les heures seules, 160/21 est la parité historique à documenter,
-  -- PAS une nouvelle règle : 21 ne représente pas 15 % du net resté à 160.
+  -- Les cinq chemins restent couverts. Pour les heures seules, les pièces
+  -- corrigées sont distinctes du planning : 60 / 9 contre 160 / 24 estimatifs.
+  -- Les quatre cas de taux/finale conservent leurs attendus précédents.
   FOR v_cas IN SELECT * FROM (VALUES
-    ('heures_seules_historique',false,3::numeric,NULL::numeric,20::numeric,
+    ('heures_seules_estimation',false,3::numeric,NULL::numeric,20::numeric,
       60::numeric,160::numeric,9::numeric,1.80::numeric,10.80::numeric,
-      24::numeric,4.80::numeric,28.80::numeric,21::numeric,4.20::numeric,25.20::numeric),
+      24::numeric,4.80::numeric,28.80::numeric,24::numeric,4.80::numeric,28.80::numeric),
     ('finale_taux_baisse',true,NULL,18,18,72,72,10.80,2.16,12.96,10.80,2.16,12.96,10.80,2.16,12.96),
     ('hebdo_taux_baisse',false,NULL,18,18,72,144,10.80,2.16,12.96,21.60,4.32,25.92,21.60,4.32,25.92),
     ('hebdo_taux_hausse',false,NULL,22,22,88,176,13.20,2.64,15.84,26.40,5.28,31.68,26.40,5.28,31.68),

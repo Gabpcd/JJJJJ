@@ -150,7 +150,7 @@ test('workflow simulé : main seul persiste, CREATE TABLE de PR envoyé une fois
   assert.deepEqual(state.persisted.map(item => item.name), [pending]);
   assert.ok(state.requests.every(request => request.url === 'https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/database/query'));
 });
-test('F1 test-only : les deux bancs sous rollback, sans migration ni CLI ni persistance', t => {
+test('F1 test-only : les trois bancs sous rollback, sans migration ni CLI ni persistance', t => {
   const f = fixture(t);
   f.git('rm', `supabase/migrations/${proposed}`); f.git('commit', '-qm', 'sans migration produit');
   const result = f.run(rollback, { HAS_MIGRATIONS: 'false' });
@@ -160,6 +160,7 @@ test('F1 test-only : les deux bancs sous rollback, sans migration ni CLI ni pers
   assert.deepEqual([...sql.matchAll(/^-- regression: (.+)$/gm)].map(match => match[1]), [
     'tests/security/facturation-remplacement-commission-f1.test.sql',
     'tests/security/facturation-heures-ajustees-chainage-f1.test.sql',
+    'tests/security/facturation-commissions-pieces-matrice-f1.test.sql',
   ]);
   assert.ok(sql.startsWith('BEGIN;\n') && sql.endsWith('ROLLBACK;\n'));
   assert.ok(!sql.includes('-- migration:')); assert.ok(!sql.includes('COMMIT;'));

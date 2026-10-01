@@ -297,6 +297,7 @@ jobs:
             'tests/security/facturation-remplacement-commission-f1.test.sql' \
             'tests/fixtures/facturation-remplacement-f1/catalogue.sql' \
             'tests/security/facturation-heures-ajustees-chainage-f1.test.sql' \
+            'tests/security/facturation-commissions-pieces-matrice-f1.test.sql' \
             'supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql' \
             'tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql'; then
             has_f1_regression=false
@@ -549,13 +550,14 @@ jobs:
             tests/security/litige-resolveur-garde-initiale.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
             tests/security/facturation-heures-ajustees-chainage-f1.test.sql
+            tests/security/facturation-commissions-pieces-matrice-f1.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
-          # staging : cette voie prouve seulement les deux régressions F1 LIVE.
+          # staging : cette voie prouve seulement les trois bancs F1 LIVE.
           # Le helper de taux corrigé doit déjà être déployé (préflight), sans sync ici.
-          # Avec migration, les 49 suites précédentes + le chaînage restent obligatoires.
+          # Avec migration, les 49 suites précédentes + le chaînage + la matrice restent obligatoires.
           case "$HAS_MIGRATIONS" in
-            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql tests/security/facturation-heures-ajustees-chainage-f1.test.sql) ;;
+            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql tests/security/facturation-heures-ajustees-chainage-f1.test.sql tests/security/facturation-commissions-pieces-matrice-f1.test.sql) ;;
             true) ;;
             *) echo "::error::Portée migration absente ou invalide."; exit 1 ;;
           esac
