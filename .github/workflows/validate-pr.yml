@@ -457,6 +457,7 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HAS_MIGRATIONS: ${{ steps.migration_scope.outputs.has_migrations }}
         run: |
           set -euo pipefail
           if [ -z "$STAGING_SUPABASE_ACCESS_TOKEN" ] || [ -z "$STAGING_SUPABASE_PROJECT_REF" ] || [ -z "$BASE_SHA" ]; then
@@ -523,6 +524,14 @@ jobs:
             tests/security/litige-resolveur-garde-initiale.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
           )
+          # Sans migration, ne pas exiger des fonctions main absentes du
+          # staging : cette voie prouve seulement la régression F1 LIVE.
+          # Avec migration, les 48 suites historiques + F1 restent obligatoires.
+          case "$HAS_MIGRATIONS" in
+            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql) ;;
+            true) ;;
+            *) echo "::error::Portée migration absente ou invalide."; exit 1 ;;
+          esac
 
           {
             echo 'BEGIN;'
@@ -560,7 +569,6 @@ jobs:
             exit 1
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
-
 
       - name: F1 — SELECT indépendant après succès ou échec SQL
         if: always() && steps.migration_scope.outputs.has_f1_regression == 'true'
