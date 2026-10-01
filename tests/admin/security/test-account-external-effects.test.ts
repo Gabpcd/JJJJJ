@@ -85,7 +85,7 @@ describe("comptes test exclus avant tout effet externe", () => {
     }
   });
 
-  it("neutralise les webhooks plateforme et Connect avant le claim/métier", () => {
+  it("classifie les webhooks avant claim et neutralise les comptes TEST sans admission", () => {
     const shared = readFileSync(
       `${root}/supabase/functions/_shared/stripe-webhook-handler.ts`,
       "utf8",
@@ -99,7 +99,7 @@ describe("comptes test exclus avant tout effet externe", () => {
     );
     expectBefore(
       handler,
-      "if (testClassification.isTest)",
+      "if (testClassification.isTest && !stagingConnectEvent)",
       "stripe.transfers.create(",
       "stripe-webhook-handler",
     );
