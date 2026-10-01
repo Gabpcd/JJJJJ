@@ -231,7 +231,9 @@ function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
     setTimeout(() => setBouncing(false), 350);
     if (document.visibilityState === 'visible' && soundEnabled) playNotifSound();
     toast.info(n.titre, { description: n.corps?.substring(0, 80) });
-    if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+    // Ce type est livré par le relais serveur et ses préférences, même page fermée.
+    // Ne pas le doubler par une alerte OS locale qui contournerait le canal PUSH.
+    if (n.type !== 'CANDIDATURE_RECUE' && document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(n.titre || 'Nouveau message', { body: n.corps || '' });
       notification.onclick = () => {
         window.focus();
