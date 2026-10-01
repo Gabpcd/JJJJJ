@@ -14,6 +14,7 @@ export const ids = Object.freeze({
   mission: 'f1300003-3000-4000-8000-000000000003',
   facture: 'f1300004-4000-4000-8000-000000000004',
   avoir: 'f1300005-5000-4000-8000-000000000005',
+  remplacement: 'f1300007-7000-4000-8000-000000000007',
   commission: 'f1300006-6000-4000-8000-000000000006',
   soignant: '11111111-1111-4111-8111-111111111111',
   etab: '22222222-2222-4222-8222-222222222222',
@@ -81,7 +82,7 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
   return handler;
 }
 
-export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '' } = {}) {
+export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE' } = {}) {
   const documents = new Map(), factures = [], versions = [], appels = [], inconnus = [], logs = [];
   const soignant = { id: ids.soignant, prenom: 'Élodie', nom: pagination ? "L'Été de la Vallée de Saint-Martin" : "L'Été", profession: 'IDE',
     numero_rpps: '00000000001', siret_liberal: '11111111111111', email: 'camille@example.invalid',
@@ -123,7 +124,7 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
         const name = path.split('/').at(-1);
         switch (name) {
           case 'fn_verifier_pre_facturation': assert.equal(body.p_mission_id, ids.mission); return json({ success: true });
-          case 'next_invoice_number': assert.equal(body.p_soignant_id, ids.soignant); return json('F1-HONORAIRE-SEMAINE');
+          case 'next_invoice_number': assert.equal(body.p_soignant_id, ids.soignant); return json(numeroFacture);
           case 'fn_calculer_montant_periode': assert.equal(body.p_mission_id, ids.mission); return json({ montant_ht_periode: 80, duree_periode_heures: 4, taux_horaire_base_fige: 20 });
           case 'fn_cumul_factures_mission': assert.equal(body.p_mission_id, ids.mission); return json({ cumul_ht: 0, nb_factures: 0 });
           case 'fn_param_num': assert.equal(body.p_cle, 'delai_paiement_prive_j'); return json(30);
@@ -134,6 +135,7 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
             return json({ success: true, delai_verification_heures: 48 });
           }
           case 'fn_preparer_facture_commission_periode': assert.equal(body.p_facture_honoraire_id, ids.facture); return json({ facture_id: ids.commission });
+          case 'fn_preparer_commission_remplacement_honoraires': assert.equal(body.p_facture_honoraire_id, ids.remplacement); return json({ facture_id: ids.commission });
           case 'fn_preparer_avoir_commission_honoraires': assert.equal(body.p_avoir_honoraires_id, ids.avoir); return json({ facture_id: ids.commission });
           default: throw new Error(`Unknown RPC ${name}`);
         }
@@ -148,6 +150,12 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
           const data = { missions: mission, soignants: soignant, etablissements: etablissement }[table];
           if (data) { assert.equal(id, data.id); return json(data); }
           if (table === 'factures_honoraires') {
+            // Fault only the real parent lookup transport; keep the renderer intact.
+            if (id === ids.facture && ['numero_facture,date_emission',
+              'id,numero_facture,date_emission,type_document,mission_id,soignant_id,etablissement_id'].includes(url.searchParams.get('select'))) {
+              if (pannePrecedente === 'absente') return json(null);
+              if (pannePrecedente === 'erreur') return json({ message: 'fixture: parent lookup unavailable' }, 500);
+            }
             if (id) { const f = factures.find(f => f.id === id); assert(f); return json(f); }
             assert.equal(url.searchParams.get('mission_id'), `eq.${ids.mission}`);
             if (url.searchParams.has('numero_semaine_iso') && factures.length) return json(factures[0]);
@@ -174,6 +182,18 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
   }));
   return { documents, factures, versions, appels, inconnus, logs, mission, soignant, etablissement, invoquer,
     async genererFacture() { return invoquer({ mission_id: ids.mission, periode_debut: '2026-09-21', periode_fin: '2026-09-27', numero_semaine_iso: 39, annee_iso: 2026, est_facture_finale_mission: false }); },
+    preparerRemplacement() {
+      assert.equal(factures.length, 1);
+      // Canonical SQL result represented at the IO boundary; this fixture does
+      // not execute the resolver, financial triggers or any payment provider.
+      const original = factures[0]; original.statut = 'REMPLACEE';
+      const remplacement = { ...original, id: ids.remplacement, numero_facture: 'F1-RECTIFICATIVE-SEMAINE',
+        type_document: 'FACTURE', facture_precedente_id: original.id, nature_correction: 'REMPLACEMENT', statut: 'BROUILLON',
+        description_prestation_snapshot: `Rectification hebdomadaire : 4 heures au taux de 18 EUR${pagination ? ` — ${mission.intitule}` : ''}`,
+        quantite_heures_snapshot: 4, taux_horaire_snapshot: 18,
+        montant_ht: 72, montant_tva: 0, montant_ttc: 72, pdf_s3_key: null, facturx_xml_url: null };
+      factures.push(remplacement); return remplacement;
+    },
     async genererAvoir() {
       assert.equal(factures.length, 1);
       factures.push({ ...factures[0], id: ids.avoir, numero_facture: 'F1-AVOIR-PARTIEL', type_document: 'AVOIR',
@@ -195,12 +215,12 @@ export function verifierXml(bytes, facture, original, vendeur = "Élodie L'Été
     qdt: 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100' };
   for (const element of Array.from(doc.getElementsByTagName('*'))) assert.equal(element.namespaceURI, namespaces[element.prefix], element.tagName);
   const all = name => Array.from(doc.getElementsByTagNameNS('*', name));
-  const one = (parent, name) => { const list = parent.getElementsByTagNameNS('*', name); assert.equal(list.length, 1, name); return list[0].textContent; };
+  const one = (parent, name) => { assert(parent, `Missing XML parent for ${name}`); const list = parent.getElementsByTagNameNS('*', name); assert.equal(list.length, 1, name); return list[0].textContent; };
   const exchanged = all('ExchangedDocument')[0]; assert(exchanged);
   assert.equal(doc.documentElement.localName, 'CrossIndustryInvoice');
   assert.equal(doc.documentElement.namespaceURI, 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100');
   assert.equal(one(exchanged, 'ID'), facture.numero_facture);
-  assert.equal(one(exchanged, 'TypeCode'), original ? '381' : '380');
+  assert.equal(one(exchanged, 'TypeCode'), facture.type_document === 'AVOIR' ? '381' : '380');
   assert.equal(one(exchanged, 'DateTimeString'), '20260930');
   assert.equal(all('InvoiceCurrencyCode')[0].textContent, 'EUR');
   assert.equal(one(all('GuidelineSpecifiedDocumentContextParameter')[0], 'ID'), 'urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic');
@@ -219,19 +239,24 @@ export function verifierXml(bytes, facture, original, vendeur = "Élodie L'Été
   assert.equal(Number(one(sums, 'DuePayableAmount')), facture.montant_ttc);
   assert.equal(Number(one(all('SpecifiedTradeSettlementLineMonetarySummation')[0], 'LineTotalAmount')), facture.montant_ht);
   assert.equal(Number(all('BilledQuantity')[0].textContent), facture.quantite_heures_snapshot);
-  assert.equal(Number(all('NetPriceProductTradePrice')[0].getElementsByTagNameNS('*', 'ChargeAmount')[0].textContent), 20);
+  assert.equal(Number(all('NetPriceProductTradePrice')[0].getElementsByTagNameNS('*', 'ChargeAmount')[0].textContent), Number(facture.taux_horaire_snapshot));
   if (original) {
     assert.equal(one(all('InvoiceReferencedDocument')[0], 'IssuerAssignedID'), original.numero_facture);
     assert.equal(one(all('InvoiceReferencedDocument')[0], 'DateTimeString'), original.date_emission.replaceAll('-', ''));
   } else assert.equal(all('InvoiceReferencedDocument').length, 0);
   const mention = all('IncludedNote').map(note => one(note, 'Content')).find(value => value.startsWith('Facture emise par JOLENE SASU'));
   assert(mention);
-  return { numero: facture.numero_facture, type: original ? '381' : '380', ht: facture.montant_ht, tva: facture.montant_tva, ttc: facture.montant_ttc, mention };
+  return { numero: facture.numero_facture, type: facture.type_document === 'AVOIR' ? '381' : '380', ht: facture.montant_ht, tva: facture.montant_tva, ttc: facture.montant_ttc, mention };
 }
 
 export async function genererDocuments(options = {}) {
   const banc = creerBanc(options);
-  for (const generate of [() => banc.genererFacture(), () => banc.genererAvoir()]) {
+  const correction = () => {
+    if (!options.remplacement) return banc.genererAvoir();
+    const facture = banc.preparerRemplacement();
+    return banc.invoquer({ facture_id: facture.id });
+  };
+  for (const generate of [() => banc.genererFacture(), correction]) {
     const response = await generate(), body = await response.json();
     assert.deepEqual(banc.inconnus, []); assert.equal(response.status, 200, JSON.stringify(body)); assert.equal(body.success, true);
   }

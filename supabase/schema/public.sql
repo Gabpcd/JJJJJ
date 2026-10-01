@@ -47091,23 +47091,44 @@ BEGIN
     'FACTURE'
   ) RETURNING * INTO v_existing;
 
-  UPDATE public.missions
-  SET total_brut = round(
-        COALESCE(total_brut, 0)
-          + v_fh.montant_ht - v_origine_honoraires.montant_ht,
-        2
-      ),
-      net_a_payer = round(
-        COALESCE(net_a_payer, 0)
-          + v_fh.montant_ttc - v_origine_honoraires.montant_ttc,
-        2
-      ),
-      montant_commission_ht = round(COALESCE(montant_commission_ht, 0) + v_delta_ht, 2),
-      montant_commission_tva = round(COALESCE(montant_commission_tva, 0) + v_delta_tva, 2),
-      montant_commission_ttc = round(COALESCE(montant_commission_ttc, 0) + v_delta_ttc, 2),
-      commission_a_recalculer = false,
-      modifie_le = now()
-  WHERE id = v_mission.id;
+  -- Cas reproduit : taux corrigé, quantité facturée inchangée sur une mission
+  -- EN_COURS. Le moteur de mission a déjà recalculé ses agrégats au nouveau
+  -- taux ; le delta de cette période ne doit pas être appliqué une seconde fois.
+  -- Les autres corrections conservent le chemin historique (notamment heures
+  -- seules et finale), sans prétendre corriger leurs propres écarts financiers.
+  IF v_mission.statut = 'EN_COURS'
+     AND v_fh.quantite_heures_snapshot > 0
+     AND v_fh.quantite_heures_snapshot::text NOT IN ('NaN', 'Infinity', '-Infinity')
+     AND v_fh.quantite_heures_snapshot = v_origine_honoraires.quantite_heures_snapshot
+     AND v_fh.taux_horaire_snapshot > 0
+     AND v_origine_honoraires.taux_horaire_snapshot > 0
+     AND v_fh.taux_horaire_snapshot::text NOT IN ('NaN', 'Infinity', '-Infinity')
+     AND v_origine_honoraires.taux_horaire_snapshot::text NOT IN ('NaN', 'Infinity', '-Infinity')
+     AND v_fh.taux_horaire_snapshot <> v_origine_honoraires.taux_horaire_snapshot
+     AND v_mission.taux_horaire_base = v_fh.taux_horaire_snapshot THEN
+    UPDATE public.missions
+    SET commission_a_recalculer = false,
+        modifie_le = now()
+    WHERE id = v_mission.id;
+  ELSE
+    UPDATE public.missions
+    SET total_brut = round(
+          COALESCE(total_brut, 0)
+            + v_fh.montant_ht - v_origine_honoraires.montant_ht,
+          2
+        ),
+        net_a_payer = round(
+          COALESCE(net_a_payer, 0)
+            + v_fh.montant_ttc - v_origine_honoraires.montant_ttc,
+          2
+        ),
+        montant_commission_ht = round(COALESCE(montant_commission_ht, 0) + v_delta_ht, 2),
+        montant_commission_tva = round(COALESCE(montant_commission_tva, 0) + v_delta_tva, 2),
+        montant_commission_ttc = round(COALESCE(montant_commission_ttc, 0) + v_delta_ttc, 2),
+        commission_a_recalculer = false,
+        modifie_le = now()
+    WHERE id = v_mission.id;
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true, 'facture_id', v_existing.id,

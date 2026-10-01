@@ -1165,8 +1165,8 @@ export default function DetailMissionSoignant() {
             />
           )}
 
-          {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
-          {estTerminee && missionEstLiberale && (
+          {/* Consulter aussi les factures hebdomadaires d'une mission en cours. */}
+          {estAssigne && missionEstLiberale && (
             <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
           )}
 

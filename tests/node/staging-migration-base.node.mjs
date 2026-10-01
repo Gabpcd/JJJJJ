@@ -101,7 +101,7 @@ if (path.basename(process.argv[1]) === 'supabase') {
   const env = { ...process.env, BASE_SHA: baseSha, RUNNER_TEMP: runner, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
     STAGING_SUPABASE_ACCESS_TOKEN: 'fake-token-never-log', STAGING_SUPABASE_PROJECT_REF: 'mejpriaetwgtcstbgfid',
     STAGING_SUPABASE_DB_PASSWORD: 'fake-password-never-log', FIXTURE_STATE: stateFile,
-    FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200) };
+    FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200), HAS_MIGRATIONS: 'true' };
   function run(script, extraEnv = {}) {
     // macOS fournit Bash 3 ; l'équivalent de mapfile permet d'exécuter le même
     // bloc prévu pour Bash 5 sur le runner, sans changer ses commandes SQL.
@@ -113,7 +113,7 @@ if (path.basename(process.argv[1]) === 'supabase') {
     assert.ok(!`${result.stdout}${result.stderr}`.includes(env.STAGING_SUPABASE_DB_PASSWORD));
     return result;
   }
-  return { run, state: () => JSON.parse(readFileSync(stateFile)), repo, runner, env, git };
+  return { run, state: () => JSON.parse(readFileSync(stateFile)), repo, runner, env, git, suites };
 }
 
 test('workflow simulé : main seul persiste, CREATE TABLE de PR envoyé une fois sous rollback', t => {
@@ -132,8 +132,20 @@ test('workflow simulé : main seul persiste, CREATE TABLE de PR envoyé une fois
   assert.equal(sql.match(/CREATE TABLE public\.unapproved_contract/g)?.length, 1);
   assert.ok(!sql.includes('CREATE TABLE public.pending_main')); assert.ok(!sql.includes('COMMIT;'));
   assert.ok(sql.includes('SAVEPOINT jolene_sql_test_1;')); assert.ok(sql.includes('ROLLBACK TO SAVEPOINT jolene_sql_test_1;'));
+  assert.deepEqual([...sql.matchAll(/^-- regression: (.+)$/gm)].map(match => match[1]), f.suites);
   assert.deepEqual(state.persisted.map(item => item.name), [pending]);
   assert.ok(state.requests.every(request => request.url === 'https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/database/query'));
+});
+test('workflow : portée migration absente ou invalide refuse avant toute requête', t => {
+  const f = fixture(t);
+  for (const HAS_MIGRATIONS of [undefined, '', 'TRUE', 'invalid']) {
+    const result = f.run(rollback, { HAS_MIGRATIONS });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /HAS_MIGRATIONS: unbound variable|Portée migration absente ou invalide/);
+    const state = f.state();
+    assert.deepEqual(state.requests, []); assert.deepEqual(state.cli, []);
+    assert.deepEqual(state.persisted, []); assert.deepEqual(state.transactions, []);
+  }
 });
 test('workflow : staging avec une version PR ou main plus récent échoue avant toute DDL/CLI', t => {
   for (const version of [proposed.slice(0, 14), '20260904000000']) {
@@ -165,5 +177,6 @@ test('un fichier PR recopié dans le worktree main est refusé même sans versio
 });
 test('workflow conserve le verrou staging et exécute ces simulations en CI', () => {
   assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.equal(sqlJob.steps.find(step => step.run === rollback).env.HAS_MIGRATIONS, '${{ steps.migration_scope.outputs.has_migrations }}');
   assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs'));
 });

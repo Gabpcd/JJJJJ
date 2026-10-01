@@ -295,6 +295,7 @@ function generateCiiXml(inv: {
   subrogationMention?: string;
   // CP-LITIGES-6 : mode AVOIR (BT-3=381 + BT-25/BT-26)
   isAvoir?: boolean;
+  isReplacement?: boolean;
   precedingInvoiceNumber?: string;  // BT-25
   precedingInvoiceIssueDate?: string; // BT-26 (YYYY-MM-DD)
 }): string {
@@ -326,7 +327,7 @@ function generateCiiXml(inv: {
   // que la facture annulée ; un type 381 avec totaux négatifs inverserait deux
   // fois le sens et casserait aussi la réconciliation ligne/en-tête.
   const typeCode = inv.isAvoir ? '381' : '380';
-  const precedingRef = inv.isAvoir && inv.precedingInvoiceNumber
+  const precedingRef = (inv.isAvoir || inv.isReplacement) && inv.precedingInvoiceNumber
     ? `<ram:InvoiceReferencedDocument>
         <ram:IssuerAssignedID>${escapeXml(inv.precedingInvoiceNumber)}</ram:IssuerAssignedID>
         ${inv.precedingInvoiceIssueDate ? `<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">${fmtDate(inv.precedingInvoiceIssueDate)}</qdt:DateTimeString></ram:FormattedIssueDateTime>` : ''}
@@ -495,6 +496,7 @@ async function generateInvoicePdf(inv: {
   mandatVersion: string;
   // CP-LITIGES-6 : mode AVOIR
   isAvoir?: boolean;
+  isReplacement?: boolean;
   precedingInvoiceNumber?: string;
   precedingInvoiceIssueDate?: string;
   motifAvoir?: string;  // issu de litiges.resolution
@@ -566,6 +568,21 @@ async function generateInvoicePdf(inv: {
       drawText(`Motif : ${inv.motifAvoir.substring(0, 90)}`, margin, y, { size: 8, color: grey });
       y -= 12;
     }
+  }
+  if (inv.isReplacement && inv.precedingInvoiceNumber && inv.precedingInvoiceIssueDate) {
+    const mention = `Facture rectificative remplaçant la facture n° ${inv.precedingInvoiceNumber} du ${inv.precedingInvoiceIssueDate}`;
+    let line = '';
+    for (const word of mention.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && fontBold.widthOfTextAtSize(next, fontSize) > w - 2 * margin) {
+        drawText(line, margin, y, { font: fontBold });
+        y -= 12;
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) { drawText(line, margin, y, { font: fontBold }); y -= 14; }
   }
   // CP-LITIGES-7a FIX 7 : mention rectification pour facture REMPLACEE
   if (inv.statut === 'REMPLACEE') {
@@ -859,6 +876,7 @@ Deno.serve(async (req) => {
       if (!sg || !et) return json(req, { error: 'Soignant/établissement introuvable' }, 404);
 
       const isAvoir = facture.type_document === 'AVOIR';
+      const isReplacement = facture.nature_correction === 'REMPLACEMENT';
       let precedingNumero: string | null = null;
       let precedingDate: string | null = null;
       let motifAvoir: string | null = null;
@@ -867,12 +885,28 @@ Deno.serve(async (req) => {
       if (isAvoir && !facture.facture_precedente_id) {
           return json(req, { error: 'AVOIR sans facture_precedente_id — incohérence critique' }, 400);
       }
+      if (isReplacement && (!facture.facture_precedente_id || facture.facture_precedente_id === facture.id)) {
+        return json(req, { error: 'FILIATION_REMPLACEMENT_INVALIDE' }, 400);
+      }
       if (facture.facture_precedente_id) {
-        const { data: prec } = await supabaseAdmin
+        const { data: prec, error: precedingError } = await supabaseAdmin
           .from('factures_honoraires')
-          .select('numero_facture, date_emission')
+          .select('id, numero_facture, date_emission, type_document, mission_id, soignant_id, etablissement_id')
           .eq('id', facture.facture_precedente_id)
           .single();
+        if (isReplacement) {
+          const validDate = typeof prec?.date_emission === 'string'
+            && /^\d{4}-\d{2}-\d{2}$/.test(prec.date_emission)
+            && Number.isFinite(Date.parse(prec.date_emission))
+            && new Date(prec.date_emission).toISOString().slice(0, 10) === prec.date_emission;
+          if (precedingError || !prec || facture.type_document !== 'FACTURE'
+            || prec.id !== facture.facture_precedente_id || prec.type_document !== 'FACTURE'
+            || prec.mission_id !== facture.mission_id || prec.soignant_id !== facture.soignant_id
+            || prec.etablissement_id !== facture.etablissement_id
+            || typeof prec.numero_facture !== 'string' || !prec.numero_facture.trim() || !validDate) {
+            return json(req, { error: 'FILIATION_REMPLACEMENT_INVALIDE' }, 400);
+          }
+        }
         precedingNumero = prec?.numero_facture ?? null;
         precedingDate = prec?.date_emission ?? null;
 
@@ -975,6 +1009,7 @@ Deno.serve(async (req) => {
         currencyCode: 'EUR',
         subrogationMention,
         isAvoir,
+        isReplacement,
         precedingInvoiceNumber: precedingNumero ?? undefined,
         precedingInvoiceIssueDate: precedingDate ?? undefined,
       });
@@ -1003,6 +1038,7 @@ Deno.serve(async (req) => {
         mandatVersion: facture.mandat_version || '1.1',
         subrogationMention,
         isAvoir,
+        isReplacement,
         precedingInvoiceNumber: precedingNumero ?? undefined,
         precedingInvoiceIssueDate: precedingDate ?? undefined,
         motifAvoir: motifAvoir ?? undefined,

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { creerBanc, genererDocuments, verifierXml } from '../helpers/facturation-documents-harness.mjs';
+import { creerBanc, genererDocuments, verifierXml, sha256 }  from '../helpers/facturation-documents-harness.mjs';
 
 test('vrai handler : facture hebdomadaire et avoir, PDF lisibles, XML cohérents et empreintes des octets uploadés', async () => {
   const banc = await genererDocuments();
@@ -103,4 +103,99 @@ test('l’analyse refuse les identités, références, devise, type ou espaces d
   const avoir = banc.factures[1], avoirXml = banc.documents.get(avoir.facturx_xml_url).bytes;
   assert.throws(() => verifierXml(Buffer.from(avoirXml.toString().replace(f.numero_facture, 'AUTRE-FACTURE')), avoir, f));
   assert.throws(() => verifierXml(Buffer.from('<broken>'), f));
+});
+
+
+test('remplacement réel : XML380, filiation numéro/date, 4h × 18 = 72 et octets originaux inchangés', async () => {
+  const banc = creerBanc({ unicode: true });
+  assert.equal((await banc.genererFacture()).status, 200);
+  const original = banc.factures[0];
+  const avant = { pdf: Buffer.from(banc.documents.get(original.pdf_s3_key).bytes),
+    xml: Buffer.from(banc.documents.get(original.facturx_xml_url).bytes), version: structuredClone(banc.versions[0]),
+    pdfKey: original.pdf_s3_key, xmlKey: original.facturx_xml_url };
+  const remplacement = banc.preparerRemplacement();
+  const response = await banc.invoquer({ facture_id: remplacement.id });
+  assert.equal(response.status, 200, JSON.stringify(await response.json()));
+  assert.deepEqual(banc.inconnus, []); assert(!banc.logs.some(l => l.level === 'error'));
+  const pdf = banc.documents.get(remplacement.pdf_s3_key), xml = banc.documents.get(remplacement.facturx_xml_url);
+  assert.equal(pdf.contentType, 'application/pdf'); assert.equal(pdf.bytes.subarray(0, 5).toString(), '%PDF-');
+  assert.equal(xml.contentType, 'application/xml');
+  const resultat = verifierXml(xml.bytes, remplacement, original, "Łukasz İpek D'Été", 'Clinique fictive Жанна & Santé');
+  assert.equal(resultat.type, '380'); assert.equal(resultat.ht, 72); assert.equal(resultat.ttc, 72);
+  assert.equal(remplacement.taux_horaire_snapshot, 18); assert.equal(remplacement.quantite_heures_snapshot, 4);
+  assert.equal(original.montant_ht, 80); assert.equal(original.statut, 'REMPLACEE');
+  assert.equal(remplacement.statut, 'EMISE');
+  assert.equal(banc.documents.size, 4); assert.equal(banc.versions.length, 2);
+  assert.equal(banc.versions[1].pdf_sha256, sha256(pdf.bytes));
+  assert.equal(banc.versions[1].xml_sha256, sha256(xml.bytes));
+  assert.deepEqual(banc.versions[0], avant.version);
+  assert.equal(original.pdf_s3_key, avant.pdfKey); assert.equal(original.facturx_xml_url, avant.xmlKey);
+  assert.deepEqual(banc.documents.get(avant.pdfKey).bytes, avant.pdf);
+  assert.deepEqual(banc.documents.get(avant.xmlKey).bytes, avant.xml);
+  assert.notEqual(remplacement.pdf_s3_key, avant.pdfKey); assert.notEqual(remplacement.facturx_xml_url, avant.xmlKey);
+  for (const [before, after] of [
+    ['<ram:TypeCode>380', '<ram:TypeCode>381'],
+    [original.numero_facture, 'AUTRE-REFERENCE'],
+    ['<qdt:DateTimeString format="102">20260930', '<qdt:DateTimeString format="102">20260929'],
+    ['<ram:ChargeAmount>18.00', '<ram:ChargeAmount>20.00'],
+  ]) {
+    assert(xml.bytes.toString().includes(before));
+    assert.throws(() => verifierXml(Buffer.from(xml.bytes.toString().replace(before, after)), remplacement, original,
+      "Łukasz İpek D'Été", 'Clinique fictive Жанна & Santé'));
+  }
+});
+
+test('remplacement : filiation invalide refusée avant upload, émission, registre, commission ou email', async () => {
+  const cas = [
+    ['remplacement', 'facture_precedente_id', null], ['remplacement', 'facture_precedente_id', 'self'],
+    ['remplacement', 'type_document', 'AVOIR'], ['original', 'type_document', 'AVOIR'],
+    ['original', 'mission_id', 'f1300009-9000-4000-8000-000000000009'],
+    ['original', 'soignant_id', 'f1300009-9000-4000-8000-000000000009'],
+    ['original', 'etablissement_id', 'f1300009-9000-4000-8000-000000000009'],
+    ['original', 'numero_facture', null], ['original', 'numero_facture', '   '],
+    ['original', 'date_emission', null], ['original', 'date_emission', '2026-02-30'],
+    ['original', 'date_emission', '30/09/2026'],
+  ];
+  for (const [cible, champ, valeur] of cas) {
+    // A fresh request cohort per case preserves the real rate-limit guard.
+    const banc = creerBanc(); assert.equal((await banc.genererFacture()).status, 200);
+    const original = banc.factures[0], remplacement = banc.preparerRemplacement();
+    const objet = cible === 'original' ? original : remplacement;
+    const depuis = banc.appels.length; objet[champ] = valeur === 'self' ? remplacement.id : valeur;
+    const response = await banc.invoquer({ facture_id: remplacement.id });
+    assert.equal(response.status, 400, champ);
+    assert.deepEqual(await response.json(), { error: 'FILIATION_REMPLACEMENT_INVALIDE' });
+    sansEffet(banc, depuis); assert.equal(banc.documents.size, 2); assert.equal(banc.versions.length, 1);
+    assert.equal(remplacement.statut, 'BROUILLON');
+  }
+});
+
+test('remplacement : parent absent ou lecture en erreur refuse sans effet documentaire', async () => {
+  for (const pannePrecedente of ['absente', 'erreur']) {
+    const banc = creerBanc({ pannePrecedente }); assert.equal((await banc.genererFacture()).status, 200);
+    const f = banc.preparerRemplacement(), depuis = banc.appels.length;
+    const response = await banc.invoquer({ facture_id: f.id });
+    assert.equal(response.status, 400); assert.deepEqual(await response.json(), { error: 'FILIATION_REMPLACEMENT_INVALIDE' });
+    sansEffet(banc, depuis); assert.equal(banc.documents.size, 2); assert.equal(banc.versions.length, 1);
+  }
+});
+
+
+test('une facture ordinaire liée à une période précédente reste380 sans mention de remplacement', async () => {
+  const banc = creerBanc(); assert.equal((await banc.genererFacture()).status, 200);
+  const f = banc.preparerRemplacement(); f.nature_correction = 'ORIGINALE';
+  f.description_prestation_snapshot = banc.factures[0].description_prestation_snapshot;
+  const response = await banc.invoquer({ facture_id: f.id });
+  assert.equal(response.status, 200);
+  const xml = banc.documents.get(f.facturx_xml_url).bytes;
+  const resultat = verifierXml(xml, f);
+  assert.equal(resultat.type, '380'); assert.deepEqual(banc.inconnus, []);
+});
+
+
+test('fixture frontend de remplacement : vrais PDF paginés Unicode et XML380 au taux18', async () => {
+  const banc = await genererDocuments({ remplacement: true, unicode: true, pagination: true });
+  assert.equal(banc.factures[1].nature_correction, 'REMPLACEMENT');
+  assert.equal(banc.factures[1].montant_ttc, 72); assert.equal(banc.factures[1].taux_horaire_snapshot, 18);
+  assert.equal(banc.factures[0].statut, 'REMPLACEE');
 });
