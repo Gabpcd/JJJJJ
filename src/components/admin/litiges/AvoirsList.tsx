@@ -276,7 +276,7 @@ export function AvoirsList({ onChanged }: Props) {
 
   const tableAvoirs = (rows: AvoirEnrichi[], emptyTestId?: string) => (
     <div className="overflow-x-auto rounded-lg border">
-      <Table>
+      <Table className="min-w-[1100px]">
         <TableHeader>
           <TableRow>
             <TableHead>N° avoir</TableHead>
@@ -311,18 +311,18 @@ export function AvoirsList({ onChanged }: Props) {
               && (montants.montantRemboursement ?? 0) > 0;
             return (
               <TableRow key={a.id} data-testid="avoir-row" data-avoir-id={a.id}>
-                <TableCell className="font-mono text-xs">
+                <TableCell className="whitespace-nowrap font-mono text-xs">
                   {a.numero_facture ?? '—'}
                 </TableCell>
                 <TableCell>{a.soignant_nom ?? '—'}</TableCell>
                 <TableCell>{a.etablissement_nom ?? '—'}</TableCell>
-                <TableCell className="text-right font-mono">
+                <TableCell className="whitespace-nowrap text-right font-mono">
                   {formatMontant(montants.ht)}
                 </TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
+                <TableCell className="whitespace-nowrap text-right font-mono text-muted-foreground">
                   {formatMontant(montants.tva)}
                 </TableCell>
-                <TableCell className="text-right font-mono font-semibold">
+                <TableCell className="whitespace-nowrap text-right font-mono font-semibold">
                   {formatMontant(montants.ttc)}
                 </TableCell>
                 <TableCell>
@@ -337,7 +337,7 @@ export function AvoirsList({ onChanged }: Props) {
                     {LABELS_STATUT_AVOIR[a.statut as StatutAvoir] ?? a.statut}
                   </BadgeY2K>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                   {formatDate(a.date_emission)}
                 </TableCell>
                 <TableCell className="text-right">
