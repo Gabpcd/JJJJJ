@@ -31,3 +31,44 @@ Le témoin SQL est raccordé à Validate PR, sous transaction puis ROLLBACK, san
 Ce témoin n’a pas encore été exécuté sur PostgreSQL distant. La revue indépendante, la CI SQL et ses contrôles après annulation doivent précéder toute publication/déploiement. La réception physique reste une recette distincte autorisée sur destinataires de test maîtrisés ; aucune notification réelle n’a été envoyée par ce lot.
 
 Preuves locales conservées dans `/private/tmp/jolene-push-candidatures-preuves-20261001`, avec les états rouges initiaux, les catalogues, les JSON de résultats, les captures et les empreintes du build servi. Le build se trouve dans `/private/tmp/jolene-push-candidatures-dist-20261001` ; aucun serveur local n’est laissé actif.
+
+### Isolement du témoin SQL sur une file préexistante — 1er octobre 2026
+
+Le run de PR 1013 au commit `66c7aacf` a refusé le contexte avant toute fixture
+(`PUSH_RECETTE_CONTEXTE_NON_ISOLE`). La lecture indépendante a confirmé trois
+anciennes actions `PENDING` réelles ; ce constat ne permet pas de les exécuter ni
+de présumer qu'elles sont jetables. Les contrôles après échec étaient inchangés.
+
+Le correctif porte seulement sur le banc et sa preuve indépendante. Sous le
+verrou CI existant, le test acquiert `SHARE ROW EXCLUSIVE` sur la file, avec
+`lock_timeout = 5s` et `statement_timeout = 90s`. Il garde une photo JSONB privée
+complète de toutes les lignes préexistantes, refuse tout trigger ou règle UPDATE
+actif, pince les corps des deux claims et la définition du classificateur, et
+refuse toute collision des sept identifiants de worker du test. Cette dernière
+garde couvre aussi le SELECT final du claim, qui retrouve les prises récentes
+par identifiant de worker.
+
+Dans cette seule transaction, les états `PENDING`/`PENDING_AIFE` voient uniquement
+leur `next_retry_at` reporté, et `PROCESSING` uniquement `cron_lock_at`. Les dates
+sont placées un jour après le début de la transaction. Les autres colonnes et
+états restent identiques. Le prédicat temporel exact des deux claims est vérifié
+sur toutes les lignes étrangères, indépendamment de leur type et de leur
+classification réelle. Chaque réponse de claim, y compris la boucle des anciens
+workers, doit contenir uniquement les huit actions de fixture recensées et aucune
+ligne de la photo. La photo est contrôlée après chaque claim.
+
+Avant le ROLLBACK final, le test refuse les ajouts hors fixture, les suppressions
+ou tout changement hors des deux dates prévues, puis restaure exactement ces
+dates et compare chaque ligne entière à la photo. Aucun payload étranger n'est
+renvoyé ou journalisé. Le SELECT indépendant avant/après renvoie désormais aussi
+une empreinte ordonnée de toutes les lignes complètes de la file : une altération
+à compte constant bloque donc la preuve. Les 24 compteurs, les autres empreintes,
+les gardes cron/réseau et le contrôle `always` restent en place.
+
+Les fonctions produit, les règles de claim, les fixtures de candidature et les
+attendus métier sont inchangés. Les contrôles locaux vérifient la source et le
+contrôleur avec transport simulé ; ils ne prouvent pas encore l'exécution SQL du
+nouveau banc. Celle-ci doit passer dans la CI transactionnelle avec son SELECT
+indépendant. Aucune nouvelle campagne UI n'est attribuée à ce delta de banc :
+les simulations frontend du lot push restent des preuves distinctes, sans
+livraison réelle de notification ni mouvement fournisseur.

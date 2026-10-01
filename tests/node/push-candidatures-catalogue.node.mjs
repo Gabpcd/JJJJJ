@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {controlerCataloguePushCandidatures} from '../../scripts/ci/push-candidatures-catalogue.mjs';
 
 const source=readFileSync('tests/fixtures/push-candidatures/catalogue.sql','utf8');
 const keys=[...source.matchAll(/'([a-z_]+)',\(SELECT count\(\*\)/g)].map(x=>x[1]);
-const hashes=['routines_md5','triggers_md5','inventaire_md5','contraintes_md5','indexes_md5','parametre_md5'];
+const hashes=['routines_md5','triggers_md5','inventaire_md5','contraintes_md5','indexes_md5','parametre_md5','externalisations_md5'];
 const row=()=>({residus:0,compteurs:Object.fromEntries(keys.map(k=>[k,0])),...Object.fromEntries(hashes.map(k=>[k,'a'.repeat(32)]))});
 function harness() {
  const files=new Map(), calls=[], state={rows:[row()],status:200};
@@ -60,4 +61,73 @@ test('raccord sans nouveau gate : migration, verrou existant et contrôle always
  assert.equal((y.match(/tests\/security\/push-candidatures.test.sql/g)||[]).length,1);
  assert(y.indexOf('run: node scripts/ci/push-candidatures-catalogue.mjs avant')<y.indexOf('name: Exécuter les migrations ajoutées'));
  assert(y.indexOf('run: node scripts/ci/push-candidatures-catalogue.mjs apres')>y.indexOf('name: Exécuter les migrations ajoutées'));
+});
+
+const fixture=readFileSync('tests/security/push-candidatures.test.sql','utf8');
+const migration=readFileSync('supabase/migrations/20261001142707_relayer_nouvelles_candidatures_push.sql','utf8');
+test('isolement : verrou borné, photo privée complète et aucune désactivation de garde',()=>{
+ assert.match(fixture,/SET LOCAL statement_timeout='90s';/);
+ assert.match(fixture,/SET LOCAL lock_timeout='5s';/);
+ const lock=fixture.indexOf('LOCK TABLE public.externalisation_actions IN SHARE ROW EXCLUSIVE MODE;');
+ const photo=fixture.indexOf('SELECT id,to_jsonb(a) AS ligne FROM public.externalisation_actions a;');
+ const update=fixture.indexOf('UPDATE public.externalisation_actions a');
+ assert(lock>fixture.indexOf("SET LOCAL lock_timeout='5s';") && photo>lock && update>photo);
+ assert.match(fixture,/tgenabled<>'D' AND \(tgtype::integer&16\)<>0/);
+ assert.match(fixture,/ev_type='2' AND ev_enabled<>'D'/);
+ assert.doesNotMatch(fixture,/DISABLE|session_replication_role|TRUNCATE|DELETE FROM public\.externalisation_actions/i);
+ assert.doesNotMatch(fixture,/GRANT[^;]*push_candidatures_etrangeres/i);
+ assert.match(fixture,/ROLLBACK;\s*$/);
+});
+test('isolement : les empreintes et le prédicat temporel viennent des deux claims réels',()=>{
+ const claims=[...migration.matchAll(/CREATE OR REPLACE FUNCTION public\.fn_externalisations_a_traiter\([^\n]+\)[\s\S]*?AS \$function\$([\s\S]*?)\$function\$/g)];
+ assert.equal(claims.length,2);
+ const normal=s=>s.replace(/\s+/g,' ');
+ const eligibility=s=>s.match(/\(a\.statut = 'PENDING'[\s\S]*?a\.cron_lock_at < now\(\) - interval '10 minutes'\)/)?.[0];
+ const predicate=eligibility(fixture);assert(predicate);
+ for(const [,body] of claims){
+  assert(fixture.includes(createHash('md5').update(body).digest('hex')));
+  assert.equal(normal(eligibility(body)),normal(predicate));
+ }
+ const classification=migration.match(/'private\.fn_externalisation_est_reelle\(externalisation_actions\)','([a-f0-9]{32})'/)[1];
+ assert(fixture.includes(classification));
+});
+test('isolement : tous les workers fixes sont refusés en cas de collision, chaque retour est vérifié',()=>{
+ const collision=fixture.match(/ligne->>'cron_lock_par' IN\s*\(([\s\S]*?)\)\)/)[1];
+ const expected=['ancien-push-premier',...Array.from({length:3},(_,i)=>`ancien-push-recette-${i+1}`),
+  'nouveau-push-sans-capacite','nouveau-push-recette-lot1','nouveau-push-recette-lot2'];
+ assert.deepEqual([...collision.matchAll(/'([^']+)'/g)].map(x=>x[1]),expected);
+ const assigned=[...fixture.matchAll(/r:=public\.fn_externalisations_a_traiter\([^\n]+;\n([^\n]+)/g)];
+ assert.equal(assigned.length,4);
+ for(const [,next] of assigned)assert.equal(next.trim(),'PERFORM pg_temp.verifier_claim_push(r);');
+ assert.match(fixture,/FOR r IN SELECT public\.fn_externalisations_a_traiter\([^\n]+LOOP\s+PERFORM pg_temp\.verifier_claim_push\(r\);\s+END LOOP;/);
+ assert.doesNotMatch(fixture,/LOOP NULL/);
+ assert.match(fixture,/EXISTS\(SELECT 1 FROM push_candidatures_etrangeres e WHERE e.id::text=x->>'id'\)/);
+ assert.match(fixture,/NOT EXISTS\(SELECT 1 FROM push_candidatures_actions_fixture f WHERE f.id::text=x->>'id'\)/);
+});
+test('isolement : seule projection des deux dates, contrôle complet avant restauration et ROLLBACK',()=>{
+ assert.match(fixture,/\(to_jsonb\(a\)-'next_retry_at'-'cron_lock_at'\)\s+IS DISTINCT FROM \(e.ligne-'next_retry_at'-'cron_lock_at'\)/);
+ assert.match(fixture,/a.next_retry_at IS DISTINCT FROM CASE/);
+ assert.match(fixture,/a.cron_lock_at IS DISTINCT FROM CASE/);
+ const restoration=fixture.slice(fixture.indexOf('DO $restauration$'));
+ assert(restoration.indexOf('PERFORM pg_temp.verifier_isolement_push();')<restoration.indexOf('UPDATE public.externalisation_actions'));
+ assert.match(restoration,/NOT EXISTS\(SELECT 1 FROM push_candidatures_actions_fixture f WHERE f.id=a.id\)/);
+ assert.match(restoration,/to_jsonb\(a\) IS DISTINCT FROM e.ligne/);
+ assert.match(restoration,/net.http_request_queue/);
+ const updates=[...fixture.matchAll(/UPDATE public\.externalisation_actions a\s+SET ([\s\S]*?)\s+FROM push_candidatures_etrangeres/g)];
+ assert.equal(updates.length,2);
+ for(const [,set] of updates)assert.deepEqual([...set.matchAll(/(?:^|,)\s*([a-z_]+)=/g)].map(x=>x[1]),['next_retry_at','cron_lock_at']);
+});
+test('catalogue : empreinte complète ordonnée sans contenu de file exposé',()=>{
+ assert.match(source,/SET LOCAL timezone='UTC';/);
+ assert.match(source,/md5\(COALESCE\(jsonb_agg\(to_jsonb\(a\) ORDER BY a.id\)::text,'\[\]'\)\)\s+FROM public\.externalisation_actions a\) AS externalisations_md5/);
+});
+test('catalogue : file non vide inchangée acceptée, contenu dérivé sans différence de compte refusé',async()=>{
+ const h=harness();h.state.rows[0].compteurs.externalisations=3;
+ await controlerCataloguePushCandidatures('avant',h.options);
+ await controlerCataloguePushCandidatures('apres',h.options);
+ const changed=harness();changed.state.rows[0].compteurs.externalisations=3;
+ await controlerCataloguePushCandidatures('avant',changed.options);
+ changed.state.rows[0].externalisations_md5='c'.repeat(32);
+ await assert.rejects(controlerCataloguePushCandidatures('apres',changed.options),/PUSH_CATALOGUE_MODIFIE/);
+ assert.equal(changed.files.size,1);
 });

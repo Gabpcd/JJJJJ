@@ -2,6 +2,7 @@
 -- Uniquement empreintes, compteurs et absence de fixtures ; aucun payload/token.
 BEGIN READ ONLY;
 SET LOCAL statement_timeout='15s';
+SET LOCAL timezone='UTC';
 SELECT
   (SELECT md5(COALESCE(jsonb_agg(jsonb_build_object('signature',p.oid::regprocedure::text,
     'definition',md5(pg_get_functiondef(p.oid)),'owner',p.proowner,'definer',p.prosecdef,
@@ -25,6 +26,8 @@ SELECT
     'public.candidatures'::regclass,'public.notifications'::regclass)) AS indexes_md5,
   (SELECT md5(COALESCE(jsonb_agg(jsonb_build_object('cle',cle,'valeur',valeur) ORDER BY cle)::text,'[]'))
    FROM public.parametres_systeme WHERE cle='inscriptions_publiques_actives') AS parametre_md5,
+  (SELECT md5(COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text,'[]'))
+   FROM public.externalisation_actions a) AS externalisations_md5,
   jsonb_build_object(
     'auth_users',(SELECT count(*) FROM auth.users),
     'soignants',(SELECT count(*) FROM public.soignants),

@@ -20,8 +20,8 @@ export async function controlerCataloguePushCandidatures(phase, { env=process.en
   try { rows=await response.json(); } catch { throw new Error('PUSH_CATALOGUE_JSON_REFUSE'); }
   const row=Array.isArray(rows) && rows.length===1 ? rows[0] : null;
   if (!row || row.residus!==0 || row.compteurs?.net_requests!==0 || row.compteurs?.cron_actifs!==0
-    || !isDeepStrictEqual(Object.keys(row).sort(), ['compteurs','contraintes_md5','indexes_md5','inventaire_md5','parametre_md5','residus','routines_md5','triggers_md5'])
-    || !['routines_md5','triggers_md5','inventaire_md5','contraintes_md5','indexes_md5','parametre_md5'].every(k=>/^[a-f0-9]{32}$/.test(row[k]))
+    || !isDeepStrictEqual(Object.keys(row).sort(), ['compteurs','contraintes_md5','externalisations_md5','indexes_md5','inventaire_md5','parametre_md5','residus','routines_md5','triggers_md5'])
+    || !['routines_md5','triggers_md5','inventaire_md5','contraintes_md5','externalisations_md5','indexes_md5','parametre_md5'].every(k=>/^[a-f0-9]{32}$/.test(row[k]))
     || !isDeepStrictEqual(Object.keys(row.compteurs).sort(),compteurs)
     || !Object.values(row.compteurs).every(n=>Number.isSafeInteger(n) && n>=0)) throw new Error('PUSH_CATALOGUE_ETAT_REFUSE');
   const file=join(env.RUNNER_TEMP,'push-candidatures-catalogue-avant.json');
@@ -30,7 +30,7 @@ export async function controlerCataloguePushCandidatures(phase, { env=process.en
     if (!isDeepStrictEqual(JSON.parse(read(file,'utf8')),rows)) throw new Error('PUSH_CATALOGUE_MODIFIE');
     write(join(env.RUNNER_TEMP,'push-candidatures-catalogue-apres.json'),JSON.stringify(rows)+'\n',{mode:0o600,flag:'wx'});
   }
-  return `PUSH_CATALOGUE_${phase.toUpperCase()}_OK : 24 compteurs, corps/droits/triggers/inventaire/indexes/contraintes/paramètre identiques, zéro résidu.`;
+  return `PUSH_CATALOGUE_${phase.toUpperCase()}_OK : 24 compteurs, corps/droits/triggers/inventaire/indexes/contraintes/paramètre et lignes complètes de la file identiques, zéro résidu.`;
 }
 if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   try { console.log(await controlerCataloguePushCandidatures(process.argv[2])); }
