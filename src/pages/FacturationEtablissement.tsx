@@ -197,6 +197,16 @@ function FacturationEtablissementContent() {
   const [missionsBloqueesParLitige, setMissionsBloqueesParLitige] = useState<Set<string>>(new Set());
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [factureTelechargementId, setFactureTelechargementId] = useState<string | null>(null);
+
+  async function consulterFactureHonoraires(factureId: string) {
+    setFactureTelechargementId(factureId);
+    try {
+      await telechargerFactureHonorairesPDF(factureId);
+    } finally {
+      setFactureTelechargementId(null);
+    }
+  }
 
   // ── UI state ──
   const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
@@ -1088,6 +1098,25 @@ function FacturationEtablissementContent() {
                           )}
                         </div>
                       </div>
+
+                      {m.facture_honoraires_id && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          aria-label={`Télécharger le PDF ${factureHonoraires?.numero_facture || m.intitule}`}
+                          aria-busy={factureTelechargementId === m.facture_honoraires_id}
+                          disabled={factureTelechargementId !== null}
+                          onClick={() => consulterFactureHonoraires(m.facture_honoraires_id)}
+                        >
+                          {factureTelechargementId === m.facture_honoraires_id
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                            : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}
+                          {factureTelechargementId === m.facture_honoraires_id
+                            ? 'Téléchargement…'
+                            : 'Consulter la facture PDF'}
+                        </Button>
+                      )}
 
                       {!canManagePayments ? (
                         <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto]">

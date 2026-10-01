@@ -1322,10 +1322,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   />
                 </div>
               )}
-              {/* Facture honoraires — visible quand mission TERMINEE (une facture
-                  a été générée à la déclaration paiement ou via generate-invoice).
-                  L'étab doit pouvoir télécharger la facture comme preuve comptable. */}
-              {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+              {/* Les factures hebdomadaires existent avant la fin de la mission.
+                  La carte reste vide tant qu'aucun document n'a été émis. */}
+              {m.soignant_assigne_id && (
                 <FactureHonorairesCard missionId={m.id} viewerRole={isAdmin ? 'ADMIN' : 'ETAB'} />
               )}
               {/* Workflow paiement mission */}
