@@ -61,6 +61,8 @@ import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
+import { SuiviRemboursementConnectDialog } from '@/components/SuiviRemboursementConnectDialog';
+import { estSessionCheckout, etatRetourConnect, lireSuiviRemboursementConnect } from '@/lib/suiviRemboursementConnect';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
@@ -227,7 +229,18 @@ function FacturationEtablissementContent() {
   const [connectPaymentContext, setConnectPaymentContext] = useState<{
     missionId: string;
     factureHonoraireId?: string;
+    checkoutSessionId: string;
   } | null>(null);
+  const [suiviConnect, setSuiviConnect] = useState<{ factureId: string; numeroFacture?: string; checkoutSessionId?: string } | null>(null);
+  const confirmationConnectRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    setSuiviConnect(null);
+    setShowConnectCheckout(false);
+    setConnectClientSecret(null);
+    setConnectPaymentContext(null);
+    setConnectConfirming(false);
+    return () => { confirmationConnectRef.current?.abort(); confirmationConnectRef.current = null; };
+  }, [etablissementId, user?.id]);
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
@@ -660,8 +673,11 @@ function FacturationEtablissementContent() {
       }
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) {
+        if (!estSessionCheckout(result.checkout_session_id)) {
+          throw new Error('La référence de ce paiement ne peut pas être vérifiée. Rechargez la page avant de continuer.');
+        }
         setConnectClientSecret(result.client_secret);
-        setConnectPaymentContext({ missionId, factureHonoraireId });
+        setConnectPaymentContext({ missionId, factureHonoraireId, checkoutSessionId: result.checkout_session_id });
         setShowConnectCheckout(true);
         setConnectDecomposition({
           commission_ttc: result.commission_ttc ?? result.commission,
@@ -678,37 +694,20 @@ function FacturationEtablissementContent() {
     }
   };
 
-  const verifierStatutConnect = useCallback(async (
-    missionId?: string,
-    factureHonoraireId?: string,
-  ): Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'> => {
-    if (!etablissementId || !factureHonoraireId) return 'EN_ATTENTE';
-
-    let requete = supabase
-      .from('stripe_transfers')
-      .select('statut')
-      .eq('etablissement_id', etablissementId)
-      .order('cree_le', { ascending: false })
-      .limit(1);
-    if (missionId) requete = requete.eq('mission_id', missionId);
-    if (factureHonoraireId) requete = requete.eq('facture_honoraire_id', factureHonoraireId);
-
-    const { data, error } = await requete.maybeSingle();
-    if (error) throw error;
-    const statut = data?.statut;
-    if (statut && ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)) return 'CONFIRME';
-    if (statut === 'ECHOUE') return 'ECHEC';
-    return 'EN_ATTENTE';
-  }, [etablissementId]);
-
   const finaliserRetourConnect = useCallback(async (
-    context?: { missionId?: string; factureHonoraireId?: string },
+    context?: { missionId?: string; factureHonoraireId?: string; checkoutSessionId?: string },
   ) => {
+    confirmationConnectRef.current?.abort();
+    const controller = new AbortController();
+    confirmationConnectRef.current = controller;
+    const courant = () => confirmationConnectRef.current === controller;
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     setConnectConfirming(true);
     const delais = [0, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
     try {
-      if (!context?.factureHonoraireId) {
-        toast.info('Retour Stripe reçu sans facture identifiée. Le paiement reste en attente de rapprochement ; aucune confirmation n’est déduite de la mission.');
+      if (!context?.factureHonoraireId || !estSessionCheckout(context.checkoutSessionId)) {
+        toast.info('Le retour Stripe ne permet pas d’identifier exactement ce paiement. Consultez son suivi avant de réessayer.');
+        if (context?.factureHonoraireId) setSuiviConnect({ factureId: context.factureHonoraireId });
         await charger();
         return;
       }
@@ -716,30 +715,44 @@ function FacturationEtablissementContent() {
         if (delai > 0) {
           await new Promise((resolve) => window.setTimeout(resolve, delai));
         }
-        const statut = await verifierStatutConnect(context?.missionId, context?.factureHonoraireId);
+        if (!courant()) return;
+        if (controller.signal.aborted) throw new Error('La vérification du paiement a dépassé le délai autorisé.');
+        const suivi = await lireSuiviRemboursementConnect(context.factureHonoraireId, context.checkoutSessionId, controller.signal);
+        if (!courant()) return;
+        if (context.missionId && suivi.mission_id !== context.missionId) throw new Error('Le paiement ne correspond pas à la mission attendue.');
+        const statut = etatRetourConnect(suivi);
+        if (statut === 'REMBOURSEMENT' || statut === 'A_VERIFIER') {
+          toast.info(statut === 'REMBOURSEMENT'
+            ? 'Un remboursement est suivi pour ce paiement. Consultez son état actuel.'
+            : 'La situation de ce paiement nécessite une vérification. Consultez son suivi avant de réessayer.');
+          setSuiviConnect({ factureId: context.factureHonoraireId, checkoutSessionId: context.checkoutSessionId });
+          await charger();
+          return;
+        }
         if (statut === 'CONFIRME') {
           toast.success('Paiement confirmé et enregistré.');
           await charger();
           return;
         }
-        if (statut === 'ECHEC') {
-          toast.error('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.');
-          await charger();
-          return;
-        }
       }
-      toast.info('Paiement transmis à Stripe. La confirmation est encore en cours ; la page sera actualisée automatiquement au prochain chargement.');
+      toast.info('La confirmation de ce paiement n’est pas disponible pour le moment. Consultez son suivi avant de réessayer.');
+      setSuiviConnect({ factureId: context.factureHonoraireId, checkoutSessionId: context.checkoutSessionId });
       await charger();
     } catch (error) {
+      if (!courant()) return;
       capturerErreurSentry(error, 'FacturationEtablissement', 'confirmation_stripe_connect');
-      toast.error('Impossible de confirmer le paiement pour le moment. Son statut reste en attente, sans le déclarer payé.');
+      toast.error('Impossible de vérifier le paiement pour le moment. Consultez son suivi avant de réessayer.');
+      if (context?.factureHonoraireId) setSuiviConnect({ factureId: context.factureHonoraireId, checkoutSessionId: estSessionCheckout(context.checkoutSessionId) ? context.checkoutSessionId : undefined });
     } finally {
-      setConnectConfirming(false);
-      setShowConnectCheckout(false);
-      setConnectClientSecret(null);
-      setConnectPaymentContext(null);
+      clearTimeout(timeout);
+      if (courant()) {
+        setConnectConfirming(false);
+        setShowConnectCheckout(false);
+        setConnectClientSecret(null);
+        setConnectPaymentContext(null);
+      }
     }
-  }, [charger, verifierStatutConnect]);
+  }, [charger]);
 
   useEffect(() => {
     if (
@@ -751,11 +764,13 @@ function FacturationEtablissementContent() {
 
     const missionId = searchParams.get('mission') || undefined;
     const factureHonoraireId = searchParams.get('facture_honoraire') || undefined;
+    const checkoutSessionId = searchParams.get('session_id') || undefined;
     const nettoyes = new URLSearchParams(searchParams);
     nettoyes.delete('paiement');
     nettoyes.delete('facture_honoraire');
+    nettoyes.delete('session_id');
     setSearchParams(nettoyes, { replace: true });
-    void finaliserRetourConnect({ missionId, factureHonoraireId });
+    void finaliserRetourConnect({ missionId, factureHonoraireId, checkoutSessionId });
   }, [
     canReadFinance,
     etablissementId,
@@ -1169,6 +1184,10 @@ function FacturationEtablissementContent() {
                         </Button>
                       )}
 
+                      {m.facture_honoraires_id && <Button type="button" size="sm" variant="outline" className="min-h-[44px]"
+                        onClick={() => setSuiviConnect({ factureId: m.facture_honoraires_id })}>
+                        <Clock className="mr-2 h-4 w-4" /> Suivi du paiement par carte
+                      </Button>}
                       {aRapprocher ? (
                         <p role="alert" className="text-sm text-muted-foreground">Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement. Le montant de cette pièce ne constitue pas un nouveau solde dû.</p>
                       ) : !canManagePayments ? (
@@ -1879,7 +1898,7 @@ function FacturationEtablissementContent() {
                               <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
                               <td className="py-2"><BadgeY2K variant="success" aria-label="Confirmé"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /></BadgeY2K></td>
                               <td className="py-2">
-                                <div className="flex items-center gap-1 justify-end">
+                                <div className="flex flex-wrap items-center gap-1 justify-end">
                                   {p.facture_honoraires_id && (
                                     <Button
                                       size="icon"
@@ -1897,6 +1916,8 @@ function FacturationEtablissementContent() {
                                       <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
                                     </Button>
                                   )}
+                                  {p.facture_honoraires_id && <Button size="sm" variant="outline" className="min-h-[44px]"
+                                    onClick={() => setSuiviConnect({ factureId: p.facture_honoraires_id })}>Suivi du paiement par carte</Button>}
                                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               </td>
@@ -1955,6 +1976,8 @@ function FacturationEtablissementContent() {
                               <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
                             </Button>
                           )}
+                          {p.facture_honoraires_id && <Button size="sm" variant="outline" className="mt-2 min-h-[44px] w-full"
+                            onClick={() => setSuiviConnect({ factureId: p.facture_honoraires_id })}>Suivi du paiement par carte</Button>}
                         </div>
                       ))}
                     </div>
@@ -2285,6 +2308,7 @@ function FacturationEtablissementContent() {
           }}
         />
       )}
+      {suiviConnect && <SuiviRemboursementConnectDialog {...suiviConnect} onClose={() => setSuiviConnect(null)} />}
     </LayoutApp>
   );
 }

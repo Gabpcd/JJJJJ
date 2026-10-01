@@ -37,6 +37,7 @@ describe('extraireMessageErreur', () => {
     ['LIBERAL_FACTURE_REQUISE', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.'],
     ['PAIEMENT_HISTORIQUE_A_RAPPROCHER', 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.'],
     ['PAIEMENT_STRIPE_EN_COURS', 'Un règlement Stripe est déjà engagé pour cette facture. Consultez son état dans l’historique avant toute autre action.'],
+    ['CONNECT_REFUND_RECONCILIATION_REQUIRED', 'Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.'],
     ['PAIEMENT_FACTURE_DEJA_DECLARE', 'Un règlement a déjà été déclaré pour cette facture. Consultez l’historique des paiements.'],
     ['AVOIR_A_RAPPROCHER', 'Cette facture possède un avoir. Contactez l’assistance pour rapprocher son règlement avant de payer.'],
     ['MONTANT_FACTURE_INCOHERENT', 'Le règlement ne correspond pas à la facture sélectionnée. Rechargez la facturation pour vérifier ses informations.'],

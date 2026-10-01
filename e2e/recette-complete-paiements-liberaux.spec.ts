@@ -26,7 +26,7 @@ async function fixture(page: Page, connect = false) {
   await simulation.installer(page.context(), 'ADMIN_ETABLISSEMENT');
   await page.clock.setFixedTime(new Date('2026-10-01T10:00:00Z'));
   const erreurs: string[] = [], interdits: string[] = [], mutations: { name: string; body: unknown }[] = [];
-  const controle = { modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' };
+  const controle = { modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
   page.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()); });
   page.on('pageerror', e => erreurs.push(e.message));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -55,7 +55,7 @@ async function fixture(page: Page, connect = false) {
       expect(name).toBe('stripe-connect-pay-mission'); expect(connect).toBe(true); expect(req.method()).toBe('POST');
       expect(req.postDataJSON()).toEqual({ mission_id: ids.mission, facture_honoraire_id: remplacement });
       mutations.push({ name, body: req.postDataJSON() });
-      return json({ error: controle.refus });
+      return route.fulfill({ status: controle.refusStatus, json: { error: controle.refus, ...(controle.refusMessage ? { message: controle.refusMessage } : {}) } });
     }
     if (url.pathname.startsWith('/storage/')) { interdits.push(`${req.method()} ${url.pathname}`); return route.abort(); }
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
@@ -64,6 +64,12 @@ async function fixture(page: Page, connect = false) {
       if (name === 'fn_declarer_paiement_facture_soignant') {
         expect(connect).toBe(false); expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_montant: 60, p_methode: 'VIREMENT', p_reference: 'VIR-2026-060', p_date_paiement: '2026-10-01', p_attestation_sur_l_honneur: true });
         mutations.push({ name, body }); return json({ error: controle.refus });
+      }
+      if (name === 'fn_suivi_remboursements_connect_facture') {
+        expect(connect && controle.retour).toBe(true);
+        expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_checkout_session_id: 'cs_test_retour_liberal' });
+        return json({ facture_honoraire_id: remplacement, mission_id: ids.mission, checkout_session_id_filtre: 'cs_test_retour_liberal',
+          source: 'CONNECT_AVANT_TRANSFERT', visibilite_montants: 'TOTAL_ETABLISSEMENT', paiement_statut: 'ECHOUE', operations: [], lecture_complete: true });
       }
       if (!lectureRpc.has(name)) { interdits.push(`RPC ${name}`); return route.abort(); }
       if (name === 'fn_mode_paiement_mission') return json(controle.modeInvalide ? {} : { type_contrat_applique: controle.salarie ? 'SALARIE' : 'LIBERAL', mode_recommande: controle.salarie ? 'VIREMENT_PAIE' : connect ? 'STRIPE_CONNECT' : 'VIREMENT_NOTE_HONORAIRES', montant_soignant: 160, commission_ttc: 24, total: 184 });
@@ -74,9 +80,7 @@ async function fixture(page: Page, connect = false) {
     if (url.pathname.startsWith('/rest/') && !url.pathname.includes('/rpc/')) {
       if (!['GET','HEAD'].includes(req.method())) { interdits.push(`${req.method()} ${name}`); return route.abort(); }
       if (name === 'stripe_transfers' && url.searchParams.get('select') === 'statut' && controle.retour) {
-        expect(url.searchParams.get('mission_id')).toBe(`eq.${ids.mission}`);
-        expect(url.searchParams.get('facture_honoraire_id')).toBe(`eq.${remplacement}`);
-        return json({statut:'ECHOUE'});
+        interdits.push('Retour déduit de la dernière trace sans Session exacte'); return route.abort();
       }
       if (name === 'factures_honoraires') {
         let rows = docs;
@@ -143,15 +147,17 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
   if (connect) {
     f.controle.retour=true;
     await stabiliserActionsNationales(page);
-    await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&facture_honoraire=${remplacement}&paiement=succes`);
-    await expect(page.getByText('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.',{exact:true})).toBeVisible();
+    await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&facture_honoraire=${remplacement}&paiement=succes&session_id=cs_test_retour_liberal`);
+    await expect(page.getByText('La situation de ce paiement nécessite une vérification. Consultez son suivi avant de réessayer.',{exact:true})).toBeVisible();
+    await expect(page.getByRole('dialog')).toContainText('La situation de ce paiement nécessite une vérification');
+    await expect(page.getByText(/Aucun paiement n’a été enregistré/)).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`mission=${ids.mission}`));
-    await expect(page).not.toHaveURL(/paiement=|facture_honoraire=/);
+    await expect(page).not.toHaveURL(/paiement=|facture_honoraire=|session_id=/);
     await expect(page.getByText('FACTURE-AUTRE-MISSION',{exact:true})).toHaveCount(0);
     expect(f.mutations).toHaveLength(2);
     await stabiliserActionsNationales(page);
     await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&paiement=succes`);
-    await expect(page.getByText('Retour Stripe reçu sans facture identifiée. Le paiement reste en attente de rapprochement ; aucune confirmation n’est déduite de la mission.',{exact:true})).toBeVisible();
+    await expect(page.getByText('Le retour Stripe ne permet pas d’identifier exactement ce paiement. Consultez son suivi avant de réessayer.',{exact:true})).toBeVisible();
     await expect(page.getByText('Paiement confirmé et enregistré.',{exact:true})).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`mission=${ids.mission}`));
   }
@@ -220,4 +226,23 @@ test('Salarié : bulletin explicite, montant partiel refusé et escrow conservé
   await expect(page.getByRole('button',{name:'Déclarer le paiement effectué'})).toHaveCount(0);
   await page.screenshot({path:info.outputPath('escrow-conserve.png'),scale:'css',animations:'disabled'});
   expect(f.mutations).toEqual([]); f.verifier();
+});
+
+test('Connect : un remboursement à rapprocher refuse explicitement un nouveau paiement', async ({ page }, info) => {
+  const f = await fixture(page, true);
+  f.controle.refus = 'CONNECT_REFUND_RECONCILIATION_REQUIRED';
+  f.controle.refusMessage = 'Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.';
+  f.controle.refusStatus = 409;
+  await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}`);
+  const piece = page.getByText('FACTURE-RECTIFICATIVE-60', { exact: true }).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
+  await action(page, piece.getByRole('button', { name: 'Payer via Stripe', exact: true }));
+  await expect(page.getByText(f.controle.refusMessage, { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Paiement confirmé et enregistré.', { exact: true })).toHaveCount(0);
+  expect(f.mutations).toEqual([{ name: 'stripe-connect-pay-mission', body: { mission_id: ids.mission, facture_honoraire_id: remplacement } }]);
+  await page.screenshot({ path: info.outputPath('remboursement-refuse-nouveau-paiement.png'), scale: 'css', animations: 'disabled' });
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(piece).toBeVisible();
+  expect(f.mutations).toHaveLength(1);
+  f.verifier(['Failed to load resource: the server responded with a status of 409 (Conflict)']);
 });
