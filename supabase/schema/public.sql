@@ -28119,6 +28119,7 @@ DECLARE
   v_ref text;
   v_echeance date;
   v_paiement_id uuid;
+  v_detail text;
 BEGIN
   IF NOT p_attestation_sur_l_honneur THEN
     RETURN jsonb_build_object(
@@ -28129,8 +28130,7 @@ BEGIN
 
   SELECT * INTO v_fh
   FROM public.factures_honoraires
-  WHERE id = p_facture_honoraire_id
-  FOR UPDATE;
+  WHERE id = p_facture_honoraire_id;
   IF v_fh.id IS NULL OR v_fh.type_document <> 'FACTURE' THEN
     RETURN jsonb_build_object('error', 'Facture d''honoraires introuvable');
   END IF;
@@ -28139,7 +28139,10 @@ BEGIN
   FROM public.missions
   WHERE id = v_fh.mission_id
   FOR UPDATE;
-  IF v_mission.id IS NULL
+  -- Relecture verrouillée après mission : même ordre que le rapprochement Stripe.
+  SELECT * INTO v_fh FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id FOR UPDATE;
+  IF v_mission.id IS NULL OR v_fh.id IS NULL
      OR v_fh.etablissement_id <> v_mission.etablissement_id
      OR v_fh.soignant_id <> v_mission.soignant_assigne_id THEN
     RETURN jsonb_build_object('error', 'Facture et mission incohérentes');
@@ -28187,10 +28190,10 @@ BEGIN
     RETURN jsonb_build_object('error', 'Paiement déjà déclaré pour cette période');
   END IF;
 
-  IF p_montant IS NULL OR p_montant <= 0 THEN
+  IF p_montant IS NULL OR NOT (p_montant > 0 AND p_montant < 'Infinity'::numeric) THEN
     RETURN jsonb_build_object('error', 'Le montant doit être supérieur à 0.');
   END IF;
-  IF abs(round(p_montant, 2) - round(v_fh.montant_ttc, 2)) > 0.01 THEN
+  IF p_montant IS DISTINCT FROM v_fh.montant_ttc THEN
     RETURN jsonb_build_object(
       'error', 'MONTANT_FACTURE_INCOHERENT',
       'message', 'Le montant déclaré doit correspondre au montant exact de la facture (' || v_fh.montant_ttc || ' €).'
@@ -28270,6 +28273,15 @@ BEGIN
     'mission_intitule', v_mission.intitule,
     'echeance', v_echeance
   );
+EXCEPTION WHEN check_violation THEN
+  IF SQLERRM IN ('PAIEMENT_HISTORIQUE_A_RAPPROCHER','PAIEMENT_STRIPE_EN_COURS',
+    'PAIEMENT_FACTURE_DEJA_DECLARE','AVOIR_A_RAPPROCHER','MONTANT_FACTURE_INCOHERENT',
+    'PERIODE_NON_PAYABLE','DECLARATION_FACTURE_INVALIDE','LIBERAL_FACTURE_REQUISE') THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    RETURN jsonb_build_object('error',SQLERRM,'message',COALESCE(NULLIF(v_detail,''),
+      'Ce règlement doit être vérifié avant une nouvelle déclaration.'));
+  END IF;
+  RAISE;
 END;
 $$;
 
@@ -28525,6 +28537,11 @@ BEGIN
      )
   THEN
     RETURN jsonb_build_object('error', 'ACCES_REFUSE', 'message', 'Accès refusé.');
+  END IF;
+
+  IF v_mission.type_contrat_applique = 'LIBERAL' THEN
+    RETURN jsonb_build_object('error', 'LIBERAL_FACTURE_REQUISE',
+      'message', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.');
   END IF;
 
   IF p_montant_verse IS NULL OR p_montant_verse <= 0
@@ -56443,6 +56460,10 @@ BEGIN
     RAISE EXCEPTION 'Mission Connect incohérente' USING ERRCODE = 'P0001';
   END IF;
 
+  IF (SELECT count(*) FROM public.stripe_transfers WHERE mission_id=p_mission_id
+      AND stripe_checkout_session_id=p_stripe_checkout_session_id) <> 1 THEN
+    RAISE EXCEPTION 'Trace Connect absente ou ambiguë' USING ERRCODE='23514';
+  END IF;
   SELECT st.* INTO v_transfer
   FROM public.stripe_transfers st
   WHERE st.mission_id = p_mission_id
@@ -56451,6 +56472,8 @@ BEGIN
   LIMIT 1
   FOR UPDATE;
   IF NOT FOUND
+     OR (v_transfer.facture_honoraire_id IS NOT NULL
+         AND v_transfer.facture_honoraire_id <> p_facture_honoraires_id)
      OR v_transfer.soignant_id <> p_soignant_id
      OR v_transfer.etablissement_id <> p_etablissement_id
      OR round(v_transfer.montant_soignant * 100)::integer <> p_montant_soignant_cts
@@ -56459,6 +56482,8 @@ BEGIN
      OR v_transfer.statut NOT IN ('EN_ATTENTE', 'ECHOUE', 'CHARGE_REUSSI', 'TRANSFERE', 'PAYE')
      OR (v_transfer.stripe_payment_intent_id IS NOT NULL
          AND v_transfer.stripe_payment_intent_id <> p_stripe_payment_intent_id)
+     OR (v_transfer.stripe_charge_id IS NOT NULL
+         AND v_transfer.stripe_charge_id <> p_stripe_charge_id)
      OR (v_transfer.stripe_transfer_id IS NOT NULL
          AND v_transfer.stripe_transfer_id <> p_stripe_transfer_id) THEN
     RAISE EXCEPTION 'Trace Connect incohérente' USING ERRCODE = 'P0001';
@@ -56492,6 +56517,11 @@ BEGIN
     RAISE EXCEPTION 'Facture honoraires Connect incohérente' USING ERRCODE = 'P0001';
   END IF;
 
+  -- Le producteur possède la FH explicite validée contre la Session Stripe.
+  -- Rattachement courant de cette trace seulement ; aucun paiement ancien réécrit.
+  UPDATE public.stripe_transfers SET facture_honoraire_id=v_honoraires.id
+  WHERE id=v_transfer.id AND facture_honoraire_id IS NULL;
+
   UPDATE public.factures_honoraires
   SET statut = 'PAYEE',
       stripe_payment_intent_id = p_stripe_payment_intent_id,
@@ -56508,6 +56538,8 @@ BEGIN
        OR v_commission.type_document <> 'FACTURE'
        OR v_commission.mission_id <> p_mission_id
        OR v_commission.etablissement_id <> p_etablissement_id
+       OR (v_commission.facture_honoraire_id IS NOT NULL
+           AND v_commission.facture_honoraire_id <> p_facture_honoraires_id)
        OR round(v_commission.montant_ttc * 100)::integer <> p_montant_commission_cts
        OR v_commission.statut NOT IN ('EMISE', 'EN_RETARD', 'PAYEE')
        OR (v_commission.stripe_payment_intent_id IS NOT NULL
@@ -56548,6 +56580,8 @@ BEGIN
     IF NOT FOUND
        OR v_commission.mission_id <> p_mission_id
        OR v_commission.etablissement_id <> p_etablissement_id
+       OR (v_commission.facture_honoraire_id IS NOT NULL
+           AND v_commission.facture_honoraire_id <> p_facture_honoraires_id)
        OR v_commission.statut <> 'PAYEE'
        OR v_commission.stripe_payment_intent_id <> p_stripe_payment_intent_id
        OR round(v_commission.montant_ttc * 100)::integer <> p_montant_commission_cts THEN
@@ -56557,12 +56591,12 @@ BEGIN
   END IF;
 
   INSERT INTO public.paiements_soignant (
-    mission_id, soignant_id, etablissement_id, montant_net, methode,
+    mission_id, facture_honoraire_id, soignant_id, etablissement_id, montant_net, methode,
     reference_virement, date_paiement, statut,
     confirme_par_etablissement, confirme_par_etablissement_le,
     confirme_par_soignant, confirme_par_soignant_le, stripe_transfer_id
   ) VALUES (
-    p_mission_id, p_soignant_id, p_etablissement_id,
+    p_mission_id, p_facture_honoraires_id, p_soignant_id, p_etablissement_id,
     p_montant_soignant_cts::numeric / 100, 'NOTE_HONORAIRES',
     'STRIPE-' || p_stripe_transfer_id,
     (COALESCE(p_rapproche_le, now()))::date, 'CONFIRME',
@@ -73699,6 +73733,9 @@ CREATE OR REPLACE TRIGGER "trg_p0_rbac_missions" BEFORE INSERT OR DELETE OR UPDA
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_paiements_soignant" BEFORE INSERT OR DELETE OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
 
+CREATE OR REPLACE TRIGGER "trg_paiement_liberal_facture" BEFORE INSERT OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_paiement_liberal_facture"();
+
+
 
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_partages_rib" BEFORE DELETE OR UPDATE ON "public"."partages_rib" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
@@ -73745,6 +73782,9 @@ CREATE OR REPLACE TRIGGER "trg_preserver_rectification_facture_honoraires" BEFOR
 
 
 CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id", "mission_id" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"();
+
+
+CREATE OR REPLACE TRIGGER "trg_reservation_connect_paiement" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_reservation_connect"();
 
 
 

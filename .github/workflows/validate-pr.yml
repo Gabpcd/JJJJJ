@@ -85,6 +85,9 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 
+      - name: Catalogue paiement indépendant sans réseau
+        run: node --test tests/node/paiements-catalogue.node.mjs
+
       - name: Garde du témoin F1 avant migration sans réseau
         run: node --test tests/node/f1-heures-temoin-avant-migration.node.mjs
 
@@ -477,6 +480,14 @@ jobs:
             node scripts/ci/f1-heures-temoin-avant-migration.mjs
           fi
 
+      - name: Paiements — catalogue avant migration
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-catalogue.mjs avant
+
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
         env:
@@ -551,6 +562,7 @@ jobs:
             tests/lot21/d4-cascade-profession-mission.test.sql
             tests/security/facturation-heures-ajustees-chainage-f1.test.sql
             tests/security/facturation-commissions-pieces-matrice-f1.test.sql
+            tests/security/paiements-liberaux-facture.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
@@ -599,6 +611,14 @@ jobs:
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
 
+      - name: Paiements — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-catalogue.mjs apres
+
       - name: F1 — SELECT indépendant après succès ou échec SQL
         if: always() && steps.migration_scope.outputs.has_f1_regression == 'true'
         timeout-minutes: 2
@@ -621,6 +641,36 @@ jobs:
           jq -S . "$RUNNER_TEMP/f1-catalogue-apres.json" > "$RUNNER_TEMP/f1-apres-canonique.json"
           cmp "$RUNNER_TEMP/f1-avant-canonique.json" "$RUNNER_TEMP/f1-apres-canonique.json"
           echo 'F1_CONTROLE_INDEPENDANT_OK : catalogue et compteurs inchangés, zéro résidu.'
+
+  paiements-concurrence:
+    name: Paiements — verrous PostgreSQL 17 éphémère
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Métadonnées officielles Docker Hub lues le 01/10/2026, aucune couche locale.
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: paiements_concurrence
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d paiements_concurrence"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_PG_CONCURRENCY: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: paiements_concurrence
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@v5
+      - name: Deux écrivains, observateur et reprises exactes
+        run: python3 scripts/ci/paiements-concurrence-pg17.py
 
   escrow-gate:
     name: Escrow (recette si paiements touchés)
