@@ -8,7 +8,7 @@ import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, ChevronRight, AlertTriangle, Timer, Scale, MessageCircle, Clock, Star, type LucideIcon } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { AccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
+import { EtatAccesEtablissement, ErreurRubriqueEtablissement } from '@/components/AccesEtablissement';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -50,7 +50,8 @@ import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEta
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
-  const { user, parcours, etablissementId, loading: scopeLoading, resolved: scopeResolved, error: scopeError, retry: relancerScope } = useEtablissementScope();
+  const scope = useEtablissementScope();
+  const { user, parcours, etablissementId, loading: scopeLoading, resolved: scopeResolved, error: scopeError, retry: relancerScope } = scope;
   const { afficherNotification } = useNotification();
   interface EtabInfo {
     nom: string;
@@ -469,7 +470,7 @@ export default function DashboardEtablissement() {
   // reste désactivée et ses valeurs par défaut ne sont pas des statistiques.
   const compteEnPreparation = !etablissementId && parcours?.type_compte === 'ETABLISSEMENT';
   if (!etablissementId && !compteEnPreparation) {
-    return <AccesEtablissement titre="Tableau de bord" description="Retrouvez ici l’activité de votre établissement.">{null}</AccesEtablissement>;
+    return <EtatAccesEtablissement scope={scope} titre="Tableau de bord" description="Retrouvez ici l’activité de votre établissement.">{null}</EtatAccesEtablissement>;
   }
   // Pour un établissement existant, null peut signaler une erreur de lecture :
   // seul false établit l'absence de mission, sans masquer une activité existante.
