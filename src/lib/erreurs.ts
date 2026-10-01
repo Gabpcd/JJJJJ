@@ -419,6 +419,14 @@ export function extraireMessageErreur(error: any): string {
   if (!error) return '';
   const msg = error.message || error.details || error.hint || '';
 
+  const codePaiement = error.code || error.error || error.error_code;
+  if (codePaiement === 'LIBERAL_FACTURE_REQUISE' || msg.includes('LIBERAL_FACTURE_REQUISE')) {
+    return 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.';
+  }
+  if (codePaiement === 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' || msg.includes('PAIEMENT_HISTORIQUE_A_RAPPROCHER')) {
+    return 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.';
+  }
+
   // PostgREST refuse un JWT expiré ou invalide avant d'exécuter la requête.
   // Conserver ce refus et indiquer comment reprendre, sans exposer son anglais.
   if (error.code === 'PGRST301' || /jwt expired/i.test(msg)) {

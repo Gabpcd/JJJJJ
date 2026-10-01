@@ -10,13 +10,13 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface Props {
   missionId: string;
   soignantAssigneId: string;
   etablissementId: string;
-  onStartConnectPay: () => void;
-  soignantHasConnect: boolean;
+  typeContratApplique?: 'LIBERAL' | 'SALARIE' | null;
 }
 
 type ModeRecommande = 'STRIPE_CONNECT' | 'VIREMENT_PAIE' | 'VIREMENT_NOTE_HONORAIRES';
@@ -37,7 +37,7 @@ const isRefValid = (ref: string) => {
   return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
 };
 
-export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, onStartConnectPay, soignantHasConnect }: Props) {
+export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, typeContratApplique }: Props) {
   const navigate = useNavigate();
   const {
     loading: permissionsLoading,
@@ -119,7 +119,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           throw new Error('Historique de paiement incomplet');
         }
         const modeData = modeResponse.data as (InfoPaiement & { error?: string }) | null;
-        if (!modeData || modeData.error || !modeData.mode_recommande) {
+        if (!modeData || modeData.error || !['SALARIE', 'LIBERAL'].includes(modeData.type_contrat_applique ?? '')
+          || (typeContratApplique && typeContratApplique !== modeData.type_contrat_applique)
+          || (modeData.type_contrat_applique === 'SALARIE' && modeData.mode_recommande !== 'VIREMENT_PAIE')
+          || (modeData.type_contrat_applique === 'LIBERAL' && !['STRIPE_CONNECT', 'VIREMENT_NOTE_HONORAIRES'].includes(modeData.mode_recommande))) {
           throw new Error(modeData?.error || 'Mode de paiement indisponible');
         }
         if (cancelled) return;
@@ -141,7 +144,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     };
     void load();
     return () => { cancelled = true; };
-  }, [canReadFinance, missionId, permissionsError, permissionsLoading, reloadToken]);
+  }, [canReadFinance, missionId, permissionsError, permissionsLoading, reloadToken, typeContratApplique]);
 
   const retryLoad = () => {
     if (permissionsError) {
@@ -194,6 +197,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       toast.error('Votre rôle ne permet pas de déclarer un paiement.');
       return;
     }
+    if (info?.type_contrat_applique !== 'SALARIE' || info.mode_recommande !== 'VIREMENT_PAIE') {
+      toast.error(extraireMessageErreur({ code: 'LIBERAL_FACTURE_REQUISE' }));
+      return;
+    }
     if (!isRefValid(reference)) {
       toast.error('La référence doit contenir au moins 6 caractères, dont 2 chiffres et 1 lettre (ex : VIR-2026-001)');
       return;
@@ -225,32 +232,18 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     }
     setDeclaring(true);
     try {
-      const { data, error } = estPaiementSalarie
-        ? await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
-            p_mission_id: missionId,
-            p_montant_verse: montantDeclare,
-            p_montant_total_du: montantDu,
-            p_reference: reference.trim(),
-            p_methode: 'VIREMENT',
-            p_date_paiement: new Date().toISOString().slice(0, 10),
-            p_attestation_sur_l_honneur: attestation,
-          })
-        : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
-            p_mission_id: missionId,
-            p_montant: montantDeclare,
-            p_reference: reference.trim(),
-            p_attestation_sur_l_honneur: attestation,
-          });
+      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
+        p_mission_id: missionId,
+        p_montant_verse: montantDeclare,
+        p_montant_total_du: montantDu,
+        p_reference: reference.trim(),
+        p_methode: 'VIREMENT',
+        p_date_paiement: new Date().toISOString().slice(0, 10),
+        p_attestation_sur_l_honneur: attestation,
+      });
       if (error) throw error;
       const result = data as any;
-      if (result?.error) {
-        if (result?.use_stripe_connect) {
-          toast.info('Ce soignant utilise Stripe Connect — redirection vers le paiement par carte');
-          onStartConnectPay();
-          return;
-        }
-        throw new Error(result.error);
-      }
+      if (result?.error) throw { code: result.error, message: result.message || result.error };
       toast.success('Paiement déclaré — le soignant sera notifié');
       setReference('');
       setMontantNetReel('');
@@ -262,7 +255,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         .order('cree_le', { ascending: false }).limit(1);
       if (pData?.length) setPaiementExistant(pData[0]);
     } catch (e: any) {
-      toast.error(e?.message || 'Erreur lors de la déclaration');
+      toast.error(extraireMessageErreur(e));
     }
     setDeclaring(false);
   };
@@ -320,6 +313,14 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       <p className="text-sm font-semibold">Paiement suivi par Jolene</p>
       <p className="text-xs text-muted-foreground">Le paiement et ses éventuels remboursements sont gérés par Jolene. Aucune déclaration de paiement manuel n’est nécessaire ici.</p>
     </div>
+  );
+
+  const estLiberal = info.type_contrat_applique === 'LIBERAL';
+  const lienFactures = (
+    <BoutonY2K size="sm" variant="secondary"
+      onClick={() => navigate(`/etablissement/facturation?tab=missions-a-payer&mission=${encodeURIComponent(missionId)}`)}>
+      Voir les factures de cette mission
+    </BoutonY2K>
   );
 
   const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -394,6 +395,12 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
 
     return (
       <div className={`card-base ${statutUI.borderClass} ${statutUI.bgClass} space-y-3`}>
+        {estLiberal && (
+          <div className="space-y-2">
+            {!p.facture_honoraire_id && <p className="text-xs text-muted-foreground">Ce paiement antérieur n’est pas lié à une facture. Un rapprochement est nécessaire avant tout nouveau règlement.</p>}
+            {lienFactures}
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-2 min-w-0">
             <StatutIcon className={`h-4 w-4 ${statutUI.iconClass} shrink-0 mt-0.5`} />
@@ -419,7 +426,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           {/* Si paiement Stripe Connect : afficher le montant TOTAL débité à l'étab
               (honoraires soignant + commission Jolene capturée à la source), pas
               juste le net soignant — évite la confusion "seul 132€ a été débité". */}
-          {p.stripe_transfer_id && info ? (
+          {p.stripe_transfer_id && info && !estLiberal ? (
             <>
               <p className="text-muted-foreground">
                 Montant débité : <span className="text-foreground font-semibold">{fmt(p.montant_net + info.commission_ttc)}</span>
@@ -486,6 +493,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     const paiementConfirme = stripeTransfer.statut === 'CHARGE_REUSSI';
     return (
       <div className={`card-base space-y-2 ${isVerse ? 'border-success/20' : 'border-primary/20'}`}>
+        {estLiberal && lienFactures}
         <p className="text-sm font-semibold text-foreground flex items-center gap-2">
           {isVerse ? (
             <><CheckCircle className="h-4 w-4 text-success" /> Paiement Stripe effectué</>
@@ -514,28 +522,15 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     );
   }
 
-  // Stripe Connect: paiement automatique
-  if (info.mode_recommande === 'STRIPE_CONNECT' && soignantHasConnect) {
-    return (
-      <div className="card-base border-primary/20 space-y-3">
-        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-primary" /> Paiement Stripe Connect
-        </p>
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p>Commission Jolene TTC : {fmt(info.commission_ttc)}</p>
-          <p>Honoraires soignant : {fmt(info.montant_soignant)}</p>
-          <p className="font-semibold text-foreground">Total : {fmt(info.total)}</p>
-        </div>
-        {canManagePayments ? (
-          <BoutonY2K size="sm" onClick={onStartConnectPay} className="gap-2" iconeGauche={<CreditCard className="h-4 w-4" />}>
-            💳 Payer via Stripe
-          </BoutonY2K>
-        ) : (
-          <p className="text-xs text-muted-foreground">Consultation uniquement — paiement non autorisé pour votre rôle.</p>
-        )}
-      </div>
-    );
-  }
+  // En libéral, seule une pièce identifiée peut fonder un règlement. Les
+  // agrégats de mission restent une estimation, jamais un montant à payer.
+  if (estLiberal) return (
+    <div className="card-base border-primary/20 space-y-3">
+      <p className="text-sm font-semibold">Paiement par facture</p>
+      <p className="text-xs text-muted-foreground">Ouvrez Facturation pour consulter les pièces de cette mission et choisir la facture à régler. Le montant prévisionnel de la mission ne vaut pas montant dû.</p>
+      {lienFactures}
+    </div>
+  );
 
   // Paiement manuel avec référence obligatoire. Pour un salarié, la valeur
   // remontée par le mode de paiement est seulement une estimation avant PAS :

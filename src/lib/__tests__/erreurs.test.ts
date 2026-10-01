@@ -33,6 +33,15 @@ describe('erreurs inscription familles de compte', () => {
 });
 
 describe('extraireMessageErreur', () => {
+  it.each([
+    ['LIBERAL_FACTURE_REQUISE', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.'],
+    ['PAIEMENT_HISTORIQUE_A_RAPPROCHER', 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.'],
+  ])('oriente le refus financier %s sans exposer un code technique', (code, message) => {
+    expect(extraireMessageErreur({ code })).toBe(message);
+    expect(extraireMessageErreur({ error: code })).toBe(message);
+    expect(extraireMessageErreur({ message: code })).toBe(message);
+  });
+
   it('should return empty string for null/undefined', () => {
     expect(extraireMessageErreur(null)).toBe('');
     expect(extraireMessageErreur(undefined)).toBe('');
