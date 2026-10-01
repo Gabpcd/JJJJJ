@@ -1891,6 +1891,12 @@ function FacturationEtablissementContent() {
                                       <Download className="h-4 w-4 text-muted-foreground" />
                                     </Button>
                                   )}
+                                  {p.facture_honoraires_id && p.mission_id && (
+                                    <Button size="sm" variant="outline" className="min-h-[44px]"
+                                      onClick={() => setFactureAContester({ ...p, intitule: p.mission_intitule })}>
+                                      <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
+                                    </Button>
+                                  )}
                                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               </td>
@@ -1943,11 +1949,17 @@ function FacturationEtablissementContent() {
                               </Button>
                             )}
                           </div>
+                          {p.facture_honoraires_id && p.mission_id && (
+                            <Button size="sm" variant="outline" className="mt-2 min-h-[44px] w-full"
+                              onClick={() => setFactureAContester({ ...p, intitule: p.mission_intitule })}>
+                              <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
+                      Les 10 derniers paiements confirmés par le soignant. Le titre ouvre la mission. Contester une facture ouvre une demande de revue, sans déclencher de remboursement.
                     </p>
                   </CardY2KContent>
                 </CardY2K>
