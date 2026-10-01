@@ -1,0 +1,65 @@
+name: Actualiser generate-invoice staging (manuel uniquement)
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'SHA main exact relu et approuvé pour ce seul déploiement'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  refresh-one-function:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Refuse any context except the explicitly selected main SHA
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != 'Gabpcd/JJJJJ' || "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' || ! "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ || "$GITHUB_SHA" != "$EXPECTED_SHA" ]]; then
+            echo 'TRUSTED_MAIN_REQUIRED'
+            exit 1
+          fi
+      - name: Checkout exact trusted main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Node without package installation
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Test refusals and closed reports without credentials or network
+        run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
+      - name: Install the pinned Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # official v1 branch, observed 2026-10-01
+        with:
+          version: '2.98.0'
+      - name: Check current main and staging; deploy this function once; probe without Auth
+        timeout-minutes: 6
+        run: node scripts/ci/refresh-generate-invoice-staging.mjs
+        env:
+          INVOICE_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Closed result only, including uncertain deployment
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: generate-invoice-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/generate-invoice-staging-proof/result.json
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false
