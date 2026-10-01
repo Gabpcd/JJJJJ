@@ -13,7 +13,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
-import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { chargerPolicesFacture, verifierCaracteresFacture, ErreurPoliceFacture, fontkit } from './fonts.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
@@ -501,10 +502,13 @@ async function generateInvoicePdf(inv: {
   statut?: string;
   replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
+  await verifierCaracteresFacture(Object.values(inv));
+  const polices = await chargerPolicesFacture();
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595, 842]); // A4
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
+  let page = pdfDoc.addPage([595, 842]); // A4
+  const font = await pdfDoc.embedFont(polices.regular, { subset: true });
+  const fontBold = await pdfDoc.embedFont(polices.bold, { subset: true });
   const fontSize = 9;
   const titleSize = 14;
   const sectionSize = 10;
@@ -667,11 +671,36 @@ async function generateInvoicePdf(inv: {
 
   // Subrogation
   if (inv.subrogationMention) {
+    const mentionLines: string[] = [];
+    let mentionLine = '';
+    for (const word of inv.subrogationMention.split(/\s+/)) {
+      const candidate = mentionLine ? `${mentionLine} ${word}` : word;
+      if (mentionLine && font.widthOfTextAtSize(candidate, 8) > w - 2 * margin) {
+        mentionLines.push(mentionLine);
+        mentionLine = word;
+      } else {
+        mentionLine = candidate;
+      }
+    }
+    if (mentionLine) mentionLines.push(mentionLine);
+    // Keep the complete mention, optional payee, payment terms and footer on
+    // the page. Long descriptions must not push this block below the margin.
+    const remainingHeight = 29 + mentionLines.length * 12
+      + (inv.factorName ? 12 : 0) + (inv.factorIban ? 12 : 0)
+      + 10 + (inv.isAvoir ? 0 : 32) + 25;
+    if (y - remainingHeight < margin) {
+      page = pdfDoc.addPage([595, 842]);
+      y = 800;
+      drawText(`Numero : ${inv.invoiceNumber}`, margin, y, { font: fontBold, size: sectionSize });
+      y -= 25;
+    }
     drawLine(y); y -= 15;
     drawText('MENTION SUBROGATIVE', margin, y, { font: fontBold, size: sectionSize });
     y -= 14;
-    drawText(inv.subrogationMention, margin, y, { size: 8 });
-    y -= 12;
+    for (const mentionPart of mentionLines) {
+      drawText(mentionPart, margin, y, { size: 8 });
+      y -= 12;
+    }
     if (inv.factorName) { drawText(`Paiement a l'ordre de : ${inv.factorName}`, margin, y, { size: 8 }); y -= 12; }
     if (inv.factorIban) { drawText(`IBAN : ${inv.factorIban}`, margin, y, { size: 8 }); y -= 12; }
     y -= 10;
@@ -704,19 +733,21 @@ async function generateInvoicePdf(inv: {
       : null;
     const rot = degrees(30);
     // Anchor tuned for visual centering of a diagonal stamp on A4 (595x842).
-    page.drawText(stampMain, {
-      x: 90, y: 320,
-      font: fontBold, size: 100,
-      color: stampColor, opacity: 0.35,
-      rotate: rot,
-    });
-    if (stampSub) {
-      page.drawText(stampSub, {
-        x: 170, y: 280,
-        font: fontBold, size: 22,
-        color: stampColor, opacity: 0.45,
+    for (const stampedPage of pdfDoc.getPages()) {
+      stampedPage.drawText(stampMain, {
+        x: 90, y: 320,
+        font: fontBold, size: 100,
+        color: stampColor, opacity: 0.35,
         rotate: rot,
       });
+      if (stampSub) {
+        stampedPage.drawText(stampSub, {
+          x: 170, y: 280,
+          font: fontBold, size: 22,
+          color: stampColor, opacity: 0.45,
+          rotate: rot,
+        });
+      }
     }
   }
 
@@ -903,6 +934,14 @@ Deno.serve(async (req) => {
         nom: '',
         siret_liberal: sellerSiret,
       }, facture.date_emission);
+
+      // Validate the canonical snapshots before generating or replacing files.
+      await verifierCaracteresFacture([
+        facture.numero_facture, facture.date_emission, facture.date_echeance,
+        sellerName, sellerProfession, sellerSiret, sellerProfessionalNumber, sellerAddress,
+        buyerName, buyerSiret, buyerAddress, description, subrogationMention,
+        facture.mandat_version, precedingNumero, precedingDate, motifAvoir, replacedByNumero,
+      ]);
 
       const xmlCii = generateCiiXml({
         invoiceNumber: facture.numero_facture,
@@ -1322,6 +1361,15 @@ Deno.serve(async (req) => {
     }
 
     // 5. Générer le numéro de facture
+    // Validate all dynamic PDF text before consuming a number. The existing
+    // idempotent commission repair above does not regenerate a document.
+    await verifierCaracteresFacture([
+      soignant.prenom, soignant.nom, soignant.profession, soignant.siret_liberal,
+      soignant.numero_rpps, soignant.numero_adeli, soignant.adresse_rue,
+      soignant.adresse_code_postal, soignant.adresse_ville, soignant.mandat_facturation_version,
+      etab.nom, etab.siret, etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville,
+      mission.intitule, mission.service,
+    ]);
     const { data: invoiceNumber, error: numErr } = await supabaseAdmin.rpc('next_invoice_number', {
       p_soignant_id: soignant.id,
     });
@@ -1705,6 +1753,17 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error('generate-invoice error:', err);
+    if (err instanceof ErreurPoliceFacture) {
+      const caractereNonPrisEnCharge = err.code === 'CARACTERE_PDF_NON_PRIS_EN_CHARGE';
+      return json(req, {
+        error: err.code,
+        code: err.code,
+        message: caractereNonPrisEnCharge
+          ? 'La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité.'
+          : 'Le PDF de la facture ne peut pas être généré pour le moment. Contactez l’assistance.',
+        ...(err.detail ? { details: { codepoint: err.detail } } : {}),
+      }, caractereNonPrisEnCharge ? 422 : 500);
+    }
     return json(req, { error: err instanceof Error ? err.message : 'Erreur interne' }, 500);
   }
 });

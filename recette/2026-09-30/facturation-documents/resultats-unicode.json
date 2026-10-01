@@ -1,0 +1,214 @@
+{
+  "base": "86d9e677721258bf99a69344210c9a34ed2cc4ca",
+  "stats": {
+    "startTime": "2026-09-30T21:43:41.529Z",
+    "duration": 83923.14300000001,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6038,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4889,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4210,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5542,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4879,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4112,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5459,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5359,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4182,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5557,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5390,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 3772,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 7075,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant Unicode : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 6934,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4361,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    }
+  ],
+  "node": {
+    "passes": 9,
+    "echoues": 0
+  },
+  "mode": "Vrais octets PDF/XML, IO et frontend simulés ; pas de cloud/Deno local",
+  "deno": "Contrôle CI ajouté, pas exécuté localement"
+}

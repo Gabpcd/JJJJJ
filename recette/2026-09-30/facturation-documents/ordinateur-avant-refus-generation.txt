@@ -1,0 +1,76 @@
+- main:
+  - heading "Facturation" [level=1]:
+    - img
+    - text: Facturation
+  - paragraph: Paiements soignants, commissions Jolene et exports comptables
+  - paragraph: 94,40 €
+  - paragraph: Total à régler
+  - button "— Soignants à régler · 0 mission":
+    - paragraph: —
+    - paragraph: Soignants à régler · 0 mission
+    - img
+  - button "— Commissions Jolene · 0 facture à régler":
+    - paragraph: —
+    - paragraph: Commissions Jolene · 0 facture à régler
+    - img
+  - button "Échéances à payer aux soignants (1)" [expanded]:
+    - heading "Échéances à payer aux soignants (1)" [level=3]:
+      - img
+      - text: Échéances à payer aux soignants (1)
+    - img
+  - button "Mission hebdomadaire fictive F1"
+  - text: 李 L'Été 1j
+  - paragraph: IDE · 4h pointées
+  - paragraph: 21/09/2026 → 27/09/2026
+  - text: Contrat libéral → Note d'honoraires (Stripe Connect)
+  - paragraph: 94,40 €
+  - paragraph: dont 14,40 € commission Jolene
+  - button "Payer via Stripe":
+    - img
+    - text: Payer via Stripe
+  - button "Paiements en attente (0)" [expanded]:
+    - heading "Paiements en attente (0)" [level=3]:
+      - img
+      - text: Paiements en attente (0)
+    - img
+  - text: Aucun paiement en attente de confirmation soignant.
+  - button "Commissions Jolene (0)" [expanded]:
+    - heading "Commissions Jolene (0)" [level=3]:
+      - img
+      - text: Commissions Jolene (0)
+    - img
+  - text: Aucune facture de commission à régler ou en cours.
+  - img
+  - paragraph: Activez le prélèvement automatique
+  - paragraph: "Plus de virement à effectuer manuellement : les factures éligibles sont présentées au prélèvement après leur émission, lors du prochain traitement automatique."
+  - button "Activer le prélèvement automatique":
+    - img
+    - text: Activer le prélèvement automatique
+  - paragraph:
+    - img
+    - text: Virement manuel — coordonnées bancaires Jolene
+  - paragraph: "IBAN : FR76 1732 8844 0018 3164 8362 916"
+  - paragraph: "BIC : SWNBFR22"
+  - paragraph: "Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)"
+  - button "Historique paiements (0 confirmé)" [expanded]:
+    - heading "Historique paiements (0 confirmé)" [level=3]:
+      - img
+      - text: Historique paiements (0 confirmé)
+    - img
+  - text: Aucun paiement confirmé pour l'instant.
+  - button "Exports comptables" [expanded]:
+    - heading "Exports comptables" [level=3]:
+      - img
+      - text: Exports comptables
+    - img
+  - paragraph: Téléchargez vos données financières pour votre comptabilité.
+  - button "Export comptable / Paie Formats Standard, Silae et Sage":
+    - img
+    - paragraph: Export comptable / Paie
+    - paragraph: Formats Standard, Silae et Sage
+  - button "Toutes les factures commission Télécharge les 0 dernières payées":
+    - img
+    - paragraph: Toutes les factures commission
+    - paragraph: Télécharge les 0 dernières payées
+  - paragraph: À savoir
+  - paragraph: Les factures honoraires soignants (mandat art. 289 I-2 CGI) sont accessibles individuellement depuis la section 5 (historique paiements).

@@ -1,0 +1,114 @@
+name: Restore local bootstrap (empty infrastructure only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/restore-local-bootstrap.yml'
+      - 'tools/restore-local/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-restore-local-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  empty-local-stacks:
+    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/restore-local
+    env:
+      PRIVATE_DIR: /tmp/jolene-restore-private-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_DIR: /tmp/jolene-restore-proof-${{ github.run_id }}-${{ github.run_attempt }}
+      DRILL_RUN: jolene-restore-drill-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact tested revision
+        timeout-minutes: 1
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Node (no npm install)
+        timeout-minutes: 1
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Identity and local guards
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PROOF_DIR"
+          node scripts/restore/ci-guard.mjs identity > "$PROOF_DIR/identity.json"
+          node --test scripts/restore/bootstrap.test.mjs scripts/restore/ci-guard.test.mjs scripts/restore/extensions.test.mjs scripts/export/export-schema.test.mjs > "$PROOF_DIR/unit-tests.tap"
+          node scripts/restore/bootstrap.mjs plan "$PRIVATE_DIR" "$DRILL_RUN" > "$PROOF_DIR/plan.json"
+      - name: Preload five public digest-pinned images (before isolation)
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=15s 270s node scripts/restore/bootstrap.mjs preload "$PRIVATE_DIR" > "$PROOF_DIR/preload.json" 2>&1
+      - name: Preflight without application schema
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          node scripts/restore/bootstrap.mjs preflight "$PRIVATE_DIR" > "$PROOF_DIR/preflight.json" 2>&1
+      - name: Start two empty isolated stacks and check API health
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=15s 210s node scripts/restore/bootstrap.mjs up "$PRIVATE_DIR" > "$PROOF_DIR/start.json" 2>&1
+      - name: Reinspect network, empty SQL and health; refuse repeated start
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          node scripts/restore/bootstrap.mjs inspect "$PRIVATE_DIR" > "$PROOF_DIR/inspect.json" 2>&1
+          node scripts/restore/ci-guard.mjs existing-refusal "$PRIVATE_DIR" > "$PROOF_DIR/existing-refusal.json" 2>&1
+      - name: Read installed and available extension versions (no CREATE)
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          node scripts/restore/bootstrap.mjs extensions "$PRIVATE_DIR" > "$PROOF_DIR/extensions.json" 2>&1
+      - name: Filtered container states before cleanup
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROOF_DIR"
+          if [[ -f "$PRIVATE_DIR/manifest.json" ]]; then
+            node scripts/restore/bootstrap.mjs diagnose "$PRIVATE_DIR" > "$PROOF_DIR/diagnostic.json" 2>&1
+          fi
+      - name: Always clean only exact owned resources
+        if: always()
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROOF_DIR"
+          if [[ -f "$PRIVATE_DIR/manifest.json" ]]; then
+            node scripts/restore/bootstrap.mjs down "$PRIVATE_DIR" > "$PROOF_DIR/cleanup.json" 2>&1
+            node scripts/restore/bootstrap.mjs down "$PRIVATE_DIR" > "$PROOF_DIR/cleanup-again.json" 2>&1
+          else
+            node scripts/restore/bootstrap.mjs absent "$DRILL_RUN" > "$PROOF_DIR/no-start.json" 2>&1
+          fi
+      - name: Independently verify exact absence
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROOF_DIR"
+          node scripts/restore/bootstrap.mjs absent "$DRILL_RUN" > "$PROOF_DIR/absence.json" 2>&1
+      - name: Filtered proof only (never private compose, keys, DB logs or dumps)
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: restore-empty-infra-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PROOF_DIR }}/
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false

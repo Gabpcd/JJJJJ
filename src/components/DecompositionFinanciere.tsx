@@ -327,7 +327,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
         </div>
 
         <p className="text-[10px] text-muted-foreground/60 italic mt-4">
-          Contrat libéral : le soignant déclare ses revenus et cotise auprès de l'URSSAF libérale / CARPIMKO ou CIPAV.
+          Exercice libéral : les obligations déclaratives et les cotisations dépendent de la profession et de la situation du soignant. Consultez les organismes compétents.
         </p>
       </div>
     );

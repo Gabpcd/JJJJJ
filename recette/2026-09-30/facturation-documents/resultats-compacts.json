@@ -1,0 +1,143 @@
+{
+  "base": "ed402c3277d634691acc43a1a2cbeec93a126092",
+  "stats": {
+    "startTime": "2026-09-30T21:18:15.174Z",
+    "duration": 47623.073000000004,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5526,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-portrait",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 3228,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4959,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ipad-paysage",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 2913,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4919,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "iphone",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 2892,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4881,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "android",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 4112,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 soignant : facture et avoir générés, téléchargés et cohérents après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 5150,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    },
+    {
+      "titre": "Documents F1 établissement : commission réelle de période téléchargée après recharge",
+      "projet": "ordinateur",
+      "statut": "expected",
+      "resultats": [
+        {
+          "statut": "passed",
+          "duree_ms": 3563,
+          "retry": 0,
+          "erreurs": []
+        }
+      ]
+    }
+  ]
+}
