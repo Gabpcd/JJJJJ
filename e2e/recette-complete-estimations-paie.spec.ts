@@ -1,6 +1,9 @@
 import { expect, test, type Page, type Locator, type TestInfo } from '@playwright/test';
 import { simulerSoignant, entrer, aller, recharger, sansDebordement, mission, ids } from './helpers/recette-complete-soignant';
 import { simulerEtablissement, entrer as entrerEtab, allerA, stabiliserLectures } from './helpers/recette-complete-etablissement';
+import { figerHorlogePaie, periodeMissionPaie } from './helpers/recette-horloge-paie';
+
+test.beforeEach(async ({ page }, info) => { await figerHorlogePaie(page, info); });
 
 // Parcours visibles fictifs : les notes distinguent simulation, bulletin employeur et facture.
 async function preuveNote(page: Page, note: Locator, info: TestInfo, nom: string) {
@@ -13,15 +16,14 @@ async function preuveNote(page: Page, note: Locator, info: TestInfo, nom: string
   await sansDebordement(page);
   await expect(page.getByText(/montants calculés par le moteur de paie font foi|montant définitif est confirmé après validation/)).toHaveCount(0);
   await info.attach(nom, { body: await page.locator('main').ariaSnapshot(), contentType: 'text/plain' });
-  await page.screenshot({ path: info.outputPath(`${nom}.png`), fullPage: false });
+  await page.screenshot({ path: info.outputPath(`${nom}.png`), fullPage: false, scale: 'css' });
 }
 
 test('soignant — estimations sur accueil, historique, recherche, détail et sélection de série', async ({ page }, info) => {
   const etat = await simulerSoignant(page); etat.offers = true;
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await page.route('https://fonts.gstatic.com/**', route => route.fulfill({ body: '' }));
-  const date = new Date(); date.setDate(1); date.setHours(10, 0, 0, 0);
-  etat.tables.set('missions', [{ ...mission, statut: 'TERMINEE', soignant_assigne_id: ids.user, debut_le: date.toISOString(), fin_le: new Date(date.getTime() + 8 * 3600000).toISOString() }]);
+  etat.tables.set('missions', [{ ...mission, statut: 'TERMINEE', soignant_assigne_id: ids.user, ...periodeMissionPaie }]);
   await page.route('**/rest/v1/mission_creneaux?*', async route => {
     const idsDemandes = new URL(route.request().url()).searchParams.get('mission_id') ?? '';
     const lignes = (etat.tables.get('missions') ?? []).filter(m => idsDemandes.includes(m.id)).map(m => ({ id: `creneau-${m.id}`, mission_id: m.id, debut: m.debut_le, fin: m.fin_le, est_pause: false, type_creneau: 'PREVISIONNEL' }));

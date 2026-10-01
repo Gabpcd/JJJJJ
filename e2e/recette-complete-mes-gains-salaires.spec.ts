@@ -1,13 +1,13 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { simulerSoignant, entrer, aller, recharger, attendreAPI, sansDebordement, ids, mission } from './helpers/recette-complete-soignant';
+import { figerHorlogePaie, periodeMissionPaie } from './helpers/recette-horloge-paie';
+
+test.beforeEach(async ({ page }, info) => { await figerHorlogePaie(page, info); });
 
 // États fictifs du contrat legacy : aucun paiement, compte ou appel distant réel.
 type Ligne = Record<string, any>;
 const regionSalaires = (page: Page) => page.getByRole('region', { name: 'Déclarations de salaire par mission' });
-const date = new Date();
-date.setDate(1); date.setHours(10, 0, 0, 0);
-const debut = date.toISOString();
-const fin = new Date(date.getTime() + 8 * 3600000).toISOString();
+const { debut_le: debut, fin_le: fin } = periodeMissionPaie;
 const idMission = (n: number) => `69000000-0000-4000-8000-${String(200 + n).padStart(12, '0')}`;
 function creerMission(n: number, intitule: string, extra: Ligne = {}) {
   return { ...mission, id: idMission(n), intitule, debut_le: debut, fin_le: fin, statut: 'TERMINEE', soignant_assigne_id: ids.user, nb_creneaux: 1, net_estime: 999, net_a_payer: 1210, total_brut: 1000, presences: [{ valide_par_etablissement: true }], creneaux: [], ...extra };
@@ -64,7 +64,7 @@ async function preuve(page: Page, info: TestInfo, nom: string) {
   await sansDebordement(page);
   await info.attach(nom, { body: await page.locator('main').ariaSnapshot(), contentType: 'text/plain' });
   await regionSalaires(page).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath(`${nom}.png`), fullPage: false });
+  await page.screenshot({ path: info.outputPath(`${nom}.png`), fullPage: false, scale: 'css' });
 }
 
 test('salaires — états prudents, montants invalides, badges et absence de faux premier paiement', async ({ page }, info) => {
