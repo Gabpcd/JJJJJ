@@ -57893,8 +57893,9 @@ BEGIN
     DELETE FROM cotisations_sociales WHERE soignant_id = v_uid;
     DELETE FROM conformite_travail WHERE soignant_id = v_uid;
     UPDATE messages_litige SET contenu = '[Message supprimé]' WHERE auteur_id = v_uid;
-    UPDATE stripe_transfers SET soignant_id = NULL WHERE soignant_id = v_uid;
-    UPDATE paiements_soignant SET soignant_id = NULL WHERE soignant_id = v_uid;
+    -- Le profil est anonymisé et conservé par son id. Les références des pièces
+    -- et règlements restent inchangées : aucune réattribution de l’historique.
+    -- Les deux colonnes soignant_id sont NOT NULL ; aucune écriture ici.
     INSERT INTO journaux_audit (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
     VALUES (v_uid, 'SOIGNANT', 'RGPD_SUPPRESSION_COMPTE', 'soignant', v_uid,
         jsonb_build_object('anonymise', true, 'tables_nettoyees', ARRAY[
@@ -57906,7 +57907,8 @@ BEGIN
             'souscriptions_prevoyance','suivi_conversion_3200h',
             'mandats_facturation_signatures','cessions_creance','factures_honoraires','factor_advances',
             'email_queue','sms_envoyes','cotisations_sociales','conformite_travail',
-            'messages_litige','stripe_transfers','paiements_soignant']));
+            'messages_litige'],
+            'tables_financieres_conservees', ARRAY['stripe_transfers','paiements_soignant']));
     INSERT INTO private.suppressions_compte_confirmees(utilisateur_id,type_profil,anonymise_le,email_anonymise)
     SELECT id,'SOIGNANT',supprime_le,email FROM public.soignants WHERE id=v_uid
     ON CONFLICT(utilisateur_id,type_profil) DO UPDATE SET anonymise_le=excluded.anonymise_le,email_anonymise=excluded.email_anonymise;

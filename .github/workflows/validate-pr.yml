@@ -97,6 +97,9 @@ jobs:
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
+      - name: Suppression avec historique — contrôleur sans réseau
+        run: node --test tests/node/suppression-historique-catalogue.node.mjs
+
       - name: Journal et préflight fournisseurs hors réseau
         run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
 
@@ -488,6 +491,14 @@ jobs:
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/paiements-catalogue.mjs avant
 
+      - name: Suppression — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/suppression-historique-catalogue.mjs avant
+
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
         env:
@@ -532,6 +543,7 @@ jobs:
             tests/security/p0-auth-rls.test.sql
             tests/security/inscription-progressive.test.sql
             tests/security/suppression-compte-isolation-psc.test.sql
+            tests/security/suppression-compte-historique-financier.test.sql
             tests/security/exploration-sans-profil.test.sql
             tests/security/alertes-recherches-etablissement.test.sql
             tests/security/debit-cron-alertes.test.sql
@@ -618,6 +630,14 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/paiements-catalogue.mjs apres
+
+      - name: Suppression — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/suppression-historique-catalogue.mjs apres
 
       - name: F1 — SELECT indépendant après succès ou échec SQL
         if: always() && steps.migration_scope.outputs.has_f1_regression == 'true'
