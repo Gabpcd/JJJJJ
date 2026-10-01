@@ -103,6 +103,7 @@ describe('interface AdminModeration contextualisée', () => {
     expect(adminDetailPage).toContain('Revoir dans Modération');
     expect(adminDetailPage).not.toContain("supabase.rpc('fn_admin_moderer_document'");
     expect(adminDetailPage).not.toContain('il sera validé immédiatement');
-    expect(adminPage).toContain("searchParams.get('onglet') === 'documents'");
+    // L'ouverture effective de Documents est vérifiée par AdminModeration.load-error.test.tsx
+    // et par le parcours navigateur recette-complete-notification-remboursement-manuel.
   });
 });
