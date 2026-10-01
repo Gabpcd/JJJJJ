@@ -406,6 +406,38 @@ test('honoraires documentaires — établissement 70,80 et 94,40 à régler, est
   } finally { await contexte.close(); }
 });
 
+// Le moteur peut faire défiler le padding et l'interligne sans masquer le
+// texte. Mesurer la boîte typographique aux styles calculés évite de supposer
+// une métrique de police identique sous macOS et sur le runner Linux.
+async function mesurerLigne(motif: Locator, extremite: 'premiere' | 'derniere') {
+  return motif.evaluate((element, extremite) => {
+    const champ = element as HTMLTextAreaElement, css = getComputedStyle(champ);
+    const debut = extremite === 'premiere' ? 0 : champ.value.lastIndexOf('\n') + 1;
+    const fin = extremite === 'premiere' ? champ.value.indexOf('\n') : champ.value.length;
+    const miroir = document.createElement('div'), ligne = document.createElement('span');
+    for (const cle of ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant',
+      'line-height', 'letter-spacing', 'word-spacing', 'text-transform', 'text-indent', 'tab-size'])
+      miroir.style.setProperty(cle, css.getPropertyValue(cle));
+    const largeur = champ.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    Object.assign(miroir.style, { position: 'fixed', top: '0', left: '-10000px',
+      width: `${largeur}px`, margin: '0', padding: '0', border: '0', boxSizing: 'content-box',
+      whiteSpace: 'pre-wrap', overflowWrap: 'break-word', visibility: 'hidden', pointerEvents: 'none' });
+    miroir.setAttribute('aria-hidden', 'true');
+    ligne.textContent = champ.value.slice(debut, fin < 0 ? champ.value.length : fin);
+    miroir.append(document.createTextNode(champ.value.slice(0, debut)), ligne);
+    document.body.append(miroir);
+    try {
+      const r = champ.getBoundingClientRect(), m = miroir.getBoundingClientRect(), t = ligne.getBoundingClientRect();
+      const clip = { haut: r.top + champ.clientTop, bas: r.top + champ.clientTop + champ.clientHeight };
+      const haut = clip.haut + parseFloat(css.paddingTop) - champ.scrollTop + t.top - m.top;
+      const bas = haut + t.height;
+      return { extremite, scrollTop: champ.scrollTop, paddingTop: parseFloat(css.paddingTop),
+        interligne: parseFloat(css.lineHeight), haut, bas, clip,
+        visible: t.width > 0 && t.height > 0 && haut >= clip.haut && bas <= clip.bas };
+    } finally { miroir.remove(); }
+  }, extremite);
+}
+
 test('menus et dialogue — position conservée, Select imbriqué et clavier sans création de litige', async ({ page }, info) => {
   const banc = await preparerGains(page, info); await banc.ouvrir();
   const body = page.locator('body');
@@ -450,15 +482,29 @@ test('menus et dialogue — position conservée, Select imbriqué et clavier san
   await motif.fill(brouillon);
   for (let n = 0; n < 25; n++) await motif.press('ArrowUp');
   await expect.poll(() => motif.evaluate(element => (element as HTMLTextAreaElement).selectionStart)).toBe(0);
-  const haut = await motif.evaluate(element => ({ scrollTop: element.scrollTop,
-    paddingTop: parseFloat(getComputedStyle(element).paddingTop) }));
-  // WebKit laisse défiler le padding (8 px) quand le curseur atteint le
-  // premier caractère ; aucune ligne de texte ne doit être masquée.
-  expect(haut.scrollTop).toBeLessThanOrEqual(haut.paddingTop);
+  await expect(motif).toBeFocused();
+  const haut = await mesurerLigne(motif, 'premiere');
+  expect(haut.visible, 'La première ligne reste entièrement dans le champ').toBe(true);
+  await page.screenshot({ path: info.outputPath('dialogue-clavier-premiere-ligne.png'), fullPage: false, animations: 'disabled', scale: 'css' });
+  // Témoin négatif de la mesure : une vraie ligne masquée doit être refusée.
+  // Seul le scroll interne est déplacé puis restauré ; ni style ni texte ne changent.
+  let masque;
+  try {
+    await motif.evaluate((element, decalage) => { element.scrollTop += decalage; }, 2 * haut.interligne);
+    masque = await mesurerLigne(motif, 'premiere');
+    expect(masque.visible).toBe(false);
+  } finally {
+    await motif.evaluate((element, scroll) => { element.scrollTop = scroll; }, haut.scrollTop);
+  }
+  expect((await mesurerLigne(motif, 'premiere')).visible).toBe(true);
   for (let n = 0; n < 25; n++) await motif.press('ArrowDown');
   await expect.poll(() => motif.evaluate(element => (element as HTMLTextAreaElement).selectionStart)).toBe(brouillon.length);
   await expect.poll(() => motif.evaluate(element => element.scrollTop)).toBeGreaterThan(haut.scrollTop);
   await expect(motif).toHaveValue(brouillon);
+  await expect(motif).toBeFocused();
+  const bas = await mesurerLigne(motif, 'derniere');
+  expect(bas.visible, 'La dernière ligne reste visible après la navigation clavier').toBe(true);
+  await info.attach('geometrie-champ-clavier', { body: JSON.stringify({ haut, masque, bas }, null, 2), contentType: 'application/json' });
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(positionDialogue);
   await info.attach('dialogue-select-clavier-sans-envoi', { body: await dialogue.ariaSnapshot(), contentType: 'text/plain' });
   await page.screenshot({ path: info.outputPath('dialogue-select-clavier-sans-envoi.png'), fullPage: false, animations: 'disabled', scale: 'css' });
