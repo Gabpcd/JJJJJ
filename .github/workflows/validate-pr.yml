@@ -292,7 +292,9 @@ jobs:
 
           if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/security/facturation-remplacement-commission-f1.test.sql' \
-            'tests/fixtures/facturation-remplacement-f1/catalogue.sql'; then
+            'tests/fixtures/facturation-remplacement-f1/catalogue.sql' \
+            'tests/security/facturation-heures-ajustees-chainage-f1.test.sql' \
+            'tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql'; then
             has_f1_regression=false
           else
             has_f1_regression=true
@@ -447,14 +449,14 @@ jobs:
           set -euo pipefail
           test "$STAGING_SUPABASE_PROJECT_REF" = 'mejpriaetwgtcstbgfid'
           test -n "$STAGING_SUPABASE_ACCESS_TOKEN"
-          jq -Rs '{query: .}' tests/fixtures/facturation-remplacement-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
+          jq -Rs '{query: .}' tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
           code=$(curl -sS --connect-timeout 10 --max-time 30 \
             -o "$RUNNER_TEMP/f1-catalogue-avant.json" -w '%{http_code}' \
             -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
             -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
             --data-binary @"$RUNNER_TEMP/f1-catalogue-query.json")
           test "$code" -ge 200 && test "$code" -lt 300
-          jq -e 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
+          jq -e 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and .[0].helper_remplacement_md5 == "c793ac81eaef0fe18fb5920c9264c675" and (.[0].compteurs | length == 25) and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
 
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
@@ -528,12 +530,14 @@ jobs:
             tests/security/cloture-mission-tenant.test.sql
             tests/security/litige-resolveur-garde-initiale.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
+            tests/security/facturation-heures-ajustees-chainage-f1.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
-          # staging : cette voie prouve seulement la régression F1 LIVE.
-          # Avec migration, les 48 suites historiques + F1 restent obligatoires.
+          # staging : cette voie prouve seulement les deux régressions F1 LIVE.
+          # Le helper de taux corrigé doit déjà être déployé (préflight), sans sync ici.
+          # Avec migration, les 49 suites précédentes + le chaînage restent obligatoires.
           case "$HAS_MIGRATIONS" in
-            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql) ;;
+            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql tests/security/facturation-heures-ajustees-chainage-f1.test.sql) ;;
             true) ;;
             *) echo "::error::Portée migration absente ou invalide."; exit 1 ;;
           esac

@@ -171,6 +171,18 @@ test('F1 active sa transaction et son contrôle indépendant, sans activer le dr
   assert.notEqual(mix.result.status, 0);
   assert.match(mix.result.stderr + mix.result.stdout, /fixture contrat et la recette F1 doivent rester séparées/);
 });
+test('le chaînage heures F1 conserve la voie test-only, le contrôle indépendant et le refus du mélange contrat', t => {
+  const s = scopeReel(t, ['tests/security/facturation-heures-ajustees-chainage-f1.test.sql']);
+  assert.equal(s.result.status, 0);
+  assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
+  assert.ok(actifs.some(step => step.env?.HAS_MIGRATIONS));
+  assert.ok(actifs.some(step => step.name === 'F1 — SELECT indépendant après succès ou échec SQL'));
+  assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || /supabase (?:link|db push)|CREATE EXTENSION/.test(step.run || '') || step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
+  const mix = scopeReel(t, ['tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql', 'tests/fixtures/contrat-service-v11/draft.sql']);
+  assert.notEqual(mix.result.status, 0);
+  assert.match(mix.result.stderr + mix.result.stdout, /fixture contrat et la recette F1 doivent rester séparées/);
+});
 test('les conditions SQL non reconnues ne sont pas considérées actives par défaut', () => {
   for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true"])
     assert.throws(() => executeCondition({ if: condition }, {}), /condition nouvelle non couverte/);
