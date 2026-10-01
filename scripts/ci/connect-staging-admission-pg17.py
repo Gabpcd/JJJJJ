@@ -58,7 +58,7 @@ sql(f"UPDATE private.stripe_connect_test_capacities SET enabled=true WHERE id='{
 refused(f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:{H}','{C}',NULL);",'CONNECT_RELEASE_CLOSED')
 refused(f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:{H}','{C}',NULL);",'CONNECT_CLIENT_VERSION_REQUIRED')
 # Une réservation historique, même même owner et sans Session, n'est pas adoptée.
-sql(f"INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token) VALUES('FACTURE:{C}','CONNECT_INVOICE','connect-invoice:{H}');")
+sql(CTX+f"INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token) VALUES('FACTURE:{C}','CONNECT_INVOICE','connect-invoice:{H}');")
 refused(claim,'CONNECT_TEST_NO_HISTORICAL_CLAIM')
 assert sql('SELECT count(*) FROM private.stripe_connect_avant_transfert')=='0'
 # Nettoyage de cette seule fixture synthétique dans la base PG17 éphémère.
