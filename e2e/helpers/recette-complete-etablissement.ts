@@ -58,7 +58,9 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
   if (!/\/(auth|rest|functions|storage)\/v1\//.test(url.pathname)) {
    if(req.isNavigationRequest()&&req.resourceType()==='document'){
     // Les hints DNS/TLS échappent au routage HTTP, même avec une API locale.
-    const response=await route.fetch();
+    // Même reprise que le harnais mission : une coupure TCP du GET HTML local seulement.
+    // Aucun retry de scénario, de réponse HTTP, d’API ou d’écriture.
+    const response=await route.fetch({maxRetries:req.method()==='GET'?1:0,timeout:12_000});
     const html=(await response.text()).replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi,'');
     return route.fulfill({response,body:html});
    }
