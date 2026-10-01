@@ -8,6 +8,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { fetchAvecBorneNettoyage } from './cleanup-scope';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL || '';
 const SERVICE_ROLE_KEY =
@@ -33,6 +34,7 @@ export function adminClient(): SupabaseClient {
     }
     _admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
+      global: { fetch: fetchAvecBorneNettoyage },
     });
   }
   return _admin;
