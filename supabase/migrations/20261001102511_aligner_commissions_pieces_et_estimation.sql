@@ -18,7 +18,11 @@ BEGIN
       OR p.prosecdef IS DISTINCT FROM true OR pg_get_userbyid(p.proowner) IS DISTINCT FROM 'postgres'
       OR p.proconfig IS DISTINCT FROM ARRAY[r.configuration]::text[]
       OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[]
-      OR NOT EXISTS(SELECT 1 FROM private.security_definer_inventory WHERE signature=r.signature AND definition_md5=md5(p.prosrc)) THEN
+      OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+        WHERE signature=r.signature AND (categorie IS DISTINCT FROM 'SERVICE_ONLY_REVOQUE'
+          OR definition_md5 IS DISTINCT FROM md5(p.prosrc)))
+      OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+        WHERE signature='public.'||r.signature) THEN
       RAISE EXCEPTION 'Commission : corps, droits ou inventaire inattendus (%)',r.signature;
     END IF;
   END LOOP;
@@ -230,9 +234,28 @@ BEGIN
       OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[] THEN
       RAISE EXCEPTION 'Commission : installation ou droits inattendus (%)',r.signature;
     END IF;
-    UPDATE private.security_definer_inventory SET definition_md5=md5(p.prosrc),recense_le=now()
-      WHERE signature=r.signature AND definition_md5 IN(r.ancien_corps,r.nouveau_corps);
-    IF NOT FOUND THEN RAISE EXCEPTION 'Commission : inventaire non actualisé (%)',r.signature; END IF;
+    -- Ces deux fonctions n'avaient pas d'entrée d'inventaire sur le staging
+    -- ni en production. Le préflight vérifie leur définition et leurs droits
+    -- exacts avant toute installation ; aucune entrée divergente n'est reprise.
+    IF NOT EXISTS(SELECT 1 FROM private.security_definer_inventory WHERE signature=r.signature) THEN
+      INSERT INTO private.security_definer_inventory(signature,categorie,definition_md5,justification,recense_le)
+      VALUES(r.signature,'SERVICE_ONLY_REVOQUE',md5(p.prosrc),
+        CASE r.signature
+          WHEN 'fn_preparer_facture_commission_periode(uuid)' THEN
+            'Primitive service_role : commission rattachée à la pièce exacte, taux de mission stocké et historique documentaire contrôlés.'
+          WHEN 'dec_calculer_commission()' THEN
+            'Fonction trigger : estimation financière de mission ; EXECUTE révoqué pour PUBLIC, anon et authenticated.'
+        END,now());
+    ELSE
+      UPDATE private.security_definer_inventory SET definition_md5=md5(p.prosrc),recense_le=now()
+        WHERE signature=r.signature AND categorie='SERVICE_ONLY_REVOQUE'
+          AND definition_md5 IN(r.ancien_corps,r.nouveau_corps);
+      IF NOT FOUND THEN RAISE EXCEPTION 'Commission : inventaire non actualisé (%)',r.signature; END IF;
+    END IF;
+    IF (SELECT count(*) FROM private.security_definer_inventory WHERE signature=r.signature
+      AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=md5(p.prosrc))<>1 THEN
+      RAISE EXCEPTION 'Commission : inventaire installé inattendu (%)',r.signature;
+    END IF;
   END LOOP;
 END;
 $inventory$;

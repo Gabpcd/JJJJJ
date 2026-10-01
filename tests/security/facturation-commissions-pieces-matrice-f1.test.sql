@@ -10,6 +10,160 @@ SELECT set_config('request.jwt.claim.sub','',true);
 SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
 
+-- Ces fonctions temporaires rejouent les deux blocs réels de la migration.
+-- Le test Node vérifie l'identité octet pour octet ; aucun corps métier n'est recopié.
+CREATE FUNCTION pg_temp.f1_inventory_preflight() RETURNS void LANGUAGE plpgsql AS $replay_preflight$
+DECLARE r record; p record;
+BEGIN
+  IF md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure))
+    IS DISTINCT FROM 'c793ac81eaef0fe18fb5920c9264c675' THEN
+    RAISE EXCEPTION 'Prérequis commission rectificative absent';
+  END IF;
+  FOR r IN SELECT * FROM (VALUES
+    ('fn_preparer_facture_commission_periode(uuid)','e155d0232345adb95321d1e56f3c4cdd','8030a296741d5bfe6dad70edd4d8f20d','f26f4d29b77cb2be569c0db62c1fb4dc','fe01d207db4766c4246f641ba171a3e7','search_path=public, pg_temp'),
+    ('dec_calculer_commission()','065286258fe7a131557692126c896b1a','2767aab47df4d531744cd751a4faed95','cdfa3faf225b0ac26b43db8a9ad8b41f','4c0238a79c1e54e0b17ad55f89e35104','search_path=public')
+  ) AS attendu(signature, ancien_corps, nouveau_corps, ancienne_definition, nouvelle_definition, configuration) LOOP
+    SELECT * INTO p FROM pg_catalog.pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
+    IF NOT FOUND OR md5(p.prosrc) NOT IN (r.ancien_corps,r.nouveau_corps)
+      OR md5(pg_get_functiondef(p.oid)) NOT IN (r.ancienne_definition,r.nouvelle_definition)
+      OR p.prosecdef IS DISTINCT FROM true OR pg_get_userbyid(p.proowner) IS DISTINCT FROM 'postgres'
+      OR p.proconfig IS DISTINCT FROM ARRAY[r.configuration]::text[]
+      OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[]
+      OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+        WHERE signature=r.signature AND (categorie IS DISTINCT FROM 'SERVICE_ONLY_REVOQUE'
+          OR definition_md5 IS DISTINCT FROM md5(p.prosrc)))
+      OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+        WHERE signature='public.'||r.signature) THEN
+      RAISE EXCEPTION 'Commission : corps, droits ou inventaire inattendus (%)',r.signature;
+    END IF;
+  END LOOP;
+END;
+$replay_preflight$;
+CREATE FUNCTION pg_temp.f1_inventory_install() RETURNS void LANGUAGE plpgsql AS $replay_inventory$
+DECLARE r record; p record;
+BEGIN
+  FOR r IN SELECT * FROM (VALUES
+    ('fn_preparer_facture_commission_periode(uuid)','e155d0232345adb95321d1e56f3c4cdd','8030a296741d5bfe6dad70edd4d8f20d','f26f4d29b77cb2be569c0db62c1fb4dc','fe01d207db4766c4246f641ba171a3e7','search_path=public, pg_temp'),
+    ('dec_calculer_commission()','065286258fe7a131557692126c896b1a','2767aab47df4d531744cd751a4faed95','cdfa3faf225b0ac26b43db8a9ad8b41f','4c0238a79c1e54e0b17ad55f89e35104','search_path=public')
+  ) AS attendu(signature, ancien_corps, nouveau_corps, ancienne_definition, nouvelle_definition, configuration) LOOP
+    SELECT * INTO p FROM pg_catalog.pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
+    IF NOT FOUND OR md5(p.prosrc) IS DISTINCT FROM r.nouveau_corps
+      OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.nouvelle_definition
+      OR p.prosecdef IS DISTINCT FROM true OR pg_get_userbyid(p.proowner) IS DISTINCT FROM 'postgres'
+      OR p.proconfig IS DISTINCT FROM ARRAY[r.configuration]::text[]
+      OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[] THEN
+      RAISE EXCEPTION 'Commission : installation ou droits inattendus (%)',r.signature;
+    END IF;
+    -- Ces deux fonctions n'avaient pas d'entrée d'inventaire sur le staging
+    -- ni en production. Le préflight vérifie leur définition et leurs droits
+    -- exacts avant toute installation ; aucune entrée divergente n'est reprise.
+    IF NOT EXISTS(SELECT 1 FROM private.security_definer_inventory WHERE signature=r.signature) THEN
+      INSERT INTO private.security_definer_inventory(signature,categorie,definition_md5,justification,recense_le)
+      VALUES(r.signature,'SERVICE_ONLY_REVOQUE',md5(p.prosrc),
+        CASE r.signature
+          WHEN 'fn_preparer_facture_commission_periode(uuid)' THEN
+            'Primitive service_role : commission rattachée à la pièce exacte, taux de mission stocké et historique documentaire contrôlés.'
+          WHEN 'dec_calculer_commission()' THEN
+            'Fonction trigger : estimation financière de mission ; EXECUTE révoqué pour PUBLIC, anon et authenticated.'
+        END,now());
+    ELSE
+      UPDATE private.security_definer_inventory SET definition_md5=md5(p.prosrc),recense_le=now()
+        WHERE signature=r.signature AND categorie='SERVICE_ONLY_REVOQUE'
+          AND definition_md5 IN(r.ancien_corps,r.nouveau_corps);
+      IF NOT FOUND THEN RAISE EXCEPTION 'Commission : inventaire non actualisé (%)',r.signature; END IF;
+    END IF;
+    IF (SELECT count(*) FROM private.security_definer_inventory WHERE signature=r.signature
+      AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=md5(p.prosrc))<>1 THEN
+      RAISE EXCEPTION 'Commission : inventaire installé inattendu (%)',r.signature;
+    END IF;
+  END LOOP;
+END;
+$replay_inventory$;
+DO $inventory_test$
+DECLARE
+  v_signatures constant text[]:=ARRAY['fn_preparer_facture_commission_periode(uuid)','dec_calculer_commission()'];
+  v_before jsonb;
+  v_after jsonb;
+  v_functions_before jsonb;
+  v_functions_after jsonb;
+  v_signature text;
+  v_kind text;
+  v_phase text;
+  v_refused boolean;
+  v_rolled_back boolean:=false;
+BEGIN
+  IF session_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL
+     OR EXISTS(SELECT 1 FROM cron.job WHERE active)
+  THEN RAISE EXCEPTION 'F1 inventaire : contexte de maintenance isolé requis'; END IF;
+  SELECT jsonb_agg(to_jsonb(i) ORDER BY signature) INTO v_before
+    FROM private.security_definer_inventory i WHERE signature=ANY(v_signatures);
+  SELECT jsonb_agg(jsonb_build_object('signature',p.oid::regprocedure::text,
+    'definition',pg_get_functiondef(p.oid),'acl',p.proacl::text,'owner',p.proowner,
+    'config',p.proconfig,'security_definer',p.prosecdef) ORDER BY p.oid)
+    INTO v_functions_before FROM pg_proc p
+    WHERE p.oid IN ('public.fn_preparer_facture_commission_periode(uuid)'::regprocedure,
+      'public.dec_calculer_commission()'::regprocedure);
+  BEGIN
+    -- Absence réellement exercée sur la table canonique, puis recensement exact.
+    DELETE FROM private.security_definer_inventory WHERE signature=ANY(v_signatures);
+    PERFORM pg_temp.f1_inventory_preflight();
+    PERFORM pg_temp.f1_inventory_install();
+    IF (SELECT count(*) FROM private.security_definer_inventory i
+      JOIN pg_proc p ON p.oid=to_regprocedure('public.'||i.signature)
+      WHERE i.signature=ANY(v_signatures) AND i.categorie='SERVICE_ONLY_REVOQUE'
+        AND i.definition_md5=md5(p.prosrc))<>2
+    THEN RAISE EXCEPTION 'F1 inventaire : absence non réparée exactement'; END IF;
+    -- Rejeu avec entrées exactes présentes : mêmes signatures, corps et droits.
+    PERFORM pg_temp.f1_inventory_preflight();
+    PERFORM pg_temp.f1_inventory_install();
+    FOREACH v_signature IN ARRAY v_signatures LOOP
+      FOREACH v_kind IN ARRAY ARRAY['empreinte','categorie'] LOOP
+        FOREACH v_phase IN ARRAY ARRAY['preflight','installation'] LOOP
+          v_refused:=false;
+          BEGIN
+            UPDATE private.security_definer_inventory SET
+              definition_md5=CASE WHEN v_kind='empreinte' THEN repeat('0',32) ELSE definition_md5 END,
+              categorie=CASE WHEN v_kind='categorie' THEN 'PUBLIC_VOLONTAIRE' ELSE categorie END
+            WHERE signature=v_signature;
+            IF v_phase='preflight' THEN PERFORM pg_temp.f1_inventory_preflight();
+            ELSE PERFORM pg_temp.f1_inventory_install(); END IF;
+          EXCEPTION WHEN SQLSTATE 'P0001' THEN
+            IF SQLERRM IS DISTINCT FROM (CASE v_phase
+              WHEN 'preflight' THEN format('Commission : corps, droits ou inventaire inattendus (%s)',v_signature)
+              ELSE format('Commission : inventaire non actualisé (%s)',v_signature) END)
+            THEN RAISE; END IF;
+            v_refused:=true;
+          END;
+          IF NOT v_refused THEN
+            RAISE EXCEPTION 'F1 inventaire : contradiction acceptée (%/%/%)',v_signature,v_kind,v_phase;
+          END IF;
+          -- Le sous-bloc de refus doit aussi annuler sa mutation contradictoire.
+          PERFORM pg_temp.f1_inventory_preflight();
+        END LOOP;
+      END LOOP;
+    END LOOP;
+    SELECT jsonb_agg(jsonb_build_object('signature',p.oid::regprocedure::text,
+      'definition',pg_get_functiondef(p.oid),'acl',p.proacl::text,'owner',p.proowner,
+      'config',p.proconfig,'security_definer',p.prosecdef) ORDER BY p.oid)
+      INTO v_functions_after FROM pg_proc p
+      WHERE p.oid IN ('public.fn_preparer_facture_commission_periode(uuid)'::regprocedure,
+        'public.dec_calculer_commission()'::regprocedure);
+    IF v_functions_after IS DISTINCT FROM v_functions_before THEN
+      RAISE EXCEPTION 'F1 inventaire : corps ou droits modifiés';
+    END IF;
+    RAISE EXCEPTION 'F1_INVENTAIRE_ANNULATION_ATTENDUE' USING ERRCODE='JF152';
+  EXCEPTION WHEN SQLSTATE 'JF152' THEN
+    IF SQLERRM<>'F1_INVENTAIRE_ANNULATION_ATTENDUE' THEN RAISE; END IF;
+    v_rolled_back:=true;
+  END;
+  SELECT jsonb_agg(to_jsonb(i) ORDER BY signature) INTO v_after
+    FROM private.security_definer_inventory i WHERE signature=ANY(v_signatures);
+  IF NOT v_rolled_back OR v_after IS DISTINCT FROM v_before THEN
+    RAISE EXCEPTION 'F1 inventaire : annulation non prouvée';
+  END IF;
+END;
+$inventory_test$;
+
 DO $f1$
 DECLARE
   v_soignant constant uuid := 'f1410001-1000-4000-8000-000000000001';

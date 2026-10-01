@@ -95,3 +95,23 @@ test('workflow : après sync+catalogue et avant migrations, aucun continue-on-er
   assert(step.includes("--diff-filter=A"));assert(step.includes('20261001102511_aligner_commissions_pieces_et_estimation.sql'));
   assert(step.includes("has_migrations == 'true' && steps.migration_scope.outputs.has_f1_regression == 'true'"));
 });
+
+
+test('la matrice rejoue les vrais blocs préflight/inventaire sans changer les deux corps métier', async () => {
+  const migration=await readFile('supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql','utf8');
+  const sql=await readFile('tests/security/facturation-commissions-pieces-matrice-f1.test.sql','utf8');
+  for(const [source,replay] of [['preflight','preflight'],['inventory','inventory']]) {
+    const body=migration.split(`DO $${source}$`)[1].split(`$${source}$;`)[0];
+    const executed=sql.split(`AS $replay_${replay}$`)[1].split(`$replay_${replay}$;`)[0];
+    assert.equal(executed,body,`le bloc ${source} testé doit être celui installé`);
+  }
+  const {createHash}=await import('node:crypto');
+  const bodies=[...migration.matchAll(/AS \$function\$([\s\S]*?)\$function\$;/g)].map(m=>createHash('md5').update(m[1]).digest('hex'));
+  assert.deepEqual(bodies,['8030a296741d5bfe6dad70edd4d8f20d','2767aab47df4d531744cd751a4faed95']);
+  assert.match(sql,/DELETE FROM private\.security_definer_inventory WHERE signature=ANY\(v_signatures\)/);
+  assert.match(sql,/ARRAY\['empreinte','categorie'\]/);
+  assert.match(sql,/ARRAY\['preflight','installation'\]/);
+  assert.match(sql,/v_functions_after IS DISTINCT FROM v_functions_before/);
+  assert.match(sql,/v_after IS DISTINCT FROM v_before/);
+  assert.match(sql,/ROLLBACK;\s*$/);
+});
