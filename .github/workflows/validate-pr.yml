@@ -617,6 +617,7 @@ jobs:
             tests/security/paiements-liberaux-facture.test.sql
             tests/security/numerotation-factures.test.sql
             tests/security/diagnostic-financier-documentaire.test.sql
+            tests/security/notification-remboursement-manuel.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.

@@ -61237,9 +61237,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_notif_admin_remboursement_manuel"() 
     AS $$
 DECLARE
   v_admin_id UUID;
-  v_soignant RECORD;
   v_montant NUMERIC;
-  v_a_iban BOOLEAN;
 BEGIN
   IF NEW.type_document <> 'AVOIR' OR NEW.mode_remboursement <> 'VIREMENT_MANUEL'
      OR NEW.date_remboursement IS NOT NULL THEN
@@ -61250,32 +61248,17 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT prenom, nom, iban_virement INTO v_soignant
-  FROM public.soignants WHERE id = NEW.soignant_id;
-  v_a_iban := v_soignant.iban_virement IS NOT NULL AND length(trim(v_soignant.iban_virement)) > 0;
   v_montant := COALESCE(NEW.montant_ttc, NEW.montant_ht, 0);
-
-  IF v_a_iban THEN
-    INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
-    VALUES (
-      'REMBOURSEMENT_AVOIR_SWAN',
-      jsonb_build_object('avoir_id', NEW.id, 'soignant_id', NEW.soignant_id, 'montant', v_montant),
-      'remboursement_avoir', NEW.id
-    );
-  END IF;
 
   FOR v_admin_id IN SELECT public.fn_list_admin_user_ids() LOOP
     INSERT INTO public.notifications (destinataire_id, type_destinataire, type, titre, corps, lien, type_ressource, id_ressource)
     VALUES (
       v_admin_id, 'ADMIN', 'REMBOURSEMENT_MANUEL_A_FAIRE',
-      CASE WHEN v_a_iban THEN '💸 Remboursement (virement SEPA auto)' ELSE '💸 Remboursement par virement à effectuer' END,
+      '💸 Remboursement manuel à traiter',
       'Avoir ' || COALESCE(NEW.numero_facture, '') || ' — ' ||
-        to_char(v_montant, 'FM999G999D00') || ' € pour ' ||
-        COALESCE(v_soignant.prenom, '') || ' ' || COALESCE(v_soignant.nom, '') ||
-        CASE WHEN v_a_iban
-             THEN ' : virement SEPA SWAN automatique initié.'
-             ELSE ' : IBAN MANQUANT — virement manuel requis (relancer le soignant). Admin > Litiges > Avoirs.' END,
-      '/admin/litiges',
+        replace(to_char(v_montant, 'FM999999999999990.00'), '.', ',') ||
+        ' €. Remboursement manuel à traiter et à confirmer après vérification de la preuve bancaire.',
+      '/admin/moderation?onglet=avoirs',
       'facture_honoraire', NEW.id
     );
   END LOOP;
