@@ -21,6 +21,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
+import { executerNettoyageBorne } from '../helpers/cleanup-scope';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 import {
   cleanupMissionCascade,
@@ -158,14 +159,14 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
       throw new Error(`snapshot état soignant empêchement: ${snapshotError?.message || 'introuvable'}`);
     }
     snapshotSoignant = s as any;
-    await nettoyer();
+    await executerNettoyageBorne('empêchement beforeAll', nettoyer);
   });
 
   test.afterEach(async () => {
-    await nettoyer();
+    await executerNettoyageBorne('empêchement afterEach', nettoyer);
   });
 
-  test.afterAll(async () => {
+  test.afterAll(async () => executerNettoyageBorne('empêchement afterAll', async () => {
     const erreurs: string[] = [];
     if (caregiver && snapshotSoignant) {
       try {
@@ -189,7 +190,7 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     if (erreurs.length > 0) {
       throw new Error(`afterAll empêchement incomplet: ${erreurs.join(' | ')}`);
     }
-  });
+  }));
 
   test('déclaration structurée : preuve, clôture originale et assigné conservé', async () => {
     const missionId = await seedMissionAssignee();
