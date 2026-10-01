@@ -14,6 +14,7 @@ import {
   verifyCronServiceAuth,
 } from "../_shared/cron-service-auth.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import { processConnectRefundBatch } from "../_shared/stripe-connect-pretransfer.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -753,10 +754,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const success = failed === 0;
+    // Origine privée distincte : pas d'AVOIR fictif, de reversal, d'email ni
+    // d'élargissement de la queue historique. Deux intentions au plus.
+    const pretransfer = await processConnectRefundBatch(sb, stripe, () => crypto.randomUUID());
+    const success = failed === 0 && pretransfer.failed === 0 && pretransfer.errors.length === 0;
     return new Response(JSON.stringify({
       success,
       processed: queue.length,
+      pretransfer,
       succeeded,
       pending,
       failed,

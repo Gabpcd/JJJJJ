@@ -6,6 +6,7 @@ import { writeRequiredFinancialAudit } from "../_shared/financial-audit.ts";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
 import {
   acquireStripePaymentFlowClaim,
+  mapStripeConnectProtocolError,
   bindStripePaymentFlowClaimSession,
   releaseStripePaymentFlowClaimForExpiredSession,
 } from "../_shared/stripe-payment-flow-claim.ts";
@@ -16,6 +17,7 @@ import {
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 import { requireAcquiredStripeSourceCharge } from "../_shared/stripe-source-charge.ts";
 import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
+import { arbitrateConnectOperation, reserveConnectCheckout, bindConnectCheckout, requireConnectCheckoutAdmission, parseConnectOperation } from "../_shared/stripe-connect-pretransfer.ts";
 
 function objectId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -429,6 +431,35 @@ Deno.serve(async (req) => {
         status: 409,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
+    }
+
+    // Une orientation de remboursement persiste après clôture du litige.
+    // La même pièce ne redevient pas payable via une Session déjà complète.
+    // Lecture seulement : aucune adoption ou réinitialisation de l'intention.
+    if (existingTransfer?.stripe_checkout_session_id) {
+      const { data: operationExistante, error: operationError } = await supabaseAdmin.rpc(
+        "fn_connect_avant_transfert_lire",
+        { p_session_id: existingTransfer.stripe_checkout_session_id },
+      );
+      if (operationError) throw new Error("Lecture de l'intention Connect impossible");
+      if (operationExistante !== null) {
+        const operation = parseConnectOperation(operationExistante);
+        if (operation.session_id !== existingTransfer.stripe_checkout_session_id
+          || operation.trace_id !== existingTransfer.id
+          || operation.mission_id !== mission_id
+          || operation.facture_honoraire_id !== factureHonoraires.id
+          || operation.etablissement_id !== mission.etablissement_id
+          || operation.soignant_id !== soignantId) throw new Error("CONNECT_OPERATION_CHANGED");
+        if (operation.orientation === "REFUND") {
+          return new Response(JSON.stringify({
+            error: "CONNECT_REFUND_RECONCILIATION_REQUIRED",
+            message: "Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.",
+          }), {
+            status: 409,
+            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          });
+        }
+      }
     }
 
     // D6 : la facture de commission est liée à la facture d'honoraires exacte.
@@ -904,6 +935,11 @@ Deno.serve(async (req) => {
       });
       const chargeId = sourceCharge.id;
 
+      if (!existingTransfer.stripe_transfer_id) {
+        const operation = await arbitrateConnectOperation(supabaseAdmin, stripe, existingTransfer.id, session.id);
+        if (operation.orientation !== "TRANSFER") throw new Error("CONNECT_REFUND_IN_PROGRESS");
+      }
+
       const transfer = existingTransfer.stripe_transfer_id
         ? await stripe.transfers.retrieve(existingTransfer.stripe_transfer_id)
         : await stripe.transfers.create({
@@ -1183,6 +1219,7 @@ Deno.serve(async (req) => {
         && derniereSessionMission.expires_at * 1000 > Date.now()
         && !statutAutoriseNouvelleTentative
       ) {
+        await requireConnectCheckoutAdmission(supabaseAdmin, derniereSessionMission);
         const incoherences = await verifierSessionConnect(derniereSessionMission, false);
         if (incoherences.length > 0) {
           await stripe.checkout.sessions.expire(derniereSessionMission.id);
@@ -1293,6 +1330,11 @@ Deno.serve(async (req) => {
       mission: mission_id,
       facture_honoraire: factureHonoraires.id,
     });
+    const connectOperationId = await reserveConnectCheckout(supabaseAdmin, {
+      factureHonoraireId: factureHonoraires.id,
+      factureCommissionId: factureCommission?.id || "",
+      attemptKey: checkoutIdempotencyKey,
+    });
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       client_reference_id: mission_id,
@@ -1324,6 +1366,7 @@ Deno.serve(async (req) => {
         statement_descriptor: "JOLENE",
         metadata: {
           type: "CONNECT_MISSION_PAYMENT",
+          connect_operation_id: connectOperationId,
           mission_id,
           etablissement_id: mission.etablissement_id,
           soignant_id: soignantId,
@@ -1344,6 +1387,7 @@ Deno.serve(async (req) => {
         // skippée silencieusement après paiement réussi.
         // Maintenant : redondance sender-side + fallback defensive côté webhook.
         type: "CONNECT_MISSION_PAYMENT",
+        connect_operation_id: connectOperationId,
         mission_id,
         etablissement_id: mission.etablissement_id,
         soignant_id: soignantId,
@@ -1354,7 +1398,7 @@ Deno.serve(async (req) => {
         facture_commission_id: factureCommission?.id || "",
         payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
       },
-      return_url: `${origin}/etablissement/facturation?${returnParams.toString()}`,
+      return_url: `${origin}/etablissement/facturation?${returnParams.toString()}&session_id={CHECKOUT_SESSION_ID}`,
     }, { idempotencyKey: checkoutIdempotencyKey });
 
     try {
@@ -1471,6 +1515,8 @@ Deno.serve(async (req) => {
         }
       }
 
+      await bindConnectCheckout(supabaseAdmin, connectOperationId, session.id);
+
       // Update mission payment mode
       const { data: missionPersisted, error: missionErr } = await supabaseAdmin
         .from("missions")
@@ -1557,7 +1603,7 @@ Deno.serve(async (req) => {
     );
   } catch (error: unknown) {
     // [CP-STRIPE-6 H9] Mapping typed Stripe errors
-    const mapped = mapStripeCustomerConfigurationError(error) || mapStripeError(error);
+    const mapped = mapStripeConnectProtocolError(error) || mapStripeCustomerConfigurationError(error) || mapStripeError(error);
     console[mapped.logLevel](`[stripe-connect-pay-mission] step=${step} ERROR:`, {
       code: mapped.code,
       raw: error instanceof Error ? error.message : String(error),

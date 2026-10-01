@@ -1,0 +1,154 @@
+{
+  "project_id": "mejpriaetwgtcstbgfid",
+  "observed_at": [
+    "2026-10-01T18:04:47.369467+00:00",
+    "2026-10-01T18:06:38.338249+00:00"
+  ],
+  "source_queries": [
+    "auth-staging-20261001-180447.sql",
+    "auth-transitifs-staging-20261001-180638.sql"
+  ],
+  "routines": [
+    {
+      "acl": "{=X/supabase_auth_admin,supabase_auth_admin=X/supabase_auth_admin,dashboard_user=X/supabase_auth_admin}",
+      "kind": "f",
+      "owner": "supabase_auth_admin",
+      "config": null,
+      "result": "uuid",
+      "body_md5": "cdef18c69c4f4cbbced2eaf81e628b49",
+      "language": "sql",
+      "signature": "auth.uid()",
+      "definition": "CREATE OR REPLACE FUNCTION auth.uid()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n  coalesce(\n    nullif(current_setting('request.jwt.claim.sub', true), ''),\n    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')\n  )::uuid\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "ea3b41bf29e2ad573067939329aa088e",
+      "security_definer": false,
+      "inventory": null
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "boolean",
+      "body_md5": "ef86d65809c3f76a1ac08eb737796fad",
+      "language": "sql",
+      "signature": "public.est_admin()",
+      "definition": "CREATE OR REPLACE FUNCTION public.est_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\n  SELECT public.est_admin_valide();\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "7e2b7825e43b9ea73c540f5f1ca9b264",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "ef86d65809c3f76a1ac08eb737796fad",
+        "category": "ADMIN_EST_ADMIN_VALIDE",
+        "signature": "est_admin()"
+      }
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "boolean",
+      "body_md5": "7954bb4e079865c63c4ba1096bd1fc76",
+      "language": "sql",
+      "signature": "public.est_admin_valide()",
+      "definition": "CREATE OR REPLACE FUNCTION public.est_admin_valide()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\n  SELECT COALESCE(EXISTS (\n    SELECT 1\n      FROM auth.users u\n     WHERE u.id = auth.uid()\n       AND u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'\n       AND u.deleted_at IS NULL\n       AND (u.banned_until IS NULL OR u.banned_until <= now())\n       AND u.email_confirmed_at IS NOT NULL\n       AND EXISTS (\n         SELECT 1\n           FROM public.equipe_admin ea\n          WHERE ea.user_id = u.id\n            AND ea.actif IS TRUE\n            AND ARRAY[\n              'Dashboard',\n              'Utilisateurs',\n              'Missions',\n              'Litiges & contrats',\n              'Finances',\n              'Messagerie',\n              'Conformité & Technique',\n              'Fondateur'\n            ]::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])\n       )\n  ), false);\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "ac1b087cbbf231e4b0ac8523054c25bc",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "7954bb4e079865c63c4ba1096bd1fc76",
+        "category": "ADMIN_EST_ADMIN_VALIDE",
+        "signature": "est_admin_valide()"
+      }
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "boolean",
+      "body_md5": "1ee98c0e7094db4e98277b85ce71c6ec",
+      "language": "plpgsql",
+      "signature": "public.fn_a_permission_etablissement(text,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.fn_a_permission_etablissement(p_permission text, p_etablissement_id uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\nDECLARE\n  v_role text;\nBEGIN\n  IF public.est_admin() THEN RETURN true; END IF;\n  v_role := public.fn_role_etablissement_courant(p_etablissement_id);\n  IF v_role IS NULL THEN RETURN false; END IF;\n\n  RETURN CASE lower(COALESCE(p_permission, ''))\n    WHEN 'gerer_equipe' THEN v_role = 'PROPRIETAIRE'\n    WHEN 'supprimer_compte' THEN v_role = 'PROPRIETAIRE'\n    WHEN 'profil_etab' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE')\n    WHEN 'paiement' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE')\n    WHEN 'missions' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')\n    WHEN 'candidatures' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')\n    WHEN 'contrats' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')\n    WHEN 'pointage' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH', 'POINTAGE_ONLY')\n    WHEN 'rh' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')\n    WHEN 'api' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE')\n    WHEN 'lecture_missions' THEN true\n    WHEN 'lecture_candidatures' THEN v_role <> 'POINTAGE_ONLY'\n    WHEN 'lecture_contrats' THEN v_role <> 'POINTAGE_ONLY'\n    WHEN 'lecture_paiement' THEN v_role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'LECTURE_SEULE')\n    WHEN 'lecture_pointage' THEN true\n    WHEN 'lecture' THEN true\n    ELSE false\n  END;\nEND;\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "324d479198251e9c91524f28496780ba",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "1ee98c0e7094db4e98277b85ce71c6ec",
+        "category": "MIXTE_TENANT_ADMIN",
+        "signature": "fn_a_permission_etablissement(text,uuid)"
+      }
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "boolean",
+      "body_md5": "8246c4c1f1b0a8053adb176a06c96766",
+      "language": "sql",
+      "signature": "public.fn_compte_auth_actif()",
+      "definition": "CREATE OR REPLACE FUNCTION public.fn_compte_auth_actif()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\n  SELECT COALESCE(EXISTS (\n    SELECT 1\n    FROM auth.users u\n    WHERE u.id = auth.uid()\n      AND u.deleted_at IS NULL\n      AND (u.banned_until IS NULL OR u.banned_until <= now())\n      AND NOT EXISTS (\n        SELECT 1 FROM public.soignants s\n        WHERE s.id = u.id AND s.supprime_le IS NOT NULL\n      )\n      AND NOT EXISTS (\n        SELECT 1 FROM public.etablissements e\n        WHERE e.id = u.id AND e.supprime_le IS NOT NULL\n      )\n  ), false);\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "cba1336dbd147cadc94bc6baf06ceb43",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "8246c4c1f1b0a8053adb176a06c96766",
+        "category": "RPC_UTILISATEUR_AUTH_INTERNE",
+        "signature": "fn_compte_auth_actif()"
+      }
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "text",
+      "body_md5": "ceb4e333f4b7f69a3be422b9753b559a",
+      "language": "plpgsql",
+      "signature": "public.fn_role_etablissement_courant(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.fn_role_etablissement_courant(p_etablissement_id uuid DEFAULT NULL::uuid)\n RETURNS text\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\nDECLARE\n  v_uid uuid := auth.uid();\n  v_role text;\nBEGIN\n  IF v_uid IS NULL OR NOT public.fn_compte_auth_actif() THEN\n    RETURN NULL;\n  END IF;\n\n  SELECT m.role INTO v_role\n  FROM public.membres_etablissement m\n  JOIN public.etablissements e ON e.id = m.etablissement_id\n  WHERE m.user_id = v_uid\n    AND m.actif = true\n    AND e.supprime_le IS NULL\n    AND (p_etablissement_id IS NULL OR m.etablissement_id = p_etablissement_id)\n  ORDER BY CASE m.role WHEN 'PROPRIETAIRE' THEN 1 WHEN 'ADMIN_GROUPE' THEN 2 ELSE 3 END\n  LIMIT 1;\n\n  IF v_role IS NOT NULL THEN\n    RETURN v_role;\n  END IF;\n\n  -- Compatibilite des comptes historiques : le compte Auth et la ligne\n  -- etablissement partagent le meme UUID. Un simple etablissement_id stale\n  -- dans app_metadata ne suffit jamais a recreer une appartenance revoquee.\n  SELECT 'PROPRIETAIRE' INTO v_role\n  FROM auth.users u\n  JOIN public.etablissements e ON e.id = u.id\n  WHERE u.id = v_uid\n    AND u.raw_app_meta_data ->> 'role' IN ('ADMIN_ETABLISSEMENT', 'ETABLISSEMENT')\n    AND e.supprime_le IS NULL\n    AND (p_etablissement_id IS NULL OR e.id = p_etablissement_id)\n  LIMIT 1;\n\n  RETURN v_role;\nEND;\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "c263e1db47a25c67de3a2308dc8aa81c",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "ceb4e333f4b7f69a3be422b9753b559a",
+        "category": "RPC_UTILISATEUR_AUTH_INTERNE",
+        "signature": "fn_role_etablissement_courant(uuid)"
+      }
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "kind": "f",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public, auth"
+      ],
+      "result": "uuid",
+      "body_md5": "dc3ef839d2920fb33cf6d7b320842c10",
+      "language": "sql",
+      "signature": "public.mon_etablissement_id()",
+      "definition": "CREATE OR REPLACE FUNCTION public.mon_etablissement_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'auth'\nAS $function$\n  SELECT COALESCE(\n    (\n      SELECT m.etablissement_id\n      FROM public.membres_etablissement m\n      JOIN public.etablissements e ON e.id = m.etablissement_id\n      WHERE m.user_id = auth.uid()\n        AND m.actif = true\n        AND e.supprime_le IS NULL\n      ORDER BY CASE m.role WHEN 'PROPRIETAIRE' THEN 1 WHEN 'ADMIN_GROUPE' THEN 2 ELSE 3 END\n      LIMIT 1\n    ),\n    (\n      SELECT e.id\n      FROM auth.users u\n      JOIN public.etablissements e ON e.id = u.id\n      WHERE u.id = auth.uid()\n        AND u.deleted_at IS NULL\n        AND (u.banned_until IS NULL OR u.banned_until <= now())\n        AND u.raw_app_meta_data ->> 'role' IN ('ADMIN_ETABLISSEMENT', 'ETABLISSEMENT')\n        AND e.supprime_le IS NULL\n      LIMIT 1\n    )\n  );\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "c460c68169ff164cb109501d6dde885d",
+      "security_definer": true,
+      "inventory": {
+        "body_md5": "dc3ef839d2920fb33cf6d7b320842c10",
+        "category": "RPC_UTILISATEUR_AUTH_INTERNE",
+        "signature": "mon_etablissement_id()"
+      }
+    }
+  ]
+}

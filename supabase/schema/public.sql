@@ -57030,6 +57030,9 @@ BEGIN
   IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
+  IF p_flow IN ('CONNECT_MISSION','CONNECT_INVOICE') THEN
+    RAISE EXCEPTION 'CONNECT_CLIENT_VERSION_REQUIRED' USING ERRCODE='55000';
+  END IF;
   IF p_flow NOT IN ('CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION', 'CONNECT_INVOICE')
      OR NULLIF(btrim(p_owner_token), '') IS NULL
      OR ((p_facture_id IS NULL) = (p_mission_id IS NULL)) THEN
@@ -57486,6 +57489,9 @@ BEGIN
     OR COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'service_role'
   ) THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  IF p_event_type='checkout.session.completed' AND p_payload#>>'{object,metadata,type}'='CONNECT_MISSION_PAYMENT' THEN
+    RAISE EXCEPTION 'CONNECT_CLIENT_VERSION_REQUIRED' USING ERRCODE='55000';
   END IF;
 
   IF p_source_webhook NOT IN ('PLATFORM', 'CONNECT') THEN
@@ -84353,3 +84359,677 @@ ALTER FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) OWNER T
 REVOKE ALL ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) TO service_role;
 
+
+
+-- Connect avant transfert : projection publique de la migration 20261001171439.
+CREATE OR REPLACE FUNCTION "public"."fn_stripe_payment_flow_claim_connect_v1"("p_flow" "text", "p_owner_token" "text", "p_facture_id" "uuid" DEFAULT NULL::"uuid", "p_mission_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_resources text[];
+  v_resource text;
+  v_conflict public.stripe_payment_flow_claims%ROWTYPE;
+  v_session_ids text[];
+  v_intent_ids text[];
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  IF p_flow IS NULL OR p_flow NOT IN ('CONNECT_MISSION','CONNECT_INVOICE') THEN
+    RAISE EXCEPTION 'CONNECT_PROTOCOL_SCOPE' USING ERRCODE='22023';
+  END IF;
+  IF COALESCE(NULLIF(auth.jwt()->>'role',''),NULLIF(current_setting('request.jwt.claim.role',true),''),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE='42501';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM private.stripe_connect_release_gate
+    WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled IS TRUE) THEN
+    RAISE EXCEPTION 'CONNECT_RELEASE_CLOSED' USING ERRCODE='55000';
+  END IF;
+  IF p_flow NOT IN ('CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION', 'CONNECT_INVOICE')
+     OR NULLIF(btrim(p_owner_token), '') IS NULL
+     OR ((p_facture_id IS NULL) = (p_mission_id IS NULL)) THEN
+    RAISE EXCEPTION 'Paramètres de claim Stripe invalides' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_facture_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.factures f
+      WHERE f.id = p_facture_id
+        AND f.type_document = 'FACTURE'
+        AND f.statut <> 'ANNULEE'
+    ) THEN
+      RAISE EXCEPTION 'Facture de claim introuvable ou non payable' USING ERRCODE = 'P0002';
+    END IF;
+    IF p_flow = 'CONNECT_INVOICE' THEN
+      v_resources := ARRAY['FACTURE:' || p_facture_id::text];
+    ELSE
+      SELECT array_agg(DISTINCT r.resource_key ORDER BY r.resource_key)
+      INTO v_resources
+      FROM (
+        SELECT 'FACTURE:' || p_facture_id::text AS resource_key
+        UNION ALL
+        SELECT 'MISSION:' || f.mission_id::text
+        FROM public.factures f
+        WHERE f.id = p_facture_id AND f.mission_id IS NOT NULL
+        UNION ALL
+        SELECT 'MISSION:' || m.id::text
+        FROM public.missions m
+        WHERE m.facture_id = p_facture_id
+      ) r;
+    END IF;
+  ELSE
+    IF NOT EXISTS (SELECT 1 FROM public.missions m WHERE m.id = p_mission_id) THEN
+      RAISE EXCEPTION 'Mission de claim introuvable' USING ERRCODE = 'P0002';
+    END IF;
+    v_resources := ARRAY['MISSION:' || p_mission_id::text];
+  END IF;
+
+  FOREACH v_resource IN ARRAY v_resources LOOP
+    PERFORM pg_advisory_xact_lock(hashtextextended(v_resource, 0));
+  END LOOP;
+
+  SELECT c.* INTO v_conflict
+  FROM public.stripe_payment_flow_claims c
+  WHERE c.resource_key = ANY(v_resources)
+    AND (c.flow <> p_flow OR c.owner_token <> p_owner_token)
+  ORDER BY c.resource_key
+  LIMIT 1;
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'acquired', false,
+      'flow', v_conflict.flow,
+      'owner_token', v_conflict.owner_token,
+      'resources', v_resources,
+      'stripe_checkout_session_id', v_conflict.stripe_checkout_session_id,
+      'stripe_payment_intent_id', v_conflict.stripe_payment_intent_id
+    );
+  END IF;
+
+  INSERT INTO public.stripe_payment_flow_claims (resource_key, flow, owner_token)
+  SELECT r.resource_key, p_flow, p_owner_token
+  FROM unnest(v_resources) AS r(resource_key)
+  ON CONFLICT (resource_key) DO NOTHING;
+
+  SELECT
+    array_agg(DISTINCT c.stripe_checkout_session_id)
+      FILTER (WHERE c.stripe_checkout_session_id IS NOT NULL),
+    array_agg(DISTINCT c.stripe_payment_intent_id)
+      FILTER (WHERE c.stripe_payment_intent_id IS NOT NULL)
+  INTO v_session_ids, v_intent_ids
+  FROM public.stripe_payment_flow_claims c
+  WHERE c.resource_key = ANY(v_resources)
+    AND c.flow = p_flow
+    AND c.owner_token = p_owner_token;
+
+  IF COALESCE(array_length(v_session_ids, 1), 0) > 1
+     OR COALESCE(array_length(v_intent_ids, 1), 0) > 1 THEN
+    RAISE EXCEPTION 'Claims Stripe du même flux incohérents' USING ERRCODE = '23514';
+  END IF;
+  IF COALESCE(array_length(v_session_ids, 1), 0) = 1 THEN
+    UPDATE public.stripe_payment_flow_claims c
+    SET stripe_checkout_session_id = v_session_ids[1], modifie_le = now()
+    WHERE c.resource_key = ANY(v_resources)
+      AND c.flow = p_flow
+      AND c.owner_token = p_owner_token
+      AND c.stripe_checkout_session_id IS NULL;
+  END IF;
+  IF COALESCE(array_length(v_intent_ids, 1), 0) = 1 THEN
+    UPDATE public.stripe_payment_flow_claims c
+    SET stripe_payment_intent_id = v_intent_ids[1], modifie_le = now()
+    WHERE c.resource_key = ANY(v_resources)
+      AND c.flow = p_flow
+      AND c.owner_token = p_owner_token
+      AND c.stripe_payment_intent_id IS NULL;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'acquired', true,
+    'flow', p_flow,
+    'owner_token', p_owner_token,
+    'resources', v_resources,
+    'stripe_checkout_session_id', v_session_ids[1],
+    'stripe_payment_intent_id', v_intent_ids[1]
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_stripe_payment_flow_claim_connect_v1"("p_flow" "text", "p_owner_token" "text", "p_facture_id" "uuid", "p_mission_id" "uuid") OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION "public"."fn_stripe_webhook_event_claim_connect_v1"("p_event_id" "text", "p_event_type" "text", "p_payload" "jsonb", "p_source_webhook" "text", "p_livemode" boolean) RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_inserted integer := 0;
+  v_claimed integer := 0;
+  v_traite_le timestamptz;
+BEGIN
+  IF NOT (
+    public.est_admin()
+    OR COALESCE(NULLIF(auth.jwt()->>'role', ''), NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'service_role'
+  ) THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  IF p_event_type IS DISTINCT FROM 'checkout.session.completed'
+    OR p_source_webhook IS DISTINCT FROM 'PLATFORM'
+    OR p_payload#>>'{object,metadata,type}' IS DISTINCT FROM 'CONNECT_MISSION_PAYMENT' THEN
+    RAISE EXCEPTION 'CONNECT_PROTOCOL_SCOPE' USING ERRCODE='22023';
+  END IF;
+  IF COALESCE(NULLIF(auth.jwt()->>'role',''),NULLIF(current_setting('request.jwt.claim.role',true),''),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE='42501';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM private.stripe_connect_release_gate
+    WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled IS TRUE) THEN
+    RAISE EXCEPTION 'CONNECT_RELEASE_CLOSED' USING ERRCODE='55000';
+  END IF;
+
+  IF p_source_webhook NOT IN ('PLATFORM', 'CONNECT') THEN
+    RAISE EXCEPTION 'Source webhook invalide' USING ERRCODE = '22023';
+  END IF;
+
+  INSERT INTO public.stripe_webhook_events (
+    event_id,
+    event_type,
+    payload,
+    source_webhook,
+    livemode,
+    traitement_commence_le,
+    tentatives
+  ) VALUES (
+    p_event_id,
+    p_event_type,
+    p_payload,
+    p_source_webhook,
+    p_livemode,
+    now(),
+    1
+  )
+  ON CONFLICT (event_id) DO NOTHING;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  IF v_inserted = 1 THEN
+    RETURN 'CLAIMED';
+  END IF;
+
+  SELECT traite_le
+    INTO v_traite_le
+  FROM public.stripe_webhook_events
+  WHERE event_id = p_event_id;
+
+  IF v_traite_le IS NOT NULL THEN
+    RETURN 'PROCESSED';
+  END IF;
+
+  -- Reprise possible après cinq minutes. Une Edge Function ne doit pas rester
+  -- active aussi longtemps ; ce lease couvre un crash sans bloquer l'event à vie.
+  UPDATE public.stripe_webhook_events
+  SET traitement_commence_le = now(),
+      tentatives = tentatives + 1,
+      erreur = NULL,
+      event_type = p_event_type,
+      payload = p_payload,
+      source_webhook = p_source_webhook,
+      livemode = p_livemode
+  WHERE event_id = p_event_id
+    AND traite_le IS NULL
+    AND (
+      traitement_commence_le IS NULL
+      OR traitement_commence_le < now() - interval '5 minutes'
+    );
+
+  GET DIAGNOSTICS v_claimed = ROW_COUNT;
+  IF v_claimed = 1 THEN
+    RETURN 'CLAIMED';
+  END IF;
+
+  RETURN 'PROCESSING';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_stripe_webhook_event_claim_connect_v1"("p_event_id" "text", "p_event_type" "text", "p_payload" "jsonb", "p_source_webhook" "text", "p_livemode" boolean) OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION public.fn_stripe_webhook_event_claim_connect_v1(text,text,jsonb,text,boolean) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_stripe_webhook_event_claim_connect_v1(text,text,jsonb,text,boolean) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_checkout_preparer(p_facture_honoraire_id uuid,p_facture_commission_id uuid,p_cle_tentative text)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE h public.factures_honoraires; c public.factures; m public.missions; o private.stripe_connect_avant_transfert;
+BEGIN
+ PERFORM private.fn_connect_exiger_service();
+ SELECT * INTO STRICT h FROM public.factures_honoraires WHERE id=p_facture_honoraire_id;
+ SELECT * INTO STRICT m FROM public.missions WHERE id=h.mission_id FOR UPDATE;
+ SELECT * INTO o FROM private.stripe_connect_avant_transfert WHERE attempt_key=p_cle_tentative;
+ IF FOUND THEN
+   IF o.mission_id IS DISTINCT FROM m.id OR o.facture_honoraire_id IS DISTINCT FROM p_facture_honoraire_id
+     OR o.facture_commission_id IS DISTINCT FROM p_facture_commission_id THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONFLICT'; END IF;
+   -- Rejeu lié : prendre ST AVANT FH/C, pas depuis un appel sous leurs verrous.
+   o:=private.fn_connect_operation_verrouiller(o.id);
+ END IF;
+ SELECT * INTO STRICT h FROM public.factures_honoraires WHERE id=p_facture_honoraire_id FOR UPDATE;
+ SELECT * INTO STRICT c FROM public.factures WHERE id=p_facture_commission_id FOR UPDATE;
+ IF h.statut IS NULL OR h.statut NOT IN('EMISE','EN_RETARD') OR c.statut IS NULL OR c.statut NOT IN('EMISE','EN_RETARD') OR h.mission_id IS DISTINCT FROM m.id
+   OR h.stripe_payment_intent_id IS NOT NULL OR c.stripe_payment_intent_id IS NOT NULL
+   OR c.facture_honoraire_id IS DISTINCT FROM h.id OR c.mission_id IS DISTINCT FROM m.id OR c.type_document IS DISTINCT FROM 'FACTURE'
+   OR m.type_contrat_applique::text IS DISTINCT FROM 'LIBERAL' OR m.statut IS NULL OR m.statut NOT IN('EN_COURS','TERMINEE')
+   OR (m.statut='EN_COURS' AND (h.est_facture_finale_mission IS DISTINCT FROM FALSE OR h.periode_fin IS NULL OR h.periode_fin>=current_date))
+   OR NOT EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:'||c.id::text AND flow='CONNECT_INVOICE')
+ THEN RAISE EXCEPTION 'CONNECT_ADMISSION_NOT_PAYABLE'; END IF;
+ IF o.id IS NULL THEN
+ INSERT INTO private.stripe_connect_avant_transfert(attempt_key,mission_id,etablissement_id,soignant_id,facture_honoraire_id,
+   facture_commission_id,customer_id,destination_id,soignant_cents,commission_cents,total_cents)
+ SELECT p_cle_tentative,m.id,m.etablissement_id,m.soignant_assigne_id,h.id,c.id,e.stripe_customer_id,onb.stripe_account_id,
+   round(h.montant_ttc*100)::bigint,round(c.montant_ttc*100)::bigint,round((h.montant_ttc+c.montant_ttc)*100)::bigint
+ FROM public.etablissements e JOIN public.stripe_connect_onboarding onb ON onb.soignant_id=m.soignant_assigne_id AND onb.statut='COMPLET'
+ WHERE e.id=m.etablissement_id ON CONFLICT(attempt_key) DO NOTHING;
+ SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE attempt_key=p_cle_tentative;
+ IF o.facture_honoraire_id IS DISTINCT FROM h.id OR o.facture_commission_id IS DISTINCT FROM c.id THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONFLICT'; END IF;
+ -- Une insertion neuve a trace_id NULL et n'acquiert donc aucune ST tardive.
+ IF o.trace_id IS NOT NULL THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONCURRENT_LINK'; END IF;
+ o:=private.fn_connect_operation_verrouiller(o.id);
+ END IF;
+ IF NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ACCOUNT_NOT_OPERATIONAL'; END IF;
+ RETURN jsonb_build_object('operation_id',o.id,'facture_honoraire_id',h.id,'facture_commission_id',c.id);
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_checkout_preparer(uuid,uuid,text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_checkout_preparer(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_checkout_preparer(uuid,uuid,text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_checkout_lier(p_operation_id uuid,p_session_id text)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert; s public.stripe_transfers;
+BEGIN
+ PERFORM private.fn_connect_exiger_service();
+ SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE id=p_operation_id;
+ PERFORM 1 FROM public.missions WHERE id=o.mission_id FOR UPDATE;
+ SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE id=p_operation_id;
+ IF o.session_id IS NOT NULL AND o.session_id<>p_session_id THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONFLICT'; END IF;
+ SELECT * INTO STRICT s FROM public.stripe_transfers WHERE stripe_checkout_session_id=p_session_id FOR UPDATE;
+ o:=private.fn_connect_operation_verrouiller(o.id);
+ IF o.session_id IS NOT NULL AND o.session_id<>p_session_id THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONFLICT'; END IF;
+ IF s.mission_id IS DISTINCT FROM o.mission_id OR s.facture_honoraire_id IS DISTINCT FROM o.facture_honoraire_id
+   OR s.facture_id IS DISTINCT FROM o.facture_commission_id OR s.stripe_transfer_id IS NOT NULL OR s.statut IS DISTINCT FROM 'EN_ATTENTE'
+   OR NOT EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:'||o.facture_commission_id::text
+     AND flow='CONNECT_INVOICE' AND stripe_checkout_session_id=p_session_id)
+ THEN RAISE EXCEPTION 'CONNECT_ADMISSION_TRACE'; END IF;
+ IF NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ACCOUNT_NOT_OPERATIONAL'; END IF;
+ UPDATE private.stripe_connect_avant_transfert SET session_id=p_session_id,trace_id=s.id WHERE id=o.id;
+ -- ST exacte déjà verrouillée avant FH/C ; pas d'acquisition tardive d'une autre trace.
+ o:=private.fn_connect_operation_verrouiller(o.id);
+ RETURN jsonb_build_object('bound',true,'operation_id',o.id,'session_id',p_session_id);
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_checkout_lier(uuid,text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_checkout_lier(uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_checkout_lier(uuid,text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_checkout_verifier(p_operation_id uuid,p_session_id text)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert;
+BEGIN
+ o:=private.fn_connect_operation_verrouiller(p_operation_id);
+ IF o.session_id IS DISTINCT FROM p_session_id OR o.orientation IS NOT NULL OR NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ADMISSION_CONFLICT'; END IF;
+ RETURN jsonb_build_object('admitted',true,'operation_id',o.id,'session_id',p_session_id);
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_checkout_verifier(uuid,text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_checkout_verifier(uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_checkout_verifier(uuid,text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_avant_transfert_lire(p_session_id text)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert;
+BEGIN
+ PERFORM private.fn_connect_exiger_service();
+ SELECT * INTO o FROM private.stripe_connect_avant_transfert WHERE session_id=p_session_id;
+ IF NOT FOUND OR o.orientation IS NULL THEN RETURN NULL; END IF;
+ RETURN to_jsonb(o)-'attempt_key'-'owner_token'-'lease_until';
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_avant_transfert_lire(text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_avant_transfert_lire(text) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_avant_transfert_lire(text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_avant_transfert_arbitrer(p_operation_id uuid,p_trace_id uuid,p_source jsonb)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert; s public.stripe_transfers; l uuid;
+BEGIN
+ o:=private.fn_connect_operation_verrouiller(p_operation_id);
+ IF o.trace_id IS DISTINCT FROM p_trace_id OR p_source IS NULL
+   OR (to_jsonb(o)-ARRAY['id','attempt_key','trace_id','payment_intent_id','charge_id','livemode','orientation','litige_id','refund_id','refund_status','first_attempt_at','owner_token','lease_until','next_read_at','review_code','failure_balance_transaction_id','created_at','succeeded_at'])
+     IS DISTINCT FROM (p_source-ARRAY['payment_intent_id','charge_id','livemode'])
+   OR jsonb_typeof(p_source->'livemode') IS DISTINCT FROM 'boolean'
+   OR COALESCE(p_source->>'payment_intent_id','')!~'^pi_[A-Za-z0-9_]+$' OR COALESCE(p_source->>'charge_id','')!~'^ch_[A-Za-z0-9_]+$'
+ THEN RAISE EXCEPTION 'CONNECT_ARBITRATION_SOURCE'; END IF;
+ IF o.orientation IS NOT NULL THEN
+   IF o.orientation='TRANSFER' AND NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ACCOUNT_NOT_OPERATIONAL'; END IF;
+   IF o.payment_intent_id IS DISTINCT FROM p_source->>'payment_intent_id' OR o.charge_id IS DISTINCT FROM p_source->>'charge_id'
+     OR o.livemode IS DISTINCT FROM (p_source->>'livemode')::boolean THEN RAISE EXCEPTION 'CONNECT_ARBITRATION_CONFLICT'; END IF;
+   RETURN to_jsonb(o)-'attempt_key'-'owner_token'-'lease_until';
+ END IF;
+ IF NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ACCOUNT_NOT_OPERATIONAL'; END IF;
+ SELECT * INTO STRICT s FROM public.stripe_transfers WHERE id=p_trace_id;
+ IF (s.stripe_payment_intent_id IS NOT NULL AND s.stripe_payment_intent_id IS DISTINCT FROM p_source->>'payment_intent_id')
+   OR (s.stripe_charge_id IS NOT NULL AND s.stripe_charge_id IS DISTINCT FROM p_source->>'charge_id')
+   OR s.stripe_transfer_id IS NOT NULL OR s.statut IS NULL OR s.statut NOT IN('EN_ATTENTE','ECHOUE','CHARGE_REUSSI')
+   OR EXISTS(SELECT 1 FROM public.paiements_soignant WHERE mission_id=o.mission_id AND (facture_honoraire_id=o.facture_honoraire_id OR facture_honoraire_id IS NULL)
+     AND statut IN('DECLARE','CONFIRME','CONTESTE','RESOLU'))
+   OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=o.mission_id AND statut<>'REMBOURSE')
+   OR NOT EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id=o.facture_honoraire_id AND statut IN('EMISE','EN_RETARD'))
+   OR NOT EXISTS(SELECT 1 FROM public.factures WHERE id=o.facture_commission_id AND statut IN('EMISE','EN_RETARD'))
+ THEN RAISE EXCEPTION 'CONNECT_ARBITRATION_ALREADY_MOVED'; END IF;
+ -- Observation du litige au moment de l'arbitrage, PAS de verrou litige après mission.
+ SELECT id INTO l FROM public.litiges WHERE mission_id=o.mission_id AND (facture_id=o.facture_honoraire_id OR facture_id IS NULL)
+   AND statut IN('OUVERT','EN_DISCUSSION','EN_MEDIATION','MEDIATION_EN_COURS','REVUE_ADMIN') ORDER BY id LIMIT 1;
+ UPDATE private.stripe_connect_avant_transfert SET payment_intent_id=p_source->>'payment_intent_id',charge_id=p_source->>'charge_id',
+   livemode=(p_source->>'livemode')::boolean,orientation=CASE WHEN l IS NULL THEN 'TRANSFER' ELSE 'REFUND' END,litige_id=l
+ WHERE id=o.id RETURNING * INTO o;
+ IF o.orientation='REFUND' THEN
+   UPDATE public.stripe_transfers SET statut='EN_ATTENTE',erreur='Remboursement avant transfert en cours de rapprochement'
+   WHERE id=o.trace_id AND stripe_checkout_session_id=o.session_id AND stripe_transfer_id IS NULL;
+ END IF;
+ RETURN to_jsonb(o)-'attempt_key'-'owner_token'-'lease_until';
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_avant_transfert_arbitrer(uuid,uuid,jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_avant_transfert_arbitrer(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_avant_transfert_arbitrer(uuid,uuid,jsonb) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_remboursement_prendre(p_operation_id uuid,p_owner_token uuid)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert;
+BEGIN
+ o:=private.fn_connect_operation_verrouiller(p_operation_id);
+ IF o.orientation IS DISTINCT FROM 'REFUND' OR p_owner_token IS NULL THEN RAISE EXCEPTION 'CONNECT_REFUND_ORIENTATION'; END IF;
+ IF o.lease_until>clock_timestamp() AND o.owner_token IS DISTINCT FROM p_owner_token THEN
+   RETURN jsonb_build_object('acquired',false,'owner_token',p_owner_token);
+ END IF;
+ UPDATE private.stripe_connect_avant_transfert SET owner_token=p_owner_token,lease_until=clock_timestamp()+interval '15 minutes'
+ WHERE id=o.id RETURNING * INTO o;
+ RETURN jsonb_build_object('acquired',true,'owner_token',p_owner_token,'can_create',private.fn_connect_creation_autorisee(o.id),'operation',to_jsonb(o)-'attempt_key'-'owner_token'-'lease_until');
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_remboursement_prendre(uuid,uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_remboursement_prendre(uuid,uuid) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_remboursement_prendre(uuid,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_remboursement_demarrer(p_operation_id uuid,p_owner_token uuid)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert; allowed boolean; a jsonb;
+BEGIN
+ o:=private.fn_connect_operation_verrouiller(p_operation_id);
+ IF o.orientation IS DISTINCT FROM 'REFUND' OR p_owner_token IS NULL OR o.owner_token IS DISTINCT FROM p_owner_token OR o.lease_until IS NULL OR o.lease_until<=clock_timestamp()
+   OR o.refund_id IS NOT NULL OR o.refund_status<>'READY' THEN RAISE EXCEPTION 'CONNECT_REFUND_LEASE'; END IF;
+ IF NOT private.fn_connect_creation_autorisee(o.id) THEN RAISE EXCEPTION 'CONNECT_ACCOUNT_NOT_OPERATIONAL'; END IF;
+ allowed:=o.first_attempt_at IS NULL OR o.first_attempt_at>clock_timestamp()-interval '20 hours';
+ UPDATE private.stripe_connect_avant_transfert SET first_attempt_at=COALESCE(first_attempt_at,clock_timestamp()),
+   review_code=CASE WHEN allowed THEN review_code ELSE 'CREATE_WINDOW_CLOSED' END,
+   refund_status=CASE WHEN allowed THEN refund_status ELSE 'REVIEW' END,
+   owner_token=CASE WHEN allowed THEN owner_token ELSE NULL END,
+   lease_until=CASE WHEN allowed THEN lease_until ELSE NULL END WHERE id=o.id;
+ IF NOT allowed THEN
+   UPDATE public.stripe_transfers SET statut='ECHOUE',erreur='Résultat du remboursement à rapprocher ; aucun nouvel appel automatique autorisé'
+   WHERE id=o.trace_id AND stripe_checkout_session_id=o.session_id AND stripe_transfer_id IS NULL;
+   a:=public.fn_ecrire_audit_safe(o.etablissement_id,'SYSTEME','ADMIN_ACTION','factures_honoraires',o.facture_honoraire_id,NULL,
+     jsonb_build_object('evenement','CONNECT_REMBOURSEMENT_INCIDENT','operation_id',o.id,'incident','CREATE_WINDOW_CLOSED'),NULL,'connect-pretransfer');
+   IF (a->>'success')::boolean IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'CONNECT_REFUND_AUDIT_FAILED'; END IF;
+ END IF;
+ RETURN jsonb_build_object('operation_id',o.id,'owner_token',p_owner_token,'create_allowed',allowed);
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_remboursement_demarrer(uuid,uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_remboursement_demarrer(uuid,uuid) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_remboursement_demarrer(uuid,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_remboursement_constater(p_operation_id uuid,p_owner_token uuid,p_refund jsonb)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE o private.stripe_connect_avant_transfert; st text; a jsonb; touched integer; incident text; retour text;
+BEGIN
+ o:=private.fn_connect_operation_verrouiller(p_operation_id);
+ st:=upper(p_refund->>'status');
+ IF o.orientation IS DISTINCT FROM 'REFUND' OR o.first_attempt_at IS NULL OR p_owner_token IS NULL OR o.owner_token IS DISTINCT FROM p_owner_token
+   OR o.lease_until IS NULL OR o.lease_until<=clock_timestamp() OR COALESCE(p_refund->>'id','')!~'^re_[A-Za-z0-9_]+$'
+   OR (o.refund_id IS NOT NULL AND o.refund_id IS DISTINCT FROM p_refund->>'id')
+   OR p_refund->>'payment_intent_id' IS DISTINCT FROM o.payment_intent_id OR p_refund->>'charge_id' IS DISTINCT FROM o.charge_id
+   OR p_refund->>'currency' IS DISTINCT FROM 'eur' OR (p_refund->>'amount')::bigint IS DISTINCT FROM o.total_cents
+   OR st IS NULL OR st NOT IN('PENDING','REQUIRES_ACTION','SUCCEEDED','FAILED','CANCELED')
+ THEN RAISE EXCEPTION 'CONNECT_REFUND_RECEIPT'; END IF;
+ IF o.refund_status='REVIEW' THEN
+   UPDATE private.stripe_connect_avant_transfert SET owner_token=NULL,lease_until=NULL WHERE id=o.id;
+   RETURN jsonb_build_object('operation_id',o.id,'refund_id',o.refund_id,'status','REVIEW','review_code',o.review_code);
+ END IF;
+ IF o.refund_status IN('FAILED','CANCELED') AND st IS DISTINCT FROM o.refund_status THEN
+   incident:='REFUND_STATUS_CONTRADICTORY';
+   st:='REVIEW';
+ END IF;
+ IF o.refund_status='SUCCEEDED' AND st='PENDING' THEN st:='SUCCEEDED'; END IF;
+ IF o.refund_status='SUCCEEDED' AND st IN('FAILED','CANCELED','REQUIRES_ACTION') THEN
+   retour:=p_refund->>'failure_balance_transaction_id';
+   IF st IN('FAILED','CANCELED') AND COALESCE(retour,'')!~'^txn_[A-Za-z0-9_]+$' THEN RAISE EXCEPTION 'CONNECT_REFUND_RETURN_NOT_PROVEN'; END IF;
+   incident:=CASE WHEN st='REQUIRES_ACTION' THEN 'REFUND_REQUIRES_ACTION_AFTER_SUCCESS' ELSE 'REFUND_RETURNED_AFTER_SUCCESS' END;
+   st:='REVIEW';
+ END IF;
+ UPDATE private.stripe_connect_avant_transfert SET refund_id=p_refund->>'id',refund_status=st WHERE id=o.id;
+ IF st='SUCCEEDED' AND o.refund_status<>'SUCCEEDED' THEN
+   UPDATE public.stripe_transfers SET statut='REMBOURSE',erreur='Paiement remboursé avant transfert après ouverture d’un litige'
+   WHERE id=o.trace_id AND stripe_checkout_session_id=o.session_id AND stripe_transfer_id IS NULL AND statut IN('EN_ATTENTE','ECHOUE','CHARGE_REUSSI');
+   GET DIAGNOSTICS touched=ROW_COUNT;
+   IF touched<>1 THEN RAISE EXCEPTION 'CONNECT_REFUND_TRACE_NOT_FINALIZED'; END IF;
+   a:=public.fn_ecrire_audit_safe(o.etablissement_id,'SYSTEME','ADMIN_ACTION','factures_honoraires',o.facture_honoraire_id,NULL,
+     jsonb_build_object('evenement','CONNECT_REMBOURSE_AVANT_TRANSFERT_POUR_LITIGE','operation_id',o.id,'litige_id',o.litige_id,
+       'stripe_session_id',o.session_id,'stripe_payment_intent_id',o.payment_intent_id,'stripe_refund_id',p_refund->>'id'),NULL,'connect-pretransfer');
+   IF (a->>'success')::boolean IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'CONNECT_REFUND_AUDIT_FAILED'; END IF;
+ END IF;
+ IF st IN('FAILED','CANCELED','REVIEW') AND o.refund_status IS DISTINCT FROM st THEN
+   UPDATE public.stripe_transfers SET statut='ECHOUE',erreur='Le remboursement requiert un rapprochement ; aucun nouveau transfert autorisé'
+   WHERE id=o.trace_id AND stripe_checkout_session_id=o.session_id AND stripe_transfer_id IS NULL AND statut IN('EN_ATTENTE','CHARGE_REUSSI','REMBOURSE','ECHOUE');
+   GET DIAGNOSTICS touched=ROW_COUNT;
+   IF touched<>1 THEN RAISE EXCEPTION 'CONNECT_REFUND_FAILURE_NOT_RECORDED'; END IF;
+   a:=public.fn_ecrire_audit_safe(o.etablissement_id,'SYSTEME','ADMIN_ACTION','factures_honoraires',o.facture_honoraire_id,NULL,
+     jsonb_build_object('evenement','CONNECT_REMBOURSEMENT_INCIDENT','operation_id',o.id,'stripe_refund_id',p_refund->>'id',
+       'statut_courant',p_refund->>'status','incident',COALESCE(incident,'REFUND_'||st),'failure_balance_transaction_id',retour),NULL,'connect-pretransfer');
+   IF (a->>'success')::boolean IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'CONNECT_REFUND_AUDIT_FAILED'; END IF;
+ END IF;
+ UPDATE private.stripe_connect_avant_transfert SET refund_id=p_refund->>'id',refund_status=st,
+   succeeded_at=CASE WHEN st='SUCCEEDED' THEN COALESCE(succeeded_at,clock_timestamp()) ELSE succeeded_at END,
+   failure_balance_transaction_id=COALESCE(failure_balance_transaction_id,retour),
+   review_code=CASE WHEN incident IS NOT NULL THEN incident WHEN st='FAILED' THEN 'REFUND_FAILED' WHEN st='CANCELED' THEN 'REFUND_CANCELED' ELSE review_code END,
+   owner_token=NULL,lease_until=NULL,next_read_at=clock_timestamp()+CASE WHEN st='SUCCEEDED' THEN interval '1 hour' ELSE interval '5 minutes' END
+ WHERE id=o.id;
+ RETURN jsonb_build_object('operation_id',o.id,'refund_id',p_refund->>'id','status',st,'review_code',COALESCE(incident,o.review_code));
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_remboursement_constater(uuid,uuid,jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_remboursement_constater(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_remboursement_constater(uuid,uuid,jsonb) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_connect_remboursements_a_traiter(p_limit integer DEFAULT 2)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
+DECLARE r jsonb;
+BEGIN
+ PERFORM private.fn_connect_exiger_service();
+ IF p_limit IS NULL OR p_limit<1 OR p_limit>2 THEN RAISE EXCEPTION 'CONNECT_REFUND_BATCH_LIMIT'; END IF;
+ SELECT COALESCE(jsonb_agg(x.doc ORDER BY x.created_at,x.id),'[]'::jsonb) INTO r FROM (
+   SELECT o.id,o.created_at,to_jsonb(o)-'attempt_key'-'owner_token'-'lease_until' AS doc
+   FROM private.stripe_connect_avant_transfert o JOIN public.soignants s ON s.id=o.soignant_id
+   JOIN public.etablissements e ON e.id=o.etablissement_id
+   WHERE o.orientation='REFUND' AND (o.refund_status IN('READY','PENDING','REQUIRES_ACTION')
+     OR (o.refund_status='SUCCEEDED' AND o.succeeded_at>clock_timestamp()-interval '31 days')) AND o.review_code IS NULL
+     AND o.next_read_at<=clock_timestamp() AND (o.lease_until IS NULL OR o.lease_until<=clock_timestamp())
+     AND s.est_compte_test IS FALSE AND e.est_compte_test IS FALSE
+   ORDER BY o.next_read_at,o.created_at,o.id LIMIT p_limit
+ ) x;
+ RETURN r;
+END;$f$;
+
+ALTER FUNCTION public.fn_connect_remboursements_a_traiter(integer) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_connect_remboursements_a_traiter(integer) FROM PUBLIC,anon,authenticated;
+GRANT ALL ON FUNCTION public.fn_connect_remboursements_a_traiter(integer) TO service_role;
+
+CREATE OR REPLACE TRIGGER trg_connect_garder_orientation BEFORE UPDATE ON public.stripe_transfers
+ FOR EACH ROW EXECUTE FUNCTION private.fn_connect_garder_orientation_trace();
+
+-- Suivi en lecture, même livraison fermée que le moteur.
+-- CANDIDAT DE LECTURE, NON MIGRE / NON EXECUTE.
+-- A composer avec le schéma privé Connect avant transfert, après revue.
+-- Aucun accès direct nouveau aux tables, aucun effet fournisseur.
+CREATE FUNCTION public.fn_suivi_remboursements_connect_facture(
+  p_facture_honoraire_id uuid,
+  p_checkout_session_id text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $suivi$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_h public.factures_honoraires;
+  v_s public.stripe_transfers;
+  v_admin boolean;
+  v_finance boolean;
+  v_count bigint;
+  v_paiement_statut text := NULL;
+  v_operations jsonb;
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès refusé.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT h.* INTO v_h FROM public.factures_honoraires h
+  WHERE h.id = p_facture_honoraire_id;
+  v_admin := public.est_admin_valide() IS TRUE;
+  v_finance := v_admin OR (
+    v_h.etablissement_id = public.mon_etablissement_id()
+    AND public.fn_a_permission_etablissement('lecture_paiement', v_h.etablissement_id) IS TRUE
+  );
+  IF v_h.id IS NULL OR v_h.type_document IS DISTINCT FROM 'FACTURE'
+     OR (v_h.soignant_id IS DISTINCT FROM v_uid AND v_finance IS NOT TRUE) THEN
+    RAISE EXCEPTION 'Accès refusé.' USING ERRCODE = '42501';
+  END IF;
+  IF v_h.mission_id IS NULL THEN
+    RAISE EXCEPTION 'Suivi de paiement indisponible.' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- NULL demande l'historique. Une chaîne vide ou mal formée n'est jamais NULL.
+  IF p_checkout_session_id IS NOT NULL AND (
+    length(p_checkout_session_id) > 255 OR p_checkout_session_id !~ '^cs_[A-Za-z0-9_]+$'
+  ) THEN
+    RAISE EXCEPTION 'Session de paiement invalide.' USING ERRCODE = '22023';
+  END IF;
+
+  -- Ne pas affecter une trace ancienne sans FK à une facture par déduction.
+  -- Une Session étrangère ou inconnue donne la même absence de trace propre.
+  IF p_checkout_session_id IS NOT NULL THEN
+    SELECT count(*) INTO v_count FROM public.stripe_transfers s
+    WHERE s.facture_honoraire_id = v_h.id
+      AND s.stripe_checkout_session_id = p_checkout_session_id;
+    IF v_count > 1 THEN
+      RAISE EXCEPTION 'Suivi de paiement indisponible.' USING ERRCODE = 'P0001';
+    ELSIF v_count = 1 THEN
+      SELECT s.* INTO STRICT v_s FROM public.stripe_transfers s
+      WHERE s.facture_honoraire_id = v_h.id
+        AND s.stripe_checkout_session_id = p_checkout_session_id;
+      IF v_s.mission_id IS DISTINCT FROM v_h.mission_id
+         OR v_s.etablissement_id IS DISTINCT FROM v_h.etablissement_id
+         OR v_s.soignant_id IS DISTINCT FROM v_h.soignant_id
+         OR v_s.statut NOT IN ('EN_ATTENTE','CHARGE_REUSSI','TRANSFERE','PAYE','ECHOUE','REMBOURSE','ANNULEE')
+         OR (SELECT count(*) FROM public.stripe_transfers s
+             WHERE s.stripe_checkout_session_id = p_checkout_session_id) <> 1 THEN
+        RAISE EXCEPTION 'Suivi de paiement indisponible.' USING ERRCODE = 'P0001';
+      END IF;
+      v_paiement_statut := v_s.statut;
+    END IF;
+  END IF;
+
+  -- Toutes les lectures partagent le snapshot STABLE de l'appel. On valide la
+  -- filiation persistée, pas l'affectation ou l'activité actuelles de la mission.
+  -- Aucun appel au helper privé de mutation / admissibilité d'un nouveau POST.
+  IF EXISTS (
+    SELECT 1
+    FROM private.stripe_connect_avant_transfert o
+    LEFT JOIN public.stripe_transfers s ON s.id = o.trace_id
+    LEFT JOIN public.factures c ON c.id = o.facture_commission_id
+    WHERE o.facture_honoraire_id = v_h.id AND o.orientation = 'REFUND'
+      AND (p_checkout_session_id IS NULL OR o.session_id = p_checkout_session_id)
+      AND (
+        o.mission_id IS DISTINCT FROM v_h.mission_id
+        OR o.etablissement_id IS DISTINCT FROM v_h.etablissement_id
+        OR o.soignant_id IS DISTINCT FROM v_h.soignant_id
+        OR o.session_id IS NULL OR o.trace_id IS NULL
+        OR s.id IS NULL OR s.facture_honoraire_id IS DISTINCT FROM v_h.id
+        OR s.mission_id IS DISTINCT FROM o.mission_id
+        OR s.etablissement_id IS DISTINCT FROM o.etablissement_id
+        OR s.soignant_id IS DISTINCT FROM o.soignant_id
+        OR s.facture_id IS DISTINCT FROM o.facture_commission_id
+        OR s.stripe_checkout_session_id IS DISTINCT FROM o.session_id
+        OR s.stripe_transfer_id IS NOT NULL
+        OR (s.stripe_payment_intent_id IS NOT NULL AND s.stripe_payment_intent_id IS DISTINCT FROM o.payment_intent_id)
+        OR (s.stripe_charge_id IS NOT NULL AND s.stripe_charge_id IS DISTINCT FROM o.charge_id)
+        OR c.id IS NULL OR c.type_document IS DISTINCT FROM 'FACTURE'
+        OR c.facture_honoraire_id IS DISTINCT FROM v_h.id
+        OR c.mission_id IS DISTINCT FROM o.mission_id
+        OR c.etablissement_id IS DISTINCT FROM o.etablissement_id
+        OR round(v_h.montant_ttc * 100) IS DISTINCT FROM o.soignant_cents
+        OR round(c.montant_ttc * 100) IS DISTINCT FROM o.commission_cents
+        OR round(s.montant_soignant * 100) IS DISTINCT FROM o.soignant_cents
+        OR round(s.montant_commission * 100) IS DISTINCT FROM o.commission_cents
+        OR round(s.montant_total * 100) IS DISTINCT FROM o.total_cents
+        OR o.soignant_cents <= 0 OR o.commission_cents <= 0
+        OR o.total_cents IS DISTINCT FROM o.soignant_cents + o.commission_cents
+        OR o.total_cents > 9007199254740991
+        OR o.refund_status IS NULL
+        OR o.refund_status NOT IN ('READY','PENDING','REQUIRES_ACTION','SUCCEEDED','FAILED','CANCELED','REVIEW')
+        OR (o.refund_status = 'SUCCEEDED' AND (o.succeeded_at IS NULL OR o.review_code IS NOT NULL))
+        OR s.statut IS DISTINCT FROM CASE
+          WHEN o.refund_status = 'SUCCEEDED' THEN 'REMBOURSE'
+          WHEN o.refund_status IN ('READY','PENDING','REQUIRES_ACTION') THEN 'EN_ATTENTE'
+          WHEN o.refund_status IN ('FAILED','CANCELED','REVIEW') THEN 'ECHOUE'
+          ELSE NULL END
+        OR (o.review_code IS NOT NULL AND o.review_code NOT IN (
+          'CREATE_WINDOW_CLOSED','REFUND_FAILED','REFUND_CANCELED',
+          'REFUND_RETURNED_AFTER_SUCCESS','REFUND_REQUIRES_ACTION_AFTER_SUCCESS','REFUND_STATUS_CONTRADICTORY'))
+        OR (SELECT count(*) FROM public.stripe_transfers sx
+            WHERE sx.stripe_checkout_session_id = o.session_id) <> 1
+      )
+  ) THEN
+    RAISE EXCEPTION 'Suivi de paiement indisponible.' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'id', o.id,
+    'checkout_session_id', o.session_id,
+    'statut', o.refund_status,
+    'montant_honoraires_centimes', o.soignant_cents,
+    'montant_commission_centimes', CASE WHEN v_finance IS TRUE THEN o.commission_cents ELSE NULL END,
+    'montant_total_centimes', CASE WHEN v_finance IS TRUE THEN o.total_cents ELSE NULL END,
+    'cree_le', o.created_at,
+    'mis_a_jour_le', NULL,
+    'succeeded_at', o.succeeded_at,
+    'review_code', o.review_code
+  ) ORDER BY o.created_at, o.id), '[]'::jsonb)
+  INTO v_operations
+  FROM private.stripe_connect_avant_transfert o
+  WHERE o.facture_honoraire_id = v_h.id AND o.orientation = 'REFUND'
+    AND (p_checkout_session_id IS NULL OR o.session_id = p_checkout_session_id);
+
+  RETURN jsonb_build_object(
+    'facture_honoraire_id', v_h.id,
+    'mission_id', v_h.mission_id,
+    'checkout_session_id_filtre', p_checkout_session_id,
+    'source', 'CONNECT_AVANT_TRANSFERT',
+    'visibilite_montants', CASE WHEN v_finance IS TRUE THEN 'TOTAL_ETABLISSEMENT' ELSE 'HONORAIRES' END,
+    'paiement_statut', v_paiement_statut,
+    'operations', v_operations,
+    'lecture_complete', true
+  );
+END;
+$suivi$;
+ALTER FUNCTION public.fn_suivi_remboursements_connect_facture(uuid,text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_suivi_remboursements_connect_facture(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_suivi_remboursements_connect_facture(uuid,text) TO authenticated;
+COMMENT ON FUNCTION public.fn_suivi_remboursements_connect_facture(uuid,text) IS
+  'Lecture du suivi Connect avant transfert par facture autorisée et Session optionnelle exacte. Aucun effet financier, aucun secret fournisseur ; commissions et total réservés au périmètre établissement/admin.';
