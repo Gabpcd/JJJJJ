@@ -2,7 +2,7 @@
 
 Ce job prépare le schéma de la recette, sans ouvrir le paiement. Il peut exécuter la migration complète 1017, la vérifier après ROLLBACK, puis l'installer en une seule transaction avec son registre, une table privée d'allocation TEST vide et le supplément d'admission fermé. Il ne crée aucun acteur, capacité active, Checkout, Refund ou transfert. Il ne déploie pas d'Edge et ne configure aucune clé ni aucun webhook.
 
-Le contrat livré est `ready:false`, avec candidat/manifeste/catalogues absents. Il refuse donc avant le premier appel réseau et avant l'étape recevant les secrets. Les tests Node de fermeture et d’admission s'exécutent aussi dans Validate PR, indépendamment de cette fermeture. Les tests de transport utilisent des réponses simulées ; le parser du véritable assemblage n'est pas une exécution PostgreSQL.
+Le contrat livré est `ready:false`, avec candidat/manifeste/catalogues absents. Il refuse donc avant le premier appel réseau et avant l'étape recevant les secrets. Dans ce lot destiné à main, Validate PR ajoute uniquement les 44 tests Node de l'exécuteur fermé, indépendamment de cette fermeture. Les tests d'admission et leurs sources SQL dépendent du candidat #1017 : ils ne sont pas inclus ici. Les tests de transport utilisent des réponses simulées ; le parser du véritable assemblage n'est pas une exécution PostgreSQL.
 
 ## Source de confiance et déclenchement futur
 
@@ -24,7 +24,7 @@ Les empreintes structurelles attendues doivent être préparées dans une base P
 
 ## Table TEST et suite indispensable
 
-`private.stripe_connect_test_capacities` est installée vide, propriétaire postgres, RLS et sans droit de table via l'API. Le supplément fournit seulement les RPC service bornés décrits dans `connect-staging-admission.md`. Il réserve une capacité, les SHA, les acteurs/pièces/objets Stripe exacts, `livemode=false`, au maximum un Checkout et un Refund, zéro transfert et une opération unique. Aucun enregistrement de capacité n'est installé, et le contrôle final refuse toute ligne.
+`private.stripe_connect_test_capacities` est installée vide, propriétaire postgres, RLS et sans droit de table via l'API. Le supplément du candidat #1017 fournit seulement les RPC service bornés décrits dans son document `docs/connect-staging-admission.md`. Ce document, la table de capacité, le SQL d'admission, la migration financière et les handlers restent dans le candidat distinct ; aucun n'est livré par ce petit lot. Il réserve une capacité, les SHA, les acteurs/pièces/objets Stripe exacts, `livemode=false`, au maximum un Checkout et un Refund, zéro transfert et une opération unique. Aucun enregistrement de capacité n'est installé, et le contrôle final refuse toute ligne.
 
 Les handlers ne sont pas déployés par cet exécuteur. L'allocation d'une capacité, les identités Stripe TEST et la configuration `CONNECT_STAGING_TEST_RUN` seront des opérations distinctes revues, après PostgreSQL 17 et avant la recette frontend. Préserver `est_compte_test=true`, les gardes des autres comptes et la porte générale fermée. Une révocation interdit une nouvelle autorisation de POST ; une requête déjà en vol doit être rapprochée ensuite. La consommation de budget ne vaut jamais autorisation permanente.
 
@@ -34,6 +34,6 @@ Après ces raccords et leur preuve PG17, la recette réelle utilisera les endpoi
 
 ## Limites du gel
 
-Aucune activation ni application staging/prod n'a eu lieu. L'installation de la table vide ne valide ni ses futurs droits d'allocation ni une admission Stripe TEST. Aucun fournisseur, frontend, RLS distant ou appareil physique n'est prouvé par ce lot. Le workflow PostgreSQL a deux entrées de matrice, chacune avec une base et des rôles neufs : moteur initial puis admission TEST. Leur résultat réel sur le SHA final reste requis avant ouverture du contrat. Les fonctions Edge et le générateur staging doivent ensuite être actualisés par un déploiement borné distinct, sans utiliser les workflows qui réinstallent les clés/webhooks ou réinitialisent staging.
+Aucune activation ni application staging/prod n'a eu lieu. L'installation de la table vide ne valide ni ses futurs droits d'allocation ni une admission Stripe TEST. Aucun fournisseur, frontend, RLS distant ou appareil physique n'est prouvé par ce lot. Le workflow PostgreSQL du candidat #1017 possède deux entrées de matrice, chacune avec une base et des rôles neufs : moteur initial puis admission TEST. Ce workflow et ses témoins ne sont pas inclus dans le lot exécuteur destiné à main. Leurs résultats réels sur le SHA candidat final restent requis avant ouverture du contrat. Les fonctions Edge et le générateur staging doivent ensuite être actualisés par un déploiement borné distinct, sans utiliser les workflows qui réinstallent les clés/webhooks ou réinitialisent staging.
 
 L'API Management SQL est documentée en version bêta ; une réponse inattendue ferme le run ([référence officielle](https://supabase.com/docs/reference/api/v1-run-a-query)). Le rapport publié contient uniquement SHA, phases, codes fermés et booléens. Ni SQL, ni catalogue brut, ni données métier, ni credentials ne deviennent un artefact. Le dépôt est public.
