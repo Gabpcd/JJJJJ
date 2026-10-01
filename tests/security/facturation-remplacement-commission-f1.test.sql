@@ -240,7 +240,13 @@ BEGIN
       OR (v_cas.finale AND (v_snapshot-'commission_facturee'-'facture_id'-'modifie_le' IS DISTINCT FROM
         (SELECT to_jsonb(m)-'commission_facturee'-'facture_id'-'modifie_le' FROM public.missions m WHERE id=v_mission)
         OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND commission_facturee AND facture_id=v_commission)))
-    THEN RAISE EXCEPTION 'F1 : commission intermédiaire/idempotence incorrecte'; END IF;
+    THEN RAISE EXCEPTION 'F1 : commission initiale/idempotence incorrecte ; cas=% ; resultat=% ; rejeu=% ; montants=% ; champs_mission=%',
+      v_cas.nom,v_resultat,v_rejeu,
+      (SELECT jsonb_build_object('ht',montant_ht,'tva',montant_tva,'ttc',montant_ttc,'statut',statut)
+        FROM public.factures WHERE id=v_commission),
+      (SELECT jsonb_agg(a.key ORDER BY a.key) FROM jsonb_each(v_snapshot) a
+        WHERE a.value IS DISTINCT FROM (SELECT to_jsonb(m)->a.key FROM public.missions m WHERE id=v_mission));
+    END IF;
     BEGIN
       PERFORM public.fn_emettre_document_facturation_honoraires(v_honoraire,'fixture-f1.pdf','fixture-f1.xml');
       RAISE EXCEPTION 'F1 : double émission acceptée';
