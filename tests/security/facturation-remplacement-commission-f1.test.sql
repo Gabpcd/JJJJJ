@@ -193,9 +193,14 @@ BEGIN
     v_numero:=public.next_invoice_number(v_soignant);
     INSERT INTO public.factures_honoraires(id,numero_facture,soignant_id,etablissement_id,mission_id,
       montant_ht,montant_ttc,montant_tva,taux_tva,periode_debut,periode_fin,statut,
-      type_document,nature_correction,mode_remboursement,est_facture_finale_mission)
+      type_document,nature_correction,mode_remboursement,est_facture_finale_mission,
+      quantite_heures_snapshot,taux_horaire_snapshot)
     VALUES(v_honoraire,v_numero,v_soignant,v_etab,v_mission,80,80,0,0,v_semaine,v_semaine+6,'BROUILLON',
-      'FACTURE','ORIGINALE','N_A',v_cas.finale);
+      'FACTURE','ORIGINALE','N_A',v_cas.finale,4,20);
+    -- Le générateur réel conserve ces deux snapshots sur l'original.
+    IF NOT EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id=v_honoraire
+      AND quantite_heures_snapshot=4 AND taux_horaire_snapshot=20 AND montant_ht=80 AND montant_ttc=80)
+    THEN RAISE EXCEPTION 'F1 : snapshots de la facture originale incorrects'; END IF;
     BEGIN
       INSERT INTO public.factures_honoraires(id,numero_facture,soignant_id,etablissement_id,mission_id,
         montant_ht,montant_ttc,periode_debut,periode_fin,est_facture_finale_mission)

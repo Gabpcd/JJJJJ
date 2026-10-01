@@ -53,6 +53,16 @@ bénigne : l’UPDATE de liaison de commission remet `taux_rist_plafonne` de NUL
 à 20 sans activer de plafond. Le test vérifie explicitement ces valeurs, les
 montants restant identiques, au lieu d’ignorer les modifications de mission.
 
+Le job [110307612064](https://github.com/Gabpcd/JJJJJ/actions/runs/36843403655/job/110307612064),
+au commit `a10bcec60fdb7d0e731fa659da2c798e1029a7d0`, est resté rouge après le
+correctif : l’original synthétique omettait ses snapshots de quantité et de taux,
+donc le garde conservait le chemin historique. Le vrai générateur les renseigne
+explicitement. La fixture fournit désormais 4 h et 20 €/h et vérifie ces valeurs
+avec les montants HT/TTC de 80 €, avant toute résolution. Les cinq attendus et
+le garde produit sont inchangés. Ce rouge est conservé, avec son contrôle
+indépendant sans résidu ; il ne prouve pas la correction. Les anciens originaux
+dont les snapshots sont NULL restent volontairement dans le chemin historique.
+
 **Écart restant confirmé :** les heures seules laissent un net de 160 € et une
 commission de 21 €, qui ne correspond pas à 15 % de ce net. Le test de parité
 empêche de dégrader ce chemin, mais ne valide pas son résultat comptable. Une
