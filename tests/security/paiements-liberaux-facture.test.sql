@@ -107,6 +107,7 @@ DO $f1$
 DECLARE
   v_soignant constant uuid := 'f1520001-1000-4000-8000-000000000001';
   v_etab constant uuid := 'f1520002-2000-4000-8000-000000000002';
+  v_soignant_tiers constant uuid := 'f1520007-7000-4000-8000-000000000007';
   v_mission constant uuid := 'f1520003-3000-4000-8000-000000000003';
   v_honoraire constant uuid := 'f1520004-4000-4000-8000-000000000004';
   v_doublon constant uuid := 'f1520005-5000-4000-8000-000000000005';
@@ -156,8 +157,8 @@ BEGIN
     'public.invoice_audit_log'::regclass,'public.paiements_soignant'::regclass,
     'public.stripe_transfers'::regclass,'public.stripe_payment_flow_claims'::regclass) AND NOT tgisinternal AND tgenabled NOT IN ('O','A'))
   THEN RAISE EXCEPTION 'Paiement F152 : triggers métier désactivés'; END IF;
-  IF EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab))
-    OR EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant)
+  IF EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab,v_soignant_tiers))
+    OR EXISTS(SELECT 1 FROM public.soignants WHERE id IN(v_soignant,v_soignant_tiers))
     OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=v_etab OR siret='99150000001847')
     OR EXISTS(SELECT 1 FROM public.missions WHERE id IN(v_mission,v_salarie))
     OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id IN(v_honoraire,v_doublon))
@@ -519,23 +520,47 @@ BEGIN
       IF v_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_honoraire)
         OR v_autre_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_doublon) THEN
         RAISE EXCEPTION 'Paiement F152 : propagation PI ou réparation altère une pièce existante'; END IF;
+      SELECT to_jsonb(t) INTO v_snapshot FROM public.stripe_transfers t WHERE id=v_transfer;
       BEGIN
         UPDATE public.stripe_transfers SET stripe_payment_intent_id='pi_F152contradictoire' WHERE id=v_transfer;
         RAISE EXCEPTION 'Paiement F152 : PI contradictoire accepté';
       EXCEPTION WHEN check_violation THEN
         IF SQLERRM<>'Trace Stripe incohérente avec la facture explicite' THEN RAISE; END IF;
       END;
+      -- Le tiers existe réellement : la FK ne doit pas masquer le refus de
+      -- concordance des parties par le trigger PI. Aucune mission/pièce à lui.
+      INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
+      VALUES(v_soignant_tiers,'00000000-0000-0000-0000-000000000000','f152-tiers@example.invalid','authenticated','authenticated',
+        '{"role":"SOIGNANT","est_compte_test":true,"is_test_playwright":true}',now());
+      INSERT INTO public.soignants(id,prenom,nom,email,profession,type_exercice,date_naissance,est_compte_test,
+        source_acquisition,code_parrainage,sms_actif,sms_alertes_actives,defacto_opt_in,
+        identite_verifiee,diplome_verifie,rpps_verifie,tous_documents_valides)
+      VALUES(v_soignant_tiers,'Fixture','Tiers F152','f152-tiers@example.invalid','IDE','LIBERAL','1990-01-01',true,
+        'RECETTE_F1_SQL','F152SQLTIERS',false,false,false,false,false,false,false);
+      UPDATE public.preferences_notifications SET canal_email=false,canal_sms=false,canal_push=false,canal_in_app=false
+        WHERE utilisateur_id=v_soignant_tiers;
+      IF NOT EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant_tiers AND est_compte_test=true)
+        OR (SELECT count(*) FROM public.preferences_notifications WHERE utilisateur_id=v_soignant_tiers
+          AND NOT canal_email AND NOT canal_sms AND NOT canal_push AND NOT canal_in_app)<>1 THEN
+        RAISE EXCEPTION 'Paiement F152 : tiers de contradiction absent ou canaux ouverts'; END IF;
       BEGIN
-        UPDATE public.stripe_transfers SET soignant_id=v_etab,stripe_payment_intent_id='pi_F152synthetique' WHERE id=v_transfer;
+        UPDATE public.stripe_transfers SET soignant_id=v_soignant_tiers,stripe_payment_intent_id='pi_F152synthetique' WHERE id=v_transfer;
         RAISE EXCEPTION 'Paiement F152 : parties PI contradictoires acceptées';
       EXCEPTION WHEN check_violation THEN
         IF SQLERRM<>'Trace Stripe incohérente avec la facture explicite' THEN RAISE; END IF;
       END;
       IF v_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_honoraire)
-        OR v_autre_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_doublon) THEN
+        OR v_autre_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_doublon)
+        OR v_snapshot IS DISTINCT FROM (SELECT to_jsonb(t) FROM public.stripe_transfers t WHERE id=v_transfer) THEN
         RAISE EXCEPTION 'Paiement F152 : refus PI avec modification partielle'; END IF;
       RAISE EXCEPTION 'F152_PI_ANNULE' USING ERRCODE='JP158';
     EXCEPTION WHEN SQLSTATE 'JP158' THEN IF SQLERRM<>'F152_PI_ANNULE' THEN RAISE; END IF; END;
+    IF EXISTS(SELECT 1 FROM auth.users WHERE id=v_soignant_tiers)
+      OR EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant_tiers)
+      OR EXISTS(SELECT 1 FROM public.preferences_notifications WHERE utilisateur_id=v_soignant_tiers)
+      OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id=v_soignant_tiers)
+      OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id=v_soignant_tiers) THEN
+      RAISE EXCEPTION 'Paiement F152 : tiers de contradiction non annulé'; END IF;
     v_cas:=v_cas+1;
     IF v_cas<>13 OR EXISTS(SELECT 1 FROM net.http_request_queue)
       OR EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE facture_origine_id=v_honoraire)
@@ -546,15 +571,16 @@ BEGIN
     IF SQLERRM<>'F152_ANNULATION_ATTENDUE' THEN RAISE; END IF;
     v_annule:=true;
   END;
-  IF NOT v_annule OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab))
+  IF NOT v_annule OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab,v_soignant_tiers))
+    OR EXISTS(SELECT 1 FROM public.soignants WHERE id IN(v_soignant,v_soignant_tiers))
     OR EXISTS(SELECT 1 FROM public.missions WHERE id IN(v_mission,v_salarie))
     OR EXISTS(SELECT 1 FROM public.paiements_soignant WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.stripe_transfers WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.factures WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key IN('MISSION:'||v_mission::text,'FACTURE:'||v_commission::text))
-    OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id IN(v_soignant,v_etab))
-    OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(v_soignant,v_etab))
+    OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id IN(v_soignant,v_etab,v_soignant_tiers))
+    OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(v_soignant,v_etab,v_soignant_tiers))
   THEN RAISE EXCEPTION 'Paiement F152 : résidu après annulation'; END IF;
 END $f1$;
 SELECT 'PAIEMENTS_LIBERAUX_ROLLBACK' AS preuve,true AS annule;

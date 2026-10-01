@@ -55,3 +55,16 @@ test('le témoin rejoue le vrai préflight ACL, sans élargir le contrôle méti
  assert.match(migration,/OR p\.proacl IS DISTINCT FROM r\.acl::aclitem\[\]/);
  for(const refused of ['TO PUBLIC','TO anon','WITH GRANT OPTION','FROM authenticated'])assert.ok(suite.includes(refused));
 });
+
+test('la contradiction PI utilise un vrai tiers synthétique couvert par le rollback',()=>{
+ const suite=readFileSync('tests/security/paiements-liberaux-facture.test.sql','utf8');
+ const tiers=suite.match(/v_soignant_tiers constant uuid := '([^']+)'/)?.[1];
+ assert.ok(tiers?.startsWith('f152000'));
+ assert.match(source,/auth.users WHERE id::text LIKE 'f152000%'/);
+ assert.match(suite,/VALUES\(v_soignant_tiers,'00000000-0000-0000-0000-000000000000','f152-tiers@example.invalid'/);
+ assert.match(suite,/VALUES\(v_soignant_tiers,'Fixture','Tiers F152'/);
+ assert.match(suite,/UPDATE public.stripe_transfers SET soignant_id=v_soignant_tiers,/);
+ assert.doesNotMatch(suite,/UPDATE public.stripe_transfers SET soignant_id=v_etab,/);
+ assert.match(suite,/EXCEPTION WHEN check_violation THEN\s+IF SQLERRM<>'Trace Stripe incohérente avec la facture explicite'/);
+ assert.match(suite,/tiers de contradiction non annulé/);
+});
