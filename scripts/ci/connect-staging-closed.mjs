@@ -116,7 +116,11 @@ export async function executeClosed({env,local,contract,fetchImpl=fetch,checkpoi
   return report;
 }
 
-const git=(cwd,args)=>execFileSync('git',['-C',cwd,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:15_000,maxBuffer:2_000_000}).trim();
+// Aucune clé du job ni variable de substitution Git n'est transmise au sous-processus.
+export const git=(cwd,args,environment=process.env)=>execFileSync('git',['-C',cwd,...args],{
+  env:{PATH:environment.PATH,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'},
+  encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:15_000,maxBuffer:2_000_000,
+}).trim();
 const file=(root,path)=>{const p=resolve(root,path);if(lstatSync(p).isSymbolicLink()||!lstatSync(p).isFile())fail('ASSET_NOT_REGULAR');return readFileSync(p,'utf8');};
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   let report;
