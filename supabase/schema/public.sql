@@ -22732,8 +22732,8 @@ BEGIN
       maj_le = EXCLUDED.maj_le
   WHERE EXCLUDED.runid > cache.runid;
 
-  -- pg_cron insère d'abord un run `running`, puis met à jour la même ligne
-  -- (même runid) à la fin. On rafraîchit donc aussi les runid déjà connus,
+  -- pg_cron passe par starting/connecting/sending puis running, avant de
+  -- finaliser le même runid. On rafraîchit donc aussi les runid déjà connus,
   -- sinon un appel effectué pendant l'exécution resterait figé sur `running`.
   UPDATE private.cron_job_latest_run_cache AS cache
   SET start_time = d.start_time,
@@ -22797,8 +22797,9 @@ BEGIN
 
     -- Les crons rares encore jamais exécutés ne sont pas faussement signalés.
     -- Un run normalement en cours n'est ni « jamais exécuté », ni en retard :
-    -- il ne devient tardif que si sa durée dépasse la fenêtre attendue.
-    IF v_cron.dernier_statut IN ('starting', 'running') THEN
+    -- connecting/sending peuvent avoir start_time et end_time NULL (pg_cron 1.6.4).
+    -- Il ne devient tardif que si sa durée mesurable dépasse la fenêtre attendue.
+    IF v_cron.dernier_statut IN ('starting', 'connecting', 'sending', 'running') THEN
       v_retard := v_cron.dernier_demarrage IS NOT NULL
         AND v_cron.dernier_demarrage < pg_catalog.now() - v_intervalle_attendu;
     ELSIF v_cron.jobname = 'sync-chorus-status-hourly'
