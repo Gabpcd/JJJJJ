@@ -16,7 +16,8 @@ describe('régressions lancement — paiements critiques', () => {
     expect(workflow).toContain('Voir les factures de cette mission');
     expect(facturation).toContain('setConnectClientSecret(result.client_secret)');
     expect(facturation).toContain('clientSecret: connectClientSecret');
-    expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId })');
+    expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId, checkoutSessionId: result.checkout_session_id })');
+    expect(facturation).toContain('if (!estSessionCheckout(result.checkout_session_id))');
     expect(checkout).toContain('preparedClientSecret?: string | null');
     expect(checkout).toContain('if (preparedClientSecret)');
     expect(checkout).toContain('setClientSecret(preparedClientSecret)');

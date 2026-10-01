@@ -114,10 +114,13 @@ describe('Finances établissement — cohérence interface et RBAC', () => {
   it('ne transforme pas le retour Stripe en succès avant confirmation serveur', () => {
     expect(connectPayment).toContain('facture_honoraire: factureHonoraires.id');
     expect(connectPayment).toContain('mission: mission_id');
-    expect(listPage).toContain("Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'>");
-    expect(listPage).toContain("['CHARGE_REUSSI', 'TRANSFERE', 'PAYE']");
-    expect(listPage).toContain("statut === 'ECHOUE'");
-    expect(listPage).toContain('La confirmation est encore en cours');
+    expect(connectPayment).toContain('session_id={CHECKOUT_SESSION_ID}');
+    expect(listPage).toContain('lireSuiviRemboursementConnect(context.factureHonoraireId, context.checkoutSessionId, controller.signal)');
+    expect(listPage).toContain('const statut = etatRetourConnect(suivi)');
+    expect(listPage).toContain('suivi.mission_id !== context.missionId');
+    expect(listPage).toContain("statut === 'REMBOURSEMENT' || statut === 'A_VERIFIER'");
+    expect(listPage).toContain('Consultez son suivi avant de réessayer.');
+    expect(listPage).not.toContain('Aucun paiement n’a été enregistré.');
     expect(listPage).toContain('onComplete: () => void finaliserRetourConnect');
   });
 
