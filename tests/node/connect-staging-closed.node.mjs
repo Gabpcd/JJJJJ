@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { checkContract, checkContext, checkAssets, checkSnapshot, checkPending, executeClosed, digest, canonical, PROJECT, REPOSITORY } from '../../scripts/ci/connect-staging-closed.mjs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { checkContract, checkContext, checkAssets, checkSnapshot, checkPending, executeClosed, digest, canonical, git, PROJECT, REPOSITORY } from '../../scripts/ci/connect-staging-closed.mjs';
 import { catalogueSql, transactionSql } from '../../scripts/ci/connect-staging-closed-sql.mjs';
 const main='1'.repeat(40),candidate='2'.repeat(40),tree='3'.repeat(40);
 const migration='-- Source synthétique de transport uniquement\nBEGIN;\nSELECT 1;\nCOMMIT;\n';
@@ -112,4 +114,27 @@ test('workflow manuel, main, staging séquentiel, aucun CLI/secrets fournisseurs
  assert.match(yaml,/github.ref == 'refs\/heads\/main'/);
  assert.ok(yaml.indexOf('mjs resolve')<yaml.indexOf('secrets.STAGING_SUPABASE_ACCESS_TOKEN'));
  assert.ok(!/npm (ci|install)|supabase .*deploy|STRIPE_TEST_SECRET|SERVICE_ROLE|DB_PASSWORD/.test(yaml));
+});
+
+test('le processus Git ne reçoit aucun secret ni override hérité du job',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'jolene-git-env-'));
+ try{
+  // Véritable execFileSync, remplaçant seulement le binaire par un témoin
+  // local qui rapporte son environnement ; aucun dépôt ni réseau n'est touché.
+  writeFileSync(join(directory,'git'),`#!${process.execPath}\nprocess.stdout.write(JSON.stringify(process.env));\n`,{mode:0o700});
+  const received=JSON.parse(git(directory,['status','--porcelain'],{
+   PATH:directory,STAGING_SUPABASE_ACCESS_TOKEN:'staging-secret-sentinel',GITHUB_TOKEN:'github-secret-sentinel',GH_TOKEN:'gh-secret-sentinel',
+   SUPABASE_SERVICE_ROLE_KEY:'service-secret-sentinel',STRIPE_SECRET_KEY:'stripe-secret-sentinel',
+   HOME:'/untrusted-home',XDG_CONFIG_HOME:'/untrusted-config',SSH_AUTH_SOCK:'/untrusted-agent',NODE_OPTIONS:'--require=/untrusted-preload',
+   GIT_DIR:'/untrusted-repo',GIT_WORK_TREE:'/untrusted-tree',GIT_EXEC_PATH:'/untrusted-bin',GIT_ASKPASS:'/untrusted-askpass',GIT_SSH_COMMAND:'/untrusted-ssh',
+   GIT_CONFIG_NOSYSTEM:'0',GIT_CONFIG_GLOBAL:'/untrusted-global',GIT_TERMINAL_PROMPT:'1',GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'alias.status',GIT_CONFIG_VALUE_0:'!untrusted',
+  }));
+  // CoreFoundation ajoute cette valeur locale lors du démarrage de Node sur
+  // macOS ; elle ne provient pas de l'environnement transmis à execFileSync.
+  if(process.platform==='darwin' && '__CF_USER_TEXT_ENCODING' in received){
+   assert.match(received.__CF_USER_TEXT_ENCODING,/^0x[0-9a-f]+:0x[0-9a-f]+:0x[0-9a-f]+$/i);
+   delete received.__CF_USER_TEXT_ENCODING;
+  }
+  assert.deepEqual(received,{PATH:directory,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'});
+ }finally{rmSync(directory,{recursive:true,force:true});}
 });
