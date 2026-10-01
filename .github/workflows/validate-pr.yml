@@ -271,7 +271,7 @@ jobs:
 
       # Les migrations PR sont testées puis annulées. Seul le schéma de base
       # main peut être synchronisé durablement ; ce job ne déploie pas la PR.
-      # Une PR sans migration ne dépend pas de la disponibilité du staging.
+      # Une PR sans migration ne dépend du staging que pour une recette SQL explicite.
       - name: Déterminer si les migrations sont concernées
         id: migration_scope
         env:
@@ -285,12 +285,25 @@ jobs:
           fi
 
           if git diff --quiet "$BASE_SHA"...HEAD -- \
+            'tests/security/facturation-remplacement-commission-f1.test.sql' \
+            'tests/fixtures/facturation-remplacement-f1/catalogue.sql'; then
+            has_f1_regression=false
+          else
+            has_f1_regression=true
+          fi
+          echo "has_f1_regression=$has_f1_regression" >> "$GITHUB_OUTPUT"
+
+          if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/fixtures/contrat-service-v11/**' \
             'tests/security/contrat-service-v11.test.sql' \
             'scripts/ci/contrat-v11-sql-proof.mjs' \
             'tests/node/contrat-v11-sql-proof.node.mjs'; then
             echo "has_contract_fixture=false" >> "$GITHUB_OUTPUT"
           else
+            if [ "$has_f1_regression" = true ]; then
+              echo "::error::La fixture contrat et la recette F1 doivent rester séparées."
+              exit 1
+            fi
             # Une preuve de draft ne doit jamais déclencher le bootstrap.
             if ! git diff --quiet "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql'; then
               echo "::error::La recette contrat doit rester sans migration produit."
@@ -419,8 +432,27 @@ jobs:
               --password "$STAGING_SUPABASE_DB_PASSWORD" \
               --workdir "$BASE_WORKTREE"
 
+      - name: F1 — catalogue et absence de résidus avant transaction
+        if: steps.migration_scope.outputs.has_f1_regression == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_SUPABASE_PROJECT_REF" = 'mejpriaetwgtcstbgfid'
+          test -n "$STAGING_SUPABASE_ACCESS_TOKEN"
+          jq -Rs '{query: .}' tests/fixtures/facturation-remplacement-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
+          code=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o "$RUNNER_TEMP/f1-catalogue-avant.json" -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/f1-catalogue-query.json")
+          test "$code" -ge 200 && test "$code" -lt 300
+          jq -e 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
+
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
-        if: steps.migration_scope.outputs.has_migrations == 'true'
+        if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
@@ -484,6 +516,7 @@ jobs:
             tests/security/financial-audit-jwt-role.test.sql
             tests/security/factures-numerotation-series.test.sql
             tests/security/facturation-hebdomadaire-f1.test.sql
+            tests/security/facturation-remplacement-commission-f1.test.sql
             tests/security/stripe-refund-identifiers.test.sql
             tests/security/security-definer-inventory-explicit.test.sql
             tests/security/cloture-mission-tenant.test.sql
@@ -527,6 +560,30 @@ jobs:
             exit 1
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+
+      - name: F1 — SELECT indépendant après succès ou échec SQL
+        if: always() && steps.migration_scope.outputs.has_f1_regression == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_SUPABASE_PROJECT_REF" = 'mejpriaetwgtcstbgfid'
+          test -n "$STAGING_SUPABASE_ACCESS_TOKEN"
+          test -f "$RUNNER_TEMP/f1-catalogue-avant.json"
+          code=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o "$RUNNER_TEMP/f1-catalogue-apres.json" -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/f1-catalogue-query.json")
+          test "$code" -ge 200 && test "$code" -lt 300
+          jq -e 'type == "array" and length == 1 and .[0].residus == 0' "$RUNNER_TEMP/f1-catalogue-apres.json"
+          jq -S . "$RUNNER_TEMP/f1-catalogue-avant.json" > "$RUNNER_TEMP/f1-avant-canonique.json"
+          jq -S . "$RUNNER_TEMP/f1-catalogue-apres.json" > "$RUNNER_TEMP/f1-apres-canonique.json"
+          cmp "$RUNNER_TEMP/f1-avant-canonique.json" "$RUNNER_TEMP/f1-apres-canonique.json"
+          echo 'F1_CONTROLE_INDEPENDANT_OK : catalogue et compteurs inchangés, zéro résidu.'
 
   escrow-gate:
     name: Escrow (recette si paiements touchés)
