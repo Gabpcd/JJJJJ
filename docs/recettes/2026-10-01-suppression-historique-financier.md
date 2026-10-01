@@ -27,3 +27,11 @@ Le build frontend root conservé de 13:20 UTC a été réutilisé sans compilati
 Il reste à obtenir le témoin rouge SQL sur l’ancien corps, le passage sous migration candidate et le SELECT indépendant après rollback, puis la revue du résultat exact de CI. La simulation ne prouve pas la conservation réelle des lignes financières ni le soft-delete Auth distant.
 
 Une simulation ou une trace Stripe SQL ne certifie ni un paiement fournisseur, ni la suppression Auth réelle. Aucun compte cloud n’a été supprimé, aucun SQL métier exécuté, aucun déploiement ni livraison mobile effectué pour cette préparation. Le parcours reste ouvert jusqu’aux preuves prévues ; ce lot ne permet pas de déclarer une préparation nationale complète.
+
+## Correction de fixture après PR 1011, tête 622aa8bb
+
+Le run `36873880356`, job SQL `110408240924`, a passé les préflights puis a échoué au deuxième INSERT de facture de cette recette : les deux UUID de soignants commençaient par `f1610000`. Le générateur existant utilise ce préfixe de huit caractères en l'absence de SIRET et un compteur propre à chaque soignant ; les deux premières pièces portaient donc `JOL-f1610000-2026-00001`, contraire à l'unicité globale des numéros. Les trois SELECT indépendants après erreur ont confirmé leurs catalogues/compteurs inchangés et zéro résidu. Le job PostgreSQL 17 restait vert.
+
+Le second acteur utilise désormais le préfixe réservé `f1610007`, ajouté explicitement à tous les prédicats de résidus qui portent sur les acteurs. La recette exige aussi que les deux appels réels à `next_invoice_number` produisent des numéros initiaux distincts avant de commencer les histoires. Aucun numéro n'est fabriqué à la place du générateur, aucun montant/statut/attendu ni corps produit n'est changé. Le générateur lui-même n'est pas corrigé par ce delta : son risque de collision entre préfixes identiques reste distinct de la validation du parcours de suppression.
+
+Les parseurs de la recette et du catalogue passent, ainsi que les 30 tests Node des deux contrôleurs (17 suppression, 13 paiements). Les 53 suites, leurs pré/post contrôles et le préflight ACL strict restent inchangés. Le prochain passage SQL doit confirmer la fixture corrigée ; aucun DDL ni appel métier direct n'a été lancé pour ce diagnostic.

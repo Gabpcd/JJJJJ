@@ -57,3 +57,10 @@ test('CI garde le témoin PSC et impose un SELECT après, même après erreur SQ
   assert.match(y,/name: Suppression — SELECT indépendant après succès ou échec\n\s+if: always\(\) && steps.migration_scope.outputs.has_migrations == 'true'/);
   assert.match(y,/node --test tests\/node\/suppression-historique-catalogue.node.mjs/);
 });
+test('deux émetteurs avec préfixes distincts restent tous couverts par le catalogue',()=>{
+  const fixture=readFileSync('tests/security/suppression-compte-historique-financier.test.sql','utf8');
+  const actors=Object.fromEntries([...fixture.matchAll(/v_(etab|manuel|stripe|futur|sans_profil) constant uuid := '([^']+)'/g)].map(m=>[m[1],m[2]]));
+  assert.equal(Object.keys(actors).length,5);assert.notEqual(actors.manuel.slice(0,8),actors.stripe.slice(0,8));
+  for(const id of Object.values(actors))assert.ok(source.includes(`'${id.slice(0,8)}-%'`));
+  assert.match(fixture,/public\.next_invoice_number\(v_manuel\)=public\.next_invoice_number\(v_stripe\)/);
+});

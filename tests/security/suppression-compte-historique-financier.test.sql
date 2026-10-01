@@ -13,7 +13,7 @@ DO $suppression$
 DECLARE
   v_etab constant uuid := 'f1610000-0000-4000-8000-000000000001';
   v_manuel constant uuid := 'f1610000-0000-4000-8000-000000000002';
-  v_stripe constant uuid := 'f1610000-0000-4000-8000-000000000003';
+  v_stripe constant uuid := 'f1610007-0000-4000-8000-000000000003';
   v_futur constant uuid := 'f1610000-0000-4000-8000-000000000004';
   v_sans_profil constant uuid := 'f1610000-0000-4000-8000-000000000005';
   v_mission uuid;
@@ -100,6 +100,10 @@ BEGIN
   THEN RAISE EXCEPTION 'Suppression F161 : canaux de recette non fermés'; END IF;
   SELECT jsonb_agg(to_jsonb(u) ORDER BY id) INTO v_auth_avant FROM auth.users u
     WHERE id IN(v_etab,v_manuel,v_stripe,v_futur,v_sans_profil);
+  -- Le numéro contient les huit premiers caractères de l'identité, tandis
+  -- que la séquence appartient à chaque soignant : deux préfixes distincts.
+  IF public.next_invoice_number(v_manuel)=public.next_invoice_number(v_stripe) THEN
+    RAISE EXCEPTION 'Suppression F161 : numéros initiaux des deux acteurs identiques'; END IF;
 
   -- Sans identité, le wrapper reste non appelable par anon.
   PERFORM set_config('request.jwt.claim.sub','',true);

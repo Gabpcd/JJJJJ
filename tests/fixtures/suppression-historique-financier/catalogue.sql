@@ -29,17 +29,17 @@ SELECT
     'scoring',(SELECT count(*) FROM public.scoring_breakdown),'rate_limits',(SELECT count(*) FROM public.rate_limits),
     'net_requests',(SELECT count(*) FROM net.http_request_queue)
   ) AS compteurs,
-  (SELECT count(*) FROM auth.users WHERE id::text LIKE 'f1610000-%')
-    +(SELECT count(*) FROM public.soignants WHERE id::text LIKE 'f1610000-%')
-    +(SELECT count(*) FROM public.etablissements WHERE id::text LIKE 'f1610000-%')
+  (SELECT count(*) FROM auth.users WHERE id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
+    +(SELECT count(*) FROM public.soignants WHERE id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
+    +(SELECT count(*) FROM public.etablissements WHERE id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
     +(SELECT count(*) FROM public.missions WHERE id::text LIKE 'f1610001-%')
     +(SELECT count(*) FROM public.mission_creneaux WHERE mission_id::text LIKE 'f1610001-%')
     +(SELECT count(*) FROM public.factures_honoraires WHERE id::text LIKE 'f1610002-%')
     +(SELECT count(*) FROM public.paiements_soignant WHERE mission_id::text LIKE 'f1610001-%')
     +(SELECT count(*) FROM public.stripe_transfers WHERE mission_id::text LIKE 'f1610001-%')
-    +(SELECT count(*) FROM private.suppressions_compte_confirmees WHERE utilisateur_id::text LIKE 'f1610000-%')
-    +(SELECT count(*) FROM public.rate_limits WHERE cle LIKE 'f1610000-%')
-    +(SELECT count(*) FROM public.notifications WHERE destinataire_id::text LIKE 'f1610000-%')
-    +(SELECT count(*) FROM public.email_queue WHERE destinataire_id::text LIKE 'f1610000-%')
+    +(SELECT count(*) FROM private.suppressions_compte_confirmees WHERE utilisateur_id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
+    +(SELECT count(*) FROM public.rate_limits WHERE cle LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
+    +(SELECT count(*) FROM public.notifications WHERE destinataire_id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
+    +(SELECT count(*) FROM public.email_queue WHERE destinataire_id::text LIKE ANY(ARRAY['f1610000-%','f1610007-%']))
     +(SELECT count(*) FROM public.invoice_audit_log WHERE invoice_id::text LIKE 'f1610002-%') AS residus;
 ROLLBACK;
