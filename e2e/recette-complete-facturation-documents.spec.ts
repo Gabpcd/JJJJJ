@@ -242,8 +242,10 @@ test('Documents F1 établissement : refus de caractère expliqué, sans relance 
   expect(refus.status).toBe(422); expect(banc.documents.size).toBe(0); expect(banc.factures).toEqual([]);
   expect(banc.appels.filter(a => a.method !== 'GET' && a.path !== '/rest/v1/rpc/fn_verifier_pre_facturation')).toEqual([]);
   const { etat } = await simulerEtablissement(page);
-  const origin = 'http://127.0.0.1:54321', pay = '/functions/v1/stripe-connect-pay-mission', generate = '/functions/v1/generate-invoice';
-  const reseau = await encadrer(page, banc, { [`${origin}${pay}`]: 409, [`${origin}${generate}`]: 422 });
+  const pay = '/functions/v1/stripe-connect-pay-mission', generate = '/functions/v1/generate-invoice';
+  let origin: string | null = null;
+  const refusHttpAttendus: Record<string, number> = {};
+  const reseau = await encadrer(page, banc, refusHttpAttendus);
   const appels: string[] = [];
   await page.route('**/functions/v1/*', async route => {
     const req = route.request(), url = new URL(req.url());
@@ -264,7 +266,21 @@ test('Documents F1 établissement : refus de caractère expliqué, sans relance 
     heures: 4, net_a_payer: 80, montant_commission_ttc: 14.4, jours_depuis_fin: 1,
     debut_le: '2026-09-21', fin_le: '2026-09-27',
   }] });
-  await entrerEtablissement(page, 'connexion'); await allerA(page, '/etablissement/facturation?tab=payer');
+  // La CI compile l'API fictive sur le port du preview, le banc local peut
+  // utiliser un autre port. Épingler l'origine du login réellement intercepté,
+  // toujours loopback, avant d'autoriser ces deux seules fonctions simulées.
+  const [connexion] = await Promise.all([
+    page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === '/auth/v1/token'),
+    entrerEtablissement(page, 'connexion'),
+  ]);
+  const api = new URL(connexion.url());
+  expect(api.protocol).toBe('http:');
+  expect(['127.0.0.1', 'localhost']).toContain(api.hostname);
+  origin = api.origin;
+  refusHttpAttendus[`${origin}${pay}`] = 409;
+  refusHttpAttendus[`${origin}${generate}`] = 422;
+  await info.attach('origine-api-simulee', { body: origin, contentType: 'text/plain' });
+  await allerA(page, '/etablissement/facturation?tab=payer');
   await expect(page.getByRole('button', { name: 'Payer via Stripe', exact: true })).toBeVisible();
   await aria(page, info, 'avant-refus-generation');
   const message = 'La facture ne peut pas être générée : un caractère du document n’est pas encore pris en charge. Contactez l’assistance sans modifier l’identité.';
