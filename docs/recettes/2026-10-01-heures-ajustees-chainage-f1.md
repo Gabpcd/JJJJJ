@@ -3,7 +3,7 @@
 Ce candidat est distinct du correctif de taux de PR 1009. Il cherche à reproduire
 l’effet d’une correction d’heures sur les commissions documentaires suivantes,
 sans traiter le montant prévisionnel de mission comme un solde payable.
-Il n’a pas encore été exécuté en SQL. Son raccord CI candidat reste à relire ;
+Il n’a pas encore été exécuté en SQL. Le raccord pré-migration ajouté reste à relire ;
 aucun lancement distant n’est autorisé avant la coordination de publication.
 
 La règle existante est décrite dans `docs/logique-paiements-v1.md`, § 2.2 :
@@ -63,11 +63,51 @@ Il est lu avant et après le test, indépendamment du résultat, sous le verrou
 staging déjà partagé. La voie test-only exécute les deux bancs sans ouvrir
 bootstrap/sync/CLI ; la voie migration conserve les 49 suites précédentes dans
 leur ordre et ajoute ce témoin. Le banc à cinq cas de PR 1009 est inchangé.
-La publication partira de main après fusion de PR 1009 ; elle ne doit ni
-re-synchroniser ce correctif ni tolérer son absence sur le staging.
+La publication partira de main après fusion de PR 1009. La voie test-only ne
+synchronise rien et refuse un staging dont le helper corrigé est absent. Pour
+une PR contenant la migration produit, la synchronisation existante de la base
+main vers staging reste seule responsable de cette mise à niveau ; aucun nouveau
+déployeur ni reset n’est ajouté.
 
 Après preuve rouge, le correctif envisagé doit rester limité au calcul documentaire
 à partir des honoraires et du taux historique, préserver plafond Rist, TVA,
 arrondis, idempotence et corrections/avoirs. Les pièces déjà émises et les paiements
 ne doivent pas être réécrits. La cohérence du bloc prévisionnel reste un contrôle
 séparé ; aucune validation nationale n’est revendiquée par ce témoin.
+
+
+## Témoin rouge avant la migration produit
+
+Le script `scripts/ci/f1-heures-temoin-avant-migration.mjs` est raccordé uniquement
+lorsque la PR ajoute la migration
+`20261001102511_aligner_commissions_pieces_et_estimation.sql`. Il s’exécute après
+la synchronisation existante de main et le catalogue initial, avant l’application
+transactionnelle de la migration candidate. Le verrou staging est inchangé.
+Le témoin SQL et son catalogue sont vérifiés par SHA-256 puis envoyés tels quels.
+
+`JF141` est seulement la sentinelle interne qui annule chaque histoire. L’erreur
+finale attendue a le SQLSTATE externe `P0001`. Le raccord exige HTTP 400, le format
+Management API déjà observé, le préfixe métier exact et les deux diagnostics JSON
+complets, dans leur ordre, sans valeur ou champ supplémentaire :
+
+- Intermédiaire : mission après correction 160 € / 21 € HT ; commission suivante
+  10,50 € HT / 2,10 € TVA / 12,60 € TTC ; cumuls honoraires 140 € et commissions
+  19,50 € HT.
+- Finale : même correction, puis mission après clôture 160 € / 24 € HT ; commission
+  suivante 15 € HT / 3 € TVA / 18 € TTC ; cumuls honoraires 140 € et commissions
+  24 € HT.
+
+Les bruts, TVA et TTC des agrégats sont également comparés strictement. Cette
+liste reste une prévision à mesurer : aucun rouge réel de ce témoin n’est encore
+revendiqué. Toute autre erreur, succès inattendu, réponse ambiguë ou panne réseau
+bloque la suite. Aucun retry de la fixture n’est autorisé.
+
+Une nouvelle requête READ ONLY contrôle ensuite le catalogue et les 25 compteurs,
+y compris si la réponse du témoin est perdue. Ils doivent être identiques au
+contrôle initial et sans résidus. Ce contrôle indépendant est obligatoire avant
+que le script n’accepte la reproduction et que la migration puisse commencer.
+Le contrôle `always()` existant après le job SQL reste également en place.
+La preuve compacte conserve uniquement les diagnostics synthétiques, les codes
+et les empreintes ; elle n’imprime aucun corps fournisseur inconnu ni secret.
+Les tests Node utilisent exclusivement des réponses fictives et ne prouvent pas
+une exécution PostgreSQL ou une intégration frontend.
