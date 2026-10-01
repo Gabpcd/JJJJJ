@@ -131,7 +131,7 @@ test('YAML : aucun verrou pendant attente, verrou seulement aprÃ¨s needs et accÃ
   assert.equal(workflow.permissions.actions, 'read'); assert.equal(workflow.permissions.contents, 'read');
   const attente = workflow.jobs['schema-staging'], comptes = workflow.jobs.comptes;
   assert.equal(attente.concurrency, undefined); assert.equal(comptes.needs, 'schema-staging');
-  assert.deepEqual(comptes.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(comptes.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
   assert.equal(attente['timeout-minutes'], 17);
   const step = attente.steps.find(s => s.run === 'node scripts/ci/wait-staging-schema.mjs');
   assert.equal(step.env.STAGING_SCHEMA_SHA, '${{ github.event.pull_request.head.sha || github.sha }}');

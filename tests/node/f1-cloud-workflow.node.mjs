@@ -6,7 +6,7 @@ const require=createRequire(import.meta.url),YAML=require('yaml');
 const workflow=YAML.parse(await readFile(new URL('../../.github/workflows/f1-cloud-staging.yml',import.meta.url),'utf8'));
 test('manual main-only job retains staging lock, read-only repository token and bounded always-finalization',()=>{
   assert.deepEqual(Object.keys(workflow.on),['workflow_dispatch']);assert.deepEqual(workflow.permissions,{contents:'read'});
-  assert.deepEqual(workflow.concurrency,{group:'jolene-supabase-staging-writes','cancel-in-progress':false});
+  assert.deepEqual(workflow.concurrency,{group:'jolene-supabase-staging-writes',queue:'max','cancel-in-progress':false});
   const job=workflow.jobs.documents;assert.equal(job['timeout-minutes'],35);
   for(const clause of ["github.repository == 'Gabpcd/JJJJJ'","github.ref == 'refs/heads/main'","github.event_name == 'workflow_dispatch'"])assert(job.if.includes(clause));
   const steps=job.steps,pilot=steps.findIndex(x=>x.id==='pilot'),cleanup=steps.findIndex(x=>x.run==='node scripts/ci/f1-cloud-pilot.mjs finalize');

@@ -71,6 +71,7 @@ on:
 
 concurrency:
   group: jolene-supabase-staging-writes
+  queue: max
   cancel-in-progress: false
 
 jobs:
