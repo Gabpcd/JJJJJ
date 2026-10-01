@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { creerMissionSimulee, ids } from './helpers/recette-complete-mission';
-import { stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
+import { ids } from './helpers/recette-complete-mission';
+import { creerActionsNationales, stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
 
 // API intégralement simulée : aucun litige, remboursement ou email réel.
 async function action(page: Page, target: Locator) {
@@ -9,7 +9,7 @@ async function action(page: Page, target: Locator) {
 }
 for (const role of ['ADMIN_ETABLISSEMENT', 'SOIGNANT'] as const) {
   test(`${role} : pièce exacte, lecture en erreur, reprise et confirmation vérifiée`, async ({ page, context }, info) => {
-    const simulation = creerMissionSimulee(), { state } = simulation;
+    const simulation = creerActionsNationales(), { state } = simulation;
     Object.assign(state.mission, { statut: 'TERMINEE', soignant_assigne_id: ids.soignant, type_contrat_applique: 'LIBERAL' });
     state.presence = { valide_par_etablissement: true }; simulation.simulerEmissionFacture();
     Object.assign(state.facture, { statut: 'PAYEE', emise_le: '2026-09-30T09:00:00Z', verification_echeance_le: '2026-10-02T09:00:00Z' });
