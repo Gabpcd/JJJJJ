@@ -1,0 +1,160 @@
+import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { simulerEtablissement, stabiliserLectures, ids, email } from './helpers/recette-complete-etablissement';
+
+const entetes = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
+type Mode = 'valide' | 'indisponible' | 'minimal' | 'divergent' | 'absent';
+
+async function preparer(page: Page, modeInitial: Mode) {
+  const context = page.context();
+  const horsPage: string[] = [];
+  // Ferme aussi la première requête d'une éventuelle popup.
+  await context.route('**/*', async route => {
+    horsPage.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+    await route.abort();
+  });
+  const { etat } = await simulerEtablissement(page, modeInitial === 'minimal' ? 'minimal' : 'complet');
+  await page.addInitScript(() => { delete (Navigator.prototype as { serviceWorker?: unknown }).serviceWorker; });
+  let mode = modeInitial;
+  let numero = 0;
+  const roles: { index: number; statut: number; mode: Mode }[] = [];
+  const consoleMessages: { type: string; texte: string }[] = [];
+  page.on('console', message => consoleMessages.push({ type: message.type(), texte: message.text() }));
+  const user = { id: ids.user, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: new Date().toISOString(),
+    app_metadata: modeInitial === 'minimal' ? {} : { role: 'ADMIN_ETABLISSEMENT' }, user_metadata: {}, identities: [] };
+  await page.route('**/auth/v1/**', async route => {
+    const nom = new URL(route.request().url()).pathname.split('/').pop();
+    if (!['token', 'user'].includes(nom!)) return route.fallback();
+    await route.fulfill({ json: nom === 'user' ? user : { user, token_type: 'bearer', access_token: 'fixture-auth', refresh_token: 'fixture-refresh', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600 }, headers: entetes });
+  });
+  await page.route('**/rest/v1/rpc/fn_get_my_role', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, body: '', headers: entetes });
+    const index = numero++, courant = mode;
+    const echec = courant === 'indisponible' || (courant === 'divergent' && index === 4);
+    await new Promise(resolve => setTimeout(resolve, echec ? 1200 : 100));
+    roles.push({ index, statut: echec ? 503 : 200, mode: courant });
+    if (echec) return route.fulfill({ status: 503, json: { message: 'Indisponibilité simulée du périmètre' }, headers: entetes });
+    if (courant === 'absent') return route.fulfill({ json: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: null }, headers: entetes });
+    await route.fallback();
+  });
+  const rpcAutorises = new Set(['fn_get_my_role', 'fn_audit_connexion', 'fn_update_presence', 'fn_ecrire_audit_safe', 'fn_mes_permissions_etab', 'fn_messages_non_lus', 'fn_compte_auth_actif', 'fn_param_bool', 'fn_stats_dashboard_etablissement', 'fn_mes_soignants_etablissement', 'fn_lister_missions_a_noter_etab', 'fn_mes_credits_etab', 'fn_mon_score_etab', 'fn_mon_etablissement_complet', 'fn_capacite_alertes_recherches', 'fn_mode_exercice']);
+  const refus: string[] = [];
+  await page.route('**/*', async route => {
+    const req = route.request(), url = new URL(req.url());
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.fallback();
+    if (/\/(auth|rest|functions|storage)\/v1\//.test(url.pathname)) {
+      const nom = url.pathname.split('/').pop()!;
+      const autorise = req.method() === 'OPTIONS' ||
+        (url.pathname.includes('/auth/v1/') && ['token', 'user'].includes(nom)) ||
+        (url.pathname.includes('/rest/v1/rpc/') && rpcAutorises.has(nom)) ||
+        (url.pathname.includes('/rest/v1/') && ['GET', 'HEAD'].includes(req.method()));
+      if (!autorise) { refus.push(`${req.method()} ${url.pathname}`); return route.abort(); }
+      return route.fallback();
+    }
+    if (req.isNavigationRequest()) {
+      const response = await route.fetch({ maxRedirects: 0 });
+      if (response.status() >= 300 && response.status() < 400) { refus.push(`REDIRECTION ${url.pathname}`); return route.abort(); }
+      const html = (await response.text()).replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi, '');
+      return route.fulfill({ response, body: html });
+    }
+    return route.fallback();
+  });
+  return { etat, roles, consoleMessages, horsPage, refus, changer: (nouveau: Mode) => { mode = nouveau; } };
+}
+
+async function connecter(page: Page) {
+  await page.goto('/connexion');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Mot!Solide-Recette2026');
+  const bouton = page.getByRole('button', { name: 'Se connecter', exact: true });
+  if (test.info().project.use.hasTouch) await bouton.tap(); else await bouton.click();
+  await expect(page).toHaveURL(/\/etablissement\/tableau-de-bord$/);
+}
+async function pret(page: Page) {
+  await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached({ timeout: 5000 });
+  await expect(page.locator('#main-content')).not.toBeEmpty();
+  await expect(page.getByRole('heading', { name: 'Établissement non rattaché' })).toHaveCount(0);
+  await stabiliserLectures(page);
+}
+async function manque(page: Page) {
+  await expect(page.getByRole('heading', { name: 'Établissement non rattaché' })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('dashboard-etablissement-ready')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Préparer une mission', exact: true })).toHaveCount(0);
+  await expect(page.locator('#main-content')).not.toBeEmpty();
+  await stabiliserLectures(page);
+}
+async function capturer(page: Page, info: TestInfo, nom: string) {
+  const cible = page.locator('#main-content');
+  await info.attach(`${nom}-aria`, { body: await cible.ariaSnapshot(), contentType: 'text/plain' });
+  await page.screenshot({ path: info.outputPath(`${nom}.png`), animations: 'disabled', scale: 'css' });
+}
+async function reessayer(page: Page) {
+  const bouton = page.getByRole('button', { name: 'Réessayer', exact: true });
+  if (test.info().project.use.hasTouch) await bouton.tap(); else await bouton.click();
+  await pret(page);
+}
+
+for (const mode of ['valide', 'indisponible', 'minimal', 'divergent'] as const) {
+  test(`dashboard périmètre ${mode} : contenu, reprise et rechargement`, async ({ page }, info) => {
+    const banc = await preparer(page, mode);
+    try {
+      await connecter(page);
+      if (mode === 'minimal') {
+        await pret(page);
+        await expect(page.getByRole('heading', { name: 'Préparez votre première mission' })).toBeVisible();
+        await expect(page.getByText('À compléter avant publication')).toBeVisible();
+        expect(banc.etat.appels).not.toContain('POST fn_stats_dashboard_etablissement');
+        await capturer(page, info, 'preparation');
+        const bouton = page.getByRole('button', { name: 'Préparer une mission', exact: true });
+        if (info.project.use.hasTouch) await bouton.tap(); else await bouton.click();
+        await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
+        await stabiliserLectures(page);
+        await page.goBack();
+        await pret(page);
+      } else if (mode === 'indisponible') {
+        await manque(page);
+        expect(banc.roles.some(r => r.statut === 503)).toBe(true);
+        expect(banc.etat.appels).not.toContain('POST fn_stats_dashboard_etablissement');
+        await capturer(page, info, 'rattachement-indisponible');
+        banc.changer('valide');
+        await reessayer(page);
+      } else if (mode === 'divergent') {
+        await expect.poll(() => banc.roles.some(r => r.index === 4 && r.statut === 503), { timeout: 5000 }).toBe(true);
+        await stabiliserLectures(page);
+        // Selon l'ordre des montages, la page reçoit le succès ou le 503.
+        // Dans les deux cas, un état explicite doit remplacer l'ancien main vide.
+        await expect(page.locator('#main-content')).not.toBeEmpty();
+        if (await page.getByRole('heading', { name: 'Établissement non rattaché' }).isVisible()) {
+          await manque(page);
+          await capturer(page, info, 'concurrence-reprise');
+          banc.changer('valide');
+          await reessayer(page);
+        } else await pret(page);
+      } else {
+        await pret(page);
+        // Un scope précédemment valide n'autorise pas à garder la page après sa perte.
+        banc.changer('absent');
+        await page.reload();
+        await manque(page);
+        await capturer(page, info, 'rattachement-perdu');
+        banc.changer('valide');
+        await reessayer(page);
+      }
+      await stabiliserLectures(page);
+      await page.reload();
+      await pret(page);
+      await capturer(page, info, 'apres-rechargement');
+      expect(banc.etat.erreurs).toEqual([]);
+      expect(banc.etat.inconnues).toEqual([]);
+      expect(banc.etat.ecritures).toEqual([]);
+      expect(banc.etat.operations).toEqual([]);
+      expect(banc.horsPage).toEqual([]);
+      expect(banc.refus).toEqual([]);
+      const erreursConsole = banc.consoleMessages.filter(m => m.type === 'error');
+      // Seule la réponse 503 explicitement injectée peut produire une erreur réseau.
+      expect(erreursConsole.filter(m => !/Failed to load resource.*503/.test(m.texte))).toEqual([]);
+      if (erreursConsole.length) expect(banc.roles.some(r => r.statut === 503)).toBe(true);
+    } finally {
+      await info.attach('reseau-et-console', { body: JSON.stringify({ roles: banc.roles, appels: banc.etat.appels, ecritures: banc.etat.ecritures, operations: banc.etat.operations, inconnues: banc.etat.inconnues, erreurs: banc.etat.erreurs, refus: banc.refus, horsPage: banc.horsPage, console: banc.consoleMessages }, null, 2), contentType: 'application/json' });
+    }
+  });
+}
