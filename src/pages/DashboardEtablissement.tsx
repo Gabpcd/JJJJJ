@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -52,7 +52,24 @@ export default function DashboardEtablissement() {
   const navigate = useNavigate();
   const scope = useEtablissementScope();
   const { user, parcours, etablissementId, loading: scopeLoading, resolved: scopeResolved, error: scopeError, retry: relancerScope } = scope;
+  const queryClient = useQueryClient();
   const { afficherNotification } = useNotification();
+
+  useEffect(() => {
+    const queryKey = ['dashboard-etablissement', user?.id, etablissementId];
+    // Un départ du document ne démonte pas nécessairement React (bfcache).
+    // Annuler la lecture exacte, puis la reprendre si ce document est restauré.
+    const quitterDocument = () => { void queryClient.cancelQueries({ queryKey, exact: true }); };
+    const restaurerDocument = (event: PageTransitionEvent) => {
+      if (event.persisted) void queryClient.refetchQueries({ queryKey, exact: true, type: 'active' });
+    };
+    window.addEventListener('pagehide', quitterDocument);
+    window.addEventListener('pageshow', restaurerDocument);
+    return () => {
+      window.removeEventListener('pagehide', quitterDocument);
+      window.removeEventListener('pageshow', restaurerDocument);
+    };
+  }, [queryClient, user?.id, etablissementId]);
   interface EtabInfo {
     nom: string;
     paliers_commission?: { nom: string } | null;
@@ -110,7 +127,7 @@ export default function DashboardEtablissement() {
 
   const { data: dashData, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard-etablissement', user?.id, etablissementId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       let partialError = false;
       const now = new Date();
       const debutMois = debutMoisParis(now).toISOString();
@@ -140,16 +157,17 @@ export default function DashboardEtablissement() {
       try {
         // Primary data: RPC stats + etab + recent missions + paliers
         const [resEtab, resMissions, resPaliers, resDashStats, resSoignants] = await Promise.all([
-          supabase.rpc('fn_mon_etablissement_complet' as any),
+          supabase.rpc('fn_mon_etablissement_complet' as any).abortSignal(signal),
           supabase.from('missions')
             .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
             .eq('etablissement_id', etablissementId)
             .order('cree_le', { ascending: false })
-            .limit(5),
-          supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
-          supabase.rpc('fn_stats_dashboard_etablissement' as any),
-          supabase.rpc('fn_mes_soignants_etablissement'),
+            .limit(5).abortSignal(signal),
+          supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }).abortSignal(signal),
+          supabase.rpc('fn_stats_dashboard_etablissement' as any).abortSignal(signal),
+          supabase.rpc('fn_mes_soignants_etablissement').abortSignal(signal),
         ]);
+        signal.throwIfAborted();
 
         if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); partialError = true; }
         else if (resEtab.data) etabResult = resEtab.data;
@@ -162,7 +180,8 @@ export default function DashboardEtablissement() {
         if (Object.keys(sgMap).length === 0 && resMissions.data) {
           const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
           if (sgIds.length > 0) {
-            const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
+            const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds).abortSignal(signal);
+            signal.throwIfAborted();
             if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
           }
         }
@@ -181,14 +200,16 @@ export default function DashboardEtablissement() {
             try {
               const creneauxRecents = await chargerCreneauxMissionsPagines(
                 idsMissionsRecentes,
-                { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+                { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal },
               );
+              signal.throwIfAborted();
               for (const creneau of creneauxRecents as CreneauPlanning[]) {
                 const liste = creneauxRecentsParMission.get(creneau.mission_id) ?? [];
                 liste.push(creneau);
                 creneauxRecentsParMission.set(creneau.mission_id, liste);
               }
             } catch (erreurCreneauxRecents) {
+              signal.throwIfAborted();
               logger.warn('[DashboardEtab] Erreur planning des dernières missions', erreurCreneauxRecents);
               partialError = true;
               creneauxRecentsDisponibles = false;
@@ -240,15 +261,16 @@ export default function DashboardEtablissement() {
           // l'affichage est ensuite construit depuis mission_creneaux.
           const [resCout, resProchaines] = await Promise.all([
             supabase.from('missions').select('id, total_brut, duree_heures, soignant_assigne_id, fin_le')
-              .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
+              .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois).abortSignal(signal),
             supabase.from('missions')
               .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, nb_creneaux, soignant_assigne_id')
               .eq('etablissement_id', etablissementId)
               .gte('fin_le', now.toISOString())
               .lte('debut_le', finFenetrePlanning.toISOString())
               .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
-              .order('debut_le', { ascending: true }),
+              .order('debut_le', { ascending: true }).abortSignal(signal),
           ]);
+          signal.throwIfAborted();
 
           if (resCout.error) {
             logger.warn('[DashboardEtab] Erreur coût/top soignants', resCout.error);
@@ -271,7 +293,8 @@ export default function DashboardEtablissement() {
             const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
             const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
             if (missingIds.length > 0) {
-              const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds);
+              const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds).abortSignal(signal);
+              signal.throwIfAborted();
               if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
             }
             topSoignantsResult = sorted.map(([id, count]) => {
@@ -292,8 +315,9 @@ export default function DashboardEtablissement() {
             if (missionsPlanning.length > 0) {
               creneauxPlanning = await chargerCreneauxMissionsPagines(
                 missionsPlanning.map((mission) => mission.id),
-                { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+                { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal },
               ) as CreneauPlanning[];
+              signal.throwIfAborted();
             }
 
             const creneauxParMission = new Map<string, CreneauPlanning[]>();
@@ -321,6 +345,7 @@ export default function DashboardEtablissement() {
             );
           }
         } catch (err) {
+          signal.throwIfAborted();
           logger.warn('[DashboardEtab] Erreur chargement planning', err);
           partialError = true;
           erreurPlanningResult = 'Le planning n\'a pas pu être chargé. Réessayez dans un instant.';
@@ -334,15 +359,17 @@ export default function DashboardEtablissement() {
             .eq('etablissement_id', etablissementId)
             .eq('statut', 'TERMINEE')
             .not('soignant_assigne_id', 'is', null)
-            .limit(50);
+            .limit(50).abortSignal(signal);
+          signal.throwIfAborted();
           if (msTerminees && msTerminees.length > 0) {
             const idsTerminees = msTerminees.map((m: any) => m.id);
             // Deux sources d'évaluation à croiser : evaluations (modale post-mission)
             // ET notations_missions (notation 1-tap) — cf. BandeauEvaluationsEnAttente (F4 Lot 7b).
             const [resEvals, resNotes] = await Promise.all([
-              supabase.from('evaluations').select('mission_id').eq('type_evaluateur', 'ETABLISSEMENT').in('mission_id', idsTerminees),
-              supabase.from('notations_missions' as any).select('mission_id').eq('sens', 'ETAB_VERS_SOIGNANT').in('mission_id', idsTerminees),
+              supabase.from('evaluations').select('mission_id').eq('type_evaluateur', 'ETABLISSEMENT').in('mission_id', idsTerminees).abortSignal(signal),
+              supabase.from('notations_missions' as any).select('mission_id').eq('sens', 'ETAB_VERS_SOIGNANT').in('mission_id', idsTerminees).abortSignal(signal),
             ]);
+            signal.throwIfAborted();
             const evalSet = new Set([
               ...(resEvals.data || []).map((e: any) => e.mission_id),
               ...((resNotes.data || []) as any[]).map((n: any) => n.mission_id),
@@ -351,15 +378,19 @@ export default function DashboardEtablissement() {
             evaluationsEnAttenteResult = { count: nonEvaluees.length, premiereMissionId: nonEvaluees[0] ?? null };
           }
         } catch (err) {
+          signal.throwIfAborted();
           logger.warn('[DashboardEtab] Erreur évaluations en attente', err);
         }
 
       } catch (err) {
+        signal.throwIfAborted();
         handleErrorSilent(err, '[DashboardEtab] Erreur critique');
         partialError = true;
       }
 
-      // Audit HDS
+      // Ne pas lancer d'audit ni publier un résultat partiel après annulation.
+      signal.throwIfAborted();
+      // L'audit déjà envoyé n'est pas annulé : c'est une écriture de consultation.
       try {
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'DONNEES_PERSO_CONSULTATION',
@@ -367,8 +398,10 @@ export default function DashboardEtablissement() {
           p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
         });
       } catch (err) {
+        signal.throwIfAborted();
         logger.warn('[DashboardEtab] Erreur audit HDS', err);
       }
+      signal.throwIfAborted();
 
       return {
         etab: etabResult,
@@ -415,7 +448,6 @@ export default function DashboardEtablissement() {
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
   const loading = scopeLoading || !scopeResolved || dashboardLoading;
-  const queryClient = useQueryClient();
   const { estProlonge: chargementProlonge, reinitialiser: reinitialiserChargement } = useChargementProlonge(loading);
 
   const relancerDashboard = () => {
