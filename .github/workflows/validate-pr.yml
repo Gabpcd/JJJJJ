@@ -61,6 +61,9 @@ jobs:
       - name: Documents facturation réels avec IO fictives
         run: node --test tests/node/facturation-documents.node.mjs
 
+      - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
+        run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
+
       - name: Deno figé pour le chargement des polices Edge
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
