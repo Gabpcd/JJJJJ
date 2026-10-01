@@ -1,5 +1,6 @@
 -- Régression : commission globale après remplacement canonique d’une facture hebdomadaire.
--- Source de seed : banc F1 rollback existant ; nouvelles assertions indépendantes.
+-- Source de seed : banc F1 rollback existant ; taux, heures seules et finale.
+-- Le cas heures seules décrit la parité historique, pas une cohérence globale corrigée.
 -- Pas Edge/Storage. Les références PDF/XML ci-dessous sont fictives.
 -- Le pg_net notify-support éventuel reste dans une transaction jamais commitée.
 -- Les claims administrateur sont synthétiques : aucune preuve de login/MFA.
@@ -26,6 +27,7 @@ DECLARE
   v_admin constant uuid := 'f1310006-6000-4000-8000-000000000006';
   v_equipe constant uuid := 'f1310007-7000-4000-8000-000000000007';
   v_litige constant uuid := 'f1310008-8000-4000-8000-000000000008';
+  v_presence constant uuid := 'f1310009-9000-4000-8000-000000000009';
   v_remplacement uuid;
   v_commission_remplacement uuid;
   v_commission_globale numeric;
@@ -39,6 +41,12 @@ DECLARE
   v_numero text;
   v_nom text;
   v_annule boolean := false;
+  v_cas record;
+  v_financier_avant jsonb;
+  v_mission_apres jsonb;
+  v_initial_net numeric;
+  v_duree_mission numeric;
+  v_statut public.statut_mission;
 BEGIN
   -- Ce fichier est raccordé uniquement au job staging à verrou global. Aucun
   -- cron ne doit consommer d'outbox ; toutes les écritures restent invisibles.
@@ -61,11 +69,12 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid IN ('public.soignants'::regclass,
     'public.etablissements'::regclass,'public.missions'::regclass,'public.mission_creneaux'::regclass,
     'public.factures_honoraires'::regclass,'public.factures'::regclass,'public.notifications'::regclass,
-    'public.invoice_audit_log'::regclass) AND NOT tgisinternal AND tgenabled NOT IN ('O','A'))
+    'public.invoice_audit_log'::regclass,'public.presences'::regclass) AND NOT tgisinternal AND tgenabled NOT IN ('O','A'))
   THEN RAISE EXCEPTION 'F1 : triggers métier désactivés'; END IF;
   IF EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab,v_admin))
     OR EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=v_equipe OR user_id=v_admin)
     OR EXISTS(SELECT 1 FROM public.litiges WHERE id=v_litige)
+    OR EXISTS(SELECT 1 FROM public.presences WHERE id=v_presence OR mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant)
     OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=v_etab OR siret='99150000000843')
     OR EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission)
@@ -81,6 +90,26 @@ BEGIN
   IF v_jour_passe IS NULL OR v_jour_futur IS NULL OR v_semaine+6>=current_date
   THEN RAISE EXCEPTION 'F1 : calendrier de fixture indisponible'; END IF;
 
+  -- Les deux premiers cas caractérisent les chemins partagés AVANT la
+  -- régression de taux hebdomadaire. Atteindre celle-ci prouve leur passage.
+  -- Pour les heures seules, 160/21 est la parité historique à documenter,
+  -- PAS une nouvelle règle : 21 ne représente pas 15 % du net resté à 160.
+  FOR v_cas IN SELECT * FROM (VALUES
+    ('heures_seules_historique',false,3::numeric,NULL::numeric,20::numeric,
+      60::numeric,160::numeric,9::numeric,1.80::numeric,10.80::numeric,
+      24::numeric,4.80::numeric,28.80::numeric,21::numeric,4.20::numeric,25.20::numeric),
+    ('finale_taux_baisse',true,NULL,18,18,72,72,10.80,2.16,12.96,10.80,2.16,12.96,10.80,2.16,12.96),
+    ('hebdo_taux_baisse',false,NULL,18,18,72,144,10.80,2.16,12.96,21.60,4.32,25.92,21.60,4.32,25.92),
+    ('hebdo_taux_hausse',false,NULL,22,22,88,176,13.20,2.64,15.84,26.40,5.28,31.68,26.40,5.28,31.68)
+  ) AS cas(nom,finale,heures_ajustees,taux_ajuste,taux,honoraires,net_global,
+    commission_ht,commission_tva,commission_ttc,avant_ht,avant_tva,avant_ttc,globale_ht,globale_tva,globale_ttc) LOOP
+  v_duree_mission:=CASE WHEN v_cas.finale THEN 4 ELSE 8 END;
+  v_initial_net:=CASE WHEN v_cas.finale THEN 80 ELSE 160 END;
+  v_statut:=CASE WHEN v_cas.finale THEN 'TERMINEE'::public.statut_mission ELSE 'EN_COURS'::public.statut_mission END;
+  v_annule:=false;
+  v_remplacement:=NULL;
+  v_commission:=NULL;
+  v_commission_remplacement:=NULL;
   BEGIN
     -- INSERT SQL Auth seulement : pas de session/token/SMTP/hook Auth HTTP.
     INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
@@ -110,28 +139,37 @@ BEGIN
       duree_heures,taux_horaire_base,statut,soignant_assigne_id,type_contrat_recherche,type_contrat_applique,
       choix_contrat_soignant,type_paiement_soignant,mode_paiement_soignant,strategie_facturation,est_urgente)
     VALUES(v_mission,v_etab,'RECETTE F1 SQL annulee','IDE',v_jour_futur+time '09:00',v_jour_futur+time '13:00',
-      4,20,'EN_COURS',v_soignant,'LIBERAL','LIBERAL','LIBERAL','NOTE_HONORAIRES','DIRECT','HEBDO_ET_FINALE',false);
+      4,20,v_statut,v_soignant,'LIBERAL','LIBERAL','LIBERAL','NOTE_HONORAIRES','DIRECT','HEBDO_ET_FINALE',false);
     IF (SELECT count(*) FROM public.mission_creneaux WHERE mission_id=v_mission AND type_creneau='PREVISIONNEL')<>1
       OR (SELECT fige_le FROM public.missions WHERE id=v_mission) IS NOT NULL
     THEN RAISE EXCEPTION 'F1 : planning legacy/état initial inattendu'; END IF;
     UPDATE public.mission_creneaux SET debut=v_jour_passe+time '09:00',fin=v_jour_passe+time '13:00'
       WHERE mission_id=v_mission AND type_creneau='PREVISIONNEL';
+    IF NOT v_cas.finale THEN
+      INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause,ordre)
+      VALUES(v_mission,v_jour_futur+time '09:00',v_jour_futur+time '13:00','PREVISIONNEL',false,2);
+    END IF;
     INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause,ordre)
-    VALUES(v_mission,v_jour_futur+time '09:00',v_jour_futur+time '13:00','PREVISIONNEL',false,2),
-      (v_mission,v_jour_passe+time '09:00',v_jour_passe+time '13:00','EFFECTIF',false,3);
-    IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND statut='EN_COURS'
-      AND nb_creneaux=2 AND duree_heures=8 AND duree_heures_effective=4 AND total_brut=160 AND net_a_payer=160
-      AND montant_ifm=0 AND montant_icp=0 AND montant_commission_ht=24 AND montant_commission_tva=4.8
-      AND montant_commission_ttc=28.8 AND fige_le IS NULL)
-    THEN RAISE EXCEPTION 'F1 : snapshot indépendant 8h x 20 incohérent'; END IF;
+    VALUES(v_mission,v_jour_passe+time '09:00',v_jour_passe+time '13:00','EFFECTIF',false,3);
+    -- L'état historique final est posé par maintenance dans cette transaction,
+    -- jamais par un faux paiement ni une clôture utilisateur contournée.
+    IF v_cas.finale AND NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission
+      AND statut='TERMINEE' AND fin_le<now() AND duree_heures=4)
+    THEN RAISE EXCEPTION 'F1 : historique final non passé'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND statut=v_statut
+      AND nb_creneaux=CASE WHEN v_cas.finale THEN 1 ELSE 2 END AND duree_heures=v_duree_mission
+      AND duree_heures_effective=4 AND total_brut=v_initial_net AND net_a_payer=v_initial_net
+      AND montant_ifm=0 AND montant_icp=0 AND montant_commission_ht=v_initial_net*0.15
+      AND montant_commission_tva=v_initial_net*0.03 AND montant_commission_ttc=v_initial_net*0.18 AND fige_le IS NULL)
+    THEN RAISE EXCEPTION 'F1 : snapshot initial incohérent, cas %',v_cas.nom; END IF;
     v_resultat:=public.fn_verifier_pre_facturation(v_mission,v_semaine,v_semaine+6);
     IF v_resultat->'ok' IS DISTINCT FROM 'true'::jsonb OR v_resultat->>'source_facturation'<>'EFFECTIF'
       OR (v_resultat->>'duree_facturee')::numeric IS DISTINCT FROM 4
     THEN RAISE EXCEPTION 'F1 : préfacturation semaine fermée incorrecte'; END IF;
     v_resultat:=public.fn_calculer_montant_periode(v_mission,v_semaine,v_semaine+6);
-    IF (v_resultat->>'duree_totale_mission_heures')::numeric IS DISTINCT FROM 8
+    IF (v_resultat->>'duree_totale_mission_heures')::numeric IS DISTINCT FROM v_duree_mission
       OR (v_resultat->>'duree_periode_heures')::numeric IS DISTINCT FROM 4
-      OR (v_resultat->>'ratio_periode')::numeric IS DISTINCT FROM 0.5
+      OR (v_resultat->>'ratio_periode')::numeric IS DISTINCT FROM (CASE WHEN v_cas.finale THEN 1::numeric ELSE 0.5::numeric END)
       OR (v_resultat->>'montant_ht_periode')::numeric IS DISTINCT FROM 80
     THEN RAISE EXCEPTION 'F1 : prorata hebdomadaire indépendant incorrect'; END IF;
 
@@ -156,7 +194,7 @@ BEGIN
       montant_ht,montant_ttc,montant_tva,taux_tva,periode_debut,periode_fin,statut,
       type_document,nature_correction,mode_remboursement,est_facture_finale_mission)
     VALUES(v_honoraire,v_numero,v_soignant,v_etab,v_mission,80,80,0,0,v_semaine,v_semaine+6,'BROUILLON',
-      'FACTURE','ORIGINALE','N_A',false);
+      'FACTURE','ORIGINALE','N_A',v_cas.finale);
     BEGIN
       INSERT INTO public.factures_honoraires(id,numero_facture,soignant_id,etablissement_id,mission_id,
         montant_ht,montant_ttc,periode_debut,periode_fin,est_facture_finale_mission)
@@ -198,7 +236,10 @@ BEGIN
       OR (SELECT count(*) FROM public.factures WHERE facture_honoraire_id=v_honoraire)<>1
       OR NOT EXISTS(SELECT 1 FROM public.factures WHERE id=v_commission AND montant_ht=12 AND montant_tva=2.4
         AND montant_ttc=14.4 AND statut='EMISE' AND NOT est_secteur_public AND chorus_pro_statut='NON_APPLICABLE')
-      OR v_snapshot IS DISTINCT FROM (SELECT to_jsonb(m) FROM public.missions m WHERE id=v_mission)
+      OR (NOT v_cas.finale AND v_snapshot IS DISTINCT FROM (SELECT to_jsonb(m) FROM public.missions m WHERE id=v_mission))
+      OR (v_cas.finale AND (v_snapshot-'commission_facturee'-'facture_id'-'modifie_le' IS DISTINCT FROM
+        (SELECT to_jsonb(m)-'commission_facturee'-'facture_id'-'modifie_le' FROM public.missions m WHERE id=v_mission)
+        OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND commission_facturee AND facture_id=v_commission)))
     THEN RAISE EXCEPTION 'F1 : commission intermédiaire/idempotence incorrecte'; END IF;
     BEGIN
       PERFORM public.fn_emettre_document_facturation_honoraires(v_honoraire,'fixture-f1.pdf','fixture-f1.xml');
@@ -222,6 +263,12 @@ BEGIN
       OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id IN(v_soignant,v_etab) AND id_ressource IS DISTINCT FROM v_honoraire)
       OR EXISTS(SELECT 1 FROM public.journaux_audit WHERE id_ressource IN(v_mission,v_honoraire) AND action='OVERRIDE_ANTI_SEED')
     THEN RAISE EXCEPTION 'F1 : effet externe/override inattendu'; END IF;
+    IF v_cas.heures_ajustees IS NOT NULL THEN
+      -- Historique SQL synthétique sans arrivée/départ/GPS, sans validation
+      -- établissement : ne déclenche ni conformité de pointage ni escrow.
+      INSERT INTO public.presences(id,mission_id,soignant_id,heures_reelles)
+      VALUES(v_presence,v_mission,v_soignant,4);
+    END IF;
     -- Troisième identité de recette SQL uniquement : aucun mot de passe/token.
     INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
     VALUES(v_admin,'00000000-0000-0000-0000-000000000000','f1-rectif-admin@example.invalid',
@@ -238,43 +285,64 @@ BEGIN
     VALUES(v_litige,v_mission,v_soignant,v_etab,'SOIGNANT','RECETTE SYNTHETIQUE ANNULEE : taux erroné sur première période',
       'OUVERT','DESACCORD_MONTANT_FACTURE',v_honoraire,'FACTURE_UNIQUE',v_semaine,v_semaine+6);
     v_resultat:=public.fn_admin_resoudre_litige_intelligent(v_litige,
-      'RECETTE SYNTHETIQUE ANNULEE : correction canonique du taux 20 vers 18',
-      'ETABLISSEMENT',NULL,18,'ANNULER_REEMETTRE');
+      'RECETTE SYNTHETIQUE ANNULEE : correction canonique du taux',
+      'ETABLISSEMENT',v_cas.heures_ajustees,v_cas.taux_ajuste,'ANNULER_REEMETTRE');
     v_remplacement:=NULLIF(v_resultat->>'nouvelle_facture_id','')::uuid;
     IF v_resultat->'success' IS DISTINCT FROM 'true'::jsonb OR v_remplacement IS NULL
       OR v_resultat->>'action_financiere' IS DISTINCT FROM 'ANNULER_REEMETTRE'
       OR NOT EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id=v_honoraire AND statut='REMPLACEE' AND montant_ht=80)
       OR NOT EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id=v_remplacement AND statut='BROUILLON'
         AND nature_correction='REMPLACEMENT' AND type_document='FACTURE' AND facture_precedente_id=v_honoraire
-        AND montant_ht=72 AND montant_tva=0 AND montant_ttc=72
-        AND quantite_heures_snapshot=4 AND taux_horaire_snapshot=18
+        AND montant_ht=v_cas.honoraires AND montant_tva=0 AND montant_ttc=v_cas.honoraires
+        AND quantite_heures_snapshot=COALESCE(v_cas.heures_ajustees,4) AND taux_horaire_snapshot=v_cas.taux
         AND periode_debut=v_semaine AND periode_fin=v_semaine+6)
     THEN RAISE EXCEPTION 'F1 rectification canonique incorrecte : %',v_resultat; END IF;
-    IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND statut='EN_COURS'
-      AND duree_heures=8 AND taux_horaire_base=18 AND net_a_payer=144 AND montant_commission_ht=21.60)
+    IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND statut=v_statut
+      AND duree_heures=v_duree_mission AND taux_horaire_base=v_cas.taux AND total_brut=v_cas.net_global AND net_a_payer=v_cas.net_global
+      AND montant_commission_ht=v_cas.avant_ht AND montant_commission_tva=v_cas.avant_tva
+      AND montant_commission_ttc=v_cas.avant_ttc)
     THEN RAISE EXCEPTION 'F1 rectification : mission incohérente AVANT commission remplacement'; END IF;
     PERFORM set_config('request.jwt.claim.sub','',true);
     PERFORM set_config('request.jwt.claim.role','service_role',true);
     PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
     PERFORM public.fn_emettre_document_facturation_honoraires(v_remplacement,'fixture-f1-remplacement.pdf','fixture-f1-remplacement.xml');
+    -- Les agrégats canoniques existent déjà avant le helper documentaire.
+    SELECT jsonb_build_array(total_brut,net_a_payer,montant_commission_ht,montant_commission_tva,montant_commission_ttc)
+      INTO v_financier_avant FROM public.missions WHERE id=v_mission;
+    PERFORM set_config('request.jwt.claims','{"role":"authenticated"}',true);
+    BEGIN
+      PERFORM public.fn_preparer_commission_remplacement_honoraires(v_remplacement);
+      RAISE EXCEPTION 'F1 rectification : remplacement non-service accepté';
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+    PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
     v_resultat:=public.fn_preparer_commission_remplacement_honoraires(v_remplacement);
     v_commission_remplacement:=(v_resultat->>'facture_id')::uuid;
     IF NOT EXISTS(SELECT 1 FROM public.factures WHERE id=v_commission AND statut='REMPLACEE')
       OR NOT EXISTS(SELECT 1 FROM public.factures WHERE id=v_commission_remplacement AND statut='EMISE'
         AND facture_precedente_id=v_commission AND facture_honoraire_id=v_remplacement
-        AND montant_ht=10.80 AND montant_tva=2.16 AND montant_ttc=12.96)
+        AND montant_ht=v_cas.commission_ht AND montant_tva=v_cas.commission_tva AND montant_ttc=v_cas.commission_ttc)
     THEN RAISE EXCEPTION 'F1 rectification : paire de commissions incorrecte'; END IF;
     SELECT net_a_payer,montant_commission_ht INTO v_net_global,v_commission_globale
       FROM public.missions WHERE id=v_mission;
-    -- Invariant indépendant : 8 h × 18 = 144, commission de 15 % = 21,60.
-    -- Ne jamais adapter cet attendu à un résultat 20,40 (double delta de -1,20).
-    IF v_net_global IS DISTINCT FROM 144 OR v_commission_globale IS DISTINCT FROM 21.60 THEN
-      RAISE EXCEPTION 'F1_RECTIF_GLOBAL_COMMISSION_INCOHERENTE net attendu=144 obtenu=% ; commission HT attendue=21.60 obtenue=%',v_net_global,v_commission_globale;
+    -- Le cas rouge initial reste 8 h × 18 = 144, commission de 15 % = 21,60.
+    -- Le cas symétrique est 8 h × 22 = 176, commission de 15 % = 26,40.
+    IF v_net_global IS DISTINCT FROM v_cas.net_global OR v_commission_globale IS DISTINCT FROM v_cas.globale_ht THEN
+      RAISE EXCEPTION 'F1_RECTIF_GLOBAL_COMMISSION_INCOHERENTE net attendu=% obtenu=% ; commission HT attendue=% obtenue=%',
+        v_cas.net_global,v_net_global,v_cas.globale_ht,v_commission_globale;
     END IF;
+    IF (v_cas.heures_ajustees IS NULL AND v_financier_avant IS DISTINCT FROM (SELECT jsonb_build_array(total_brut,net_a_payer,
+      montant_commission_ht,montant_commission_tva,montant_commission_ttc) FROM public.missions WHERE id=v_mission))
+      OR (SELECT jsonb_build_array(total_brut,net_a_payer,montant_commission_ht,montant_commission_tva,montant_commission_ttc)
+        FROM public.missions WHERE id=v_mission) IS DISTINCT FROM jsonb_build_array(v_cas.net_global,v_cas.net_global,
+          v_cas.globale_ht,v_cas.globale_tva,v_cas.globale_ttc)
+      OR (SELECT commission_a_recalculer FROM public.missions WHERE id=v_mission) IS DISTINCT FROM false
+    THEN RAISE EXCEPTION 'F1 rectification : agrégats inattendus, cas %',v_cas.nom; END IF;
+    SELECT to_jsonb(m) INTO v_mission_apres FROM public.missions m WHERE id=v_mission;
     -- Idempotence SQL seulement ; aucun replay de l'Edge qui crée une version.
     v_rejeu:=public.fn_preparer_commission_remplacement_honoraires(v_remplacement);
-    IF v_rejeu->'existing' IS DISTINCT FROM 'true'::jsonb OR v_rejeu->>'facture_id'<>v_commission_remplacement::text
-      OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND net_a_payer=144 AND montant_commission_ht=21.60)
+    IF v_rejeu->'existing' IS DISTINCT FROM 'true'::jsonb OR v_rejeu->>'facture_id' IS DISTINCT FROM v_commission_remplacement::text
+      OR (SELECT count(*) FROM public.factures WHERE facture_honoraire_id=v_remplacement)<>1
+      OR v_mission_apres IS DISTINCT FROM (SELECT to_jsonb(m) FROM public.missions m WHERE id=v_mission)
     THEN RAISE EXCEPTION 'F1 rectification : réparation non idempotente'; END IF;
     RAISE EXCEPTION USING ERRCODE='JF101',MESSAGE='F1_ANNULATION_ATTENDUE';
   EXCEPTION WHEN SQLSTATE 'JF101' THEN
@@ -284,6 +352,7 @@ BEGIN
   IF NOT v_annule OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab,v_admin))
     OR EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=v_equipe)
     OR EXISTS(SELECT 1 FROM public.litiges WHERE id=v_litige)
+    OR EXISTS(SELECT 1 FROM public.presences WHERE id=v_presence OR mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant)
     OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=v_etab)
     OR EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission)
@@ -297,6 +366,7 @@ BEGIN
     OR EXISTS(SELECT 1 FROM public.conformite_travail WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.suivi_conversion_3200h WHERE soignant_id=v_soignant)
   THEN RAISE EXCEPTION 'F1 : annulation transactionnelle non prouvée'; END IF;
+  END LOOP;
 END $f1$;
-SELECT 'F1_RECTIFICATION_SQL_ROLLBACK' AS preuve,true AS annule;
+SELECT 'F1_RECTIFICATION_SQL_ROLLBACK' AS preuve,true AS annule,4 AS scenarios;
 ROLLBACK;

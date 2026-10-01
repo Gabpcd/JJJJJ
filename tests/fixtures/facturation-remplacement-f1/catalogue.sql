@@ -12,6 +12,7 @@ SELECT
   jsonb_build_object(
     'auth_users',(SELECT count(*) FROM auth.users),'soignants',(SELECT count(*) FROM public.soignants),
     'etablissements',(SELECT count(*) FROM public.etablissements),'missions',(SELECT count(*) FROM public.missions),
+    'presences',(SELECT count(*) FROM public.presences),
     'creneaux',(SELECT count(*) FROM public.mission_creneaux),'equipes',(SELECT count(*) FROM public.equipe_admin),
     'litiges',(SELECT count(*) FROM public.litiges),'honoraires',(SELECT count(*) FROM public.factures_honoraires),
     'commissions',(SELECT count(*) FROM public.factures),'audit_factures',(SELECT count(*) FROM public.invoice_audit_log),
@@ -25,6 +26,7 @@ SELECT
   (SELECT count(*) FROM auth.users WHERE id::text LIKE 'f131000%')
     +(SELECT count(*) FROM public.missions WHERE id='f1310003-3000-4000-8000-000000000003')
     +(SELECT count(*) FROM public.equipe_admin WHERE id='f1310007-7000-4000-8000-000000000007')
+    +(SELECT count(*) FROM public.presences WHERE id='f1310009-9000-4000-8000-000000000009' OR mission_id='f1310003-3000-4000-8000-000000000003')
     +(SELECT count(*) FROM public.litiges WHERE id='f1310008-8000-4000-8000-000000000008')
     +(SELECT count(*) FROM public.factures_honoraires WHERE mission_id='f1310003-3000-4000-8000-000000000003')
     +(SELECT count(*) FROM public.factures WHERE mission_id='f1310003-3000-4000-8000-000000000003') AS residus;
