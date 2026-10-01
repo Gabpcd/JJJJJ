@@ -1,7 +1,9 @@
 """Vrais verrous PostgreSQL 17 ; schéma minimal isolé, aucun Supabase/Stripe.
 
 Ne prouve pas RLS, callbacks fournisseur ou graphe métier complet. Les deux
-triggers et la RPC de claim sont chargés byte-identiques depuis le lot testé.
+triggers et les deux versions du claim sont chargés byte-identiques depuis le lot
+testé. La barrière reste fermée dans la livraison ; ce banc seul l’ouvre dans sa
+base éphémère après avoir vérifié les refus ancien client / protocole fermé.
 """
 import hashlib
 import json
@@ -29,18 +31,23 @@ assert sql("SELECT count(*) FROM pg_tables WHERE schemaname='public'") == '0'
 migration = (ROOT/'supabase/migrations/20261001122318_lier_paiements_liberaux_aux_factures.sql').read_text()
 snapshot = (ROOT/'supabase/schema/public.sql').read_text()
 garde = migration[migration.index('CREATE OR REPLACE FUNCTION private.fn_garder_paiement_liberal_facture()'):migration.index('CREATE OR REPLACE FUNCTION public.fn_declarer_paiement_soignant_v2(')]
-claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim"[^;]+;', snapshot, re.S)[0]
+old_claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim"[^;]+;', snapshot, re.S)[0]
+claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"[^;]+;', snapshot, re.S)[0]
+claim_acl = re.findall(r'(?:REVOKE|GRANT) [^\n]* ON FUNCTION public\.fn_stripe_payment_flow_claim_connect_v1\(text,text,uuid,uuid\)[^\n]*;', snapshot)
+assert len(claim_acl) == 2
+release_migration = (ROOT/'supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql').read_text()
+gate = re.search(r"CREATE TABLE private\.stripe_connect_release_gate \(.*?INSERT INTO private\.stripe_connect_release_gate\(protocol,enabled\) VALUES\('CONNECT_PRETRANSFER_V1',false\);", release_migration, re.S)[0]
 confirm = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_confirmer_paiement_soignant"\(.*?\nALTER FUNCTION "public"\."fn_confirmer_paiement_soignant"[^;]+;', snapshot, re.S)[0]
 sql((ROOT/'tests/fixtures/paiements-concurrence-pg17.sql').read_text())
-print(json.dumps({'garde_sha256': hashlib.sha256(garde.encode()).hexdigest(), 'claim_sha256': hashlib.sha256(claim.encode()).hexdigest(), 'postgres': 17}), flush=True)
+print(json.dumps({'garde_sha256': hashlib.sha256(garde.encode()).hexdigest(), 'claim_sha256': hashlib.sha256(claim.encode()).hexdigest(), 'old_claim_sha256': hashlib.sha256(old_claim.encode()).hexdigest(), 'gate_sha256': hashlib.sha256(gate.encode()).hexdigest(), 'postgres': 17}), flush=True)
 M='f1530000-0000-4000-8000-000000000001'
 S='f1530000-0000-4000-8000-000000000002'
 E='f1530000-0000-4000-8000-000000000003'
 H='f1530000-0000-4000-8000-000000000004'
 F='f1530000-0000-4000-8000-000000000005'
 MANUAL=f"INSERT INTO public.paiements_soignant(mission_id,soignant_id,etablissement_id,facture_honoraire_id,montant_net) VALUES('{M}','{S}','{E}','{H}',80);"
-INVOICE=f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:{H}','{F}',NULL);"
-MISSION=f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_MISSION','connect:{M}',NULL,'{M}');"
+INVOICE=f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:{H}','{F}',NULL);"
+MISSION=f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_MISSION','connect:{M}',NULL,'{M}');"
 
 def seed():
     sql(f"""TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions;
@@ -73,8 +80,27 @@ INSERT INTO public.paiements_soignant(mission_id,soignant_id,etablissement_id,mo
   VALUES('{ML}','{S}','{E}',80,'CONFIRME','tr_F153ancien',true);
 INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token,stripe_checkout_session_id,stripe_payment_intent_id)
   VALUES('MISSION:{ML}','CONNECT_MISSION','connect:{ML}','cs_F153ancien','pi_F153ancien');""")
-sql(garde + '\n' + claim + '\n' + confirm + '\n' + legacy)
-# Le claim exact ancien ne permet pas d'engager Stripe au-dessus du virement.
+sql(garde + '\n' + gate + '\n' + old_claim + '\n' + claim + '\n' + '\n'.join(claim_acl) + '\n' + confirm + '\n' + legacy)
+# Livraison fermée et ancienne signature refusée, sans changer les lignes
+# historiques. L'ouverture ci-dessous ne concerne que cette base loopback CI.
+def claim_refused(statement, code):
+    result = subprocess.run(PSQL,input=CTX+statement,text=True,capture_output=True,timeout=15)
+    assert result.returncode != 0 and code in result.stderr and '55000' in result.stderr,result.stderr
+
+claim_photo = "SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(c) ORDER BY resource_key) FROM public.stripe_payment_flow_claims c),(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.paiements_soignant p))"
+photo = sql(claim_photo)
+assert sql("SELECT count(*)=1 AND bool_and(enabled IS FALSE) FROM private.stripe_connect_release_gate") == 't'
+for statement in [INVOICE,MISSION]:
+    claim_refused(statement.replace('fn_stripe_payment_flow_claim_connect_v1','fn_stripe_payment_flow_claim'),'CONNECT_CLIENT_VERSION_REQUIRED')
+    claim_refused(statement,'CONNECT_RELEASE_CLOSED')
+assert sql(claim_photo) == photo
+sql("UPDATE private.stripe_connect_release_gate SET enabled=true WHERE protocol='CONNECT_PRETRANSFER_V1';")
+for statement in [INVOICE,MISSION]:
+    claim_refused(statement.replace('fn_stripe_payment_flow_claim_connect_v1','fn_stripe_payment_flow_claim'),'CONNECT_CLIENT_VERSION_REQUIRED')
+assert sql(claim_photo) == photo
+print('ANCIEN_CLIENT_REFUSE_AVANT_APRES_OUVERTURE_EPHEMERE_ET_NOUVEAU_FERME_SANS_EFFET',flush=True)
+
+# Le claim versionné exact ne permet pas d'engager Stripe au-dessus du virement.
 r=subprocess.run(PSQL,input=CTX+INVOICE,text=True,capture_output=True,timeout=15)
 assert r.returncode!=0 and 'PAIEMENT_FACTURE_DEJA_DECLARE' in r.stderr and '23514' in r.stderr,r.stderr
 result=sql(f"SELECT set_config('request.jwt.claims','{{\"role\":\"authenticated\",\"sub\":\"{S}\"}}',false); SELECT public.fn_confirmer_paiement_soignant((SELECT id FROM public.paiements_soignant WHERE mission_id='{M}'));").splitlines()[-1]
@@ -84,7 +110,7 @@ assert sql(f"SELECT statut FROM public.factures_honoraires WHERE id='{H}'")=='EM
 print('HISTORIQUE_NULL_FK_CONFIRME_SANS_ATTRIBUTION',flush=True)
 # Le même événement acquis retrouve sa FH explicite et ne réattribue pas PS.
 old_payment=sql(f"SELECT row_to_json(p) FROM public.paiements_soignant p WHERE mission_id='{ML}'")
-assert json.loads(sql(CTX+f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_MISSION','connect:{ML}',NULL,'{ML}');").splitlines()[-1])['acquired'] is True
+assert json.loads(sql(CTX+f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_MISSION','connect:{ML}',NULL,'{ML}');").splitlines()[-1])['acquired'] is True
 legacy_call=f"SELECT public.fn_stripe_connect_rapprocher_local('{ML}','{S}','{E}','{HL}','{FL}','cs_F153ancien','pi_F153ancien','ch_F153ancien','tr_F153ancien',8000,1440,9440);"
 for _ in range(2):
     assert json.loads(sql(CTX+legacy_call).splitlines()[-1])['success'] is True
@@ -197,7 +223,7 @@ sql(f"""INSERT INTO public.factures_honoraires(id,mission_id,soignant_id,etablis
 VALUES('{H2}','{M}','{S}','{E}','FACTURE','EMISE',60,false,current_date-8);
 INSERT INTO public.factures(id,mission_id,etablissement_id,facture_honoraire_id,type_document,statut) VALUES('{F2}','{M}','{E}','{H2}','FACTURE','EMISE');""")
 assert json.loads(sql(CTX+INVOICE).splitlines()[-1])['acquired'] is True
-second=f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:{H2}','{F2}',NULL);"
+second=f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:{H2}','{F2}',NULL);"
 assert json.loads(sql(CTX+second).splitlines()[-1])['acquired'] is True
 assert sql('SELECT count(*) FROM public.stripe_payment_flow_claims')=='2'
 print('DEUX_PIECES_DISTINCTES_SANS_CONFLIT',flush=True)
