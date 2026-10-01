@@ -1429,8 +1429,14 @@ export async function handleStripeWebhook(
               || validatedTransferClaim.stripe_charge_id === null)) {
               let transferLinkQuery = supabaseAdmin
                 .from("stripe_transfers")
-                .update({ facture_honoraire_id: factureHonorairesId,
-                  stripe_payment_intent_id: paymentIntentId, stripe_charge_id: chargeId })
+                .update({
+                  ...(validatedTransferClaim.facture_honoraire_id === null
+                    ? { facture_honoraire_id: factureHonorairesId } : {}),
+                  ...(validatedTransferClaim.stripe_payment_intent_id === null
+                    ? { stripe_payment_intent_id: paymentIntentId } : {}),
+                  ...(validatedTransferClaim.stripe_charge_id === null
+                    ? { stripe_charge_id: chargeId } : {}),
+                })
                 .eq("id", validatedTransferClaim.id)
                 .eq("mission_id", missionId)
                 .eq("soignant_id", soignantId)

@@ -47644,15 +47644,26 @@ CREATE OR REPLACE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"() RET
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
+DECLARE v_fh public.factures_honoraires%ROWTYPE;
 BEGIN
-  IF NEW.mission_id IS NOT NULL AND NEW.stripe_payment_intent_id IS NOT NULL
-     AND NEW.stripe_payment_intent_id <> '' THEN
-    UPDATE public.factures_honoraires
-    SET stripe_payment_intent_id = NEW.stripe_payment_intent_id
-    WHERE mission_id = NEW.mission_id
-      AND COALESCE(type_document, 'FACTURE') = 'FACTURE'
-      AND (stripe_payment_intent_id IS NULL
-           OR stripe_payment_intent_id <> NEW.stripe_payment_intent_id);
+  -- Une ancienne trace mission-only ne permet pas de choisir une facture.
+  IF NEW.facture_honoraire_id IS NULL OR NEW.stripe_payment_intent_id IS NULL
+     OR NEW.stripe_payment_intent_id = '' THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_fh FROM public.factures_honoraires
+    WHERE id=NEW.facture_honoraire_id FOR UPDATE;
+  IF v_fh.id IS NULL OR v_fh.mission_id IS DISTINCT FROM NEW.mission_id
+     OR v_fh.soignant_id IS DISTINCT FROM NEW.soignant_id
+     OR v_fh.etablissement_id IS DISTINCT FROM NEW.etablissement_id
+     OR COALESCE(v_fh.type_document,'FACTURE') <> 'FACTURE'
+     OR (v_fh.stripe_payment_intent_id IS NOT NULL
+         AND v_fh.stripe_payment_intent_id <> NEW.stripe_payment_intent_id) THEN
+    RAISE EXCEPTION 'Trace Stripe incohérente avec la facture explicite' USING ERRCODE='23514';
+  END IF;
+  IF v_fh.stripe_payment_intent_id IS NULL THEN
+    UPDATE public.factures_honoraires SET stripe_payment_intent_id=NEW.stripe_payment_intent_id
+      WHERE id=v_fh.id;
   END IF;
   RETURN NEW;
 END;

@@ -6,7 +6,8 @@ BEGIN
   FOR r IN SELECT * FROM (VALUES
     ('fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)','6fb67c1130997254cf44a0629363ecff','8c3c151f43cada391532529ea30384e0','8d7a283f517d1a6a091d8e89036ec878','5838b24137ed6a5c3d339baea5d8d079','search_path=pg_catalog, public, auth','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}','MIXTE_TENANT_ADMIN'),
     ('fn_declarer_paiement_facture_soignant(uuid,numeric,text,text,date,boolean)','1158b95fdf7a8efa7fb307a9aec29fe9','76ef2eca4bfbd9ab1c3d1e684d2938c5','4a3cad7cf864927ebbd02ed7c85f0239','6adb4ee4d8ce4e93bb34e8139d61759b','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}','RPC_UTILISATEUR_AUTH_INTERNE'),
-    ('fn_stripe_connect_rapprocher_local(uuid,uuid,uuid,uuid,uuid,text,text,text,text,integer,integer,integer,timestamp with time zone)','d9e11dfde160642e08c1795802cbd0af','3be6ed641d4275e6232d475043fa6304','0ebde09e402e76b7da5adacaff3f42a6','7f6e56bcf109b4f6901da91fb5dc9d7c','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE')
+    ('fn_stripe_connect_rapprocher_local(uuid,uuid,uuid,uuid,uuid,text,text,text,text,integer,integer,integer,timestamp with time zone)','d9e11dfde160642e08c1795802cbd0af','3be6ed641d4275e6232d475043fa6304','0ebde09e402e76b7da5adacaff3f42a6','7f6e56bcf109b4f6901da91fb5dc9d7c','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE'),
+    ('fn_propage_stripe_payment_intent_trg()','14ff393ce7e1c73229c9b4c89b6c0d8d','b055f559832a40ceddf3dc326b7cce29','9911512ffafb78721e9320f4867f46f4','970a7e8cfaaba4f79930aaa06992bd73','search_path=public, extensions','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE')
   ) AS attendu(signature,ancien_corps,nouveau_corps,ancienne_definition,nouvelle_definition,configuration,acl,categorie) LOOP
     SELECT * INTO p FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
     IF md5(pg_get_functiondef(p.oid)) NOT IN (r.ancienne_definition,r.nouvelle_definition)
@@ -18,7 +19,7 @@ BEGIN
         WHERE signature=r.signature AND (definition_md5 IS DISTINCT FROM md5(p.prosrc)
           OR categorie IS DISTINCT FROM r.categorie))
       OR EXISTS (SELECT 1 FROM private.security_definer_inventory WHERE signature='public.'||r.signature)
-      OR (r.signature NOT LIKE 'fn_stripe_connect_rapprocher_local(%' AND NOT EXISTS
+      OR (r.signature NOT LIKE 'fn_stripe_connect_rapprocher_local(%' AND r.signature<>'fn_propage_stripe_payment_intent_trg()' AND NOT EXISTS
         (SELECT 1 FROM private.security_definer_inventory WHERE signature=r.signature)) THEN
       RAISE EXCEPTION 'Paiement : définition, droits ou inventaire inattendus (%)',r.signature;
     END IF;
@@ -33,6 +34,12 @@ BEGIN
     OR md5(pg_get_functiondef('public.fn_protect_stripe_transfer()'::regprocedure))
        IS DISTINCT FROM '39b6e0f0439e4efc59ac4c6bfe0d1e08' THEN
     RAISE EXCEPTION 'Paiement : prérequis claims/transferts différent';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgfoid='public.fn_propage_stripe_payment_intent_trg()'::regprocedure AND NOT tgisinternal)<>1
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='trg_propage_stripe_payment_intent'
+      AND tgrelid='public.stripe_transfers'::regclass AND tgenabled='O' AND NOT tgisinternal
+      AND pg_get_triggerdef(oid)='CREATE TRIGGER trg_propage_stripe_payment_intent AFTER INSERT OR UPDATE OF stripe_payment_intent_id, mission_id ON public.stripe_transfers FOR EACH ROW EXECUTE FUNCTION fn_propage_stripe_payment_intent_trg()') THEN
+    RAISE EXCEPTION 'Paiement : trigger de propagation PI inattendu';
   END IF;
 END;
 $preflight$;
@@ -839,13 +846,45 @@ BEGIN
   );
 END;
 $function$;
+
+CREATE OR REPLACE FUNCTION public.fn_propage_stripe_payment_intent_trg()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE v_fh public.factures_honoraires%ROWTYPE;
+BEGIN
+  -- Une ancienne trace mission-only ne permet pas de choisir une facture.
+  IF NEW.facture_honoraire_id IS NULL OR NEW.stripe_payment_intent_id IS NULL
+     OR NEW.stripe_payment_intent_id = '' THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_fh FROM public.factures_honoraires
+    WHERE id=NEW.facture_honoraire_id FOR UPDATE;
+  IF v_fh.id IS NULL OR v_fh.mission_id IS DISTINCT FROM NEW.mission_id
+     OR v_fh.soignant_id IS DISTINCT FROM NEW.soignant_id
+     OR v_fh.etablissement_id IS DISTINCT FROM NEW.etablissement_id
+     OR COALESCE(v_fh.type_document,'FACTURE') <> 'FACTURE'
+     OR (v_fh.stripe_payment_intent_id IS NOT NULL
+         AND v_fh.stripe_payment_intent_id <> NEW.stripe_payment_intent_id) THEN
+    RAISE EXCEPTION 'Trace Stripe incohérente avec la facture explicite' USING ERRCODE='23514';
+  END IF;
+  IF v_fh.stripe_payment_intent_id IS NULL THEN
+    UPDATE public.factures_honoraires SET stripe_payment_intent_id=NEW.stripe_payment_intent_id
+      WHERE id=v_fh.id;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
 DO $inventory$
 DECLARE r record; p record;
 BEGIN
   FOR r IN SELECT * FROM (VALUES
     ('fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)','6fb67c1130997254cf44a0629363ecff','8c3c151f43cada391532529ea30384e0','8d7a283f517d1a6a091d8e89036ec878','5838b24137ed6a5c3d339baea5d8d079','search_path=pg_catalog, public, auth','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}','MIXTE_TENANT_ADMIN'),
     ('fn_declarer_paiement_facture_soignant(uuid,numeric,text,text,date,boolean)','1158b95fdf7a8efa7fb307a9aec29fe9','76ef2eca4bfbd9ab1c3d1e684d2938c5','4a3cad7cf864927ebbd02ed7c85f0239','6adb4ee4d8ce4e93bb34e8139d61759b','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}','RPC_UTILISATEUR_AUTH_INTERNE'),
-    ('fn_stripe_connect_rapprocher_local(uuid,uuid,uuid,uuid,uuid,text,text,text,text,integer,integer,integer,timestamp with time zone)','d9e11dfde160642e08c1795802cbd0af','3be6ed641d4275e6232d475043fa6304','0ebde09e402e76b7da5adacaff3f42a6','7f6e56bcf109b4f6901da91fb5dc9d7c','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE')
+    ('fn_stripe_connect_rapprocher_local(uuid,uuid,uuid,uuid,uuid,text,text,text,text,integer,integer,integer,timestamp with time zone)','d9e11dfde160642e08c1795802cbd0af','3be6ed641d4275e6232d475043fa6304','0ebde09e402e76b7da5adacaff3f42a6','7f6e56bcf109b4f6901da91fb5dc9d7c','search_path=public, pg_temp','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE'),
+    ('fn_propage_stripe_payment_intent_trg()','14ff393ce7e1c73229c9b4c89b6c0d8d','b055f559832a40ceddf3dc326b7cce29','9911512ffafb78721e9320f4867f46f4','970a7e8cfaaba4f79930aaa06992bd73','search_path=public, extensions','{postgres=X/postgres,service_role=X/postgres}','SERVICE_ONLY_REVOQUE')
   ) AS attendu(signature,ancien_corps,nouveau_corps,ancienne_definition,nouvelle_definition,configuration,acl,categorie) LOOP
     SELECT * INTO p FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
     IF md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.nouvelle_definition
@@ -859,12 +898,12 @@ BEGIN
       OR EXISTS (SELECT 1 FROM private.security_definer_inventory WHERE signature='public.'||r.signature) THEN
       RAISE EXCEPTION 'Paiement : installation inattendue (%)',r.signature;
     END IF;
-    IF r.signature LIKE 'fn_stripe_connect_rapprocher_local(%' THEN
+    IF r.signature LIKE 'fn_stripe_connect_rapprocher_local(%' OR r.signature='fn_propage_stripe_payment_intent_trg()' THEN
       -- Absence constatée dans le catalogue LIVE ; entrée unique et nommée,
       -- après preuve du corps, du propriétaire et des ACL service seules.
       INSERT INTO private.security_definer_inventory(signature,categorie,definition_md5,justification)
       VALUES(r.signature,'SERVICE_ONLY_REVOQUE',md5(p.prosrc),
-        'Rapprochement Connect service : trace acquise, pièce explicite, montants et parties validés ; aucun rattachement de paiement historique.')
+        CASE WHEN r.signature='fn_propage_stripe_payment_intent_trg()' THEN 'Trigger Stripe service : PI propagé uniquement à la facture explicitement liée, mêmes parties ; aucun choix pour une trace historique sans FK.' ELSE 'Rapprochement Connect service : trace acquise, pièce explicite, montants et parties validés ; aucun rattachement de paiement historique.' END)
       ON CONFLICT(signature) DO UPDATE SET definition_md5=excluded.definition_md5,recense_le=now()
         WHERE private.security_definer_inventory.definition_md5 IN(r.ancien_corps,r.nouveau_corps)
           AND private.security_definer_inventory.categorie=r.categorie;

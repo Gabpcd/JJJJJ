@@ -13,6 +13,7 @@ const S='f1540000-0000-4000-8000-000000000002';
 const E='f1540000-0000-4000-8000-000000000003';
 const H='f1540000-0000-4000-8000-000000000004';
 const F='f1540000-0000-4000-8000-000000000005';
+const H2='f1540000-0000-4000-8000-000000000006';
 function simulation(options: { fk?: string | null; pi?: string | null; charge?: string | null;
   missing?: boolean; race?: string; pending?: boolean; invoice?: boolean; expiration?: 'INVOICE' | 'MISSION' }={}) {
   const metadata={type:'CONNECT_MISSION_PAYMENT',mission_id:M,soignant_id:S,etablissement_id:E,
@@ -36,7 +37,9 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
     stripe_connect_onboarding:[{soignant_id:S,stripe_account_id:'acct_f154',statut:'COMPLET'}],
     stripe_transfers:options.missing?[]:[st],
     factures_honoraires:[{id:H,mission_id:M,soignant_id:S,etablissement_id:E,montant_ttc:80,statut:'PAYEE',
-      stripe_payment_intent_id:'pi_f154',periode_debut:'2026-09-01',periode_fin:'2026-09-07',est_facture_finale_mission:true}],
+      stripe_payment_intent_id:'pi_f154',periode_debut:'2026-09-01',periode_fin:'2026-09-07',est_facture_finale_mission:true},
+      {id:H2,mission_id:M,soignant_id:S,etablissement_id:E,montant_ttc:60,statut:'PAYEE',
+        stripe_payment_intent_id:'pi_f154_autre',periode_debut:'2026-08-01',periode_fin:'2026-08-07',est_facture_finale_mission:false}],
     factures:[{id:F,mission_id:M,etablissement_id:E,facture_honoraire_id:H,type_document:'FACTURE',statut:'PAYEE',
       montant_ht:12,montant_tva:2.4,montant_ttc:14.4,stripe_payment_intent_id:'pi_f154'}],
     paiements_soignant:[],paiements_escrow:[],paiements_mission:[],litiges:[],
@@ -129,12 +132,18 @@ describe('Webhook réel : pièce explicite et reprise sans second transfert',()=
   it.each([
     {fk:null,pi:null,charge:null},{fk:H,pi:null,charge:null},
     {fk:null,pi:'pi_f154',charge:'ch_f154'},{fk:H,pi:'pi_f154',charge:'ch_f154'},
+    {fk:H,pi:'pi_f154',charge:null},{fk:H,pi:null,charge:'ch_f154'},
     {fk:H,pi:null,charge:null,invoice:true},
   ])('reprend les champs manquants avec les objets vérifiés %j',async values=>{
-    const s=simulation(values);const r=await s.run();
+    const s=simulation(values);const other=structuredClone(s.db.factures_honoraires.find(h=>h.id===H2));const r=await s.run();
     expect(s.state.unknown).toEqual([]);expect(r.status,s.state.logs.join('\n')).toBe(200);expect(await r.json()).toMatchObject({received:true});
     expect(s.state.create).toBe(0);expect(s.state.retrieve).toBe(1);expect(s.state.processed).toBe(true);
     expect(s.db.stripe_transfers[0]).toMatchObject({facture_honoraire_id:H,stripe_payment_intent_id:'pi_f154',stripe_charge_id:'ch_f154'});
+    const missingFields=Object.entries({facture_honoraire_id:values.fk,stripe_payment_intent_id:values.pi,
+      stripe_charge_id:values.charge}).filter(([,value])=>value===null).map(([key])=>key).sort();
+    const patches=s.state.writes.filter(w=>w.table==='stripe_transfers' && w.operation==='update');
+    expect(patches.map(w=>Object.keys(w.patch).sort())).toEqual(missingFields.length?[missingFields]:[]);
+    expect(s.db.factures_honoraires.find(h=>h.id===H2)).toEqual(other);
     expect(s.db.paiements_soignant).toHaveLength(1);expect(s.db.paiements_soignant[0]).toMatchObject({facture_honoraire_id:H,montant_net:80});
     await s.run();expect(s.db.paiements_soignant).toHaveLength(1);expect(s.state.create).toBe(0);
   });

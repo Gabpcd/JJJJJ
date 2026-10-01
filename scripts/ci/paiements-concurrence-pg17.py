@@ -201,6 +201,23 @@ second=f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-i
 assert json.loads(sql(CTX+second).splitlines()[-1])['acquired'] is True
 assert sql('SELECT count(*) FROM public.stripe_payment_flow_claims')=='2'
 print('DEUX_PIECES_DISTINCTES_SANS_CONFLIT',flush=True)
+# Vrai trigger de propagation : deux FH distinctes, aucun choix historique.
+pi = re.search(r'CREATE OR REPLACE FUNCTION public\.fn_propage_stripe_payment_intent_trg\(\).*?\$function\$;', migration, re.S)[0]
+pi_trigger = re.search(r'CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent"[^;]+;', snapshot)[0]
+sql(pi+'\n'+pi_trigger)
+sql(f"UPDATE public.factures_honoraires SET stripe_payment_intent_id='pi_F153premier' WHERE id='{H}';")
+before_pi=sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H}'")
+sql(CTX+f"INSERT INTO public.stripe_transfers(mission_id,soignant_id,etablissement_id,facture_honoraire_id,stripe_payment_intent_id) VALUES('{M}','{S}','{E}','{H2}','pi_F153second');")
+assert sql(f"SELECT stripe_payment_intent_id FROM public.factures_honoraires WHERE id='{H2}'")=='pi_F153second'
+other_pi=sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H2}'")
+trace=sql(CTX+f"INSERT INTO public.stripe_transfers(mission_id,soignant_id,etablissement_id,stripe_payment_intent_id) VALUES('{M}','{S}','{E}','pi_F153premier') RETURNING id;").splitlines()[-1]
+sql(CTX+f"UPDATE public.stripe_transfers SET facture_honoraire_id='{H}' WHERE id='{trace}'; UPDATE public.stripe_transfers SET stripe_charge_id='ch_F153' WHERE id='{trace}'; UPDATE public.stripe_transfers SET stripe_payment_intent_id=NULL WHERE id='{trace}'; UPDATE public.stripe_transfers SET stripe_payment_intent_id='pi_F153premier' WHERE id='{trace}';")
+for change in ["stripe_payment_intent_id='pi_F153contradiction'",f"stripe_payment_intent_id='pi_F153premier',soignant_id='{E}'"]:
+    r=subprocess.run(PSQL,input=CTX+f"UPDATE public.stripe_transfers SET {change} WHERE id='{trace}';",text=True,capture_output=True,timeout=20)
+    assert r.returncode!=0 and '23514' in r.stderr and 'Trace Stripe incohérente avec la facture explicite' in r.stderr,r.stderr
+assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H}'")==before_pi
+assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H2}'")==other_pi
+print('PI_DEUX_FACTURES_ISOLEES_REPARATIONS_ET_CONTRADICTIONS',flush=True)
 sql('TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions,public.journaux_audit;')
 assert sql("SELECT (SELECT count(*) FROM public.missions)+(SELECT count(*) FROM public.paiements_soignant)+(SELECT count(*) FROM public.stripe_payment_flow_claims)")=='0'
 print('PAIEMENTS_CONCURRENCE_PG17_OK : zéro fixture restante dans la base éphémère',flush=True)

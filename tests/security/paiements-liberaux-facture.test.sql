@@ -26,6 +26,7 @@ DECLARE
   v_paiement uuid;
   v_transfer uuid;
   v_avant jsonb;
+  v_autre_avant jsonb;
   v_montant numeric;
   v_colonne text;
   v_refus boolean;
@@ -394,7 +395,52 @@ BEGIN
     PERFORM set_config('request.jwt.claim.role','service_role',true);
     PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
     v_cas:=v_cas+1;
-    IF v_cas<>12 OR EXISTS(SELECT 1 FROM net.http_request_queue)
+    BEGIN
+      -- Deuxième pièce synthétique du planning futur : aucun appel d'émission.
+      INSERT INTO public.factures_honoraires(id,numero_facture,soignant_id,etablissement_id,mission_id,
+        montant_ht,montant_ttc,montant_tva,taux_tva,periode_debut,periode_fin,statut,
+        type_document,nature_correction,mode_remboursement,est_facture_finale_mission,
+        quantite_heures_snapshot,taux_horaire_snapshot)
+      VALUES(v_doublon,public.next_invoice_number(v_soignant),v_soignant,v_etab,v_mission,
+        80,80,0,0,v_semaine+14,v_semaine+20,'BROUILLON','FACTURE','ORIGINALE','N_A',false,4,20);
+      SELECT to_jsonb(h) INTO v_avant FROM public.factures_honoraires h WHERE id=v_honoraire;
+      INSERT INTO public.stripe_transfers(mission_id,facture_honoraire_id,soignant_id,etablissement_id,
+        montant_soignant,montant_commission,montant_total,statut,stripe_payment_intent_id)
+      VALUES(v_mission,v_doublon,v_soignant,v_etab,80,14.4,94.4,'EN_ATTENTE','pi_F152autre');
+      IF (SELECT stripe_payment_intent_id FROM public.factures_honoraires WHERE id=v_doublon)
+        IS DISTINCT FROM 'pi_F152autre' THEN RAISE EXCEPTION 'Paiement F152 : PI explicite non propagé'; END IF;
+      SELECT to_jsonb(h) INTO v_autre_avant FROM public.factures_honoraires h WHERE id=v_doublon;
+      -- Ancienne trace sans FK : ne choisir aucune des deux factures.
+      INSERT INTO public.stripe_transfers(mission_id,soignant_id,etablissement_id,
+        montant_soignant,montant_commission,montant_total,statut,stripe_payment_intent_id)
+      VALUES(v_mission,v_soignant,v_etab,80,14.4,94.4,'EN_ATTENTE','pi_F152synthetique') RETURNING id INTO v_transfer;
+      UPDATE public.stripe_transfers SET facture_honoraire_id=v_honoraire WHERE id=v_transfer;
+      UPDATE public.stripe_transfers SET stripe_charge_id='ch_F152synthetique' WHERE id=v_transfer;
+      UPDATE public.stripe_transfers SET stripe_payment_intent_id=NULL WHERE id=v_transfer;
+      UPDATE public.stripe_transfers SET stripe_payment_intent_id='pi_F152synthetique' WHERE id=v_transfer;
+      UPDATE public.stripe_transfers SET stripe_payment_intent_id='pi_F152synthetique' WHERE id=v_transfer;
+      IF v_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_honoraire)
+        OR v_autre_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_doublon) THEN
+        RAISE EXCEPTION 'Paiement F152 : propagation PI ou réparation altère une pièce existante'; END IF;
+      BEGIN
+        UPDATE public.stripe_transfers SET stripe_payment_intent_id='pi_F152contradictoire' WHERE id=v_transfer;
+        RAISE EXCEPTION 'Paiement F152 : PI contradictoire accepté';
+      EXCEPTION WHEN check_violation THEN
+        IF SQLERRM<>'Trace Stripe incohérente avec la facture explicite' THEN RAISE; END IF;
+      END;
+      BEGIN
+        UPDATE public.stripe_transfers SET soignant_id=v_etab,stripe_payment_intent_id='pi_F152synthetique' WHERE id=v_transfer;
+        RAISE EXCEPTION 'Paiement F152 : parties PI contradictoires acceptées';
+      EXCEPTION WHEN check_violation THEN
+        IF SQLERRM<>'Trace Stripe incohérente avec la facture explicite' THEN RAISE; END IF;
+      END;
+      IF v_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_honoraire)
+        OR v_autre_avant IS DISTINCT FROM (SELECT to_jsonb(h) FROM public.factures_honoraires h WHERE id=v_doublon) THEN
+        RAISE EXCEPTION 'Paiement F152 : refus PI avec modification partielle'; END IF;
+      RAISE EXCEPTION 'F152_PI_ANNULE' USING ERRCODE='JP158';
+    EXCEPTION WHEN SQLSTATE 'JP158' THEN IF SQLERRM<>'F152_PI_ANNULE' THEN RAISE; END IF; END;
+    v_cas:=v_cas+1;
+    IF v_cas<>13 OR EXISTS(SELECT 1 FROM net.http_request_queue)
       OR EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE facture_origine_id=v_honoraire)
       OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=v_mission) THEN
       RAISE EXCEPTION 'Paiement F152 : compte des cas ou effet sortant inattendu'; END IF;
