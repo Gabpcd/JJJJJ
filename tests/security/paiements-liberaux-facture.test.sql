@@ -326,8 +326,16 @@ BEGIN
       INSERT INTO public.missions(id,etablissement_id,intitule,profession_requise,debut_le,fin_le,
         duree_heures,taux_horaire_base,statut,soignant_assigne_id,type_contrat_recherche,type_contrat_applique,
         choix_contrat_soignant,type_paiement_soignant,mode_paiement_soignant,strategie_facturation,est_urgente)
-      VALUES(v_salarie,v_etab,'RECETTE F152 salarié synthétique','IDE',v_jour_passe+time '15:00',v_jour_passe+time '19:00',
+      VALUES(v_salarie,v_etab,'RECETTE F152 salarié synthétique','IDE',v_jour_futur+time '15:00',v_jour_futur+time '19:00',
         4,20,'TERMINEE',v_soignant,'SALARIE','SALARIE','SALARIE','BULLETIN_PAIE','DIRECT','FINALE_UNIQUE',false);
+      IF (SELECT count(*) FROM public.mission_creneaux WHERE mission_id=v_salarie AND type_creneau='PREVISIONNEL')<>1 THEN
+        RAISE EXCEPTION 'Paiement F152 : planning salarié initial inattendu'; END IF;
+      UPDATE public.mission_creneaux SET debut=v_jour_passe+time '15:00',fin=v_jour_passe+time '19:00'
+        WHERE mission_id=v_salarie AND type_creneau='PREVISIONNEL';
+      IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_salarie AND statut='TERMINEE'
+        AND debut_le=v_jour_passe+time '15:00' AND fin_le=v_jour_passe+time '19:00'
+        AND fin_le<now() AND duree_heures=4 AND total_brut=80) THEN
+        RAISE EXCEPTION 'Paiement F152 : historique salarié 4 h x 20 incohérent'; END IF;
       PERFORM set_config('request.jwt.claim.sub',v_etab::text,true);
       PERFORM set_config('request.jwt.claim.role','authenticated',true);
       PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_etab,'role','authenticated')::text,true);
