@@ -141,7 +141,7 @@ test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni r�
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(actifs.some(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
   assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || /supabase (?:link|db push)|CREATE EXTENSION/.test(step.run || '')));
-  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
 });
 test('scope YAML refuse le mélange fixture/migration avant réseau ; changements ordinaires inchangés', t => {
   const mix = scopeReel(t, ['tests/security/contrat-service-v11.test.sql', 'supabase/migrations/20260930000000_fixture.sql']);
