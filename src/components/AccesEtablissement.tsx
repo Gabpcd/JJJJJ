@@ -10,14 +10,26 @@ import { ChargementPage } from '@/components/ChargementPage';
  * Cette frontière ne donne aucun droit : les permissions métier restent vérifiées
  * par chaque rubrique et par le serveur, une fois le périmètre résolu.
  */
-export function AccesEtablissement({ children, titre, description, sansLayout = false }: {
+interface AccesEtablissementProps {
   children: ReactNode;
   titre: string;
   description: string;
   sansLayout?: boolean;
+}
+
+export function AccesEtablissement(props: AccesEtablissementProps) {
+  const scope = useEtablissementScope();
+  return <EtatAccesEtablissement {...props} scope={scope} />;
+}
+
+/** Une page qui a déjà résolu son périmètre affiche ce même état : une seconde
+ * résolution indépendante ne doit pas autoriser des enfants encore absents.
+ */
+export function EtatAccesEtablissement({ children, titre, description, sansLayout = false, scope }: AccesEtablissementProps & {
+  scope: ReturnType<typeof useEtablissementScope>;
 }) {
   usePageTitle(titre);
-  const { user, parcours, etablissementId, loading, resolved, error, retry } = useEtablissementScope();
+  const { user, parcours, etablissementId, loading, resolved, error, retry } = scope;
   const envelopper = (contenu: ReactNode) => sansLayout
     ? contenu
     : <LayoutApp role="ADMIN_ETABLISSEMENT">{contenu}</LayoutApp>;
