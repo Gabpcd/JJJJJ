@@ -50,7 +50,7 @@ jobs:
         run: node --test tests/node/load-seed-retire.node.mjs tests/node/prepare-candidatures-fixture.node.mjs tests/node/candidatures-rollback-runner.node.mjs tests/node/candidatures-staging-ui.node.mjs tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/diagnose-load-fixtures.node.mjs tests/node/prepare-dashboard-fixture.node.mjs tests/node/prepare-dashboard-pool.node.mjs tests/node/dashboard-staging-ui.node.mjs tests/node/dashboard-preview.node.mjs tests/node/wait-staging-schema.node.mjs
 
       - name: Relais candidatures — transports push simulés sans réseau
-        run: node --test tests/node/push-candidatures.node.mjs
+        run: node --test tests/node/push-candidatures.node.mjs tests/node/push-candidatures-catalogue.node.mjs
 
       - name: Tests unitaires
         run: npm test -- --reporter=dot
@@ -514,6 +514,14 @@ jobs:
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/diagnostic-financier-catalogue.mjs avant
 
+      - name: Push candidatures — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/push-candidatures-catalogue.mjs avant
+
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
         env:
@@ -639,6 +647,14 @@ jobs:
             exit 1
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+      - name: Push candidatures — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/push-candidatures-catalogue.mjs apres
 
       - name: Paiements — SELECT indépendant après succès ou échec
         if: always() && steps.migration_scope.outputs.has_migrations == 'true'
