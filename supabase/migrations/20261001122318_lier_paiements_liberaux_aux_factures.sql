@@ -1,3 +1,33 @@
+-- L'historique CREATE de staging conservait le droit PUBLIC par défaut.
+-- Seule cette variante de l'ancien corps exact peut être resserrée ; aucune
+-- tolérance PUBLIC pour un corps candidat ou un autre rôle/privilège.
+DO $acl_v2$
+DECLARE p record;
+BEGIN
+  SELECT * INTO p FROM pg_proc WHERE oid='public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure;
+  IF md5(pg_get_functiondef(p.oid)) NOT IN ('8d7a283f517d1a6a091d8e89036ec878','5838b24137ed6a5c3d339baea5d8d079')
+    OR md5(p.prosrc) NOT IN ('6fb67c1130997254cf44a0629363ecff','8c3c151f43cada391532529ea30384e0')
+    OR p.prosecdef IS DISTINCT FROM true OR pg_get_userbyid(p.proowner)<>'postgres'
+    OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, public, auth']::text[]
+    OR (p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[]
+      AND NOT (p.proacl IS NOT DISTINCT FROM '{=X/postgres,postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[]
+        AND md5(p.prosrc)='6fb67c1130997254cf44a0629363ecff'
+        AND md5(pg_get_functiondef(p.oid))='8d7a283f517d1a6a091d8e89036ec878'))
+    OR NOT EXISTS(SELECT 1 FROM private.security_definer_inventory
+      WHERE signature='fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'
+        AND categorie='MIXTE_TENANT_ADMIN' AND definition_md5=md5(p.prosrc))
+    OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+      WHERE signature='public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)') THEN
+    RAISE EXCEPTION 'Paiement : normalisation ACL v2 refusée';
+  END IF;
+  REVOKE ALL ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) FROM PUBLIC;
+  IF (SELECT proacl FROM pg_proc WHERE oid=p.oid) IS DISTINCT FROM
+      '{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[] THEN
+    RAISE EXCEPTION 'Paiement : ACL v2 finale inattendue';
+  END IF;
+END;
+$acl_v2$;
+
 -- Paiements libéraux : pièce TTC explicite, aucun recalcul ni backfill historique.
 -- Sources LIVE lues le 01/10/2026 ; exécution uniquement par le chemin de migration CI.
 DO $preflight$

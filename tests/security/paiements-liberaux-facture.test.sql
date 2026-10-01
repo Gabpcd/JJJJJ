@@ -6,6 +6,103 @@ SELECT set_config('request.jwt.claim.sub','',true);
 SELECT set_config('request.jwt.claim.role','service_role',true);
 SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
 
+-- Le vrai préflight est rejoué dans des sous-transactions annulées. Aucun
+-- corps métier n'est appelé pendant ces mutations ciblées de métadonnées.
+DO $test_acl_v2$
+DECLARE
+  v_normaliser constant text := $normaliser$
+DO $acl_v2$
+DECLARE p record;
+BEGIN
+  SELECT * INTO p FROM pg_proc WHERE oid='public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure;
+  IF md5(pg_get_functiondef(p.oid)) NOT IN ('8d7a283f517d1a6a091d8e89036ec878','5838b24137ed6a5c3d339baea5d8d079')
+    OR md5(p.prosrc) NOT IN ('6fb67c1130997254cf44a0629363ecff','8c3c151f43cada391532529ea30384e0')
+    OR p.prosecdef IS DISTINCT FROM true OR pg_get_userbyid(p.proowner)<>'postgres'
+    OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, public, auth']::text[]
+    OR (p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[]
+      AND NOT (p.proacl IS NOT DISTINCT FROM '{=X/postgres,postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[]
+        AND md5(p.prosrc)='6fb67c1130997254cf44a0629363ecff'
+        AND md5(pg_get_functiondef(p.oid))='8d7a283f517d1a6a091d8e89036ec878'))
+    OR NOT EXISTS(SELECT 1 FROM private.security_definer_inventory
+      WHERE signature='fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'
+        AND categorie='MIXTE_TENANT_ADMIN' AND definition_md5=md5(p.prosrc))
+    OR EXISTS(SELECT 1 FROM private.security_definer_inventory
+      WHERE signature='public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)') THEN
+    RAISE EXCEPTION 'Paiement : normalisation ACL v2 refusée';
+  END IF;
+  REVOKE ALL ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) FROM PUBLIC;
+  IF (SELECT proacl FROM pg_proc WHERE oid=p.oid) IS DISTINCT FROM
+      '{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[] THEN
+    RAISE EXCEPTION 'Paiement : ACL v2 finale inattendue';
+  END IF;
+END;
+$acl_v2$;
+$normaliser$;
+  v_oid oid := 'public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure;
+  v_definition text;
+  v_acl aclitem[];
+  v_inventaire jsonb;
+  v_sql text;
+  v_refus boolean;
+BEGIN
+  SELECT pg_get_functiondef(oid),proacl INTO v_definition,v_acl FROM pg_proc WHERE oid=v_oid;
+  IF md5(v_definition)<>'5838b24137ed6a5c3d339baea5d8d079' THEN
+    RAISE EXCEPTION 'Paiement F152 : candidat ACL v2 inattendu'; END IF;
+  SELECT to_jsonb(i) INTO v_inventaire FROM private.security_definer_inventory i
+    WHERE signature='fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)';
+  EXECUTE v_normaliser;
+  BEGIN
+    -- Ancien corps exact, jamais une réécriture partielle acceptée par hash.
+    EXECUTE replace(v_definition,$garde$  IF v_mission.type_contrat_applique = 'LIBERAL' THEN
+    RETURN jsonb_build_object('error', 'LIBERAL_FACTURE_REQUISE',
+      'message', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.');
+  END IF;
+
+$garde$,'');
+    UPDATE private.security_definer_inventory SET definition_md5='6fb67c1130997254cf44a0629363ecff'
+      WHERE signature='fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)';
+    REVOKE ALL ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)
+      FROM PUBLIC,postgres,service_role,authenticated;
+    GRANT EXECUTE ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)
+      TO PUBLIC,postgres,service_role,authenticated;
+    IF (SELECT proacl FROM pg_proc WHERE oid=v_oid) IS DISTINCT FROM
+      '{=X/postgres,postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'::aclitem[]
+      OR md5(pg_get_functiondef(v_oid))<>'8d7a283f517d1a6a091d8e89036ec878' THEN
+      RAISE EXCEPTION 'Paiement F152 : variante historique ACL non reproduite'; END IF;
+    EXECUTE v_normaliser;
+    IF (SELECT proacl FROM pg_proc WHERE oid=v_oid) IS DISTINCT FROM v_acl
+      OR has_function_privilege('anon',v_oid,'EXECUTE')
+      OR NOT has_function_privilege('authenticated',v_oid,'EXECUTE')
+      OR NOT has_function_privilege('service_role',v_oid,'EXECUTE') THEN
+      RAISE EXCEPTION 'Paiement F152 : normalisation historique ACL incorrecte'; END IF;
+    RAISE EXCEPTION 'F152_ACL_RESTAUREE' USING ERRCODE='JP159';
+  EXCEPTION WHEN SQLSTATE 'JP159' THEN IF SQLERRM<>'F152_ACL_RESTAUREE' THEN RAISE; END IF; END;
+  FOREACH v_sql IN ARRAY ARRAY[
+    'GRANT EXECUTE ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) TO PUBLIC',
+    'GRANT EXECUTE ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) TO anon',
+    'GRANT EXECUTE ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) TO authenticated WITH GRANT OPTION',
+    'REVOKE EXECUTE ON FUNCTION public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean) FROM authenticated'
+  ] LOOP
+    BEGIN
+      EXECUTE v_sql;
+      v_refus:=false;
+      BEGIN EXECUTE v_normaliser;
+      EXCEPTION WHEN SQLSTATE 'P0001' THEN
+        IF SQLERRM<>'Paiement : normalisation ACL v2 refusée' THEN RAISE; END IF;
+        v_refus:=true;
+      END;
+      IF NOT v_refus THEN RAISE EXCEPTION 'Paiement F152 : ACL contradictoire acceptée (%)',v_sql; END IF;
+      RAISE EXCEPTION 'F152_ACL_RESTAUREE' USING ERRCODE='JP159';
+    EXCEPTION WHEN SQLSTATE 'JP159' THEN IF SQLERRM<>'F152_ACL_RESTAUREE' THEN RAISE; END IF; END;
+  END LOOP;
+  IF pg_get_functiondef(v_oid) IS DISTINCT FROM v_definition
+    OR (SELECT proacl FROM pg_proc WHERE oid=v_oid) IS DISTINCT FROM v_acl
+    OR (SELECT to_jsonb(i) FROM private.security_definer_inventory i
+      WHERE signature='fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)') IS DISTINCT FROM v_inventaire THEN
+    RAISE EXCEPTION 'Paiement F152 : préflight ACL laisse une modification'; END IF;
+END;
+$test_acl_v2$;
+
 DO $f1$
 DECLARE
   v_soignant constant uuid := 'f1520001-1000-4000-8000-000000000001';

@@ -42,3 +42,16 @@ test('routage migration : 51 suites conservées puis nouvelle suite, postcheck a
  assert.match(y,/name: Paiements — SELECT indépendant après succès ou échec\n\s+if: always\(\) && steps.migration_scope.outputs.has_migrations == 'true'/);
  assert.match(y,/postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3/);
 });
+test('le témoin rejoue le vrai préflight ACL, sans élargir le contrôle métier existant',()=>{
+ const migration=readFileSync('supabase/migrations/20261001122318_lier_paiements_liberaux_aux_factures.sql','utf8');
+ const suite=readFileSync('tests/security/paiements-liberaux-facture.test.sql','utf8');
+ const block=migration.match(/DO \$acl_v2\$[\s\S]*?\$acl_v2\$;/)?.[0];
+ assert.ok(block);assert.equal(suite.match(/v_normaliser constant text := \$normaliser\$\n([\s\S]*?)\n\$normaliser\$/)?.[1],block);
+ assert.doesNotMatch(block,/\bGRANT\b/);
+ assert.match(block,/REVOKE ALL ON FUNCTION public\.fn_declarer_paiement_soignant_v2\([^)]+\) FROM PUBLIC;/);
+ assert.match(block,/AND md5\(p\.prosrc\)='6fb67c1130997254cf44a0629363ecff'/);
+ assert.match(block,/AND md5\(pg_get_functiondef\(p\.oid\)\)='8d7a283f517d1a6a091d8e89036ec878'/);
+ assert.ok(migration.indexOf('$acl_v2$;')<migration.indexOf('DO $preflight$'));
+ assert.match(migration,/OR p\.proacl IS DISTINCT FROM r\.acl::aclitem\[\]/);
+ for(const refused of ['TO PUBLIC','TO anon','WITH GRANT OPTION','FROM authenticated'])assert.ok(suite.includes(refused));
+});
