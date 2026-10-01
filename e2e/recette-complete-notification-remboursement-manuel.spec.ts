@@ -21,6 +21,10 @@ test('admin — notification de remboursement manuel, onglet Avoirs, panne et re
     date_emission: '2026-10-01T10:00:00Z', date_remboursement: null, reference_remboursement: null,
     soignant_id: ids.soignant, etablissement_id: ids.etab, litige_id: null };
   etat.overrides.set('factures_honoraires', [avoir]);
+  await page.route('**/rest/v1/factures_honoraires?*', async route => {
+    expect(route.request().method()).toBe('GET');
+    await route.fallback();
+  });
   const notification = { id: '79000000-0000-4000-8000-000000000091', destinataire_id: ids.user,
     titre: '💸 Remboursement manuel à traiter', corps: 'Avoir AV-RECETTE-001 — 72,00 €. Remboursement manuel à traiter et à confirmer après vérification de la preuve bancaire.',
     type: 'REMBOURSEMENT_MANUEL_A_FAIRE', lien: '/admin/moderation?onglet=avoirs',
