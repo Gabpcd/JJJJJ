@@ -100,7 +100,8 @@ BEGIN
       24::numeric,4.80::numeric,28.80::numeric,21::numeric,4.20::numeric,25.20::numeric),
     ('finale_taux_baisse',true,NULL,18,18,72,72,10.80,2.16,12.96,10.80,2.16,12.96,10.80,2.16,12.96),
     ('hebdo_taux_baisse',false,NULL,18,18,72,144,10.80,2.16,12.96,21.60,4.32,25.92,21.60,4.32,25.92),
-    ('hebdo_taux_hausse',false,NULL,22,22,88,176,13.20,2.64,15.84,26.40,5.28,31.68,26.40,5.28,31.68)
+    ('hebdo_taux_hausse',false,NULL,22,22,88,176,13.20,2.64,15.84,26.40,5.28,31.68,26.40,5.28,31.68),
+    ('hebdo_taux_baisse_payload_ui',false,4,18,18,72,144,10.80,2.16,12.96,21.60,4.32,25.92,21.60,4.32,25.92)
   ) AS cas(nom,finale,heures_ajustees,taux_ajuste,taux,honoraires,net_global,
     commission_ht,commission_tva,commission_ttc,avant_ht,avant_tva,avant_ttc,globale_ht,globale_tva,globale_ttc) LOOP
   v_duree_mission:=CASE WHEN v_cas.finale THEN 4 ELSE 8 END;
@@ -228,6 +229,9 @@ BEGIN
         AND pdf_s3_key='fixture-f1.pdf' AND facturx_xml_url='fixture-f1.xml'
         AND emise_le=notifiee_soignant_le AND verification_echeance_le>emise_le AND NOT is_public_sector)
     THEN RAISE EXCEPTION 'F1 : émission non confirmée'; END IF;
+    -- Pour la finale, ce helper lie la commission à la mission. Son UPDATE
+    -- normalise aussi taux_rist_plafonne de NULL vers20, sans plafond appliqué
+    -- (dec_appliquer_plafond_rist) : cette mutation est vérifiée séparément.
     v_resultat:=public.fn_preparer_facture_commission_periode(v_honoraire);
     v_commission:=(v_resultat->>'facture_id')::uuid;
     v_rejeu:=public.fn_preparer_facture_commission_periode(v_honoraire);
@@ -237,9 +241,11 @@ BEGIN
       OR NOT EXISTS(SELECT 1 FROM public.factures WHERE id=v_commission AND montant_ht=12 AND montant_tva=2.4
         AND montant_ttc=14.4 AND statut='EMISE' AND NOT est_secteur_public AND chorus_pro_statut='NON_APPLICABLE')
       OR (NOT v_cas.finale AND v_snapshot IS DISTINCT FROM (SELECT to_jsonb(m) FROM public.missions m WHERE id=v_mission))
-      OR (v_cas.finale AND (v_snapshot-'commission_facturee'-'facture_id'-'modifie_le' IS DISTINCT FROM
-        (SELECT to_jsonb(m)-'commission_facturee'-'facture_id'-'modifie_le' FROM public.missions m WHERE id=v_mission)
-        OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND commission_facturee AND facture_id=v_commission)))
+      OR (v_cas.finale AND (v_snapshot-'commission_facturee'-'facture_id'-'modifie_le'-'taux_rist_plafonne' IS DISTINCT FROM
+        (SELECT to_jsonb(m)-'commission_facturee'-'facture_id'-'modifie_le'-'taux_rist_plafonne' FROM public.missions m WHERE id=v_mission)
+        OR v_snapshot->'taux_rist_plafonne' IS DISTINCT FROM 'null'::jsonb
+        OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=v_mission AND commission_facturee
+          AND facture_id=v_commission AND taux_rist_plafonne=20 AND rist_plafond_applique=false)))
     THEN RAISE EXCEPTION 'F1 : commission initiale/idempotence incorrecte ; cas=% ; resultat=% ; rejeu=% ; montants=% ; champs_mission=%',
       v_cas.nom,v_resultat,v_rejeu,
       (SELECT jsonb_build_object('ht',montant_ht,'tva',montant_tva,'ttc',montant_ttc,'statut',statut)
@@ -336,7 +342,7 @@ BEGIN
       RAISE EXCEPTION 'F1_RECTIF_GLOBAL_COMMISSION_INCOHERENTE net attendu=% obtenu=% ; commission HT attendue=% obtenue=%',
         v_cas.net_global,v_net_global,v_cas.globale_ht,v_commission_globale;
     END IF;
-    IF (v_cas.heures_ajustees IS NULL AND v_financier_avant IS DISTINCT FROM (SELECT jsonb_build_array(total_brut,net_a_payer,
+    IF ((v_cas.heures_ajustees IS NULL OR v_cas.heures_ajustees=4) AND v_financier_avant IS DISTINCT FROM (SELECT jsonb_build_array(total_brut,net_a_payer,
       montant_commission_ht,montant_commission_tva,montant_commission_ttc) FROM public.missions WHERE id=v_mission))
       OR (SELECT jsonb_build_array(total_brut,net_a_payer,montant_commission_ht,montant_commission_tva,montant_commission_ttc)
         FROM public.missions WHERE id=v_mission) IS DISTINCT FROM jsonb_build_array(v_cas.net_global,v_cas.net_global,
@@ -374,5 +380,5 @@ BEGIN
   THEN RAISE EXCEPTION 'F1 : annulation transactionnelle non prouvée'; END IF;
   END LOOP;
 END $f1$;
-SELECT 'F1_RECTIFICATION_SQL_ROLLBACK' AS preuve,true AS annule,4 AS scenarios;
+SELECT 'F1_RECTIFICATION_SQL_ROLLBACK' AS preuve,true AS annule,5 AS scenarios;
 ROLLBACK;
