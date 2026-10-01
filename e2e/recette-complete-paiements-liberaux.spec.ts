@@ -228,11 +228,24 @@ test('Salarié : bulletin explicite, montant partiel refusé et escrow conservé
   expect(f.mutations).toEqual([]); f.verifier();
 });
 
-test('Connect : un remboursement à rapprocher refuse explicitement un nouveau paiement', async ({ page }, info) => {
+for (const refus of [
+  {
+    code: 'CONNECT_REFUND_RECONCILIATION_REQUIRED', status: 409, statusText: 'Conflict',
+    message: 'Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.',
+  },
+  {
+    code: 'CONNECT_RELEASE_CLOSED', status: 503, statusText: 'Service Unavailable',
+    message: 'Le paiement de cette facture est temporairement indisponible pendant une mise à jour. Réessayez plus tard depuis Facturation.',
+  },
+  {
+    code: 'CONNECT_CLIENT_VERSION_REQUIRED', status: 503, statusText: 'Service Unavailable',
+    message: 'Cette version du paiement est indisponible. Rechargez Facturation avant de réessayer.',
+  },
+]) test(`Connect : ${refus.code} explique le refus sans ouvrir un paiement`, async ({ page }, info) => {
   const f = await fixture(page, true);
-  f.controle.refus = 'CONNECT_REFUND_RECONCILIATION_REQUIRED';
-  f.controle.refusMessage = 'Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.';
-  f.controle.refusStatus = 409;
+  f.controle.refus = refus.code;
+  f.controle.refusMessage = refus.message;
+  f.controle.refusStatus = refus.status;
   await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}`);
   const piece = page.getByText('FACTURE-RECTIFICATIVE-60', { exact: true }).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
   await action(page, piece.getByRole('button', { name: 'Payer via Stripe', exact: true }));
@@ -240,9 +253,9 @@ test('Connect : un remboursement à rapprocher refuse explicitement un nouveau p
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Paiement confirmé et enregistré.', { exact: true })).toHaveCount(0);
   expect(f.mutations).toEqual([{ name: 'stripe-connect-pay-mission', body: { mission_id: ids.mission, facture_honoraire_id: remplacement } }]);
-  await page.screenshot({ path: info.outputPath('remboursement-refuse-nouveau-paiement.png'), scale: 'css', animations: 'disabled' });
+  await page.screenshot({ path: info.outputPath(`${refus.code.toLowerCase()}.png`), scale: 'css', animations: 'disabled' });
   await stabiliserActionsNationales(page); await page.reload();
   await expect(piece).toBeVisible();
   expect(f.mutations).toHaveLength(1);
-  f.verifier(['Failed to load resource: the server responded with a status of 409 (Conflict)']);
+  f.verifier([`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`]);
 });
