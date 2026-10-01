@@ -4,11 +4,13 @@ import { readFileSync, writeFileSync, mkdirSync, lstatSync } from 'node:fs';
 import { resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { catalogueSql, transactionSql } from './connect-staging-closed-sql.mjs';
+import { renderStagingAdmission } from './connect-staging-admission-render.mjs';
 
 export const PROJECT = 'mejpriaetwgtcstbgfid';
 export const REPOSITORY = 'Gabpcd/JJJJJ';
-export const MIGRATION = 'supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql';
+export const MIGRATION = 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql';
 export const CAPACITY = 'scripts/ci/connect-staging-test-capacity.sql';
+export const ADMISSION = 'scripts/ci/connect-staging-admission.sql';
 const API = `https://api.supabase.com/v1/projects/${PROJECT}`;
 const GH = `https://api.github.com/repos/${REPOSITORY}`;
 const sha = (v, n=40) => typeof v==='string' && new RegExp(`^[a-f0-9]{${n}}$`).test(v) && !/^0+$/.test(v);
@@ -25,8 +27,8 @@ export function checkContract(c) {
   if(c.ready!==true) fail('READINESS_CLOSED');
   if(!exact(c.candidate,['sha','tree']) || !sha(c.candidate.sha) || !sha(c.candidate.tree)) fail('CANDIDATE_PIN_REQUIRED');
   const m=c.reviewedManifest;
-  if(!exact(m,['migrationSha256','capacitySha256','manifestSha256']) || !sha(m.migrationSha256,64) || !sha(m.capacitySha256,64)
-    || m.manifestSha256!==digest(JSON.stringify(canonical({candidate:c.candidate,migrationSha256:m.migrationSha256,capacitySha256:m.capacitySha256})))) fail('MANIFEST_PIN_REQUIRED');
+  if(!exact(m,['migrationSha256','capacitySha256','admissionSha256','manifestSha256']) || !sha(m.migrationSha256,64) || !sha(m.capacitySha256,64) || !sha(m.admissionSha256,64)
+    || m.manifestSha256!==digest(JSON.stringify(canonical({candidate:c.candidate,migrationSha256:m.migrationSha256,capacitySha256:m.capacitySha256,admissionSha256:m.admissionSha256})))) fail('MANIFEST_PIN_REQUIRED');
   if(!Array.isArray(c.requiredCiRuns) || !c.requiredCiRuns.length || c.requiredCiRuns.length>10
     || new Set(c.requiredCiRuns).size!==c.requiredCiRuns.length || c.requiredCiRuns.some(x=>!id(x))) fail('CI_RUN_PINS_REQUIRED');
   for(const v of [c.expectedBefore,c.expectedAfter]) if(!exact(v,['catalogue','registry']) || !sha(v.catalogue,32) || !sha(v.registry,32)) fail('CATALOGUE_PIN_REQUIRED');
@@ -43,9 +45,10 @@ export function checkContext(env,local,c) {
 export function checkAssets(c,local) {
   if(local.candidateSha!==c.candidate.sha || local.candidateTree!==c.candidate.tree || local.candidateClean!==true) fail('CANDIDATE_TREE_MISMATCH');
   if(typeof local.migration!=='string' || Buffer.byteLength(local.migration)>300_000 || digest(local.migration)!==c.reviewedManifest.migrationSha256
-    || typeof local.capacity!=='string' || Buffer.byteLength(local.capacity)>100_000 || digest(local.capacity)!==c.reviewedManifest.capacitySha256) fail('ASSET_DIGEST_MISMATCH');
+    || typeof local.capacity!=='string' || Buffer.byteLength(local.capacity)>100_000 || digest(local.capacity)!==c.reviewedManifest.capacitySha256
+    || typeof local.admission!=='string' || Buffer.byteLength(local.admission)>200_000 || digest(local.admission)!==c.reviewedManifest.admissionSha256) fail('ASSET_DIGEST_MISMATCH');
   if(!Array.isArray(local.migrationVersions) || !local.migrationVersions.length || local.migrationVersions.some(v=>!/^\d{14}$/.test(v))
-    || new Set(local.migrationVersions).size!==local.migrationVersions.length || !local.migrationVersions.includes('20261001171439')) fail('MIGRATION_FILES_INVALID');
+    || new Set(local.migrationVersions).size!==local.migrationVersions.length || !local.migrationVersions.includes('20261001201055')) fail('MIGRATION_FILES_INVALID');
 }
 export function checkSnapshot(value,c,phase,baseline) {
   if(!Array.isArray(value) || value.length!==1 || !exact(value[0],['catalogue','registry','versions','rows','quiescent','gate_closed','capacity_closed'])) fail('CATALOGUE_SHAPE');
@@ -57,7 +60,7 @@ export function checkSnapshot(value,c,phase,baseline) {
   return s;
 }
 export function checkPending(local,snapshot,phase) {
-  const expected=local.migrationVersions.filter(v=>phase==='after'||v!=='20261001171439').sort();
+  const expected=local.migrationVersions.filter(v=>phase==='after'||v!=='20261001201055').sort();
   if(JSON.stringify(snapshot.versions.slice().sort())!==JSON.stringify(expected)) fail('MIGRATION_HISTORY_MISMATCH');
 }
 
@@ -128,7 +131,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       console.log('CANDIDATE_PIN_CONFIRMED');
     }else{
       const candidate=resolve(root,'candidate');Object.assign(local,{candidateSha:git(candidate,['rev-parse','HEAD']),candidateTree:git(candidate,['rev-parse','HEAD^{tree}']),candidateClean:git(candidate,['status','--porcelain','--untracked-files=all'])==='',
-        migration:file(candidate,MIGRATION),capacity:file(root,CAPACITY),migrationVersions:git(candidate,['ls-tree','-r','--name-only','HEAD','supabase/migrations']).split('\n').map(x=>/^supabase\/migrations\/(\d{14})_[^/]+\.sql$/.exec(x)?.[1]).filter(Boolean)});
+        migration:file(candidate,MIGRATION),capacity:file(candidate,CAPACITY),admission:renderStagingAdmission(file(candidate,MIGRATION),file(candidate,ADMISSION)),migrationVersions:git(candidate,['ls-tree','-r','--name-only','HEAD','supabase/migrations']).split('\n').map(x=>/^supabase\/migrations\/(\d{14})_[^/]+\.sql$/.exec(x)?.[1]).filter(Boolean)});
       if(!process.env.RUNNER_TEMP||!isAbsolute(process.env.RUNNER_TEMP))fail('REPORT_PATH_REQUIRED');
       const out=resolve(process.env.RUNNER_TEMP,'connect-staging-closed');mkdirSync(out,{recursive:true,mode:0o700});
       report=await executeClosed({env:process.env,local,contract,checkpoint:r=>writeFileSync(resolve(out,'result.json'),JSON.stringify(r,null,2)+'\n',{mode:0o600})});

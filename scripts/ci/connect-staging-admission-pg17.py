@@ -18,7 +18,7 @@ exec(compile(base.split(marker)[0], str(ROOT/'scripts/ci/connect-pretransfer-pg1
 assert sql('SELECT private.fn_connect_protocole_ouvert()')=='f'
 capacity=(ROOT/'scripts/ci/connect-staging-test-capacity.sql').read_text()
 render=subprocess.run(['node','--input-type=module','-e',
- "import{readFileSync as r}from'node:fs';import{renderStagingAdmission as f}from'./scripts/ci/connect-staging-admission-render.mjs';process.stdout.write(f(r('supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql','utf8'),r('scripts/ci/connect-staging-admission.sql','utf8')));"],
+ "import{readFileSync as r}from'node:fs';import{renderStagingAdmission as f}from'./scripts/ci/connect-staging-admission-render.mjs';process.stdout.write(f(r('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql','utf8'),r('scripts/ci/connect-staging-admission.sql','utf8')));"],
  cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
 before=sql(dependency_fingerprint)
 sql('BEGIN;'+capacity+render+'ROLLBACK;')

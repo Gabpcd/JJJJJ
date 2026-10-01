@@ -12,7 +12,7 @@ Les comptes suspendus ou anonymisés ne peuvent pas autoriser un nouveau POST. L
 
 ## Livraison fermée
 
-La migration 20261001171439 est une seule transaction : préflight exact des dépendances, moteur et postflight, puis barrière versionnée, postflight fermé et RPC publique de lecture avec son préflight Auth/RBAC et son inventaire. Les dépendances attendues sont celles de l'union774, devenue main58fd29319f04122520a8a2d850f63b9f559919db. Le vieux staging observé avant ces livraisons est volontairement refusé. Les ACL, corps, inventaire, triggers et transitifs d'audit ne sont pas ajustés automatiquement pour faire passer le préflight.
+La migration 20261001201055 est une seule transaction : préflight exact des dépendances, moteur et postflight, puis barrière versionnée, postflight fermé et RPC publique de lecture avec son préflight Auth/RBAC et son inventaire. Les dépendances attendues sont celles de l'union774, devenue main58fd29319f04122520a8a2d850f63b9f559919db. Le vieux staging observé avant ces livraisons est volontairement refusé. Les ACL, corps, inventaire, triggers et transitifs d'audit ne sont pas ajustés automatiquement pour faire passer le préflight.
 
 Les anciens noms de claims refusent explicitement les flux Connect, même après ouverture future. Les nouveaux noms service-only n'acceptent que leur flux et requièrent la ligne privée CONNECT_PRETRANSFER_V1 activée. Elle est créée avec enabled=false, sans droit client ni RPC d'ouverture. La même fermeture est vérifiée dans la garde d'admission/création du moteur. Un bail pris avant une fermeture ne suffit pas : demarrer revérifie avant de permettre le POST. Lecture, poll et constat d'un remboursement déjà engagé restent disponibles.
 

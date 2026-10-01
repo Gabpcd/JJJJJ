@@ -36,7 +36,7 @@ for (const [label, delta] of [
 
 test('le corps relu est celui encapsulé dans la migration entière', () => {
   const fixture = readFileSync('tests/fixtures/connect-pretransfer-schema-candidate.sql', 'utf8');
-  const migration = readFileSync('supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
+  const migration = readFileSync('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
   assert.ok(migration.includes(fixture.slice(fixture.indexOf('CREATE TABLE'))));
   assert.equal(migration.match(/\nBEGIN;\n/g)?.length, 1);
   assert.ok(migration.endsWith('COMMIT;\n'));
@@ -46,7 +46,7 @@ test('la barrière fermée est dans le même COMMIT que le moteur', () => {
   const source = readFileSync('tests/fixtures/connect-pretransfer-release-gate-candidate.sql', 'utf8');
   assert.equal(source.match(/\nBEGIN;\n/g)?.length, 1);
   const body = source.replace('\nBEGIN;\n', '\n').replace(/COMMIT;\n$/, '');
-  const migration = readFileSync('supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
+  const migration = readFileSync('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
   assert.ok(migration.includes(body));
   assert.ok(migration.indexOf('$postflight$;') < migration.indexOf('$barrier_preflight$;'));
   assert.ok(migration.includes("VALUES('CONNECT_PRETRANSFER_V1',false)"));
@@ -55,7 +55,7 @@ test('la barrière fermée est dans le même COMMIT que le moteur', () => {
 
 test('le cadre de lecture exact vient après la barrière, dans le COMMIT unique', () => {
   const source = readFileSync('tests/fixtures/connect-pretransfer-suivi-installation.sql', 'utf8');
-  const migration = readFileSync('supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
+  const migration = readFileSync('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql', 'utf8');
   assert.ok(migration.includes(source));
   const barrierEnd = migration.indexOf('$barrier_installation$;');
   const suiviStart = migration.indexOf('$suivi_preflight$;');

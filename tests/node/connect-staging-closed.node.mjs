@@ -6,14 +6,15 @@ import { catalogueSql, transactionSql } from '../../scripts/ci/connect-staging-c
 const main='1'.repeat(40),candidate='2'.repeat(40),tree='3'.repeat(40);
 const migration='-- Source synthétique de transport uniquement\nBEGIN;\nSELECT 1;\nCOMMIT;\n';
 const capacity='-- Fragment synthétique sans acteur ni effet fournisseur\nSELECT 2;';
-const manifest={candidate:{sha:candidate,tree},migrationSha256:digest(migration),capacitySha256:digest(capacity)};
+const admission='-- Fragment admission synthétique fermé\nSELECT 3;';
+const manifest={candidate:{sha:candidate,tree},migrationSha256:digest(migration),capacitySha256:digest(capacity),admissionSha256:digest(admission)};
 const contract={schemaVersion:1,ready:true,projectRef:PROJECT,protocolEnabled:false,capabilityEnabled:false,
- candidate:manifest.candidate,reviewedManifest:{migrationSha256:manifest.migrationSha256,capacitySha256:manifest.capacitySha256,manifestSha256:digest(JSON.stringify(canonical(manifest)))},
+ candidate:manifest.candidate,reviewedManifest:{migrationSha256:manifest.migrationSha256,capacitySha256:manifest.capacitySha256,admissionSha256:manifest.admissionSha256,manifestSha256:digest(JSON.stringify(canonical(manifest)))},
  requiredCiRuns:['123','456'],expectedBefore:{catalogue:'a'.repeat(32),registry:'b'.repeat(32)},expectedAfter:{catalogue:'c'.repeat(32),registry:'d'.repeat(32)},reason:'Fixture de transport hors réseau'};
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:REPOSITORY,GITHUB_REF:'refs/heads/main',GITHUB_SHA:main,
  EXPECTED_MAIN_SHA:main,EXPECTED_CANDIDATE_SHA:candidate,EXPECTED_CANDIDATE_TREE:tree,EXPECTED_MANIFEST_SHA256:contract.reviewedManifest.manifestSha256,
  GITHUB_RUN_ID:'789',GITHUB_RUN_ATTEMPT:'1',STAGING_SUPABASE_ACCESS_TOKEN:'management-secret-sentinel',GITHUB_TOKEN:'github-secret-sentinel'};
-const local={mainSha:main,mainClean:true,candidateSha:candidate,candidateTree:tree,candidateClean:true,migration,capacity,migrationVersions:['20260930082312','20261001171439']};
+const local={mainSha:main,mainClean:true,candidateSha:candidate,candidateTree:tree,candidateClean:true,migration,capacity,admission,migrationVersions:['20260930082312','20261001201055']};
 const before={...contract.expectedBefore,versions:['20260930082312'],rows:'e'.repeat(32),quiescent:true,gate_closed:true,capacity_closed:true};
 const after={...contract.expectedAfter,versions:local.migrationVersions,rows:before.rows,quiescent:true,gate_closed:true,capacity_closed:true};
 const response=x=>({ok:true,text:async()=>JSON.stringify(x)});
@@ -57,7 +58,7 @@ for(const [key,value] of [['projectRef','flripxtsyegjshnhzjkz'],['protocolEnable
 test('manifest obligatoire et authentifié par son empreinte',()=>assert.throws(()=>checkContract({...contract,reviewedManifest:{...contract.reviewedManifest,capacitySha256:'f'.repeat(64)}}),/MANIFEST_PIN_REQUIRED/));
 for(const v of [[],['123','123'],['abc']])test(`liste CI explicitement fermée ${JSON.stringify(v)}`,()=>assert.throws(()=>checkContract({...contract,requiredCiRuns:v}),/CI_RUN_PINS_REQUIRED/));
 for(const key of ['candidateSha','candidateTree','candidateClean'])test(`arbre local ${key}`,()=>assert.throws(()=>checkAssets(contract,{...local,[key]:false}),/CANDIDATE_TREE_MISMATCH/));
-for(const key of ['migration','capacity'])test(`octets ${key} différents`,()=>assert.throws(()=>checkAssets(contract,{...local,[key]:local[key]+'\n'}),/ASSET_DIGEST_MISMATCH/));
+for(const key of ['migration','capacity','admission'])test(`octets ${key} différents`,()=>assert.throws(()=>checkAssets(contract,{...local,[key]:local[key]+'\n'}),/ASSET_DIGEST_MISMATCH/));
 for(const options of [{mainMoved:true},{treeDrift:true},{badCi:true},{ciShaDrift:true},{fork:true},{badHost:true},{notQuiet:true},{rawError:true}])test(`précontrôle refuse ${Object.keys(options)[0]}`,async()=>{
  const h=harness(options),r=await h.run();assert.equal(r.status,'failed');assert.equal(r.commitAttempted,false);
  assert.equal(h.calls.filter(x=>x.body&&JSON.parse(x.body).read_only===false).length,0);
@@ -101,6 +102,7 @@ test('SQL : unique transaction, assertions avant/après, aucune activation',()=>
 test('fragments non transactionnels ou injection de délimiteur refusés',()=>{
  assert.throws(()=>transactionSql({...local,migration:'SELECT 1;'},contract,before,true),/MIGRATION_TRANSACTION_REFUSED/);
  assert.throws(()=>transactionSql({...local,capacity:'COMMIT;'},contract,before,true),/CAPACITY_FRAGMENT_REFUSED/);
+ assert.throws(()=>transactionSql({...local,admission:'COMMIT;'},contract,before,true),/ADMISSION_FRAGMENT_REFUSED/);
  assert.throws(()=>transactionSql({...local,migration:migration.replace('SELECT 1;','SELECT $jolene_migration_source$;')},contract,before,true),/SQL_DELIMITER_COLLISION/);
 });
 test('workflow manuel, main, staging séquentiel, aucun CLI/secrets fournisseurs',()=>{

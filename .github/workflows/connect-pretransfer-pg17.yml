@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/connect-pretransfer-pg17.yml'
       - 'scripts/ci/connect-pretransfer-pg17.py'
+      - 'scripts/ci/connect-staging-*'
+      - 'tests/node/connect-staging-*.node.mjs'
+      - 'supabase/functions/_shared/stripe-connect-staging-test.ts'
       - 'tests/fixtures/connect-pretransfer-*.sql'
       - 'tests/fixtures/connect-pretransfer-auth-dependencies.json'
       - 'tests/node/connect-pretransfer-pg17.node.mjs'
@@ -24,9 +27,13 @@ permissions:
 
 jobs:
   postgres-isole:
-    name: Intention et reprise Connect — PostgreSQL 17 sans fournisseur
+    name: Connect ${{ matrix.scenario }} — PostgreSQL 17 sans fournisseur
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [pretransfer, staging-admission]
     services:
       postgres:
         # Image officielle identique aux bancs paiements/numérotation relus.
@@ -53,6 +60,12 @@ jobs:
       - name: Refus effectif des destinations hors du banc
         run: node --test tests/node/connect-pretransfer-pg17.node.mjs
       - name: Transitions, atomicité et écrivains concurrents sans cloud
+        if: matrix.scenario == 'pretransfer'
         # Le runner refuse une destination autre que cette base neuve loopback.
         # Routines Auth réelles, tables annexes locales ; aucun compte distant.
         run: python3 scripts/ci/connect-pretransfer-pg17.py
+      - name: Admission TEST sur une autre base neuve, gate générale fermée
+        if: matrix.scenario == 'staging-admission'
+        # Chaque entrée de matrice a son propre service postgres et ses rôles.
+        # Aucun reset d'une base existante ni partage des fixtures du premier banc.
+        run: python3 scripts/ci/connect-staging-admission-pg17.py

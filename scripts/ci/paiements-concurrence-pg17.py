@@ -35,7 +35,7 @@ old_claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_
 claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"[^;]+;', snapshot, re.S)[0]
 claim_acl = re.findall(r'(?:REVOKE|GRANT) [^\n]* ON FUNCTION public\.fn_stripe_payment_flow_claim_connect_v1\(text,text,uuid,uuid\)[^\n]*;', snapshot)
 assert len(claim_acl) == 2
-release_migration = (ROOT/'supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql').read_text()
+release_migration = (ROOT/'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql').read_text()
 gate = re.search(r"CREATE TABLE private\.stripe_connect_release_gate \(.*?INSERT INTO private\.stripe_connect_release_gate\(protocol,enabled\) VALUES\('CONNECT_PRETRANSFER_V1',false\);", release_migration, re.S)[0]
 confirm = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_confirmer_paiement_soignant"\(.*?\nALTER FUNCTION "public"\."fn_confirmer_paiement_soignant"[^;]+;', snapshot, re.S)[0]
 sql((ROOT/'tests/fixtures/paiements-concurrence-pg17.sql').read_text())

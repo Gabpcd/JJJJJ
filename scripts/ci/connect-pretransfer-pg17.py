@@ -64,7 +64,7 @@ assert sql("SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','private',
 assert sql("SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role','supabase_auth_admin','dashboard_user')") == '0'
 snapshot = (ROOT/'supabase/schema/public.sql').read_text()
 schema = (ROOT/'tests/fixtures/connect-pretransfer-schema-candidate.sql').read_text()
-migration = (ROOT/'supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql').read_text()
+migration = (ROOT/'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql').read_text()
 assert schema[schema.index('CREATE TABLE'):] in migration, 'CONNECT_MIGRATION_CORE_CHANGED'
 sql("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
     "CREATE ROLE supabase_auth_admin NOLOGIN; CREATE ROLE dashboard_user NOLOGIN;"

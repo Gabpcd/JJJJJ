@@ -53,6 +53,7 @@ export function transactionSql(local,contract,before,commit) {
   if(typeof local.migration!=='string'||!/^([\s\S]*?)\bBEGIN;[\s\S]*\nCOMMIT;\s*$/.test(local.migration)
     || (local.migration.match(/^BEGIN;\s*$/gm)||[]).length!==1 || (local.migration.match(/^COMMIT;\s*$/gm)||[]).length!==1) throw new Error('MIGRATION_TRANSACTION_REFUSED');
   if(typeof local.capacity!=='string'||/^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im.test(local.capacity)) throw new Error('CAPACITY_FRAGMENT_REFUSED');
+  if(typeof local.admission!=='string'||/^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im.test(local.admission)) throw new Error('ADMISSION_FRAGMENT_REFUSED');
   // Les fichiers ont été pincés par SHA256 avant ce raccord. Aucun SQL fourni par input.
   const body=local.migration.replace(/^BEGIN;\s*$/m,'').replace(/^COMMIT;\s*$/m,'');
   const delimiter='$jolene_migration_source$';if(local.migration.includes(delimiter))throw new Error('SQL_DELIMITER_COLLISION');
@@ -71,8 +72,9 @@ export function transactionSql(local,contract,before,commit) {
  ${assertion(false,contract.expectedBefore)}
  ${body}
  ${local.capacity}
+ ${local.admission}
  INSERT INTO supabase_migrations.schema_migrations(version,name,statements)
- VALUES('20261001171439','reserver_remboursement_connect_avant_transfert',ARRAY[${delimiter}${local.migration}${delimiter}]);
+ VALUES('20261001201055','reserver_remboursement_connect_avant_transfert',ARRAY[${delimiter}${local.migration}${delimiter}]);
  ${assertion(true,contract.expectedAfter)}
  ${commit?'COMMIT':'ROLLBACK'};`;
 }

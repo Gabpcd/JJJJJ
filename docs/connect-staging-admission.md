@@ -32,7 +32,7 @@ Le lot est donc non activé et non validé pour un paiement réel de production.
 - Le supplément généré est analysable : 33 instructions SQL et 22 corps PL/pgSQL. L'analyse syntaxique ne remplace pas son exécution PostgreSQL 17.
 - Aucun frontend, SQL distant, déploiement ou objet Stripe n'a été exécuté ou créé par ces tests. Le témoin PG17 et le parcours intégré doivent encore être exécutés avant installation.
 
-Le témoin référence actuellement `20261001171439_reserver_remboursement_connect_avant_transfert.sql`. Lors de l'intégration sur la branche finale, conserver le contrôle d'ancrages et actualiser cette référence si la migration est renommée pour respecter l'ordre des migrations. Ne pas réutiliser des empreintes calculées avant cette intégration.
+Le témoin référence actuellement `20261001201055_reserver_remboursement_connect_avant_transfert.sql`. Lors de l'intégration sur la branche finale, conserver le contrôle d'ancrages et actualiser cette référence si la migration est renommée pour respecter l'ordre des migrations. Ne pas réutiliser des empreintes calculées avant cette intégration.
 
 ## Correction après revue indépendante
 
@@ -43,3 +43,9 @@ Avant toute réservation nouvelle, le handler pagine les Sessions Stripe et refu
 Le nouveau fichier `stripe-connect-staging-pay-runtime.test.ts` exécute le vrai handler configuré et ses helpers, avec transports en mémoire : 38 scénarios réussis, portant le sous-ensemble runtime à 124 tests verts. Ils couvrent la création, la reprise exacte, les traces/claims/Sessions historiques, la pagination et la disponibilité réelle attendue du destinataire. Ils ne remplacent toujours ni l'exécution PostgreSQL 17 ni le circuit Stripe TEST dans l'interface.
 
 Le contrôle des traces cherche aussi une autre trace de la FH **ou de la commission**, sans se limiter à la plus récente. La reprise liée exige un claim présent et exact. Le RPC inscrit `claim_reserved_at` dans la même transaction que son claim neuf, sous le verrou existant de la ressource : une réponse perdue avant la réservation de l'opération peut être reprise sans confondre ce claim neuf avec un ancien. Le témoin PG17 contient ce scénario mais reste à exécuter. Les tests Node du supplément sont maintenant au nombre de 42.
+
+## Intégration CI fermée
+
+La migration est renommée `20261001201055_reserver_remboursement_connect_avant_transfert.sql`, horodatage créé avec `supabase migration new`, après les migrations admin de 19:42. Ses octets sont conservés. Le workflow PostgreSQL utilise deux entrées de matrice : chacune reçoit son propre service postgres neuf et ses propres rôles, sans reset ni fixtures partagées. Le second runner s'arrête avant l'ouverture générale du prélude et installe le supplément fermé. Validate PR exécute les tests Node des deux lots.
+
+L'exécuteur manuel prépare désormais migration, table vide et supplément généré dans sa même transaction avec ROLLBACK préalable. L'empreinte du supplément appartient au manifeste. Le contrat versionné reste `ready:false`, tous ses pins restent absents : aucune requête distante n'est autorisée par cette intégration.

@@ -49,7 +49,7 @@ test('refund seulement exact op Session mode',async()=>{
  await requireStagingRefundScope(db,config,op);
  for(const change of [{id:id(55)},{session_id:'cs_test_OTHER'},{livemode:true},{orientation:'TRANSFER'}])await assert.rejects(()=>requireStagingRefundScope(db,config,{...op,...change}));
 });
-const migration=readFileSync('supabase/migrations/20261001171439_reserver_remboursement_connect_avant_transfert.sql','utf8');
+const migration=readFileSync('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql','utf8');
 const helpers=readFileSync('scripts/ci/connect-staging-admission.sql','utf8');
 test('raccord conserve gate false et source gelée',()=>{
  const sql=renderStagingAdmission(migration,helpers);

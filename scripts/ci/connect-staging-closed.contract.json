@@ -9,5 +9,5 @@
   "requiredCiRuns": [],
   "expectedBefore": null,
   "expectedAfter": null,
-  "reason": "SHA1017 final et lot TEST à relire ; aucune activation ni allocation financière autorisée"
+  "reason": "Source intégrée et migration 20261001201055 à valider en CI PG17 ; empreintes et manifeste non pincés, aucune activation ni allocation financière autorisée"
 }
