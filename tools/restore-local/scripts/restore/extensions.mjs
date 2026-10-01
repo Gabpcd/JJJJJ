@@ -1,3 +1,6 @@
+import {readFileSync,statSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 export const NAMES=['pg_cron','pg_net','pg_stat_statements','pg_trgm','pgcrypto','pgjwt','plpgsql','supabase_vault','uuid-ossp'];
 const ident=x=>typeof x==='string'&&/^[a-z_][a-z0-9_-]{0,62}$/.test(x);
 const version=x=>typeof x==='string'&&/^[0-9][a-zA-Z0-9_.-]{0,30}$/.test(x);
@@ -21,4 +24,32 @@ export function compareRequired(source,runtime){
   exact_version_available:t.available_versions.some(v=>v.version===s.version),available_catalogue_complete:!t.available_truncated,
   installed_version_matches:t.installed===null?null:t.installed.version===s.version,installed_schema_matches:t.installed===null?null:t.installed.schema===s.schema};});
  return {result:'EXTENSION_COMPATIBILITY_ONLY',checks,declarations_compatible:checks.every(c=>c.exact_version_available&&c.available_catalogue_complete&&c.installed_version_matches!==false&&c.installed_schema_matches!==false),import_ready:false};
+}
+
+// Both observations must belong to the same new run. Absence is permitted only
+// for the two extensions not installed by this empty-stack initialization.
+export function compareInventories(source,report,expectedRun){
+ if(typeof expectedRun!=='string'||!/^jolene-restore-drill-[a-z0-9][a-z0-9-]{0,25}$/.test(expectedRun)||report?.run!==expectedRun||report.result!=='EXTENSION_CATALOGUE_ONLY'||report.extensions_changed!==false||report.schema_imported!==false||!Array.isArray(report.inventories)||report.inventories.length!==2)reject();
+ const sides=['source','target'];
+ if(report.inventories.some(x=>!x||!sides.includes(x.side))||new Set(report.inventories.map(x=>x.side)).size!==2)reject();
+ const inventories=sides.map(side=>{
+  const runtime=projectExtensions(report.inventories.find(x=>x.side===side));
+  const comparison=compareRequired(source,runtime);
+  const checks=comparison.checks.map(check=>({...check,
+   bootstrap_installation_present:['pgjwt','pg_trgm'].includes(check.name)?null:runtime.extensions.find(x=>x.name===check.name).installed!==null
+  }));
+  return {side,checks,declarations_compatible:comparison.declarations_compatible&&checks.every(x=>x.bootstrap_installation_present!==false)};
+ });
+ return {result:'EXTENSION_COMPATIBILITY_ONLY',run:expectedRun,inventories,declarations_compatible:inventories.every(x=>x.declarations_compatible),extensions_changed:false,schema_imported:false,import_ready:false};
+}
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ try{
+  const [command,path,expectedRun,...extra]=process.argv.slice(2);
+  if(command!=='compare'||!path||extra.length||statSync(path).size>1048576)reject();
+  // Fixed versioned requirements: no CLI/env override of versions or schemas.
+  const source=JSON.parse(readFileSync(new URL('../export/scope.json',import.meta.url),'utf8')).extensions;
+  const result=compareInventories(source,JSON.parse(readFileSync(path,'utf8')),expectedRun);
+  console.log(JSON.stringify(result));
+  if(!result.declarations_compatible)process.exitCode=1;
+ }catch{console.error(JSON.stringify({error:'EXTENSION_COMPARISON_REFUSED',import_ready:false}));process.exitCode=1;}
 }

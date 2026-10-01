@@ -161,3 +161,14 @@ test('loopback family requires a known connection line, not an address mentioned
   const r=classifyHealthOutput(text);assert.equal(r.loopback_family,family);assert.ok(!JSON.stringify(r).includes('CANARY'));assert.ok(!JSON.stringify(r).includes('::1'));assert.ok(!JSON.stringify(r).includes('127.0.0.1'));
  }
 });
+
+test('063 server replacement changes only the two database images in the generated plan',()=>{
+ const previous=clone(lock),db=previous.images.find(x=>x.repository==='supabase/postgres');
+ db.linux_amd64_digest='sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b';db.reference='supabase/postgres@'+db.linux_amd64_digest;
+ const old=makePlan(run,'/tmp/private-plan',previous,secrets),next=plan();
+ for(const side of ['source','target']){assert.notEqual(old.services[side+'-db'].image,next.services[side+'-db'].image);old.services[side+'-db'].image=next.services[side+'-db'].image;}
+ assert.deepEqual(next,old);assert.equal(Object.keys(next.volumes).length,6);
+ const another=makePlan(run+'-next','/tmp/private-next',lock,secrets);
+ const names=new Set(Object.values(next.volumes).map(x=>x.name));assert.ok(Object.values(another.volumes).every(x=>!names.has(x.name)));
+ for(const resource of ['source-data','source-config','source-files','target-data','target-config','target-files'])assert.throws(()=>assertAbsent(run,()=>run+'-'+resource),/RESOURCES_REMAIN/);
+});
