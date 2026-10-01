@@ -4,11 +4,19 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('régressions lancement — paiements critiques', () => {
-  it('réutilise la Session Connect préparée depuis la fiche mission', () => {
+  it('conserve le client_secret préparé dans Facturation, sans Checkout mission-only', () => {
     const detail = read('src/pages/DetailMission.tsx');
+    const facturation = read('src/pages/FacturationEtablissement.tsx');
+    const workflow = read('src/components/WorkflowPaiementMission.tsx');
     const checkout = read('src/components/StripeEmbeddedCheckout.tsx');
 
-    expect(detail).toContain('preparedClientSecret={connectClientSecret}');
+    expect(detail).not.toContain('preparedClientSecret={connectClientSecret}');
+    expect(detail).not.toContain('StripeEmbeddedCheckout');
+    expect(workflow).toContain('/etablissement/facturation?tab=missions-a-payer&mission=${encodeURIComponent(missionId)}');
+    expect(workflow).toContain('Voir les factures de cette mission');
+    expect(facturation).toContain('setConnectClientSecret(result.client_secret)');
+    expect(facturation).toContain('clientSecret: connectClientSecret');
+    expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId })');
     expect(checkout).toContain('preparedClientSecret?: string | null');
     expect(checkout).toContain('if (preparedClientSecret)');
     expect(checkout).toContain('setClientSecret(preparedClientSecret)');
