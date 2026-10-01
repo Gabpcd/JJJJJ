@@ -316,9 +316,9 @@ test('Documents F1 établissement : refus de caractère expliqué, sans relance 
 
 // Same archived bytes as the document suite; the adapter maps only fixture UUIDs
 // to the authenticated mission actors. No mission completion or payment occurs.
-for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as const) {
-  test(`Accès F1 EN_COURS ${surface} : documents archivés accessibles, refus de téléchargement puis reprise`, async ({ page, context }, info) => {
-    const banc = await genererDocuments(), simulation = creerSuiviSimule();
+for (const remplacement of [false, true]) for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as const) {
+  test(`${remplacement ? 'Remplacement' : 'Accès'} F1 EN_COURS ${surface} : documents archivés accessibles, refus de téléchargement puis reprise`, async ({ page, context, analyse }, info) => {
+    const banc = await genererDocuments({ remplacement, unicode: remplacement }), simulation = creerSuiviSimule();
     const { state, installer } = simulation;
     Object.assign(state.soignant, banc.soignant, { id: idsMission.soignant, type_exercice: 'LIBERAL' });
     Object.assign(state.etablissement, banc.etablissement, { id: idsMission.etablissement, est_compte_test: true });
@@ -326,6 +326,7 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
       soignant_assigne_id: idsMission.soignant, etablissement_id: idsMission.etablissement,
       statut: 'EN_COURS', nb_creneaux: 2, profession_requise: banc.soignant.profession,
       type_contrat_recherche: 'LIBERAL', etablissements: state.etablissement });
+    if (remplacement) Object.assign(state.mission, { taux_horaire_base: 18, total_brut: 144, net_a_payer: 144, montant_commission_ht: 21.6 });
     // The mission spans two weeks, but contains two four-hour shifts, not
     // one continuous 316-hour shift. Only the first shift has been worked.
     state.creneaux.splice(0, state.creneaux.length,
@@ -340,12 +341,14 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
     expect(heures('PREVISIONNEL')).toBe(8); expect(heures('EFFECTIF')).toBe(4);
     const rows = banc.factures.map(f => ({ ...f, mission_id: idsMission.mission,
       soignant_id: idsMission.soignant, etablissement_id: idsMission.etablissement }));
-    const original = rows.find(f => f.type_document === 'FACTURE')!;
-    const avoir = rows.find(f => f.type_document === 'AVOIR')!;
-    expect(avoir.facture_precedente_id).toBe(original.id);
+    const [original, correction] = rows;
+    expect(correction.type_document).toBe(remplacement ? 'FACTURE' : 'AVOIR');
+    expect(correction.facture_precedente_id).toBe(original.id);
+    const exigible = remplacement ? correction : original;
+    const commissionTtc = remplacement ? 12.96 : 14.4;
     expect(original.est_facture_finale_mission).toBe(false);
-    expect(rows.map(f => f.statut)).toEqual(['EMISE', 'EMISE']);
-    state.facture = original;
+    expect(rows.map(f => f.statut)).toEqual([remplacement ? 'REMPLACEE' : 'EMISE', 'EMISE']);
+    state.facture = exigible;
     const avantMission = JSON.stringify(state.mission), avantDocuments = JSON.stringify(rows);
     const role = surface === 'detail-soignant' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
     await installer(context, role);
@@ -386,14 +389,14 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
       }
       lectures.push(`${req.method()} ${nom}`);
       if (nom === 'fn_obligations_financieres') return route.fulfill({ json: {
-        total_du: 94.4, total_soignants_du: 80, total_commissions_du: 14.4,
+        total_du: remplacement ? 84.96 : 94.4, total_soignants_du: exigible.montant_ttc, total_commissions_du: commissionTtc,
         nb_missions_non_payees: 1, factures_impayees: [],
         missions_non_payees: [{ mission_id: idsMission.mission, intitule: state.mission.intitule,
           soignant_id: idsMission.soignant, soignant_nom: `${state.soignant.prenom} ${state.soignant.nom}`,
           soignant_profession: 'IDE', soignant_stripe_connect: true, type_contrat_applique: 'LIBERAL',
-          net_a_payer: 80, heures: 4, montant_commission_ttc: 14.4, jours_depuis_fin: 0,
-          debut_le: state.mission.debut_le, fin_le: state.mission.fin_le, facture_honoraires_id: original.id,
-          periode_debut: original.periode_debut, periode_fin: original.periode_fin,
+          net_a_payer: exigible.montant_ttc, heures: 4, montant_commission_ttc: commissionTtc, jours_depuis_fin: 0,
+          debut_le: state.mission.debut_le, fin_le: state.mission.fin_le, facture_honoraires_id: exigible.id,
+          periode_debut: exigible.periode_debut, periode_fin: exigible.periode_fin,
           est_facture_finale_mission: false }],
       } });
       if (nom === 'factures_honoraires' && !url.searchParams.has('id')) {
@@ -411,7 +414,7 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
       : `/${surface === 'detail-soignant' ? 'soignant' : 'etablissement'}/missions/${idsMission.mission}`;
     await page.goto(chemin);
     await expect(page.getByText(state.mission.intitule, { exact: true }).first()).toBeVisible();
-    const documents = surface === 'a-payer' ? [original] : [original, avoir];
+    const documents = surface === 'a-payer' ? [exigible] : [original, correction];
     const bouton = (f: typeof original) => page.getByRole('button', { name: `Télécharger le PDF ${f.numero_facture}`, exact: true });
     await aria(page, info, `${surface}-avant-acces`);
     expect(state.mission.statut).toBe('EN_COURS');
@@ -420,16 +423,17 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
       factures: rows, role, interdits }, null, 2), contentType: 'application/json' });
     // This is the baseline failure: the original exists and the mission is
     // EN_COURS, yet the document button used to be absent on all three surfaces.
-    await expect(bouton(original)).toBeVisible();
+    await expect(bouton(exigible)).toBeVisible();
     if (surface === 'a-payer') await expect(page.getByRole('button', { name: 'Payer via Stripe', exact: true })).toBeVisible();
     else {
       await expect(page.getByRole('heading', { name: surface === 'detail-soignant'
         ? 'Vos documents d’honoraires pour cette mission' : 'Documents d’honoraires du soignant', exact: true })).toBeVisible();
-      await expect(bouton(avoir)).toBeVisible();
-      await expect(page.getByText('1 avoir comptabilisé en négatif dans le total net.', { exact: true })).toBeVisible();
+      await expect(bouton(original)).toBeVisible();
+      await expect(bouton(correction)).toBeVisible();
+      if (!remplacement) await expect(page.getByText('1 avoir comptabilisé en négatif dans le total net.', { exact: true })).toBeVisible();
     }
     let pannes = 1;
-    const stockage = `/storage/v1/object/sign/jolene-documents/${original.pdf_s3_key}`;
+    const stockage = `/storage/v1/object/sign/jolene-documents/${exigible.pdf_s3_key}`;
     await page.route('**/storage/v1/object/sign/jolene-documents/**', async route => {
       const req = route.request(), url = new URL(req.url());
       if (req.method() === 'GET' && decodeURIComponent(url.pathname) === stockage && pannes) {
@@ -440,9 +444,9 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
       }
       return route.fallback();
     });
-    if (tactile) await bouton(original).tap(); else await bouton(original).click();
+    if (tactile) await bouton(exigible).tap(); else await bouton(exigible).click();
     const message = page.getByText('Téléchargement indisponible (503).', { exact: true });
-    await expect(message).toBeVisible(); await expect(bouton(original)).toBeEnabled();
+    await expect(message).toBeVisible(); await expect(bouton(exigible)).toBeEnabled();
     await expect.poll(async () => {
       const box = await message.boundingBox(), viewport = page.viewportSize();
       return !!box && !!viewport && box.x >= 0 && box.y >= 0
@@ -457,6 +461,36 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
         const bytes = await telecharger(page, bouton(f), f.numero_facture, tactile);
         expect(sha256(bytes)).toBe(sha256(banc.documents.get(f.pdf_s3_key).bytes));
         octetsVerifies.push({ numero: f.numero_facture, sha256: sha256(bytes) });
+        if (remplacement && !recharge) {
+          const texte = await analyserPdf(analyse, bytes, info, `${surface}-${f.numero_facture}`);
+          expect(texte).toContain(f.numero_facture);
+          expect(texte).toContain(`${banc.soignant.prenom} ${banc.soignant.nom}`);
+          expect(texte).toContain(banc.etablissement.nom);
+          const xml = verifierXml(banc.documents.get(f.facturx_xml_url).bytes, f,
+            f.id === correction.id ? original : undefined, `${banc.soignant.prenom} ${banc.soignant.nom}`, banc.etablissement.nom);
+          expect(xml.type).toBe('380');
+          const total = f.id === correction.id ? '72.00' : '80.00';
+          const taux = f.id === correction.id ? '18.00' : '20.00';
+          expect(texte).toContain(`TOTAL ${total} EUR 0.00 EUR ${total} EUR`);
+          expect(texte).toContain(`Quantite : 4.00 h · Prix unitaire HT : ${taux} EUR/h`);
+          const reference = `Facture rectificative remplaçant la facture n° ${original.numero_facture} du ${original.date_emission}`;
+          if (f.id === correction.id) expect(texte).toContain(reference);
+          else expect(texte).not.toContain('Facture rectificative remplaçant');
+        }
+      }
+      if (remplacement) {
+        if (surface === 'a-payer') {
+          await expect(bouton(original)).toHaveCount(0);
+          await expect(page.getByText(original.numero_facture, { exact: true })).toHaveCount(0);
+          await expect(page.getByRole('button', { name: 'Payer via Stripe', exact: true })).toBeVisible();
+        } else {
+          await expect(bouton(original).locator('..')).toContainText('Remplacée');
+          await expect(bouton(correction).locator('..')).toContainText('Émise');
+          const carte = page.locator('.card-base').filter({ has: page.getByRole('heading', { name: surface === 'detail-soignant'
+            ? 'Vos documents d’honoraires pour cette mission' : 'Documents d’honoraires du soignant', exact: true }) });
+          await expect(carte.getByText('Net facturé', { exact: true }).locator('..')).toContainText(/72,00\s*€/);
+          await expect(carte.getByText('1 avoir comptabilisé en négatif dans le total net.', { exact: true })).toHaveCount(0);
+        }
       }
       expect(JSON.stringify(state.mission)).toBe(avantMission);
       expect(JSON.stringify(rows)).toBe(avantDocuments);
@@ -465,7 +499,7 @@ for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as 
     }
     expect(telechargements).toEqual([...documents, ...documents].map(f => `${f.numero_facture}.pdf`));
     expect(reseau.lectures.filter(x => x.startsWith('octets:'))).toHaveLength(documents.length * 2);
-    await bouton(original).scrollIntoViewIfNeeded();
+    await bouton(exigible).scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`${surface}-apres-recharge.png`), animations: 'disabled', scale: 'css' });
     await aria(page, info, `${surface}-apres-recharge`);
