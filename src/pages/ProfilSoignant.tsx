@@ -19,6 +19,7 @@ import { AvatarUpload } from '@/components/AvatarUpload';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
+import { validerProfilSoignant } from '@/lib/valider-profil-soignant';
 import { calculerCompletionProfil } from '@/lib/profil-soignant';
 import type { Database } from '@/integrations/supabase/types';
 import { SectionProfilPrincipal } from '@/components/profil-soignant/SectionProfilPrincipal';
@@ -43,6 +44,7 @@ export default function ProfilSoignant() {
     ? tabParam!
     : 'principal';
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deconnexionEnCours, setDeconnexionEnCours] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -129,19 +131,33 @@ export default function ProfilSoignant() {
   }, [ongletActif, loading]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
+    const userId = user.id;
+    let actif = true;
+    const controleur = new AbortController();
     setLoading(true);
-    supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
-      if (error) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-        setLoading(false);
-        return;
-      }
-      if (data) {
+    setErreurChargement(false);
+    setSoignantRow(null);
+    setNoteMoyenne(null);
+    setEvaluations([]);
+    setBadgeStats(null);
+    setNbEvenementsScore(0);
+    // Borne uniquement cette lecture : une réponse tardive ne réhydrate jamais
+    // le formulaire après expiration, nouvelle tentative ou démontage.
+    const delai = window.setTimeout(() => {
+      controleur.abort();
+      if (actif) { setErreurChargement(true); setLoading(false); }
+    }, 10_000);
+    void (async () => {
+      try {
+        const reponse = await supabase.rpc('fn_mon_profil_soignant_complet').abortSignal(controleur.signal);
+        if (!actif || controleur.signal.aborted) return;
+        if (reponse.error) throw reponse.error;
+        const data = validerProfilSoignant(reponse.data, userId);
         supabase.rpc('fn_ecrire_audit_safe', {
-          p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+          p_acteur_id: userId, p_type_acteur: 'SOIGNANT',
           p_action: 'DONNEES_PERSO_CONSULTATION',
-          p_type_ressource: 'soignant', p_id_ressource: user.id,
+          p_type_ressource: 'soignant', p_id_ressource: userId,
           p_cle_s3: null, p_details: { page: 'profil' },
           p_ip: null, p_navigateur: navigator.userAgent,
         }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.audit'));
@@ -173,27 +189,34 @@ export default function ProfilSoignant() {
         setAvatarUrl(data.avatar_url || '');
         setTauxHoraireMinimum(data.taux_horaire_minimum ?? null);
         setVilleRecherche(data.ville_recherche || '');
-        setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
+        setSpecialites(data.specialites);
         setTypesContrat(getTypesContratSoignant(data));
         setConsentementGPS(data.consentement_gps !== false);
         setPoolUrgenceActif(data.disponible_urgence || false);
         setPoolUrgenceRayon(data.urgence_rayon_km || 15);
 
-        setSoignantRow(data as SoignantRow);
+        setSoignantRow(data);
+      } catch {
+        if (actif && !controleur.signal.aborted) setErreurChargement(true);
+      } finally {
+        window.clearTimeout(delai);
+        if (actif && !controleur.signal.aborted) setLoading(false);
       }
-      setLoading(false);
-    });
+    })();
 
-    supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
+    supabase.rpc('fn_note_moyenne' as any, { p_user_id: userId }).abortSignal(controleur.signal)
       .then(({ data }: any) => {
+        if (!actif || controleur.signal.aborted) return;
         if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
         else if (data && typeof data === 'object' && !Array.isArray(data) && 'total' in data) setNoteMoyenne(data);
-      }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.noteMoyenne'));
-    supabase.rpc('fn_mes_evaluations_recues' as any)
+      }).then(undefined, (err) => { if (actif && !controleur.signal.aborted) handleErrorSilent(err, 'ProfilSoignant.noteMoyenne'); });
+    supabase.rpc('fn_mes_evaluations_recues' as any).abortSignal(controleur.signal)
       .then(({ data }: any) => {
+        if (!actif || controleur.signal.aborted) return;
         if (Array.isArray(data)) setEvaluations(data);
-      }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.evaluations'));
-    supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
+      }).then(undefined, (err) => { if (actif && !controleur.signal.aborted) handleErrorSilent(err, 'ProfilSoignant.evaluations'); });
+    supabase.rpc('fn_badge_stats' as any).abortSignal(controleur.signal).then(({ data }: any) => {
+        if (!actif || controleur.signal.aborted) return;
       if (data) {
         setBadgeStats({
           missionsTerminees: data.total_missions ?? data.missionsTerminees ?? 0,
@@ -207,17 +230,19 @@ export default function ProfilSoignant() {
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
         });
       }
-    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.badgeStats'));
+    }).then(undefined, (err) => { if (actif && !controleur.signal.aborted) handleErrorSilent(err, 'ProfilSoignant.badgeStats'); });
 
     // Événements de score contestables — le recours « pénalité injuste » n'est
     // affiché QUE s'il en existe (jamais de bloc vide anxiogène). Shape RPC
     // défensive : { events } (SectionEvenementsScore) ou { evenements } (legacy).
-    supabase.rpc('fn_mes_evenements_score' as any, { p_limit: 5 }).then(({ data }: any) => {
+    supabase.rpc('fn_mes_evenements_score' as any, { p_limit: 5 }).abortSignal(controleur.signal).then(({ data }: any) => {
+        if (!actif || controleur.signal.aborted) return;
       const res = data as any;
       const evs = res?.events ?? res?.evenements ?? (Array.isArray(res) ? res : []);
       setNbEvenementsScore(Array.isArray(evs) ? evs.length : 0);
-    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.evenementsScore'));
-  }, [user, refreshKey, afficherNotification]);
+    }).then(undefined, (err) => { if (actif && !controleur.signal.aborted) handleErrorSilent(err, 'ProfilSoignant.evenementsScore'); });
+    return () => { actif = false; window.clearTimeout(delai); controleur.abort(); };
+  }, [user?.id, refreshKey]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -273,9 +298,10 @@ export default function ProfilSoignant() {
 
   const resumeCompletion = calculerCompletionProfil(soignantRow);
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (!user) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  const profilDisponible = !loading && !erreurChargement && soignantRow?.id === user.id;
 
-  const profilComplet = resumeCompletion.peut_candidater;
+  const profilComplet = profilDisponible && resumeCompletion.peut_candidater;
 
   // Score simple sur le Profil (dissolution du hub Réputation, modèle Uber) :
   // une note + un niveau, sans page algo. Niveau dérivé du score (mêmes seuils
@@ -288,7 +314,7 @@ export default function ProfilSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="flex items-center gap-4 mb-6">
+      {profilDisponible ? <div className="flex items-center gap-4 mb-6">
         <AvatarUpload
           src={avatarUrl}
           prenom={prenom}
@@ -304,9 +330,9 @@ export default function ProfilSoignant() {
             <BadgeRPPS rppsVerifie={rppsVerifie} rpps={rpps} profession={profession} />
           </div>
         </div>
-      </div>
+      </div> : <h1 className="text-xl font-bold text-foreground mb-6">Mon profil</h1>}
 
-      {!profilComplet && (
+      {!profilComplet && profilDisponible && (
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-6 flex items-start gap-3">
           <span className="text-xl shrink-0">🎯</span>
           <div>
@@ -379,7 +405,16 @@ export default function ProfilSoignant() {
             </TabsList>
           </div>
 
+          {ongletActif !== 'confidentialite' && loading && <ChargementPage />}
+          {erreurChargement && (
+            <div role="alert" className="card-base mb-4 space-y-3">
+              <p>Ton profil n’a pas pu être chargé. Tu peux réessayer ; tes données n’ont pas été modifiées.</p>
+              <button type="button" onClick={() => setRefreshKey(key => key + 1)} className="btn-secondary">Réessayer</button>
+            </div>
+          )}
+
           <TabsContent value="principal">
+            {profilDisponible && <>
             <SectionProfilPrincipal
               userId={user!.id}
               email={email}
@@ -422,12 +457,14 @@ export default function ProfilSoignant() {
             <div className="mt-4">
               <SectionDpaeIdentite soignantId={user!.id} typeExercice={typeExercice} />
             </div>
+            </>}
           </TabsContent>
 
           {/* Onglet « Paiements » retiré : la config Stripe/Mandat est source unique
               dans Compte (« Paiements & facturation »). */}
 
           <TabsContent value="preferences">
+            {profilDisponible && <>
             <SectionPreferences
               userId={user!.id}
               bio={bio}
@@ -462,6 +499,7 @@ export default function ProfilSoignant() {
                 {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
               </button>
             </div>
+            </>}
           </TabsContent>
 
           <TabsContent value="confidentialite">
