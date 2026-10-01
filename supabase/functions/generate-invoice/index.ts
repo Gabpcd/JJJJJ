@@ -557,32 +557,34 @@ async function generateInvoicePdf(inv: {
   drawText(`Date d'echeance : ${inv.dueDate}`, margin + 200, y);
   y -= 14;
 
+  // Les références conservent leur numéro entier, sans réduire la police.
+  function drawReference(text: string, options?: { size?: number; color?: typeof black }) {
+    const size = options?.size || fontSize;
+    let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && fontBold.widthOfTextAtSize(next, size) > w - 2 * margin) {
+        drawText(line, margin, y, { font: fontBold, ...options });
+        y -= 12;
+        line = word;
+      } else line = next;
+    }
+    if (line) { drawText(line, margin, y, { font: fontBold, ...options }); y -= 14; }
+  }
+
   // CP-LITIGES-6 : mention obligatoire AVOIR (art. L441-10 C. com.)
   if (inv.isAvoir && inv.precedingInvoiceNumber) {
-    drawText(
+    drawReference(
       `Avoir emis sur facture n. ${inv.precedingInvoiceNumber}${inv.precedingInvoiceIssueDate ? ` du ${inv.precedingInvoiceIssueDate}` : ''}`,
-      margin, y, { font: fontBold, size: sectionSize, color: red }
+      { size: sectionSize, color: red }
     );
-    y -= 14;
     if (inv.motifAvoir) {
       drawText(`Motif : ${inv.motifAvoir.substring(0, 90)}`, margin, y, { size: 8, color: grey });
       y -= 12;
     }
   }
   if (inv.isReplacement && inv.precedingInvoiceNumber && inv.precedingInvoiceIssueDate) {
-    const mention = `Facture rectificative remplaçant la facture n° ${inv.precedingInvoiceNumber} du ${inv.precedingInvoiceIssueDate}`;
-    let line = '';
-    for (const word of mention.split(' ')) {
-      const next = line ? `${line} ${word}` : word;
-      if (line && fontBold.widthOfTextAtSize(next, fontSize) > w - 2 * margin) {
-        drawText(line, margin, y, { font: fontBold });
-        y -= 12;
-        line = word;
-      } else {
-        line = next;
-      }
-    }
-    if (line) { drawText(line, margin, y, { font: fontBold }); y -= 14; }
+    drawReference(`Facture rectificative remplaçant la facture n° ${inv.precedingInvoiceNumber} du ${inv.precedingInvoiceIssueDate}`);
   }
   // CP-LITIGES-7a FIX 7 : mention rectification pour facture REMPLACEE
   if (inv.statut === 'REMPLACEE') {
@@ -590,8 +592,7 @@ async function generateInvoicePdf(inv: {
     const mentionReplace = inv.replacedByInvoiceNumber
       ? `Facture rectificative remplacee par ${inv.replacedByInvoiceNumber} (art. L441-9 C. com.).`
       : `Facture rectifiee et remplacee (art. L441-9 C. com.).`;
-    drawText(mentionReplace, margin, y, { font: fontBold, size: sectionSize, color: orange });
-    y -= 14;
+    drawReference(mentionReplace, { size: sectionSize, color: orange });
   }
   y -= 10;
 
@@ -782,6 +783,13 @@ Deno.serve(async (req) => {
     return json(req, { error: 'Trop de demandes. Réessayez dans 1 minute.' }, 429);
   }
 
+  let generationEnCours: { client: any; factureId: string; token: string } | null = null;
+  const signalerEchecGeneration = async () => {
+    if (!generationEnCours) return;
+    const { client, factureId, token } = generationEnCours;
+    generationEnCours = null;
+    await client.rpc('fn_terminer_generation_honoraires', { p_facture_id: factureId, p_token: token, p_documents: null });
+  };
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) return json(req, { error: 'Non autorisé' }, 401);
@@ -844,12 +852,32 @@ Deno.serve(async (req) => {
       authenticatedClient = supabaseUser;
     }
 
+    const repondreFactureExistante = async (id: string, numero: string, nature: string) => {
+      // L’émission peut avoir réussi avant la préparation de la commission.
+      // Cette réparation reste nécessaire, même si la réservation vient de
+      // découvrir la pièce concurrente après la première lecture.
+      if (!['ORIGINALE', 'REMPLACEMENT'].includes(nature)) return json(req, {
+        error: 'FACTURE_RESERVATION_CORRECTION_EXISTANTE', facture_id: id,
+      }, 409);
+      const commissionRpc = nature === 'REMPLACEMENT'
+        ? 'fn_preparer_commission_remplacement_honoraires'
+        : 'fn_preparer_facture_commission_periode';
+      const { error } = await supabaseAdmin.rpc(commissionRpc, {
+        p_facture_honoraire_id: id,
+      });
+      if (error) return json(req, {
+        error: `Facture honoraires existante mais commission non préparée : ${error.message}`,
+        facture_id: id,
+      }, 500);
+      return json(req, { error: `Une facture existe déjà : ${numero}`, facture_id: id }, 409);
+    };
+
     // ═══════════════════════════════════════════════════════════
     // MODE REGEN (CP-LITIGES-6) — facture_id fourni
     // Regénère PDF + XML CII + upload S3 + éventuelle resoumission Chorus
     // pour une facture existante (cas AVOIR ou ANNULER_REEMETTRE).
     // ═══════════════════════════════════════════════════════════
-    if (facture_id && !mission_id) {
+    const genererFactureExistante = async (facture_id: string, tokenReservation?: string) => {
       const { data: facture, error: fErr } = await supabaseAdmin
         .from('factures_honoraires')
         .select('id, numero_facture, soignant_id, etablissement_id, mission_id, montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva, date_emission, date_echeance, statut, mandat_version, type_document, facture_precedente_id, litige_id, is_public_sector, service_code_chorus, periode_debut, periode_fin, numero_semaine_iso, annee_iso, est_facture_finale_mission, nature_correction, regime_tva_snapshot, base_legale_tva_snapshot, nature_prestation_snapshot, description_prestation_snapshot, quantite_heures_snapshot, taux_horaire_snapshot, emetteur_identite_snapshot, emetteur_profession_snapshot, emetteur_siret_snapshot, emetteur_numero_professionnel_snapshot, emetteur_adresse_snapshot, emetteur_adresse_rue_snapshot, emetteur_adresse_code_postal_snapshot, emetteur_adresse_ville_snapshot, emetteur_email_snapshot, emetteur_numero_tva_snapshot, destinataire_nom_snapshot, destinataire_siret_snapshot, destinataire_adresse_rue_snapshot, destinataire_adresse_code_postal_snapshot, destinataire_adresse_ville_snapshot')
@@ -933,27 +961,27 @@ Deno.serve(async (req) => {
       }
 
       const regimeSnapshot = facture.regime_tva_snapshot
-        || sg.regime_tva_honoraires
-        || (facture.exoneration_tva ? 'EXONERE_ART_261_4_1' : 'ASSUJETTI_TVA');
+        ?? (sg.regime_tva_honoraires
+        || (facture.exoneration_tva ? 'EXONERE_ART_261_4_1' : 'ASSUJETTI_TVA'));
       const vat = traitementTvaDepuisRegimeSnapshot(regimeSnapshot, facture.date_emission);
-      const sellerName = facture.emetteur_identite_snapshot || `${sg.prenom} ${sg.nom}`.trim();
-      const sellerProfession = facture.emetteur_profession_snapshot || sg.profession || '';
-      const sellerSiret = facture.emetteur_siret_snapshot || sg.siret_liberal || '';
-      const sellerProfessionalNumber = facture.emetteur_numero_professionnel_snapshot || sg.numero_rpps || sg.numero_adeli || '';
-      const sellerStreet = facture.emetteur_adresse_rue_snapshot || sg.adresse_rue || '';
-      const sellerPostalCode = facture.emetteur_adresse_code_postal_snapshot || sg.adresse_code_postal || '';
-      const sellerCity = facture.emetteur_adresse_ville_snapshot || sg.adresse_ville || '';
-      const sellerEmail = facture.emetteur_email_snapshot || sg.email || '';
-      const sellerVatId = facture.emetteur_numero_tva_snapshot || sg.numero_tva || '';
+      const sellerName = facture.emetteur_identite_snapshot ?? `${sg.prenom} ${sg.nom}`.trim();
+      const sellerProfession = facture.emetteur_profession_snapshot ?? (sg.profession || '');
+      const sellerSiret = facture.emetteur_siret_snapshot ?? (sg.siret_liberal || '');
+      const sellerProfessionalNumber = facture.emetteur_numero_professionnel_snapshot ?? (sg.numero_rpps || sg.numero_adeli || '');
+      const sellerStreet = facture.emetteur_adresse_rue_snapshot ?? (sg.adresse_rue || '');
+      const sellerPostalCode = facture.emetteur_adresse_code_postal_snapshot ?? (sg.adresse_code_postal || '');
+      const sellerCity = facture.emetteur_adresse_ville_snapshot ?? (sg.adresse_ville || '');
+      const sellerEmail = facture.emetteur_email_snapshot ?? (sg.email || '');
+      const sellerVatId = facture.emetteur_numero_tva_snapshot ?? (sg.numero_tva || '');
       const sellerAddress = facture.emetteur_adresse_snapshot
-        || [sellerStreet, sellerPostalCode, sellerCity].filter(Boolean).join(', ');
-      const buyerName = facture.destinataire_nom_snapshot || et.nom;
-      const buyerSiret = facture.destinataire_siret_snapshot || et.siret || '';
-      const buyerStreet = facture.destinataire_adresse_rue_snapshot || et.adresse_rue || '';
-      const buyerPostalCode = facture.destinataire_adresse_code_postal_snapshot || et.adresse_code_postal || '';
-      const buyerCity = facture.destinataire_adresse_ville_snapshot || et.adresse_ville || '';
+        ?? [sellerStreet, sellerPostalCode, sellerCity].filter(Boolean).join(', ');
+      const buyerName = facture.destinataire_nom_snapshot ?? et.nom;
+      const buyerSiret = facture.destinataire_siret_snapshot ?? (et.siret || '');
+      const buyerStreet = facture.destinataire_adresse_rue_snapshot ?? (et.adresse_rue || '');
+      const buyerPostalCode = facture.destinataire_adresse_code_postal_snapshot ?? (et.adresse_code_postal || '');
+      const buyerCity = facture.destinataire_adresse_ville_snapshot ?? (et.adresse_ville || '');
       const buyerAddress = [buyerStreet, buyerPostalCode, buyerCity].filter(Boolean).join(', ');
-      const description = facture.description_prestation_snapshot || (isAvoir
+      const description = facture.description_prestation_snapshot ?? (isAvoir
         ? `Avoir sur facture ${precedingNumero ?? ''}${motifAvoir ? ' — ' + motifAvoir.substring(0, 100) : ''}`
         : facture.nature_correction === 'COMPLEMENT'
         ? `Complement d'honoraires apres litige sur facture ${precedingNumero ?? ''}`
@@ -976,6 +1004,19 @@ Deno.serve(async (req) => {
         buyerName, buyerSiret, buyerAddress, description, subrogationMention,
         facture.mandat_version, precedingNumero, precedingDate, motifAvoir, replacedByNumero,
       ]);
+
+      const estPremiereEmission = ['BROUILLON', 'EN_GENERATION', 'ERREUR_GENERATION'].includes(facture.statut);
+      if (tokenReservation && !estPremiereEmission) {
+        return await repondreFactureExistante(facture.id, facture.numero_facture, facture.nature_correction);
+      }
+      let generationToken: string | null = tokenReservation || null;
+      if (estPremiereEmission && !generationToken) {
+        const { data: bail, error: bailError } = await supabaseAdmin.rpc('fn_acquerir_generation_honoraires', { p_facture_id: facture_id });
+        if (bailError) return json(req, { error: 'FACTURE_GENERATION_REPRISE_REFUSEE', message: 'La reprise de cette facture est indisponible. Contactez l’assistance.', facture_id }, 409);
+        if (!bail?.acquise || !bail?.token) return json(req, { error: 'FACTURE_GENERATION_EN_COURS', message: 'Cette facture est déjà en cours de génération ou a été émise. Actualisez dans quelques instants.', facture_id }, 409);
+        generationToken = bail.token;
+        generationEnCours = { client: supabaseAdmin, factureId: facture_id, token: bail.token };
+      }
 
       const xmlCii = generateCiiXml({
         invoiceNumber: facture.numero_facture,
@@ -1055,92 +1096,47 @@ Deno.serve(async (req) => {
       const { error: regenXmlUploadError } = await supabaseAdmin.storage.from('jolene-documents')
         .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: false });
       if (regenPdfUploadError || regenXmlUploadError) {
-        if (['BROUILLON', 'EN_GENERATION'].includes(facture.statut)) {
-          await supabaseAdmin.from('factures_honoraires')
-            .update({ statut: 'ERREUR_GENERATION' })
-            .eq('id', facture_id)
-            .in('statut', ['BROUILLON', 'EN_GENERATION']);
-        }
-        return json(req, {
-          error: `Échec régénération stockage : ${regenPdfUploadError?.message || regenXmlUploadError?.message}`,
-        }, 500);
-      }
-
-      const [pdfSha256, xmlSha256] = await Promise.all([
-        sha256Hex(pdfBytes),
-        sha256Hex(xmlCii),
-      ]);
-      const { error: documentLedgerError } = await supabaseAdmin
-        .from('factures_honoraires_documents')
-        .insert({
-          facture_honoraire_id: facture_id,
-          pdf_s3_key: storagePath,
-          facturx_xml_url: xmlPath,
-          pdf_sha256: pdfSha256,
-          xml_sha256: xmlSha256,
-          motif_generation: ['BROUILLON', 'EN_GENERATION'].includes(facture.statut)
-            ? 'EMISSION_DOCUMENT_CORRECTION'
-            : 'REGENERATION_DOCUMENT_IMMUABLE',
+        await signalerEchecGeneration();
+        if (tokenReservation) await supabaseAdmin.from('journaux_audit').insert({
+          acteur_id: null, type_acteur: 'SYSTEME', action: 'ADMIN_ACTION',
+          type_ressource: 'facture_honoraire', id_ressource: facture.id,
+          details: { event: 'GENERATION_INVOICE_FAIL', error: String(regenPdfUploadError || regenXmlUploadError),
+            mission_id: facture.mission_id, periode_debut: facture.periode_debut, periode_fin: facture.periode_fin },
         });
-      if (documentLedgerError) {
-        console.error('[generate-invoice] ledger regen error', documentLedgerError.message);
-        if (['BROUILLON', 'EN_GENERATION'].includes(facture.statut)) {
-          await supabaseAdmin.from('factures_honoraires')
-            .update({ statut: 'ERREUR_GENERATION' })
-            .eq('id', facture_id)
-            .in('statut', ['BROUILLON', 'EN_GENERATION']);
-        }
-        return json(req, { error: 'Version documentaire non enregistrée — émission interrompue' }, 500);
+        return json(req, { error: 'Échec régénération stockage', facture_id }, 500);
       }
 
-      const estPremiereEmission = ['BROUILLON', 'EN_GENERATION'].includes(facture.statut);
+      const [pdfSha256, xmlSha256] = await Promise.all([sha256Hex(pdfBytes), sha256Hex(xmlCii)]);
+      const documents = { pdf_s3_key: storagePath, facturx_xml_url: xmlPath, pdf_sha256: pdfSha256, xml_sha256: xmlSha256 };
       let delaiVerificationHeures = 48;
       if (estPremiereEmission) {
-        if (isAvoir) {
-          const { error: avoirReferenceError } = await supabaseAdmin
-            .from('factures_honoraires')
-            .update({ chorus_avoir_reference_invoice: precedingNumero })
-            .eq('id', facture_id);
-          if (avoirReferenceError) {
-            return json(req, {
-              error: `Référence de l'avoir non enregistrée : ${avoirReferenceError.message}`,
-            }, 500);
-          }
+        const { data: emission, error: emissionError } = await supabaseAdmin.rpc('fn_terminer_generation_honoraires', {
+          p_facture_id: facture_id, p_token: generationToken, p_documents: documents,
+        });
+        if (emissionError || !emission?.success) {
+          await signalerEchecGeneration();
+          return json(req, { error: 'Émission atomique interrompue', facture_id }, 500);
         }
-        const { data: emission, error: emissionError } = await supabaseAdmin.rpc(
-          'fn_emettre_document_facturation_honoraires',
-          {
-            p_facture_id: facture_id,
-            p_pdf_s3_key: storagePath,
-            p_facturx_xml_url: xmlPath,
-          },
-        );
-        if (emissionError || !(emission as any)?.success) {
-          await supabaseAdmin.from('factures_honoraires')
-            .update({ statut: 'ERREUR_GENERATION' })
-            .eq('id', facture_id)
-            .in('statut', ['BROUILLON', 'EN_GENERATION']);
-          return json(req, {
-            error: `Emission atomique échouée : ${emissionError?.message || 'réponse invalide'}`,
-          }, 500);
-        }
-        delaiVerificationHeures = Number((emission as any).delai_verification_heures) || 48;
+        generationEnCours = null;
+        delaiVerificationHeures = Number(emission.delai_verification_heures) || 48;
       } else {
-        const { error: upErr } = await supabaseAdmin
-          .from('factures_honoraires')
-          .update({
-            pdf_s3_key: storagePath,
-            facturx_xml_url: xmlPath,
-            pdf_a_regenerer: false,
-            chorus_avoir_reference_invoice: isAvoir ? precedingNumero : null,
-          })
-          .eq('id', facture_id);
-        if (upErr) return json(req, { error: `UPDATE facture échoué : ${upErr.message}` }, 500);
+        // Une nouvelle version d’une pièce déjà émise ne l’émet pas une seconde fois.
+        const { error: ledgerError } = await supabaseAdmin.from('factures_honoraires_documents').insert({
+          facture_honoraire_id: facture_id, ...documents, motif_generation: 'REGENERATION_DOCUMENT_IMMUABLE',
+        });
+        if (ledgerError) return json(req, { error: 'Version documentaire non enregistrée', facture_id }, 500);
+        const { error: upErr } = await supabaseAdmin.from('factures_honoraires').update({
+          pdf_s3_key: storagePath, facturx_xml_url: xmlPath, pdf_a_regenerer: false,
+          chorus_avoir_reference_invoice: isAvoir ? precedingNumero : null,
+        }).eq('id', facture_id);
+        if (upErr) return json(req, { error: 'Version documentaire non rattachée', facture_id }, 500);
       }
 
       let commissionCorrection: Record<string, unknown> | null = null;
-      if (isAvoir || ['COMPLEMENT', 'REMPLACEMENT'].includes(facture.nature_correction)) {
-        const commissionRpc = isAvoir
+      if (isAvoir || ['ORIGINALE', 'COMPLEMENT', 'REMPLACEMENT'].includes(facture.nature_correction)) {
+        const commissionRpc = facture.nature_correction === 'ORIGINALE'
+          ? 'fn_preparer_facture_commission_periode'
+          : isAvoir
           ? 'fn_preparer_avoir_commission_honoraires'
           : facture.nature_correction === 'COMPLEMENT'
             ? 'fn_preparer_commission_complement_honoraires'
@@ -1194,18 +1190,27 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`[generate-invoice] REGEN ${facture.type_document} ${facture.numero_facture} (id=${facture_id})`);
+      if (tokenReservation && isServiceRole) {
+        await supabaseAdmin.from('invoice_audit_log').insert({
+          invoice_id: facture.id,
+          action: 'GENERATED_VIA_SERVICE_ROLE',
+          actor_id: null,
+          payload_before: { caller_context: 'service_role', mission_id: facture.mission_id, reason: service_role_reason },
+          payload_after: { numero_facture: facture.numero_facture, template_version: 'v2_facturx' },
+        });
+      }
+      console.log(`[generate-invoice] ${tokenReservation ? 'EMISSION' : 'REGEN'} ${facture.type_document} ${facture.numero_facture} (id=${facture_id})`);
       return json(req, {
         success: true,
-        mode: 'regen',
+        ...(tokenReservation ? { is_public_sector: facture.is_public_sector || false } : { mode: 'regen', type_document: facture.type_document }),
         facture_id,
-        type_document: facture.type_document,
         numero_facture: facture.numero_facture,
         pdf_path: storagePath,
         xml_path: xmlPath,
         facture_commission_id: commissionCorrection?.facture_id || null,
       });
-    }
+    };
+    if (facture_id && !mission_id) return await genererFactureExistante(facture_id);
 
     if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
 
@@ -1366,10 +1371,11 @@ Deno.serve(async (req) => {
     {
       let q = supabaseAdmin
         .from('factures_honoraires')
-        .select('id, numero_facture, est_facture_finale_mission, periode_debut, periode_fin')
+        .select('id, numero_facture, statut, type_document, nature_correction, est_facture_finale_mission, periode_debut, periode_fin')
         .eq('mission_id', mission_id)
         .neq('nature_correction', 'COMPLEMENT')
-        .not('statut', 'in', '("ANNULEE","REMPLACEE","ERREUR_GENERATION")');
+        .eq('type_document', 'FACTURE')
+        .not('statut', 'in', '("ANNULEE","REMPLACEE")');
       if (isHebdoMode && est_facture_finale_mission !== true) {
         // doublon hebdo
         q = q.eq('annee_iso', annee_iso).eq('numero_semaine_iso', numero_semaine_iso).eq('est_facture_finale_mission', false);
@@ -1377,22 +1383,19 @@ Deno.serve(async (req) => {
         // doublon finale (FINALE_UNIQUE ou facture finale partielle d'une mission HEBDO_ET_FINALE)
         q = q.eq('est_facture_finale_mission', true);
       }
-      const { data: existing } = await q.maybeSingle();
+      const { data: existing, error: existingError } = await q.maybeSingle();
+      if (existingError) return json(req, { error: 'FACTURE_RESERVATION_HISTORIQUE_AMBIGU', message: 'Les documents existants doivent être vérifiés avant une nouvelle génération.' }, 409);
       if (existing) {
-        // Un retry du cron peut intervenir après l'émission de la note mais
-        // avant la création de la facture de commission. Réparer ce second
-        // artefact avant de répondre idempotent.
-        const { error: commissionRepairError } = await supabaseAdmin.rpc(
-          'fn_preparer_facture_commission_periode',
-          { p_facture_honoraire_id: existing.id },
-        );
-        if (commissionRepairError) {
-          return json(req, {
-            error: `Facture honoraires existante mais commission non préparée : ${commissionRepairError.message}`,
-            facture_id: existing.id,
-          }, 500);
+        if (['BROUILLON', 'EN_GENERATION', 'ERREUR_GENERATION'].includes(existing.statut)) {
+          const requestedStart = isHebdoMode ? periode_debut : String(mission.debut_le || '').slice(0, 10);
+          const requestedEnd = isHebdoMode ? periode_fin : String(mission.fin_le || '').slice(0, 10);
+          if (existing.type_document !== 'FACTURE' || existing.nature_correction !== 'ORIGINALE'
+            || existing.periode_debut !== requestedStart || existing.periode_fin !== requestedEnd) {
+            return json(req, { error: 'FACTURE_RESERVATION_PERIODE_DIFFERENTE', facture_id: existing.id }, 409);
+          }
+          return await genererFactureExistante(existing.id);
         }
-        return json(req, { error: `Une facture existe déjà : ${existing.numero_facture}`, facture_id: existing.id }, 409);
+        return await repondreFactureExistante(existing.id, existing.numero_facture, existing.nature_correction);
       }
     }
 
@@ -1406,11 +1409,6 @@ Deno.serve(async (req) => {
       etab.nom, etab.siret, etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville,
       mission.intitule, mission.service,
     ]);
-    const { data: invoiceNumber, error: numErr } = await supabaseAdmin.rpc('next_invoice_number', {
-      p_soignant_id: soignant.id,
-    });
-    if (numErr || !invoiceNumber) return json(req, { error: 'Erreur génération numéro de facture' }, 500);
-
     // 6. Calculer les montants
     //    - Mode finale unique : amountHt = mission.net_a_payer (comme avant)
     //    - Mode hebdo / finale partielle : appel fn_calculer_montant_periode
@@ -1458,11 +1456,6 @@ Deno.serve(async (req) => {
     const delaiJours = Number(delaiParam) || defautDelai;
     const dueDate = new Date(Date.now() + delaiJours * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // 7. Check factor
-    const factorData: any = null;
-    let subrogationMention: string | null = null;
-    // Factor assignment is done post-creation; here we just check if pre-assigned
-
     // 8. Get Chorus config if public sector
     let serviceCodeChorus: string | null = null;
     if (etab.est_secteur_public && etab.chorus_pro_actif) {
@@ -1477,7 +1470,6 @@ Deno.serve(async (req) => {
 
     // 9. Generate XML CII
     const sellerAddress = [soignant.adresse_rue, soignant.adresse_code_postal, soignant.adresse_ville].filter(Boolean).join(', ');
-    const buyerAddress = [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(', ');
     // Description avec mention hebdo + cumul si applicable
     let description: string;
     if (isHebdoMode && est_facture_finale_mission !== true) {
@@ -1496,73 +1488,6 @@ Deno.serve(async (req) => {
     if (quantiteHeures && tauxHoraireSnapshot) {
       description += ` — ${quantiteHeures.toFixed(2)} h x ${tauxHoraireSnapshot.toFixed(2)} EUR/h`;
     }
-
-    subrogationMention = buildSubrogationMention(soignant, issueDate);
-
-    const xmlCii = generateCiiXml({
-      invoiceNumber: invoiceNumber as string,
-      issueDate,
-      dueDate,
-      sellerName: `${soignant.prenom} ${soignant.nom}`,
-      sellerSiret: soignant.siret_liberal || '',
-      sellerVatId: soignant.numero_tva || '',
-      sellerRpps: soignant.numero_rpps || '',
-      sellerAdeli: soignant.numero_adeli || '',
-      sellerAddress: soignant.adresse_rue || '',
-      sellerCity: soignant.adresse_ville || '',
-      sellerPostalCode: soignant.adresse_code_postal || '',
-      sellerEmail: soignant.email || '',
-      buyerName: etab.nom,
-      buyerSiret: etab.siret || '',
-      buyerAddress: etab.adresse_rue || '',
-      buyerCity: etab.adresse_ville || '',
-      buyerPostalCode: etab.adresse_code_postal || '',
-      serviceDate: isHebdoMode
-        ? periode_fin
-        : (mission.fin_le ? String(mission.fin_le).slice(0, 10) : issueDate),
-      serviceCode: serviceCodeChorus || '',
-      description,
-      quantity: quantiteHeures,
-      unitPriceHt: tauxHoraireSnapshot,
-      amountHt,
-      amountTva,
-      amountTtc,
-      vatRate,
-      vatExempt,
-      vatExemptionReason: vatExempt ? vat.exemptionReason : '',
-      currencyCode: 'EUR',
-      subrogationMention,
-    });
-
-    // 10. Generate real PDF binary via pdf-lib
-    const pdfBytes = await generateInvoicePdf({
-      invoiceNumber: invoiceNumber as string,
-      issueDate,
-      dueDate,
-      sellerName: `${soignant.prenom} ${soignant.nom}`,
-      sellerProfession: soignant.profession || '',
-      sellerSiret: soignant.siret_liberal || '',
-      sellerRpps: soignant.numero_rpps || '',
-      sellerAdeli: soignant.numero_adeli || '',
-      sellerAddress,
-      buyerName: etab.nom,
-      buyerSiret: etab.siret || '',
-      buyerAddress,
-      description,
-      quantity: quantiteHeures,
-      unitPriceHt: tauxHoraireSnapshot,
-      amountHt,
-      amountTva,
-      amountTtc,
-      vatExempt,
-      vatExemptionReason: vatExempt ? vat.exemptionReason : '',
-      mandatVersion: soignant.mandat_facturation_version || '1.1',
-      subrogationMention,
-    });
-
-    // 11. Upload to Supabase Storage
-    const storagePath = cheminDocumentVersionne('invoices', soignant.id, invoiceNumber as string, 'pdf');
-    const xmlPath = cheminDocumentVersionne('invoices', soignant.id, invoiceNumber as string, 'xml');
 
     // 11b. Lookup facture précédente pour chaînage hebdo (Partie 2)
     let facturePrecedenteId: string | null = null;
@@ -1583,10 +1508,7 @@ Deno.serve(async (req) => {
     //     et empêche tout doublon hebdo concurrent. Sera passée à EMISE
     //     après succès upload PDF/XML, ou ERREUR_GENERATION sinon.
     const finalFlag = isHebdoMode ? (est_facture_finale_mission === true) : true;
-    const { data: facture, error: insertErr } = await supabaseAdmin
-      .from('factures_honoraires')
-      .insert({
-        numero_facture: invoiceNumber as string,
+    const { data: reservation, error: insertErr } = await supabaseAdmin.rpc('fn_reserver_facture_honoraires', { p_document: {
         soignant_id: soignant.id,
         etablissement_id: etab.id,
         mission_id: mission.id,
@@ -1597,7 +1519,6 @@ Deno.serve(async (req) => {
         exoneration_tva: vatExempt,
         date_emission: issueDate,
         date_echeance: dueDate,
-        statut: 'EN_GENERATION',
         mandat_version: soignant.mandat_facturation_version || '1.1',
         template_version: 'v2_facturx',
         is_public_sector: etab.est_secteur_public || false,
@@ -1609,7 +1530,6 @@ Deno.serve(async (req) => {
         annee_iso: (isHebdoMode && !finalFlag) ? annee_iso : null,
         est_facture_finale_mission: finalFlag,
         facture_precedente_id: facturePrecedenteId,
-        nature_correction: 'ORIGINALE',
         regime_tva_snapshot: vat.regime,
         base_legale_tva_snapshot: vat.legalBasis,
         nature_prestation_snapshot: vat.serviceNature,
@@ -1631,163 +1551,38 @@ Deno.serve(async (req) => {
         destinataire_adresse_rue_snapshot: etab.adresse_rue,
         destinataire_adresse_code_postal_snapshot: etab.adresse_code_postal,
         destinataire_adresse_ville_snapshot: etab.adresse_ville,
-      })
-      .select('id, numero_facture')
-      .single();
+      } });
 
     if (insertErr) {
       console.error('Insert facture error:', insertErr);
-      return json(req, { error: `Erreur insertion facture : ${insertErr.message}` }, 500);
+      return json(req, { error: 'FACTURE_RESERVATION_REFUSEE', message: 'La facture ne peut pas être réservée pour le moment.' }, 409);
     }
 
-    // Upload PDF + XML, puis UPDATE → EMISE. En cas d'échec, ERREUR_GENERATION.
-    const { error: uploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(storagePath, creerBlobPdf(pdfBytes), { upsert: false });
-
-    const { error: xmlUploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: false });
-
-    if (uploadErr || xmlUploadErr) {
-      console.error('Upload error:', uploadErr || xmlUploadErr);
-      await supabaseAdmin.from('factures_honoraires').update({
-        statut: 'ERREUR_GENERATION',
-      }).eq('id', facture!.id);
-      // Audit alerte admin
-      await supabaseAdmin.from('journaux_audit').insert({
-        acteur_id: null, type_acteur: 'SYSTEME',
-        action: 'ADMIN_ACTION', type_ressource: 'facture_honoraire',
-        id_ressource: facture!.id,
-        details: { event: 'GENERATION_INVOICE_FAIL', error: String(uploadErr || xmlUploadErr), mission_id, periode_debut, periode_fin },
-      });
-      return json(req, { error: 'Echec upload PDF/XML — facture en ERREUR_GENERATION', facture_id: facture!.id }, 500);
-    }
-
-    const [pdfSha256, xmlSha256] = await Promise.all([
-      sha256Hex(pdfBytes),
-      sha256Hex(xmlCii),
-    ]);
-    const { error: documentLedgerError } = await supabaseAdmin
-      .from('factures_honoraires_documents')
-      .insert({
-        facture_honoraire_id: facture!.id,
-        pdf_s3_key: storagePath,
-        facturx_xml_url: xmlPath,
-        pdf_sha256: pdfSha256,
-        xml_sha256: xmlSha256,
-        motif_generation: 'EMISSION_INITIALE',
-      });
-    if (documentLedgerError) {
-      console.error('Document ledger error:', documentLedgerError.message);
-      await supabaseAdmin.from('factures_honoraires')
-        .update({ statut: 'ERREUR_GENERATION' })
-        .eq('id', facture!.id)
-        .eq('statut', 'EN_GENERATION');
-      return json(req, {
-        error: 'Version documentaire non enregistrée — facture non émise',
-        facture_id: facture!.id,
-      }, 500);
-    }
-
-    // Tout est ok → émission + remise de copie in-app dans une seule
-    // transaction SQL. Le délai de vérification part de cet instant exact.
-    const { data: emission, error: updErr } = await supabaseAdmin.rpc(
-      'fn_emettre_document_facturation_honoraires',
-      {
-        p_facture_id: facture!.id,
-        p_pdf_s3_key: storagePath,
-        p_facturx_xml_url: xmlPath,
-      },
-    );
-    if (updErr || !(emission as any)?.success) {
-      console.error('Emission atomique error:', updErr);
-      // Ne jamais laisser un slot EN_GENERATION bloquer toutes les reprises du
-      // cron. Le retry suivant pourra régénérer une facture proprement.
-      await supabaseAdmin
-        .from('factures_honoraires')
-        .update({ statut: 'ERREUR_GENERATION' })
-        .eq('id', facture!.id)
-        .eq('statut', 'EN_GENERATION');
-      return json(req, {
-        error: `Erreur passage EMISE : ${updErr?.message || 'réponse invalide'}`,
-        facture_id: facture!.id,
-      }, 500);
-    }
-
-    // D6 — la commission Jolene suit exactement la même période que la note
-    // d'honoraires. Cette facture est celle qui sera payée par Stripe (privé)
-    // ou déposée sur Chorus Pro (public).
-    const { data: commissionPrepared, error: commissionPrepareError } = await supabaseAdmin
-      .rpc('fn_preparer_facture_commission_periode', {
-        p_facture_honoraire_id: facture!.id,
-      });
-    if (commissionPrepareError || !(commissionPrepared as any)?.facture_id) {
-      console.error('Commission invoice preparation error:', commissionPrepareError);
-      return json(req, {
-        error: `Erreur génération facture commission : ${commissionPrepareError?.message || 'réponse invalide'}`,
-        facture_id: facture!.id,
-      }, 500);
-    }
-
-    // 13. Secteur public : la note d'honoraires et la facture de commission
-    // sont deux documents distincts. La seconde est bien la facture Jolene
-    // déposée via chorus-pro-deposit.
-    if (etab.est_secteur_public) {
-      try {
-        await supabaseAdmin.functions.invoke('submit-to-chorus', {
-          body: { facture_honoraire_id: facture!.id },
-        });
-        await supabaseAdmin.functions.invoke('chorus-pro-deposit', {
-          body: { facture_id: (commissionPrepared as any).facture_id, action: 'deposer' },
-        });
-      } catch (e) {
-        console.warn('Chorus submission deferred:', e);
+    if (!reservation?.facture_id || !reservation?.numero_facture) return json(req, { error: 'Réservation de facture invalide' }, 500);
+    if (!reservation.cree) {
+      if (['BROUILLON', 'EN_GENERATION', 'ERREUR_GENERATION'].includes(reservation.statut)) {
+        if (reservation.nature_correction !== 'ORIGINALE') return json(req, {
+          error: 'FACTURE_RESERVATION_CORRECTION_EXISTANTE', facture_id: reservation.facture_id,
+        }, 409);
+        return await genererFactureExistante(reservation.facture_id);
       }
+      return await repondreFactureExistante(reservation.facture_id, reservation.numero_facture, reservation.nature_correction);
     }
-
-    await notifierEmissionDocument(
-      supabaseAdmin,
-      {
-        id: facture!.id,
-        numero_facture: facture!.numero_facture,
-        soignant_id: soignant.id,
-        etablissement_id: etab.id,
-        montant_ht: amountHt,
-        montant_tva: amountTva,
-        montant_ttc: amountTtc,
-        periode_debut: isHebdoMode ? periode_debut : (mission.debut_le ? String(mission.debut_le).slice(0, 10) : issueDate),
-        periode_fin: isHebdoMode ? periode_fin : (mission.fin_le ? String(mission.fin_le).slice(0, 10) : issueDate),
-        type_document: 'FACTURE',
-      },
-      soignant,
-      Number((emission as any).delai_verification_heures) || 48,
-    );
-
-    // 14. If service_role, insert explicit audit entry
-    if (isServiceRole) {
-      await supabaseAdmin.from('invoice_audit_log').insert({
-        invoice_id: facture!.id,
-        action: 'GENERATED_VIA_SERVICE_ROLE',
-        actor_id: null,
-        payload_before: { caller_context: 'service_role', mission_id, reason: service_role_reason },
-        payload_after: { numero_facture: facture!.numero_facture, template_version: 'v2_facturx' },
-      });
+    if (!reservation.token) return json(req, { error: 'Réservation de génération invalide', facture_id: reservation.facture_id }, 500);
+    generationEnCours = { client: supabaseAdmin, factureId: reservation.facture_id, token: reservation.token };
+    try {
+      // Même le premier rendu relit les snapshots réellement persistés par
+      // l’INSERT et ses triggers ; aucune identité courante ne les remplace.
+      return await genererFactureExistante(reservation.facture_id, reservation.token);
+    } finally {
+      // Couvre également un retour anticipé avant rendu (lecture/permission).
+      // Le token clôturé est effacé par le succès, et un ancien token ne peut
+      // jamais rétrograder une émission acquise ou le bail d’une autre reprise.
+      await signalerEchecGeneration();
     }
-
-    console.log(`[generate-invoice] Facture ${invoiceNumber} générée pour mission ${mission_id}${isServiceRole ? ` (service_role: ${service_role_reason})` : ''}`);
-
-    return json(req, {
-      success: true,
-      facture_id: facture!.id,
-      facture_commission_id: (commissionPrepared as any).facture_id,
-      numero_facture: facture!.numero_facture,
-      is_public_sector: etab.est_secteur_public || false,
-      pdf_path: storagePath,
-      xml_path: xmlPath,
-    });
 
   } catch (err) {
+    await signalerEchecGeneration();
     console.error('generate-invoice error:', err);
     if (err instanceof ErreurPoliceFacture) {
       const caractereNonPrisEnCharge = err.code === 'CARACTERE_PDF_NON_PRIS_EN_CHARGE';

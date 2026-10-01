@@ -144,7 +144,11 @@ async function aria(page: Page, info: TestInfo, nom: string) {
 }
 
 for (const unicode of [false, true]) test(`Documents F1 soignant${unicode ? ' Unicode' : ''} : facture et avoir générés, téléchargés et cohérents après recharge`, async ({ page, analyse }, info) => {
-  const banc = await genererDocuments({ unicode }), etat = await simulerSoignant(page), reseau = await encadrer(page, banc);
+  const numeros = unicode ? {
+    numeroFacture: 'JOL-11111111111141118111111111111111-2026-100000',
+    numeroAvoir: 'AV-11111111111141118111111111111111-2026-100000',
+  } : {};
+  const banc = await genererDocuments({ unicode, ...numeros }), etat = await simulerSoignant(page), reseau = await encadrer(page, banc);
   const nom = `${banc.soignant.prenom} ${banc.soignant.nom}`;
   Object.assign(etat.profile, { type_exercice: 'LIBERAL', statut_liberal: 'EN_COURS', rpps_verifie: false, tous_documents_valides: false });
   const rows = banc.factures.map(f => ({ ...f, mission_intitule: banc.mission.intitule, etablissement_nom: banc.etablissement.nom, statut_litige: 'NORMAL' }));
@@ -196,7 +200,7 @@ for (const unicode of [false, true]) test(`Documents F1 soignant${unicode ? ' Un
   // description existante. Le handler doit conserver la mention entière et le
   // pied de page, y compris lorsqu'une seconde page devient nécessaire.
   if (info.project.name === 'ordinateur') {
-    const long = await genererDocuments({ pagination: true, unicode });
+    const long = await genererDocuments({ pagination: true, unicode, ...numeros });
     for (const f of long.factures) {
       const texte = await analyserPdf(analyse, long.documents.get(f.pdf_s3_key).bytes, info, `pagination-${f.type_document}`);
       const nomLong = `${long.soignant.prenom} ${long.soignant.nom}`;
@@ -279,7 +283,11 @@ test('Documents F1 établissement : une facture absente interdit le paiement, y 
 // to the authenticated mission actors. No mission completion or payment occurs.
 for (const remplacement of [false, true]) for (const surface of ['a-payer', 'detail-etablissement', 'detail-soignant'] as const) {
   test(`${remplacement ? 'Remplacement' : 'Accès'} F1 EN_COURS ${surface} : documents archivés accessibles, refus de téléchargement puis reprise`, async ({ page, context, analyse }, info) => {
-    const banc = await genererDocuments({ remplacement, unicode: remplacement }), simulation = creerSuiviSimule();
+    const numeros = remplacement && surface === 'detail-etablissement' ? {
+      numeroFacture: 'JOL-11111111111141118111111111111111-2026-100000',
+      numeroRemplacement: 'JOL-11111111111141118111111111111111-2026-100001',
+    } : {};
+    const banc = await genererDocuments({ remplacement, unicode: remplacement, ...numeros }), simulation = creerSuiviSimule();
     const { state, installer } = simulation;
     Object.assign(state.soignant, banc.soignant, { id: idsMission.soignant, type_exercice: 'LIBERAL' });
     Object.assign(state.etablissement, banc.etablissement, { id: idsMission.etablissement, est_compte_test: true });
@@ -300,6 +308,27 @@ for (const remplacement of [false, true]) for (const surface of ['a-payer', 'det
     const heures = (type: string) => state.creneaux.filter(c => c.type_creneau === type)
       .reduce((total, c) => total + (Date.parse(c.fin) - Date.parse(c.debut)) / 3_600_000, 0);
     expect(heures('PREVISIONNEL')).toBe(8); expect(heures('EFFECTIF')).toBe(4);
+    if (remplacement) {
+      // Le frontend n'a plus de génération libérale mission-only. Exercer la
+      // reprise réelle du handler local, puis consulter les mêmes archives par
+      // les gestes existants ; les RPC/Storage restent des doubles fermés.
+      const avant = { appels: banc.appels.length, documents: banc.documents.size,
+        versions: banc.versions.length, emissions: banc.emissions.length,
+        factures: JSON.stringify(banc.factures) };
+      const reprise = await banc.genererFacture(), payload = await reprise.json();
+      expect(reprise.status).toBe(409); expect(payload.facture_id).toBe(ids.remplacement);
+      const appels = banc.appels.slice(avant.appels);
+      const commissions = appels.filter(a => a.path.includes('/fn_preparer_'));
+      expect(commissions.map(a => ({ path: a.path, id: a.body.p_facture_honoraire_id }))).toEqual([
+        { path: '/rest/v1/rpc/fn_preparer_commission_remplacement_honoraires', id: ids.remplacement },
+      ]);
+      expect(appels.filter(a => a.path.startsWith('/storage/') || a.path.endsWith('/send-email'))).toEqual([]);
+      expect(banc.documents.size).toBe(avant.documents); expect(banc.versions.length).toBe(avant.versions);
+      expect(banc.emissions.length).toBe(avant.emissions); expect(JSON.stringify(banc.factures)).toBe(avant.factures);
+      expect(banc.inconnus).toEqual([]);
+      await info.attach('reprise-remplacement-emis-handler', { body: JSON.stringify({ payload, commissions,
+        aucunNouveauRendu: true, aucuneNouvelleEmission: true }, null, 2), contentType: 'application/json' });
+    }
     const rows = banc.factures.map(f => ({ ...f, mission_id: idsMission.mission,
       soignant_id: idsMission.soignant, etablissement_id: idsMission.etablissement }));
     const [original, correction] = rows;

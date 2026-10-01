@@ -79,7 +79,7 @@ BEGIN
   END LOOP;
 END;
 $replay_inventory$;
-DO $inventory_test$
+CREATE FUNCTION pg_temp.f1_inventory_test() RETURNS void LANGUAGE plpgsql AS $inventory_test$
 DECLARE
   v_signatures constant text[]:=ARRAY['fn_preparer_facture_commission_periode(uuid)','dec_calculer_commission()'];
   v_before jsonb;
@@ -163,6 +163,82 @@ BEGIN
   END IF;
 END;
 $inventory_test$;
+
+-- Le successeur change seulement les verrous. Rejouer les blocs d'inventaire
+-- historiques sur leurs corps exacts dans une sous-transaction annulée, puis
+-- prouver le retour intégral aux quatre candidats AVANT les neuf cas métier.
+DO $inventory_successor$
+DECLARE
+  r record; p record; v_param text; v_previous text; v_definition text;
+  v_before jsonb; v_after jsonb; v_rolled_back boolean:=false;
+  v_signatures constant text[]:=ARRAY[
+    'fn_preparer_facture_commission_periode(uuid)',
+    'fn_preparer_commission_complement_honoraires(uuid)',
+    'fn_preparer_commission_remplacement_honoraires(uuid)',
+    'fn_preparer_avoir_commission_honoraires(uuid)'];
+BEGIN
+  IF session_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL
+     OR EXISTS(SELECT 1 FROM cron.job WHERE active)
+  THEN RAISE EXCEPTION 'F1 inventaire : contexte de maintenance isolé requis'; END IF;
+  SELECT jsonb_agg(jsonb_build_object('signature',i.signature,'registre',to_jsonb(i),
+    'definition',pg_get_functiondef(p.oid),'acl',p.proacl::text,'owner',p.proowner,
+    'config',p.proconfig,'security_definer',p.prosecdef) ORDER BY i.signature)
+    INTO v_before FROM private.security_definer_inventory i
+    JOIN pg_proc p ON p.oid=to_regprocedure('public.'||i.signature)
+    WHERE i.signature=ANY(v_signatures);
+  BEGIN
+    FOR r IN SELECT * FROM (VALUES
+    ('fn_preparer_facture_commission_periode(uuid)','8030a296741d5bfe6dad70edd4d8f20d','fe01d207db4766c4246f641ba171a3e7','57a21cb459d2a7eaedddf3d560f37425','59bfad8aa55638236e6aae5d4bc674c9'),
+    ('fn_preparer_commission_complement_honoraires(uuid)','4f8b01ff648de99644464ba700e11d00','b4e7b07193aa270a24a66a10709a87d8','2e285170947e879524316f0252347313','b61aefda7ac13ff6006a588acaacdce9'),
+    ('fn_preparer_commission_remplacement_honoraires(uuid)','c8b2603eda031d12d75a294ffb87d522','c793ac81eaef0fe18fb5920c9264c675','3a15006bb68a7a44801e429aa1fb3e58','c736c66d76001b64ba425484f77c6ea2'),
+    ('fn_preparer_avoir_commission_honoraires(uuid)','9af2c8bd25c4db563c2d935ba99effd8','a65bb72885271a63de5b2dbcdbb7a6be','972bff7ed6b0beedc598d2cb815f2130','4afd9dca4fea1d23414a797342cd1180')
+    ) AS attendu(signature,ancien_corps,ancienne_definition,nouveau_corps,nouvelle_definition) LOOP
+      SELECT * INTO p FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
+      IF md5(p.prosrc) IS DISTINCT FROM r.nouveau_corps
+        OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.nouvelle_definition
+        OR NOT p.prosecdef OR p.provolatile<>'v' OR pg_get_userbyid(p.proowner)<>'postgres'
+        OR p.proconfig IS DISTINCT FROM ARRAY['search_path=public, pg_temp']::text[]
+        OR p.proacl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}'::aclitem[]
+        OR (SELECT count(*) FROM private.security_definer_inventory WHERE signature=r.signature
+            AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=r.nouveau_corps)<>1
+        OR EXISTS(SELECT 1 FROM private.security_definer_inventory WHERE signature='public.'||r.signature)
+      THEN RAISE EXCEPTION 'F1 inventaire : successeur exact requis (%)',r.signature; END IF;
+      v_param:=CASE WHEN r.signature='fn_preparer_avoir_commission_honoraires(uuid)'
+        THEN 'p_avoir_honoraires_id' ELSE 'p_facture_honoraire_id' END;
+      v_previous:=replace(p.prosrc,E'  v_mission_verrou uuid;\n','');
+      v_previous:=replace(v_previous,
+        E'  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.\n'
+        ||E'  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.\n'
+        ||'  SELECT mission_id INTO v_mission_verrou FROM public.factures_honoraires WHERE id='||v_param||E';\n'
+        ||E'  PERFORM 1 FROM public.missions WHERE id=v_mission_verrou FOR UPDATE;\n\n','');
+      v_previous:=replace(v_previous,E'    AND mission_id IS NOT DISTINCT FROM v_mission_verrou\n','');
+      IF md5(v_previous) IS DISTINCT FROM r.ancien_corps
+      THEN RAISE EXCEPTION 'F1 inventaire : corps historique exact non reconstruit (%)',r.signature; END IF;
+      v_definition:=replace(pg_get_functiondef(p.oid),p.prosrc,v_previous);
+      EXECUTE v_definition;
+      IF md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM r.ancienne_definition
+      THEN RAISE EXCEPTION 'F1 inventaire : définition historique inexacte (%)',r.signature; END IF;
+      UPDATE private.security_definer_inventory SET definition_md5=r.ancien_corps
+        WHERE signature=r.signature AND categorie='SERVICE_ONLY_REVOQUE' AND definition_md5=r.nouveau_corps;
+      IF NOT FOUND THEN RAISE EXCEPTION 'F1 inventaire : registre historique non préparé'; END IF;
+    END LOOP;
+    PERFORM pg_temp.f1_inventory_test();
+    RAISE EXCEPTION 'F1_INVENTAIRE_SUCCESSEUR_ANNULATION' USING ERRCODE='JF174';
+  EXCEPTION WHEN SQLSTATE 'JF174' THEN
+    IF SQLERRM<>'F1_INVENTAIRE_SUCCESSEUR_ANNULATION' THEN RAISE; END IF;
+    v_rolled_back:=true;
+  END;
+  SELECT jsonb_agg(jsonb_build_object('signature',i.signature,'registre',to_jsonb(i),
+    'definition',pg_get_functiondef(p.oid),'acl',p.proacl::text,'owner',p.proowner,
+    'config',p.proconfig,'security_definer',p.prosecdef) ORDER BY i.signature)
+    INTO v_after FROM private.security_definer_inventory i
+    JOIN pg_proc p ON p.oid=to_regprocedure('public.'||i.signature)
+    WHERE i.signature=ANY(v_signatures);
+  IF NOT v_rolled_back OR v_before IS NULL OR jsonb_array_length(v_before)<>4
+    OR v_after IS DISTINCT FROM v_before
+  THEN RAISE EXCEPTION 'F1 inventaire : successeurs non restaurés intégralement'; END IF;
+END;
+$inventory_successor$;
 
 DO $f1$
 DECLARE
@@ -256,10 +332,10 @@ BEGIN
   THEN RAISE EXCEPTION 'F1 : calendrier de fixture indisponible'; END IF;
 
 
-  IF md5(pg_get_functiondef('public.fn_preparer_commission_complement_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM 'b4e7b07193aa270a24a66a10709a87d8'
+  IF md5(pg_get_functiondef('public.fn_preparer_commission_complement_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM 'b61aefda7ac13ff6006a588acaacdce9'
     OR md5(pg_get_functiondef('public.fn_admin_resoudre_litige_complement_honoraires(uuid,text,text,numeric,numeric)'::regprocedure)) IS DISTINCT FROM '0f8d3a480b3dd60e8081e53a97b30cc9'
     OR md5(pg_get_functiondef('public.fn_solde_correction_facture_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM '668023f4f4e42102dbc9f6faa95a8cd9'
-    OR md5(pg_get_functiondef('public.fn_preparer_avoir_commission_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM 'a65bb72885271a63de5b2dbcdbb7a6be'
+    OR md5(pg_get_functiondef('public.fn_preparer_avoir_commission_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM '4afd9dca4fea1d23414a797342cd1180'
   THEN RAISE EXCEPTION 'F1 matrice : dépendances LIVE des corrections modifiées'; END IF;
 
   -- Matrice complémentaire, distincte du témoin rouge byte-identique.

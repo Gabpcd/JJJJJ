@@ -62,7 +62,7 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Documents facturation réels avec IO fictives
-        run: node --test tests/node/facturation-documents.node.mjs
+        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs
 
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
@@ -461,12 +461,20 @@ jobs:
         if: steps.migration_scope.outputs.has_f1_regression == 'true'
         timeout-minutes: 2
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: |
           set -euo pipefail
           test "$STAGING_SUPABASE_PROJECT_REF" = 'mejpriaetwgtcstbgfid'
           test -n "$STAGING_SUPABASE_ACCESS_TOKEN"
+          # Une seule identité attendue, déterminée par la base effectivement testée.
+          git rev-parse --verify "${BASE_SHA}^{commit}" >/dev/null
+          if git cat-file -e "$BASE_SHA:supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql" 2>/dev/null; then
+            expected_f1_helper='c736c66d76001b64ba425484f77c6ea2'
+          else
+            expected_f1_helper='c793ac81eaef0fe18fb5920c9264c675'
+          fi
           jq -Rs '{query: .}' tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
           code=$(curl -sS --connect-timeout 10 --max-time 30 \
             -o "$RUNNER_TEMP/f1-catalogue-avant.json" -w '%{http_code}' \
@@ -474,7 +482,7 @@ jobs:
             -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
             --data-binary @"$RUNNER_TEMP/f1-catalogue-query.json")
           test "$code" -ge 200 && test "$code" -lt 300
-          jq -e 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and .[0].helper_remplacement_md5 == "c793ac81eaef0fe18fb5920c9264c675" and (.[0].compteurs | length == 25) and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
+          jq -e --arg helper "$expected_f1_helper" 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and .[0].helper_remplacement_md5 == $helper and (.[0].compteurs | length == 25) and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
 
       - name: F1 — reproduction exacte avant la migration candidate
         if: steps.migration_scope.outputs.has_migrations == 'true' && steps.migration_scope.outputs.has_f1_regression == 'true'
@@ -521,6 +529,14 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/push-candidatures-catalogue.mjs avant
+
+      - name: Numérotation — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/numerotation-catalogue.mjs avant
 
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
@@ -599,6 +615,7 @@ jobs:
             tests/security/facturation-heures-ajustees-chainage-f1.test.sql
             tests/security/facturation-commissions-pieces-matrice-f1.test.sql
             tests/security/paiements-liberaux-facture.test.sql
+            tests/security/numerotation-factures.test.sql
             tests/security/diagnostic-financier-documentaire.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
@@ -647,6 +664,14 @@ jobs:
             exit 1
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+      - name: Numérotation — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/numerotation-catalogue.mjs apres
 
       - name: Push candidatures — SELECT indépendant après succès ou échec
         if: always() && steps.migration_scope.outputs.has_migrations == 'true'
@@ -732,6 +757,36 @@ jobs:
       - uses: actions/checkout@v5
       - name: Deux écrivains, observateur et reprises exactes
         run: python3 scripts/ci/paiements-concurrence-pg17.py
+
+  numerotation-concurrence:
+    name: Numérotation — réservations et reprises PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Même image officielle figée que le banc paiements, sans cloud.
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: numerotation_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d numerotation_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_NUMBERING_WITNESS: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: numerotation_temoin
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rouge historique, migration réelle et deux écrivains observés
+        run: python3 scripts/ci/numerotation-concurrence-pg17.py
 
   escrow-gate:
     name: Escrow (recette si paiements touchés)
