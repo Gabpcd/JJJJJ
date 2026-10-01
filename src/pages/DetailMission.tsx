@@ -23,7 +23,6 @@ import {
   type ContratElectroniqueMissionResume,
 } from '@/components/CarteContratElectroniqueMission';
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
-import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 // La page reste lazy ; ce second import dynamique préchargeait à nouveau
 // le bundle d'entrée déjà exécuté et déclenchait un warning WebKit.
@@ -50,7 +49,6 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
-import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
@@ -502,13 +500,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     navigate(`/admin/litiges?litige=${encodeURIComponent(resultat.litige_id)}`);
   };
 
-  // Stripe Connect
-  const [soignantHasConnect, setSoignantHasConnect] = useState(false);
-  const [connectPayLoading, setConnectPayLoading] = useState(false);
-  const [showConnectCheckout, setShowConnectCheckout] = useState(false);
-  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
-  const [connectCheckoutSessionId, setConnectCheckoutSessionId] = useState<string | null>(null);
-  const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
   // Audit étab fix #3 : refreshTick remplace navigate(0) (full page reload).
   // Incrémente cet état pour re-fetcher les données ciblées sans perdre l'UI.
   const [refreshTick, setRefreshTick] = useState(0);
@@ -525,62 +516,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     window.addEventListener(OUVERTURE_NOTIFICATION, ouvrirNotification);
     return () => window.removeEventListener(OUVERTURE_NOTIFICATION, ouvrirNotification);
   }, [id, refresh]);
-
-  const verifierStatutConnect = React.useCallback(async (
-    missionId: string,
-    etablissementId: string,
-    checkoutSessionId: string,
-  ): Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'> => {
-    const { data, error } = await supabase
-      .from('stripe_transfers')
-      .select('statut')
-      .eq('mission_id', missionId)
-      .eq('etablissement_id', etablissementId)
-      .eq('stripe_checkout_session_id', checkoutSessionId)
-      .maybeSingle();
-
-    if (error) throw error;
-    const statut = data?.statut;
-    if (statut && ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)) return 'CONFIRME';
-    if (statut === 'ECHOUE') return 'ECHEC';
-    return 'EN_ATTENTE';
-  }, []);
-
-  const finaliserRetourConnect = React.useCallback(async (
-    missionId: string,
-    etablissementId: string,
-    checkoutSessionId: string,
-  ) => {
-    const delais = [0, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
-    try {
-      for (const delai of delais) {
-        if (delai > 0) {
-          await new Promise((resolve) => window.setTimeout(resolve, delai));
-        }
-        const statut = await verifierStatutConnect(
-          missionId,
-          etablissementId,
-          checkoutSessionId,
-        );
-        if (statut === 'CONFIRME') {
-          toast.success('Paiement confirmé et enregistré.');
-          refresh();
-          return;
-        }
-        if (statut === 'ECHEC') {
-          toast.error('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.');
-          refresh();
-          return;
-        }
-      }
-
-      toast.info('Paiement transmis à Stripe. La confirmation est encore en cours ; aucun paiement n’est déclaré tant que le serveur ne l’a pas confirmé.');
-      refresh();
-    } catch (error) {
-      capturerErreurSentry(error, 'DetailMission', 'confirmation_stripe_connect');
-      toast.error('Impossible de confirmer le paiement pour le moment. Son statut reste en attente, sans le déclarer payé.');
-    }
-  }, [refresh, verifierStatutConnect]);
 
   useEffect(() => {
     if (!id) return;
@@ -692,16 +627,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         if (litigeData && (litigeData as any).exists !== false && (litigeData as any).litige_id) {
           setLitigeExistant(litigeData);
         }
-      }
-
-      // Check if soignant has Connect account
-      if (m && m.soignant_assigne_id && (m as any).statut === 'TERMINEE') {
-        const { data: connectData } = await supabase
-          .from('stripe_connect_onboarding')
-          .select('statut')
-          .eq('soignant_id', m.soignant_assigne_id)
-          .maybeSingle();
-        setSoignantHasConnect(connectData?.statut === 'COMPLET');
       }
 
       setLoading(false);
@@ -1327,56 +1252,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {m.soignant_assigne_id && (
                 <FactureHonorairesCard missionId={m.id} viewerRole={isAdmin ? 'ADMIN' : 'ETAB'} />
               )}
-              {/* Workflow paiement mission */}
-              {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+              {/* Le paiement libéral s'effectue par facture, y compris pendant
+                  une mission hebdomadaire. Le salarié conserve son bulletin. */}
+              {!isAdmin && m.soignant_assigne_id && (m.statut === 'TERMINEE' || (m.statut === 'EN_COURS' && m.type_contrat_applique === 'LIBERAL')) && (
                 <WorkflowPaiementMission
                   missionId={m.id}
                   soignantAssigneId={m.soignant_assigne_id}
                   etablissementId={m.etablissement_id}
-                  soignantHasConnect={soignantHasConnect}
-                  onStartConnectPay={async () => {
-                    setConnectPayLoading(true);
-                    const loadingToastId = toast.loading('Préparation du paiement…');
-                    try {
-                      const { data: sessionData } = await supabase.auth.getSession();
-                      const accessToken = sessionData?.session?.access_token;
-                      if (!accessToken) {
-                        toast.error('Session expirée, veuillez vous reconnecter', { id: loadingToastId });
-                        return;
-                      }
-
-                      // FIX 3 Option B — génération facture honoraires à la volée si absente.
-                      const { result: data, error: fnErr, code, message, factureGenereeAuto } =
-                        await payerMissionStripeConnectAvecGenerationAuto(m.id, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
-
-                      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
-                        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { id: loadingToastId, duration: 8000 });
-                        return;
-                      }
-
-                      if (data?.already_paid) {
-                        toast.info(data.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
-                        refresh();
-                        return;
-                      }
-
-                      if (fnErr || code || !data?.client_secret || !data?.checkout_session_id) {
-                        toast.error(message || code || fnErr?.message || 'Erreur lors du paiement', { id: loadingToastId });
-                        return;
-                      }
-
-                      toast.dismiss(loadingToastId);
-                      if (factureGenereeAuto) {
-                        toast.success('Facture honoraires générée automatiquement');
-                      }
-                      setConnectClientSecret(data.client_secret);
-                      setConnectCheckoutSessionId(data.checkout_session_id);
-                      setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
-                      setShowConnectCheckout(true);
-                    } finally {
-                      setConnectPayLoading(false);
-                    }
-                  }}
+                  typeContratApplique={m.type_contrat_applique}
                 />
               )}
               {/* Litige section */}
@@ -1739,24 +1622,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </Suspense>
       )}
 
-      {showConnectCheckout && connectClientSecret && connectCheckoutSessionId && (
-        <StripeEmbeddedCheckout
-          factureId={m.id}
-          preparedClientSecret={connectClientSecret}
-          open={showConnectCheckout}
-          onClose={() => {
-            setShowConnectCheckout(false);
-            setConnectClientSecret(null);
-            setConnectCheckoutSessionId(null);
-            setConnectDecomposition(null);
-          }}
-          onComplete={() => finaliserRetourConnect(
-            m.id,
-            m.etablissement_id,
-            connectCheckoutSessionId,
-          )}
-        />
-      )}
     </DetailMissionLayout>
   );
 }

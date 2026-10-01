@@ -6,6 +6,10 @@ import { adminClient, userIdByEmail } from '../helpers/db';
 import { ROUTES_ETABLISSEMENT, ROUTES_SOIGNANT } from '../helpers/ios-series-c-routes';
 import { PREFIX_MISSION_MATCHING, seedMissionMatching } from '../helpers/seed-matching';
 
+// Garder la trace du premier échec, même lorsqu’un retry réussit : il faut
+// pouvoir diagnostiquer un écran vide intermittent après authentification.
+test.use({ trace: 'retain-on-failure' });
+
 type RoleAudit = 'soignant' | 'etab';
 
 type RouteAudit = {

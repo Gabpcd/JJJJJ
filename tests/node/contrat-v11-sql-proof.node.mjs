@@ -128,11 +128,11 @@ function scopeReel(t, changes) {
 function executeCondition(step, outputs) {
   if (!step.if) return true;
   const condition = step.if.replace(/^always\(\) && /, '');
-  const terms = condition.split(' || ').map(term => {
+  const terms = condition.split(' || ').map(group => group.split(' && ').map(term => {
     const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture) == '(true|false)'$/.exec(term);
     assert.ok(match, 'condition nouvelle non couverte');
     return outputs[match[1]] === match[2];
-  });
+  }).every(Boolean));
   return terms.some(Boolean);
 }
 test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni régressions migration', t => {
@@ -141,7 +141,7 @@ test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni r�
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(actifs.some(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
   assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || /supabase (?:link|db push)|CREATE EXTENSION/.test(step.run || '')));
-  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
 });
 test('scope YAML refuse le mélange fixture/migration avant réseau ; changements ordinaires inchangés', t => {
   const mix = scopeReel(t, ['tests/security/contrat-service-v11.test.sql', 'supabase/migrations/20260930000000_fixture.sql']);
@@ -171,9 +171,42 @@ test('F1 active sa transaction et son contrôle indépendant, sans activer le dr
   assert.notEqual(mix.result.status, 0);
   assert.match(mix.result.stderr + mix.result.stdout, /fixture contrat et la recette F1 doivent rester séparées/);
 });
+test('le chaînage heures F1 conserve la voie test-only, le contrôle indépendant et le refus du mélange contrat', t => {
+  const s = scopeReel(t, ['tests/security/facturation-heures-ajustees-chainage-f1.test.sql']);
+  assert.equal(s.result.status, 0);
+  assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
+  assert.ok(actifs.some(step => step.env?.HAS_MIGRATIONS));
+  assert.ok(actifs.some(step => step.name === 'F1 — SELECT indépendant après succès ou échec SQL'));
+  assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || /supabase (?:link|db push)|CREATE EXTENSION/.test(step.run || '') || step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
+  const mix = scopeReel(t, ['tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql', 'tests/fixtures/contrat-service-v11/draft.sql']);
+  assert.notEqual(mix.result.status, 0);
+  assert.match(mix.result.stderr + mix.result.stdout, /fixture contrat et la recette F1 doivent rester séparées/);
+});
 test('les conditions SQL non reconnues ne sont pas considérées actives par défaut', () => {
   for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true"])
     assert.throws(() => executeCondition({ if: condition }, {}), /condition nouvelle non couverte/);
+});
+
+test('le témoin avant migration exige migration ET recette F1, jamais un seul des deux', t => {
+  const step = sqlJob.steps.find(s => s.name === 'F1 — reproduction exacte avant la migration candidate');
+  assert.ok(step);
+  for (const has_migrations of ['true', 'false']) {
+    for (const has_f1_regression of ['true', 'false']) {
+      assert.equal(executeCondition(step, { has_migrations, has_f1_regression }),
+        has_migrations === 'true' && has_f1_regression === 'true');
+    }
+  }
+  const s = scopeReel(t, [
+    'supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql',
+    'tests/security/facturation-heures-ajustees-chainage-f1.test.sql',
+  ]);
+  assert.equal(s.result.status, 0);
+  assert.deepEqual(s.outputs, { has_migrations: 'true', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  assert.equal(executeCondition(step, s.outputs), true);
+  for (const condition of ["steps.migration_scope.outputs.has_migrations == 'false' && unknown()",
+    "steps.migration_scope.outputs.has_migrations == 'true' || unknown()"])
+    assert.throws(() => executeCondition({ if: condition }, s.outputs), /condition nouvelle non couverte/);
 });
 
 test('double échec garde les deux catégories sans exposer la réponse fournisseur', async () => {

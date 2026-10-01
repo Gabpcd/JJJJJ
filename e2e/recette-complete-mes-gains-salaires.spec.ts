@@ -183,7 +183,7 @@ test('historique salarié et profil libéral ou mixte — factures conservées, 
     { id: 'avoir', mission_id: 'mission-avoir', numero_facture: 'DOCUMENT-4', statut: 'EMISE', montant_ttc: 30 },
   ].map(f => ({ ...f, etablissement_id: ids.etab, etablissement_nom: 'Résidence simulation', date_emission: debut }));
   etat.overrides.set('fn_mes_factures_honoraires', factures);
-  etat.tables.set('factures_honoraires', factures.map(f => ({ id: f.id, soignant_id: ids.user, type_document: f.id === 'avoir' ? 'AVOIR' : 'FACTURE' })));
+  etat.tables.set('factures_honoraires', factures.map(f => ({ ...f, soignant_id: ids.user, date_emission: f.date_emission.slice(0, 10), type_document: f.id === 'avoir' ? 'AVOIR' : 'FACTURE' })));
   await ouvrir(page);
   for (const type of ['LIBERAL', 'MIXTE']) {
     if (type === 'MIXTE') { etat.profile.type_exercice = type; etat.tables.set('paiements_soignant', [...paiements].reverse()); await recharger(page); await regionSalaires(page).locator('summary').click(); }

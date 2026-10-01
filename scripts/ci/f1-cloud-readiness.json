@@ -1,0 +1,25 @@
+{
+  "ready": false,
+  "sourceSha": null,
+  "catalogueExact": false,
+  "generatorSourceExact": false,
+  "outgoingClosed": false,
+  "noActiveCron": false,
+  "authCreationReviewed": false,
+  "replacementCanonicalWithoutPayment": false,
+  "retentionReviewed": false,
+  "uiDocumentsAccessible": false,
+  "uiNetworkContractReviewed": false,
+  "catalogue": {
+    "routines": null,
+    "triggers": null,
+    "columns": null
+  },
+  "sourceFiles": {},
+  "edge": {
+    "generate-invoice": null,
+    "send-email": null,
+    "notify-support": null
+  },
+  "reviewedAt": null
+}

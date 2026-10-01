@@ -37,7 +37,9 @@ describe('Pointage, facturation hebdomadaire et commission Chorus', () => {
     expect(storageMigration).toContain("WHERE id = 'jolene-documents'");
     expect(defactoMigration).toContain('SELECT s.defacto_opt_in');
     expect(defactoMigration.split('AS $$')[1]).not.toContain('v_soignant.mandat_facturation_signe');
-    expect(generateInvoice).toContain(".update({ statut: 'ERREUR_GENERATION' })");
+    expect(generateInvoice).not.toContain(".update({ statut: 'ERREUR_GENERATION' })");
+    expect(generateInvoice).toContain("client.rpc('fn_terminer_generation_honoraires', { p_facture_id: factureId, p_token: token, p_documents: null })");
+    expect(generateInvoice).toMatch(/if \(regenPdfUploadError \|\| regenXmlUploadError\) \{\s*await signalerEchecGeneration\(\)/);
     expect(generateInvoice).toContain('regenXmlUploadError');
     expect(generateInvoice).toContain('Facture hebdomadaire S${facture.numero_semaine_iso}');
   });

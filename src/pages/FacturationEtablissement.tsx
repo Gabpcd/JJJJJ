@@ -49,6 +49,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { lirePaiementsActifs } from '@/lib/lire-paiements-actifs';
 import { relancerLectureReseau } from '@/lib/relancerLectureReseau';
 import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
@@ -195,6 +196,7 @@ function FacturationEtablissementContent() {
   const [facturesHonorairesParId, setFacturesHonorairesParId] = useState<Map<string, any>>(new Map());
   const [facturesBloqueesParLitige, setFacturesBloqueesParLitige] = useState<Set<string>>(new Set());
   const [missionsBloqueesParLitige, setMissionsBloqueesParLitige] = useState<Set<string>>(new Set());
+  const [missionsARapprocher, setMissionsARapprocher] = useState<Set<string>>(new Set());
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [factureTelechargementId, setFactureTelechargementId] = useState<string | null>(null);
@@ -300,6 +302,7 @@ function FacturationEtablissementContent() {
       setFacturesHonorairesParId(new Map());
       setFacturesBloqueesParLitige(new Set());
       setMissionsBloqueesParLitige(new Set());
+      setMissionsARapprocher(new Set());
       setLoading(false);
       return;
     }
@@ -318,7 +321,6 @@ function FacturationEtablissementContent() {
         resPrelev,
         resFacturesHonorairesOuvertes,
         resLitigesActifs,
-        resPaiementsContestes,
       ] = await Promise.all([
         lire(() => supabase.rpc('fn_mon_etablissement_complet' as any)),
         lire(() => supabase.rpc('fn_obligations_financieres' as any)),
@@ -348,10 +350,6 @@ function FacturationEtablissementContent() {
           .select('mission_id, facture_id')
           .eq('etablissement_id', etablissementId)
           .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN'])),
-        lire(() => supabase.from('paiements_soignant')
-          .select('mission_id, facture_honoraire_id')
-          .eq('etablissement_id', etablissementId)
-          .eq('statut', 'CONTESTE')),
       ]);
 
       if (version !== chargementVersionRef.current) return;
@@ -366,7 +364,16 @@ function FacturationEtablissementContent() {
       verifierReponseChargement('Prélèvements', resPrelev, estTableau);
       verifierReponseChargement('Factures d’honoraires ouvertes', resFacturesHonorairesOuvertes, estTableau);
       verifierReponseChargement('Litiges actifs', resLitigesActifs, estTableau);
-      verifierReponseChargement('Paiements contestés', resPaiementsContestes, estTableau);
+      const paiementsActifs = await lirePaiementsActifs(
+        (resObligations.data as any).missions_non_payees ?? [],
+        (missions, debut, fin) => lire(() => supabase.from('paiements_soignant')
+          .select('id, mission_id, facture_honoraire_id, statut', { count: 'exact' })
+          .eq('etablissement_id', etablissementId)
+          .in('mission_id', missions)
+          .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE', 'RESOLU'])
+          .order('id', { ascending: true }).range(debut, fin)),
+      );
+      if (version !== chargementVersionRef.current) return;
 
       setEtab(resEtab.data);
       setData(resObligations.data);
@@ -382,12 +389,17 @@ function FacturationEtablissementContent() {
       const missionsBloquees = new Set<string>();
       for (const ligne of [
         ...(resLitigesActifs.data as any[]),
-        ...(resPaiementsContestes.data as any[]),
+        ...paiementsActifs.filter(ligne => ligne.statut === 'CONTESTE'),
       ]) {
         const factureId = ligne.facture_id || ligne.facture_honoraire_id;
         if (factureId) facturesBloquees.add(factureId);
         else if (ligne.mission_id) missionsBloquees.add(ligne.mission_id);
       }
+      // Une déclaration historique sans pièce ne permet pas d'attribuer un
+      // règlement à l'une des factures. Ne pas en déduire un nouveau solde dû.
+      setMissionsARapprocher(new Set(paiementsActifs
+        .filter(ligne => !ligne.facture_honoraire_id && ligne.mission_id)
+        .map(ligne => ligne.mission_id)));
       setFacturesBloqueesParLitige(facturesBloquees);
       setMissionsBloqueesParLitige(missionsBloquees);
     } catch (err) {
@@ -403,6 +415,7 @@ function FacturationEtablissementContent() {
       setFacturesHonorairesParId(new Map());
       setFacturesBloqueesParLitige(new Set());
       setMissionsBloqueesParLitige(new Set());
+      setMissionsARapprocher(new Set());
       setErreurChargement('Impossible de charger les données de facturation en toute sécurité.');
     } finally {
       if (version === chargementVersionRef.current) setLoading(false);
@@ -449,6 +462,14 @@ function FacturationEtablissementContent() {
   // ── Handlers dialogs paiement ──
   const ouvrirDialogDeclarer = (mission: any) => {
     if (!canManagePayments) return;
+    if (mission.type_contrat_applique !== 'SALARIE' && (mission.type_contrat_applique !== 'LIBERAL' || !mission.facture_honoraires_id)) {
+      toast.error(extraireMessageErreur({ code: 'LIBERAL_FACTURE_REQUISE' }));
+      return;
+    }
+    if (mission.type_contrat_applique === 'LIBERAL' && missionsARapprocher.has(mission.mission_id)) {
+      toast.error(extraireMessageErreur({ code: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' }));
+      return;
+    }
     setErreurDeclaration(null);
     setDeclarerDialogMission(mission);
     // Un montant salarié remonté par la plateforme reste une estimation
@@ -478,6 +499,14 @@ function FacturationEtablissementContent() {
     const missionId = declarerDialogMission.mission_id;
     const montantNum = Number(declarerMontant);
     const estSalarie = declarerDialogMission.type_contrat_applique === 'SALARIE';
+    if (!estSalarie && (declarerDialogMission.type_contrat_applique !== 'LIBERAL' || !declarerDialogMission.facture_honoraires_id)) {
+      setErreurDeclaration(extraireMessageErreur({ code: 'LIBERAL_FACTURE_REQUISE' }));
+      return;
+    }
+    if (!estSalarie && missionsARapprocher.has(missionId)) {
+      setErreurDeclaration(extraireMessageErreur({ code: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' }));
+      return;
+    }
     const montantDuNum = estSalarie ? Number(declarerMontantDu) : montantNum;
     if (!montantNum || montantNum <= 0) {
       setErreurDeclaration('Montant invalide');
@@ -514,19 +543,10 @@ function FacturationEtablissementContent() {
             p_date_paiement: declarerDatePaiement,
             p_attestation_sur_l_honneur: true,
           })
-        : estSalarie
-          ? await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
+        : await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
               p_mission_id: missionId,
               p_montant_verse: montantNum,
               p_montant_total_du: montantDuNum,
-              p_methode: declarerMethode,
-              p_reference: declarerReference.trim(),
-              p_date_paiement: declarerDatePaiement,
-              p_attestation_sur_l_honneur: true,
-            })
-          : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
-              p_mission_id: missionId,
-              p_montant: montantNum,
               p_methode: declarerMethode,
               p_reference: declarerReference.trim(),
               p_date_paiement: declarerDatePaiement,
@@ -543,7 +563,7 @@ function FacturationEtablissementContent() {
         fermerDialogDeclarer();
         return;
       }
-      if (res?.error) throw new Error(res.message || res.error);
+      if (res?.error) throw { code: res.error, message: res.message || res.error };
 
       // Invoke send-email PAIEMENT_SOIGNANT_DECLARE (non-bloquant)
       try {
@@ -591,7 +611,15 @@ function FacturationEtablissementContent() {
       toast.error('Votre rôle ne permet pas d’effectuer un paiement.');
       return;
     }
-    const paymentKey = factureHonoraireId || missionId;
+    if (!factureHonoraireId) {
+      toast.error(extraireMessageErreur({ code: 'LIBERAL_FACTURE_REQUISE' }));
+      return;
+    }
+    if (missionsARapprocher.has(missionId)) {
+      toast.error(extraireMessageErreur({ code: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' }));
+      return;
+    }
+    const paymentKey = factureHonoraireId;
     setConnectPayingId(paymentKey);
     const loadingToastId = toast.loading('Préparation du paiement…');
     try {
@@ -622,7 +650,7 @@ function FacturationEtablissementContent() {
       }
 
       if (error || code) {
-        toast.error(message || code || error?.message || 'Erreur lors du paiement', { id: loadingToastId });
+        toast.error(extraireMessageErreur({ code, message: message || error?.message || code || 'Erreur lors du paiement' }), { id: loadingToastId });
         return;
       }
 
@@ -654,7 +682,7 @@ function FacturationEtablissementContent() {
     missionId?: string,
     factureHonoraireId?: string,
   ): Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'> => {
-    if (!etablissementId || (!missionId && !factureHonoraireId)) return 'EN_ATTENTE';
+    if (!etablissementId || !factureHonoraireId) return 'EN_ATTENTE';
 
     let requete = supabase
       .from('stripe_transfers')
@@ -679,8 +707,8 @@ function FacturationEtablissementContent() {
     setConnectConfirming(true);
     const delais = [0, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
     try {
-      if (!context?.missionId && !context?.factureHonoraireId) {
-        toast.info('Retour Stripe reçu. Le paiement reste en attente tant que sa référence serveur ne peut pas être vérifiée.');
+      if (!context?.factureHonoraireId) {
+        toast.info('Retour Stripe reçu sans facture identifiée. Le paiement reste en attente de rapprochement ; aucune confirmation n’est déduite de la mission.');
         await charger();
         return;
       }
@@ -725,7 +753,6 @@ function FacturationEtablissementContent() {
     const factureHonoraireId = searchParams.get('facture_honoraire') || undefined;
     const nettoyes = new URLSearchParams(searchParams);
     nettoyes.delete('paiement');
-    nettoyes.delete('mission');
     nettoyes.delete('facture_honoraire');
     setSearchParams(nettoyes, { replace: true });
     void finaliserRetourConnect({ missionId, factureHonoraireId });
@@ -822,7 +849,11 @@ function FacturationEtablissementContent() {
   }
 
   // Derived data
-  const missionsNonPayees = data?.missions_non_payees || [];
+  const missionFiltre = searchParams.get('mission');
+  const missionsNonPayeesToutes = data?.missions_non_payees || [];
+  const missionsNonPayees = missionFiltre
+    ? missionsNonPayeesToutes.filter((mission: any) => mission.mission_id === missionFiltre)
+    : missionsNonPayeesToutes;
   const paiementsEnAttente = data?.paiements_soignants_en_attente || [];
   const paiementsConfirmes = data?.paiements_soignants_confirmes || [];
   // Le RPC conserve sa clé historique `factures_impayees`, mais la liste
@@ -839,9 +870,15 @@ function FacturationEtablissementContent() {
   const facturesCommissionHistorique = data?.factures_commission_historique || [];
   const nbFacturesHistorique = data?.nb_factures_commission_historique || 0;
   const missionsNonFactureesObligs = data?.missions_non_facturees || [];
-  const contientMissionSalarieeNonPayee = missionsNonPayees.some(
+  const contientMissionSalarieeNonPayee = missionsNonPayeesToutes.some(
     (mission: any) => mission.type_contrat_applique === 'SALARIE',
   );
+
+  const montantsARapprocher = missionsNonPayeesToutes.some((mission: any) =>
+    mission.type_contrat_applique !== 'SALARIE' && (
+      mission.type_contrat_applique !== 'LIBERAL' || !mission.facture_honoraires_id
+      || missionsARapprocher.has(mission.mission_id)
+    ));
 
   const toggleSection = (id: string) =>
     setSectionsOpen(prev => ({ ...prev, [id]: !prev[id] }));
@@ -879,7 +916,7 @@ function FacturationEtablissementContent() {
       {/* Session F (F7) : onglet « Obligations » retiré — cette page consolide déjà
           toutes les obligations financières (missions à payer, commissions, historique). */}
       {/* ── SECTION 0 : État vide si rien à payer ── */}
-      {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesCommissionOuvertes.length === 0 && (
+      {data && !montantsARapprocher && missionsARapprocher.size === 0 && data.total_du === 0 && missionsNonPayeesToutes.length === 0 && facturesCommissionOuvertes.length === 0 && (
         <FadeInView>
           <div className="card-base p-8 text-center mb-6">
             <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
@@ -891,12 +928,13 @@ function FacturationEtablissementContent() {
 
       {/* ── SECTION 1 : KPIs toujours visibles ── */}
       <FadeInView>
+        {missionFiltre && <p className="mb-2 text-xs text-muted-foreground">Indicateurs de l’ensemble de l’établissement ; les échéances ci-dessous sont filtrées sur une mission.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           {/* KPI "Total à régler" — informatif uniquement (somme des 2 autres) */}
           <div className="card-base border-destructive/20">
-            <p className="text-2xl font-bold text-foreground">{fmt(data?.total_du)}</p>
+            <p className="text-2xl font-bold text-foreground">{montantsARapprocher ? 'À rapprocher' : fmt(data?.total_du)}</p>
             <p className="text-xs text-muted-foreground">
-              {contientMissionSalarieeNonPayee ? 'Total indicatif à régler' : 'Total à régler'}
+              {montantsARapprocher ? 'Total payable non établi' : contientMissionSalarieeNonPayee ? 'Total indicatif à régler' : 'Total à régler'}
             </p>
             {contientMissionSalarieeNonPayee && (
               <p className="text-[10px] text-muted-foreground mt-1">Inclut des estimations salariées avant paie et PAS.</p>
@@ -910,8 +948,8 @@ function FacturationEtablissementContent() {
             className="card-base text-left cursor-pointer hover:shadow-md transition-shadow flex items-start justify-between gap-2"
           >
             <div>
-              <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
-              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission{(data?.nb_missions_non_payees || 0) > 1 ? 's' : ''}</p>
+              <p className="text-2xl font-bold text-foreground">{montantsARapprocher ? 'À rapprocher' : fmt(data?.total_soignants_du)}</p>
+              <p className="text-xs text-muted-foreground">{montantsARapprocher ? 'Dossiers soignants' : 'Soignants à régler'} · {data?.nb_missions_non_payees || 0} mission{(data?.nb_missions_non_payees || 0) > 1 ? 's' : ''}</p>
               {contientMissionSalarieeNonPayee && (
                 <p className="text-[10px] text-muted-foreground mt-1">Salariés : estimation avant paie/PAS, à confirmer sur le bulletin employeur.</p>
               )}
@@ -955,6 +993,15 @@ function FacturationEtablissementContent() {
 
       {/* ── SECTION 2 : Missions à payer aux soignants ── */}
       <div id={SECTIONS.payer} className="mb-4">
+        {missionFiltre && (
+          <div className="mb-3 rounded-xl border border-primary/20 p-3 space-y-2" role="status">
+            <p className="text-sm font-medium">Échéances de la mission sélectionnée</p>
+            <p className="text-xs text-muted-foreground">Le filtre concerne cette liste. L’historique et les autres rubriques restent ceux de l’établissement.</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => {
+              const suite = new URLSearchParams(searchParams); suite.delete('mission'); setSearchParams(suite);
+            }}>Retirer le filtre mission</Button>
+          </div>
+        )}
         <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
           <CollapsibleTrigger className="w-full">
             {/* Lot 11 : dé-emphase de l'en-tête quand la section est vide */}
@@ -975,7 +1022,7 @@ function FacturationEtablissementContent() {
               {missionsNonPayees.length === 0 ? (
                 <CardY2K noPadding>
                   <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
-                    Aucune échéance en attente de paiement soignant.
+                    {missionFiltre ? 'Aucune échéance payable pour cette mission dans cette liste. Consultez également l’historique des paiements.' : 'Aucune échéance en attente de paiement soignant.'}
                   </CardY2KContent>
                 </CardY2K>
               ) : (
@@ -983,12 +1030,14 @@ function FacturationEtablissementContent() {
                   const typeContratMission = m.type_contrat_applique as 'SALARIE' | 'LIBERAL' | null | undefined;
                   const isSalarie = typeContratMission === 'SALARIE';
                   const isLiberal = typeContratMission === 'LIBERAL';
+                  const aRapprocher = isLiberal && missionsARapprocher.has(m.mission_id);
+                  const pieceIndisponible = !isSalarie && (!isLiberal || !m.facture_honoraires_id);
                   const modePaiementLabel = isSalarie
                     ? 'Virement SEPA selon bulletin employeur'
                     : isLiberal
                     ? (m.soignant_stripe_connect ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
-                  const peutPayerStripeBase = isLiberal && m.soignant_stripe_connect;
+                  const peutPayerStripeBase = isLiberal && !pieceIndisponible && !aRapprocher && m.soignant_stripe_connect;
                   const factureHonoraires = m.facture_honoraires_id
                     ? facturesHonorairesParId.get(m.facture_honoraires_id)
                     : null;
@@ -1018,7 +1067,7 @@ function FacturationEtablissementContent() {
                                 contrat de la MISSION (chip « Contrat … » ci-dessous, seul
                                 à faire foi via type_contrat_applique). On n'affiche JAMAIS
                                 le régime du profil sur une ligne de facturation. */}
-                            <RetardBadge jours={m.jours_depuis_fin} />
+                            {aRapprocher ? <BadgeY2K variant="warning">À rapprocher</BadgeY2K> : <RetardBadge jours={m.jours_depuis_fin} />}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
@@ -1093,8 +1142,10 @@ function FacturationEtablissementContent() {
                                 Estimation avant paie/PAS — le bulletin employeur fait foi
                               </p>
                             </div>
+                          ) : pieceIndisponible ? (
+                            <p className="text-xs text-muted-foreground">Montant payable non établi</p>
                           ) : (
-                            <p className="font-bold">{fmt(m.net_a_payer)}</p>
+                            <div><p className="font-bold">{fmt(m.net_a_payer)}</p>{aRapprocher && <p className="text-[10px] text-muted-foreground">Montant de la pièce · solde à rapprocher</p>}</div>
                           )}
                         </div>
                       </div>
@@ -1118,7 +1169,9 @@ function FacturationEtablissementContent() {
                         </Button>
                       )}
 
-                      {!canManagePayments ? (
+                      {aRapprocher ? (
+                        <p role="alert" className="text-sm text-muted-foreground">Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement. Le montant de cette pièce ne constitue pas un nouveau solde dû.</p>
+                      ) : !canManagePayments ? (
                         <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto]">
                           <p className="text-xs text-muted-foreground text-center py-1 sm:text-left">
                             Consultation uniquement — votre rôle ne permet pas d’effectuer un paiement.
@@ -1134,6 +1187,8 @@ function FacturationEtablissementContent() {
                             </Button>
                           )}
                         </div>
+                      ) : pieceIndisponible ? (
+                        <p role="alert" className="text-sm text-muted-foreground">Facture identifiée requise. Les informations de cette ligne ne permettent pas de déclarer ou d’effectuer un paiement.</p>
                       ) : peutPayerStripe ? (
                         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                           <BoutonY2K
@@ -1836,6 +1891,12 @@ function FacturationEtablissementContent() {
                                       <Download className="h-4 w-4 text-muted-foreground" />
                                     </Button>
                                   )}
+                                  {p.facture_honoraires_id && p.mission_id && (
+                                    <Button size="sm" variant="outline" className="min-h-[44px]"
+                                      onClick={() => setFactureAContester({ ...p, intitule: p.mission_intitule })}>
+                                      <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
+                                    </Button>
+                                  )}
                                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               </td>
@@ -1888,11 +1949,17 @@ function FacturationEtablissementContent() {
                               </Button>
                             )}
                           </div>
+                          {p.facture_honoraires_id && p.mission_id && (
+                            <Button size="sm" variant="outline" className="mt-2 min-h-[44px] w-full"
+                              onClick={() => setFactureAContester({ ...p, intitule: p.mission_intitule })}>
+                              <Scale className="mr-2 h-4 w-4" /> Contester la facture payée
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
+                      Les 10 derniers paiements confirmés par le soignant. Le titre ouvre la mission. Contester une facture ouvre une demande de revue, sans déclencher de remboursement.
                     </p>
                   </CardY2KContent>
                 </CardY2K>

@@ -129,7 +129,7 @@ const selection = inputs => Object.entries(workflow.jobs).filter(([, job]) => {
 }).map(([id]) => id);
 test('routage exclusif : modes D2 valides ou malformés ne lancent jamais C/E/k6', () => {
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
-  assert.deepEqual(workflow.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(workflow.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
   assert.deepEqual(selection(baseInputs), ['load-tests']);
   assert.deepEqual(selection({ ...baseInputs, scenario: '05-dashboard-concurrent', dashboard_fixture_only: true }), ['dashboard-frontend']);
   for (const scenario of ['all', '03-recherche-missions', '04-candidatures-simultanees', '05-dashboard-concurrent']) {

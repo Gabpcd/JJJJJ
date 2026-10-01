@@ -159,6 +159,38 @@ describe('useRole — résolution fail-closed', () => {
     second.unmount();
   });
 
+  it('ignore une ancienne reprise en échec après la réussite de la suivante, y compris pour le cache partagé', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: {
+      id: 'utilisateur-id', app_metadata: { role: 'ADMIN_ETABLISSEMENT' },
+    } } }, error: null });
+    const indisponible = { data: null, error: { message: 'périmètre indisponible' } };
+    let terminerAncienne!: (value: typeof indisponible) => void;
+    const ancienne = requeteRpc(new Promise<typeof indisponible>(resolve => { terminerAncienne = resolve; }));
+    mocks.rpc.mockReturnValueOnce(requeteRpc(indisponible))
+      .mockReturnValueOnce(ancienne)
+      .mockReturnValueOnce(requeteRpc({ data: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'scope-repris' }, error: null }));
+    const page = renderHook(() => useRole());
+    await act(async () => { await Promise.resolve(); });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(page.result.current).toMatchObject({ resolved: true, etablissement_id: null });
+
+    await act(async () => { page.result.current.retry(); });
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(ancienne.abortSignal.mock.calls[0][0].aborted).toBe(false);
+    await act(async () => { page.result.current.retry(); });
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
+    expect(ancienne.abortSignal.mock.calls[0][0].aborted).toBe(true);
+    expect(page.result.current.etablissement_id).toBe('scope-repris');
+
+    // Le transport simulé livre volontairement sa réponse malgré l'AbortSignal.
+    await act(async () => { terminerAncienne(indisponible); });
+    expect(page.result.current).toMatchObject({ resolved: true, etablissement_id: 'scope-repris', error: null });
+    const autre = renderHook(() => useRole());
+    await waitFor(() => expect(autre.result.current.etablissement_id).toBe('scope-repris'));
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
+    autre.unmount(); page.unmount();
+  });
+
   it('ne démonte pas la route lors d’un SIGNED_IN répété au retour d’une vue native', async () => {
     mocks.rpc.mockReturnValue(requeteRpc({
       data: { role: 'SOIGNANT', etablissement_id: null },

@@ -73,7 +73,11 @@ Deno.serve(async (req) => {
 
   // Récupérer batch
   const { data: rpcData, error: rpcErr } = await admin
-    .rpc("fn_externalisations_a_traiter", { p_limit: 50, p_worker_id: workerId });
+    .rpc("fn_externalisations_a_traiter", {
+      p_limit: 50,
+      p_worker_id: workerId,
+      p_push_candidature_v1: true,
+    });
   if (rpcErr) {
     console.error("[worker] fn_externalisations_a_traiter error:", rpcErr);
     return new Response(JSON.stringify({ error: "RPC failed" }),
@@ -191,6 +195,7 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
       return dispatchEmail(admin, action);
     case "SMS_NOTIF":
       return dispatchSmsOtp(admin, action);
+    case "PUSH_CANDIDATURE_RECUE":
     case "PUSH_NOTIF":
       return dispatchPush(admin, action);
     case "AVOIR_PDF_GENERATION":
@@ -1043,7 +1048,45 @@ async function dispatchSmsOtp(admin: any, action: ActionRow): Promise<DispatchRe
 }
 
 async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const p = action.payload;
+  let p = action.payload;
+  if (action.type_action === "PUSH_CANDIDATURE_RECUE" || p?.type_evenement === "CANDIDATURE_RECUE") {
+    if (action.type_action !== "PUSH_CANDIDATURE_RECUE" || action.source !== "AUTRE" || !action.source_id) {
+      return { ok: false, erreur: "PUSH_CANDIDATURE_ACTION_INVALIDE" };
+    }
+    // Relire les droits et préférences au dispatch : la file peut attendre.
+    // La RPC ne renvoie que la notification liée à cette action en traitement.
+    const { data: preparation, error } = await admin.rpc("fn_preparer_push_candidature_recue", {
+      p_action_id: action.id,
+    });
+    if (error || !preparation || typeof preparation !== "object" || Array.isArray(preparation)) {
+      return { ok: false, erreur: "PUSH_CANDIDATURE_VERIFICATION_INDISPONIBLE" };
+    }
+    if (preparation.eligible === false
+      && ["source_inactive", "destinataire_inactif", "preference_desactivee"].includes(preparation.raison)) {
+      return { ok: true, resultat: { skipped: true, reason: preparation.raison } };
+    }
+    const canonical = preparation.payload;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const dataKeys = ["candidature_id", "mission_id", "soignant_id", "etablissement_id", "notification_id"];
+    const payloadKeys = ["destinataire_id", "type_evenement", "mission_id", "titre", "corps", "lien", "data"];
+    if (preparation.eligible !== true || !canonical || typeof canonical !== "object" || Array.isArray(canonical)
+      || Object.keys(canonical).length !== payloadKeys.length || payloadKeys.some(key => !(key in canonical))
+      || canonical.type_evenement !== "CANDIDATURE_RECUE"
+      || typeof canonical.destinataire_id !== "string" || !uuid.test(canonical.destinataire_id)
+      || typeof canonical.mission_id !== "string" || !uuid.test(canonical.mission_id)
+      || canonical.lien !== `/etablissement/missions/${canonical.mission_id}`
+      || typeof canonical.titre !== "string" || !canonical.titre.trim() || canonical.titre.length > 120
+      || typeof canonical.corps !== "string" || canonical.corps.length > 500
+      || !canonical.data || typeof canonical.data !== "object" || Array.isArray(canonical.data)
+      || Object.keys(canonical.data).length !== dataKeys.length
+      || dataKeys.some(key => typeof canonical.data[key] !== "string" || !uuid.test(canonical.data[key]))
+      || canonical.data.candidature_id !== action.source_id || canonical.data.mission_id !== canonical.mission_id
+      || payloadKeys.filter(key => key !== "data").some(key => canonical[key] !== p[key])
+      || dataKeys.some(key => canonical.data[key] !== p.data?.[key])) {
+      return { ok: false, erreur: "PUSH_CANDIDATURE_PROVENANCE_INVALIDE" };
+    }
+    p = canonical;
+  }
   // Adapter le format pour send-push (peut être appelé avec destinataire_id, type_evenement, titre, corps, data.lien)
   const body: any = {
     destinataire_id: p.destinataire_id,

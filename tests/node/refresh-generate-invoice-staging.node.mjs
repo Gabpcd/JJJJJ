@@ -110,3 +110,13 @@ test('the actual workflow gate fails red on a wrong ref/SHA before checkout or c
     const no=spawnSync('bash',['-c',gate],{env:{...base,[key]:value},encoding:'utf8'});assert.equal(no.status,1);assert.equal(no.stdout,'TRUSTED_MAIN_REQUIRED\n');assert.equal(no.stderr,'');
   }
 });
+
+test('the CLI version cache is ignored and untracked, so version setup preserves the strict clean-checkout guard', () => {
+  const cwd = new URL('../../', import.meta.url);
+  const path = 'supabase/.temp/cli-latest';
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', path], { cwd, encoding: 'utf8' });
+  assert.equal(tracked.status, 1, 'the CLI rewrites this cache even during --version');
+  const ignored = spawnSync('git', ['check-ignore', '--no-index', '--', path], { cwd, encoding: 'utf8' });
+  assert.equal(ignored.status, 0);
+  assert.equal(ignored.stdout.trim(), path);
+});

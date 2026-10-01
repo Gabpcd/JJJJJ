@@ -316,6 +316,13 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Radix verrouille le débordement pendant un Select ou un dialogue. Avec
+     height:100%, ce verrou coupait la page à la hauteur du viewport et remettait
+     son scroll à zéro. Garder la hauteur du contenu, sans retirer le verrou. */
+  body[data-scroll-locked] {
+    height: auto;
+  }
+
   /* ── Safari iOS: prevent zoom on input focus (all inputs >= 16px) ── */
   input, textarea, select {
     font-size: max(16px, 1rem);

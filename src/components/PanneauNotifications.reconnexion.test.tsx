@@ -183,3 +183,23 @@ it.each([0, 50])('tout marquer comme lu couvre 60 lignes dont %s déjà lues, sa
   const mutation = m.reads.find(r => r.update);
   expect(mutation.filters).toEqual({ destinataire_id: 'compte-a', lue: false });
 });
+
+it.each(['CANDIDATURE_RECUE', 'SYSTEME'])('page masquée : %s conserve l’in-app et respecte son circuit OS', async type => {
+  const os = vi.fn();
+  const previous = Object.getOwnPropertyDescriptor(window, 'Notification');
+  Object.defineProperty(window, 'Notification', { configurable: true, value: Object.assign(function Notification() { os(); }, { permission: 'granted' }) });
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  try {
+    render(app()); await screen.findByRole('button', { name: 'Notifications, 1 non lue' });
+    await status('SUBSCRIBED');
+    const nouvelle = { ...row('candidature'), type };
+    m.rows.push(nouvelle);
+    await act(async () => m.channels[0].insert({ new: nouvelle }));
+    await screen.findByRole('button', { name: 'Notifications, 2 non lues' });
+    expect(m.info).toHaveBeenCalledTimes(1);
+    expect(os).toHaveBeenCalledTimes(type === 'CANDIDATURE_RECUE' ? 0 : 1);
+  } finally {
+    if (previous) Object.defineProperty(window, 'Notification', previous);
+    else Reflect.deleteProperty(window, 'Notification');
+  }
+});

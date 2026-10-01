@@ -1147,9 +1147,15 @@ CREATE OR REPLACE FUNCTION "public"."dec_calculer_commission"() RETURNS "trigger
 DECLARE
     v_taux NUMERIC;
 BEGIN
-    IF NEW.statut = 'TERMINEE' AND NEW.net_a_payer IS NOT NULL THEN
+    -- Après dec_mission_z_finance, les colonnes mission décrivent le même
+    -- planning. Un delta de facture ne peut modifier uniquement sa commission.
+    -- Les pièces comptables restent calculées et payées indépendamment.
+    IF (NEW.statut = 'TERMINEE'
+        OR (NEW.statut = 'EN_COURS' AND NEW.type_contrat_applique = 'LIBERAL'))
+       AND NEW.net_a_payer IS NOT NULL THEN
         v_taux := COALESCE(
             NEW.taux_commission_fige,
+            CASE WHEN NEW.statut = 'EN_COURS' THEN NEW.taux_commission ELSE NULL END,
             (SELECT e.taux_commission_negocie FROM etablissements e WHERE e.id = NEW.etablissement_id),
             public.fn_param_num('commission_defaut_pct', 15)
         );
@@ -28113,6 +28119,7 @@ DECLARE
   v_ref text;
   v_echeance date;
   v_paiement_id uuid;
+  v_detail text;
 BEGIN
   IF NOT p_attestation_sur_l_honneur THEN
     RETURN jsonb_build_object(
@@ -28123,8 +28130,7 @@ BEGIN
 
   SELECT * INTO v_fh
   FROM public.factures_honoraires
-  WHERE id = p_facture_honoraire_id
-  FOR UPDATE;
+  WHERE id = p_facture_honoraire_id;
   IF v_fh.id IS NULL OR v_fh.type_document <> 'FACTURE' THEN
     RETURN jsonb_build_object('error', 'Facture d''honoraires introuvable');
   END IF;
@@ -28133,7 +28139,10 @@ BEGIN
   FROM public.missions
   WHERE id = v_fh.mission_id
   FOR UPDATE;
-  IF v_mission.id IS NULL
+  -- Relecture verrouillée après mission : même ordre que le rapprochement Stripe.
+  SELECT * INTO v_fh FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id FOR UPDATE;
+  IF v_mission.id IS NULL OR v_fh.id IS NULL
      OR v_fh.etablissement_id <> v_mission.etablissement_id
      OR v_fh.soignant_id <> v_mission.soignant_assigne_id THEN
     RETURN jsonb_build_object('error', 'Facture et mission incohérentes');
@@ -28181,10 +28190,10 @@ BEGIN
     RETURN jsonb_build_object('error', 'Paiement déjà déclaré pour cette période');
   END IF;
 
-  IF p_montant IS NULL OR p_montant <= 0 THEN
+  IF p_montant IS NULL OR NOT (p_montant > 0 AND p_montant < 'Infinity'::numeric) THEN
     RETURN jsonb_build_object('error', 'Le montant doit être supérieur à 0.');
   END IF;
-  IF abs(round(p_montant, 2) - round(v_fh.montant_ttc, 2)) > 0.01 THEN
+  IF p_montant IS DISTINCT FROM v_fh.montant_ttc THEN
     RETURN jsonb_build_object(
       'error', 'MONTANT_FACTURE_INCOHERENT',
       'message', 'Le montant déclaré doit correspondre au montant exact de la facture (' || v_fh.montant_ttc || ' €).'
@@ -28264,6 +28273,15 @@ BEGIN
     'mission_intitule', v_mission.intitule,
     'echeance', v_echeance
   );
+EXCEPTION WHEN check_violation THEN
+  IF SQLERRM IN ('PAIEMENT_HISTORIQUE_A_RAPPROCHER','PAIEMENT_STRIPE_EN_COURS',
+    'PAIEMENT_FACTURE_DEJA_DECLARE','AVOIR_A_RAPPROCHER','MONTANT_FACTURE_INCOHERENT',
+    'PERIODE_NON_PAYABLE','DECLARATION_FACTURE_INVALIDE','LIBERAL_FACTURE_REQUISE') THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    RETURN jsonb_build_object('error',SQLERRM,'message',COALESCE(NULLIF(v_detail,''),
+      'Ce règlement doit être vérifié avant une nouvelle déclaration.'));
+  END IF;
+  RAISE;
 END;
 $$;
 
@@ -28519,6 +28537,11 @@ BEGIN
      )
   THEN
     RETURN jsonb_build_object('error', 'ACCES_REFUSE', 'message', 'Accès refusé.');
+  END IF;
+
+  IF v_mission.type_contrat_applique = 'LIBERAL' THEN
+    RETURN jsonb_build_object('error', 'LIBERAL_FACTURE_REQUISE',
+      'message', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.');
   END IF;
 
   IF p_montant_verse IS NULL OR p_montant_verse <= 0
@@ -30235,6 +30258,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_diagnostic_coherence_financiere"() RETUR
 DECLARE
   v_missions jsonb;
   v_factures jsonb;
+  v_non_verifiables jsonb;
+  v_factures_verifiees bigint;
   v_transfers jsonb;
 BEGIN
   IF NOT public.est_admin() THEN
@@ -30258,39 +30283,51 @@ BEGIN
     ) ORDER BY intitule) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
   ) INTO v_missions FROM ecarts;
 
-  WITH attendus AS (
+  -- Une pièce rectifiée et une finale de période ne se comparent jamais
+  -- au planning courant ni au net global de la mission.
+  WITH pieces AS (
     SELECT fh.id, fh.numero_facture, fh.mission_id, fh.montant_ht,
       CASE
-        WHEN COALESCE(fh.est_facture_finale_mission, false) THEN m.net_a_payer
-        ELSE (
-          SELECT round(COALESCE(sum(
-            extract(epoch FROM (mc.fin_le - mc.debut_le)) / 3600.0
-            * COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base)
-          ), 0), 2)
-          FROM public.mission_creneaux mc
-          WHERE mc.mission_id = m.id
-            AND COALESCE(mc.type_creneau, 'PREVISIONNEL') = 'PREVISIONNEL'
-            AND mc.est_pause IS NOT TRUE
-            AND mc.debut_le::date BETWEEN fh.periode_debut AND fh.periode_fin
-        )
-      END AS attendu
+        WHEN fh.type_document = 'AVOIR' OR fh.nature_correction = 'COMPLEMENT'
+          THEN 'CORRECTION_MONETAIRE'
+        WHEN fh.quantite_heures_snapshot IS NULL OR fh.taux_horaire_snapshot IS NULL
+          THEN 'SNAPSHOTS_INDISPONIBLES'
+        WHEN fh.quantite_heures_snapshot <= 0 OR fh.taux_horaire_snapshot <= 0
+          OR fh.quantite_heures_snapshot::text IN ('NaN', 'Infinity', '-Infinity')
+          OR fh.taux_horaire_snapshot::text IN ('NaN', 'Infinity', '-Infinity')
+          THEN 'SNAPSHOTS_INVALIDES'
+        WHEN fh.montant_ht::text IN ('NaN', 'Infinity', '-Infinity')
+          THEN 'MONTANT_INVALIDE'
+        ELSE NULL
+      END AS motif,
+      round(fh.quantite_heures_snapshot * fh.taux_horaire_snapshot, 2) AS attendu
     FROM public.factures_honoraires fh
-    JOIN public.missions m ON m.id = fh.mission_id
-    WHERE COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-      AND fh.statut NOT IN ('BROUILLON', 'REMPLACEE', 'ANNULEE', 'ERREUR_GENERATION')
-  ), ecarts AS (
-    SELECT * FROM attendus
-    WHERE attendu IS NOT NULL AND attendu > 0
-      AND abs(montant_ht - attendu) > greatest(attendu * 0.01, 1.00)
+    WHERE fh.type_document IN ('FACTURE', 'AVOIR')
+      AND fh.statut NOT IN ('BROUILLON', 'EN_GENERATION', 'REMPLACEE', 'ANNULEE', 'ERREUR_GENERATION')
+  ), classes AS (
+    SELECT *, motif IS NULL
+      AND abs(montant_ht - attendu) > greatest(attendu * 0.01, 1.00) AS en_ecart
+    FROM pieces
   )
   SELECT jsonb_build_object(
-    'count', count(*),
-    'echantillon', COALESCE(jsonb_agg(jsonb_build_object(
+    'count', count(*) FILTER (WHERE en_ecart),
+    'echantillon', COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'facture_id', id, 'numero_facture', numero_facture,
       'mission_id', mission_id, 'montant_ht', montant_ht,
-      'mission_net', attendu, 'ecart', montant_ht - attendu
-    ) ORDER BY numero_facture) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
-  ) INTO v_factures FROM ecarts;
+      'attendu_ht', attendu, 'mission_net', attendu, 'ecart', montant_ht - attendu
+    ) ORDER BY numero_facture, id) FROM (
+      SELECT * FROM classes WHERE en_ecart ORDER BY numero_facture, id LIMIT 10
+    ) e), '[]'::jsonb)
+  ), jsonb_build_object(
+    'count', count(*) FILTER (WHERE motif IS NOT NULL),
+    'echantillon', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'facture_id', id, 'numero_facture', numero_facture,
+      'mission_id', mission_id, 'motif', motif
+    ) ORDER BY numero_facture, id) FROM (
+      SELECT * FROM classes WHERE motif IS NOT NULL ORDER BY numero_facture, id LIMIT 10
+    ) n), '[]'::jsonb)
+  ), count(*) FILTER (WHERE motif IS NULL)
+  INTO v_factures, v_non_verifiables, v_factures_verifiees FROM classes;
 
   WITH orphelins AS (
     SELECT st.id, st.mission_id, st.montant_total
@@ -30312,6 +30349,9 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success', true,
+    'controle_documentaire_version', 2,
+    'factures_verifiees', v_factures_verifiees,
+    'factures_non_verifiables', v_non_verifiables,
     'genere_le', now(),
     'missions_incoherentes', v_missions,
     'factures_ecart_mission', v_factures,
@@ -46737,6 +46777,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
+  v_mission_verrou uuid;
   v_avoir_h public.factures_honoraires%ROWTYPE;
   v_origine_h public.factures_honoraires%ROWTYPE;
   v_origine_c public.factures%ROWTYPE;
@@ -46752,9 +46793,15 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
+  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.
+  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.
+  SELECT mission_id INTO v_mission_verrou FROM public.factures_honoraires WHERE id=p_avoir_honoraires_id;
+  PERFORM 1 FROM public.missions WHERE id=v_mission_verrou FOR UPDATE;
+
   SELECT * INTO v_avoir_h
   FROM public.factures_honoraires
   WHERE id = p_avoir_honoraires_id
+    AND mission_id IS NOT DISTINCT FROM v_mission_verrou
     AND type_document = 'AVOIR'
     AND nature_correction = 'AVOIR'
     AND statut IN ('EMISE', 'REMBOURSE')
@@ -46869,6 +46916,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_preparer_commission_complement_honoraire
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
+  v_mission_verrou uuid;
   v_fh public.factures_honoraires%ROWTYPE;
   v_origine_honoraires public.factures_honoraires%ROWTYPE;
   v_origine_commission public.factures%ROWTYPE;
@@ -46885,9 +46933,15 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
+  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.
+  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.
+  SELECT mission_id INTO v_mission_verrou FROM public.factures_honoraires WHERE id=p_facture_honoraire_id;
+  PERFORM 1 FROM public.missions WHERE id=v_mission_verrou FOR UPDATE;
+
   SELECT * INTO v_fh
   FROM public.factures_honoraires
   WHERE id = p_facture_honoraire_id
+    AND mission_id IS NOT DISTINCT FROM v_mission_verrou
     AND type_document = 'FACTURE'
     AND nature_correction = 'COMPLEMENT'
     AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
@@ -46991,6 +47045,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_preparer_commission_remplacement_honorai
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
+  v_mission_verrou uuid;
   v_fh public.factures_honoraires%ROWTYPE;
   v_origine_honoraires public.factures_honoraires%ROWTYPE;
   v_mission public.missions%ROWTYPE;
@@ -47010,9 +47065,15 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
+  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.
+  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.
+  SELECT mission_id INTO v_mission_verrou FROM public.factures_honoraires WHERE id=p_facture_honoraire_id;
+  PERFORM 1 FROM public.missions WHERE id=v_mission_verrou FOR UPDATE;
+
   SELECT * INTO v_fh
   FROM public.factures_honoraires
   WHERE id = p_facture_honoraire_id
+    AND mission_id IS NOT DISTINCT FROM v_mission_verrou
     AND type_document = 'FACTURE'
     AND nature_correction = 'REMPLACEMENT'
     AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
@@ -47147,11 +47208,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_preparer_facture_commission_periode"("p_
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
+  v_mission_verrou uuid;
   v_fh public.factures_honoraires%ROWTYPE;
   v_mission public.missions%ROWTYPE;
   v_etab public.etablissements%ROWTYPE;
   v_existing public.factures%ROWTYPE;
-  v_total_precedent numeric := 0;
+  v_base_precedente numeric := 0;
+  v_commission_precedente numeric := 0;
+  v_nb_precedents integer := 0;
+  v_taux_commission numeric;
+  v_ht_piece numeric(10,2);
   v_ttc numeric(10,2);
   v_ht numeric(10,2);
   v_tva numeric(10,2);
@@ -47161,9 +47227,15 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
+  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.
+  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.
+  SELECT mission_id INTO v_mission_verrou FROM public.factures_honoraires WHERE id=p_facture_honoraire_id;
+  PERFORM 1 FROM public.missions WHERE id=v_mission_verrou FOR UPDATE;
+
   SELECT * INTO v_fh
   FROM public.factures_honoraires
   WHERE id = p_facture_honoraire_id
+    AND mission_id IS NOT DISTINCT FROM v_mission_verrou
     AND type_document = 'FACTURE'
     AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
   FOR UPDATE;
@@ -47193,36 +47265,71 @@ BEGIN
      OR v_mission.type_contrat_applique <> 'LIBERAL'
      OR v_mission.soignant_assigne_id <> v_fh.soignant_id
      OR v_mission.etablissement_id <> v_fh.etablissement_id
-     OR COALESCE(v_mission.net_a_payer, 0) <= 0
-     OR COALESCE(v_mission.montant_commission_ttc, 0) <= 0 THEN
+     OR v_fh.montant_ht IS NULL OR v_fh.montant_ht <= 0
+     OR v_fh.montant_ht::text IN ('NaN', 'Infinity', '-Infinity') THEN
     RAISE EXCEPTION 'Mission incohérente pour la facture de commission' USING ERRCODE = '23514';
   END IF;
 
-  SELECT COALESCE(sum(f.montant_ttc), 0)
-  INTO v_total_precedent
-  FROM public.factures f
-  WHERE f.mission_id = v_mission.id
-    AND f.facture_honoraire_id IS NOT NULL
-    AND f.type_document = 'FACTURE'
-    AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION');
+  -- La mission reste une estimation du planning. Les honoraires émis sont
+  -- l'assiette de cette facture, y compris après un litige sur une autre période.
+  -- Le repli historique conserve le taux déjà stocké, jamais le ratio des montants.
+  v_taux_commission := COALESCE(v_mission.taux_commission_fige, v_mission.taux_commission);
+  IF v_taux_commission IS NULL OR v_taux_commission <= 0 OR v_taux_commission > 100
+     OR v_taux_commission::text IN ('NaN', 'Infinity', '-Infinity') THEN
+    RAISE EXCEPTION 'Taux de commission de mission absent ou incohérent' USING ERRCODE = '23514';
+  END IF;
+  v_ht_piece := round(v_fh.montant_ht * v_taux_commission / 100, 2);
+  v_ht := v_ht_piece;
 
   IF v_fh.est_facture_finale_mission THEN
-    v_ttc := round(GREATEST(v_mission.montant_commission_ttc - v_total_precedent, 0), 2);
-  ELSE
-    v_ttc := round(
-      LEAST(
-        v_mission.montant_commission_ttc - v_total_precedent,
-        v_mission.montant_commission_ttc * v_fh.montant_ttc / v_mission.net_a_payer
-      ),
-      2
-    );
-  END IF;
-  IF v_ttc <= 0 THEN
-    RAISE EXCEPTION 'Commission de période nulle ou déjà intégralement facturée' USING ERRCODE = '23514';
-  END IF;
+    -- La dernière pièce ne doit solder ni un budget prévisionnel ni une erreur
+    -- historique. Les remplacements exclus et les avoirs signés restent liés
+    -- à leurs propres commissions ; seuls les centimes d'arrondi sont lissés.
+    IF EXISTS (
+      SELECT 1 FROM public.factures_honoraires h
+      WHERE h.mission_id = v_mission.id AND h.id <> v_fh.id
+        AND h.statut IN ('EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE', 'REMBOURSE')
+        AND (h.soignant_id IS DISTINCT FROM v_fh.soignant_id
+          OR h.etablissement_id IS DISTINCT FROM v_fh.etablissement_id
+          OR h.montant_ht <= 0 OR h.montant_ht::text IN ('NaN', 'Infinity', '-Infinity')
+          OR (SELECT count(*) FROM public.factures f WHERE f.facture_honoraire_id = h.id
+            AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')) <> 1
+          OR NOT EXISTS (
+            SELECT 1 FROM public.factures f
+            WHERE f.facture_honoraire_id = h.id AND f.mission_id = v_mission.id
+              AND f.etablissement_id = v_fh.etablissement_id
+              AND f.type_document = h.type_document::text
+              AND f.montant_ht > 0 AND f.montant_ht::text NOT IN ('NaN', 'Infinity', '-Infinity')
+              AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+          ))
+    ) THEN
+      RAISE EXCEPTION 'Commission antérieure absente, ambiguë ou incohérente : facture finale suspendue' USING ERRCODE = '23514';
+    END IF;
 
-  v_ht := round(v_ttc / 1.20, 2);
-  v_tva := v_ttc - v_ht;
+    SELECT COALESCE(sum(CASE WHEN h.type_document = 'AVOIR' THEN -h.montant_ht ELSE h.montant_ht END), 0),
+           COALESCE(sum(CASE WHEN f.type_document = 'AVOIR' THEN -f.montant_ht ELSE f.montant_ht END), 0),
+           count(*)::integer
+      INTO v_base_precedente, v_commission_precedente, v_nb_precedents
+      FROM public.factures_honoraires h
+      JOIN public.factures f ON f.facture_honoraire_id = h.id AND f.type_document = h.type_document::text
+      WHERE h.mission_id = v_mission.id AND f.mission_id = v_mission.id AND h.id <> v_fh.id
+        AND h.soignant_id = v_fh.soignant_id AND h.etablissement_id = v_fh.etablissement_id
+        AND f.etablissement_id = v_fh.etablissement_id
+        AND h.statut IN ('EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE', 'REMBOURSE')
+        AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION');
+    v_ht := round((v_base_precedente + v_fh.montant_ht) * v_taux_commission / 100, 2)
+      - v_commission_precedente;
+    IF abs(v_ht - v_ht_piece) > v_nb_precedents * 0.01 THEN
+      RAISE EXCEPTION 'Historique de commission incohérent : écart hors arrondis' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  IF v_ht <= 0 OR v_ht::text IN ('NaN', 'Infinity', '-Infinity') THEN
+    RAISE EXCEPTION 'Commission de période nulle ou négative' USING ERRCODE = '23514';
+  END IF;
+  -- Même calcul par pièce que les commissions de remplacement/complément.
+  -- La TVA n'est pas compensée entre deux factures déjà émises.
+  v_tva := round(v_ht * 0.20, 2);
+  v_ttc := v_ht + v_tva;
   v_numero := 'JOL-' || to_char(CURRENT_DATE, 'YYYY') || '-H-' || upper(left(replace(v_fh.id::text, '-', ''), 10));
 
   INSERT INTO public.factures (
@@ -47582,15 +47689,26 @@ CREATE OR REPLACE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"() RET
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
+DECLARE v_fh public.factures_honoraires%ROWTYPE;
 BEGIN
-  IF NEW.mission_id IS NOT NULL AND NEW.stripe_payment_intent_id IS NOT NULL
-     AND NEW.stripe_payment_intent_id <> '' THEN
-    UPDATE public.factures_honoraires
-    SET stripe_payment_intent_id = NEW.stripe_payment_intent_id
-    WHERE mission_id = NEW.mission_id
-      AND COALESCE(type_document, 'FACTURE') = 'FACTURE'
-      AND (stripe_payment_intent_id IS NULL
-           OR stripe_payment_intent_id <> NEW.stripe_payment_intent_id);
+  -- Une ancienne trace mission-only ne permet pas de choisir une facture.
+  IF NEW.facture_honoraire_id IS NULL OR NEW.stripe_payment_intent_id IS NULL
+     OR NEW.stripe_payment_intent_id = '' THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_fh FROM public.factures_honoraires
+    WHERE id=NEW.facture_honoraire_id FOR UPDATE;
+  IF v_fh.id IS NULL OR v_fh.mission_id IS DISTINCT FROM NEW.mission_id
+     OR v_fh.soignant_id IS DISTINCT FROM NEW.soignant_id
+     OR v_fh.etablissement_id IS DISTINCT FROM NEW.etablissement_id
+     OR COALESCE(v_fh.type_document,'FACTURE') <> 'FACTURE'
+     OR (v_fh.stripe_payment_intent_id IS NOT NULL
+         AND v_fh.stripe_payment_intent_id <> NEW.stripe_payment_intent_id) THEN
+    RAISE EXCEPTION 'Trace Stripe incohérente avec la facture explicite' USING ERRCODE='23514';
+  END IF;
+  IF v_fh.stripe_payment_intent_id IS NULL THEN
+    UPDATE public.factures_honoraires SET stripe_payment_intent_id=NEW.stripe_payment_intent_id
+      WHERE id=v_fh.id;
   END IF;
   RETURN NEW;
 END;
@@ -56398,6 +56516,10 @@ BEGIN
     RAISE EXCEPTION 'Mission Connect incohérente' USING ERRCODE = 'P0001';
   END IF;
 
+  IF (SELECT count(*) FROM public.stripe_transfers WHERE mission_id=p_mission_id
+      AND stripe_checkout_session_id=p_stripe_checkout_session_id) <> 1 THEN
+    RAISE EXCEPTION 'Trace Connect absente ou ambiguë' USING ERRCODE='23514';
+  END IF;
   SELECT st.* INTO v_transfer
   FROM public.stripe_transfers st
   WHERE st.mission_id = p_mission_id
@@ -56406,6 +56528,8 @@ BEGIN
   LIMIT 1
   FOR UPDATE;
   IF NOT FOUND
+     OR (v_transfer.facture_honoraire_id IS NOT NULL
+         AND v_transfer.facture_honoraire_id <> p_facture_honoraires_id)
      OR v_transfer.soignant_id <> p_soignant_id
      OR v_transfer.etablissement_id <> p_etablissement_id
      OR round(v_transfer.montant_soignant * 100)::integer <> p_montant_soignant_cts
@@ -56414,6 +56538,8 @@ BEGIN
      OR v_transfer.statut NOT IN ('EN_ATTENTE', 'ECHOUE', 'CHARGE_REUSSI', 'TRANSFERE', 'PAYE')
      OR (v_transfer.stripe_payment_intent_id IS NOT NULL
          AND v_transfer.stripe_payment_intent_id <> p_stripe_payment_intent_id)
+     OR (v_transfer.stripe_charge_id IS NOT NULL
+         AND v_transfer.stripe_charge_id <> p_stripe_charge_id)
      OR (v_transfer.stripe_transfer_id IS NOT NULL
          AND v_transfer.stripe_transfer_id <> p_stripe_transfer_id) THEN
     RAISE EXCEPTION 'Trace Connect incohérente' USING ERRCODE = 'P0001';
@@ -56447,6 +56573,11 @@ BEGIN
     RAISE EXCEPTION 'Facture honoraires Connect incohérente' USING ERRCODE = 'P0001';
   END IF;
 
+  -- Le producteur possède la FH explicite validée contre la Session Stripe.
+  -- Rattachement courant de cette trace seulement ; aucun paiement ancien réécrit.
+  UPDATE public.stripe_transfers SET facture_honoraire_id=v_honoraires.id
+  WHERE id=v_transfer.id AND facture_honoraire_id IS NULL;
+
   UPDATE public.factures_honoraires
   SET statut = 'PAYEE',
       stripe_payment_intent_id = p_stripe_payment_intent_id,
@@ -56463,6 +56594,8 @@ BEGIN
        OR v_commission.type_document <> 'FACTURE'
        OR v_commission.mission_id <> p_mission_id
        OR v_commission.etablissement_id <> p_etablissement_id
+       OR (v_commission.facture_honoraire_id IS NOT NULL
+           AND v_commission.facture_honoraire_id <> p_facture_honoraires_id)
        OR round(v_commission.montant_ttc * 100)::integer <> p_montant_commission_cts
        OR v_commission.statut NOT IN ('EMISE', 'EN_RETARD', 'PAYEE')
        OR (v_commission.stripe_payment_intent_id IS NOT NULL
@@ -56503,6 +56636,8 @@ BEGIN
     IF NOT FOUND
        OR v_commission.mission_id <> p_mission_id
        OR v_commission.etablissement_id <> p_etablissement_id
+       OR (v_commission.facture_honoraire_id IS NOT NULL
+           AND v_commission.facture_honoraire_id <> p_facture_honoraires_id)
        OR v_commission.statut <> 'PAYEE'
        OR v_commission.stripe_payment_intent_id <> p_stripe_payment_intent_id
        OR round(v_commission.montant_ttc * 100)::integer <> p_montant_commission_cts THEN
@@ -56512,12 +56647,12 @@ BEGIN
   END IF;
 
   INSERT INTO public.paiements_soignant (
-    mission_id, soignant_id, etablissement_id, montant_net, methode,
+    mission_id, facture_honoraire_id, soignant_id, etablissement_id, montant_net, methode,
     reference_virement, date_paiement, statut,
     confirme_par_etablissement, confirme_par_etablissement_le,
     confirme_par_soignant, confirme_par_soignant_le, stripe_transfer_id
   ) VALUES (
-    p_mission_id, p_soignant_id, p_etablissement_id,
+    p_mission_id, p_facture_honoraires_id, p_soignant_id, p_etablissement_id,
     p_montant_soignant_cts::numeric / 100, 'NOTE_HONORAIRES',
     'STRIPE-' || p_stripe_transfer_id,
     (COALESCE(p_rapproche_le, now()))::date, 'CONFIRME',
@@ -57814,8 +57949,9 @@ BEGIN
     DELETE FROM cotisations_sociales WHERE soignant_id = v_uid;
     DELETE FROM conformite_travail WHERE soignant_id = v_uid;
     UPDATE messages_litige SET contenu = '[Message supprimé]' WHERE auteur_id = v_uid;
-    UPDATE stripe_transfers SET soignant_id = NULL WHERE soignant_id = v_uid;
-    UPDATE paiements_soignant SET soignant_id = NULL WHERE soignant_id = v_uid;
+    -- Le profil est anonymisé et conservé par son id. Les références des pièces
+    -- et règlements restent inchangées : aucune réattribution de l’historique.
+    -- Les deux colonnes soignant_id sont NOT NULL ; aucune écriture ici.
     INSERT INTO journaux_audit (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
     VALUES (v_uid, 'SOIGNANT', 'RGPD_SUPPRESSION_COMPTE', 'soignant', v_uid,
         jsonb_build_object('anonymise', true, 'tables_nettoyees', ARRAY[
@@ -57827,7 +57963,8 @@ BEGIN
             'souscriptions_prevoyance','suivi_conversion_3200h',
             'mandats_facturation_signatures','cessions_creance','factures_honoraires','factor_advances',
             'email_queue','sms_envoyes','cotisations_sociales','conformite_travail',
-            'messages_litige','stripe_transfers','paiements_soignant']));
+            'messages_litige'],
+            'tables_financieres_conservees', ARRAY['stripe_transfers','paiements_soignant']));
     INSERT INTO private.suppressions_compte_confirmees(utilisateur_id,type_profil,anonymise_le,email_anonymise)
     SELECT id,'SOIGNANT',supprime_le,email FROM public.soignants WHERE id=v_uid
     ON CONFLICT(utilisateur_id,type_profil) DO UPDATE SET anonymise_le=excluded.anonymise_le,email_anonymise=excluded.email_anonymise;
@@ -64756,46 +64893,22 @@ END; $$;
 ALTER FUNCTION "public"."next_avoir_commission_number"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") RETURNS "text"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-  v_siret TEXT;
-  v_year TEXT;
-  v_last_seq INTEGER;
-  v_next_seq INTEGER;
-  v_lock_key BIGINT;
-  v_result TEXT;
+CREATE OR REPLACE FUNCTION public.next_avoir_number(p_soignant_id uuid)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public
+AS $numero$
+DECLARE v_seq bigint; v_prefixe text;
 BEGIN
-  v_lock_key := ('x' || left(md5('AV:' || p_soignant_id::text), 15))::bit(64)::bigint;
-  PERFORM pg_advisory_xact_lock(v_lock_key);
-
-  SELECT COALESCE(LEFT(siret_liberal, 8), LEFT(p_soignant_id::text, 8))
-    INTO v_siret
-    FROM public.soignants WHERE id = p_soignant_id;
-  IF v_siret IS NULL THEN
-    v_siret := LEFT(p_soignant_id::text, 8);
-  END IF;
-
-  v_year := TO_CHAR(CURRENT_DATE, 'YYYY');
-
-  SELECT MAX(
-    NULLIF(SPLIT_PART(numero_facture, '-', 4), '')::INTEGER
-  ) INTO v_last_seq
-    FROM public.factures_honoraires
-   WHERE soignant_id = p_soignant_id
-     AND type_document = 'AVOIR'
-     AND numero_facture LIKE 'AV-%';
-
-  v_next_seq := COALESCE(v_last_seq, 0) + 1;
-  v_result := 'AV-' || v_siret || '-' || v_year || '-' || LPAD(v_next_seq::TEXT, 5, '0');
-  RETURN v_result;
+  IF p_soignant_id IS NULL THEN RAISE EXCEPTION 'Émetteur requis' USING ERRCODE='22004'; END IF;
+  PERFORM pg_advisory_xact_lock(('x'||left(md5('AV:'||p_soignant_id::text),15))::bit(64)::bigint);
+  v_prefixe:=replace(p_soignant_id::text,'-','');
+  -- Continuité historique tous millésimes, y compris les pièces en erreur.
+  SELECT COALESCE(MAX(NULLIF(split_part(numero_facture,'-',4),'')::bigint),0)+1 INTO v_seq
+  FROM public.factures_honoraires WHERE soignant_id=p_soignant_id AND numero_facture LIKE 'AV-%' AND type_document='AVOIR';
+  RETURN 'AV-'||v_prefixe||'-'||to_char(CURRENT_DATE,'YYYY')||'-'||lpad(v_seq::text,greatest(5,length(v_seq::text)),'0');
 END;
-$$;
+$numero$;
 
-
-ALTER FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION public.next_avoir_number(uuid) OWNER TO postgres;
 
 
 COMMENT ON FUNCTION "public"."next_avoir_number"("p_soignant_id" "uuid") IS 'Séquence avoir par soignant, distincte de next_invoice_number. Format AV-{SIRET}-{YYYY}-{NNNNN}.';
@@ -64821,13 +64934,22 @@ END; $$;
 ALTER FUNCTION "public"."next_facture_complementaire_number"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."next_invoice_number"("p_soignant_id" "uuid") RETURNS "text"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$ DECLARE v_siret TEXT; v_year TEXT; v_last_seq INTEGER; v_next_seq INTEGER; v_lock_key BIGINT; v_result TEXT; BEGIN v_lock_key := ('x' || left(md5(p_soignant_id::text), 15))::bit(64)::bigint; PERFORM pg_advisory_xact_lock(v_lock_key); SELECT COALESCE(LEFT(siret_liberal, 8), LEFT(p_soignant_id::text, 8)) INTO v_siret FROM soignants WHERE id = p_soignant_id; IF v_siret IS NULL THEN v_siret := LEFT(p_soignant_id::text, 8); END IF; v_year := TO_CHAR(CURRENT_DATE, 'YYYY'); SELECT MAX(NULLIF(SPLIT_PART(numero_facture, '-', 4), '')::INTEGER) INTO v_last_seq FROM factures_honoraires WHERE soignant_id = p_soignant_id AND numero_facture LIKE 'JOL-%'; v_next_seq := COALESCE(v_last_seq, 0) + 1; v_result := 'JOL-' || v_siret || '-' || v_year || '-' || LPAD(v_next_seq::TEXT, 5, '0'); RETURN v_result; END; $$;
+CREATE OR REPLACE FUNCTION public.next_invoice_number(p_soignant_id uuid)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public
+AS $numero$
+DECLARE v_seq bigint; v_prefixe text;
+BEGIN
+  IF p_soignant_id IS NULL THEN RAISE EXCEPTION 'Émetteur requis' USING ERRCODE='22004'; END IF;
+  PERFORM pg_advisory_xact_lock(('x'||left(md5(''||p_soignant_id::text),15))::bit(64)::bigint);
+  v_prefixe:=replace(p_soignant_id::text,'-','');
+  -- Continuité historique tous millésimes, y compris les pièces en erreur.
+  SELECT COALESCE(MAX(NULLIF(split_part(numero_facture,'-',4),'')::bigint),0)+1 INTO v_seq
+  FROM public.factures_honoraires WHERE soignant_id=p_soignant_id AND numero_facture LIKE 'JOL-%';
+  RETURN 'JOL-'||v_prefixe||'-'||to_char(CURRENT_DATE,'YYYY')||'-'||lpad(v_seq::text,greatest(5,length(v_seq::text)),'0');
+END;
+$numero$;
 
-
-ALTER FUNCTION "public"."next_invoice_number"("p_soignant_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION public.next_invoice_number(uuid) OWNER TO postgres;
 
 
 CREATE OR REPLACE FUNCTION "public"."peut_exercer"("p_profession" "text", "p_type_exercice" "text", "p_type_etablissement" "text") RETURNS boolean
@@ -73654,6 +73776,9 @@ CREATE OR REPLACE TRIGGER "trg_p0_rbac_missions" BEFORE INSERT OR DELETE OR UPDA
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_paiements_soignant" BEFORE INSERT OR DELETE OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
 
+CREATE OR REPLACE TRIGGER "trg_paiement_liberal_facture" BEFORE INSERT OR UPDATE ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_paiement_liberal_facture"();
+
+
 
 CREATE OR REPLACE TRIGGER "trg_p0_rbac_partages_rib" BEFORE DELETE OR UPDATE ON "public"."partages_rib" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"('paiement');
 
@@ -73700,6 +73825,9 @@ CREATE OR REPLACE TRIGGER "trg_preserver_rectification_facture_honoraires" BEFOR
 
 
 CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id", "mission_id" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"();
+
+
+CREATE OR REPLACE TRIGGER "trg_reservation_connect_paiement" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_reservation_connect"();
 
 
 
@@ -83935,4 +84063,293 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
+
+
+
+-- Réservations privées de première émission : aucun accès client.
+CREATE TABLE private.generations_factures_honoraires (
+  facture_id uuid PRIMARY KEY REFERENCES public.factures_honoraires(id),
+  token uuid NOT NULL,
+  expire_le timestamptz NOT NULL,
+  resultat jsonb,
+  documents jsonb
+);
+ALTER TABLE private.generations_factures_honoraires OWNER TO postgres;
+ALTER TABLE private.generations_factures_honoraires ENABLE ROW LEVEL SECURITY;
+ALTER TABLE private.generations_factures_honoraires FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON private.generations_factures_honoraires FROM PUBLIC,anon,authenticated,service_role;
+
+
+CREATE OR REPLACE FUNCTION public.fn_acquerir_generation_honoraires(p_facture_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
+AS $bail$
+DECLARE v_f public.factures_honoraires%ROWTYPE; v_m uuid; v_b private.generations_factures_honoraires%ROWTYPE; v_token uuid;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
+  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
+  SELECT * INTO v_f FROM public.factures_honoraires WHERE id=p_facture_id FOR UPDATE;
+  IF NOT FOUND OR v_f.mission_id IS DISTINCT FROM v_m THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
+  IF v_f.statut NOT IN('BROUILLON','EN_GENERATION','ERREUR_GENERATION') THEN
+    RETURN jsonb_build_object('acquise',false,'statut',v_f.statut,'facture_id',v_f.id); END IF;
+  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
+  IF FOUND AND v_b.resultat IS NULL AND v_b.expire_le>clock_timestamp() THEN
+    RETURN jsonb_build_object('acquise',false,'statut','EN_GENERATION','facture_id',v_f.id); END IF;
+  -- Le trigger de période et les index normaux refusent une autre pièce active.
+  UPDATE public.factures_honoraires SET statut='EN_GENERATION' WHERE id=p_facture_id AND statut<>'EN_GENERATION';
+  v_token:=gen_random_uuid();
+  INSERT INTO private.generations_factures_honoraires(facture_id,token,expire_le)
+    VALUES(p_facture_id,v_token,clock_timestamp()+interval '10 minutes')
+    ON CONFLICT(facture_id) DO UPDATE SET token=EXCLUDED.token,expire_le=EXCLUDED.expire_le,resultat=NULL,documents=NULL;
+  RETURN jsonb_build_object('acquise',true,'token',v_token,'facture_id',v_f.id,'statut','EN_GENERATION');
+END;
+$bail$;
+
+CREATE OR REPLACE FUNCTION public.fn_reserver_facture_honoraires(p_document jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
+AS $reservation$
+DECLARE v_d public.factures_honoraires%ROWTYPE; v_m public.missions%ROWTYPE; v_f public.factures_honoraires%ROWTYPE;
+  v_ids uuid[]; v_numero text; v_bail jsonb;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  IF jsonb_typeof(p_document) IS DISTINCT FROM 'object' OR EXISTS(
+    SELECT 1 FROM jsonb_object_keys(p_document) k WHERE k<>ALL(ARRAY[
+      'soignant_id',
+      'etablissement_id',
+      'mission_id',
+      'montant_ht',
+      'montant_tva',
+      'montant_ttc',
+      'taux_tva',
+      'exoneration_tva',
+      'date_emission',
+      'date_echeance',
+      'mandat_version',
+      'template_version',
+      'is_public_sector',
+      'siret_client',
+      'service_code_chorus',
+      'periode_debut',
+      'periode_fin',
+      'numero_semaine_iso',
+      'annee_iso',
+      'est_facture_finale_mission',
+      'facture_precedente_id',
+      'regime_tva_snapshot',
+      'base_legale_tva_snapshot',
+      'nature_prestation_snapshot',
+      'description_prestation_snapshot',
+      'quantite_heures_snapshot',
+      'taux_horaire_snapshot',
+      'emetteur_identite_snapshot',
+      'emetteur_profession_snapshot',
+      'emetteur_siret_snapshot',
+      'emetteur_numero_professionnel_snapshot',
+      'emetteur_adresse_snapshot',
+      'emetteur_adresse_rue_snapshot',
+      'emetteur_adresse_code_postal_snapshot',
+      'emetteur_adresse_ville_snapshot',
+      'emetteur_email_snapshot',
+      'emetteur_numero_tva_snapshot',
+      'destinataire_nom_snapshot',
+      'destinataire_siret_snapshot',
+      'destinataire_adresse_rue_snapshot',
+      'destinataire_adresse_code_postal_snapshot',
+      'destinataire_adresse_ville_snapshot'
+    ]::text[])) THEN RAISE EXCEPTION 'FACTURE_RESERVATION_CHAMPS_INVALIDES' USING ERRCODE='22023'; END IF;
+  SELECT * INTO v_d FROM jsonb_populate_record(NULL::public.factures_honoraires,p_document);
+  SELECT * INTO v_m FROM public.missions WHERE id=v_d.mission_id FOR UPDATE;
+  IF NOT FOUND OR v_m.type_contrat_applique IS DISTINCT FROM 'LIBERAL'
+    OR v_m.soignant_assigne_id IS DISTINCT FROM v_d.soignant_id
+    OR v_m.etablissement_id IS DISTINCT FROM v_d.etablissement_id
+    OR v_d.periode_debut IS NULL OR v_d.periode_fin IS NULL OR v_d.periode_fin<v_d.periode_debut
+    OR v_d.est_facture_finale_mission IS NULL THEN
+    RAISE EXCEPTION 'FACTURE_RESERVATION_MISSION_INCOHERENTE' USING ERRCODE='23514'; END IF;
+  -- Un original/correctif déjà actif n'est jamais remplacé par une nouvelle émission.
+  SELECT array_agg(id) INTO v_ids FROM public.factures_honoraires
+  WHERE mission_id=v_d.mission_id AND type_document='FACTURE' AND nature_correction<>'COMPLEMENT'
+    AND statut NOT IN('ANNULEE','REMPLACEE')
+    AND (est_facture_finale_mission=v_d.est_facture_finale_mission AND
+      (v_d.est_facture_finale_mission OR (annee_iso=v_d.annee_iso AND numero_semaine_iso=v_d.numero_semaine_iso)));
+  IF cardinality(v_ids)>1 THEN RAISE EXCEPTION 'FACTURE_RESERVATION_HISTORIQUE_AMBIGU' USING ERRCODE='23514'; END IF;
+  IF cardinality(v_ids)=1 THEN
+    SELECT * INTO v_f FROM public.factures_honoraires WHERE id=v_ids[1] FOR UPDATE;
+    IF v_f.soignant_id IS DISTINCT FROM v_d.soignant_id OR v_f.etablissement_id IS DISTINCT FROM v_d.etablissement_id
+      OR v_f.periode_debut IS DISTINCT FROM v_d.periode_debut OR v_f.periode_fin IS DISTINCT FROM v_d.periode_fin THEN
+      RAISE EXCEPTION 'FACTURE_RESERVATION_PERIODE_DIFFERENTE' USING ERRCODE='23514'; END IF;
+    RETURN jsonb_build_object('cree',false,'facture_id',v_f.id,'numero_facture',v_f.numero_facture,'statut',v_f.statut,'nature_correction',v_f.nature_correction);
+  END IF;
+  v_numero:=public.next_invoice_number(v_d.soignant_id);
+  INSERT INTO public.factures_honoraires(numero_facture,statut,type_document,nature_correction,
+    soignant_id,
+    etablissement_id,
+    mission_id,
+    montant_ht,
+    montant_tva,
+    montant_ttc,
+    taux_tva,
+    exoneration_tva,
+    date_emission,
+    date_echeance,
+    mandat_version,
+    template_version,
+    is_public_sector,
+    siret_client,
+    service_code_chorus,
+    periode_debut,
+    periode_fin,
+    numero_semaine_iso,
+    annee_iso,
+    est_facture_finale_mission,
+    facture_precedente_id,
+    regime_tva_snapshot,
+    base_legale_tva_snapshot,
+    nature_prestation_snapshot,
+    description_prestation_snapshot,
+    quantite_heures_snapshot,
+    taux_horaire_snapshot,
+    emetteur_identite_snapshot,
+    emetteur_profession_snapshot,
+    emetteur_siret_snapshot,
+    emetteur_numero_professionnel_snapshot,
+    emetteur_adresse_snapshot,
+    emetteur_adresse_rue_snapshot,
+    emetteur_adresse_code_postal_snapshot,
+    emetteur_adresse_ville_snapshot,
+    emetteur_email_snapshot,
+    emetteur_numero_tva_snapshot,
+    destinataire_nom_snapshot,
+    destinataire_siret_snapshot,
+    destinataire_adresse_rue_snapshot,
+    destinataire_adresse_code_postal_snapshot,
+    destinataire_adresse_ville_snapshot
+  ) VALUES(v_numero,'EN_GENERATION','FACTURE','ORIGINALE',
+    v_d.soignant_id,
+    v_d.etablissement_id,
+    v_d.mission_id,
+    v_d.montant_ht,
+    v_d.montant_tva,
+    v_d.montant_ttc,
+    v_d.taux_tva,
+    v_d.exoneration_tva,
+    v_d.date_emission,
+    v_d.date_echeance,
+    v_d.mandat_version,
+    v_d.template_version,
+    v_d.is_public_sector,
+    v_d.siret_client,
+    v_d.service_code_chorus,
+    v_d.periode_debut,
+    v_d.periode_fin,
+    v_d.numero_semaine_iso,
+    v_d.annee_iso,
+    v_d.est_facture_finale_mission,
+    v_d.facture_precedente_id,
+    v_d.regime_tva_snapshot,
+    v_d.base_legale_tva_snapshot,
+    v_d.nature_prestation_snapshot,
+    v_d.description_prestation_snapshot,
+    v_d.quantite_heures_snapshot,
+    v_d.taux_horaire_snapshot,
+    v_d.emetteur_identite_snapshot,
+    v_d.emetteur_profession_snapshot,
+    v_d.emetteur_siret_snapshot,
+    v_d.emetteur_numero_professionnel_snapshot,
+    v_d.emetteur_adresse_snapshot,
+    v_d.emetteur_adresse_rue_snapshot,
+    v_d.emetteur_adresse_code_postal_snapshot,
+    v_d.emetteur_adresse_ville_snapshot,
+    v_d.emetteur_email_snapshot,
+    v_d.emetteur_numero_tva_snapshot,
+    v_d.destinataire_nom_snapshot,
+    v_d.destinataire_siret_snapshot,
+    v_d.destinataire_adresse_rue_snapshot,
+    v_d.destinataire_adresse_code_postal_snapshot,
+    v_d.destinataire_adresse_ville_snapshot
+  ) RETURNING * INTO v_f;
+  v_bail:=public.fn_acquerir_generation_honoraires(v_f.id);
+  IF (v_bail->>'acquise')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_RESERVATION_BAIL_REFUSE'; END IF;
+  RETURN v_bail||jsonb_build_object('cree',true,'numero_facture',v_numero);
+END;
+$reservation$;
+
+CREATE OR REPLACE FUNCTION public.fn_terminer_generation_honoraires(p_facture_id uuid,p_token uuid,p_documents jsonb DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO pg_catalog, public
+AS $terminer$
+DECLARE v_f public.factures_honoraires%ROWTYPE; v_b private.generations_factures_honoraires%ROWTYPE;
+  v_m uuid; v_resultat jsonb; v_prefixe text; v_pdf text; v_xml text; v_uuid_regex constant text:='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+BEGIN
+  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+    RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+  -- Le trigger de période d'un complément lit aussi l'origine : sérialiser
+  -- avec les résolveurs avant de prendre la pièce, le bail et cet advisory.
+  SELECT mission_id INTO v_m FROM public.factures_honoraires WHERE id=p_facture_id;
+  PERFORM 1 FROM public.missions WHERE id=v_m FOR UPDATE;
+  SELECT * INTO v_f FROM public.factures_honoraires
+    WHERE id=p_facture_id AND mission_id IS NOT DISTINCT FROM v_m FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_INTROUVABLE'; END IF;
+  SELECT * INTO v_b FROM private.generations_factures_honoraires WHERE facture_id=p_facture_id FOR UPDATE;
+  IF NOT FOUND OR p_token IS NULL OR v_b.token IS DISTINCT FROM p_token THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_TOKEN_PERIME' USING ERRCODE='23514'; END IF;
+  IF v_b.resultat IS NOT NULL THEN
+    IF p_documents IS NOT NULL AND p_documents IS DISTINCT FROM v_b.documents THEN
+      RAISE EXCEPTION 'FACTURE_GENERATION_REJEU_DIFFERENT' USING ERRCODE='23514'; END IF;
+    RETURN v_b.resultat;
+  END IF;
+  -- Un succès acquis reste rejouable ; un renderer expiré ne peut plus écrire.
+  IF v_b.expire_le<=clock_timestamp() THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_BAIL_EXPIRE' USING ERRCODE='23514'; END IF;
+  IF v_f.statut IS DISTINCT FROM 'EN_GENERATION' THEN RAISE EXCEPTION 'FACTURE_GENERATION_ETAT_INVALIDE' USING ERRCODE='23514'; END IF;
+  IF p_documents IS NULL THEN
+    UPDATE public.factures_honoraires SET statut='ERREUR_GENERATION' WHERE id=p_facture_id;
+    UPDATE private.generations_factures_honoraires SET expire_le=clock_timestamp() WHERE facture_id=p_facture_id;
+    RETURN jsonb_build_object('success',false,'statut','ERREUR_GENERATION','facture_id',p_facture_id);
+  END IF;
+  v_prefixe:=(CASE WHEN v_f.type_document='AVOIR' THEN 'avoirs/' ELSE 'invoices/' END)||v_f.soignant_id::text||'/'||v_f.numero_facture||'/';
+  v_pdf:=p_documents->>'pdf_s3_key'; v_xml:=p_documents->>'facturx_xml_url';
+  IF jsonb_typeof(p_documents) IS DISTINCT FROM 'object'
+    OR (SELECT count(*) FROM jsonb_object_keys(p_documents))<>4
+    OR v_pdf IS NULL OR v_xml IS NULL
+    OR left(v_pdf,length(v_prefixe))<>v_prefixe OR left(v_xml,length(v_prefixe))<>v_prefixe
+    OR substring(v_pdf from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.pdf$')
+    OR substring(v_xml from length(v_prefixe)+1) !~ ('^'||v_uuid_regex||'\.xml$')
+    OR COALESCE(p_documents->>'pdf_sha256','') !~ '^[a-f0-9]{64}$'
+    OR COALESCE(p_documents->>'xml_sha256','') !~ '^[a-f0-9]{64}$' THEN
+    RAISE EXCEPTION 'FACTURE_GENERATION_DOCUMENTS_INVALIDES' USING ERRCODE='23514'; END IF;
+  INSERT INTO public.factures_honoraires_documents(facture_honoraire_id,pdf_s3_key,facturx_xml_url,pdf_sha256,xml_sha256,motif_generation)
+    VALUES(p_facture_id,v_pdf,v_xml,p_documents->>'pdf_sha256',p_documents->>'xml_sha256',
+      CASE WHEN v_f.nature_correction='ORIGINALE' THEN 'EMISSION_INITIALE' ELSE 'EMISSION_DOCUMENT_CORRECTION' END);
+  IF v_f.type_document='AVOIR' THEN
+    UPDATE public.factures_honoraires cible
+      SET chorus_avoir_reference_invoice=origine.numero_facture
+      FROM public.factures_honoraires origine
+      WHERE cible.id=p_facture_id AND origine.id=v_f.facture_precedente_id
+        AND origine.mission_id=v_f.mission_id AND origine.soignant_id=v_f.soignant_id
+        AND origine.etablissement_id=v_f.etablissement_id AND origine.type_document='FACTURE';
+    IF NOT FOUND THEN RAISE EXCEPTION 'FACTURE_GENERATION_REFERENCE_INVALIDE' USING ERRCODE='23514'; END IF;
+  END IF;
+  v_resultat:=public.fn_emettre_document_facturation_honoraires(p_facture_id,v_pdf,v_xml);
+  IF (v_resultat->>'success')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'FACTURE_GENERATION_EMISSION_REFUSEE'; END IF;
+  UPDATE private.generations_factures_honoraires SET resultat=v_resultat,documents=p_documents WHERE facture_id=p_facture_id;
+  RETURN v_resultat;
+END;
+$terminer$;
+
+ALTER FUNCTION public.next_invoice_number(uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.next_invoice_number(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.next_invoice_number(uuid) TO service_role;
+ALTER FUNCTION public.next_avoir_number(uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.next_avoir_number(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.next_avoir_number(uuid) TO service_role;
+ALTER FUNCTION public.fn_acquerir_generation_honoraires(uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_acquerir_generation_honoraires(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_acquerir_generation_honoraires(uuid) TO service_role;
+ALTER FUNCTION public.fn_reserver_facture_honoraires(jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_reserver_facture_honoraires(jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_reserver_facture_honoraires(jsonb) TO service_role;
+ALTER FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_terminer_generation_honoraires(uuid,uuid,jsonb) TO service_role;
 

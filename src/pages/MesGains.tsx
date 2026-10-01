@@ -35,11 +35,13 @@ import { telechargerOuPartager } from '@/lib/telechargement';
 import { promptParrainage } from '@/lib/prompt-parrainage';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
-  enrichirFacturesHonoraires,
+  factureCompteDansTotal,
   factureEstAvoir,
+  montantTtcSigneFacture,
   regrouperFacturesParMission,
   resumerFacturesMission,
 } from '@/lib/factureHonorairesUi';
+import { chargerHonorairesFactures, resumerHonorairesFactures, type HonorairesFactures } from '@/lib/honorairesFactures';
 import { classerPaiementSalaire, indexerDernierPaiementParMission, repartirPaiementConfirme } from '@/lib/paiementSoignantUi';
 import { cleJourParis, cleMoisParis, formatParis } from '@/lib/date-heure-paris';
 import { chargerCreneauxMissionsPagines, type CreneauMissionCharge } from '@/lib/mission-creneaux-pagines';
@@ -73,6 +75,7 @@ export function MesGainsApercuContent() {
   const [soignant, setSoignant] = useState<any>(null);
   const [paiementsMap, setPaiementsMap] = useState<Record<string, any>>({});
   const [facturesMap, setFacturesMap] = useState<Record<string, any[]>>({});
+  const [documentsHonoraires, setDocumentsHonoraires] = useState<HonorairesFactures[]>([]);
   const [recherche, setRecherche] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
@@ -85,7 +88,7 @@ export function MesGainsApercuContent() {
       setErreurChargement(null);
       setLoading(true);
       try {
-        const [missionsResult, soignantResult, paiementsResult, facturesResult, metadonneesFacturesResult] = await Promise.all([
+        const [missionsResult, soignantResult, paiementsResult, documents] = await Promise.all([
           supabase
             .from('missions')
             .select('id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche, presences(valide_par_etablissement, valide_auto_72h_le, valide_le)')
@@ -101,20 +104,13 @@ export function MesGainsApercuContent() {
             .order('cree_le', { ascending: false, nullsFirst: false })
             .order('date_paiement', { ascending: false, nullsFirst: false })
             .order('id', { ascending: false }) as any,
-          // MÊME source que l'onglet Factures pour éviter les états divergents.
-          supabase.rpc('fn_mes_factures_honoraires' as any),
-          // Le RPC historique n'expose pas le type_document. Cette lecture RLS
-          // empêche qu'un AVOIR `EMISE` soit interprété comme un revenu attendu.
-          supabase
-            .from('factures_honoraires')
-            .select('id, type_document, montant_signe, cree_le, template_version, numero_semaine_iso, periode_debut, periode_fin, facture_precedente_id, date_remboursement')
-            .eq('soignant_id', user.id),
+          // Les mêmes pièces RLS que l'onglet Factures, avec preuve d'exhaustivité.
+          // Avoirs et remplacements ne dépendent pas d'un RPC historique tronqué.
+          chargerHonorairesFactures(user.id),
         ]);
         if (missionsResult.error) throw missionsResult.error;
         if (soignantResult.error) throw soignantResult.error;
         if (paiementsResult.error) throw paiementsResult.error;
-        if (facturesResult.error) throw facturesResult.error;
-        if (metadonneesFacturesResult.error) throw metadonneesFacturesResult.error;
 
         const pageMissions = (missionsResult.data ?? []) as any[];
         const [enriched, creneauxPage] = await Promise.all([
@@ -144,11 +140,8 @@ export function MesGainsApercuContent() {
           (paiementsResult.data || []) as any[],
         ));
 
-        const facturesEnrichies = enrichirFacturesHonoraires(
-          (facturesResult.data || []) as any[],
-          (metadonneesFacturesResult.data || []) as any[],
-        );
-        setFacturesMap(regrouperFacturesParMission(facturesEnrichies));
+        setDocumentsHonoraires(documents);
+        setFacturesMap(regrouperFacturesParMission(documents));
 
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -181,25 +174,24 @@ export function MesGainsApercuContent() {
         set.add(cleMoisParis(mission.debut_le));
       }
     });
+    documentsHonoraires.forEach(document => {
+      if (document.date_emission) set.add(document.date_emission.slice(0, 7));
+    });
     return Array.from(set).sort().reverse();
-  }, [allMissions, creneauxMissions]);
+  }, [allMissions, creneauxMissions, documentsHonoraires]);
 
-  const missionsGraphique = useMemo(() => {
+  const missionsGraphique = useMemo(() => documentsHonoraires
+    .filter(factureCompteDansTotal)
+    .map(document => ({ debut_le: `${document.date_emission}T12:00:00Z`, net_a_payer: montantTtcSigneFacture(document) })),
+  [documentsHonoraires]);
+  const salairesGraphique = useMemo(() => {
     try {
-      return moisDisponibles.flatMap((cleMois) => {
+      return moisDisponibles.flatMap(cleMois => {
         const [annee, mois] = cleMois.split('-').map(Number);
-        return construireExportPaiePeriode(allMissions, creneauxMissions, annee, mois)
-          .map((mission) => ({
-            debut_le: `${cleMois}-15T12:00:00`,
-            net_a_payer: montantFinanceAfficheMission(mission)?.montant ?? null,
-          }));
+        return construireExportPaiePeriode(allMissions.filter(estMissionSalariee), creneauxMissions, annee, mois)
+          .map(mission => ({ debut_le: `${cleMois}-15T12:00:00`, net_a_payer: montantFinanceAfficheMission(mission)?.montant ?? null }));
       });
-    } catch {
-      // Un historique mensuel incomplet ne doit jamais produire une barre
-      // financière approximative. Les pipelines facture/paiement restent
-      // disponibles car ils reposent sur leurs propres périodes et statuts.
-      return [];
-    }
+    } catch { return []; }
   }, [allMissions, creneauxMissions, moisDisponibles]);
 
   const periodeMissions = useMemo(() => {
@@ -234,6 +226,9 @@ export function MesGainsApercuContent() {
       : moisFiltre === 'TOUS'
         ? 'Tout temps'
         : formatParis(`${moisFiltre}-01T12:00:00`, 'MMMM yyyy');
+  const honorairesFactures = useMemo(() => resumerHonorairesFactures(documentsHonoraires,
+    moisFiltre === 'TOUS' ? null : moisFiltre === 'CE_MOIS' ? cleMoisParis(new Date()) : moisFiltre),
+  [documentsHonoraires, moisFiltre]);
 
   const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
   // D3 : profil 100 % salarié — le net exact vient du bulletin de paie de
@@ -247,7 +242,7 @@ export function MesGainsApercuContent() {
   const libMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'LIBERAL'), [missions]);
   const salMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'SALARIE'), [missions]);
   const indetCount = useMemo(() => missions.filter(m => !m.type_contrat_applique).length, [missions]);
-  // Libéral : honoraires bruts dus au soignant, sans retenue de commission Jolene, PAS ×0,78.
+  // Estimation secondaire du planning ; le KPI financier utilise les pièces.
   const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [libMissions]);
   // Salarié : net estimé après cotisations salariales (~22 %).
   const netSal = useMemo(() => salMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [salMissions]);
@@ -273,7 +268,7 @@ export function MesGainsApercuContent() {
     };
 
     // Les factures hebdomadaires peuvent exister avant que la mission longue
-    // passe à TERMINEE. On part donc de toutes les factures du RPC, pas seulement
+    // passe à TERMINEE. On part donc de toutes les pièces chargées, pas seulement
     // des missions terminées actuellement chargées/paginées.
     Object.values(facturesMap).forEach((documents) => {
       const resume = resumerFacturesMission(documents);
@@ -348,7 +343,7 @@ export function MesGainsApercuContent() {
 
   const exporterCSV = () => {
     if (exportIndisponible) return;
-    const header = 'Début,Fin,Mission,Service,Établissement,Heures,Taux horaire,Brut,Montant affiché,Nature\n';
+    const header = 'Début,Fin,Mission,Service,Établissement,Heures,Taux horaire,Brut du planning,Montant estimatif du planning,Nature\n';
     const rows = missions.flatMap(m => {
       const finance = montantFinanceAfficheMission(m);
       const creneaux = Array.isArray(m.creneaux_export) && m.creneaux_export.length > 0
@@ -358,7 +353,7 @@ export function MesGainsApercuContent() {
         `${formatParis(creneau.debut, 'dd/MM/yyyy HH:mm')},${formatParis(creneau.fin, 'dd/MM/yyyy HH:mm')},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(creneau.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${index === 0 ? (Number(m.total_brut) || 0).toFixed(2) : ''},${index === 0 ? (finance?.montant ?? 0).toFixed(2) : ''},"${finance?.libelle ?? 'Indisponible'}"`
       ));
     }).join('\n');
-    const nom = `gains-jolene-${moisFiltre === 'CE_MOIS' ? cleMoisParis(new Date()) : moisFiltre}-${cleJourParis(new Date())}.csv`;
+    const nom = `planning-jolene-${moisFiltre === 'CE_MOIS' ? cleMoisParis(new Date()) : moisFiltre}-${cleJourParis(new Date())}.csv`;
     void telechargerOuPartager(header + rows, nom, 'text/csv');
   };
 
@@ -431,7 +426,7 @@ export function MesGainsApercuContent() {
       <PaiementsEscrowAVenir />
 
       {/* Honoraires : mêmes factures et montants que l’onglet Factures. */}
-      {(pipeline.aValider.nb + pipeline.enAttente.nb + pipeline.paye.nb) > 0 && (
+      {!erreurChargement && (pipeline.aValider.nb + pipeline.enAttente.nb + pipeline.paye.nb) > 0 && (
         <div role="region" aria-label="Suivi des honoraires" className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Clock className="h-4 w-4 text-primary" />
@@ -501,16 +496,33 @@ export function MesGainsApercuContent() {
           un seul job, la confiance paiement. Le parrainage vit dans Compte (entrée
           dédiée), en bas d'Accueil (carte discrète) et aux pics d'émotion (§5). */}
 
+      {(isLiberal || allMissions.some(mission => mission.type_contrat_applique === 'LIBERAL') || documentsHonoraires.length > 0) && !erreurChargement && (
+        <section aria-label="Honoraires facturés" className="mb-6">
+          <CarteKPIY2K
+            icone={<Receipt className="h-4 w-4" />}
+            valeur={fmt(honorairesFactures.montant)}
+            label={`Honoraires facturés TTC · ${labelPeriode}`}
+            variant="holographic"
+            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            Factures actives, remplacements et avoirs inclus, selon leur date d’émission.
+            Le montant facturé se distingue du paiement reçu, affiché dans le suivi ci-dessus.
+          </p>
+        </section>
+      )}
+
       {/* KPIs — séparés par régime (jamais de sous-bloc à zéro). Honoraires libéraux
           et net salarié ne sont pas le même concept : on ne les fusionne pas. */}
-      {!periodeMissions.erreur && <>
+      {!erreurChargement && !periodeMissions.erreur && <>
+        <h2 className="text-sm font-semibold mb-3">Estimations du planning des missions terminées</h2>
         <div className={`grid grid-cols-2 gap-3 mb-4 ${libMissions.length > 0 && salMissions.length > 0 ? 'xl:grid-cols-4' : libMissions.length > 0 || salMissions.length > 0 ? 'xl:grid-cols-3' : ''}`}>
         {libMissions.length > 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(honorairesLib)}
-            label={`Honoraires · missions terminées · ${labelPeriode}`}
-            variant="holographic"
+            label={`Honoraires prévisionnels · ${labelPeriode}`}
+            variant="default"
             onClick={() => navigate('/soignant/mes-gains?tab=factures')}
           />
         )}
@@ -528,7 +540,7 @@ export function MesGainsApercuContent() {
         <CarteKPIY2K
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalBrutFiltre)}
-          label={`Brut · ${labelPeriode}`}
+            label={`${isSalariePur ? 'Brut' : 'Brut du planning'} · ${labelPeriode}`}
           variant={isSalariePur ? 'holographic' : 'default'}
           onClick={salaires.length > 0 ? afficherSuiviSalaires : libMissions.length > 0 ? () => navigate(destinationPaiements) : undefined}
         />
@@ -556,16 +568,17 @@ export function MesGainsApercuContent() {
         )}
         {libMissions.length > 0 && (
           <p className="text-[11px] text-muted-foreground mb-6">
-            👜 Honoraires libéraux bruts dus pour les missions terminées — ce montant ne signifie pas nécessairement qu'il est déjà encaissé. Les charges URSSAF et de retraite sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
+            Ces estimations viennent du planning et peuvent différer des pièces après une correction. Consultez les honoraires facturés et leur suivi pour les montants documentaires et les paiements. Voir aussi <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
           </p>
         )}
       </>}
 
       {/* 6d.1 : graphique seulement à partir de 2 mois de données — une barre
           seule = du bruit, pas une tendance. */}
-      {moisDisponibles.length >= 2 && (
+      {!erreurChargement && moisDisponibles.length >= 2 && (
         <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
           <GraphiqueGains6Mois missions={missionsGraphique} />
+          <GraphiqueGains6Mois missions={salairesGraphique} estimationSalariale />
         </Suspense>
       )}
 
@@ -632,10 +645,10 @@ export function MesGainsApercuContent() {
             {/* D3/§7.3 : salarié pur → pas d'estimation de prélèvements (le net
                 exact vient du bulletin de l'employeur) ; on affiche le brut total. */}
             <div>
-              <span className="text-muted-foreground">Montants par régime</span>
+              <span className="text-muted-foreground">Estimations du planning par régime</span>
               <p className="font-bold text-foreground">
                 {[
-                  honorairesLib > 0 ? `${fmt(honorairesLib)} honoraires` : null,
+                  honorairesLib > 0 ? `${fmt(honorairesLib)} honoraires prévisionnels` : null,
                   netSal > 0 ? `${fmt(netSal)} net salarié*` : null,
                 ].filter(Boolean).join(' + ') || '—'}
               </p>
@@ -732,9 +745,12 @@ export function MesGainsApercuContent() {
                         {finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}
                       </p>
                     )}
-                    {finance && <p className="text-[10px] text-muted-foreground">{finance.libelle}</p>}
+                    {finance && <p className="text-[10px] text-muted-foreground">{finance.nature === 'HONORAIRES_LIBERAUX' ? 'Honoraires prévisionnels du planning' : finance.libelle}</p>}
+                    {regimeMission(m) === 'LIBERAL' && (facturesMap[m.id] ?? []).length > 0 && (
+                      <p className="text-[10px] text-muted-foreground">Facturé sur la mission : {fmt(resumerHonorairesFactures(facturesMap[m.id]).montant)} TTC</p>
+                    )}
                     {m.total_brut != null && (
-                      <p className="text-[10px] text-muted-foreground">brut : {fmt(m.total_brut)}</p>
+                      <p className="text-[10px] text-muted-foreground">{regimeMission(m) === 'LIBERAL' ? 'brut du planning' : 'brut'} : {fmt(m.total_brut)}</p>
                     )}
                     {(() => {
                       if (estMissionSalariee(m)) {

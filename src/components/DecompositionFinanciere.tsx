@@ -309,8 +309,8 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
           {/* Commission Jolene — uniquement côté étab/admin (logique-paiements-v1 §5.5) */}
           {isEtabOrAdmin && commissionTtc > 0 && (
             <div className="border-t border-border pt-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">Commission Jolene</span>
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1">
+                <span className="text-sm font-semibold text-foreground">Commission Jolene prévisionnelle</span>
                 <span className="font-semibold text-foreground">{fmt(commissionTtc)} TTC</span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
@@ -320,7 +320,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
                 <span className="font-medium">Calcul : </span>{tauxCommission}% HT × {fmt(totalBrut)} honoraires bruts (taux de commission applicable)
               </p>
               <p className="text-[11px] text-primary mt-2">
-                ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — à ne pas ajouter au virement honoraires soignant.
+                ℹ️ Estimation du planning. La commission facturée figure sur chaque facture Jolene distincte — à ne pas ajouter au virement honoraires soignant.
               </p>
             </div>
           )}

@@ -82,8 +82,11 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
   return handler;
 }
 
-export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE' } = {}) {
+export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE', apresReservation = null, reservationConcurrenteEmise = false, numeroAvoir = 'F1-AVOIR-PARTIEL', numeroRemplacement = 'F1-RECTIFICATIVE-SEMAINE' } = {}) {
   const documents = new Map(), factures = [], versions = [], appels = [], inconnus = [], logs = [];
+  const baux = new Map(), emissions = [];
+  const pannes = { xml: panneXml, perdreReponseFinale: false };
+  const acquerir = f => { const b = { token: webcrypto.randomUUID(), actif: true, resultat: null }; baux.set(f.id, b); f.statut = 'EN_GENERATION'; return b; };
   const soignant = { id: ids.soignant, prenom: 'Élodie', nom: pagination ? "L'Été de la Vallée de Saint-Martin" : "L'Été", profession: 'IDE',
     numero_rpps: '00000000001', siret_liberal: '11111111111111', email: 'camille@example.invalid',
     adresse_rue: '1 rue Fictive', adresse_code_postal: '75001', adresse_ville: 'Paris',
@@ -105,7 +108,8 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
   const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
   const fetchFictif = async (input, init) => {
     const req = new Request(input, init), url = new URL(req.url), path = url.pathname;
-    appels.push({ method: req.method, path, query: url.search });
+    const appel = { method: req.method, path, query: url.search };
+    appels.push(appel);
     try {
       assert.equal(url.origin, origin, 'Cloud/provider origin forbidden');
       assert.equal(req.headers.get('authorization'), `Bearer ${secretFictif}`);
@@ -115,26 +119,51 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
         assert.equal(req.headers.get('x-upsert'), 'false');
         assert(!documents.has(key));
         const form = await req.formData(), file = form.get(''); assert(file instanceof Blob);
-        if (panneXml && key.endsWith('.xml')) return json({ message: 'XML storage failure' }, 500);
+        if (pannes.xml && key.endsWith('.xml')) return json({ message: 'XML storage failure' }, 500);
         documents.set(key, { bytes: Buffer.from(await file.arrayBuffer()), contentType: file.type });
         return json({ Key: `jolene-documents/${key}` });
       }
       const body = req.method === 'GET' ? null : await req.json();
+      if (body !== null) appel.body = structuredClone(body);
       if (path.startsWith('/rest/v1/rpc/') && req.method === 'POST') {
         const name = path.split('/').at(-1);
         switch (name) {
           case 'fn_verifier_pre_facturation': assert.equal(body.p_mission_id, ids.mission); return json({ success: true });
-          case 'next_invoice_number': assert.equal(body.p_soignant_id, ids.soignant); return json(numeroFacture);
+          case 'fn_reserver_facture_honoraires': {
+            assert.equal(body.p_document.mission_id, ids.mission);
+            assert(!Object.hasOwn(body.p_document, 'numero_facture')); assert(!Object.hasOwn(body.p_document, 'statut'));
+            const old = factures.find(f => f.nature_correction === 'ORIGINALE');
+            if (old) return json({ cree: false, facture_id: old.id, numero_facture: old.numero_facture, statut: old.statut, nature_correction: old.nature_correction });
+            const f = { ...body.p_document, id: ids.facture, numero_facture: numeroFacture, statut: 'EN_GENERATION', type_document: 'FACTURE', nature_correction: 'ORIGINALE' };
+            factures.push(f);
+            if (apresReservation) apresReservation(f);
+            if (reservationConcurrenteEmise) { f.statut = typeof reservationConcurrenteEmise === 'string' ? reservationConcurrenteEmise : 'EMISE'; return json({ cree: false, facture_id: f.id, numero_facture: f.numero_facture, statut: f.statut, nature_correction: f.nature_correction }); }
+            const b = acquerir(f);
+            return json({ cree: true, acquise: true, facture_id: f.id, numero_facture: f.numero_facture, token: b.token });
+          }
+          case 'fn_acquerir_generation_honoraires': {
+            const f = factures.find(f => f.id === body.p_facture_id); assert(f);
+            if (!['BROUILLON', 'EN_GENERATION', 'ERREUR_GENERATION'].includes(f.statut) || baux.get(f.id)?.actif) return json({ acquise: false, statut: f.statut, facture_id: f.id });
+            const b = acquerir(f); return json({ acquise: true, token: b.token, facture_id: f.id, statut: f.statut });
+          }
+          case 'fn_terminer_generation_honoraires': {
+            const f = factures.find(f => f.id === body.p_facture_id), b = baux.get(body.p_facture_id); assert(f);
+            if (!b || b.token !== body.p_token) return json({ message: 'FACTURE_GENERATION_TOKEN_PERIME', code: '23514' }, 400);
+            if (b.resultat) { if (body.p_documents) assert.deepEqual(body.p_documents, b.documents); return json(b.resultat); }
+            assert.equal(f.statut, 'EN_GENERATION');
+            if (body.p_documents === null) { f.statut = 'ERREUR_GENERATION'; b.actif = false; return json({ success: false }); }
+            const d = body.p_documents; assert(documents.has(d.pdf_s3_key) && documents.has(d.facturx_xml_url));
+            assert.equal(d.pdf_sha256, sha256(documents.get(d.pdf_s3_key).bytes)); assert.equal(d.xml_sha256, sha256(documents.get(d.facturx_xml_url).bytes));
+            versions.push({ facture_honoraire_id: f.id, ...d, motif_generation: f.nature_correction === 'ORIGINALE' ? 'EMISSION_INITIALE' : 'EMISSION_DOCUMENT_CORRECTION' });
+            Object.assign(f, { statut: 'EMISE', pdf_s3_key: d.pdf_s3_key, facturx_xml_url: d.facturx_xml_url });
+            emissions.push(f.id); b.documents = d; b.resultat = { success: true, delai_verification_heures: 48 }; b.actif = false;
+            if (pannes.perdreReponseFinale) { pannes.perdreReponseFinale = false; return json({ message: 'Réponse perdue après commit simulé' }, 503); }
+            return json(b.resultat);
+          }
           case 'fn_calculer_montant_periode': assert.equal(body.p_mission_id, ids.mission); return json({ montant_ht_periode: 80, duree_periode_heures: 4, taux_horaire_base_fige: 20 });
           case 'fn_cumul_factures_mission': assert.equal(body.p_mission_id, ids.mission); return json({ cumul_ht: 0, nb_factures: 0 });
           case 'fn_param_num': assert.equal(body.p_cle, 'delai_paiement_prive_j'); return json(30);
-          case 'fn_emettre_document_facturation_honoraires': {
-            const f = factures.find(f => f.id === body.p_facture_id); assert(f);
-            assert(documents.has(body.p_pdf_s3_key) && documents.has(body.p_facturx_xml_url));
-            Object.assign(f, { statut: 'EMISE', pdf_s3_key: body.p_pdf_s3_key, facturx_xml_url: body.p_facturx_xml_url });
-            return json({ success: true, delai_verification_heures: 48 });
-          }
-          case 'fn_preparer_facture_commission_periode': assert.equal(body.p_facture_honoraire_id, ids.facture); return json({ facture_id: ids.commission });
+          case 'fn_preparer_facture_commission_periode': assert(factures.some(f => f.id === body.p_facture_honoraire_id && f.type_document === 'FACTURE' && f.nature_correction === 'ORIGINALE')); return json({ facture_id: ids.commission });
           case 'fn_preparer_commission_remplacement_honoraires': assert.equal(body.p_facture_honoraire_id, ids.remplacement); return json({ facture_id: ids.commission });
           case 'fn_preparer_avoir_commission_honoraires': assert.equal(body.p_avoir_honoraires_id, ids.avoir); return json({ facture_id: ids.commission });
           default: throw new Error(`Unknown RPC ${name}`);
@@ -157,14 +186,17 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
               if (pannePrecedente === 'erreur') return json({ message: 'fixture: parent lookup unavailable' }, 500);
             }
             if (id) { const f = factures.find(f => f.id === id); assert(f); return json(f); }
+            if (url.searchParams.has('facture_precedente_id')) {
+              assert.equal(url.searchParams.get('facture_precedente_id'), `eq.${ids.facture}`);
+              assert.equal(url.searchParams.get('select'), 'numero_facture,cree_le');
+              assert.equal(url.searchParams.get('order'), 'cree_le.desc'); assert.equal(url.searchParams.get('limit'), '1');
+              const f = factures.find(f => f.facture_precedente_id === ids.facture); assert(f);
+              return json({ numero_facture: f.numero_facture, cree_le: instant });
+            }
             assert.equal(url.searchParams.get('mission_id'), `eq.${ids.mission}`);
-            if (url.searchParams.has('numero_semaine_iso') && factures.length) return json(factures[0]);
+            if (url.searchParams.has('numero_semaine_iso') && factures.length) return json(factures.find(f => f.type_document === 'FACTURE' && f.nature_correction !== 'COMPLEMENT' && !['ANNULEE','REMPLACEE'].includes(f.statut)) || null);
             return json([]);
           }
-        }
-        if (req.method === 'POST' && table === 'factures_honoraires') {
-          assert.equal(body.mission_id, ids.mission); assert.equal(body.statut, 'EN_GENERATION');
-          const f = { ...body, id: ids.facture, type_document: 'FACTURE' }; factures.push(f); return json(f, 201);
         }
         if (req.method === 'POST' && table === 'factures_honoraires_documents') { versions.push(body); return json(null, 201); }
         if (req.method === 'POST' && ['invoice_audit_log', 'journaux_audit'].includes(table)) return json(null, 201);
@@ -180,14 +212,14 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secretFictif}` },
     body: JSON.stringify({ ...body, service_role_reason: 'ops_test_octets_locaux' }),
   }));
-  return { documents, factures, versions, appels, inconnus, logs, mission, soignant, etablissement, invoquer,
+  return { documents, factures, versions, appels, inconnus, logs, mission, soignant, etablissement, invoquer, baux, emissions, pannes,
     async genererFacture() { return invoquer({ mission_id: ids.mission, periode_debut: '2026-09-21', periode_fin: '2026-09-27', numero_semaine_iso: 39, annee_iso: 2026, est_facture_finale_mission: false }); },
     preparerRemplacement() {
       assert.equal(factures.length, 1);
       // Canonical SQL result represented at the IO boundary; this fixture does
       // not execute the resolver, financial triggers or any payment provider.
       const original = factures[0]; original.statut = 'REMPLACEE';
-      const remplacement = { ...original, id: ids.remplacement, numero_facture: 'F1-RECTIFICATIVE-SEMAINE',
+      const remplacement = { ...original, id: ids.remplacement, numero_facture: numeroRemplacement,
         type_document: 'FACTURE', facture_precedente_id: original.id, nature_correction: 'REMPLACEMENT', statut: 'BROUILLON',
         description_prestation_snapshot: `Rectification hebdomadaire : 4 heures au taux de 18 EUR${pagination ? ` — ${mission.intitule}` : ''}`,
         quantite_heures_snapshot: 4, taux_horaire_snapshot: 18,
@@ -196,7 +228,7 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
     },
     async genererAvoir() {
       assert.equal(factures.length, 1);
-      factures.push({ ...factures[0], id: ids.avoir, numero_facture: 'F1-AVOIR-PARTIEL', type_document: 'AVOIR',
+      factures.push({ ...factures[0], id: ids.avoir, numero_facture: numeroAvoir, type_document: 'AVOIR',
         facture_precedente_id: ids.facture, nature_correction: 'AVOIR', statut: 'EN_GENERATION',
         description_prestation_snapshot: pagination ? `Correction fictive de 1 heure. ${mission.intitule}` : 'Correction fictive de 1 heure', quantite_heures_snapshot: 1,
         montant_ht: 20, montant_tva: 0, montant_ttc: 20, pdf_s3_key: null, facturx_xml_url: null });

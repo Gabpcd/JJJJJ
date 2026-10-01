@@ -49,6 +49,9 @@ jobs:
       - name: Contrats des scénarios de charge
         run: node --test tests/node/load-seed-retire.node.mjs tests/node/prepare-candidatures-fixture.node.mjs tests/node/candidatures-rollback-runner.node.mjs tests/node/candidatures-staging-ui.node.mjs tests/node/load-tests.node.mjs tests/node/prepare-load-fixtures.node.mjs tests/node/diagnose-load-fixtures.node.mjs tests/node/prepare-dashboard-fixture.node.mjs tests/node/prepare-dashboard-pool.node.mjs tests/node/dashboard-staging-ui.node.mjs tests/node/dashboard-preview.node.mjs tests/node/wait-staging-schema.node.mjs
 
+      - name: Relais candidatures — transports push simulés sans réseau
+        run: node --test tests/node/push-candidatures.node.mjs tests/node/push-candidatures-catalogue.node.mjs
+
       - name: Tests unitaires
         run: npm test -- --reporter=dot
 
@@ -59,10 +62,13 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Documents facturation réels avec IO fictives
-        run: node --test tests/node/facturation-documents.node.mjs
+        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs
 
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
+
+      - name: Contrats du pilote documentaire F1 sans réseau ni credentials
+        run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
 
       - name: Deno figé pour le chargement des polices Edge
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
@@ -82,11 +88,23 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 
+      - name: Catalogue paiement indépendant sans réseau
+        run: node --test tests/node/paiements-catalogue.node.mjs
+
+      - name: Garde du témoin F1 avant migration sans réseau
+        run: node --test tests/node/f1-heures-temoin-avant-migration.node.mjs
+
       - name: Vérifier les empreintes inventaire explicites
         run: node --test tests/node/security-definer-inventory.node.mjs tests/node/litige-resolveur-garde.node.mjs
 
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
+
+      - name: Suppression avec historique — contrôleur sans réseau
+        run: node --test tests/node/suppression-historique-catalogue.node.mjs
+
+      - name: Diagnostic financier — contrôleur sans réseau
+        run: node --test tests/node/diagnostic-financier-catalogue.node.mjs
 
       - name: Journal et préflight fournisseurs hors réseau
         run: node --test tests/node/recette-fournisseurs-manifest.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-collector.node.mjs
@@ -266,6 +284,7 @@ jobs:
       # Même verrou que le bootstrap staging : leurs écritures ne doivent
       # jamais s'exécuter simultanément sur la base partagée.
       group: jolene-supabase-staging-writes
+      queue: max
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
@@ -289,7 +308,11 @@ jobs:
 
           if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/security/facturation-remplacement-commission-f1.test.sql' \
-            'tests/fixtures/facturation-remplacement-f1/catalogue.sql'; then
+            'tests/fixtures/facturation-remplacement-f1/catalogue.sql' \
+            'tests/security/facturation-heures-ajustees-chainage-f1.test.sql' \
+            'tests/security/facturation-commissions-pieces-matrice-f1.test.sql' \
+            'supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql' \
+            'tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql'; then
             has_f1_regression=false
           else
             has_f1_regression=true
@@ -438,20 +461,82 @@ jobs:
         if: steps.migration_scope.outputs.has_f1_regression == 'true'
         timeout-minutes: 2
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: |
           set -euo pipefail
           test "$STAGING_SUPABASE_PROJECT_REF" = 'mejpriaetwgtcstbgfid'
           test -n "$STAGING_SUPABASE_ACCESS_TOKEN"
-          jq -Rs '{query: .}' tests/fixtures/facturation-remplacement-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
+          # Une seule identité attendue, déterminée par la base effectivement testée.
+          git rev-parse --verify "${BASE_SHA}^{commit}" >/dev/null
+          if git cat-file -e "$BASE_SHA:supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql" 2>/dev/null; then
+            expected_f1_helper='c736c66d76001b64ba425484f77c6ea2'
+          else
+            expected_f1_helper='c793ac81eaef0fe18fb5920c9264c675'
+          fi
+          jq -Rs '{query: .}' tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql > "$RUNNER_TEMP/f1-catalogue-query.json"
           code=$(curl -sS --connect-timeout 10 --max-time 30 \
             -o "$RUNNER_TEMP/f1-catalogue-avant.json" -w '%{http_code}' \
             -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
             -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
             --data-binary @"$RUNNER_TEMP/f1-catalogue-query.json")
           test "$code" -ge 200 && test "$code" -lt 300
-          jq -e 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
+          jq -e --arg helper "$expected_f1_helper" 'type == "array" and length == 1 and .[0].residus == 0 and .[0].compteurs.net_requests == 0 and .[0].helper_remplacement_md5 == $helper and (.[0].compteurs | length == 25) and (.[0].routines_md5 | test("^[a-f0-9]{32}$")) and (.[0].triggers_md5 | test("^[a-f0-9]{32}$"))' "$RUNNER_TEMP/f1-catalogue-avant.json"
+
+      - name: F1 — reproduction exacte avant la migration candidate
+        if: steps.migration_scope.outputs.has_migrations == 'true' && steps.migration_scope.outputs.has_f1_regression == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          added_migrations=$(git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql')
+          if printf '%s\n' "$added_migrations" | grep -Fxq 'supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql'; then
+            node scripts/ci/f1-heures-temoin-avant-migration.mjs
+          fi
+
+      - name: Paiements — catalogue avant migration
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-catalogue.mjs avant
+
+      - name: Suppression — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/suppression-historique-catalogue.mjs avant
+
+      - name: Diagnostic financier — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/diagnostic-financier-catalogue.mjs avant
+
+      - name: Push candidatures — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/push-candidatures-catalogue.mjs avant
+
+      - name: Numérotation — catalogue avant transaction
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/numerotation-catalogue.mjs avant
 
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
         if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_f1_regression == 'true'
@@ -497,6 +582,7 @@ jobs:
             tests/security/p0-auth-rls.test.sql
             tests/security/inscription-progressive.test.sql
             tests/security/suppression-compte-isolation-psc.test.sql
+            tests/security/suppression-compte-historique-financier.test.sql
             tests/security/exploration-sans-profil.test.sql
             tests/security/alertes-recherches-etablissement.test.sql
             tests/security/debit-cron-alertes.test.sql
@@ -518,6 +604,7 @@ jobs:
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
             tests/security/factures-numerotation-series.test.sql
+            tests/security/push-candidatures.test.sql
             tests/security/facturation-hebdomadaire-f1.test.sql
             tests/security/facturation-remplacement-commission-f1.test.sql
             tests/security/stripe-refund-identifiers.test.sql
@@ -525,12 +612,18 @@ jobs:
             tests/security/cloture-mission-tenant.test.sql
             tests/security/litige-resolveur-garde-initiale.test.sql
             tests/lot21/d4-cascade-profession-mission.test.sql
+            tests/security/facturation-heures-ajustees-chainage-f1.test.sql
+            tests/security/facturation-commissions-pieces-matrice-f1.test.sql
+            tests/security/paiements-liberaux-facture.test.sql
+            tests/security/numerotation-factures.test.sql
+            tests/security/diagnostic-financier-documentaire.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
-          # staging : cette voie prouve seulement la régression F1 LIVE.
-          # Avec migration, les 48 suites historiques + F1 restent obligatoires.
+          # staging : cette voie prouve seulement les trois bancs F1 LIVE.
+          # Le helper de taux corrigé doit déjà être déployé (préflight), sans sync ici.
+          # Avec migration, les 49 suites précédentes + le chaînage + la matrice restent obligatoires.
           case "$HAS_MIGRATIONS" in
-            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql) ;;
+            false) SQL_TESTS=(tests/security/facturation-remplacement-commission-f1.test.sql tests/security/facturation-heures-ajustees-chainage-f1.test.sql tests/security/facturation-commissions-pieces-matrice-f1.test.sql) ;;
             true) ;;
             *) echo "::error::Portée migration absente ou invalide."; exit 1 ;;
           esac
@@ -572,6 +665,46 @@ jobs:
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
 
+      - name: Numérotation — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/numerotation-catalogue.mjs apres
+
+      - name: Push candidatures — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/push-candidatures-catalogue.mjs apres
+
+      - name: Paiements — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-catalogue.mjs apres
+
+      - name: Suppression — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/suppression-historique-catalogue.mjs apres
+
+      - name: Diagnostic financier — SELECT indépendant après succès ou échec
+        if: always() && steps.migration_scope.outputs.has_migrations == 'true'
+        timeout-minutes: 2
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/diagnostic-financier-catalogue.mjs apres
+
       - name: F1 — SELECT indépendant après succès ou échec SQL
         if: always() && steps.migration_scope.outputs.has_f1_regression == 'true'
         timeout-minutes: 2
@@ -594,6 +727,66 @@ jobs:
           jq -S . "$RUNNER_TEMP/f1-catalogue-apres.json" > "$RUNNER_TEMP/f1-apres-canonique.json"
           cmp "$RUNNER_TEMP/f1-avant-canonique.json" "$RUNNER_TEMP/f1-apres-canonique.json"
           echo 'F1_CONTROLE_INDEPENDANT_OK : catalogue et compteurs inchangés, zéro résidu.'
+
+  paiements-concurrence:
+    name: Paiements — verrous PostgreSQL 17 éphémère
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Métadonnées officielles Docker Hub lues le 01/10/2026, aucune couche locale.
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: paiements_concurrence
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d paiements_concurrence"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_PG_CONCURRENCY: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: paiements_concurrence
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@v5
+      - name: Deux écrivains, observateur et reprises exactes
+        run: python3 scripts/ci/paiements-concurrence-pg17.py
+
+  numerotation-concurrence:
+    name: Numérotation — réservations et reprises PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Même image officielle figée que le banc paiements, sans cloud.
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: numerotation_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d numerotation_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_NUMBERING_WITNESS: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: numerotation_temoin
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rouge historique, migration réelle et deux écrivains observés
+        run: python3 scripts/ci/numerotation-concurrence-pg17.py
 
   escrow-gate:
     name: Escrow (recette si paiements touchés)

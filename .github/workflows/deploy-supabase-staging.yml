@@ -56,6 +56,7 @@ concurrency:
   # Partagé avec le job SQL des PR : une seule écriture à la fois sur le
   # projet staging, même lorsque les opérations viennent de workflows distincts.
   group: jolene-supabase-staging-writes
+  queue: max
   cancel-in-progress: false
 
 jobs:

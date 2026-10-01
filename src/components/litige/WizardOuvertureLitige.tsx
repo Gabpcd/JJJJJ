@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { chargerFacturesContestables, type FactureContestable } from '@/lib/facturesContestables';
 import { useNotification } from '@/contexts/NotificationContext';
 import {
   DialogResponsive,
@@ -23,16 +24,6 @@ interface Props {
   onClose: () => void;
   onSuccess?: () => void;
 }
-
-type FactureContestable = {
-  id: string;
-  numero_facture: string;
-  periode_debut: string | null;
-  periode_fin: string | null;
-  montant_ttc: number;
-  statut: string;
-  nature_correction?: string | null;
-};
 
 const TYPES: { value: TypeLitige; label: string; description: string }[] = [
   { value: 'PAIEMENT', label: '💰 Paiement', description: 'Montant erroné, retard de paiement, heures non comptées…' },
@@ -68,35 +59,44 @@ export function WizardOuvertureLitige({
   const [creating, setCreating] = useState(false);
   const [factures, setFactures] = useState<FactureContestable[]>([]);
   const [factureSelectionnee, setFactureSelectionnee] = useState(factureHonorairesId ?? '');
+  const [lecture, setLecture] = useState({ cle: '', statut: 'chargement' as 'chargement' | 'ok' | 'erreur' });
+  const [tentativeLecture, setTentativeLecture] = useState(0);
+  const cleLecture = `${missionId}:${factureHonorairesId ?? ''}:${tentativeLecture}`;
+  const statutLecture = lecture.cle === cleLecture ? lecture.statut : 'chargement';
+  const lectureRequise = typeLitige === 'PAIEMENT' || Boolean(factureHonorairesId);
 
   useEffect(() => {
     let actif = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    setLecture({ cle: cleLecture, statut: 'chargement' });
+    setFactures([]);
+    setFactureSelectionnee('');
     void (async () => {
-      const { data } = await supabase
-        .from('factures_honoraires')
-        .select('id, numero_facture, periode_debut, periode_fin, montant_ttc, statut, nature_correction')
-        .eq('mission_id', missionId)
-        .eq('type_document', 'FACTURE')
-        .in('statut', ['EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE'])
-        .order('periode_debut', { ascending: false });
-      if (!actif) return;
-      const options = (data ?? []) as FactureContestable[];
-      setFactures(options);
-      if (factureHonorairesId) {
-        setFactureSelectionnee(factureHonorairesId);
-      } else if (options.length === 1) {
-        setFactureSelectionnee(options[0].id);
+      try {
+        const options = await chargerFacturesContestables(missionId, factureHonorairesId, controller.signal);
+        if (!actif) return;
+        setFactures(options);
+        setFactureSelectionnee(factureHonorairesId ?? (options.length === 1 ? options[0].id : ''));
+        setLecture({ cle: cleLecture, statut: 'ok' });
+      } catch {
+        if (actif) setLecture({ cle: cleLecture, statut: 'erreur' });
+      } finally {
+        clearTimeout(timeout);
       }
     })();
-    return () => { actif = false; };
-  }, [missionId, factureHonorairesId]);
+    return () => { actif = false; clearTimeout(timeout); controller.abort(); };
+  }, [missionId, factureHonorairesId, cleLecture]);
 
   const factureRequise = typeLitige === 'PAIEMENT' && factures.length > 1;
-  const peutAvancer1 = typeLitige !== null && (!factureRequise || Boolean(factureSelectionnee));
+  const pieceVerifiee = !lectureRequise || (statutLecture === 'ok'
+    && (!factureRequise || Boolean(factureSelectionnee))
+    && (!factureHonorairesId || factures.some(f => f.id === factureSelectionnee)));
+  const peutAvancer1 = typeLitige !== null && pieceVerifiee;
   const peutAvancer2 = detail.trim().length >= 20;
 
   async function creerLitige() {
-    if (creating || !typeLitige || detail.trim().length < 20) return;
+    if (creating || !typeLitige || !pieceVerifiee || detail.trim().length < 20) return;
     setErreur(null);
 
     const motifStructure = `[${typeLitige}] ${detail.trim()}`;
@@ -114,7 +114,8 @@ export function WizardOuvertureLitige({
     };
     // Une demande de revue hors délai reste rattachée au document exact : le
     // passage en catégorie AUTRE ne doit jamais faire perdre le périmètre.
-    if (factureSelectionnee) {
+    if (statutLecture === 'ok' && factureSelectionnee
+      && factures.some(facture => facture.id === factureSelectionnee)) {
       params.p_facture_id = factureSelectionnee;
     }
     try {
@@ -125,6 +126,10 @@ export function WizardOuvertureLitige({
       if (error) throw error;
       if ((data as any)?.error) {
         setErreur((data as any).error);
+        return;
+      }
+      if ((data as any)?.success !== true || typeof (data as any)?.litige_id !== 'string' || !(data as any).litige_id) {
+        setErreur('La création du litige n’a pas pu être confirmée. Réessayez.');
         return;
       }
 
@@ -193,7 +198,18 @@ export function WizardOuvertureLitige({
                   </label>
                 ))}
               </div>
-              {(typeLitige === 'PAIEMENT' || Boolean(factureHonorairesId)) && factures.length > 0 && (
+              {lectureRequise && statutLecture === 'chargement' && (
+                <p role="status" className="text-sm text-muted-foreground">Chargement de la facture concernée…</p>
+              )}
+              {lectureRequise && statutLecture === 'erreur' && (
+                <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                  <p>Impossible de vérifier la facture concernée. Réessayez avant de continuer.</p>
+                  <button type="button" className="btn-secondary mt-2 min-h-[44px]" onClick={() => setTentativeLecture(n => n + 1)}>
+                    Réessayer le chargement des factures
+                  </button>
+                </div>
+              )}
+              {lectureRequise && statutLecture === 'ok' && factures.length > 0 && (
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <label htmlFor="facture-contestee" className="mb-1 block text-sm font-medium">
                     Facture concernée{factures.length > 1 ? ' *' : ''}
@@ -202,6 +218,7 @@ export function WizardOuvertureLitige({
                     id="facture-contestee"
                     className="input-base min-h-[44px] w-full text-sm"
                     value={factureSelectionnee}
+                    disabled={Boolean(factureHonorairesId)}
                     onChange={(event) => setFactureSelectionnee(event.target.value)}
                   >
                     {factures.length > 1 && <option value="">Choisir la période exacte…</option>}
@@ -212,7 +229,7 @@ export function WizardOuvertureLitige({
                     ))}
                   </select>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Seule cette échéance sera gelée et corrigée ; les autres périodes restent payables.
+                    Votre demande reste rattachée à cette facture. Les autres périodes ne sont pas concernées.
                   </p>
                 </div>
               )}
@@ -235,7 +252,7 @@ export function WizardOuvertureLitige({
                 rows={6}
                 className="input-base font-normal text-sm"
                 placeholder="Le 15 mai, j'ai pointé à 7h00 mais le décompte affiche 8h. La différence (1h × 25€) n'a pas été payée…"
-                disabled={creating}
+                disabled={creating || !pieceVerifiee}
                 minLength={20}
                 maxLength={2000}
               />
@@ -257,7 +274,7 @@ export function WizardOuvertureLitige({
                   <p className="text-[11px] uppercase text-muted-foreground">Détail</p>
                   <p className="whitespace-pre-wrap text-xs">{detail.trim()}</p>
                 </div>
-                {factureSelectionnee && (
+                {statutLecture === 'ok' && factures.some(facture => facture.id === factureSelectionnee) && (
                   <div>
                     <p className="text-[11px] uppercase text-muted-foreground">Facture ciblée</p>
                     <p className="text-xs font-medium">
@@ -310,7 +327,7 @@ export function WizardOuvertureLitige({
               <button
                 type="button"
                 onClick={() => setEtape(3)}
-                disabled={!peutAvancer2}
+                disabled={!peutAvancer2 || !pieceVerifiee}
                 className="btn-primary text-sm inline-flex items-center justify-center gap-1 min-h-[44px] disabled:opacity-50"
               >
                 Suivant <ChevronRight className="h-4 w-4" />
@@ -320,7 +337,7 @@ export function WizardOuvertureLitige({
               <button
                 type="button"
                 onClick={creerLitige}
-                disabled={creating}
+                disabled={creating || !pieceVerifiee}
                 className="btn-primary text-sm inline-flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50"
               >
                 {creating && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -33,6 +33,30 @@ describe('erreurs inscription familles de compte', () => {
 });
 
 describe('extraireMessageErreur', () => {
+  it.each([
+    ['LIBERAL_FACTURE_REQUISE', 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.'],
+    ['PAIEMENT_HISTORIQUE_A_RAPPROCHER', 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.'],
+    ['PAIEMENT_STRIPE_EN_COURS', 'Un règlement Stripe est déjà engagé pour cette facture. Consultez son état dans l’historique avant toute autre action.'],
+    ['PAIEMENT_FACTURE_DEJA_DECLARE', 'Un règlement a déjà été déclaré pour cette facture. Consultez l’historique des paiements.'],
+    ['AVOIR_A_RAPPROCHER', 'Cette facture possède un avoir. Contactez l’assistance pour rapprocher son règlement avant de payer.'],
+    ['MONTANT_FACTURE_INCOHERENT', 'Le règlement ne correspond pas à la facture sélectionnée. Rechargez la facturation pour vérifier ses informations.'],
+    ['PERIODE_NON_PAYABLE', 'Cette période n’est pas encore payable. Consultez les échéances dans Facturation.'],
+    ['DECLARATION_FACTURE_INVALIDE', 'La déclaration ne peut pas être enregistrée pour cette facture. Rechargez la facturation pour vérifier son état.'],
+    ['PAIEMENT_FINANCIER_IMMUABLE', 'Les informations financières d’un paiement existant ne peuvent pas être réattribuées. Contactez l’assistance pour son rapprochement.'],
+    ['PREUVE_STRIPE_REQUISE', 'Le règlement Stripe ne peut pas encore être vérifié. Consultez l’historique et contactez l’assistance avant tout nouveau paiement.'],
+    ['PAIEMENT_STRIPE_REJEU_INCOHERENT', 'Le règlement Stripe ne correspond pas aux informations déjà enregistrées. Contactez l’assistance avant tout nouveau paiement.'],
+  ])('oriente le refus financier %s sans exposer un code technique', (code, message) => {
+    expect(extraireMessageErreur({ code })).toBe(message);
+    expect(extraireMessageErreur({ error: code })).toBe(message);
+    expect(extraireMessageErreur({ message: code })).toBe(message);
+    expect(extraireMessageErreur({ code: '23514', message: code })).toBe(message);
+  });
+
+  it('utilise le code du refus courant même si un ancien message figure dans la réponse', () => {
+    expect(extraireMessageErreur({ code: 'PAIEMENT_STRIPE_EN_COURS', message: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' }))
+      .toBe('Un règlement Stripe est déjà engagé pour cette facture. Consultez son état dans l’historique avant toute autre action.');
+  });
+
   it('should return empty string for null/undefined', () => {
     expect(extraireMessageErreur(null)).toBe('');
     expect(extraireMessageErreur(undefined)).toBe('');

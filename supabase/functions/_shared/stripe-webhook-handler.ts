@@ -1014,7 +1014,7 @@ export async function handleStripeWebhook(
           await supabaseAdmin
             .from("stripe_transfers")
             .select(
-              "id, mission_id, facture_id, facture_honoraire_id, soignant_id, etablissement_id, statut, montant_soignant, montant_commission, montant_total, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
+              "id, mission_id, facture_id, facture_honoraire_id, soignant_id, etablissement_id, statut, montant_soignant, montant_commission, montant_total, stripe_checkout_session_id, stripe_payment_intent_id, stripe_charge_id, stripe_transfer_id",
             )
             .eq("mission_id", missionId)
             .eq("stripe_checkout_session_id", session.id)
@@ -1093,6 +1093,8 @@ export async function handleStripeWebhook(
           || validatedTransferClaim.soignant_id !== soignantId
           || validatedTransferClaim.etablissement_id !== validatedMission.etablissement_id
           || (invoiceScopedPayment
+            && validatedTransferClaim.facture_honoraire_id !== factureHonorairesId)
+          || (validatedTransferClaim.facture_honoraire_id !== null
             && validatedTransferClaim.facture_honoraire_id !== factureHonorairesId)
           || (invoiceScopedPayment
             && validatedTransferClaim.facture_id !== sessionFactureCommissionId)
@@ -1177,6 +1179,10 @@ export async function handleStripeWebhook(
         }
         if (session.amount_total !== totalCents || session.currency !== "eur") {
           incoherences.push("session.amount_or_currency");
+        }
+        if (validatedTransferClaim && validatedTransferClaim.stripe_charge_id !== null
+          && validatedTransferClaim.stripe_charge_id !== chargeId) {
+          incoherences.push("transfer_claim.source_charge");
         }
         if (typeof session.customer === "string" ? session.customer !== customerId : session.customer?.id !== customerId) {
           incoherences.push("session.customer");
@@ -1378,27 +1384,82 @@ export async function handleStripeWebhook(
             }
 
             if (!transferDejaCree) {
-              const { data: transferUpdated, error: transferUpdateError } = await supabaseAdmin
+              let transferUpdateQuery = supabaseAdmin
                 .from("stripe_transfers")
                 .update({
                   statut: "TRANSFERE",
                   stripe_transfer_id: transfer.id,
                   stripe_charge_id: chargeId || paymentIntentId,
                   stripe_payment_intent_id: paymentIntentId,
+                  facture_honoraire_id: factureHonorairesId,
                   transfere_le: new Date().toISOString(),
                 })
+                .eq("id", validatedTransferClaim.id)
                 .eq("mission_id", missionId)
+                .eq("soignant_id", soignantId)
+                .eq("etablissement_id", validatedMission.etablissement_id)
                 .eq("stripe_checkout_session_id", session.id)
                 .eq("statut", "EN_ATTENTE")
                 .eq("montant_soignant", soignantCents / 100)
                 .eq("montant_commission", commissionCents / 100)
-                .eq("montant_total", totalCents / 100)
-                .select("id")
+                .eq("montant_total", totalCents / 100);
+              transferUpdateQuery = validatedTransferClaim.facture_honoraire_id === null
+                ? transferUpdateQuery.is("facture_honoraire_id", null)
+                : transferUpdateQuery.eq("facture_honoraire_id", validatedTransferClaim.facture_honoraire_id);
+              transferUpdateQuery = validatedTransferClaim.stripe_payment_intent_id === null
+                ? transferUpdateQuery.is("stripe_payment_intent_id", null)
+                : transferUpdateQuery.eq("stripe_payment_intent_id", validatedTransferClaim.stripe_payment_intent_id);
+              transferUpdateQuery = validatedTransferClaim.stripe_charge_id === null
+                ? transferUpdateQuery.is("stripe_charge_id", null)
+                : transferUpdateQuery.eq("stripe_charge_id", validatedTransferClaim.stripe_charge_id);
+              const { data: transferUpdated, error: transferUpdateError } = await transferUpdateQuery.select("id")
                 .maybeSingle();
               if (transferUpdateError || !transferUpdated) {
                 throw new Error(
                   `Transfer persistence failed after Stripe success: ${transferUpdateError?.message || "row missing"}`,
                 );
+              }
+            }
+
+            // Ancienne trace sans FK : la Session et le Transfer exacts ont été
+            // vérifiés ci-dessus. Lier cette seule trace avant le paiement local,
+            // sans déduire une facture d'un PI propagé à toute la mission.
+            if (transferDejaCree && (validatedTransferClaim.facture_honoraire_id === null
+              || validatedTransferClaim.stripe_payment_intent_id === null
+              || validatedTransferClaim.stripe_charge_id === null)) {
+              let transferLinkQuery = supabaseAdmin
+                .from("stripe_transfers")
+                .update({
+                  ...(validatedTransferClaim.facture_honoraire_id === null
+                    ? { facture_honoraire_id: factureHonorairesId } : {}),
+                  ...(validatedTransferClaim.stripe_payment_intent_id === null
+                    ? { stripe_payment_intent_id: paymentIntentId } : {}),
+                  ...(validatedTransferClaim.stripe_charge_id === null
+                    ? { stripe_charge_id: chargeId } : {}),
+                })
+                .eq("id", validatedTransferClaim.id)
+                .eq("mission_id", missionId)
+                .eq("soignant_id", soignantId)
+                .eq("etablissement_id", validatedMission.etablissement_id)
+                .eq("stripe_checkout_session_id", session.id)
+                .eq("stripe_transfer_id", transfer.id)
+                .eq("statut", validatedTransferClaim.statut)
+                .eq("montant_soignant", soignantCents / 100)
+                .eq("montant_commission", commissionCents / 100)
+                .eq("montant_total", totalCents / 100);
+              transferLinkQuery = validatedTransferClaim.facture_honoraire_id === null
+                ? transferLinkQuery.is("facture_honoraire_id", null)
+                : transferLinkQuery.eq("facture_honoraire_id", validatedTransferClaim.facture_honoraire_id);
+              transferLinkQuery = validatedTransferClaim.stripe_payment_intent_id === null
+                ? transferLinkQuery.is("stripe_payment_intent_id", null)
+                : transferLinkQuery.eq("stripe_payment_intent_id", validatedTransferClaim.stripe_payment_intent_id);
+              transferLinkQuery = validatedTransferClaim.stripe_charge_id === null
+                ? transferLinkQuery.is("stripe_charge_id", null)
+                : transferLinkQuery.eq("stripe_charge_id", validatedTransferClaim.stripe_charge_id);
+              const { data: transferLinked, error: transferLinkError } = await transferLinkQuery.select("id")
+                .maybeSingle();
+              if (transferLinkError || !transferLinked) {
+                throw new Error(`Acquired transfer invoice linkage failed: ${transferLinkError?.message || "row changed"}`);
               }
             }
 
@@ -2316,7 +2377,7 @@ export async function handleStripeWebhook(
         }
         await releaseStripePaymentFlowClaimForExpiredSession(
           supabaseAdmin,
-          "CONNECT_MISSION",
+          expiredSession.metadata?.payment_scope === "INVOICE" ? "CONNECT_INVOICE" : "CONNECT_MISSION",
           expiredSession.id,
         );
 

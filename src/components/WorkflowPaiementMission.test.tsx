@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowPaiementMission } from './WorkflowPaiementMission';
 
@@ -83,16 +83,17 @@ const salaryPaymentInfo = {
   type_contrat_applique: 'SALARIE',
 };
 
-function renderWorkflow() {
+function Location() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
+function renderWorkflow(props: Partial<React.ComponentProps<typeof WorkflowPaiementMission>> = {}) {
   return render(
     <MemoryRouter>
       <WorkflowPaiementMission
         missionId="mission-salariee"
         soignantAssigneId="soignant-1"
         etablissementId="etablissement-1"
-        onStartConnectPay={vi.fn()}
-        soignantHasConnect={false}
+        {...props}
       />
+      <Location />
     </MemoryRouter>,
   );
 }
@@ -185,6 +186,35 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
     expect(screen.queryByRole('button', { name: 'Déclarer le paiement effectué' })).not.toBeInTheDocument();
     panne = false; fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
     expect(await screen.findByText('Virement de rémunération salariée')).toBeVisible();
+  });
+
+  it.each(['VIREMENT_NOTE_HONORAIRES', 'STRIPE_CONNECT'])('oriente le libéral %s vers une facture, sans transmettre l’estimation', async mode => {
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve({ data: name === 'fn_suivi_escrow_mission' ? [] : {
+      ...salaryPaymentInfo, type_contrat_applique: 'LIBERAL', mode_recommande: mode, montant_soignant: 160,
+    }, error: null }));
+    renderWorkflow({ typeContratApplique: 'LIBERAL' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir les factures de cette mission' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/etablissement/facturation?tab=missions-a-payer&mission=mission-salariee');
+    expect(screen.queryByRole('button', { name: /Déclarer|Payer via Stripe/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/160,00/)).not.toBeInTheDocument();
+    expect(mocks.rpc.mock.calls.every(([name]) => !name.startsWith('fn_declarer'))).toBe(true);
+  });
+
+  it.each([null, {}, { ...salaryPaymentInfo, type_contrat_applique: null }, { ...salaryPaymentInfo, mode_recommande: 'INCONNU' }])('refuse un mode incomplet sans supposer salarié (%j)', async info => {
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve({ data: name === 'fn_suivi_escrow_mission' ? [] : info, error: null }));
+    renderWorkflow();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Paiement indisponible');
+    expect(screen.queryByRole('button', { name: /Déclarer|Payer via Stripe/ })).not.toBeInTheDocument();
+  });
+
+  it('conserve le paiement historique non lié sans le présenter comme une dette', async () => {
+    mocks.from.mockImplementation((name: string) => queryResponse(name === 'paiements_soignant' ? [{ id: 'ancien', statut: 'DECLARE', montant_net: 60, facture_honoraire_id: null }] : []));
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve({ data: name === 'fn_suivi_escrow_mission' ? [] : { ...salaryPaymentInfo, type_contrat_applique: 'LIBERAL', mode_recommande: 'VIREMENT_NOTE_HONORAIRES' }, error: null }));
+    renderWorkflow({ typeContratApplique: 'LIBERAL' });
+    expect(await screen.findByText('Paiement déclaré — en attente du soignant')).toBeVisible();
+    expect(screen.getByText(/Ce paiement antérieur n’est pas lié/)).toBeVisible();
+    expect(screen.getByText(/Montant versé/)).toHaveTextContent('60,00');
+    expect(screen.queryByRole('button', { name: /Déclarer le paiement|Payer via Stripe/ })).not.toBeInTheDocument();
   });
 
 });

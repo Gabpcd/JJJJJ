@@ -54,7 +54,7 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
  await page.route('**/*', async route => {
   const req=route.request(), url=new URL(req.url()), name=url.pathname.split('/').pop()!;
   if(url.protocol==='blob:'&&['127.0.0.1','localhost'].includes(new URL(url.pathname).hostname))return route.continue();
-  const fulfill = (options: Parameters<typeof route.fulfill>[0]) => route.fulfill({...options,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,HEAD,OPTIONS',...options?.headers}});
+  const fulfill = (options: Parameters<typeof route.fulfill>[0]) => route.fulfill({...options,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,HEAD,OPTIONS','access-control-expose-headers':'content-range',...options?.headers}});
   if(!['127.0.0.1','localhost'].includes(url.hostname)) return route.abort();
   if(!/\/(auth|rest|functions|storage)\/v1\//.test(url.pathname)){
    if(req.isNavigationRequest()&&req.resourceType()==='document'){

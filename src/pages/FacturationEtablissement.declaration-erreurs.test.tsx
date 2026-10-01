@@ -42,9 +42,9 @@ async function ouvrir(mode:'facture'|'salarie'|'legacy'){
 }
 describe('Déclaration paiement — erreur locale et envoi unique',()=>{
  beforeEach(()=>{
-  vi.resetAllMocks();const q:any={};for(const method of ['select','eq','in','order','limit'])q[method]=()=>q;q.then=(resolve:unknown)=>Promise.resolve({data:[],error:null}).then(resolve as never);mocks.from.mockReturnValue(q);mocks.invoke.mockResolvedValue({data:{success:true},error:null});
+  vi.resetAllMocks();const q:any={};for(const method of ['select','eq','in','order','limit','range'])q[method]=()=>q;q.then=(resolve:unknown)=>Promise.resolve({data:[],error:null,count:0}).then(resolve as never);mocks.from.mockReturnValue(q);mocks.invoke.mockResolvedValue({data:{success:true},error:null});
  });
- it.each(['facture','salarie','legacy'] as const)('préserve la déclaration %s et sa RPC après refus',async(mode)=>{
+ it.each(['facture','salarie'] as const)('préserve la déclaration %s et sa RPC après refus',async(mode)=>{
   declaration.mockResolvedValueOnce({data:{error:'ATTESTATION_REQUISE'},error:null});
   const dialog=await ouvrir(mode);const envoyer=dialog.getByRole('button',{name:'Valider la déclaration'});fireEvent.click(envoyer);
   expect(await dialog.findByRole('alert')).toHaveTextContent("Attestation sur l'honneur obligatoire");
@@ -77,6 +77,44 @@ describe('Déclaration paiement — erreur locale et envoi unique',()=>{
   expect(mocks.success).toHaveBeenCalledExactlyOnceWith('Paiement déclaré — en attente de confirmation du soignant');
   expect(mocks.logWarning).toHaveBeenCalledTimes(['failed','payload-failed','rejected'].includes(etat)?1:0);
   expect(mocks.logInfo).toHaveBeenCalledTimes(etat==='skipped'?1:0);
+ });
+
+ it('refuse une obligation libérale sans pièce identifiée',async()=>{
+  preparer('legacy');render(<MemoryRouter><FacturationEtablissement/></MemoryRouter>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Facture identifiée requise');
+  expect(screen.queryByRole('button',{name:'Déclarer un paiement'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Payer via Stripe'})).not.toBeInTheDocument();
+  expect(declaration).not.toHaveBeenCalled();expect(mocks.invoke).not.toHaveBeenCalled();
+ });
+ it.each(['DECLARE','CONFIRME','CONTESTE','RESOLU'])('conserve un paiement historique %s sans l’attribuer ni présenter une nouvelle dette',async(statut)=>{
+  preparer('facture');mocks.from.mockImplementation((table:string)=>{
+   const q:any={};for(const method of ['select','eq','in','order','limit','range'])q[method]=vi.fn(()=>q);
+   q.then=(resolve:unknown)=>Promise.resolve({data:table==='paiements_soignant'?[{id:'historique',mission_id:'mission',facture_honoraire_id:null,statut}]:[],error:null,count:table==='paiements_soignant'?1:0}).then(resolve as never);return q;
+  });
+  render(<MemoryRouter><FacturationEtablissement/></MemoryRouter>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Un paiement antérieur doit être rapproché');
+  expect(screen.getByText('Total payable non établi')).toBeInTheDocument();
+  expect(screen.getByText('Montant de la pièce · solde à rapprocher')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Déclarer un paiement'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Payer via Stripe'})).not.toBeInTheDocument();
+  expect(declaration).not.toHaveBeenCalled();expect(mocks.invoke).not.toHaveBeenCalled();
+ });
+ it('refuse les actions si la lecture de l’historique échoue puis propose la reprise',async()=>{
+  preparer('facture');mocks.from.mockImplementation((table:string)=>{
+   const q:any={};for(const method of ['select','eq','in','order','limit','range'])q[method]=()=>q;
+   q.then=(resolve:unknown)=>Promise.resolve(table==='paiements_soignant'?{data:null,error:{code:'42501',message:'permission denied'}}:{data:[],error:null,count:0}).then(resolve as never);return q;
+  });
+  render(<MemoryRouter><FacturationEtablissement/></MemoryRouter>);
+  expect(await screen.findByText('Impossible de charger les données de facturation en toute sécurité.')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Réessayer'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Déclarer un paiement'})).not.toBeInTheDocument();
+  expect(declaration).not.toHaveBeenCalled();expect(mocks.invoke).not.toHaveBeenCalled();
+ });
+ it.each(['LIBERAL_FACTURE_REQUISE','PAIEMENT_HISTORIQUE_A_RAPPROCHER'])('rend le refus documentaire %s sans nouvel effet',async(code)=>{
+  declaration.mockResolvedValueOnce({data:{error:code},error:null});const dialog=await ouvrir('facture');
+  fireEvent.click(dialog.getByRole('button',{name:'Valider la déclaration'}));
+  expect(await dialog.findByRole('alert')).toHaveTextContent(code==='LIBERAL_FACTURE_REQUISE'?'ouvrez Facturation et choisissez la facture':'Un paiement antérieur doit être rapproché');
+  expect(dialog.getByLabelText(/Référence/)).toHaveValue(reference);expect(mocks.invoke).not.toHaveBeenCalled();expect(mocks.success).not.toHaveBeenCalled();
  });
 
 });

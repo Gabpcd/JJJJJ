@@ -65,13 +65,14 @@ function requeteEnAttente(table: string) {
     in: vi.fn(() => builder),
     order: vi.fn(() => builder),
     limit: vi.fn(() => builder),
+    range: vi.fn(() => builder),
     then: attente.then.bind(attente),
   };
   return builder;
 }
 
 function requeteResolue(table: string, data: unknown, error: unknown = null) {
-  const response = Promise.resolve({ data, error });
+  const response = Promise.resolve({ data, error, count: Array.isArray(data) ? data.length : null });
   const builder: any = {
     select: vi.fn(() => builder),
     eq: vi.fn((colonne: string, valeur: unknown) => {
@@ -81,6 +82,7 @@ function requeteResolue(table: string, data: unknown, error: unknown = null) {
     in: vi.fn(() => builder),
     order: vi.fn(() => builder),
     limit: vi.fn(() => builder),
+    range: vi.fn(() => builder),
     then: response.then.bind(response),
   };
   return builder;
@@ -242,7 +244,7 @@ describe('FacturationEtablissement — périmètre des membres', () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(5));
 
     const filtresEtablissement = mocks.filtres.filter(({ colonne }) => colonne === 'etablissement_id');
     expect(filtresEtablissement).toEqual([
@@ -251,7 +253,6 @@ describe('FacturationEtablissement — périmètre des membres', () => {
       { table: 'paiements_mission', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
       { table: 'factures_honoraires', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
       { table: 'litiges', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
-      { table: 'paiements_soignant', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
     ]);
     expect(filtresEtablissement).not.toContainEqual(expect.objectContaining({ valeur: 'membre-utilisateur-id' }));
   });

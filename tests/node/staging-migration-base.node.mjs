@@ -12,6 +12,11 @@ const workflow = parse(readFileSync(path.join(root, '.github/workflows/validate-
 const sqlJob = workflow.jobs['sql-transaction'];
 const bootstrap = sqlJob.steps.find(step => step.name === 'Synchroniser le schéma main vers le staging').run;
 const rollback = sqlJob.steps.find(step => step.name === 'Exécuter les migrations ajoutées et les régressions SQL sans persister').run;
+const preflightF1 = sqlJob.steps.find(step => step.name === 'F1 — catalogue et absence de résidus avant transaction');
+const controleF1 = sqlJob.steps.find(step => step.name === 'F1 — SELECT indépendant après succès ou échec SQL');
+const catalogueF1 = () => [{ helper_remplacement_md5: 'c793ac81eaef0fe18fb5920c9264c675', routines_md5: 'a'.repeat(32),
+  triggers_md5: 'b'.repeat(32), residus: 0,
+  compteurs: { ...Object.fromEntries(Array.from({ length: 24 }, (_, i) => [`table${i}`, 0])), net_requests: 0 } }];
 const main = '20260901000000_main.sql', pending = '20260902000000_pending_main.sql', proposed = '20260903000000_unapproved_contract.sql';
 const baseInput = { baseFiles: [main, pending], remoteRows: [{ version: main.slice(0, 14) }],
   changes: [{ status: 'A', path: `supabase/migrations/${proposed}` }] };
@@ -65,9 +70,10 @@ function fixture(t, options = {}) {
   const suites = [...rollback.matchAll(/^\s+(tests\/[^\s]+\.sql)$/gm)].map(match => match[1]);
   assert.ok(suites.length > 10);
   for (const name of suites) write(name, "BEGIN;\nSELECT 'fixture assertion';\nROLLBACK;\n");
+  write('tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql', readFileSync(path.join(root, 'tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql'), 'utf8'));
   git('add', '.'); git('commit', '-qm', 'PR fixture');
   const stateFile = path.join(dir, 'state.json');
-  writeFileSync(stateFile, JSON.stringify({ registry: options.registry ?? baseInput.remoteRows, requests: [], cli: [], persisted: [], transactions: [] }));
+  writeFileSync(stateFile, JSON.stringify({ registry: options.registry ?? baseInput.remoteRows, catalogue: options.catalogue ?? catalogueF1(), catalogueAfter: options.catalogueAfter ?? null, requests: [], cli: [], persisted: [], transactions: [] }));
   const transport = `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path');
 const stateFile = process.env.FIXTURE_STATE, state = JSON.parse(fs.readFileSync(stateFile));
@@ -91,9 +97,10 @@ if (path.basename(process.argv[1]) === 'supabase') {
   const query = JSON.parse(payload).query;
   state.requests.push({ url: args.find(arg => arg.startsWith('https:')), query });
   const registry = query.startsWith('SELECT version FROM supabase_migrations');
-  const code = registry ? process.env.FIXTURE_REGISTRY_STATUS || '200' : '200';
+  const catalogue = query.includes(' AS helper_remplacement_md5');
+  const code = registry ? process.env.FIXTURE_REGISTRY_STATUS || '200' : catalogue ? '200' : process.env.FIXTURE_SQL_STATUS || '200';
   if (query.includes('unapproved_contract')) state.transactions.push(query);
-  fs.writeFileSync(get('-o'), JSON.stringify(registry ? state.registry : []));
+  fs.writeFileSync(get('-o'), JSON.stringify(registry ? state.registry : catalogue ? (state.catalogueAfter && state.requests.filter(r => r.query.includes(' AS helper_remplacement_md5')).length > 1 ? state.catalogueAfter : state.catalogue) : []));
   fs.writeFileSync(stateFile, JSON.stringify(state)); process.stdout.write(code);
 }
 `;
@@ -101,13 +108,20 @@ if (path.basename(process.argv[1]) === 'supabase') {
   const env = { ...process.env, BASE_SHA: baseSha, RUNNER_TEMP: runner, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
     STAGING_SUPABASE_ACCESS_TOKEN: 'fake-token-never-log', STAGING_SUPABASE_PROJECT_REF: 'mejpriaetwgtcstbgfid',
     STAGING_SUPABASE_DB_PASSWORD: 'fake-password-never-log', FIXTURE_STATE: stateFile,
-    FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200), HAS_MIGRATIONS: 'true' };
+    FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200), FIXTURE_SQL_STATUS: String(options.sqlStatus ?? 200), HAS_MIGRATIONS: 'true' };
   function run(script, extraEnv = {}) {
     // macOS fournit Bash 3 ; l'équivalent de mapfile permet d'exécuter le même
     // bloc prévu pour Bash 5 sur le runner, sans changer ses commandes SQL.
     const compat = 'if ! type mapfile >/dev/null 2>&1; then mapfile() { shift; local name="$1" line; eval "$name=()"; while IFS= read -r line; do eval "$name+=(\\"\\$line\\")"; done; }; fi\n';
     // L'étape existante emploie /tmp ; isoler seulement ses fichiers de sortie.
-    const isolated = script.replaceAll('/tmp/jolene-', `${runner}/jolene-`);
+    let isolated = script.replaceAll('/tmp/jolene-', `${runner}/jolene-`);
+    // Bash 3 traite un tableau vide comme absent sous nounset, contrairement
+    // au Bash 5 du runner. Adapter uniquement cette sémantique dans le harnais
+    // local ; la CI Linux exécute le bloc YAML sans cette réécriture.
+    const major = Number(execFileSync('bash', ['-c', 'printf %s "${BASH_VERSINFO[0]}"'], { encoding: 'utf8' }));
+    if (major < 4) isolated = isolated
+      .replaceAll('"${MIGRATIONS[@]}"', '${MIGRATIONS[@]+"${MIGRATIONS[@]}"}')
+      .replaceAll('${#MIGRATIONS[@]}', '$(if [ -n "${MIGRATIONS[*]-}" ]; then printf %s "${#MIGRATIONS[@]}"; else printf 0; fi)');
     const result = spawnSync('bash', ['-c', compat + isolated], { cwd: repo, env: { ...env, ...extraEnv }, encoding: 'utf8' });
     assert.ok(!`${result.stdout}${result.stderr}`.includes(env.STAGING_SUPABASE_ACCESS_TOKEN));
     assert.ok(!`${result.stdout}${result.stderr}`.includes(env.STAGING_SUPABASE_DB_PASSWORD));
@@ -135,6 +149,48 @@ test('workflow simulé : main seul persiste, CREATE TABLE de PR envoyé une fois
   assert.deepEqual([...sql.matchAll(/^-- regression: (.+)$/gm)].map(match => match[1]), f.suites);
   assert.deepEqual(state.persisted.map(item => item.name), [pending]);
   assert.ok(state.requests.every(request => request.url === 'https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/database/query'));
+});
+test('F1 test-only : les trois bancs sous rollback, sans migration ni CLI ni persistance', t => {
+  const f = fixture(t);
+  f.git('rm', `supabase/migrations/${proposed}`); f.git('commit', '-qm', 'sans migration produit');
+  const result = f.run(rollback, { HAS_MIGRATIONS: 'false' });
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  const state = f.state(); assert.equal(state.requests.length, 1);
+  const sql = state.requests[0].query;
+  assert.deepEqual([...sql.matchAll(/^-- regression: (.+)$/gm)].map(match => match[1]), [
+    'tests/security/facturation-remplacement-commission-f1.test.sql',
+    'tests/security/facturation-heures-ajustees-chainage-f1.test.sql',
+    'tests/security/facturation-commissions-pieces-matrice-f1.test.sql',
+  ]);
+  assert.ok(sql.startsWith('BEGIN;\n') && sql.endsWith('ROLLBACK;\n'));
+  assert.ok(!sql.includes('-- migration:')); assert.ok(!sql.includes('COMMIT;'));
+  assert.deepEqual(state.cli, []); assert.deepEqual(state.persisted, []);
+});
+test('F1 préflight refuse le helper ancien, une preuve incomplète ou des résidus avant transaction', t => {
+  for (const change of [
+    c => { c[0].helper_remplacement_md5 = 'b35b9b246690238ccb77e19e484c2a77'; },
+    c => { delete c[0].compteurs.table0; }, c => { c[0].residus = 1; }, c => { c[0].compteurs.net_requests = 1; },
+  ]) {
+    const catalogue = catalogueF1(); change(catalogue);
+    const f = fixture(t, { catalogue }); const result = f.run(preflightF1.run);
+    assert.notEqual(result.status, 0); assert.equal(f.state().requests.length, 1);
+    assert.ok(f.state().requests[0].query.includes('BEGIN READ ONLY;'));
+    assert.deepEqual(f.state().cli, []); assert.deepEqual(f.state().persisted, []);
+  }
+});
+test('F1 contrôle indépendant reste exécuté après SQL rouge et refuse toute dérive', t => {
+  assert.equal(controleF1.if, "always() && steps.migration_scope.outputs.has_f1_regression == 'true'");
+  for (const divergent of [false, true]) {
+    const catalogueAfter = catalogueF1(); if (divergent) catalogueAfter[0].compteurs.table1 = 1;
+    const f = fixture(t, { sqlStatus: 503, catalogueAfter });
+    assert.equal(f.run(preflightF1.run).status, 0);
+    assert.notEqual(f.run(rollback).status, 0);
+    const post = f.run(controleF1.run);
+    assert.equal(post.status === 0, !divergent, post.stdout + post.stderr);
+    const state = f.state(); assert.equal(state.requests.length, 3);
+    assert.ok(state.requests[2].query.includes('BEGIN READ ONLY;'));
+    assert.deepEqual(state.cli, []); assert.deepEqual(state.persisted, []);
+  }
 });
 test('workflow : portée migration absente ou invalide refuse avant toute requête', t => {
   const f = fixture(t);
@@ -176,7 +232,7 @@ test('un fichier PR recopié dans le worktree main est refusé même sans versio
   assert.notEqual(result.status, 0); assert.match(result.stderr, /worktree de base ont été modifiées/);
 });
 test('workflow conserve le verrou staging et exécute ces simulations en CI', () => {
-  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', 'cancel-in-progress': false });
+  assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
   assert.equal(sqlJob.steps.find(step => step.run === rollback).env.HAS_MIGRATIONS, '${{ steps.migration_scope.outputs.has_migrations }}');
   assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs'));
 });

@@ -36,7 +36,7 @@ test('F1 soignant : honoraire intermédiaire émis et à vérifier, montant cons
   const etat=await simulerSoignant(page),verifier=await fermerReseau(page);
   Object.assign(etat.profile,{type_exercice:'LIBERAL',statut_liberal:'EN_COURS',rpps_verifie:false,tous_documents_valides:false});
   etat.overrides.set('fn_mes_factures_honoraires',[{...honoraire,soignant_id:idsSoignant.user,etablissement_id:idsSoignant.etab}]);
-  etat.tables.set('factures_honoraires',[{...honoraire,soignant_id:idsSoignant.user}]);
+  etat.tables.set('factures_honoraires',[{...honoraire,date_emission:honoraire.date_emission.slice(0,10),soignant_id:idsSoignant.user}]);
   await entrerSoignant(page,'connexion');await aller(page,'/soignant/mes-gains');
   await page.getByRole('tab',{name:'Factures',exact:true}).click();
   for(const reload of [false,true]) {

@@ -419,6 +419,29 @@ export function extraireMessageErreur(error: any): string {
   if (!error) return '';
   const msg = error.message || error.details || error.hint || '';
 
+  const codePaiement = error.code || error.error || error.error_code;
+  const erreursPaiement: Record<string, string> = {
+    LIBERAL_FACTURE_REQUISE: 'Pour une mission libérale, ouvrez Facturation et choisissez la facture à régler.',
+    PAIEMENT_HISTORIQUE_A_RAPPROCHER: 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.',
+    PAIEMENT_STRIPE_EN_COURS: 'Un règlement Stripe est déjà engagé pour cette facture. Consultez son état dans l’historique avant toute autre action.',
+    PAIEMENT_FACTURE_DEJA_DECLARE: 'Un règlement a déjà été déclaré pour cette facture. Consultez l’historique des paiements.',
+    AVOIR_A_RAPPROCHER: 'Cette facture possède un avoir. Contactez l’assistance pour rapprocher son règlement avant de payer.',
+    MONTANT_FACTURE_INCOHERENT: 'Le règlement ne correspond pas à la facture sélectionnée. Rechargez la facturation pour vérifier ses informations.',
+    PERIODE_NON_PAYABLE: 'Cette période n’est pas encore payable. Consultez les échéances dans Facturation.',
+    DECLARATION_FACTURE_INVALIDE: 'La déclaration ne peut pas être enregistrée pour cette facture. Rechargez la facturation pour vérifier son état.',
+    PAIEMENT_FINANCIER_IMMUABLE: 'Les informations financières d’un paiement existant ne peuvent pas être réattribuées. Contactez l’assistance pour son rapprochement.',
+    PREUVE_STRIPE_REQUISE: 'Le règlement Stripe ne peut pas encore être vérifié. Consultez l’historique et contactez l’assistance avant tout nouveau paiement.',
+    PAIEMENT_STRIPE_REJEU_INCOHERENT: 'Le règlement Stripe ne correspond pas aux informations déjà enregistrées. Contactez l’assistance avant tout nouveau paiement.',
+  };
+  // Le code métier structuré prime sur un éventuel ancien message. PostgREST
+  // fournit plutôt le SQLSTATE dans code et le code métier dans message.
+  if (Object.prototype.hasOwnProperty.call(erreursPaiement, codePaiement)) {
+    return erreursPaiement[codePaiement];
+  }
+  for (const [code, message] of Object.entries(erreursPaiement)) {
+    if (msg.includes(code)) return message;
+  }
+
   // PostgREST refuse un JWT expiré ou invalide avant d'exécuter la requête.
   // Conserver ce refus et indiquer comment reprendre, sans exposer son anglais.
   if (error.code === 'PGRST301' || /jwt expired/i.test(msg)) {
