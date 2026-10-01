@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
     let existingTransferQuery = supabaseAdmin
       .from("stripe_transfers")
       .select(
-        "id, statut, cree_le, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
+        "id, mission_id, etablissement_id, soignant_id, facture_id, facture_honoraire_id, statut, cree_le, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
       )
       .eq("mission_id", mission_id);
     if (invoiceScopedPayment) {
@@ -363,9 +363,24 @@ Deno.serve(async (req) => {
 
     // La capacité ne peut jamais adopter une tentative historique ni toucher
     // une autre trace de la facture, même sur le projet staging.
-    if (testCapacity && existingTransfer && existingTransfer.stripe_checkout_session_id !== testCapacity.sessionId) {
+    if (testCapacity && existingTransfer && (!testCapacity.operationId || !testCapacity.sessionId || !testCapacity.traceId
+      || existingTransfer.id !== testCapacity.traceId || existingTransfer.stripe_transfer_id
+      || existingTransfer.mission_id !== testCapacity.missionId || existingTransfer.etablissement_id !== testCapacity.etablissementId
+      || existingTransfer.soignant_id !== testCapacity.soignantId || existingTransfer.facture_id !== testCapacity.factureCommissionId
+      || existingTransfer.facture_honoraire_id !== testCapacity.factureHonoraireId
+      || existingTransfer.stripe_checkout_session_id !== testCapacity.sessionId)) {
       throw new Error("CONNECT_STAGING_TEST_REFUSED");
     }
+
+    if (testCapacity?.sessionId && !existingTransfer) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+    if (testCapacity) {
+      let foreignTraceQuery = supabaseAdmin.from("stripe_transfers").select("id")
+        .or(`facture_honoraire_id.eq.${testCapacity.factureHonoraireId},facture_id.eq.${testCapacity.factureCommissionId}`);
+      if (testCapacity.traceId) foreignTraceQuery = foreignTraceQuery.neq("id", testCapacity.traceId);
+      const {data: foreignTrace, error: foreignTraceError} = await foreignTraceQuery.limit(1).maybeSingle();
+      if (foreignTraceError || foreignTrace) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+    }
+
 
     const FENETRE_ORPHELIN_MINUTES = 15;
     let transferStatutCourant: string | null = existingTransfer?.statut ?? null;
@@ -462,6 +477,7 @@ Deno.serve(async (req) => {
       if (operationError) throw new Error("Lecture de l'intention Connect impossible");
       if (operationExistante !== null) {
         const operation = parseConnectOperation(operationExistante);
+        if (testCapacity && operation.id !== testCapacity.operationId) throw new Error("CONNECT_STAGING_TEST_REFUSED");
         if (operation.session_id !== existingTransfer.stripe_checkout_session_id
           || operation.trace_id !== existingTransfer.id
           || operation.mission_id !== mission_id
@@ -505,6 +521,7 @@ Deno.serve(async (req) => {
       factureCommission = legacyCommission.data;
       factureCommissionError = legacyCommission.error;
     }
+    if (testCapacity && !factureCommission) throw new Error("CONNECT_STAGING_TEST_REFUSED");
     if (!factureCommission && !factureCommissionError) {
       const { error: prepareCommissionError } = await supabaseAdmin.rpc(
         "fn_preparer_facture_commission_periode",
@@ -584,7 +601,7 @@ Deno.serve(async (req) => {
     //   - EN_ATTENTE >= 15 min              : orphelin → marquer ECHOUE puis laisser repartir une nouvelle session.
     const transferAReutiliserId: string | null = existingTransfer?.id ?? null;
 
-    if (existingTransfer?.statut === "EN_ATTENTE") {
+    if (!testCapacity && existingTransfer?.statut === "EN_ATTENTE") {
       const ageMs = Date.now() - new Date(existingTransfer.cree_le).getTime();
       const ageMinutes = Math.floor(ageMs / 60000);
 
@@ -675,6 +692,42 @@ Deno.serve(async (req) => {
       if (customer.deleted || customer.livemode !== false || customer.metadata.etablissement_id !== etab.id) {
         throw new Error("CONNECT_STAGING_TEST_REFUSED");
       }
+      const destination = await stripe.accounts.retrieve(testCapacity.destinationId);
+      if (destination.id !== testCapacity.destinationId || destination.metadata?.soignant_id !== soignantId
+        || destination.charges_enabled !== true || destination.payouts_enabled !== true
+        || destination.details_submitted !== true || destination.capabilities?.transfers !== "active"
+        || destination.requirements?.disabled_reason || (destination.requirements?.currently_due?.length ?? 1) !== 0) {
+        throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      }
+      // Aucune reprise de Session/claim historique, même expiré ou sans PI.
+      // Pagination complète avant la première écriture de cette requête.
+      let startingAfter: string | undefined;
+      do {
+        const page = await stripe.checkout.sessions.list({ customer: testCapacity.customerId, limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}) });
+        for (const candidate of page.data) {
+          const metadata = candidate.metadata || {};
+          const sameScope = metadata.facture_id === testCapacity.factureCommissionId
+            || metadata.facture_commission_id === testCapacity.factureCommissionId
+            || metadata.facture_honoraires_id === testCapacity.factureHonoraireId
+            || metadata.type === "CONNECT_MISSION_PAYMENT" && metadata.mission_id === mission_id && !metadata.facture_honoraires_id;
+          if (sameScope && (!testCapacity.sessionId || candidate.id !== testCapacity.sessionId
+            || candidate.livemode !== false || metadata.connect_operation_id !== testCapacity.operationId)) {
+            throw new Error("CONNECT_STAGING_TEST_REFUSED");
+          }
+        }
+        startingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+        if (page.has_more && !startingAfter) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      } while (startingAfter);
+      const {data: claim, error: claimError} = await supabaseAdmin.from("stripe_payment_flow_claims")
+        .select("flow, owner_token, stripe_checkout_session_id, stripe_payment_intent_id")
+        .eq("resource_key", `FACTURE:${testCapacity.factureCommissionId}`).maybeSingle();
+      if (claimError || !claim && (testCapacity.claimReservedAt || testCapacity.operationId || testCapacity.sessionId)
+        || claim && (!testCapacity.claimReservedAt || claim.flow !== "CONNECT_INVOICE"
+        || claim.owner_token !== `connect-invoice:${testCapacity.factureHonoraireId}`
+        || claim.stripe_checkout_session_id !== testCapacity.sessionId || claim.stripe_payment_intent_id)) {
+        throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      }
     }
     // Le Customer de recette est préexistant et contrôlé : ce handler n'en crée
     // aucun implicitement pour essayer de rendre admissible une capacité.
@@ -727,33 +780,16 @@ Deno.serve(async (req) => {
         flow: "CONNECT_MISSION" as const,
         owner_token: `connect:${mission_id}`,
       };
-    const paymentFlowClaim = await acquireStripePaymentFlowClaim(
-      supabaseAdmin,
-      paymentFlowClaimExpected,
-      Boolean(testCapacity),
-    );
-    const recoveryPaiementFinal = Boolean(
-      existingTransfer
-      && ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(existingTransfer.statut),
-    );
-    if (!paymentFlowClaim.acquired && !recoveryPaiementFinal) {
-      return new Response(JSON.stringify({
-        error: "PAIEMENT_MISSION_DEJA_REVENDIQUE",
-        message:
-          "Cette mission possède déjà un autre flux de paiement Stripe en cours.",
-        claimed_by: paymentFlowClaim.claim.flow,
-      }), {
-        status: 409,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
+    let testCheckoutOperationId = testCapacity?.operationId ?? null;
     const verifierSessionConnect = async (
       session: Stripe.Checkout.Session,
       requireSucceededIntent: boolean,
     ): Promise<string[]> => {
       const incoherences: string[] = [];
       const metadata = session.metadata || {};
+      if (testCapacity && (session.livemode !== false || metadata.connect_operation_id !== testCheckoutOperationId)) {
+        incoherences.push("session.staging_identity");
+      }
       if (objectId(session.customer) !== customerId) incoherences.push("session.customer");
       if (session.currency !== "eur") incoherences.push("session.currency");
       if (session.amount_total !== totalCents) incoherences.push("session.amount_total");
@@ -908,6 +944,44 @@ Deno.serve(async (req) => {
       }
       return incoherences;
     };
+
+    if (testCapacity?.sessionId && testRuntime) {
+      const session = await stripe.checkout.sessions.retrieve(testCapacity.sessionId);
+      if (session.id !== testCapacity.sessionId || session.livemode !== false
+        || session.metadata?.connect_operation_id !== testCapacity.operationId) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      if (session.status !== "open" || session.expires_at * 1000 <= Date.now()) {
+        return new Response(JSON.stringify({error: "CONNECT_TEST_RECONCILIATION_REQUIRED",
+          message: "Cette tentative doit être rapprochée avant tout nouveau règlement."}),
+        {status:409,headers:{...corsHeaders(req),"Content-Type":"application/json"}});
+      }
+      await requireConnectCheckoutAdmission(supabaseAdmin, session);
+      if ((await verifierSessionConnect(session, false)).length) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      return new Response(JSON.stringify({success:true,resumed:true,client_secret:session.client_secret,
+        checkout_session_id:session.id,total:totalCents/100,commission:commissionCents/100,
+        commission_ttc:commissionCents/100,soignant:soignantCents/100,montant_soignant:soignantCents/100}),
+      {status:200,headers:{...corsHeaders(req),"Content-Type":"application/json"}});
+    }
+
+    const paymentFlowClaim = await acquireStripePaymentFlowClaim(
+      supabaseAdmin,
+      paymentFlowClaimExpected,
+      Boolean(testCapacity),
+    );
+    const recoveryPaiementFinal = Boolean(
+      existingTransfer
+      && ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(existingTransfer.statut),
+    );
+    if (!paymentFlowClaim.acquired && !recoveryPaiementFinal) {
+      return new Response(JSON.stringify({
+        error: "PAIEMENT_MISSION_DEJA_REVENDIQUE",
+        message:
+          "Cette mission possède déjà un autre flux de paiement Stripe en cours.",
+        claimed_by: paymentFlowClaim.claim.flow,
+      }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     const auditerSessionConnectIncoherente = async (
       session: Stripe.Checkout.Session,
@@ -1196,7 +1270,7 @@ Deno.serve(async (req) => {
     // clé de base rejouerait sinon éternellement la même Session expirée.
     let sessionCompleteHistorique: Stripe.Checkout.Session | null = null;
     let completeStartingAfter: string | undefined;
-    while (!sessionCompleteHistorique) {
+    while (!testCapacity && !sessionCompleteHistorique) {
       const pageComplete = await stripe.checkout.sessions.list({
         customer: customerId,
         status: "complete",
@@ -1210,7 +1284,7 @@ Deno.serve(async (req) => {
       completeStartingAfter = last.id;
     }
 
-    const sessionsConnues = await stripe.checkout.sessions.list({ customer: customerId, limit: 100 });
+    const sessionsConnues = testCapacity ? { data: [] } : await stripe.checkout.sessions.list({ customer: customerId, limit: 100 });
     const sessionsMission = sessionsConnues.data
       .filter(sessionMatchesScope)
       .sort((a, b) => b.created - a.created);
@@ -1370,6 +1444,8 @@ Deno.serve(async (req) => {
       attemptKey: checkoutIdempotencyKey,
     });
     if (testCapacity && testRuntime) {
+      if (testCapacity.operationId && testCapacity.operationId !== connectOperationId) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      testCheckoutOperationId = connectOperationId;
       await authorizeStagingCheckout(supabaseAdmin, stripe, testRuntime, connectOperationId);
     }
     const session = await stripe.checkout.sessions.create({

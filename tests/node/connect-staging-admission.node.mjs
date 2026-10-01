@@ -13,7 +13,7 @@ const env={SUPABASE_URL:'https://mejpriaetwgtcstbgfid.supabase.co',SUPABASE_ENV:
 const row={id:id(9),protocol:'CONNECT_STAGING_TEST_V1',project_ref:'mejpriaetwgtcstbgfid',server_sha:config.serverSha,ui_sha:config.uiSha,source_manifest_sha256:config.manifestSha256,
  platform_account_id:config.platformAccountId,livemode:false,transfers_allowed:false,max_checkouts:1,max_refunds:1,enabled:true,revoked_at:null,expires_at:new Date(Date.now()+3600_000).toISOString(),
  mission_id:id(3),etablissement_id:id(2),soignant_id:id(1),facture_honoraire_id:id(4),facture_commission_id:id(5),customer_id:'cus_TEST',destination_id:'acct_RecipientTEST',
- soignant_cents:8000,commission_cents:1440,total_cents:9440,operation_id:id(8),session_id:'cs_test_TEST'};
+ soignant_cents:8000,commission_cents:1440,total_cents:9440,operation_id:id(8),trace_id:id(7),session_id:'cs_test_TEST',claim_reserved_at:new Date().toISOString()};
 const op={id:id(8),facture_honoraire_id:id(4),session_id:'cs_test_TEST',livemode:false,orientation:'REFUND'};
 const db={rpc:async()=>({data:row,error:null})};
 const stripe={accounts:{retrieve:async()=>({id:config.platformAccountId})},balance:{retrieve:async()=>({livemode:false})}};
@@ -26,7 +26,8 @@ test('identité Stripe compte et balance TEST relus',async()=>verifyStagingStrip
 test('compte Stripe étranger refusé',async()=>assert.rejects(()=>verifyStagingStripeIdentity({...stripe,accounts:{retrieve:async()=>({id:'acct_Foreign'})}},config)));
 test('balance live refusée',async()=>assert.rejects(()=>verifyStagingStripeIdentity({...stripe,balance:{retrieve:async()=>({livemode:true})}},config)));
 test('capacité exacte positive',()=>assert.equal(parseStagingConnectCapacity(row,config).active,true));
-for(const key of ['id','project_ref','server_sha','ui_sha','source_manifest_sha256','platform_account_id','customer_id','destination_id','session_id','operation_id'])
+test('Session sans trace ou opération refusée',()=>{assert.throws(()=>parseStagingConnectCapacity({...row,trace_id:null},config));assert.throws(()=>parseStagingConnectCapacity({...row,operation_id:null},config));});
+for(const key of ['id','project_ref','server_sha','ui_sha','source_manifest_sha256','platform_account_id','customer_id','destination_id','session_id','operation_id','trace_id'])
  test(`capacité refuse ${key} étranger ou mal formé`,()=>assert.throws(()=>parseStagingConnectCapacity({...row,[key]:'foreign'},config)));
 for(const [i,changes] of [{livemode:true},{transfers_allowed:true},{max_checkouts:2},{max_refunds:2},{total_cents:9441},{commission_cents:NaN},{soignant_cents:Number.MAX_SAFE_INTEGER},{etablissement_id:row.soignant_id},{facture_commission_id:row.facture_honoraire_id}].entries())
  test(`budget/identité refuse ${i}`,()=>assert.throws(()=>parseStagingConnectCapacity({...row,...changes},config)));

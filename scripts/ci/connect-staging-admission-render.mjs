@@ -51,7 +51,18 @@ export function renderStagingAdmission(migration,helpers){
  ]){
   const s=source(migration,sig),old=sig.split('.')[1].split('(')[0];
   guards.push(`IF to_regprocedure(${quote(sig.replace(old,newName))}) IS NOT NULL THEN RAISE EXCEPTION 'CONNECT_TEST_RPC_PREEXISTS'; END IF;`);
-  changes.push(replaceBody(s,once(s.body,condition,guard)).replace(`"${old}"`,`"${newName}"`));
+  let body=once(s.body,condition,guard);
+  if(newName==='fn_stripe_payment_flow_claim_connect_test_v1'){
+   // L'origine du claim est écrite dans la même transaction, après le verrou
+   // ressource et l'insertion. Une réponse perdue se reprend sans adopter un
+   // claim ancien et sans acquérir la capacité avant les verrous existants.
+   body=once(body,guard,'');
+   body=once(body,'  END LOOP;\n\n  SELECT c.* INTO v_conflict',`  END LOOP;\n${guard}\n\n  SELECT c.* INTO v_conflict`);
+   body=once(body,"  RETURN jsonb_build_object(\n    'acquired', true,",`  UPDATE private.stripe_connect_test_capacities
+  SET claim_reserved_at=COALESCE(claim_reserved_at,clock_timestamp()) WHERE facture_commission_id=p_facture_id;
+  RETURN jsonb_build_object(\n    'acquired', true,`);
+  }
+  changes.push(replaceBody(s,body).replace(`"${old}"`,`"${newName}"`));
   changes.push(`ALTER FUNCTION ${sig.replace(old,newName)} OWNER TO postgres;\nREVOKE ALL ON FUNCTION ${sig.replace(old,newName)} FROM PUBLIC,anon,authenticated,service_role;\nGRANT EXECUTE ON FUNCTION ${sig.replace(old,newName)} TO service_role;`);
  }
  const batch=source(migration,'public.fn_connect_remboursements_a_traiter(integer)');

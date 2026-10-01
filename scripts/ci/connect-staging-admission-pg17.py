@@ -57,7 +57,18 @@ sql(f"UPDATE private.stripe_connect_test_capacities SET enabled=true WHERE id='{
 # L'autorisation de la seule capacité n'ouvre aucun ancien/général client.
 refused(f"SELECT public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:{H}','{C}',NULL);",'CONNECT_RELEASE_CLOSED')
 refused(f"SELECT public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:{H}','{C}',NULL);",'CONNECT_CLIENT_VERSION_REQUIRED')
+# Une réservation historique, même même owner et sans Session, n'est pas adoptée.
+sql(f"INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token) VALUES('FACTURE:{C}','CONNECT_INVOICE','connect-invoice:{H}');")
+refused(claim,'CONNECT_TEST_NO_HISTORICAL_CLAIM')
+assert sql('SELECT count(*) FROM private.stripe_connect_avant_transfert')=='0'
+# Nettoyage de cette seule fixture synthétique dans la base PG17 éphémère.
+sql(f"DELETE FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:{C}';")
 assert value(claim)['acquired'] is True
+claim_origin=sql('SELECT claim_reserved_at::text FROM private.stripe_connect_test_capacities')
+assert claim_origin
+# Réponse perdue après COMMIT : le même claim est repris avant toute opération.
+assert value(claim)['acquired'] is True
+assert sql('SELECT claim_reserved_at::text FROM private.stripe_connect_test_capacities')==claim_origin
 op=value(f"SELECT public.fn_connect_checkout_preparer('{H}','{C}','test_attempt');")['operation_id']
 assert value(f"SELECT public.fn_connect_test_checkout_autoriser('{op}',repeat('a',40),repeat('c',64));")['allowed'] is True
 refused(f"SELECT public.fn_connect_test_checkout_autoriser('{op}',repeat('d',40),repeat('c',64));",'CONNECT_TEST_CHECKOUT_CLOSED')

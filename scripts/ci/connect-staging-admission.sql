@@ -12,6 +12,8 @@ BEGIN
  THEN RAISE EXCEPTION 'CONNECT_TEST_INSTALLATION_REFUSED'; END IF;
 END $preflight$;
 
+ALTER TABLE private.stripe_connect_test_capacities ADD COLUMN claim_reserved_at timestamptz;
+
 CREATE FUNCTION private.fn_connect_test_cohorte(p_e uuid,p_s uuid)
  RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $test$
  SELECT p_e<>p_s
@@ -87,7 +89,9 @@ BEGIN
  SELECT * INTO c FROM private.stripe_connect_test_capacities WHERE facture_honoraire_id=p_facture_honoraire_id;
  IF NOT FOUND THEN RETURN NULL; END IF;
  c:=private.fn_connect_test_scope(c.id,false);
- RETURN to_jsonb(c)||jsonb_build_object('session_id',(SELECT session_id FROM private.stripe_connect_avant_transfert WHERE id=c.operation_id));
+ RETURN to_jsonb(c)||jsonb_build_object(
+   'session_id',(SELECT session_id FROM private.stripe_connect_avant_transfert WHERE id=c.operation_id),
+   'trace_id',(SELECT trace_id FROM private.stripe_connect_avant_transfert WHERE id=c.operation_id));
 END $test$;
 
 -- Appelé après les verrous métier et l'insertion de l'opération. Jamais avant
@@ -158,6 +162,18 @@ BEGIN
  IF p_flow IS DISTINCT FROM 'CONNECT_INVOICE' OR p_mission_id IS NOT NULL THEN RAISE EXCEPTION 'CONNECT_TEST_INVOICE_REQUIRED'; END IF;
  SELECT * INTO STRICT c FROM private.stripe_connect_test_capacities WHERE facture_commission_id=p_facture_id;
  c:=private.fn_connect_test_scope(c.id,true);
+ IF c.claim_reserved_at IS NULL AND EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:'||p_facture_id::text)
+ THEN RAISE EXCEPTION 'CONNECT_TEST_NO_HISTORICAL_CLAIM'; END IF;
+ IF c.claim_reserved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:'||p_facture_id::text)
+ THEN RAISE EXCEPTION 'CONNECT_TEST_CLAIM_SCOPE'; END IF;
+ IF c.operation_id IS NOT NULL AND NOT private.fn_connect_test_operation_connue(c.operation_id)
+ THEN RAISE EXCEPTION 'CONNECT_TEST_CLAIM_SCOPE'; END IF;
+ IF EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims f
+   WHERE f.resource_key='FACTURE:'||p_facture_id::text
+   AND (f.flow IS DISTINCT FROM 'CONNECT_INVOICE' OR f.owner_token IS DISTINCT FROM 'connect-invoice:'||c.facture_honoraire_id::text
+     OR f.stripe_checkout_session_id IS DISTINCT FROM (SELECT session_id FROM private.stripe_connect_avant_transfert WHERE id=c.operation_id)
+     OR f.stripe_payment_intent_id IS NOT NULL))
+ THEN RAISE EXCEPTION 'CONNECT_TEST_CLAIM_SCOPE'; END IF;
 END $test$;
 
 CREATE FUNCTION private.fn_connect_test_exiger_evenement(p_payload jsonb,p_livemode boolean)

@@ -11,7 +11,7 @@ const obj = (v: unknown): Dict => v && typeof v==='object' && !Array.isArray(v) 
 export type StagingConnectConfig = { serverSha: string; uiSha: string; manifestSha256: string; platformAccountId: string; capabilityId: string; returnOrigin: string };
 export type StagingConnectCapacity = { id: string; missionId: string; etablissementId: string; soignantId: string;
   factureHonoraireId: string; factureCommissionId: string; customerId: string; destinationId: string;
-  soignantCents: number; commissionCents: number; totalCents: number; operationId: string | null; sessionId: string | null; active: boolean };
+  soignantCents: number; commissionCents: number; totalCents: number; operationId: string | null; sessionId: string | null; traceId: string | null; claimReservedAt: string | null; active: boolean };
 export function stagingConnectConfig(getEnv: (name: string)=>string|undefined): StagingConnectConfig | null {
   const raw=getEnv('CONNECT_STAGING_TEST_RUN');
   if(!raw) return null;
@@ -51,11 +51,14 @@ export function parseStagingConnectCapacity(value: unknown,c: StagingConnectConf
   for(const k of ['soignant_cents','commission_cents','total_cents']) if(!Number.isSafeInteger(r[k]) || (r[k] as number)<=0)fail();
   if((r.soignant_cents as number)+(r.commission_cents as number)!==r.total_cents
     || r.operation_id!==null && (typeof r.operation_id!=='string'||!uuid.test(r.operation_id))
-    || r.session_id!==null && (typeof r.session_id!=='string'||!/^cs_test_[A-Za-z0-9]+$/.test(r.session_id))) fail();
+    || r.session_id!==null && (typeof r.session_id!=='string'||!/^cs_test_[A-Za-z0-9]+$/.test(r.session_id))
+    || r.trace_id!==null && (typeof r.trace_id!=='string'||!uuid.test(r.trace_id))
+    || (r.session_id===null)!==(r.trace_id===null) || r.operation_id===null && r.session_id!==null
+    || r.claim_reserved_at!==null && (typeof r.claim_reserved_at!=='string'||!Number.isFinite(Date.parse(r.claim_reserved_at)))) fail();
   return Object.freeze({id:r.id,missionId:r.mission_id,etablissementId:r.etablissement_id,soignantId:r.soignant_id,
     factureHonoraireId:r.facture_honoraire_id,factureCommissionId:r.facture_commission_id,
     customerId:r.customer_id,destinationId:r.destination_id,soignantCents:r.soignant_cents,commissionCents:r.commission_cents,
-    totalCents:r.total_cents,operationId:r.operation_id,sessionId:r.session_id,
+    totalCents:r.total_cents,operationId:r.operation_id,sessionId:r.session_id,traceId:r.trace_id,claimReservedAt:r.claim_reserved_at,
     active:r.enabled && r.revoked_at===null && Date.parse(r.expires_at as string)>now}) as StagingConnectCapacity;
 }
 export async function readStagingConnectCapacity(sb: Client,c: StagingConnectConfig,honoraireId: string,active=false): Promise<StagingConnectCapacity> {
