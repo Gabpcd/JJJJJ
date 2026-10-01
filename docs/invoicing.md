@@ -7,22 +7,22 @@ Jolene agit comme **mandataire de facturation** (art. 289 I-2 CGI) : elle émet 
 ## Schéma de flux
 
 ```
-Mission TERMINEE
+Période facturable LIBÉRAL
       │
       ▼
 ┌─────────────────┐
 │ generate-invoice │  ← Vérifie mandat + mission + pas de doublon
-│                  │  ← Appelle next_invoice_number()
+│                  │  ← Réserve numéro + pièce + bail dans une transaction
 │                  │  ← Génère PDF + XML CII (EN16931)
 │                  │  ← Upload Supabase Storage
-│                  │  ← INSERT factures_honoraires (EMISE)
+│                  │  ← Finalise registre + émission dans une transaction
 └─────────────────┘
       │
       ├── Secteur PUBLIC ──▶ submit-to-chorus ──▶ Chorus Pro (PISTE API)
       │                           │
       │                     sync-chorus-status (cron horaire)
       │
-      └── Secteur PRIVÉ ──▶ send-email (template FACTURE_HONORAIRE)
+      └── Secteur PRIVÉ ──▶ send-email (template FACTURE_EMISE)
                                  │
                            Relances J+15, J+30, J+45
 ```
@@ -39,12 +39,25 @@ Mission TERMINEE
 
 ## Numérotation
 
-Format : `JOL-{SIRET_8}-{YYYY}-{NNNNN}`
+Nouvelles pièces : `JOL-{UUID_EMETTEUR_32}-{YYYY}-{SEQUENCE}` ; les avoirs
+utilisent le préfixe `AV`. Les numéros déjà attribués restent inchangés.
 
-- Séquence continue par soignant, sans trou
-- Advisory lock PostgreSQL pour la concurrence
+- Séquence par soignant, sur toutes les pièces conservées, y compris en erreur
+- UUID complet sans tirets pour distinguer deux SIRET ou UUID de même préfixe
+- Au moins cinq chiffres, sans troncature lorsque la séquence grandit
 - Pas de reset annuel (le préfixe année est informatif)
-- Fonction : `next_invoice_number(p_soignant_id)`
+- `next_invoice_number`/`next_avoir_number` calculent le suivant dans la
+  transaction de leur producteur SQL. Un appel isolé ne réserve aucun numéro.
+- Le générateur Edge réserve numéro et pièce avec
+  `fn_reserver_facture_honoraires`, puis rend les snapshots persistés.
+- Un bail privé limite le rendu simultané ; la reprise après panne conserve la
+  même pièce et son numéro. Le registre des octets et la première émission sont
+  enregistrés ensemble, sous vérification du token serveur courant.
+
+La preuve de concurrence est dans `scripts/ci/numerotation-concurrence-pg17.py`
+(PostgreSQL 17 éphémère). L'ancien test réseau qui sélectionnait deux soignants
+arbitraires et supposait qu'un simple appel de calcul consommait un numéro est
+retiré ; aucun fallback production ni secret n'est requis par son remplaçant.
 
 ## Triggers (factures_honoraires)
 
