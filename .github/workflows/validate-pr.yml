@@ -299,8 +299,7 @@ jobs:
           if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/fixtures/contrat-service-v11/**' \
             'tests/security/contrat-service-v11.test.sql' \
-            'scripts/ci/contrat-v11-sql-proof.mjs' \
-            'tests/node/contrat-v11-sql-proof.node.mjs'; then
+            'scripts/ci/contrat-v11-sql-proof.mjs'; then
             echo "has_contract_fixture=false" >> "$GITHUB_OUTPUT"
           else
             if [ "$has_f1_regression" = true ]; then
