@@ -1,6 +1,6 @@
 # Paiement libéral depuis une pièce identifiée — 1er octobre 2026
 
-Base : `1913e57b3835c2aa75dd252769867a518e12727a`. Correction frontend distincte des gardes SQL et Connect, sans migration ni recalcul financier.
+Le frontend initial part de `1913e57b3835c2aa75dd252769867a518e12727a`. Il est intégré ici aux gardes SQL et Connect, en conservant la distinction entre simulations d’interface, tests serveur et preuve fournisseur.
 
 Sur le détail d’une mission libérale assignée, EN_COURS ou TERMINEE, le composant de paiement oriente l’établissement vers Facturation avec `tab=missions-a-payer&mission=<id>`. Il ne transmet plus l’estimation globale de mission à une déclaration ou à Stripe. La route et les permissions établissement existantes restent nécessaires ; ce lien n’est pas monté dans la vue admin. La vue soignant reste inchangée.
 
@@ -14,16 +14,16 @@ Le salarié conserve la saisie du net du bulletin officiel, le refus des paiemen
 
 ## Vérifications locales
 
-- 94 tests unitaires ciblés : composant paiement, permissions/scope, refus de déclaration, messages et 21 cas de pagination/validation.
+- 104 tests unitaires ciblés : composant paiement, permissions/scope, refus de déclaration, messages et 21 cas de pagination/validation. Les onze refus financiers sont traduits en français ; le code métier structuré prime sur un ancien message, tandis que le message PostgREST reste lu lorsque `code` contient un SQLSTATE.
 - Typecheck applicatif et typecheck ciblé E2E verts ; build web compilé sur API loopback fictive, sans télémétrie distante.
 - 25 scénarios Playwright, un seul worker, zéro retry/skip : cinq cas sur iPhone, Android, iPad portrait, iPad paysage et ordinateur.
-- Virement TERMINEE et Connect EN_COURS : vraie navigation vers les pièces 60 et 80 euros de deux semaines closes distinctes, ancienne facture REMPLACEE exclue, sélection et payload de la facture 60, Annuler sans effet, refus serveur affiché, rechargement et retrait du filtre. L’estimation 160 ne devient jamais un ordre libéral.
+- Virement TERMINEE et Connect EN_COURS : vraie navigation vers les pièces 60 et 80 euros de deux semaines closes distinctes, ancienne facture REMPLACEE exclue, sélection et payload de la facture 60, Annuler sans effet, refus de l’historique ambigu puis refus d’un règlement Stripe en cours après rechargement, et retrait du filtre. Les deux refus apparaissent en français. L’estimation 160 ne devient jamais un ordre libéral.
 - Retour Connect simulé avec facture : réponse ECHOUE vérifiée par lecture ciblée ; sans facture : attente explicite et aucun lookup global. Aucun paiement fournisseur n’est exécuté.
 - Historique : 201 lignes avec la ligne sans pièce en seconde page ; page omise → erreur et Réessayer ; pages complètes après rapprochement fictif → actions disponibles ; pièce absente → actions refusées.
 - Salarié : champs du bulletin initialement vides, geste de déclaration partielle refusé avant RPC, montant exact saisissable ; escrow conservé après rechargement.
 - Le scénario documentaire qui déclenchait auparavant un paiement mission-only sans facture est remplacé par son refus avant Edge. Le vrai handler documentaire exécuté dans son banc local conserve son témoin Unicode 422 et zéro upload/émission ; aucune invocation cloud.
 
-Preuves : `/private/tmp/jolene-paiements-liberaux-preuves-20261001/validation.json`, `matrice-finale/results.json`, 35 captures PNG et `SHA256SUMS`. Le manifeste distingue sources, build servi et journaux. Les premiers rouges sont conservés : modale d’évaluation non fermée dans le scénario initial, ressources externes non encore neutralisées et assertion de bouton salarié désactivé alors que le comportement conservé refuse au clic. Ils ne sont pas comptés dans la passe finale.
+La passe d’intégration et ses 35 captures sont conservées dans `/private/tmp/jolene-paiements-union-preuves-20261001/frontend/results.json`, avec les journaux unitaires, de compilation et de typecheck dans le même dossier parent. Le typecheck applicatif et celui des trois specs concernées sont verts. Le correctif de types du scénario honoraires ne change pas son JavaScript émis ni ses assertions. Les preuves initiales restent disponibles dans `/private/tmp/jolene-paiements-liberaux-preuves-20261001/validation.json` et `matrice-finale/results.json`. Les premiers rouges y sont conservés : modale d’évaluation non fermée dans le scénario initial, ressources externes non encore neutralisées et assertion de bouton salarié désactivé alors que le comportement conservé refuse au clic. Ils ne sont pas comptés dans la passe finale.
 
 Le réseau Auth/REST/Edge est explicitement simulé. Les ressources Google Fonts et le script Stripe sont neutralisés localement ; les autres destinations externes sont refusées. Le seul log navigateur attendu dans le cas négatif est vérifié exactement : refus de l’historique incomplet. Aucun email, SMS ou signature n’est déclenché. Les WebSockets sont fermés : l’indicateur de notifications peut signaler cette coupure, et Realtime/push ne sont pas validés. Les captures sont des vues normales, sans CSS masqué ; une carte longue peut être partiellement hors champ, tandis que les gestes sont exécutés dans le viewport.
 

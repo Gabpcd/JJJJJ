@@ -55,7 +55,7 @@ async function fixture(page: Page, connect = false) {
       expect(name).toBe('stripe-connect-pay-mission'); expect(connect).toBe(true); expect(req.method()).toBe('POST');
       expect(req.postDataJSON()).toEqual({ mission_id: ids.mission, facture_honoraire_id: remplacement });
       mutations.push({ name, body: req.postDataJSON() });
-      return json({ error: controle.refus, message: 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.' });
+      return json({ error: controle.refus });
     }
     if (url.pathname.startsWith('/storage/')) { interdits.push(`${req.method()} ${url.pathname}`); return route.abort(); }
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
@@ -115,6 +115,10 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
   await expect(page).toHaveURL(new RegExp(`facturation\\?tab=missions-a-payer&mission=${ids.mission}`));
   for (const reload of [false,true]) {
     if (reload) { await stabiliserActionsNationales(page); await page.reload(); }
+    f.controle.refus = reload ? 'PAIEMENT_STRIPE_EN_COURS' : 'PAIEMENT_HISTORIQUE_A_RAPPROCHER';
+    const refusAttendu = reload
+      ? 'Un règlement Stripe est déjà engagé pour cette facture. Consultez son état dans l’historique avant toute autre action.'
+      : 'Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.';
     await expect(page.getByText('FACTURE-RECTIFICATIVE-60',{exact:true})).toBeVisible();
     await expect(page.getByText('FACTURE-SECONDE-80',{exact:true})).toBeVisible();
     await expect(page.getByText('FACTURE-ORIGINALE-80',{exact:true})).toHaveCount(0);
@@ -123,7 +127,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
     await expect(piece).toContainText(/60,00\s*€/);
     if (connect) {
       await action(page,piece.getByRole('button',{name:'Payer via Stripe',exact:true}));
-      await expect(page.getByText('Un paiement antérieur doit être rapproché de sa facture avant de déclarer un nouveau règlement.',{exact:true})).toBeVisible();
+      await expect(page.getByText(refusAttendu,{exact:true})).toBeVisible();
     } else {
       await action(page,piece.getByRole('button',{name:'Déclarer un paiement',exact:true}));
       const dialog = page.getByRole('dialog'); await expect(dialog.getByLabel('Montant des honoraires versés')).toHaveValue('60.00');
@@ -131,7 +135,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
       await action(page,piece.getByRole('button',{name:'Déclarer un paiement',exact:true}));
       await dialog.getByLabel(/Référence/).fill('VIR-2026-060'); await dialog.getByLabel('Date du paiement',{exact:true}).fill('2026-10-01');
       await dialog.getByRole('checkbox').check(); await action(page,dialog.getByRole('button',{name:'Valider la déclaration'}));
-      await expect(dialog.getByRole('alert')).toContainText('Un paiement antérieur doit être rapproché');
+      await expect(dialog.getByRole('alert')).toHaveText(refusAttendu);
       await action(page,dialog.getByRole('button',{name:'Annuler',exact:true}));
     }
     expect(f.mutations).toHaveLength(reload?2:1);

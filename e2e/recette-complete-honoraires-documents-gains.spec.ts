@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type BrowserContextOptions, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { simulerSoignant, entrer, aller, recharger, attendreAPI, ids, mission } from './helpers/recette-complete-soignant';
 import { simulerEtablissement, entrer as entrerEtablissement, allerA, stabiliserLectures, ids as etabIds, etablissement } from './helpers/recette-complete-etablissement';
 import { creerSuiviSimule } from './helpers/recette-complete-suivi-mission';
@@ -148,7 +148,7 @@ async function montantDocumentaire(page: Page, montant: string, label: string) {
   await expect(region.getByText(`Honoraires facturés TTC · ${label}`, { exact: true })).toBeVisible();
   await expect(region.getByText(euro(montant), { exact: true })).toBeVisible();
 }
-function documents(avoir = false): Ligne[] {
+function documents(avoir = false) {
   const commun = { mission_id: ids.mission, soignant_id: ids.user, etablissement_id: ids.etab,
     mission_intitule: 'Mission fictive — planning distinct des documents', etablissement_nom: 'Clinique fictive F1',
     type_document: 'FACTURE', montant_tva: 0, taux_tva: 0, taux_horaire_snapshot: 20,
@@ -353,7 +353,7 @@ test('honoraires documentaires — établissement 70,80 et 94,40 à régler, est
   await stabiliserLectures(page);
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]); reseau.verifier();
   // La deuxième surface lit les agrégats de mission, pas la réponse des obligations.
-  const use = info.project.use;
+  const use: typeof info.project.use & Pick<BrowserContextOptions, 'screen'> = info.project.use;
   const contexte = await browser.newContext({ viewport: use.viewport, screen: use.screen, deviceScaleFactor: use.deviceScaleFactor,
     isMobile: use.isMobile, hasTouch: use.hasTouch, userAgent: use.userAgent, locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block' });
   try {
