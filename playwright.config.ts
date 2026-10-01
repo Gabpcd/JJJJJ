@@ -29,6 +29,8 @@ export default defineConfig({
     // Les scénarios entièrement simulés ont leur propre build sans secrets
     // et matrice cinq formats : e2e/playwright.recette-complete.config.ts.
     '**/recette-complete-*.spec.ts',
+    // Le pilote documentaire local fermé utilise son contrat et sa configuration dédiés.
+    '**/f1-cloud-navigation.spec.ts',
     ...(process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts']),
     // e2e/non-regression/ appartient exclusivement au projet
     // mobile-non-regression ci-dessous — chromium & co l'ignorent.

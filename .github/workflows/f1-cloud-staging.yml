@@ -1,0 +1,85 @@
+name: F1 staging documents
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Exact reviewed main SHA; no branch or PR revision
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  cancel-in-progress: false
+
+jobs:
+  documents:
+    if: github.repository == 'Gabpcd/JJJJJ' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      F1_APPROVED_SHA: ${{ inputs.approved_sha }}
+      STAGING_SUPABASE_PROJECT_REF: mejpriaetwgtcstbgfid
+      STAGING_SUPABASE_URL: https://mejpriaetwgtcstbgfid.supabase.co
+    steps:
+      - name: Start the real job clock before setup
+        run: echo "F1_JOB_STARTED_UNIX=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Refuse until exact SQL, source, effects and retention contracts are reviewed
+        run: node scripts/ci/f1-cloud-pilot.mjs check
+      - name: Dependencies from committed lockfile, before any fixture
+        timeout-minutes: 6
+        run: npm ci
+      - name: Offline contracts and actual generator document tests
+        run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
+      - name: Install pinned browsers before any fixture
+        timeout-minutes: 8
+        run: npx --no-install playwright install --with-deps chromium webkit
+      - name: Actual local PDF parsing and rendering
+        run: node --test tests/node/f1-cloud-pdf.browser.mjs
+      - name: Build exact frontend for staging, without provider diagnostics
+        timeout-minutes: 5
+        env:
+          VITE_SUPABASE_URL: https://mejpriaetwgtcstbgfid.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ''
+        run: npm run build
+      - name: One original and one replacement, two roles in five formats
+        id: pilot
+        timeout-minutes: 14
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: node scripts/ci/f1-cloud-pilot.mjs run
+      - name: Always close owned Auth if not attempted; independently verify retention
+        timeout-minutes: 4
+        if: always() && steps.pilot.outcome != 'skipped'
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: node scripts/ci/f1-cloud-pilot.mjs finalize
+      - name: Closed report and synthetic invoice-card captures only
+        if: always() && steps.pilot.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: f1-staging-documents-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/f1-cloud-proof/result.json
+            ${{ runner.temp }}/f1-cloud-proof/finalization.json
+            ${{ runner.temp }}/f1-cloud-proof/*.png
+
+# No push/PR/cron trigger, deployment, migration, webhook, secret rotation or
+# provider probe. Private manifests/session tokens remain outside artifact paths.
