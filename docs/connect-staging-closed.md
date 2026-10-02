@@ -22,6 +22,8 @@ La seule destination est `mejpriaetwgtcstbgfid`, sous `jolene-supabase-staging-w
 
 Les empreintes structurelles attendues doivent être préparées dans une base PG17 à partir des sources réelles et confrontées au catalogue staging frais, pas inventées ni apprises aveuglément pour obtenir du vert. Le registre attendu inclut la ligne exacte `{version,name,statements:[sourceOriginale]}`. Une divergence de forme du registre doit être traitée avant activation. L'exécuteur ne répare ni ne bascule l'historique.
 
+Les options des relations appartiennent aussi à cette empreinte, triées dans un ordre canonique. Une modification de `security_invoker` ou `security_barrier` d'une vue doit donc être détectée même si sa définition et ses ACL ne changent pas. Le candidat #1017 porte les mutations négatives PostgreSQL 17 correspondantes ; elles ne sont pas exécutées par les seuls tests de transport de ce lot. Toute ancienne empreinte préparée sans ces options doit être recalculée et revue avant de renseigner les pins, qui restent absents ici.
+
 ## Table TEST et suite indispensable
 
 `private.stripe_connect_test_capacities` est installée vide, propriétaire postgres, RLS et sans droit de table via l'API. Le supplément du candidat #1017 fournit seulement les RPC service bornés décrits dans son document `docs/connect-staging-admission.md`. Ce document, la table de capacité, le SQL d'admission, la migration financière et les handlers restent dans le candidat distinct ; aucun n'est livré par ce petit lot. Il réserve une capacité, les SHA, les acteurs/pièces/objets Stripe exacts, `livemode=false`, au maximum un Checkout et un Refund, zéro transfert et une opération unique. Aucun enregistrement de capacité n'est installé, et le contrôle final refuse toute ligne.
