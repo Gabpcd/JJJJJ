@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { proveCatalogue, checkReference, rollbackSql } from '../../scripts/ci/connect-staging-catalogue-proof.mjs';
-import { digest, canonical } from '../../scripts/ci/connect-staging-closed.mjs';
+import { digest, canonical, checkContract } from '../../scripts/ci/connect-staging-closed.mjs';
+import { preflightSql } from '../../scripts/ci/connect-test-fixture-sql.mjs';
 
 function scenario() {
   const candidate={sha:'a'.repeat(40),tree:'b'.repeat(40)};
@@ -13,7 +14,10 @@ function scenario() {
     counts:{routines:34,relations:3,triggers:2,inventory:19,views:0,policies:0,columns:75,constraints:58,indexes:11}};
   const before={catalogue:'1'.repeat(32),registry:'2'.repeat(32),rows:'3'.repeat(32),all_rows:'4'.repeat(32),
     versions:['20261001194201'],quiescent:true,gate_closed:true,capacity_closed:true};
-  const proof={schemaVersion:1,before:{catalogue:before.catalogue,registry:before.registry},
+  const fixturePreflight={routines:'7'.repeat(32),triggers:'8'.repeat(32),columns:'9'.repeat(32),commissionHelper:'a'.repeat(32),
+    queuedRequests:0,activeCrons:0,runningCrons:0,generationUrlAbsent:true,supportStagingExact:true,gateClosed:true,capacitiesEmpty:true,operationsEmpty:true};
+  const fixturePreflightContext={searchPath:'"$user", public',databaseUser:'postgres',sessionUser:'postgres'};
+  const proof={fixturePreflight,fixturePreflightContext,schemaVersion:1,before:{catalogue:before.catalogue,registry:before.registry},
     after:{catalogue:'5'.repeat(32),registry:'6'.repeat(32)},deltaVerified:true,businessRowsUnchanged:true,closedStateVerified:true};
   const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',
     STAGING_SUPABASE_PROJECT_REF:'mejpriaetwgtcstbgfid',STAGING_SUPABASE_ACCESS_TOKEN:'SENTINELLE_TEST',
@@ -42,6 +46,17 @@ test('ne produit les pins qu’après delta exact et nouvelle lecture indépenda
   assert.match(s.calls[1].query,/CONNECT_CATALOGUE_DATA_OR_CLOSED_STATE_CHANGED/);
   assert.ok(s.calls[1].query.trimEnd().endsWith('ROLLBACK;'));
   assert.doesNotMatch(JSON.stringify(proof),/SENTINELLE/);
+  assert.deepEqual(proof.fixturePreflight,s.proof.fixturePreflight);
+  assert.deepEqual(proof.fixturePreflightContext,s.proof.fixturePreflightContext);
+  assert.equal(proof.fixturePreflightSqlSha256,digest(preflightSql()));
+  const sql=s.calls[1].query;
+  const save=sql.indexOf("set_config('jolene.fixture_preflight_search_path'");
+  const restore=sql.indexOf("set_config('search_path',pg_catalog.current_setting('jolene.fixture_preflight_search_path')");
+  const receipt=sql.indexOf('CREATE TEMP TABLE connect_fixture_preflight');
+  assert.ok(save>0&&save<sql.indexOf('SET LOCAL search_path=pg_catalog;'));
+  assert.ok(restore>sql.indexOf('END $after$;')&&receipt>restore);
+  assert.ok(sql.includes(`ON COMMIT DROP AS ${preflightSql().replace(/;\s*$/, '')};`));
+  assert.ok(sql.indexOf('SET LOCAL search_path=pg_catalog;',receipt)>receipt);
 });
 
 for(const [name,change] of [
@@ -85,6 +100,19 @@ test('ne publie aucun champ ajouté par le transport',async()=>{
   assert.deepEqual(Object.keys(proof.after).sort(),['catalogue','registry']);
 });
 
+for(const [name,mutate]of [
+  ...['queuedRequests','activeCrons','runningCrons'].map(k=>[k,p=>p.fixturePreflight[k]=1]),
+  ...['generationUrlAbsent','supportStagingExact','gateClosed','capacitiesEmpty','operationsEmpty'].map(k=>[k,p=>p.fixturePreflight[k]=false]),
+  ...['routines','triggers','columns','commissionHelper'].map(k=>[k,p=>p.fixturePreflight[k]='invalide']),
+  ['receipt absent',p=>delete p.fixturePreflight],['champ privé',p=>p.fixturePreflight.secret='SENTINELLE'],
+  ['rôle réduit',p=>p.fixturePreflightContext.databaseUser='postgresreadonly'],
+  ['session inconnue',p=>p.fixturePreflightContext.sessionUser='autre'],
+  ['contexte absent',p=>delete p.fixturePreflightContext],['search_path absent',p=>p.fixturePreflightContext.searchPath=''],
+])test(`receipt fixture invalide : ${name}`,async()=>{
+  const s=scenario();mutate(s.proof);await assert.rejects(s.execute(),/FIXTURE_PREFLIGHT_REFUSED/);
+  assert.equal(s.calls.length,3);assert.equal(s.calls[0].query,s.calls[2].query);
+});
+
 test('le générateur refuse des transactions supplémentaires',()=>{
   const s=scenario();s.source.admission='COMMIT;';s.source.admissionSha256=digest(s.source.admission);
   s.reference.sources.admissionSha256=s.source.admissionSha256;
@@ -96,6 +124,8 @@ test('le générateur refuse des transactions supplémentaires',()=>{
 
 test('contrat de livraison reste fermé et aucune branche de preuve ne le modifie',()=>{
   const c=JSON.parse(readFileSync('scripts/ci/connect-staging-closed.contract.json','utf8'));
-  assert.equal(c.ready,false);assert.equal(c.candidate,null);assert.equal(c.expectedBefore,null);assert.equal(c.expectedAfter,null);
+  assert.equal(c.protocolEnabled,false);assert.equal(c.capabilityEnabled,false);
+  if(c.ready===true)checkContract(c);
+  else {assert.equal(c.ready,false);assert.equal(c.candidate,null);assert.equal(c.expectedBefore,null);assert.equal(c.expectedAfter,null);}
   checkReference(scenario().reference,scenario().source);
 });

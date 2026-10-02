@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { structuralJsonSql, catalogueSelect } from './connect-staging-closed-sql.mjs';
 import { PROJECT, REPOSITORY, MIGRATION, CAPACITY, ADMISSION, digest, canonical, git } from './connect-staging-closed.mjs';
 import { renderStagingAdmission } from './connect-staging-admission-render.mjs';
+import { preflightSql } from './connect-test-fixture-sql.mjs';
 
 const VERSION = '20261001201055';
 const ROUTINES = [
@@ -127,6 +128,7 @@ export function rollbackSql(source, reference, before) {
     || /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im.test(source.capacity + '\n' + source.admission)) refuse('TRANSACTION_REQUIRED');
   const body = source.migration.replace(/^BEGIN;\s*$/m, '').replace(/^COMMIT;\s*$/m, '');
   return `BEGIN; SET LOCAL statement_timeout='90s'; SET LOCAL lock_timeout='3s'; SET LOCAL TIME ZONE 'UTC';
+    SELECT pg_catalog.set_config('jolene.fixture_preflight_search_path',pg_catalog.current_setting('search_path'),true);
     SELECT pg_advisory_xact_lock(184731,1017);
     LOCK TABLE supabase_migrations.schema_migrations IN SHARE ROW EXCLUSIVE MODE NOWAIT;
     SET LOCAL search_path=pg_catalog;
@@ -164,9 +166,16 @@ export function rollbackSql(source, reference, before) {
         OR s.quiescent IS DISTINCT FROM TRUE OR s.gate_closed IS DISTINCT FROM TRUE OR s.capacity_closed IS DISTINCT FROM TRUE
       THEN RAISE EXCEPTION 'CONNECT_CATALOGUE_DATA_OR_CLOSED_STATE_CHANGED'; END IF;
     END $after$;
+    -- Same operator connection defaults as the fixture's preflight, after the
+    -- candidate's local search_path changes. Only this exact SELECT is reused.
+    SELECT pg_catalog.set_config('search_path',pg_catalog.current_setting('jolene.fixture_preflight_search_path'),true);
+    CREATE TEMP TABLE connect_fixture_preflight ON COMMIT DROP AS ${preflightSql().replace(/;\s*$/, '')};
+    SET LOCAL search_path=pg_catalog;
     SELECT jsonb_build_object('schemaVersion',1,'before',jsonb_build_object('catalogue','${before.catalogue}','registry','${before.registry}'),
       'after',jsonb_build_object('catalogue',s.catalogue,'registry',s.registry),'deltaVerified',true,'businessRowsUnchanged',true,
-      'closedStateVerified',true) AS proof FROM (${catalogueSelect(true)}) s;
+      'closedStateVerified',true,'fixturePreflight',(SELECT receipt FROM pg_temp.connect_fixture_preflight),
+      'fixturePreflightContext',jsonb_build_object('searchPath',current_setting('jolene.fixture_preflight_search_path'),
+        'databaseUser',current_user,'sessionUser',session_user)) AS proof FROM (${catalogueSelect(true)}) s;
     ROLLBACK;`;
 }
 
@@ -203,12 +212,22 @@ export async function proveCatalogue({ env, source, reference, versions, fetcher
   if (!proof || proof.schemaVersion !== 1 || proof.deltaVerified !== true || proof.businessRowsUnchanged !== true
     || proof.closedStateVerified !== true || proof.before?.catalogue !== before.catalogue || proof.before?.registry !== before.registry
     || !hex(proof.after?.catalogue,32) || !hex(proof.after?.registry,32)) refuse('PROOF_REFUSED');
+  const fixture=proof.fixturePreflight,context=proof.fixturePreflightContext;
+  const hashes=['routines','triggers','columns','commissionHelper'],counts=['queuedRequests','activeCrons','runningCrons'];
+  const flags=['generationUrlAbsent','supportStagingExact','gateClosed','capacitiesEmpty','operationsEmpty'];
+  if (!fixture || Object.keys(fixture).sort().join()!==[...hashes,...counts,...flags].sort().join()
+    || !hashes.every(k=>hex(fixture[k],32)) || !counts.every(k=>fixture[k]===0) || !flags.every(k=>fixture[k]===true)
+    || !context || Object.keys(context).sort().join()!=='databaseUser,searchPath,sessionUser'
+    || context.databaseUser!=='postgres' || !['postgres','supabase_admin'].includes(context.sessionUser)
+    || typeof context.searchPath!=='string' || context.searchPath.length===0 || context.searchPath.length>256)
+    refuse('FIXTURE_PREFLIGHT_REFUSED');
   // Projection explicite : aucun champ supplémentaire du transport ne devient
   // un artefact public, même si les empreintes obligatoires sont présentes.
   return { schemaVersion:1, before:{catalogue:proof.before.catalogue,registry:proof.before.registry},
     after:{catalogue:proof.after.catalogue,registry:proof.after.registry},
     deltaVerified:true,businessRowsUnchanged:true,closedStateVerified:true,
     sources:publicManifest(source), referenceDeltaMd5:reference.deltaMd5,
+    fixturePreflight:fixture,fixturePreflightContext:context,fixturePreflightSqlSha256:digest(preflightSql()),
     rollbackVerified:true, protocolEnabled:false, capabilityEnabled:false, providerInvoked:false };
 }
 
