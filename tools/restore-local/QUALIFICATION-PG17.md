@@ -1,12 +1,12 @@
 # Qualification isolée du replay PostgreSQL 17 — branche temporaire uniquement
 
-Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `4107722ae6aeb55446aafda37f0df0a6661fcf06`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
+Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `2ce64a8afb57fcefc797fac9d0884aeba6cad1ea`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
 
 ## Source intégrale et refus fermés
 
-Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 4107…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
+Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 2ce64…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
 
-Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `da68be3468f5c7c4d6d896ad422659e21a03dfb79277b91a0d84537759db51ff`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
+Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `7373d4a3b2a919df0db33453592a689e308071c51f5e95bd528f000b88d0a6ff`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
 
 ## Infrastructure et arrêt des travaux automatiques
 
@@ -240,3 +240,9 @@ n'est proclamée avant cette nouvelle mesure.
 La nouvelle référence produit et le SHA du test figurent en tête. Les 218
 migrations restent inchangées. La branche de qualification n'est pas une PR
 produit à fusionner ; main, D et les comptes staging sont inchangés.
+
+## V14 — ordre unique du témoin effectif
+
+Le run [37061248572](https://github.com/Gabpcd/JJJJJ/actions/runs/37061248572) sur `4766e59c` valide les 218 migrations, le catalogue et les règles RLS, puis refuse l’insertion des créneaux synthétiques (SQLSTATE 23505, ligne 216). La baseline impose `UNIQUE(mission_id, ordre)` ; le trigger réel crée déjà un prévisionnel d’ordre 1. Le témoin effectif réutilisait cet ordre.
+
+La correction produit locale remplace seulement l’ordre 1 par 5 de ce témoin et ajoute un commentaire. Les deux prévisionnels insérés en ordre inversé, la pause, l’effectif et toutes les assertions demeurent. Aucune contrainte, fonction ou migration produit n’est modifiée. Le nouveau pin suit ce correctif ; la prochaine exécution devra encore prouver les scénarios et leur rollback. Le nettoyage du run précédent a confirmé zéro ressource résiduelle.
