@@ -73,6 +73,18 @@ it('still passes the returned secret to the provider when configured', async () 
   expect(mocks.redirect).not.toHaveBeenCalled();
 });
 
+it('uses a prepared secret with a configured key without creating or confirming another session', async () => {
+  mocks.stripe = Promise.resolve({ fixture: true });
+  render(<StripeEmbeddedCheckout {...props} preparedClientSecret="cs_test_fixture_prepared_secret" />);
+  expect(await screen.findByTestId('stripe-provider')).toBeInTheDocument();
+  expect(mocks.provider).toHaveBeenLastCalledWith(expect.objectContaining({
+    stripe: mocks.stripe, options: expect.objectContaining({ clientSecret: 'cs_test_fixture_prepared_secret' }),
+  }));
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  expect(mocks.redirect).not.toHaveBeenCalled();
+  expect(props.onComplete).not.toHaveBeenCalled();
+});
+
 it('keeps the server refusal visible with a configured key and never retries payment creation', async () => {
   mocks.stripe = Promise.resolve({ fixture: true });
   mocks.invoke.mockResolvedValue({ data: { error: 'TEST_ACCOUNT_PAYMENT_DISABLED' }, error: null });
