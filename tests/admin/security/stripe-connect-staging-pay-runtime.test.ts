@@ -21,7 +21,7 @@ function simulate(){
  const metadata={type:'CONNECT_MISSION_PAYMENT',payment_scope:'INVOICE',connect_operation_id:O,mission_id:M,etablissement_id:E,soignant_id:S,connected_account_id:capacity.destination_id,
   facture_honoraires_id:H,facture_commission_id:C,soignant_cents:'8000',commission_cents:'1440'};
  const session:Row={id:SESSION,metadata,customer:capacity.customer_id,client_reference_id:M,livemode:false,currency:'eur',amount_total:9440,status:'open',payment_status:'unpaid',payment_intent:null,
-  client_secret:'test_client_secret',created:Math.floor(Date.now()/1000),expires_at:Math.floor(Date.now()/1000)+3600};
+  client_secret:'test_client_secret',created:Math.floor(Date.now()/1000),expires_at:Math.floor(Date.parse(capacity.expires_at)/1000)};
  const provider:Row={sessions:[],platformId:config.platformAccountId,livemode:false,customer:{id:capacity.customer_id,livemode:false,metadata:{etablissement_id:E}},
   destination:{id:capacity.destination_id,metadata:{soignant_id:S},charges_enabled:true,payouts_enabled:true,details_submitted:true,capabilities:{transfers:'active'},requirements:{disabled_reason:null,currently_due:[]}}};
  const db:Record<string,Row[]>={missions:[{id:M,etablissement_id:E,soignant_assigne_id:S,statut:'EN_COURS',strategie_facturation:'HEBDO_ET_FINALE',type_contrat_applique:'LIBERAL',montant_commission_ttc:14.4,net_a_payer:80}],
@@ -67,7 +67,12 @@ function simulate(){
   customers={retrieve:async()=>{calls.push('stripe:customer');return structuredClone(provider.customer);},create:()=>forbid('customer:create'),update:()=>forbid('customer:update')};
   checkout={sessions:{list:async(params:Row)=>{calls.push('stripe:sessions:list');const rows=provider.sessions.filter((r:Row)=>!params.status||r.status===params.status);const start=params.starting_after?rows.findIndex((r:Row)=>r.id===params.starting_after)+1:0;return {data:structuredClone(rows.slice(start,start+100)),has_more:rows.length>start+100};},
    retrieve:async(sid:string)=>{calls.push('stripe:session:retrieve');expect(sid).toBe(SESSION);return structuredClone(session);},
-   create:async(body:Row,options:Row)=>{writes.push('stripe:checkout:create');expect(options.idempotencyKey).toBe(`connect_checkout_${H}`);expect(body.metadata).toEqual(metadata);expect(body.return_url).toContain(config.returnOrigin);provider.sessions.push(structuredClone(session));return structuredClone(session);},
+   create:async(body:Row,options:Row)=>{writes.push('stripe:checkout:create');
+    // Contrat Stripe : statement_descriptor est refusé pour un paiement carte.
+    // Le descripteur configuré sur le compte s'applique en l'absence de surcharge.
+    if(body.payment_method_types?.includes('card') && body.payment_intent_data?.statement_descriptor!==undefined)throw Error('StripeInvalidRequestError: statement_descriptor is not supported for card payments');
+    expect(body.expires_at).toBe(Math.floor(Date.parse(capacity.expires_at)/1000));
+    expect(options.idempotencyKey).toBe(`connect_checkout_${H}`);expect(body.metadata).toEqual(metadata);expect(body.return_url).toContain(config.returnOrigin);provider.sessions.push(structuredClone(session));return structuredClone(session);},
    expire:()=>forbid('session:expire')}};
   transfers={create:()=>forbid('transfer:create'),retrieve:()=>forbid('transfer:retrieve')};
   refunds={create:()=>forbid('refund:create')};paymentIntents={retrieve:()=>forbid('pi:retrieve')};
@@ -119,6 +124,12 @@ describe('Connect staging : handler configuré, transports simulés sans fournis
   const s=simulate(),d=s.provider.destination;if(key==='owner')d.metadata.soignant_id=id(99);if(key==='charges')d.charges_enabled=false;if(key==='payouts')d.payouts_enabled=false;if(key==='details')d.details_submitted=false;if(key==='capability')d.capabilities.transfers='inactive';if(key==='requirements')d.requirements.currently_due=['document'];if(key==='disabled')d.requirements.disabled_reason='rejected';if(key==='id')d.id='acct_Foreign';expect((await s.run()).status).toBe(500);expect(s.writes).toEqual([]);expect(s.unexpected).toEqual([]);
  });
  it('commission absente refusée sans préparation implicite de facture',async()=>{const s=simulate();s.db.factures=[];expect((await s.run()).status).toBe(500);expect(s.writes).toEqual([]);expect(s.unexpected).toEqual([]);});
+ it('capacité proche de sa fermeture refuse une nouvelle Session avant toute écriture',async()=>{
+  const s=simulate();s.capacity.expires_at=new Date(Date.now()+29*60_000).toISOString();expect((await s.run()).status).toBe(500);expect(s.writes).toEqual([]);expect(s.unexpected).toEqual([]);
+ });
+ it('Session ouverte au-delà de la fenêtre TEST ne restitue pas son secret de paiement',async()=>{
+  const s=simulate();s.known();s.session.expires_at+=3600;const response=await s.run();expect(response.status).toBe(500);expect((await response.json()).client_secret).toBeUndefined();expect(s.writes).toEqual([]);expect(s.unexpected).toEqual([]);
+ });
  it.each(['claim-response','reserve'])('timeout %s : reprise du claim propre sans adoption historique',async kind=>{
   const s=simulate();s.settings.claimResponseLost=kind==='claim-response';s.settings.reserveError=kind==='reserve';expect((await s.run()).status).toBe(500);
   expect(s.capacity.operation_id).toBeNull();expect(s.capacity.claim_reserved_at).toEqual(expect.any(String));expect(s.db.stripe_payment_flow_claims).toHaveLength(1);

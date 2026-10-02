@@ -1,4 +1,4 @@
-import { stagingConnectConfig, readStagingConnectCapacity, authorizeStagingCheckout, verifyStagingStripeIdentity, type StagingConnectCapacity } from "../_shared/stripe-connect-staging-test.ts";
+import { stagingConnectConfig, readStagingConnectCapacity, stagingCheckoutExpiresAt, authorizeStagingCheckout, verifyStagingStripeIdentity, type StagingConnectCapacity } from "../_shared/stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
         || testCapacity.soignantId !== mission.soignant_assigne_id || auth.userId !== testCapacity.etablissementId) {
         throw new Error("CONNECT_STAGING_TEST_REFUSED");
       }
+      if (!testCapacity.sessionId) stagingCheckoutExpiresAt(testCapacity);
     }
     if ((etablissementTest.isTest || soignantTest.isTest) && !testCapacity) {
       return new Response(JSON.stringify({
@@ -789,6 +790,9 @@ Deno.serve(async (req) => {
       const metadata = session.metadata || {};
       if (testCapacity && (session.livemode !== false || metadata.connect_operation_id !== testCheckoutOperationId)) {
         incoherences.push("session.staging_identity");
+      }
+      if (testCapacity && session.expires_at !== Math.floor(testCapacity.expiresAt / 1000)) {
+        incoherences.push("session.staging_expiration");
       }
       if (objectId(session.customer) !== customerId) incoherences.push("session.customer");
       if (session.currency !== "eur") incoherences.push("session.currency");
@@ -1449,6 +1453,7 @@ Deno.serve(async (req) => {
       await authorizeStagingCheckout(supabaseAdmin, stripe, testRuntime, connectOperationId);
     }
     const session = await stripe.checkout.sessions.create({
+      ...(testCapacity ? { expires_at: stagingCheckoutExpiresAt(testCapacity) } : {}),
       customer: customerId,
       client_reference_id: mission_id,
       ui_mode: "embedded",
@@ -1476,7 +1481,6 @@ Deno.serve(async (req) => {
         transfer_group: invoiceScopedPayment
           ? `facture_${factureHonoraires.id}`
           : `mission_${mission_id}`,
-        statement_descriptor: "JOLENE",
         metadata: {
           type: "CONNECT_MISSION_PAYMENT",
           connect_operation_id: connectOperationId,
