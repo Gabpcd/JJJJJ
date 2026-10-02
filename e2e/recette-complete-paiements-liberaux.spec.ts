@@ -124,7 +124,8 @@ async function fixture(page: Page, connect = false, commission = false, commissi
       if (commission && name === 'fn_obligations_financieres') return json({ total_du: commissionScenario === 'liee-payee' ? 0 : 14.4,
         total_soignants_du: 0, total_commissions_du: commissionScenario === 'liee-payee' ? 0 : 14.4, missions_non_payees: [],
         factures_impayees: commissionScenario === 'liee-payee' ? [] : [factureCommission], paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
-        factures_commission_historique: commissionScenario === 'liee-payee' ? [factureCommission] : [], missions_non_facturees: [] });
+        factures_commission_historique: commissionScenario === 'liee-payee' ? [factureCommission] : [],
+        nb_factures_commission_historique: commissionScenario === 'liee-payee' ? 1 : 0, missions_non_facturees: [] });
       if (name === 'fn_mode_paiement_mission') return json(controle.modeInvalide ? {} : { type_contrat_applique: controle.salarie ? 'SALARIE' : 'LIBERAL', mode_recommande: controle.salarie ? 'VIREMENT_PAIE' : connect ? 'STRIPE_CONNECT' : 'VIREMENT_NOTE_HONORAIRES', montant_soignant: 160, commission_ttc: 24, total: 184 });
       if (name === 'fn_obligations_financieres') return json({ total_du: 230, total_soignants_du: 230, total_commissions_du: 0, nb_missions_non_payees: 2,
         missions_non_payees: [obligation(remplacement,60),obligation(seconde,80),obligation(autreFacture,90,autreMission)],
@@ -357,9 +358,33 @@ test('Détail commission liée payée : historique annoncé sans faux filtre ni 
   }
   await page.screenshot({ path: info.outputPath('commission-liee-payee-historique.png'), scale: 'css', animations: 'disabled' });
   await action(page, historique);
-  await expect(page).toHaveURL(/\/etablissement\/facturation\?tab=historique$/);
-  await page.reload();
-  await expect(page).toHaveURL(/\/etablissement\/facturation\?tab=historique$/);
+  for (const reload of [false, true]) {
+    if (reload) { await stabiliserActionsNationales(page); await page.reload(); }
+    await expect(page).toHaveURL(/\/etablissement\/facturation\?tab=historique$/);
+    await expect(page.getByRole('heading', { name: 'Facturation', exact: true })).toBeVisible();
+    // L'URL ouvre l'historique général des règlements, sans filtrer une pièce.
+    await expect(page.getByRole('button', { name: 'Historique paiements (0 confirmé)', exact: true })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText("Aucun paiement confirmé pour l'instant.", { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Retirer le filtre (facture|mission)/ })).toHaveCount(0);
+    // La commission réglée reste consultable dans sa rubrique documentaire.
+    const commissions = page.getByRole('button', { name: 'Commissions Jolene (0)', exact: true });
+    if (await commissions.getAttribute('aria-expanded') === 'false') await action(page, commissions);
+    await expect(commissions).toHaveAttribute('aria-expanded', 'true');
+    const historiqueCommissions = page.getByRole('button', { name: 'Historique factures commission (1 payée)', exact: true });
+    if (await historiqueCommissions.getAttribute('aria-expanded') === 'false') await action(page, historiqueCommissions);
+    await expect(historiqueCommissions).toHaveAttribute('aria-expanded', 'true');
+    const piece = page.getByRole('link', { name: 'COMMISSION-SIMULATION', exact: true });
+    await expect(piece).toBeVisible();
+    await expect(piece).toHaveAttribute('href', `/etablissement/facturation/${commissionId}`);
+    // Le lien appartient à la ligne desktop ou à la carte mobile de cette pièce.
+    await expect(piece.locator('..').locator('..')).toContainText('Payée');
+    await expect(page.getByText('Aucune facture de commission à régler ou en cours.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Payer|Payer par carte|Payer via Stripe|Virement|Déclarer un paiement|Consulter les modalités de règlement)$/ })).toHaveCount(0);
+    await expect(page.getByText(/Prélèvement SEPA automatique programmé/)).toHaveCount(0);
+    expect(f.mutations).toHaveLength(0);
+    await stabiliserActionsNationales(page);
+    await page.screenshot({ path: info.outputPath(`commission-payee-historique-${reload ? 'apres' : 'avant'}-rechargement.png`), scale: 'css', animations: 'disabled' });
+  }
   expect(f.mutations).toHaveLength(0); f.verifier();
 });
 
