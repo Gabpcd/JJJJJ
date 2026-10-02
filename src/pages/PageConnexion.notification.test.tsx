@@ -12,7 +12,7 @@ const M='11111111-1111-4111-8111-111111111111';
 const mocks=vi.hoisted(()=>({role:'ADMIN_GROUPE',connected:false,allowed:true,signed:true,native:false,connexion:vi.fn(),rpc:vi.fn(),getSession:vi.fn(),afficherNotification:vi.fn()}));
 vi.mock('@/hooks/usePageTitle',()=>({usePageTitle:()=>undefined}));
 vi.mock('@/contexts/AuthContext',()=>({useAuth:()=>({connexion:mocks.connexion,loading:false,user:mocks.connected?{id:'user-B'}:null,session:mocks.connected?{user:{id:'user-B',email_confirmed_at:'confirmed'}}:null})}));
-vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role,loading:false,error:null,parcours:null})}));
+vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role,loading:false,resolved:true,error:null,retry:vi.fn(),parcours:null})}));
 vi.mock('@/contexts/NotificationContext',()=>({useNotification:()=>({afficherNotification:mocks.afficherNotification})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mocks.rpc,from:()=>{throw new Error('Lecture RLS non attendue pour groupe/soignant');},auth:{getSession:mocks.getSession,refreshSession:async()=>{mocks.connected=true;return {error:null};},signOut:vi.fn()}}}));
 vi.mock('@/lib/platform',()=>({isNative:()=>mocks.native}));

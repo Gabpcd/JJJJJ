@@ -36,11 +36,12 @@ async function verifierActionsPaiement(piece: Locator, nom: string) {
     return separes && centresAlignes && icone.x + icone.width <= texte.x;
   }, { message: 'Icône alignée avec le texte et actions de paiement sans recouvrement au survol' }).toBe(true);
 }
-async function fixture(page: Page, connect = false, commission = false) {
+async function fixture(page: Page, connect = false, commission = false, commissionScenario: 'mensuelle' | 'complementaire-salariee' | 'liee-payee' = 'mensuelle') {
   const simulation = creerSuiviSimule(), { state } = simulation;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
     soignant_assigne_id: ids.soignant, taux_horaire_base: 20, total_brut: 160, net_a_payer: 160,
     intitule: 'Mission libérale documentaire', debut_le: '2026-09-14T08:00:00Z', fin_le: '2026-09-21T12:00:00Z' });
+  if (commissionScenario === 'complementaire-salariee') state.mission.type_contrat_applique = 'SALARIE';
   state.creneaux.splice(0,state.creneaux.length,
     {...state.creneaux[0],debut:'2026-09-14T08:00:00Z',fin:'2026-09-14T12:00:00Z'},
     {...state.creneaux[0],id:'71000000-0000-4000-8000-000000000014',debut:'2026-09-21T08:00:00Z',fin:'2026-09-21T12:00:00Z'});
@@ -54,11 +55,12 @@ async function fixture(page: Page, connect = false, commission = false) {
   const docs = [
     { id: originale, numero_facture: 'FACTURE-ORIGINALE-80', statut: 'REMPLACEE', montant_ttc: 80, nature_correction: 'ORIGINALE' },
     { id: remplacement, numero_facture: 'FACTURE-RECTIFICATIVE-60', statut: 'EMISE', montant_ttc: 60, nature_correction: 'REMPLACEMENT', facture_precedente_id: originale },
-    { id: seconde, numero_facture: 'FACTURE-SECONDE-80', statut: 'EMISE', montant_ttc: 80, nature_correction: 'ORIGINALE' },
+    { id: seconde, numero_facture: 'FACTURE-SECONDE-80', statut: commissionScenario === 'liee-payee' ? 'PAYEE' : 'EMISE', montant_ttc: 80, nature_correction: 'ORIGINALE' },
     { id: autreFacture, numero_facture: 'FACTURE-AUTRE-MISSION', statut: 'EMISE', montant_ttc: 90, nature_correction: 'ORIGINALE' },
   ].map(f => ({ ...f, type_document: 'FACTURE', soignant_id: ids.soignant, etablissement_id: ids.etablissement,
     mission_id: f.id === autreFacture ? autreMission : ids.mission, date_emission: '2026-09-30',
-    montant_ht: f.montant_ttc, montant_tva: 0, taux_tva: 0, periode_debut: f.id === seconde ? '2026-09-21' : '2026-09-14', periode_fin: f.id === seconde ? '2026-09-27' : '2026-09-20', est_facture_finale_mission: false }));
+    montant_ht: f.montant_ttc, montant_tva: 0, taux_tva: 0, periode_debut: f.id === seconde ? '2026-09-21' : '2026-09-14', periode_fin: f.id === seconde ? '2026-09-27' : '2026-09-20', est_facture_finale_mission: false,
+    quantite_heures_snapshot: f.id === remplacement ? 3 : f.id === autreFacture ? 4.5 : 4, taux_horaire_snapshot: 20 }));
   const obligation = (id: string, net: number, missionId = ids.mission) => ({ mission_id: missionId,
     intitule: missionId === ids.mission ? state.mission.intitule : 'Autre mission documentaire',
     payment_key: id, facture_honoraires_id: controle.sansPiece ? null : id, type_contrat_applique: 'LIBERAL',
@@ -66,7 +68,11 @@ async function fixture(page: Page, connect = false, commission = false) {
     soignant_stripe_connect: connect, net_a_payer: net, montant_commission_ttc: 0, heures: 4,
     periode_debut: id === seconde ? '2026-09-21' : '2026-09-14', periode_fin: id === seconde ? '2026-09-27' : '2026-09-20', debut_le: state.mission.debut_le, fin_le: state.mission.fin_le, jours_depuis_fin: 1 });
   const factureCommission = { id: commissionId, facture_id: commissionId, numero_facture: 'COMMISSION-SIMULATION',
-    etablissement_id: ids.etablissement, statut: 'EMISE', type_document: 'FACTURE', est_secteur_public: false,
+    etablissement_id: ids.etablissement, statut: commissionScenario === 'liee-payee' ? 'PAYEE' : 'EMISE',
+    type_document: commissionScenario === 'complementaire-salariee' ? 'FACTURE_COMPLEMENTAIRE' : 'FACTURE', est_secteur_public: false,
+    mission_id: commissionScenario === 'mensuelle' ? null : ids.mission,
+    facture_honoraire_id: commissionScenario === 'liee-payee' ? seconde : null,
+    mode_paiement: commissionScenario === 'complementaire-salariee' ? 'VIREMENT' : 'STRIPE',
     montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 0,
     date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30' };
   await page.route('**/*', async route => {
@@ -115,10 +121,10 @@ async function fixture(page: Page, connect = false, commission = false) {
         expect(body).toEqual({ p_facture_id: commissionId });
         return json({ facture: factureCommission, missions: [] });
       }
-      if (commission && name === 'fn_obligations_financieres') return json({ total_du: 14.4,
-        total_soignants_du: 0, total_commissions_du: 14.4, missions_non_payees: [],
-        factures_impayees: [factureCommission], paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
-        factures_commission_historique: [], missions_non_facturees: [] });
+      if (commission && name === 'fn_obligations_financieres') return json({ total_du: commissionScenario === 'liee-payee' ? 0 : 14.4,
+        total_soignants_du: 0, total_commissions_du: commissionScenario === 'liee-payee' ? 0 : 14.4, missions_non_payees: [],
+        factures_impayees: commissionScenario === 'liee-payee' ? [] : [factureCommission], paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
+        factures_commission_historique: commissionScenario === 'liee-payee' ? [factureCommission] : [], missions_non_facturees: [] });
       if (name === 'fn_mode_paiement_mission') return json(controle.modeInvalide ? {} : { type_contrat_applique: controle.salarie ? 'SALARIE' : 'LIBERAL', mode_recommande: controle.salarie ? 'VIREMENT_PAIE' : connect ? 'STRIPE_CONNECT' : 'VIREMENT_NOTE_HONORAIRES', montant_soignant: 160, commission_ttc: 24, total: 184 });
       if (name === 'fn_obligations_financieres') return json({ total_du: 230, total_soignants_du: 230, total_commissions_du: 0, nb_missions_non_payees: 2,
         missions_non_payees: [obligation(remplacement,60),obligation(seconde,80),obligation(autreFacture,90,autreMission)],
@@ -126,15 +132,29 @@ async function fixture(page: Page, connect = false, commission = false) {
     }
     if (url.pathname.startsWith('/rest/') && !url.pathname.includes('/rpc/')) {
       if (!['GET','HEAD'].includes(req.method())) { interdits.push(`${req.method()} ${name}`); return route.abort(); }
+      if (commission && name === 'factures') {
+        expect([`eq.${commissionId}`, `in.(${commissionId})`]).toContain(url.searchParams.get('id'));
+        expect(url.searchParams.get('etablissement_id')).toBe(`eq.${ids.etablissement}`);
+        return json(req.headers().accept?.includes('vnd.pgrst.object') ? factureCommission : [factureCommission]);
+      }
+      if (commission && name === 'missions' && url.searchParams.get('select') === 'id,type_contrat_applique') {
+        expect(url.searchParams.get('id')).toBe(`eq.${ids.mission}`);
+        expect(url.searchParams.get('etablissement_id')).toBe(`eq.${ids.etablissement}`);
+        return json({ id: ids.mission, type_contrat_applique: state.mission.type_contrat_applique });
+      }
       if (name === 'stripe_transfers' && url.searchParams.get('select') === 'statut' && controle.retour) {
         interdits.push('Retour déduit de la dernière trace sans Session exacte'); return route.abort();
       }
       if (name === 'factures_honoraires') {
         let rows = docs;
-        for (const key of ['mission_id','statut']) {
+        for (const key of ['id', 'etablissement_id', 'mission_id','statut'] as const) {
           const filter = url.searchParams.get(key);
-          if (filter?.startsWith('eq.')) rows = rows.filter(f => String(f[key as 'mission_id'|'statut']) === filter.slice(3));
-          if (filter?.startsWith('in.(')) rows = rows.filter(f => filter.slice(4,-1).split(',').includes(String(f[key as 'mission_id'|'statut'])));
+          if (filter?.startsWith('eq.')) rows = rows.filter(f => String(f[key]) === filter.slice(3));
+          if (filter?.startsWith('in.(')) rows = rows.filter(f => filter.slice(4,-1).split(',').includes(String(f[key])));
+        }
+        if (req.headers().accept?.includes('vnd.pgrst.object')) {
+          expect(rows).toHaveLength(1);
+          return json(rows[0]);
         }
         return json(rows);
       }
@@ -283,7 +303,11 @@ for (const detail of [false, true]) test(`Stripe sans clé — commission depuis
   const f = await fixture(page, false, true);
   const path = detail ? `/etablissement/facturation/${commissionId}` : '/etablissement/facturation?tab=commissions';
   await page.goto(path);
-  const payer = () => page.getByRole('button', { name: detail ? 'Payer' : 'Payer par carte', exact: true });
+  if (!detail) {
+    await action(page, page.getByRole('button', { name: 'Consulter les modalités de règlement', exact: true }));
+    await expect(page).toHaveURL(new RegExp(`/etablissement/facturation/${commissionId}$`));
+  }
+  const payer = () => page.getByRole('button', { name: 'Payer', exact: true });
   await action(page, payer());
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(indisponible, { exact: true })).toBeVisible();
@@ -299,6 +323,44 @@ for (const detail of [false, true]) test(`Stripe sans clé — commission depuis
   await expect(page).toHaveURL(hostedUrl);
   await expect(page.getByRole('heading', { name: 'Paiement hébergé simulé' })).toBeVisible();
   expect(f.mutations).toHaveLength(2); f.verifier();
+});
+
+test('Détail commission complémentaire salariée : virement disponible, carte absente après rechargement', async ({ page }, info) => {
+  const f = await fixture(page, false, true, 'complementaire-salariee');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  for (const reload of [false, true]) {
+    if (reload) { await stabiliserActionsNationales(page); await page.reload(); }
+    await expect(page.getByText('COMMISSION-SIMULATION', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Payer', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Payer par carte', exact: true })).toHaveCount(0);
+    await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+    await expect(page.getByLabel('Référence de votre virement')).toBeVisible();
+    await expect(page.getByRole('button', { name: /J'ai effectué le virement/ })).toBeDisabled();
+    await action(page, page.getByRole('button', { name: 'Annuler', exact: true }));
+    expect(f.mutations).toHaveLength(0);
+  }
+  await page.screenshot({ path: info.outputPath('commission-complementaire-virement.png'), scale: 'css', animations: 'disabled' });
+  f.verifier();
+});
+
+test('Détail commission liée payée : historique annoncé sans faux filtre ni nouveau paiement', async ({ page }, info) => {
+  const f = await fixture(page, false, true, 'liee-payee');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  const historique = page.getByRole('button', { name: 'Consulter l’historique des paiements', exact: true });
+  for (const reload of [false, true]) {
+    if (reload) { await stabiliserActionsNationales(page); await page.reload(); }
+    await expect(historique).toBeVisible();
+    await expect(page.getByText('4 h facturées', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Prélèvement SEPA automatique programmé/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Payer|Payer par carte|Virement|Consulter le règlement des honoraires)$/ })).toHaveCount(0);
+    expect(f.mutations).toHaveLength(0);
+  }
+  await page.screenshot({ path: info.outputPath('commission-liee-payee-historique.png'), scale: 'css', animations: 'disabled' });
+  await action(page, historique);
+  await expect(page).toHaveURL(/\/etablissement\/facturation\?tab=historique$/);
+  await page.reload();
+  await expect(page).toHaveURL(/\/etablissement\/facturation\?tab=historique$/);
+  expect(f.mutations).toHaveLength(0); f.verifier();
 });
 
 for (const refus of [

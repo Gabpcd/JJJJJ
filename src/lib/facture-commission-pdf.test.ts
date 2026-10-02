@@ -151,3 +151,82 @@ describe('PDF commission : planning réellement chargé', () => {
     expect(mocks.error).toHaveBeenCalledWith('Le planning prévisionnel est incomplet. Vérifiez la mission avant de télécharger la facture.');
   });
 });
+
+
+describe('PDF commission : dates civiles de facturation', () => {
+  it('affiche une période comptable sans heures ni parenthèses vides', async () => {
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    const textes = mocks.text.mock.calls.map(([texte]) => texte);
+    expect(textes).toContain('21/09/2026 -> 27/09/2026');
+    expect(textes.some(texte => typeof texte === 'string' && texte.includes('()'))).toBe(false);
+    expect(textes.some(texte => typeof texte === 'string' && /21\/09\/2026 \d{2}h/.test(texte))).toBe(false);
+  });
+  it('conserve les horaires et la durée de mission lorsqu’aucune période de facture ne les remplace', async () => {
+    delete rows.factures[0].periode_debut; delete rows.factures[0].periode_fin;
+    await telechargerFactureCommissionPDF(factureId);
+    const textes = mocks.text.mock.calls.map(([texte]) => texte);
+    expect(textes.some(texte => typeof texte === 'string' && /^21\/09\/2026 \d{2}h00 -> 22\/09\/2026 \d{2}h00 \(3\.5 h\)$/.test(texte))).toBe(true);
+  });
+  it('n’ajoute aucune parenthèse vide lorsque la durée de mission est absente', async () => {
+    delete rows.factures[0].periode_debut; delete rows.factures[0].periode_fin; delete rows.missions[0].duree_heures;
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.text.mock.calls.some(([texte]) => typeof texte === 'string' && texte.includes('()'))).toBe(false);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('PDF commission : créneaux effectifs canoniques', () => {
+  function effectif(id:string,debut:string,fin:string|null,pause=false) {
+    return {...segment(id,debut,fin,pause),type_creneau:'EFFECTIF'};
+  }
+  function tableEffective() {
+    return mocks.table.mock.calls.map(([,options])=>options).find(table=>table.head?.[0]?.includes('Durée effective'));
+  }
+  it('rend 4 h effectives sans présence historique au lieu du planning prévu', async () => {
+    rows.mission_creneaux.push(effectif('effectif','2026-09-21T09:00:00Z','2026-09-21T13:00:00Z'));
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(tableEffective()?.body).toEqual([['21/09','11h00','15h00','4.00 h']]);
+    expect(plannedTable()).toBeUndefined();
+    expect(mocks.text.mock.calls.some(([texte])=>texte==='Créneaux effectifs enregistrés')).toBe(true);
+    expect(mocks.text.mock.calls.some(([texte])=>typeof texte==='string' && texte.includes('Aucun pointage'))).toBe(false);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('ne valide pas un prévisionnel inutilisé quand un effectif complet est disponible', async () => {
+    rows.mission_creneaux=[
+      segment('ancien-planning','2026-09-21T09:00:00Z',null),
+      effectif('effectif','2026-09-21T09:00:00Z','2026-09-21T13:00:00Z'),
+    ];
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(tableEffective()?.body[0][3]).toBe('4.00 h');
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('privilégie les créneaux canoniques sur une présence historique agrégée', async () => {
+    rows.presences=[{mission_id:missionId,pointage_arrivee_le:'2026-09-21T08:00:00Z',pointage_depart_le:'2026-09-27T12:00:00Z',heures_reelles:148}];
+    rows.mission_creneaux.push(effectif('effectif','2026-09-21T09:00:00Z','2026-09-21T13:00:00Z'));
+    await telechargerFactureCommissionPDF(factureId);
+    expect(tableEffective()?.body[0][3]).toBe('4.00 h');
+    expect(mocks.table.mock.calls.some(([,options])=>options.head?.[0]?.includes('Heures eff.'))).toBe(false);
+  });
+  it('charge toutes les pages, exclut les pauses et tronque aux dates civiles françaises', async () => {
+    rows.mission_creneaux=[
+      effectif('chevauche-debut','2026-09-20T23:00:00+02:00','2026-09-21T02:00:00+02:00'),
+      effectif('pause','2026-09-21T01:00:00+02:00','2026-09-21T01:30:00+02:00',true),
+      effectif('chevauche-fin','2026-09-27T23:00:00+02:00','2026-09-28T02:00:00+02:00'),
+      effectif('apres','2026-09-28T09:00:00+02:00','2026-09-28T12:00:00+02:00'),
+      effectif('avant','2026-09-20T09:00:00+02:00','2026-09-20T12:00:00+02:00'),
+    ];
+    await telechargerFactureCommissionPDF(factureId);
+    expect(tableEffective()?.body).toEqual([['21/09','00h00','02h00','2.00 h'],['27/09','23h00','00h00','1.00 h']]);
+    expect(selections.filter(s=>s.table==='mission_creneaux').map(s=>s.offset)).toEqual([0,2]);
+  });
+  it.each([null,'invalide','2026-09-21T08:00:00Z'])('refuse un effectif incomplet (%s) sans lui substituer le planning', async fin => {
+    rows.mission_creneaux.push(effectif('incomplet','2026-09-21T09:00:00Z',fin));
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).toHaveBeenCalledWith('Le planning effectif est incomplet. Vérifiez la mission avant de télécharger la facture.');
+    expect(mocks.download).not.toHaveBeenCalled();
+  });
+});

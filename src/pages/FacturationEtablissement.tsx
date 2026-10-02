@@ -17,7 +17,6 @@ import { getChorusStatutBadge } from '@/lib/chorus-helpers';
 import { EmptyState, IllustrationCalculatrice } from '@/components/ui/EmptyState';
 import { BadgePalier } from '@/components/BadgePalier';
 import { PaiementVirement } from '@/components/PaiementVirement';
-import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -73,6 +72,16 @@ const formatDateMetier = (value: unknown): string | null => {
   const date = jourIso ? new Date(`${jourIso}T12:00:00`) : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return format(date, 'd MMMM yyyy', { locale: fr });
+};
+
+// L'intervalle calendaire de la mission ne représente ni les heures pointées
+// ni les heures de cette facture hebdomadaire : utiliser son snapshot figé.
+const formaterHeuresFacturees = (valeur: unknown): string | null => {
+  if (typeof valeur !== 'number' && typeof valeur !== 'string') return null;
+  if (typeof valeur === 'string' && valeur.trim() === '') return null;
+  const heures = Number(valeur);
+  if (!Number.isFinite(heures) || heures <= 0) return null;
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(heures);
 };
 
 type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
@@ -241,8 +250,6 @@ function FacturationEtablissementContent() {
     setConnectConfirming(false);
     return () => { confirmationConnectRef.current?.abort(); confirmationConnectRef.current = null; };
   }, [etablissementId, user?.id]);
-  const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
-  const [showCheckout, setShowCheckout] = useState(false);
   const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
   const [declarerMontant, setDeclarerMontant] = useState<string>('');
   const [declarerMontantDu, setDeclarerMontantDu] = useState<string>('');
@@ -355,7 +362,7 @@ function FacturationEtablissementContent() {
           .order('capture_le', { ascending: false })
           .limit(20)),
         lire(() => supabase.from('factures_honoraires')
-          .select('id, numero_facture, nature_correction, type_document, facture_precedente_id')
+          .select('id, numero_facture, nature_correction, type_document, facture_precedente_id, quantite_heures_snapshot')
           .eq('etablissement_id', etablissementId)
           .eq('type_document', 'FACTURE')
           .in('statut', ['EMISE', 'EN_RETARD', 'VIREMENT_DECLARE'])),
@@ -869,10 +876,12 @@ function FacturationEtablissementContent() {
 
   // Derived data
   const missionFiltre = searchParams.get('mission');
+  const factureHonoraireFiltre = searchParams.get('facture_honoraire');
   const missionsNonPayeesToutes = data?.missions_non_payees || [];
-  const missionsNonPayees = missionFiltre
-    ? missionsNonPayeesToutes.filter((mission: any) => mission.mission_id === missionFiltre)
-    : missionsNonPayeesToutes;
+  const missionsNonPayees = missionsNonPayeesToutes.filter((mission: any) => (
+    (!missionFiltre || mission.mission_id === missionFiltre)
+    && (!factureHonoraireFiltre || mission.facture_honoraires_id === factureHonoraireFiltre)
+  ));
   const paiementsEnAttente = data?.paiements_soignants_en_attente || [];
   const paiementsConfirmes = data?.paiements_soignants_confirmes || [];
   // Le RPC conserve sa clé historique `factures_impayees`, mais la liste
@@ -1012,13 +1021,13 @@ function FacturationEtablissementContent() {
 
       {/* ── SECTION 2 : Missions à payer aux soignants ── */}
       <div id={SECTIONS.payer} className="mb-4">
-        {missionFiltre && (
+        {(missionFiltre || factureHonoraireFiltre) && (
           <div className="mb-3 rounded-xl border border-primary/20 p-3 space-y-2" role="status">
-            <p className="text-sm font-medium">Échéances de la mission sélectionnée</p>
+            <p className="text-sm font-medium">{factureHonoraireFiltre ? 'Échéance de la facture sélectionnée' : 'Échéances de la mission sélectionnée'}</p>
             <p className="text-xs text-muted-foreground">Le filtre concerne cette liste. L’historique et les autres rubriques restent ceux de l’établissement.</p>
             <Button type="button" variant="outline" size="sm" onClick={() => {
-              const suite = new URLSearchParams(searchParams); suite.delete('mission'); setSearchParams(suite);
-            }}>Retirer le filtre mission</Button>
+              const suite = new URLSearchParams(searchParams); suite.delete('mission'); suite.delete('facture_honoraire'); setSearchParams(suite);
+            }}>{factureHonoraireFiltre ? 'Retirer le filtre facture' : 'Retirer le filtre mission'}</Button>
           </div>
         )}
         <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
@@ -1041,7 +1050,7 @@ function FacturationEtablissementContent() {
               {missionsNonPayees.length === 0 ? (
                 <CardY2K noPadding>
                   <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
-                    {missionFiltre ? 'Aucune échéance payable pour cette mission dans cette liste. Consultez également l’historique des paiements.' : 'Aucune échéance en attente de paiement soignant.'}
+                    {factureHonoraireFiltre ? 'Aucune échéance payable pour cette facture dans cette liste. Consultez son détail ou l’historique des paiements.' : missionFiltre ? 'Aucune échéance payable pour cette mission dans cette liste. Consultez également l’historique des paiements.' : 'Aucune échéance en attente de paiement soignant.'}
                   </CardY2KContent>
                 </CardY2K>
               ) : (
@@ -1060,6 +1069,7 @@ function FacturationEtablissementContent() {
                   const factureHonoraires = m.facture_honoraires_id
                     ? facturesHonorairesParId.get(m.facture_honoraires_id)
                     : null;
+                  const heuresFacturees = formaterHeuresFacturees(factureHonoraires?.quantite_heures_snapshot);
                   const enLitige = m.facture_honoraires_id
                     ? facturesBloqueesParLitige.has(m.facture_honoraires_id)
                       || missionsBloqueesParLitige.has(m.mission_id)
@@ -1089,7 +1099,10 @@ function FacturationEtablissementContent() {
                             {aRapprocher ? <BadgeY2K variant="warning">À rapprocher</BadgeY2K> : <RetardBadge jours={m.jours_depuis_fin} />}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
+                            {m.soignant_profession}
+                            {isLiberal && (heuresFacturees
+                              ? ` · ${heuresFacturees} h facturées`
+                              : ' · Heures facturées indisponibles')}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {(m.periode_debut || m.debut_le) && new Date(m.periode_debut || m.debut_le).toLocaleDateString('fr-FR')} → {(m.periode_fin || m.fin_le) && new Date(m.periode_fin || m.fin_le).toLocaleDateString('fr-FR')}
@@ -1411,42 +1424,16 @@ function FacturationEtablissementContent() {
                             Secteur public — paiement via Chorus Pro (30 à 60 jours après acceptation)
                           </p>
                         )}
-                        {!f.est_secteur_public && (
+                        {/* Le résumé RPC ne contient pas la liaison aux honoraires.
+                            Le détail vérifie la pièce avant de proposer un règlement. */}
                         <div className="flex gap-2 flex-wrap">
-                          {canManagePayments && !virementDeclare && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
-                            <BoutonY2K
-                              size="sm"
-                              onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
-                            >
-                              <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
-                            </BoutonY2K>
-                          )}
-                          {!virementDeclare && etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
-                            <p className="w-full text-xs text-muted-foreground">
-                              Prélèvement SEPA automatique programmé — aucun paiement par carte requis.
-                            </p>
-                          )}
-                          {canManagePayments && !virementDeclare && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
-                            <BoutonY2K
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
-                            >
-                              <Banknote className="w-4 h-4 mr-1" /> Virement
-                            </BoutonY2K>
-                          )}
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}>
+                            <Eye className="w-4 h-4 mr-1" /> Consulter les modalités de règlement
+                          </BoutonY2K>
                           <BoutonY2K size="sm" variant="secondary" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
                             <Download className="w-4 h-4 mr-1" /> PDF
                           </BoutonY2K>
                         </div>
-                        )}
-                        {f.est_secteur_public && (
-                        <div className="flex gap-2 flex-wrap">
-                          <BoutonY2K size="sm" variant="secondary" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
-                            <Download className="w-4 h-4 mr-1" /> PDF
-                          </BoutonY2K>
-                        </div>
-                        )}
                       </div>
                       );
                     })}
@@ -2078,15 +2065,6 @@ function FacturationEtablissementContent() {
       </div>
 
       {/* ── DIALOGS GLOBAUX ── */}
-
-      {/* Dialog Stripe Checkout (paiement facture commission) */}
-      {canManagePayments && showCheckout && checkoutFactureId && (
-        <StripeEmbeddedCheckout
-          factureId={checkoutFactureId}
-          open={showCheckout}
-          onClose={() => { setShowCheckout(false); setCheckoutFactureId(null); charger(); }}
-        />
-      )}
 
       {/* Dialog Stripe Connect (paiement mission soignant) */}
       {canManagePayments && showConnectCheckout && connectClientSecret && (

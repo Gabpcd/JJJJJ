@@ -6,10 +6,10 @@ import MissionDepuisNotification from './MissionDepuisNotification';
 // Le trigger de famille interdit normalement SOIGNANT + adhésion active ; le
 // banc PostgreSQL prépare le refus réel, sans fabriquer cette association.
 const M='11111111-1111-4111-8111-111111111111';
-const mocks=vi.hoisted(()=>({ role: 'ADMIN_ETABLISSEMENT', uid: 'user-A', rpc: vi.fn(), from: vi.fn(), props: null as any, navigate: null as any }));
+const mocks=vi.hoisted(()=>({ role: 'ADMIN_ETABLISSEMENT', roleLoading: false, roleResolved: true, roleError: null as Error | null, retryRole: vi.fn(), uid: 'user-A', rpc: vi.fn(), from: vi.fn(), props: null as any, navigate: null as any }));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mocks.rpc,from:mocks.from}}));
 vi.mock('@/contexts/AuthContext',()=>({useAuth:()=>({user:{id:mocks.uid}})}));
-vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role})}));
+vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role,loading:mocks.roleLoading,resolved:mocks.roleResolved,error:mocks.roleError,retry:mocks.retryRole})}));
 vi.mock('@/components/ChargementPage',()=>({ChargementPage:()=> <p>Chargement</p>}));
 vi.mock('@/pages/DetailMission',()=>({default:()=> <h1>Détail habituel</h1>}));
 vi.mock('@/components/ListeCandidatures',()=>({ListeCandidatures:(props:any)=>{
@@ -20,13 +20,57 @@ const lecture=(overrides={})=>({mission:{id:M,intitule:'Mission B',etablissement
 function NavigationHarness(){mocks.navigate=useNavigate();return <Routes><Route path='/etablissement/missions/:id' element={<MissionDepuisNotification/>}/></Routes>;}
 function affichage(path=`/etablissement/missions/${M}`){return render(<MemoryRouter initialEntries={[path]}><NavigationHarness/></MemoryRouter>);}
 beforeEach(()=>{
-  mocks.role='ADMIN_ETABLISSEMENT';mocks.uid='user-A';mocks.rpc.mockReset();mocks.from.mockReset();mocks.props=null;
+  mocks.role='ADMIN_ETABLISSEMENT';mocks.roleLoading=false;mocks.roleResolved=true;mocks.roleError=null;mocks.retryRole.mockReset();mocks.uid='user-A';mocks.rpc.mockReset();mocks.from.mockReset();mocks.props=null;
   mocks.rpc.mockResolvedValue({data:lecture(),error:null});
   mocks.from.mockImplementation(table=>{expect(table).toBe('missions');const b:any={select:vi.fn(()=>b),eq:vi.fn(()=>b),maybeSingle:vi.fn().mockResolvedValue({data:null,error:null})};return b;});
   vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Réseau interdit dans cette recette mémoire');}));
 });
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 describe('Route de notification — DOM mémoire, transports simulés',()=>{
+  it('attend le rôle local puis ouvre le détail canonique sans RPC bornée',async()=>{
+    mocks.role='INCONNU';mocks.roleLoading=true;mocks.roleResolved=false;
+    mocks.from.mockImplementation(()=>{const b:any={select:()=>b,eq:()=>b,maybeSingle:async()=>({data:{id:M},error:null})};return b;});
+    const rendered=affichage();await act(async()=>{});
+    expect(screen.getByText('Chargement')).toBeTruthy();expect(mocks.rpc).not.toHaveBeenCalled();expect(mocks.from).not.toHaveBeenCalled();
+    mocks.role='ADMIN_ETABLISSEMENT';mocks.roleLoading=false;mocks.roleResolved=true;
+    rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    expect(await screen.findByText('Détail habituel')).toBeTruthy();expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it('attend le rôle groupe résolu avant sa première lecture bornée',async()=>{
+    mocks.role='INCONNU';mocks.roleLoading=true;mocks.roleResolved=false;const rendered=affichage();await act(async()=>{});
+    expect(mocks.rpc).not.toHaveBeenCalled();expect(mocks.from).not.toHaveBeenCalled();
+    mocks.role='ADMIN_GROUPE';mocks.roleLoading=false;mocks.roleResolved=true;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    await screen.findByText('Mission B');expect(mocks.rpc).toHaveBeenCalledTimes(1);expect(mocks.from).not.toHaveBeenCalled();
+  });
+  it('retire les données et anciens callbacks pendant la résolution du nouveau compte',async()=>{
+    mocks.role='ADMIN_GROUPE';const rendered=affichage();await screen.findByText('Mission B');const ancienSucces=mocks.props.onSuccess;
+    mocks.uid='user-C';mocks.roleLoading=true;mocks.roleResolved=false;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    expect(screen.getByText('Chargement')).toBeTruthy();expect(screen.queryByText('Mission B')).toBeNull();expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    act(()=>ancienSucces('Ancien résultat'));expect(screen.queryByText('Ancien résultat')).toBeNull();
+    mocks.rpc.mockResolvedValue({data:null,error:new Error('Accès refusé')});mocks.roleLoading=false;mocks.roleResolved=true;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    await screen.findByRole('alert');expect(screen.queryByText('Mission B')).toBeNull();expect(mocks.rpc).toHaveBeenCalledTimes(2);
+  });
+  it('ignore une réponse en vol après passage du rôle en revalidation',async()=>{
+    mocks.role='ADMIN_GROUPE';let resolve:any;mocks.rpc.mockReturnValue(new Promise(r=>{resolve=r;}));const rendered=affichage();await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledTimes(1));
+    mocks.roleLoading=true;mocks.roleResolved=false;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    await act(async()=>resolve({data:lecture(),error:null}));expect(screen.getByText('Chargement')).toBeTruthy();expect(screen.queryByText('Mission B')).toBeNull();
+    mocks.rpc.mockResolvedValue({data:null,error:new Error('Accès refusé')});mocks.roleLoading=false;mocks.roleResolved=true;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    await screen.findByRole('alert');expect(screen.queryByText('Mission B')).toBeNull();
+  });
+  it('retire les données si le rôle devient inconnu sans accorder une lecture',async()=>{
+    mocks.role='ADMIN_GROUPE';const rendered=affichage();await screen.findByText('Mission B');const ancienSucces=mocks.props.onSuccess;
+    mocks.role='INCONNU';rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Impossible de vérifier votre accès');expect(screen.queryByText('Mission B')).toBeNull();expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    act(()=>ancienSucces('Ancien résultat du rôle'));expect(screen.queryByText('Ancien résultat du rôle')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Réessayer'}));expect(mocks.retryRole).toHaveBeenCalledTimes(1);
+  });
+  it('réessaie une erreur de rôle par le hook avant toute lecture de mission',async()=>{
+    mocks.role='INCONNU';mocks.roleResolved=false;mocks.roleError=new Error('Erreur rôle');const rendered=affichage();
+    expect(screen.getByRole('alert')).toHaveTextContent('Impossible de vérifier votre accès');expect(mocks.rpc).not.toHaveBeenCalled();expect(mocks.from).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Réessayer'}));expect(mocks.retryRole).toHaveBeenCalledTimes(1);
+    mocks.roleError=null;mocks.roleLoading=true;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);expect(screen.getByText('Chargement')).toBeTruthy();expect(mocks.rpc).not.toHaveBeenCalled();
+    mocks.role='ADMIN_GROUPE';mocks.roleLoading=false;mocks.roleResolved=true;rendered.rerender(<MemoryRouter><NavigationHarness/></MemoryRouter>);await screen.findByText('Mission B');expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
   it.each([false, true])('réserve les safe-areas dans la structure autonome (erreur=%s)',async erreur=>{
     mocks.role='ADMIN_GROUPE';
     if(erreur)mocks.rpc.mockResolvedValue({data:null,error:new Error('Accès refusé')});

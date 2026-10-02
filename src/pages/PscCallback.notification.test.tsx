@@ -14,7 +14,7 @@ const retour='/etablissement/missions/'+M;
 const mocks=vi.hoisted(()=>({role:'SOIGNANT',connected:false,allowed:true,invoke:vi.fn(),verifyOtp:vi.fn(),rpc:vi.fn(),ouvrir:vi.fn(),afficherNotification:vi.fn()}));
 vi.mock('@/hooks/usePageTitle',()=>({usePageTitle:()=>undefined}));
 vi.mock('@/contexts/AuthContext',()=>({useAuth:()=>({connexion:vi.fn(),loading:false,user:mocks.connected?{id:'psc-membre-B'}:null,session:mocks.connected?{user:{id:'psc-membre-B',email_confirmed_at:'confirmed'}}:null})}));
-vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role,loading:false,error:null,parcours:null})}));
+vi.mock('@/hooks/useRole',()=>({useRole:()=>({role:mocks.role,loading:false,resolved:true,error:null,retry:vi.fn(),parcours:null})}));
 vi.mock('@/contexts/NotificationContext',()=>({useNotification:()=>({afficherNotification:mocks.afficherNotification})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mocks.rpc,functions:{invoke:mocks.invoke},from:()=>{throw new Error('Lecture RLS inattendue');},auth:{verifyOtp:mocks.verifyOtp,getSession:async()=>({data:{session:null}})}}}));
 vi.mock('@/lib/platform',()=>({isNative:()=>false}));

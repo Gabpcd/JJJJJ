@@ -1,8 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { telechargerOuPartagerPdf } from './telechargement';
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { ajouterJoursCivilsParis, formatParis, instantDepuisSaisieParis, instantJolene } from '@/lib/date-heure-paris';
 import { toast } from 'sonner';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import {
@@ -18,6 +17,13 @@ import {
   createHighlightBox,
   createSectionTitle,
 } from './pdf-design-system';
+
+// Une période comptable est une paire de dates civiles, sans fuseau horaire.
+function formaterDateCivile(valeur: unknown): string {
+  if (typeof valeur !== 'string') return '-';
+  const morceaux = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valeur);
+  return morceaux ? `${morceaux[3]}/${morceaux[2]}/${morceaux[1]}` : '-';
+}
 
 /**
  * Génère et télécharge le PDF d'une facture commission Jolene (étab ou admin).
@@ -99,10 +105,11 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
             .in('mission_id', missionIds)
             .order('pointage_arrivee_le', { ascending: true })
         : Promise.resolve({ data: [] as any[], error: null }),
+      // Charger les créneaux effectifs et prévisionnels, hors pauses.
       // Les créneaux portent debut/fin ; leur durée se déduit des instants.
       // Le chargeur paginé refuse un planning tronqué ou non vérifiable.
       chargerCreneauxMissionsPagines(missionIds, {
-        typeCreneau: 'PREVISIONNEL', exclurePauses: true,
+        exclurePauses: true,
       }).catch(() => { throw new Error('Impossible de vérifier les créneaux de la mission. Réessayez.'); }),
     ]);
     if (soignantsError) throw new Error('Impossible de vérifier les soignants de la facture. Réessayez.');
@@ -129,14 +136,39 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       list.push(c);
       creneauxByMission.set(c.mission_id, list);
     }
-    const debutFacture = (f as any).periode_debut ? new Date(`${String((f as any).periode_debut).slice(0, 10)}T00:00:00`) : null;
-    const finFacture = (f as any).periode_fin ? new Date(`${String((f as any).periode_fin).slice(0, 10)}T23:59:59.999`) : null;
-    const dansPeriodeFacturee = (date?: string | null) => {
-      if (!date || !debutFacture || !finFacture) return true;
-      const valeur = new Date(date).getTime();
-      return valeur >= debutFacture.getTime() && valeur <= finFacture.getTime();
-    };
     const factureMonoMission = missions.length === 1 && Boolean((f as any).mission_id);
+    const periodeFactureeDisponible = factureMonoMission && (f as any).periode_debut && (f as any).periode_fin;
+    const debutFacture = periodeFactureeDisponible
+      ? instantDepuisSaisieParis(`${(f as any).periode_debut}T00:00`)
+      : null;
+    const finFactureExclusive = periodeFactureeDisponible
+      ? ajouterJoursCivilsParis(instantDepuisSaisieParis(`${(f as any).periode_fin}T00:00`), 1)
+      : null;
+    const dansPeriodeFacturee = (date?: string | null) => {
+      if (!date || !debutFacture || !finFactureExclusive) return true;
+      const valeur = instantJolene(date).getTime();
+      return valeur >= debutFacture.getTime() && valeur < finFactureExclusive.getTime();
+    };
+    // Un créneau de nuit peut chevaucher deux périodes : ne conserver que
+    // l'intersection avec les dates civiles de la facture, dans Europe/Paris.
+    const creneauxDansPeriode = (lignes: any[], effectifs: boolean) => lignes.flatMap(c => {
+      const message = effectifs
+        ? 'Le planning effectif est incomplet. Vérifiez la mission avant de télécharger la facture.'
+        : 'Le planning prévisionnel est incomplet. Vérifiez la mission avant de télécharger la facture.';
+      let debut: number;
+      let fin: number;
+      try {
+        debut = instantJolene(c.debut).getTime();
+        if (finFactureExclusive && debut >= finFactureExclusive.getTime()) return [];
+        if (!c.fin) throw new Error(message);
+        fin = instantJolene(c.fin).getTime();
+        if (fin <= debut) throw new Error(message);
+      } catch { throw new Error(message); }
+      if (debutFacture && fin <= debutFacture.getTime()) return [];
+      const borneDebut = debutFacture ? Math.max(debut, debutFacture.getTime()) : debut;
+      const borneFin = finFactureExclusive ? Math.min(fin, finFactureExclusive.getTime()) : fin;
+      return [{ ...c, debut: new Date(borneDebut).toISOString(), fin: new Date(borneFin).toISOString() }];
+    });
 
     const { default: jsPDF } = await import('jspdf');
     const autoTableMod = await import('jspdf-autotable');
@@ -165,6 +197,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     const blockY = 44;
     const yEmet = createInfoBlock(doc, {
       x: PAGE.margin,
+      width: 90,
       y: blockY,
       label: 'Émetteur',
       name: ENTREPRISE.nom,
@@ -179,6 +212,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     });
     const yDest = createInfoBlock(doc, {
       x: 115,
+      width: PAGE.width - PAGE.margin - 115,
       y: blockY,
       label: 'Facturé à',
       name: etab?.nom || '(établissement)',
@@ -196,12 +230,12 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     doc.line(PAGE.margin, y, PAGE.width - PAGE.margin, y);
     y += 6;
 
-    addInfoRow(doc, PAGE.margin, y, 'Émission :', (f as any).date_emission ? format(new Date((f as any).date_emission), 'dd/MM/yyyy', { locale: fr }) : '-');
+    addInfoRow(doc, PAGE.margin, y, 'Émission :', (f as any).date_emission ? formatParis((f as any).date_emission, 'dd/MM/yyyy') : '-');
     if ((f as any).date_echeance) {
-      addInfoRow(doc, 75, y, 'Échéance :', format(new Date((f as any).date_echeance), 'dd/MM/yyyy', { locale: fr }));
+      addInfoRow(doc, 75, y, 'Échéance :', formaterDateCivile((f as any).date_echeance));
     }
     if ((f as any).date_paiement) {
-      addInfoRow(doc, 140, y, 'Payée le :', format(new Date((f as any).date_paiement), 'dd/MM/yyyy', { locale: fr }));
+      addInfoRow(doc, 140, y, 'Payée le :', formatParis((f as any).date_paiement, 'dd/MM/yyyy'));
     }
     y += 6;
 
@@ -251,14 +285,17 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         doc.text(sanitizeForPdf(profLine), PAGE.margin + 3, y + 10);
 
         const serviceLine = m.service ? `Service : ${m.service}` : '';
-        const debutAffiche = factureMonoMission && (f as any).periode_debut ? (f as any).periode_debut : m.debut_le;
-        const finAffiche = factureMonoMission && (f as any).periode_fin ? (f as any).periode_fin : m.fin_le;
-        const debutStr = debutAffiche ? format(new Date(debutAffiche), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
-        const finStr = finAffiche ? format(new Date(finAffiche), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
-        const dureeStr = factureMonoMission && (f as any).periode_debut && (f as any).periode_fin
+        const periodeFacturee = factureMonoMission && (f as any).periode_debut && (f as any).periode_fin;
+        const debutStr = periodeFacturee
+          ? formaterDateCivile((f as any).periode_debut)
+          : m.debut_le ? formatParis(m.debut_le, "dd/MM/yyyy HH'h'mm") : '-';
+        const finStr = periodeFacturee
+          ? formaterDateCivile((f as any).periode_fin)
+          : m.fin_le ? formatParis(m.fin_le, "dd/MM/yyyy HH'h'mm") : '-';
+        const dureeStr = periodeFacturee
           ? ''
           : (m.duree_heures ? `${Number(m.duree_heures).toFixed(1)} h` : '');
-        const periodeLine = `${debutStr} -> ${finStr} (${dureeStr})`;
+        const periodeLine = `${debutStr} -> ${finStr}${dureeStr ? ` (${dureeStr})` : ''}`;
         doc.setFontSize(7);
         doc.setTextColor(...JOLENE_COLORS.textMuted);
         doc.text(sanitizeForPdf(serviceLine ? `${serviceLine}  |  ${periodeLine}` : periodeLine), PAGE.margin + 3, y + 14.5);
@@ -266,12 +303,38 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
 
         // ── PASSE 3 : Section pointages ──
         const pres = (presencesByMission.get(m.id) || []).filter((p) => !factureMonoMission || dansPeriodeFacturee(p.pointage_arrivee_le));
-        const cren = (creneauxByMission.get(m.id) || []).filter((c) => !factureMonoMission || dansPeriodeFacturee(c.debut));
-        if (pres.length > 0) {
+        const lignesCreneaux = creneauxByMission.get(m.id) || [];
+        const effectifs = creneauxDansPeriode(lignesCreneaux.filter(c => c.type_creneau === 'EFFECTIF'), true);
+        const cren = effectifs.length === 0 && pres.length === 0
+          ? creneauxDansPeriode(lignesCreneaux.filter(c => c.type_creneau === 'PREVISIONNEL'), false)
+          : [];
+        if (effectifs.length > 0) {
           doc.setTextColor(...JOLENE_COLORS.text);
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8);
-          doc.text('Pointages', PAGE.margin, y + 3);
+          doc.text(sanitizeForPdf('Créneaux effectifs enregistrés'), PAGE.margin, y + 3);
+          y += 4;
+          autoTable(doc, {
+            startY: y,
+            head: [['Date', 'Début', 'Fin', 'Durée effective']],
+            body: effectifs.map(c => [
+              formatParis(c.debut, 'dd/MM'),
+              formatParis(c.debut, "HH'h'mm"),
+              formatParis(c.fin, "HH'h'mm"),
+              `${((instantJolene(c.fin).getTime() - instantJolene(c.debut).getTime()) / 3_600_000).toFixed(2)} h`,
+            ]),
+            styles: { fontSize: 7, cellPadding: 1.5, textColor: JOLENE_COLORS.text as any },
+            headStyles: { fillColor: JOLENE_COLORS.teal as any, textColor: [255, 255, 255] as any, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [245, 250, 249] as any },
+            margin: { left: PAGE.margin + 4, right: PAGE.margin },
+            tableWidth: PAGE.contentWidth - 4,
+          });
+          y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : y + 15;
+        } else if (pres.length > 0) {
+          doc.setTextColor(...JOLENE_COLORS.text);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.text('Pointages historiques', PAGE.margin, y + 3);
           y += 4;
           autoTable(doc, {
             startY: y,
@@ -280,9 +343,9 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
               const arr = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
               const dep = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
               return [
-                arr ? format(arr, 'dd/MM', { locale: fr }) : '-',
-                arr ? format(arr, "HH'h'mm", { locale: fr }) : '-',
-                dep ? format(dep, "HH'h'mm", { locale: fr }) : '-',
+                arr ? formatParis(arr, 'dd/MM') : '-',
+                arr ? formatParis(arr, "HH'h'mm") : '-',
+                dep ? formatParis(dep, "HH'h'mm") : '-',
                 Number(p.duree_pause_min ?? 0) > 0 ? `${p.duree_pause_min} min` : '-',
                 Number(p.heures_reelles ?? 0) > 0 ? `${Number(p.heures_reelles).toFixed(2)} h` : '-',
               ];
@@ -298,7 +361,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           doc.setTextColor(...JOLENE_COLORS.textMuted);
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(7);
-          doc.text(sanitizeForPdf('Aucun pointage enregistre - creneaux previsionnels utilises :'), PAGE.margin, y + 3);
+          doc.text(sanitizeForPdf('Planning prévisionnel (aucune durée effective disponible pour cette période) :'), PAGE.margin, y + 3);
           y += 5;
           autoTable(doc, {
             startY: y,
@@ -311,9 +374,9 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
                 throw new Error('Le planning prévisionnel est incomplet. Vérifiez la mission avant de télécharger la facture.');
               }
               return [
-                format(debut, 'dd/MM', { locale: fr }),
-                format(debut, "HH'h'mm", { locale: fr }),
-                format(fin!, "HH'h'mm", { locale: fr }),
+                formatParis(debut, 'dd/MM'),
+                formatParis(debut, "HH'h'mm"),
+                formatParis(fin!, "HH'h'mm"),
                 `${dureeHeures.toFixed(1)} h`,
               ];
             }),
@@ -327,7 +390,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           doc.setTextColor(...JOLENE_COLORS.textMuted);
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(7);
-          doc.text(sanitizeForPdf('Aucun pointage enregistre (duree previsionnelle utilisee).'), PAGE.margin, y + 3);
+          doc.text(sanitizeForPdf('Aucun créneau de travail disponible pour cette période.'), PAGE.margin, y + 3);
           y += 7;
         }
 
@@ -456,7 +519,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         y,
         width: PAGE.contentWidth,
         text: (f as any).date_paiement
-          ? `FACTURE PAYÉE le ${format(new Date((f as any).date_paiement), 'dd/MM/yyyy', { locale: fr })} - ${modeLabel}`
+          ? `FACTURE PAYÉE le ${formatParis((f as any).date_paiement, 'dd/MM/yyyy')} - ${modeLabel}`
           : `FACTURE PAYÉE - ${modeLabel}`,
         variant: 'success',
       });
@@ -465,7 +528,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     createFooter(doc, {
       companyLine: `${ENTREPRISE.nom} - ${ENTREPRISE.forme_juridique} - Capital ${ENTREPRISE.capital_social} - SIRET ${ENTREPRISE.siret_formate} - ${ENTREPRISE.rcs}`,
       contactLine: `TVA intra : ${ENTREPRISE.tva_intra} - Siège : ${ENTREPRISE.adresse} - ${ENTREPRISE.email}`,
-      extraLine: `Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
+      extraLine: `Facture générée le ${formatParis(new Date(), 'dd/MM/yyyy à HH:mm')}`,
     });
 
     await telechargerOuPartagerPdf(doc, `${(f as any).numero_facture}.pdf`);

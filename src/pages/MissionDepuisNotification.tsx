@@ -32,13 +32,16 @@ type Lecture = {
 
 export default function MissionDepuisNotification() {
   const { id } = useParams<{ id: string }>();
-  const { role } = useRole();
+  const { role, loading: roleLoading, resolved: roleResolved, error: erreurRole, retry: reessayerRole } = useRole();
+  const accesEnCours = roleLoading || (!roleResolved && !erreurRole);
+  const accesIndisponible = Boolean(erreurRole) || (roleResolved && role === 'INCONNU');
   const { user } = useAuth();
   const [lecture, setLecture] = useState<Lecture | null>(null);
   const [detailHabituel, setDetailHabituel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
-  const contexte = `${user?.id ?? ''}:${id ?? ''}`;
+  const contexte = `${user?.id ?? ''}:${id ?? ''}:${role}`;
+  const [contexteCharge, setContexteCharge] = useState<string | null>(null);
   const contexteActuel = useRef(contexte);
   contexteActuel.current = contexte;
   const [message, setMessage] = useState<{ contexte: string; texte: string } | null>(null);
@@ -66,7 +69,10 @@ export default function MissionDepuisNotification() {
 
   useEffect(() => {
     let ignore = false;
-    setLoading(true); setErreur(null); setLecture(null); setDetailHabituel(false);
+    setLoading(true); setErreur(null); setLecture(null); setDetailHabituel(false); setContexteCharge(null);
+    // Chaque instance useRole résout son accès après le premier rendu. Attendre
+    // cette résolution évite une RPC privilégiée inutile sur le détail usuel.
+    if (accesEnCours || accesIndisponible || !user?.id) return () => { ignore = true; };
     void (async () => {
       // Conserver le détail complet existant pour les comptes établissement
       // dont la RLS autorise déjà cette mission, y compris la lecture seule.
@@ -78,9 +84,9 @@ export default function MissionDepuisNotification() {
       const data = await lire();
       if (!ignore) setLecture(data);
     })().catch(error => { if (!ignore) setErreur(extraireMessageErreur(error)); })
-      .finally(() => { if (!ignore) setLoading(false); });
+      .finally(() => { if (!ignore) { setContexteCharge(contexte); setLoading(false); } });
     return () => { ignore = true; };
-  }, [id, role, lire, revision]);
+  }, [id, role, lire, revision, accesEnCours, accesIndisponible, contexte, user?.id]);
 
   useEffect(() => {
     const ouvrir = (event: Event) => {
@@ -90,15 +96,21 @@ export default function MissionDepuisNotification() {
     return () => window.removeEventListener(OUVERTURE_NOTIFICATION, ouvrir);
   }, [id, detailHabituel, recharger]);
 
-  if (loading) return <ChargementPage />;
-  if (detailHabituel) return <DetailMission />;
+  // Masquer immédiatement le résultat d'un autre compte/rôle, avant l'effet
+  // de relecture, et ne jamais réafficher une réponse annulée pendant l'accès.
+  if (accesEnCours || !user?.id || (!accesIndisponible && (loading || contexteCharge !== contexte))) return <ChargementPage />;
+  if (!accesIndisponible && detailHabituel) return <DetailMission />;
   const retour = role === 'ADMIN_GROUPE' ? '/groupe/tableau-de-bord'
     : role === 'SOIGNANT' ? '/soignant/tableau-de-bord'
     : role === 'ADMIN_PLATEFORME' ? '/admin' : '/etablissement/tableau-de-bord';
   return (
     <main className="mx-auto min-h-[100dvh] max-w-4xl space-y-4 px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
       <Link to={retour} className="text-primary underline">Retour à mon espace</Link>
-      {erreur ? <div role="alert" className="card-base">
+      {accesIndisponible ? <div role="alert" className="card-base">
+        <h1 className="font-semibold">Votre accès est momentanément indisponible</h1>
+        <p>Impossible de vérifier votre accès. Réessayez dans un instant.</p>
+        <button type="button" className="btn-primary mt-4" onClick={reessayerRole}>Réessayer</button>
+      </div> : erreur ? <div role="alert" className="card-base">
         <h1 className="font-semibold">Impossible de charger la mission</h1>
         <p>{erreur}</p><button type="button" className="btn-primary mt-4" onClick={recharger}>Réessayer</button>
       </div> : lecture && <>

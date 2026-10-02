@@ -62,7 +62,7 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Documents facturation réels avec IO fictives
-        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs
+        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs tests/node/detail-facture-document.node.mjs
 
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
