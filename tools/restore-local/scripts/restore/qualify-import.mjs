@@ -106,8 +106,20 @@ export function exactExtensions(requirements,runtime){
  if(!result.declarations_compatible||result.checks.some(c=>c.installed_version_matches!==true||c.installed_schema_matches!==true))refuse('EXTENSION_EXACT_INSTALL_REQUIRED');
  return result.checks;
 }
+export function projectOwnerProbe(value){
+ const owners=['postgres','supabase_admin'];
+ const out={named_owner:owners.includes(value?.named_owner)?value.named_owner:'other',native_owner:owners.includes(value?.native_owner)?value.native_owner:'other'};
+ for(const key of ['local_empty_context','session_postgres','named_create','native_create','named_connect','native_connect','named_temp','native_temp','postgres_superuser','admin_superuser'])out[key]=typeof value?.[key]==='boolean'?value[key]:null;
+ return out;
+}
+export function ownerProbe(value,{repaired=false}={}){
+ const expected={local_empty_context:true,session_postgres:true,named_owner:repaired?'postgres':'supabase_admin',native_owner:'postgres',
+  named_create:repaired,native_create:true,named_connect:true,native_connect:true,named_temp:true,native_temp:true,
+  postgres_superuser:false,admin_superuser:true};
+ if(!isDeepStrictEqual(value,expected))refuse('QUALIFICATION_OWNER_REFUSED');return expected;
+}
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -123,6 +135,14 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
  try{
   if(runtime.run!==evidence.run)refuse('QUALIFICATION_RUNTIME_RUN_CHANGED');
   runtime.verify();runtime.sql(Buffer.from(LOCAL_GUARD));
+  report.phase='native_owner_probe';save(report);
+  // Project only a bounded inventory; unexpected ownership refuses before the one local repair.
+  const before=runtime.probeDatabaseOwner();
+  report.ownership_before=projectOwnerProbe(before);save(report);
+  ownerProbe(before);
+  report.phase='native_owner_repair';save(report);runtime.repairDatabaseOwner();
+  const after=runtime.probeDatabaseOwner();report.ownership_after=projectOwnerProbe(after);save(report);ownerProbe(after,{repaired:true});
+  report.local_database_owner_reconciled=true;
   report.phase='integral_replay';
   for(const item of evidence.migrations){
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);

@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,validateInspection} from './bootstrap.mjs';
-import {PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros} from './qualify-import.mjs';
+import {makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
+import {PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -15,9 +15,14 @@ const replay=()=>buildReplay(paths,load,load);
 const evidence=()=>({...checkIdentity(env,head,['tools/restore-local/scripts/restore/qualify-import.mjs'],''),...replay()});
 const runtimeExtensions=()=>({postgres_major:17,extensions:requirements.map(e=>({name:e.name,installed:{version:e.version,schema:e.schema},available_count:1,available_truncated:false,available_versions:[{version:e.version,superuser:true,trusted:false,relocatable:false,schema:e.schema,requires:null}]}))});
 const zeroValue=()=>Object.fromEntries(['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'].map(k=>[k,0]));
+const nativeOwner=(repaired=false)=>({local_empty_context:true,session_postgres:true,named_owner:repaired?'postgres':'supabase_admin',native_owner:'postgres',named_create:repaired,native_create:true,named_connect:true,native_connect:true,named_temp:true,native_temp:true,postgres_superuser:false,admin_superuser:true});
 function fakeRuntime(options={}){
+ let repaired=false;
  const calls=[],extensionSQL=Buffer.from('CANONICAL_EXTENSION_SQL');
- return {calls,extensionSQL,run,verify(){calls.push({verify:true});},sql(bytes,flags={}){
+ return {calls,extensionSQL,run,
+ probeDatabaseOwner(){calls.push({ownerProbe:true,repaired});return structuredClone(repaired?(options.ownerAfter??nativeOwner(true)):(options.ownerBefore??nativeOwner()));},
+ repairDatabaseOwner(){calls.push({ownerRepair:true});repaired=true;},
+ verify(){calls.push({verify:true});},sql(bytes,flags={}){
   calls.push({bytes,flags});if(options.failOn&&options.failOn(bytes,flags))throw Error('CANARY_SECRET');
   if(bytes.toString()===STOP_CRONS)return JSON.stringify({locally_disabled_jobs:4});
   if(bytes.toString()===QUIESCENCE)return JSON.stringify(zeroValue());
@@ -105,4 +110,32 @@ test('only the exact temporary Vercel branch is disabled; all other settings equ
  }
  assert.throws(()=>checkVercel(base,expected,'refs/heads/ci/qualification-pg17-other'));
  assert.throws(()=>checkIdentity({...env,GITHUB_REF:'refs/heads/ci/qualification-pg17-other'},head,['vercel.json'],''));
+});
+
+test('exact expected native ownership gap is repaired once before replay; roles and all other values unchanged',()=>{
+ const e=evidence(),r=fakeRuntime(),reports=[];const result=qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x)));
+ assert.deepEqual(result.ownership_before,projectOwnerProbe(nativeOwner()));assert.deepEqual(result.ownership_after,projectOwnerProbe(nativeOwner(true)));
+ assert.equal(result.local_database_owner_reconciled,true);assert.equal(r.calls.filter(x=>x.ownerRepair).length,1);
+ assert.ok(r.calls.findIndex(x=>x.ownerRepair)<r.calls.findIndex(x=>x.bytes===e.migrations[0].bytes));
+ const args=ownerRepairPsqlArgs(run);assert.equal(args[args.indexOf('-U')+1],'supabase_admin');assert.equal(args[args.indexOf('-d')+1],QUALIFICATION_DB);assert.equal(args[args.indexOf('-h')+1],'/var/run/postgresql');
+ assert.match(QUALIFICATION_OWNER_REPAIR,/ALTER DATABASE jolene_candidatures_pg17_test OWNER TO postgres;/);
+ assert.ok(!/ALTER ROLE|ALTER USER|GRANT |SET ROLE|ALTER SCHEMA|DROP |DISABLE TRIGGER/.test(QUALIFICATION_OWNER_REPAIR));
+ assert.match(QUALIFICATION_OWNER_REPAIR,/session_user<>'supabase_admin'/);assert.match(QUALIFICATION_OWNER_REPAIR,/IS DISTINCT FROM 'supabase_admin'/);assert.match(QUALIFICATION_OWNER_REPAIR,/IS DISTINCT FROM 'postgres'/);
+});
+test('unexpected owner or any nonexact precondition refuses before repair and before first migration',()=>{
+ const variants=[{...nativeOwner(),named_owner:'postgres'},{...nativeOwner(),native_owner:'other'},{...nativeOwner(),named_create:true},{...nativeOwner(),native_create:false},{...nativeOwner(),postgres_superuser:true},{...nativeOwner(),admin_superuser:false},{...nativeOwner(),local_empty_context:false},{...nativeOwner(),session_postgres:false},{...nativeOwner(),named_connect:false},{...nativeOwner(),native_temp:false},{...nativeOwner(),extra:'CANARY'}];
+ for(const before of variants){
+  const e=evidence(),r=fakeRuntime({ownerBefore:before}),reports=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x))));
+  assert.equal(r.calls.some(x=>x.ownerRepair),false);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);assert.equal(reports.at(-1).phase,'native_owner_probe');assert.equal(reports.at(-1).failure.code,'QUALIFICATION_OWNER_REFUSED');assert.ok(!JSON.stringify(reports).includes('CANARY'));
+ }
+});
+test('post-repair verification must match native privileges without adding SUPERUSER; otherwise no replay',()=>{
+ for(const after of [{...nativeOwner(true),named_create:false},{...nativeOwner(true),named_owner:'supabase_admin'},{...nativeOwner(true),postgres_superuser:true},{...nativeOwner(true),local_empty_context:false}]){
+  const e=evidence(),r=fakeRuntime({ownerAfter:after}),reports=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x))));
+  assert.equal(r.calls.filter(x=>x.ownerRepair).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);assert.equal(reports.at(-1).canonical_test_passed,false);
+ }
+});
+test('ownership projection retains only fixed names and booleans; no arbitrary catalogue values escape',()=>{
+ const result=projectOwnerProbe({named_owner:'CANARY_SECRET',native_owner:'postgres',local_empty_context:'CANARY_SECRET',extra:'CANARY_SECRET'});
+ assert.equal(result.named_owner,'other');assert.equal(result.native_owner,'postgres');assert.equal(result.local_empty_context,null);assert.ok(!JSON.stringify(result).includes('CANARY'));assert.throws(()=>ownerProbe(result));
 });

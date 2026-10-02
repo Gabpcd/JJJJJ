@@ -185,6 +185,60 @@ function inspect(plan,partial=false){
  }else validateInspection(plan,networks[0],containers,volumes,{partial});
  return {containers,volumes,networkPresent:networks.length===1};
 }
+// Native migrate.sh assigns ownership to database postgres literally. The named
+// qualification DB must be inspected, never repaired on an assumed diagnosis.
+export const QUALIFICATION_OWNER_CONTEXT=`
+ current_database()='${QUALIFICATION_DB}' AND inet_server_addr() IS NULL
+ AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
+ AND current_setting('cron.database_name')='${QUALIFICATION_DB}'
+ AND current_setting('cron.launch_active_jobs')='off'
+ AND current_setting('max_worker_processes')='0'
+ AND NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE backend_type IN ('pg_cron launcher','pg_cron worker','pg_net worker'))
+ AND NOT EXISTS(SELECT 1 FROM auth.users) AND NOT EXISTS(SELECT 1 FROM auth.sessions)
+ AND NOT EXISTS(SELECT 1 FROM storage.objects) AND NOT EXISTS(SELECT 1 FROM storage.buckets)
+ AND NOT EXISTS(SELECT 1 FROM cron.job) AND NOT EXISTS(SELECT 1 FROM net.http_request_queue)
+ AND NOT EXISTS(SELECT 1 FROM net._http_response) AND NOT EXISTS(SELECT 1 FROM vault.secrets)
+ AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+     WHERE n.nspname IN ('public','private') AND c.relkind IN ('r','p'))`;
+export const QUALIFICATION_OWNER_PROBE=`
+BEGIN READ ONLY;
+SELECT jsonb_build_object(
+ 'local_empty_context',(${QUALIFICATION_OWNER_CONTEXT}),
+ 'session_postgres',(session_user='postgres' AND current_user=session_user),
+ 'named_owner',(SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()),
+ 'native_owner',(SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='postgres'),
+ 'named_create',has_database_privilege('postgres',current_database(),'CREATE'),
+ 'native_create',has_database_privilege('postgres','postgres','CREATE'),
+ 'named_connect',has_database_privilege('postgres',current_database(),'CONNECT'),
+ 'native_connect',has_database_privilege('postgres','postgres','CONNECT'),
+ 'named_temp',has_database_privilege('postgres',current_database(),'TEMP'),
+ 'native_temp',has_database_privilege('postgres','postgres','TEMP'),
+ 'postgres_superuser',(SELECT rolsuper FROM pg_roles WHERE rolname='postgres'),
+ 'admin_superuser',(SELECT rolsuper FROM pg_roles WHERE rolname='supabase_admin'));
+ROLLBACK;`;
+export const QUALIFICATION_OWNER_REPAIR=`
+BEGIN;
+DO $owner$
+BEGIN
+ IF session_user<>'supabase_admin' OR current_user<>session_user
+  OR (${QUALIFICATION_OWNER_CONTEXT}) IS DISTINCT FROM true
+  OR (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()) IS DISTINCT FROM 'supabase_admin'
+  OR (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='postgres') IS DISTINCT FROM 'postgres'
+  OR has_database_privilege('postgres',current_database(),'CREATE') IS DISTINCT FROM false
+  OR has_database_privilege('postgres','postgres','CREATE') IS DISTINCT FROM true
+  OR (SELECT rolsuper FROM pg_roles WHERE rolname='postgres') IS DISTINCT FROM false
+  OR (SELECT rolsuper FROM pg_roles WHERE rolname='supabase_admin') IS DISTINCT FROM true
+  OR has_database_privilege('postgres',current_database(),'CONNECT') IS DISTINCT FROM true
+  OR has_database_privilege('postgres','postgres','CONNECT') IS DISTINCT FROM true
+  OR has_database_privilege('postgres',current_database(),'TEMP') IS DISTINCT FROM true
+  OR has_database_privilege('postgres','postgres','TEMP') IS DISTINCT FROM true
+ THEN RAISE EXCEPTION 'QUALIFICATION_OWNER_EXACT_MISMATCH_REQUIRED'; END IF;
+END $owner$;
+ALTER DATABASE jolene_candidatures_pg17_test OWNER TO postgres;
+COMMIT;`;
+export function ownerRepairPsqlArgs(run){
+ const args=qualificationPsqlArgs(run);args[args.indexOf('-U')+1]='supabase_admin';return args;
+}
 export function qualificationPsqlArgs(run,{test=false}={}){
  runName(run);if(typeof test!=='boolean')fail('QUALIFICATION_MODE_INVALID');
  return ['exec','-i',...(test?['--env','PGOPTIONS=-c jolene.test_isolated=candidatures_multi_pg17']:[]),
@@ -211,7 +265,10 @@ export function qualifiedSession(dir){
   return true;
  };
  verify();
- return {run:m.run,verify,sql:(bytes,options={})=>{
+ return {run:m.run,verify,
+  probeDatabaseOwner:()=>JSON.parse(invoke(qualificationPsqlArgs(m.run),QUALIFICATION_OWNER_PROBE)),
+  repairDatabaseOwner:()=>{verify();invoke(ownerRepairPsqlArgs(m.run),QUALIFICATION_OWNER_REPAIR);},
+  sql:(bytes,options={})=>{
   try{return invoke(qualificationPsqlArgs(m.run,options),bytes);}
   catch(error){
    // Only machine codes and input line number leave process memory; never SQL, notices or credentials.
