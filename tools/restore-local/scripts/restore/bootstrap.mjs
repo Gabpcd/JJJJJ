@@ -299,6 +299,7 @@ export const SQL_DIAGNOSTIC_CATEGORIES=Object.freeze([
  'HISTORICAL_MANIFEST_UNCLASSIFIED','HISTORICAL_MANIFEST_ORPHAN','HISTORICAL_MANIFEST_BODY_CHANGED',
  'HISTORICAL_MANIFEST_TOTAL','HISTORICAL_MANIFEST_USER_COUNT','HISTORICAL_MANIFEST_ADMIN_COUNT',
  'HISTORICAL_MANIFEST_MIXED_COUNT','HISTORICAL_MANIFEST_PUBLIC_COUNT','HISTORICAL_MANIFEST_SERVICE_COUNT',
+ 'NOTATION_AUDIT_DEPENDENCY','NOTATION_DEFINITION_OR_ACL','NOTATION_INVENTORY',
 ]);
 export function projectSqlDiagnostic(stderr){
  // Select the ERROR/FATAL record itself, never an earlier BEGIN warning or later CONTEXT.
@@ -309,6 +310,7 @@ export function projectSqlDiagnostic(stderr){
   /^SECURITY DEFINER non classées : /,/^Signatures SECURITY DEFINER obsolètes : /,/^Corps SECURITY DEFINER modifiés sans revue : /,
   /^Manifest SECURITY DEFINER incomplet : /,/^Compte RPC_UTILISATEUR_AUTH_INTERNE inattendu$/,/^Compte ADMIN_EST_ADMIN_VALIDE inattendu$/,
   /^Compte MIXTE_TENANT_ADMIN inattendu$/,/^Compte PUBLIC_VOLONTAIRE inattendu$/,/^Compte SERVICE_ONLY_REVOQUE inattendu$/,
+  /^Notation : dépendances du journal audit inattendues$/,/^Notation : définition ou droits inattendus$/,/^Notation : inventaire divergent$/,
  ];
  const index=state==='P0001'?labels.findIndex(re=>re.test(message)):-1;
  return {sqlstate:state,line:line?Number(line):null,assertion,...(index>=0?{category:SQL_DIAGNOSTIC_CATEGORIES[index]}:{})};

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -248,4 +248,80 @@ test('changed other default ACLs or remaining client grants refuse before any im
 test('default ACL projection never exposes unknown role, privilege, payload or unbounded rows',()=>{
  const v=nativeDefaults();v.target_grants[0]={object_type:'CANARY',grantee:'CANARY',grantor:'CANARY',privilege:'CANARY',is_grantable:'CANARY',secret:'CANARY'};v.other_acl_md5='CANARY';v.extra='CANARY';const p=projectDefaultAclProbe(v);assert.ok(!JSON.stringify(p).includes('CANARY'));assert.equal(p.target_grants[0].grantee,'other');assert.equal(p.other_acl_md5,null);
  assert.equal(projectDefaultAclProbe({...nativeDefaults(),target_grants:Array(101).fill({})}).target_grants,null);
+});
+
+
+const notationBytes=readFileSync(new URL('../../../../'+NOTATION_PREFLIGHT_PATH,import.meta.url));
+const notationValue=()=>({
+ audit_helper_exists:true,audit_helper_md5:'04cc44127e325b434445113e88ce38b7',audit_helper_matches:true,
+ action_constraint_exists:true,action_constraint_md5:'5d8ca35986765f1530b47d63b9f8f432',action_constraint_validated:true,action_constraint_matches:true,
+ actor_constraint_exists:true,actor_constraint_md5:'cad0a04c75e18f5b5a2b25fe3fd6f5fe',actor_constraint_validated:true,actor_constraint_matches:true,
+ notation_exists:true,notation_md5:'de8b4925694aa624a8e45c22e47416b0',notation_body_matches:true,notation_definer:true,
+ notation_owner_matches:true,notation_config_matches:true,notation_acl_exact:false,notation_acl_set_equal:true,notation_acl_dimensions_match:true,
+ notation_acl_entries:['postgres','service_role','authenticated'].map((grantee,i)=>({position:i+1,grantee,grantor:'postgres',privilege:'EXECUTE',is_grantable:false})),
+ inventory_single_row:true,inventory_matches:true,inventory_md5:'de8b4925694aa624a8e45c22e47416b0',
+});
+test('notation exceptions map to three closed categories without free text or SQL payload',()=>{
+ const labels=['Notation : dépendances du journal audit inattendues','Notation : définition ou droits inattendus','Notation : inventaire divergent'];
+ const categories=['NOTATION_AUDIT_DEPENDENCY','NOTATION_DEFINITION_OR_ACL','NOTATION_INVENTORY'];
+ labels.forEach((label,i)=>{
+  const diagnostic=projectSqlDiagnostic('psql:<stdin>:7: WARNING:  25001: already in transaction\npsql:<stdin>:36: ERROR:  P0001: '+label);
+  assert.deepEqual(diagnostic,{sqlstate:'P0001',line:36,assertion:null,category:categories[i]});
+  assert.equal(safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic})).category,categories[i]);
+  assert.equal(projectSqlDiagnostic('ERROR:  P0001: '+label+' CANARY').category,undefined);
+  assert.equal(projectSqlDiagnostic('ERROR:  42501: '+label).category,undefined);
+ });
+});
+test('notation probe is pinned to exact file bytes and reads only metadata in guarded local read-only transaction',()=>{
+ assert.equal(hash(notationBytes),NOTATION_PREFLIGHT_SHA);
+ assert.throws(()=>notationPreflightSQL(Buffer.concat([notationBytes,Buffer.from('\n')])));
+ const sql=notationPreflightSQL(notationBytes);
+ assert.ok(sql.startsWith('BEGIN READ ONLY;\n'+LOCAL_GUARD));assert.ok(sql.endsWith('ROLLBACK;'));
+ assert.ok(!/\b(?:INSERT INTO|UPDATE |DELETE FROM|TRUNCATE |ALTER |CREATE |DROP |GRANT |REVOKE )/.test(sql));
+ assert.ok(sql.includes('WITH ORDINALITY'));assert.ok(sql.includes('p.proacl=e.acl'));assert.ok(sql.includes('cardinality(p.proacl)=cardinality(e.acl)'));
+ assert.ok(sql.includes('pg_get_constraintdef'));assert.ok(!sql.includes('pg_get_functiondef'));assert.ok(!sql.includes("'prosrc'"));
+});
+test('notation projection preserves ordered ACL and distinguishes exact order from equal effective grants',()=>{
+ const v=notationValue();assert.deepEqual(projectNotationPreflight(JSON.stringify(v)),v);
+ assert.deepEqual(v.notation_acl_entries.map(x=>x.grantee),['postgres','service_role','authenticated']);
+ assert.equal(v.notation_acl_exact,false);assert.equal(v.notation_acl_set_equal,true);
+ const changed=notationValue();changed.notation_acl_set_equal=false;changed.notation_acl_entries[1].is_grantable=true;
+ assert.deepEqual(projectNotationPreflight(JSON.stringify(changed)),changed);
+ const missing=notationValue();missing.notation_exists=false;missing.notation_md5=null;missing.notation_acl_entries=[];
+ assert.deepEqual(projectNotationPreflight(JSON.stringify(missing)),missing);
+});
+test('notation diagnostic rejects unknown fields, raw bodies, unknown roles, malformed hashes and unbounded ACLs',()=>{
+ const mutators=[x=>x.prosrc='CANARY',x=>x.notation_md5='CANARY',x=>x.notation_md5=['a'.repeat(32)],x=>delete x.audit_helper_exists,x=>x.notation_acl_exact='CANARY',
+  x=>x.notation_acl_entries[0].grantee='CANARY',x=>x.notation_acl_entries[0].grantor='CANARY',x=>x.notation_acl_entries[0].privilege='CANARY',
+  x=>x.notation_acl_entries[0].is_grantable='CANARY',x=>x.notation_acl_entries[0].secret='CANARY',x=>x.notation_acl_entries[0].position=0,
+  x=>x.notation_acl_entries[1].position=1,x=>x.notation_acl_entries=Array(65).fill(x.notation_acl_entries[0])];
+ for(const mutate of mutators){const v=notationValue();mutate(v);assert.throws(()=>projectNotationPreflight(JSON.stringify(v)),/QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED/);}
+ for(const raw of ['null','[]','{}','CANARY'])assert.throws(()=>projectNotationPreflight(raw));
+});
+test('notation probe precedes the unchanged migration once and preserves its failure without retry or canonical test',()=>{
+ const e=evidence(),item={path:NOTATION_PREFLIGHT_PATH,sha256:NOTATION_PREFLIGHT_SHA,bytes:notationBytes};e.migrations.push(item);e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
+ const r=fakeRuntime(),original=r.sql,proof=[];
+ r.sql=(bytes,flags={})=>{
+  if(bytes.toString()===notationPreflightSQL(notationBytes)){r.calls.push({bytes,flags});return JSON.stringify(notationValue());}
+  if(bytes===notationBytes){r.calls.push({bytes,flags});throw Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{sqlstate:'P0001',line:36,assertion:null,category:'NOTATION_DEFINITION_OR_ACL'}});}
+  return original(bytes,flags);
+ };
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+ const pi=r.calls.findIndex(x=>x.bytes?.toString()===notationPreflightSQL(notationBytes)),mi=r.calls.findIndex(x=>x.bytes===notationBytes);
+ assert.ok(pi>=0&&pi<mi);assert.deepEqual(r.calls[pi].flags,{});assert.deepEqual(r.calls[mi].flags,{migration:true});
+ assert.equal(r.calls.filter(x=>x.bytes===notationBytes).length,1);assert.equal(r.calls.filter(x=>x.bytes?.toString()===notationPreflightSQL(notationBytes)).length,1);
+ assert.equal(r.calls.some(x=>x.bytes===e.migrations.at(-1).bytes),false);assert.equal(r.calls.some(x=>x.flags?.test),false);
+ const last=proof.at(-1);assert.deepEqual(last.notation_preflight,{path:item.path,sha256:item.sha256,...notationValue()});
+ assert.equal(last.migrations.at(-1).completed,false);assert.equal(last.failure.category,'NOTATION_DEFINITION_OR_ACL');assert.equal(last.canonical_test_passed,false);
+});
+test('invalid notation projection or altered pin refuses before guarded migration without storing arbitrary output',()=>{
+ for(const kind of ['unsafe','bytes','sha']){
+  const e=evidence(),item={path:NOTATION_PREFLIGHT_PATH,sha256:NOTATION_PREFLIGHT_SHA,bytes:notationBytes};
+  if(kind==='bytes')item.bytes=Buffer.concat([notationBytes,Buffer.from('\n')]);if(kind==='sha')item.sha256='0'.repeat(64);
+  e.migrations.push(item);e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
+  const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString().startsWith('BEGIN READ ONLY;')?JSON.stringify({...notationValue(),prosrc:'CANARY'}):original(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(r.calls.some(x=>x.bytes===item.bytes),false);assert.equal(r.calls.some(x=>x.flags?.test),false);
+  assert.equal(proof.at(-1).failure.code,'QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
 });

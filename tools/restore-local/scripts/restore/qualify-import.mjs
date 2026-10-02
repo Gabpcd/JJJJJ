@@ -192,8 +192,90 @@ export function projectHistoricalManifest(raw,entries){
  });
  return {expected_count:422,matched_count:value.matched_count,missing_exposed_count:value.missing_exposed_count,differences};
 }
+export const NOTATION_PREFLIGHT_PATH='supabase/migrations/20260930145136_securiser_auteur_notation_mission.sql';
+export const NOTATION_PREFLIGHT_SHA='23f7ee94d48fa6c2f7ba48344c341a0db4411d467ec2861c4a0fa2a470abdbe3';
+export function notationPreflightSQL(bytes){
+ if(!Buffer.isBuffer(bytes)||hash(bytes)!==NOTATION_PREFLIGHT_SHA)refuse('QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');
+ // Observe metadata before the original guarded migration, never repair or bypass it.
+ return `BEGIN READ ONLY;
+${LOCAL_GUARD}
+WITH notation AS (
+ SELECT p.* FROM pg_catalog.pg_proc p
+ WHERE p.oid=pg_catalog.to_regprocedure('public.fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)')
+), audit_helper AS (
+ SELECT p.* FROM pg_catalog.pg_proc p
+ WHERE p.oid=pg_catalog.to_regprocedure('public.fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)')
+), action_constraint AS (
+ SELECT c.* FROM pg_catalog.pg_constraint c WHERE c.conrelid=pg_catalog.to_regclass('public.journaux_audit') AND c.conname='journaux_audit_action_check'
+), actor_constraint AS (
+ SELECT c.* FROM pg_catalog.pg_constraint c WHERE c.conrelid=pg_catalog.to_regclass('public.journaux_audit') AND c.conname='journaux_audit_type_acteur_check'
+), inventory AS (
+ SELECT definition_md5,categorie FROM private.security_definer_inventory
+ WHERE signature='fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)'
+), expected AS (
+ SELECT '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}'::aclitem[] AS acl
+), acl_rows AS (
+ SELECT u.ordinality AS position,
+  CASE WHEN a.grantee=0 THEN 'PUBLIC'
+   WHEN pg_catalog.pg_get_userbyid(a.grantee) IN ('postgres','authenticated','service_role','anon') THEN pg_catalog.pg_get_userbyid(a.grantee) ELSE 'other' END AS grantee,
+  CASE WHEN pg_catalog.pg_get_userbyid(a.grantor) IN ('postgres','authenticated','service_role','anon') THEN pg_catalog.pg_get_userbyid(a.grantor) ELSE 'other' END AS grantor,
+  CASE WHEN a.privilege_type='EXECUTE' THEN 'EXECUTE' ELSE 'other' END AS privilege,
+  a.is_grantable
+ FROM notation p CROSS JOIN LATERAL unnest(p.proacl) WITH ORDINALITY u(item,ordinality)
+ CROSS JOIN LATERAL pg_catalog.aclexplode(ARRAY[u.item]::aclitem[]) a
+)
+SELECT jsonb_build_object(
+ 'audit_helper_exists',EXISTS(SELECT 1 FROM audit_helper),
+ 'audit_helper_md5',(SELECT md5(prosrc) FROM audit_helper),
+ 'audit_helper_matches',EXISTS(SELECT 1 FROM audit_helper WHERE md5(prosrc)='04cc44127e325b434445113e88ce38b7'),
+ 'action_constraint_exists',EXISTS(SELECT 1 FROM action_constraint),
+ 'action_constraint_md5',(SELECT md5(pg_get_constraintdef(oid)) FROM action_constraint),
+ 'action_constraint_validated',COALESCE((SELECT convalidated FROM action_constraint),false),
+ 'action_constraint_matches',EXISTS(SELECT 1 FROM action_constraint WHERE convalidated AND md5(pg_get_constraintdef(oid))='5d8ca35986765f1530b47d63b9f8f432'),
+ 'actor_constraint_exists',EXISTS(SELECT 1 FROM actor_constraint),
+ 'actor_constraint_md5',(SELECT md5(pg_get_constraintdef(oid)) FROM actor_constraint),
+ 'actor_constraint_validated',COALESCE((SELECT convalidated FROM actor_constraint),false),
+ 'actor_constraint_matches',EXISTS(SELECT 1 FROM actor_constraint WHERE convalidated AND md5(pg_get_constraintdef(oid))='cad0a04c75e18f5b5a2b25fe3fd6f5fe'),
+ 'notation_exists',EXISTS(SELECT 1 FROM notation),
+ 'notation_md5',(SELECT md5(prosrc) FROM notation),
+ 'notation_body_matches',EXISTS(SELECT 1 FROM notation WHERE md5(prosrc) IN ('de8b4925694aa624a8e45c22e47416b0','0a12aab3a7d9bfe89e3e4c0b51b68faa')),
+ 'notation_definer',COALESCE((SELECT prosecdef FROM notation),false),
+ 'notation_owner_matches',EXISTS(SELECT 1 FROM notation WHERE pg_get_userbyid(proowner)='postgres'),
+ 'notation_config_matches',EXISTS(SELECT 1 FROM notation WHERE proconfig=ARRAY['search_path=public, extensions']::text[]),
+ 'notation_acl_exact',EXISTS(SELECT 1 FROM notation p CROSS JOIN expected e WHERE p.proacl=e.acl),
+ 'notation_acl_set_equal',EXISTS(SELECT 1 FROM notation p CROSS JOIN expected e WHERE cardinality(p.proacl)=cardinality(e.acl) AND p.proacl @> e.acl AND p.proacl <@ e.acl),
+ 'notation_acl_dimensions_match',EXISTS(SELECT 1 FROM notation p CROSS JOIN expected e WHERE array_dims(p.proacl)=array_dims(e.acl)),
+ 'notation_acl_entries',COALESCE((SELECT jsonb_agg(jsonb_build_object('position',position,'grantee',grantee,'grantor',grantor,'privilege',privilege,'is_grantable',is_grantable) ORDER BY position,grantee,grantor,privilege) FROM acl_rows),'[]'::jsonb),
+ 'inventory_single_row',(SELECT count(*)=1 FROM inventory),
+ 'inventory_matches',EXISTS(SELECT 1 FROM inventory WHERE categorie='MIXTE_TENANT_ADMIN' AND definition_md5 IN ('de8b4925694aa624a8e45c22e47416b0','0a12aab3a7d9bfe89e3e4c0b51b68faa')),
+ 'inventory_md5',(SELECT CASE WHEN count(*)=1 THEN min(definition_md5) END FROM inventory)
+);
+ROLLBACK;`;
+}
+const NOTATION_BOOLS=['audit_helper_exists','audit_helper_matches','action_constraint_exists','action_constraint_validated','action_constraint_matches',
+ 'actor_constraint_exists','actor_constraint_validated','actor_constraint_matches','notation_exists','notation_body_matches','notation_definer',
+ 'notation_owner_matches','notation_config_matches','notation_acl_exact','notation_acl_set_equal','notation_acl_dimensions_match','inventory_single_row','inventory_matches'];
+const NOTATION_HASHES=['audit_helper_md5','action_constraint_md5','actor_constraint_md5','notation_md5','inventory_md5'];
+export function projectNotationPreflight(raw){
+ const fail=()=>refuse('QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');
+ let v;try{v=JSON.parse(raw);}catch{fail();}
+ const keys=[...NOTATION_BOOLS,...NOTATION_HASHES,'notation_acl_entries'];
+ if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==keys.length||keys.some(k=>!(k in v))
+  ||NOTATION_BOOLS.some(k=>typeof v[k]!=='boolean')||NOTATION_HASHES.some(k=>v[k]!==null&&(typeof v[k]!=='string'||!/^[a-f0-9]{32}$/.test(v[k])))
+  ||!Array.isArray(v.notation_acl_entries)||v.notation_acl_entries.length>64)fail();
+ let previous=0;
+ const rows=v.notation_acl_entries.map(row=>{
+  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join()!=='grantee,grantor,is_grantable,position,privilege'
+   ||!Number.isSafeInteger(row.position)||row.position<=previous||row.position>64
+   ||!['postgres','authenticated','service_role','anon','PUBLIC','other'].includes(row.grantee)
+   ||!['postgres','authenticated','service_role','anon','other'].includes(row.grantor)
+   ||!['EXECUTE','other'].includes(row.privilege)||typeof row.is_grantable!=='boolean')fail();
+  previous=row.position;return {position:row.position,grantee:row.grantee,grantor:row.grantor,privilege:row.privilege,is_grantable:row.is_grantable};
+ });
+ return {...Object.fromEntries([...NOTATION_BOOLS,...NOTATION_HASHES].map(k=>[k,v[k]])),notation_acl_entries:rows};
+}
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -230,6 +312,13 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
     report.historical_manifest={path:item.path,sha256:item.sha256,...projectHistoricalManifest(runtime.sql(Buffer.from(historicalManifestSQL(entries))),entries)};
     save(report);report.phase='integral_replay';
    }
+    if(item.path===NOTATION_PREFLIGHT_PATH){
+     const sql=notationPreflightSQL(item.bytes);
+     if(item.sha256!==NOTATION_PREFLIGHT_SHA)refuse('QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');
+     report.phase='notation_preflight_read_only_probe';save(report);runtime.verify();
+     report.notation_preflight={path:item.path,sha256:item.sha256,...projectNotationPreflight(runtime.sql(Buffer.from(sql)))};
+     save(report);report.phase='integral_replay';
+    }
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);
    runtime.sql(item.bytes,{migration:true});current.completed=true;save(report);
   }

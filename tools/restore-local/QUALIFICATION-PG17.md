@@ -90,3 +90,20 @@ Le banc reprend **uniquement ces trois ALTER DEFAULT PRIVILEGES FOR ROLE postgre
 L’alignement se déroule dans une transaction qui recontrôle les préconditions, applique les trois instructions fixes, puis exige la disparition des seuls24grants et la conservation du nombre et de l’empreinte de toutes les autres entrées de pg_default_acl. Toute divergence annule la transaction. Une seconde sonde indépendante vérifie encore ces résultats avant le premier fichier. La projection ne publie que noms natifs autorisés, types/privilèges fermés, booléens, comptes et empreinte ; aucune donnée métier ni rôle inattendu. PUBLIC, service_role, les autres rôles/schémas et les objets existants ne sont pas révoqués. Le [périmètre officiel ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html) concerne uniquement les objets futurs.
 
 Aucun ajustement aprèsimport, aucune extension du manifeste422, aucun changement de sesMD5 ou des huitMD5 du test canonique, aucune migration sautée. Les218fichiers restent byte-identiques. L’explication des106expositions est cohérente avec les sources natives et les témoins historiques ; sa disparition et la réussite intégrale ne seront prouvées que par une nouvelle exécution explicitement demandée. Ce complément ne l’exécute pas.
+
+
+### Diagnostic ciblé du préflight notation (v7)
+
+Le run 36995195103 importe 202 fichiers puis reçoit P0001 à la fin du DO
+notation (fichier203, ligne36). Cette ligne recouvre trois exceptions ; l'ordre
+ACL n'est pas encore une cause établie. Avant ce seul fichier épinglé au SHA256
+23f7ee94d48fa6c2f7ba48344c341a0db4411d467ec2861c4a0fa2a470abdbe3,
+le banc lit les préconditions en READ ONLY sous le garde local existant.
+La preuve contient uniquement booléens, MD5 de code/contraintes et ACL ordonnées
+à rôles fermés (grantor, grantee, EXECUTE, grant option). Les sorties inattendues
+sont refusées ; aucune définition SQL ni valeur métier n'est exportée.
+
+Trois catégories fermées distinguent les exceptions d'audit, de définition/ACL
+et d'inventaire. La sonde n'ajuste aucun droit : la migration originale s'exécute
+ensuite intacte, une seule fois, et son refus arrête toujours le replay. Aucun
+alignement d'ordre ni changement de comparaison n'est autorisé par ce diagnostic.
