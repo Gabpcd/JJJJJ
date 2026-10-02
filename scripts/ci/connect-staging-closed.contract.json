@@ -1,13 +1,30 @@
 {
   "schemaVersion": 1,
-  "ready": false,
+  "ready": true,
   "projectRef": "mejpriaetwgtcstbgfid",
   "protocolEnabled": false,
   "capabilityEnabled": false,
-  "candidate": null,
-  "reviewedManifest": null,
-  "requiredCiRuns": [],
-  "expectedBefore": null,
-  "expectedAfter": null,
-  "reason": "Source intégrée et migration 20261001201055 à valider en CI PG17 ; empreintes et manifeste non pincés, aucune activation ni allocation financière autorisée"
+  "candidate": {
+    "sha": "ee3fc8d5de227495a0ad6dbbe8810a97aff2a3c2",
+    "tree": "3b0b93fd01b4568606c2444da3fd13a4620934ed"
+  },
+  "reviewedManifest": {
+    "migrationSha256": "44738cc509c424afa368ec255c49a75b4b2d4c5f3b9542b463093262ab06da2c",
+    "capacitySha256": "3d72d036f0b635a083cd2a505f13f48f436dabccd24f8fc355e9540bf097ec79",
+    "admissionSha256": "c9330111e10c6ddfcd39e8e27b31fd6fa3198b09cb060c0897ef189e5f8f8013",
+    "manifestSha256": "e21e8a8e0b11541e5c42c23f66c207ec0cc79a6c4ed931ad0239164d83f14fcd"
+  },
+  "requiredCiRuns": [
+    "36949937894",
+    "36949937876"
+  ],
+  "expectedBefore": {
+    "catalogue": "bbafebd8e479c324a2538cc1b12ca993",
+    "registry": "d3824d9095fc97d300b8e904b9d65609"
+  },
+  "expectedAfter": {
+    "catalogue": "dfc9a0e06a02d989b3ebdaa55c028eb0",
+    "registry": "bef8b9e4d15b2a26a6a62b8dd4996fae"
+  },
+  "reason": "Installation fermée staging du seul candidat ee3fc8d5, éprouvé en PostgreSQL 17 et sous ROLLBACK staging ; chaque dispatch exige encore main exact, CI vertes et nouveaux contrôles avant/après. Aucune activation, allocation, préparation d'acteur ni opération fournisseur autorisée."
 }

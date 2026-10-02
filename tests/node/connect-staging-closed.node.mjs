@@ -47,9 +47,15 @@ function harness(options={}){
  };
  return {calls,reports,run:()=>executeClosed({env:{...env,...options.env},local:{...local,...options.local},contract:options.contract??contract,fetchImpl,checkpoint:r=>{reports.push(r);if(options.checkpointFailure||(options.commitCheckpointFailure&&r.phase==='commit_once'))throw Error('disk detail');}})};
 }
-test('contrat versionné livré fermé : aucun appel ni credential requis',async()=>{
- const c=JSON.parse(readFileSync('scripts/ci/connect-staging-closed.contract.json','utf8'));const h=harness({contract:c,env:{STAGING_SUPABASE_ACCESS_TOKEN:undefined,GITHUB_TOKEN:undefined}});
- const r=await h.run();assert.equal(r.code,'READINESS_CLOSED');assert.equal(h.calls.length,0);assert.equal(r.commitAttempted,false);
+test('contrat versionné pincé : installation seule, mauvais dispatch et fermeture refusés avant réseau',async()=>{
+ const c=JSON.parse(readFileSync('scripts/ci/connect-staging-closed.contract.json','utf8'));
+ checkContract(c);assert.equal(c.protocolEnabled,false);assert.equal(c.capabilityEnabled,false);
+ assert.equal(c.candidate.sha,'ee3fc8d5de227495a0ad6dbbe8810a97aff2a3c2');
+ assert.deepEqual(c.requiredCiRuns,['36949937894','36949937876']);
+ for(const [versioned,code] of [[c,'DISPATCH_PIN_MISMATCH'],[{...c,ready:false},'READINESS_CLOSED']]){
+  const h=harness({contract:versioned,env:{STAGING_SUPABASE_ACCESS_TOKEN:undefined,GITHUB_TOKEN:undefined}});
+  const r=await h.run();assert.equal(r.code,code);assert.equal(h.calls.length,0);assert.equal(r.commitAttempted,false);
+ }
 });
 for(const [key,value] of [['GITHUB_EVENT_NAME','push'],['GITHUB_REPOSITORY','attacker/repo'],['GITHUB_REF','refs/heads/feature'],['GITHUB_RUN_ATTEMPT','2'],['GITHUB_SHA','f'.repeat(40)],['EXPECTED_MAIN_SHA','f'.repeat(40)]])
  test(`refus avant réseau : ${key}`,async()=>{const h=harness({env:{[key]:value}});assert.equal((await h.run()).code,'TRUSTED_MAIN_FIRST_ATTEMPT_REQUIRED');assert.equal(h.calls.length,0);});

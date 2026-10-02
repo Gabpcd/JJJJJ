@@ -2,13 +2,27 @@
 
 Ce job prépare le schéma de la recette, sans ouvrir le paiement. Il peut exécuter la migration complète 1017, la vérifier après ROLLBACK, puis l'installer en une seule transaction avec son registre, une table privée d'allocation TEST vide et le supplément d'admission fermé. Il ne crée aucun acteur, capacité active, Checkout, Refund ou transfert. Il ne déploie pas d'Edge et ne configure aucune clé ni aucun webhook.
 
-Le contrat livré est `ready:false`, avec candidat/manifeste/catalogues absents. Il refuse donc avant le premier appel réseau et avant l'étape recevant les secrets. Dans ce lot destiné à main, Validate PR ajoute uniquement les 44 tests Node de l'exécuteur fermé, indépendamment de cette fermeture. Les tests d'admission et leurs sources SQL dépendent du candidat #1017 : ils ne sont pas inclus ici. Les tests de transport utilisent des réponses simulées ; le parser du véritable assemblage n'est pas une exécution PostgreSQL.
+Le contrat autorise uniquement l'installation fermée du candidat `ee3fc8d5de227495a0ad6dbbe8810a97aff2a3c2` : `ready:true`, `protocolEnabled:false`, `capabilityEnabled:false`. Le préparateur de comptes et son contrat CI restent `ready:false`. Les tests Node de l'exécuteur vérifient ses refus avec des transports simulés ; les preuves PostgreSQL réelles du candidat sont distinctes et liées ci-dessous.
+
+Le 2 octobre 2026, [Validate PR 36949937894](https://github.com/Gabpcd/JJJJJ/actions/runs/36949937894) a réussi sur ce SHA, avec seed exact sous SAVEPOINT/ROLLBACK puis relecture indépendante, référence PostgreSQL 17 et épreuve réelle du delta de schéma staging annulée. Le [run PostgreSQL 17 36949937876](https://github.com/Gabpcd/JJJJJ/actions/runs/36949937876) a également réussi sur ce même SHA. Ces deux runs, leur conclusion, leur dépôt et leur SHA seront relus au dispatch ; les artefacts ne remplacent pas les contrôles frais sur staging.
+
+Les octets Git du candidat ont été recalculés et comparés à l'artefact `connect-catalogue-proof.json`. Le générateur d'admission de l'exécuteur est identique à celui du candidat. Les pins suivants autorisent un seul état source :
+
+| Élément | Empreinte attendue |
+| --- | --- |
+| Arbre candidat | `3b0b93fd01b4568606c2444da3fd13a4620934ed` |
+| Migration SHA256 | `44738cc509c424afa368ec255c49a75b4b2d4c5f3b9542b463093262ab06da2c` |
+| Table TEST SHA256 | `3d72d036f0b635a083cd2a505f13f48f436dabccd24f8fc355e9540bf097ec79` |
+| Admission générée SHA256 | `c9330111e10c6ddfcd39e8e27b31fd6fa3198b09cb060c0897ef189e5f8f8013` |
+| Manifeste SHA256 | `e21e8a8e0b11541e5c42c23f66c207ec0cc79a6c4ed931ad0239164d83f14fcd` |
+| Catalogue avant / registre avant | `bbafebd8e479c324a2538cc1b12ca993` / `d3824d9095fc97d300b8e904b9d65609` |
+| Catalogue après / registre après | `dfc9a0e06a02d989b3ebdaa55c028eb0` / `bef8b9e4d15b2a26a6a62b8dd4996fae` |
 
 ## Source de confiance et déclenchement futur
 
 L'exécuteur doit être intégré seul à main après revue, sans fusionner pour cela la migration financière candidate. Le workflow `connect-staging-closed.yml` s'exécute manuellement sur le SHA main exact qui porte son contrat. Le candidat est un SHA explicitement inscrit dans ce contrat, lié à son arbre Git, aux SHA256 de la migration, de la table et du supplément SQL généré et aux identifiants de runs CI revus. Un autre SHA vert, une branche, un rerun du workflow ou un fork sont refusés. Le candidat n'exécute aucun script : seuls son arbre, sa liste de migrations et les octets des sources SQL désignées sont lus ; le générateur relu de main produit le supplément sans exécuter de script du candidat.
 
-Le manifeste est le SHA256 du JSON canonique `{candidate:{sha,tree},migrationSha256,capacitySha256,admissionSha256}`. Le contrat et les quatre inputs de dispatch doivent correspondre exactement. Le prochain SHA 1017 vert doit être relu avant d'y renseigner ces pins ; aucun recalage automatique n'est fourni.
+Le manifeste est le SHA256 du JSON canonique `{candidate:{sha,tree},migrationSha256,capacitySha256,admissionSha256}`. Le contrat et les quatre inputs de dispatch doivent correspondre exactement. Un changement du candidat ou du catalogue exige une nouvelle preuve et une revue explicite des pins ; aucun recalage automatique n'est fourni.
 
 La seule destination est `mejpriaetwgtcstbgfid`, sous `jolene-supabase-staging-writes`, `queue:max`, `cancel-in-progress:false`. Les métadonnées Management doivent confirmer projet, région, santé et host canonique. Le seul secret métier reçu est `STAGING_SUPABASE_ACCESS_TOKEN`, jamais envoyé à GitHub ni à un processus enfant. `GITHUB_TOKEN` ne sert qu'aux lectures du dépôt et des runs. Aucun secret DB, service_role ou Stripe n'est demandé.
 
@@ -22,7 +36,7 @@ La seule destination est `mejpriaetwgtcstbgfid`, sous `jolene-supabase-staging-w
 
 Les empreintes structurelles attendues doivent être préparées dans une base PG17 à partir des sources réelles et confrontées au catalogue staging frais, pas inventées ni apprises aveuglément pour obtenir du vert. Le registre attendu inclut la ligne exacte `{version,name,statements:[sourceOriginale]}`. Une divergence de forme du registre doit être traitée avant activation. L'exécuteur ne répare ni ne bascule l'historique.
 
-Les options des relations appartiennent aussi à cette empreinte, triées dans un ordre canonique. Une modification de `security_invoker` ou `security_barrier` d'une vue doit donc être détectée même si sa définition et ses ACL ne changent pas. Le candidat #1017 porte les mutations négatives PostgreSQL 17 correspondantes ; elles ne sont pas exécutées par les seuls tests de transport de ce lot. Toute ancienne empreinte préparée sans ces options doit être recalculée et revue avant de renseigner les pins, qui restent absents ici.
+Les options des relations appartiennent aussi à cette empreinte, triées dans un ordre canonique. Une modification de `security_invoker` ou `security_barrier` d'une vue doit donc être détectée même si sa définition et ses ACL ne changent pas. Le candidat #1017 porte les mutations négatives PostgreSQL 17 correspondantes ; leur preuve réelle appartient aux runs épinglés, et non aux seuls tests de transport de ce lot. Les pins retenus incluent ces options.
 
 ## Table TEST et suite indispensable
 
@@ -36,6 +50,6 @@ Après ces raccords et leur preuve PG17, la recette réelle utilisera les endpoi
 
 ## Limites du gel
 
-Aucune activation ni application staging/prod n'a eu lieu. L'installation de la table vide ne valide ni ses futurs droits d'allocation ni une admission Stripe TEST. Aucun fournisseur, frontend, RLS distant ou appareil physique n'est prouvé par ce lot. Le workflow PostgreSQL du candidat #1017 possède deux entrées de matrice, chacune avec une base et des rôles neufs : moteur initial puis admission TEST. Ce workflow et ses témoins ne sont pas inclus dans le lot exécuteur destiné à main. Leurs résultats réels sur le SHA candidat final restent requis avant ouverture du contrat. Les fonctions Edge et le générateur staging doivent ensuite être actualisés par un déploiement borné distinct, sans utiliser les workflows qui réinstallent les clés/webhooks ou réinitialisent staging.
+Les épreuves staging ont appliqué puis annulé leurs transactions ; aucune installation persistante ni activation financière n'a été exécutée par cette préparation de contrat. L'installation de la table vide ne valide ni ses futurs droits d'allocation ni une admission Stripe TEST. Aucun fournisseur, frontend ou appareil physique n'est prouvé par ce lot. Le workflow PostgreSQL du candidat #1017 possède deux entrées de matrice, chacune avec une base et des rôles neufs : moteur initial puis admission TEST. Ce workflow et ses témoins ne sont pas inclus dans le lot exécuteur destiné à main. Leurs résultats réels sont ceux des runs épinglés. Les fonctions Edge candidates doivent ensuite être actualisées par un déploiement borné distinct, sans utiliser les workflows qui réinstallent les clés/webhooks ou réinitialisent staging.
 
 L'API Management SQL est documentée en version bêta ; une réponse inattendue ferme le run ([référence officielle](https://supabase.com/docs/reference/api/v1-run-a-query)). Le rapport publié contient uniquement SHA, phases, codes fermés et booléens. Ni SQL, ni catalogue brut, ni données métier, ni credentials ne deviennent un artefact. Le dépôt est public.
