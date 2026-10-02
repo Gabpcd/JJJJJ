@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "ci/qualification-pg17-candidatures-20261002": false
+    }
+  },
   "installCommand": "npm ci",
   "rewrites": [
     { "source": "/((?!assets|icons|.*\\.(?:png|jpg|svg|ico|xml|json|txt|webmanifest|js|css|woff2?)).*)", "destination": "/index.html" }

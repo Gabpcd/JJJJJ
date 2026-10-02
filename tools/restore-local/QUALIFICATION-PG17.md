@@ -1,0 +1,45 @@
+# Qualification isolée du replay PostgreSQL 17 — branche temporaire uniquement
+
+Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `7bec1138ae79131ab940137369e1706ebf0ec860`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
+
+## Source intégrale et refus fermés
+
+Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 7bec…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 -f -`. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
+
+Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `76717f04219cc07aad5884c4f0ec95e503113bdc810b7c909a8b8415b6ed12f4`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
+
+## Infrastructure et arrêt des travaux automatiques
+
+Les cinq digests existants restent inchangés, dont `supabase/postgres@sha256:432d12926b09e10eb3317b0e2e9672c9ce8ea6bccb359857a31ff9f90683161d` (17.6.1.063). Aucune mise à jour opportuniste d'extension ou d'image. Les deux piles, six volumes nommés et réseau Docker interne sans ports publics restent ceux du bootstrap. Les secrets ne sont que des valeurs aléatoires locales ; aucun secret GitHub métier n'est transmis. Les sous-processus Docker ne reçoivent que PATH/HOME.
+
+Le mode explicite `plan-qualification` utilise `jolene_candidatures_pg17_test` dans les environnements PostgreSQL et URLs locales Auth/REST/Storage. Dès le tout premier démarrage de PostgreSQL : `cron.database_name=jolene_candidatures_pg17_test`, `cron.launch_active_jobs=off`, `max_worker_processes=0`. Ce dernier réglage empêche aussi les workers d'extensions, notamment pg_net ; toute incompatibilité native provoque un refus de démarrage, sans remplacement. Le plan et les arguments effectivement lancés sont contrôlés. Les commandes psql passent ensuite exclusivement par `/var/run/postgresql` dans le conteneur DB source exact.
+
+Les images exécutent leurs propres migrations Auth/Storage ; les scripts vendoriés gardent leurs empreintes. Le [script migrate.sh officiel au commit de l'image](https://github.com/supabase/postgres/blob/a431c10a356be4c700d2e3f2af8551e2fec5e250/migrations/db/migrate.sh) exporte PGDATABASE depuis POSTGRES_DB et l'utilise pour les scripts init/migrations. Son ALTER DATABASE postgres concerne la propriété de la base système. Le jwt.sql vendorié règle encore l'expiration de la base système postgres ; il est conservé, et le test ne s'appuie pas sur ce paramètre. La prise en charge réelle de l'ensemble des scripts natifs dans la base nommée sera mesurée par la qualification ; elle n'est pas présumée acquise. Le [code pg_cron v1.6.4](https://github.com/citusdata/pg_cron/blob/v1.6.4/src/pg_cron.c) déclare les paramètres cron utilisés ; le contrôle live exige leurs valeurs.
+
+Le bootstrap vérifie d'abord le cœur vide, les trois routes locales, l'absence de sortie HTTPS et la compatibilité des neuf extensions sur les deux piles. Puis le driver arrête les huit services Auth/REST/Storage/Kong des deux piles, vérifie qu'ils restent arrêtés et que seules les deux DB restent démarrées. Il contrôle le socket, PostgreSQL17, la base exacte, le rôle postgres, les paramètres et l'absence des workers cron/net avant le premier SQL applicatif. Les jobs créés par le replay ne peuvent donc pas démarrer. Après le replay, un `UPDATE cron.job SET active=false WHERE active` local explicite les désactive avant le test ; le nombre de jobs désactivés est rapporté. Aucun cron distant n'est modifié.
+
+Les neuf versions/schémas d'extensions doivent ensuite être exactement installés. Toute divergence, corps de helper différent, personnalisation Auth/Storage absente, précondition historique inexécutable, donnée métier ou file HTTP inattendue arrête le banc. Les 14 comptages de quiescence sont exigés à zéro avant le test et après fermeture de sa transaction annulée. Une réussite ne prouverait que ce replay et ce test SQL sur cette image ; aucune équivalence universelle avec la plateforme Supabase, aucun paiement, remboursement, notification physique ni parcours frontend n'est impliqué.
+
+## Exécution future et preuves
+
+Après revue indépendante et validation du SHA de la branche, l'opérateur pourra demander explicitement :
+
+```sh
+gh workflow run restore-local-bootstrap.yml --repo Gabpcd/JJJJJ --ref ci/qualification-pg17-candidatures-20261002
+```
+
+Le workflow n'a ni événement push ni PR, ne référence aucun secret, n'appelle aucun autre workflow, n'installe aucun paquet npm et ne contacte aucune API Supabase/Stripe. Les commandes Docker de préparation lancent les ressources uniquement sur le runner Linux temporaire. Le job dispose de 35 minutes, le replay d'au plus 19 minutes ; les étapes de diagnostic filtré, double nettoyage des seules ressources nommées/étiquetées et constat indépendant d'absence sont en `always()`. En cas d'annulation forcée du runner, l'absence ne doit pas être revendiquée sans son artefact.
+
+L'artefact de sept jours contient identité, versions, empreintes ordonnées, dernière migration tentée et statut, SQLSTATE/ligne/code CAND_MULTI éventuel, comptages, verdict du test, rollback et nettoyage. Jamais compose privé, mot de passe, JWT, log SQL brut, dump ou corps des données. Le rapport distingue import incomplet, test non passé et rollback non vérifié. Aucun mot de passe cloud n'est nécessaire.
+
+## Effets d'un push de la branche — lecture statique
+
+Au SHA produit : les cinq workflows comportant `push` (Validate PR, Deploy Supabase, Playwright, Android native simulation et Lighthouse) restreignent cet événement à main. Staging-comptes et Connect PG17 n'ont pas de trigger push ; deploy-staging est manuel. Schema snapshot dépend de Deploy Supabase/main ou de sa propre programmation ; mobile-delivery est exclusivement manuel/main. Ne pas ouvrir de PR : cela activerait d'autres contrôles, dont la synchronisation staging de Validate PR que cette qualification évite.
+
+L'intégration Vercel est neutralisée pour cette seule branche par `vercel.json` : `git.deploymentEnabled["ci/qualification-pg17-candidatures-20261002"] = false`, suivant la [configuration officielle Vercel](https://vercel.com/docs/project-configuration/git-configuration). Le driver impose cette branche exacte et compare intégralement l'objet JSON à celui du SHA produit, avec cette seule propriété ajoutée ; toute autre modification (autre branche, commande, headers, rewrites, réglage global) refuse avant Docker. Aucune configuration de main, D ou d'une autre branche n'est modifiée. Avant le dispatch, confirmer que la branche publiée contient exactement ce candidat et qu'aucune preview n'a démarré ; le banc ne revendique pas une vérification live des réglages Vercel.
+
+Les scripts versionnés de build ne mutent pas staging : `npm ci`, `prebuild` (écriture locale assetlinks), puis Vite ; le plugin PDF ne lit/émet que des fichiers locaux. Le plugin Sentry pourrait créer/finaliser une release et envoyer des sources si ses variables l'activent, d'où l'arrêt explicite de cette preview plutôt qu'une présomption sur les surcharges distantes Vercel. Le workflow PG17 n'exécute aucun de ces scripts.
+
+## État de préparation
+
+Tests en mémoire du driver et de ses gardes : exécutés hors checkout, sans Docker ni PostgreSQL ni réseau. Aucun import réel, aucune simulation frontend, aucun workflow, push, build, changement main/D/staging ni appel fournisseur effectué par cette préparation. L'import historique complet peut encore échouer : son échec doit identifier la première dépendance réelle à instruire, et non conduire à réduire les gardes du test.

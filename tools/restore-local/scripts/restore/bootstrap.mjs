@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Two EMPTY local stacks only. Neither schema import nor restoration is implied.
+// Empty infrastructure by default; an explicit isolated import qualification mode is separate.
 import { randomBytes, createHash, createHmac } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {projectExtensions} from './extensions.mjs';
+export const QUALIFICATION_DB='jolene_candidatures_pg17_test';
+export const QUALIFICATION_ARGS=['-c','cron.database_name='+QUALIFICATION_DB,'-c','cron.launch_active_jobs=off','-c','max_worker_processes=0'];
 export const FORBIDDEN=['flripxtsyegjshnhzjkz','mejpriaetwgtcstbgfid','wnepopwygokbhlqghydb'];
 const HERE=dirname(fileURLToPath(import.meta.url)), ROOT=resolve(HERE,'../..');
 const LABEL='org.jolene.restore-drill', SIDES=['source','target'], ROLES=['db','auth','rest','storage','api'];
@@ -55,7 +57,9 @@ export function gateway(run,side,anon,service){
     {name:'acl',config:{hide_groups_header:true,allow:['anon','admin']}}]
   }))};
 }
-export function makePlan(run,dir,lock,secrets){
+export function makePlan(run,dir,lock,secrets,{qualification=false}={}){
+ if(typeof qualification!=='boolean')fail('QUALIFICATION_MODE_INVALID');
+ const database=qualification?QUALIFICATION_DB:'postgres';
  runName(run);if(lock.platform!=='linux/amd64'||lock.images.length!==5)fail('IMAGE_LOCK_INVALID');
  const services={},volumes={},labels={[LABEL]:run};
  const img=repo=>{const a=lock.images.filter(x=>x.repository===repo);
@@ -67,18 +71,18 @@ export function makePlan(run,dir,lock,secrets){
   const s=secrets[side],db=name(run,side,'db'),api='http://'+name(run,side,'api')+':8000',anon=jwt(s.jwt,'anon'),service=jwt(s.jwt,'service_role');
   for(const role of ['data','config','files'])volumes[side+'-'+role]={name:name(run,side,role),labels};
   services[side+'-db']={...base(side,'db','supabase/postgres'),
-   environment:{POSTGRES_HOST:'/var/run/postgresql',PGPORT:'5432',POSTGRES_PORT:'5432',PGPASSWORD:s.password,POSTGRES_PASSWORD:s.password,PGDATABASE:'postgres',POSTGRES_DB:'postgres',JWT_EXP:'3600'},
+   environment:{POSTGRES_HOST:'/var/run/postgresql',PGPORT:'5432',POSTGRES_PORT:'5432',PGPASSWORD:s.password,POSTGRES_PASSWORD:s.password,PGDATABASE:database,POSTGRES_DB:database,JWT_EXP:'3600'},
    volumes:[{type:'volume',source:side+'-data',target:'/var/lib/postgresql/data'},{type:'volume',source:side+'-config',target:'/etc/postgresql-custom'},
     bind(resolve(ROOT,'sources/volumes/db/webhooks.sql'),'/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql'),
     bind(resolve(ROOT,'sources/volumes/db/roles.sql'),'/docker-entrypoint-initdb.d/init-scripts/99-roles.sql'),
     bind(resolve(ROOT,'sources/volumes/db/jwt.sql'),'/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql'),
     bind(resolve(HERE,'init-extensions.sql'),'/docker-entrypoint-initdb.d/init-scripts/zz-restore-extensions.sql')],
-   command:['postgres','-c','config_file=/etc/postgresql/postgresql.conf','-c','log_min_messages=fatal','-c','log_statement=none'],
+   command:['postgres','-c','config_file=/etc/postgresql/postgresql.conf','-c','log_min_messages=fatal','-c','log_statement=none',...(qualification?QUALIFICATION_ARGS:[])],
    healthcheck:health(['CMD','pg_isready','-U','postgres','-h','localhost'])};
   const depends_on={[side+'-db']:{condition:'service_healthy'}};
   services[side+'-auth']={...base(side,'auth','supabase/gotrue'),depends_on,
    environment:{GOTRUE_API_HOST:'0.0.0.0',GOTRUE_API_PORT:'9999',API_EXTERNAL_URL:api+'/auth/v1',
-    GOTRUE_DB_DRIVER:'postgres',GOTRUE_DB_DATABASE_URL:'postgres://supabase_auth_admin:'+s.password+'@'+db+':5432/postgres',
+    GOTRUE_DB_DRIVER:'postgres',GOTRUE_DB_DATABASE_URL:'postgres://supabase_auth_admin:'+s.password+'@'+db+':5432/'+database,
     GOTRUE_SITE_URL:'http://'+run+'-preview:4173',GOTRUE_URI_ALLOW_LIST:'',GOTRUE_DISABLE_SIGNUP:'true',
     GOTRUE_JWT_ADMIN_ROLES:'service_role',GOTRUE_JWT_AUD:'authenticated',GOTRUE_JWT_DEFAULT_GROUP_NAME:'authenticated',GOTRUE_JWT_EXP:'3600',GOTRUE_JWT_SECRET:s.jwt,GOTRUE_JWT_ISSUER:api+'/auth/v1',
     GOTRUE_EXTERNAL_EMAIL_ENABLED:'true',GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED:'false',GOTRUE_MAILER_AUTOCONFIRM:'true',
@@ -86,11 +90,11 @@ export function makePlan(run,dir,lock,secrets){
     GOTRUE_HOOK_SEND_EMAIL_ENABLED:'false',GOTRUE_HOOK_SEND_SMS_ENABLED:'false',GOTRUE_LOG_LEVEL:'error'},
    healthcheck:health(['CMD','wget','--no-verbose','--tries=1','--spider','http://localhost:9999/health'])};
   services[side+'-rest']={...base(side,'rest','postgrest/postgrest'),depends_on,
-   environment:{PGRST_DB_URI:'postgres://authenticator:'+s.password+'@'+db+':5432/postgres',PGRST_DB_SCHEMAS:'public',PGRST_DB_EXTRA_SEARCH_PATH:'public,extensions',PGRST_DB_ANON_ROLE:'anon',PGRST_JWT_SECRET:s.jwt,PGRST_DB_USE_LEGACY_GUCS:'false',PGRST_ADMIN_SERVER_PORT:'3001',PGRST_ADMIN_SERVER_HOST:'localhost',PGRST_LOG_LEVEL:'crit'},
+   environment:{PGRST_DB_URI:'postgres://authenticator:'+s.password+'@'+db+':5432/'+database,PGRST_DB_SCHEMAS:'public',PGRST_DB_EXTRA_SEARCH_PATH:'public,extensions',PGRST_DB_ANON_ROLE:'anon',PGRST_JWT_SECRET:s.jwt,PGRST_DB_USE_LEGACY_GUCS:'false',PGRST_ADMIN_SERVER_PORT:'3001',PGRST_ADMIN_SERVER_HOST:'localhost',PGRST_LOG_LEVEL:'crit'},
    command:['postgrest'],healthcheck:health(['CMD','postgrest','--ready'])};
   services[side+'-storage']={...base(side,'storage','supabase/storage-api'),depends_on:{...depends_on,[side+'-rest']:{condition:'service_healthy'}},
    environment:{ANON_KEY:anon,SERVICE_KEY:service,POSTGREST_URL:'http://'+name(run,side,'rest')+':3000',AUTH_JWT_SECRET:s.jwt,
-    DATABASE_URL:'postgres://supabase_storage_admin:'+s.password+'@'+db+':5432/postgres',STORAGE_PUBLIC_URL:api,REQUEST_ALLOW_X_FORWARDED_PATH:'true',FILE_SIZE_LIMIT:'1048576',STORAGE_BACKEND:'file',GLOBAL_S3_BUCKET:'stub',FILE_STORAGE_BACKEND_PATH:'/var/lib/storage',TENANT_ID:run+'-'+side,REGION:'local',ENABLE_IMAGE_TRANSFORMATION:'false',LOG_LEVEL:'error'},
+    DATABASE_URL:'postgres://supabase_storage_admin:'+s.password+'@'+db+':5432/'+database,STORAGE_PUBLIC_URL:api,REQUEST_ALLOW_X_FORWARDED_PATH:'true',FILE_SIZE_LIMIT:'1048576',STORAGE_BACKEND:'file',GLOBAL_S3_BUCKET:'stub',FILE_STORAGE_BACKEND_PATH:'/var/lib/storage',TENANT_ID:run+'-'+side,REGION:'local',ENABLE_IMAGE_TRANSFORMATION:'false',LOG_LEVEL:'error'},
    volumes:[{type:'volume',source:side+'-files',target:'/var/lib/storage'}],healthcheck:health(['CMD','wget','--no-verbose','--tries=1','--spider','http://127.0.0.1:5000/status'])};
   services[side+'-api']={...base(side,'api','kong/kong'),user:'0:0',depends_on:{[side+'-auth']:{condition:'service_healthy'},[side+'-rest']:{condition:'service_healthy'},[side+'-storage']:{condition:'service_healthy'}},
    environment:{KONG_DATABASE:'off',KONG_DECLARATIVE_CONFIG:'/home/kong/local.json',KONG_ROUTER_FLAVOR:'traditional_compatible',KONG_PROXY_LISTEN:'0.0.0.0:8000',KONG_ADMIN_LISTEN:'off',KONG_STATUS_LISTEN:'off',KONG_PLUGINS:'cors,key-auth,acl,request-transformer',KONG_PROXY_ACCESS_LOG:'off',KONG_PROXY_ERROR_LOG:'/dev/null',KONG_DNS_ORDER:'LAST,A,CNAME'},
@@ -107,7 +111,18 @@ export function validatePlan(plan,run){
   for(const v of s.volumes??[])if(/docker\.sock|containerd\.sock|\/proc|\/sys/.test(v.source)||(v.type==='bind'&&!v.read_only))fail('MOUNT_INVALID');
   const text=JSON.stringify(s.environment);
   if(FORBIDDEN.some(x=>text.includes(x))||/supabase\.co|https:\/\/|host\.docker\.internal|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY/.test(text))fail('REMOTE_ENV_FORBIDDEN');
- }return true;
+ }
+ const qualified=SIDES.some(side=>plan.services[side+'-db'].environment?.POSTGRES_DB===QUALIFICATION_DB);
+ if(qualified)for(const side of SIDES){
+  const db=plan.services[side+'-db'];
+  if(db.environment.POSTGRES_DB!==QUALIFICATION_DB||db.environment.PGDATABASE!==QUALIFICATION_DB
+   ||JSON.stringify(db.command)!==JSON.stringify(['postgres','-c','config_file=/etc/postgresql/postgresql.conf','-c','log_min_messages=fatal','-c','log_statement=none',...QUALIFICATION_ARGS]))fail('QUALIFICATION_PLAN_INVALID');
+  for(const [role,key]of [['auth','GOTRUE_DB_DATABASE_URL'],['rest','PGRST_DB_URI'],['storage','DATABASE_URL']]){
+   const url=new URL(plan.services[side+'-'+role].environment[key]);
+   if(url.hostname!==name(run,side,'db')||url.port!=='5432'||url.pathname!=='/'+QUALIFICATION_DB)fail('QUALIFICATION_DATABASE_INVALID');
+  }
+ }
+ return true;
 }
 export function validateInspection(plan,network,containers,volumes,{partial=false}={}){
  const run=plan.name,expected=Object.values(plan.services);
@@ -119,6 +134,10 @@ export function validateInspection(plan,network,containers,volumes,{partial=fals
    ||c.HostConfig?.Privileged||c.HostConfig?.PublishAllPorts||Object.keys(c.HostConfig?.PortBindings??{}).length||c.HostConfig?.CapAdd?.length
    ||['host','container'].some(x=>c.HostConfig?.NetworkMode?.startsWith(x))||c.HostConfig?.PidMode||c.HostConfig?.IpcMode==='host'||c.HostConfig?.Devices?.length
    ||c.Mounts?.some(x=>/docker\.sock|containerd\.sock/.test(x.Source)))fail('CONTAINER_INSPECTION_REFUSED');
+  if(s.environment?.POSTGRES_DB===QUALIFICATION_DB&&!partial){
+   if(JSON.stringify(c.Config?.Cmd)!==JSON.stringify(s.command))fail('QUALIFICATION_COMMAND_CHANGED');
+   for(const key of ['POSTGRES_DB','PGDATABASE'])if(!(c.Config?.Env??[]).includes(key+'='+QUALIFICATION_DB))fail('QUALIFICATION_DATABASE_CHANGED');
+  }
   const expectedMounts=s.volumes??[],actualMounts=c.Mounts??[];
   if(actualMounts.length!==expectedMounts.length)fail('MOUNT_INSPECTION_REFUSED');
   for(const mount of actualMounts){
@@ -165,6 +184,44 @@ function inspect(plan,partial=false){
   if(volumes.some(v=>!allowed.includes(v.Name)||v.Labels?.[LABEL]!==run||v.Driver!=='local'||Object.keys(v.Options??{}).length))fail('VOLUME_INSPECTION_REFUSED');
  }else validateInspection(plan,networks[0],containers,volumes,{partial});
  return {containers,volumes,networkPresent:networks.length===1};
+}
+export function qualificationPsqlArgs(run,{test=false}={}){
+ runName(run);if(typeof test!=='boolean')fail('QUALIFICATION_MODE_INVALID');
+ return ['exec','-i',...(test?['--env','PGOPTIONS=-c jolene.test_isolated=candidatures_multi_pg17']:[]),
+  name(run,'source','db'),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
+  '-U','postgres','-h','/var/run/postgresql','-d',QUALIFICATION_DB,'-f','-'];
+}
+export function qualifiedSession(dir){
+ const {m,plan}=readRun(dir);verifySources();localDocker();
+ if(m.qualification!==true||m.database!==QUALIFICATION_DB)fail('QUALIFICATION_REQUIRED');
+ const locked=new Set(read(resolve(ROOT,'images.lock.json')).images.map(x=>x.reference));
+ if(Object.values(plan.services).some(s=>!locked.has(s.image)))fail('IMAGE_NOT_LOCKED');
+ const initial=inspect(plan);
+ // Stop Auth/REST/Storage/Kong on BOTH stacks before import; no API can run mutations.
+ const clients=initial.containers.filter(c=>!SIDES.some(side=>c.Name==='/'+name(m.run,side,'db')));
+ invoke(['stop','--time','10',...clients.map(c=>c.Id)]);
+ const verify=()=>{
+  const state=inspect(plan,true);
+  if(state.containers.length!==10||state.volumes.length!==6)fail('QUALIFICATION_RUNTIME_INCOMPLETE');
+  for(const c of state.containers){
+   const db=SIDES.some(side=>c.Name==='/'+name(m.run,side,'db'));
+   if(c.State?.Status!==(db?'running':'exited'))fail('QUALIFICATION_WORKER_STATE');
+   if(db&&JSON.stringify(c.Config?.Cmd)!==JSON.stringify(plan.services[c.Name.includes('-source-')?'source-db':'target-db'].command))fail('QUALIFICATION_COMMAND_CHANGED');
+  }
+  return true;
+ };
+ verify();
+ return {run:m.run,verify,sql:(bytes,options={})=>{
+  try{return invoke(qualificationPsqlArgs(m.run,options),bytes);}
+  catch(error){
+   // Only machine codes and input line number leave process memory; never SQL, notices or credentials.
+   const stderr=String(error?.detail?.stderr??''),state=stderr.match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/),line=stderr.match(/psql:<stdin>:(\d+):/);
+   const code=stderr.match(/\b(CAND_MULTI_[A-Z_]{1,80})\b/);
+   const safe=new Error('QUALIFICATION_SQL_FAILED');
+   safe.diagnostic={sqlstate:state?.[1]??null,line:line?Number(line[1]):null,assertion:code?.[1]??null};
+   throw safe;
+  }
+ }};
 }
 export function classifyHealthOutput(output){
  if(typeof output!=='string'||output.length===0)return {category:'no_output',http_status:null,loopback_family:'not_observed'};
@@ -220,14 +277,14 @@ export function assertAbsent(run,execute=invoke){
 }
 export function main(args){
  const [cmd,dirArg,runArg]=args,dir=resolve(dirArg??'.');currentPhase='read_plan';
- if(cmd==='plan'){
+ if(cmd==='plan'||cmd==='plan-qualification'){
   currentPhase='plan';const run=runName(runArg??'');verifySources();if(existsSync(dir))fail('DIRECTORY_MUST_BE_NEW');
   const lock=read(resolve(ROOT,'images.lock.json')),secrets=Object.fromEntries(SIDES.map(side=>[side,{password:randomBytes(32).toString('hex'),jwt:randomBytes(48).toString('hex')}]));
-  const plan=makePlan(run,dir,lock,secrets);validatePlan(plan,run);mkdirSync(dir,{mode:0o700});
+  const plan=makePlan(run,dir,lock,secrets,{qualification:cmd==='plan-qualification'});validatePlan(plan,run);mkdirSync(dir,{mode:0o700});
   const gateway_sha256={};
   for(const side of SIDES){const env=plan.services[side+'-storage'].environment,n=side+'-gateway.private.json',data=JSON.stringify(gateway(run,side,env.ANON_KEY,env.SERVICE_KEY),null,2);write(resolve(dir,n),data);gateway_sha256[n]=sha(data);}
   const body=JSON.stringify(plan,null,2);write(resolve(dir,'compose.private.json'),body);write(resolve(dir,'empty.env'),'');
-  const manifest={version:1,run,compose_sha256:sha(body),gateway_sha256,network:run+'-network',containers:Object.values(plan.services).map(x=>x.container_name),volumes:Object.values(plan.volumes).map(x=>x.name),backend_urls:Object.fromEntries(SIDES.map(s=>[s,'http://'+name(run,s,'api')+':8000'])),schema_imported:false,actors_created:0,files_uploaded:0};
+  const manifest={version:1,run,qualification:cmd==='plan-qualification',database:cmd==='plan-qualification'?QUALIFICATION_DB:'postgres',compose_sha256:sha(body),gateway_sha256,network:run+'-network',containers:Object.values(plan.services).map(x=>x.container_name),volumes:Object.values(plan.volumes).map(x=>x.name),backend_urls:Object.fromEntries(SIDES.map(s=>[s,'http://'+name(run,s,'api')+':8000'])),schema_imported:false,actors_created:0,files_uploaded:0};
   write(resolve(dir,'manifest.json'),JSON.stringify(manifest,null,2));return {result:'LOCAL_PLAN_ONLY',run,containers:10,schema_imported:false};
  }
  if(cmd==='absent'){currentPhase='docker_context';localDocker();return assertAbsent(runName(dirArg??''));}
@@ -260,7 +317,7 @@ export function main(args){
  }
  currentPhase=cmd==='down'?'cleanup_inventory':'inspection';const state=inspect(plan,cmd==='down');
  if(cmd==='extensions'){
-  const inventories=SIDES.map(side=>{currentPhase='extensions_'+side;const result=JSON.parse(invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],readFileSync(resolve(HERE,'preflight-extensions.sql'),'utf8')));return {side,...projectExtensions(result)};});
+  const inventories=SIDES.map(side=>{currentPhase='extensions_'+side;const result=JSON.parse(invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-h','/var/run/postgresql','-d',plan.services[side+'-db'].environment.POSTGRES_DB],readFileSync(resolve(HERE,'preflight-extensions.sql'),'utf8')));return {side,...projectExtensions(result)};});
   return {result:'EXTENSION_CATALOGUE_ONLY',run:m.run,inventories,extensions_changed:false,schema_imported:false};
  }
  if(cmd==='down'){
@@ -271,7 +328,7 @@ export function main(args){
  }
  const api_health=[];
  for(const side of SIDES){
-  currentPhase='empty_sql_'+side;invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],readFileSync(resolve(HERE,'preflight-empty.sql'),'utf8'));
+  currentPhase='empty_sql_'+side;invoke(['exec','-i',name(m.run,side,'db'),'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-h','/var/run/postgresql','-d',plan.services[side+'-db'].environment.POSTGRES_DB],readFileSync(resolve(HERE,'preflight-empty.sql'),'utf8'));
   const origin='http://'+name(m.run,side,'api')+':8000';
   const probe="(async()=>{const statuses=[];for(const path of ['/auth/v1/health','/rest/v1/','/storage/v1/status']){const r=await fetch("+JSON.stringify(origin)+"+path,{headers:{apikey:process.env.ANON_KEY,Authorization:'Bearer '+process.env.ANON_KEY},redirect:'error',signal:AbortSignal.timeout(5000)});statuses.push(r.status);await r.body?.cancel();if(r.status!==200)process.exit(2)}let escaped=false;try{await fetch('https://example.com',{redirect:'error',signal:AbortSignal.timeout(3000)});escaped=true}catch{}if(escaped)process.exit(3);process.stdout.write(JSON.stringify({statuses,outbound:'blocked'}))})().catch(()=>process.exit(4))";
   currentPhase='api_health_'+side;const response=JSON.parse(invoke(['exec',name(m.run,side,'storage'),'node','-e',probe]));
