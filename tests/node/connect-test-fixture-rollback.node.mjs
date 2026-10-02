@@ -15,7 +15,8 @@ function transport({lost=false,missing=false,drift=false}={}) {
     const request=JSON.parse(options.body);calls.push({url,...request});
     assert.equal(url,'https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/database/query');
     assert.equal(options.redirect,'error');
-    if(request.read_only)return {ok:true,redirected:false,json:async()=>[{observation:drift&&calls.length===3?{...empty(),cohort:{...empty().cohort,mandats:1}}:empty()}]};
+    assert.equal(request.read_only,false);
+    if(request.query.startsWith('BEGIN READ ONLY;'))return {ok:true,redirected:false,json:async()=>[{observation:drift&&calls.length===3?{...empty(),cohort:{...empty().cohort,mandats:1}}:empty()}]};
     if(lost)throw Error('secret that must not escape');
     return {ok:true,redirected:false,json:async()=>missing?[]:sentinel};
   };
@@ -48,14 +49,28 @@ test('rendered SQL contains exact seed bytes, synthetic Auth only, independent r
 test('simulated SQL transport requires rollback sentinel and separate read; it is not a PostgreSQL execution',async()=>{
   const h=transport(),reports=[];const r=await executeWitness({env,localSha:source,seed,fetcher:h.fetcher,record:x=>reports.push(structuredClone(x))});
   assert.equal(r.success,true);assert.equal(r.rollbackSentinel,true);assert.equal(r.independentRead,true);
-  assert.deepEqual(h.calls.map(x=>x.read_only),[true,false,true]);assert.equal(h.calls.filter(x=>!x.read_only).length,1);
+  assert.deepEqual(h.calls.map(x=>x.query.startsWith('BEGIN READ ONLY;')),[true,false,true]);assert.equal(h.calls.filter(x=>!x.query.startsWith('BEGIN READ ONLY;')).length,1);
+  for(const call of [h.calls[0],h.calls[2]]){assert.equal(call.read_only,false);assert.match(call.query,/ROLLBACK;$/);assert.match(call.query,/transaction_read_only/);assert.match(call.query,/vault\.decrypted_secrets/);}
   assert.equal(r.authHttp,false);assert.equal(r.edgeCalled,false);assert.equal(r.stripeCalled,false);
   assert.ok(reports.every(x=>!JSON.stringify(x).includes('private-management-token')));
 });
 test('lost transaction or missing sentinel still rechecks once and never retries',async()=>{
   for(const option of [{lost:true},{missing:true},{drift:true}]) {
     const h=transport(option),r=await executeWitness({env,localSha:source,seed,fetcher:h.fetcher});assert.equal(r.success,false);
-    assert.deepEqual(h.calls.map(x=>x.read_only),[true,false,true]);assert.equal(h.calls.filter(x=>!x.read_only).length,1);
+    assert.deepEqual(h.calls.map(x=>x.query.startsWith('BEGIN READ ONLY;')),[true,false,true]);assert.equal(h.calls.filter(x=>!x.query.startsWith('BEGIN READ ONLY;')).length,1);
+  }
+});
+
+test('HTTP diagnostics expose only status and allowlisted SQLSTATE/category, without provider details or retry',async()=>{
+  for(const [body,state,category] of [
+    [{message:'ERROR:  42501: permission denied for function _crypto_aead_det_decrypt\nsecret-token customer@example.com'},'42501','VAULT_EXECUTE_DENIED'],
+    [{error:{code:'25006',message:'secret-token customer@example.com'}},'25006','READ_ONLY_VIOLATION'],
+    [{code:'SECRT',message:'secret-token customer@example.com',details:{Authorization:'private-management-token'}},null,'HTTP_REFUSED'],
+  ]) {
+    let calls=0;const report=await executeWitness({env,localSha:source,seed,fetcher:async()=>{calls++;return {ok:false,status:400,redirected:false,json:async()=>body};}});
+    assert.equal(calls,1);assert.equal(report.attempted,false);assert.equal(report.code,'SQL_HTTP_REFUSED');
+    assert.deepEqual(report.httpFailures,[{phase:'preflight',httpStatus:400,sqlState:state,category}]);
+    assert.doesNotMatch(JSON.stringify(report),/secret-token|customer@|private-management-token|SECRT/);
   }
 });
 test('Validate PR runs this witness in its serialized staging job before bootstrap, even without a migration',async()=>{

@@ -5,7 +5,7 @@ import { readFile, mkdtemp, stat, chmod, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newManifest, validateManifest, checkContract, validateAuth, validateCustomer, validateAccount, validateSnapshot,
-  executePreparation, privateRead, privateWrite, CLOSED_CONTRACT, PROJECT, PLATFORM, EXCLUDED_ACCOUNT } from '../../scripts/ci/connect-test-fixture.mjs';
+  executePreparation, privateRead, privateWrite, readOnlySql, CLOSED_CONTRACT, PROJECT, PLATFORM, EXCLUDED_ACCOUNT } from '../../scripts/ci/connect-test-fixture.mjs';
 import { preflightSql, snapshotSql, transactionSql, linkSql, catalogueSqlFixture, calendarProofSql } from '../../scripts/ci/connect-test-fixture-sql.mjs';
 const seed=await readFile(new URL('../../scripts/ci/connect-test-fixture-prepare.sql',import.meta.url),'utf8');
 const sha='a'.repeat(40),hash=createHash('sha256').update(seed).digest('hex');
@@ -29,15 +29,16 @@ function harness(m,options={}) {
     commissions:state.generated?[{id:commissionId,honoraire:invoiceId,status:'EMISE',kind:'FACTURE',total:14.4,linked:false}]:[]});
   const fetcher=async(url,init)=>{
     const u=new URL(url);state.calls.push({url,init});let result;
-    if(init.method==='POST'&&!(u.pathname.endsWith('/database/query')&&JSON.parse(init.body).read_only===true))state.writes.push({url,init});
+    if(init.method==='POST'&&!(u.pathname.endsWith('/database/query')&&JSON.parse(init.body).query.startsWith('BEGIN READ ONLY;')))state.writes.push({url,init});
     if(options.before)await options.before(url,init,state);
     if(u.hostname==='api.github.com')result={ref:'refs/heads/main',object:{type:'commit',sha}};
     else if(u.hostname==='api.supabase.com') {
       if(u.pathname.endsWith('/functions'))result=Object.entries(edges).map(([slug,pin])=>({slug,status:'ACTIVE',...pin}));
       else if(u.pathname.endsWith('/database/query')) {
         const {query,read_only}=JSON.parse(init.body);
-        if(read_only&&query.includes("'gateClosed'"))result=[{receipt:catalogue}];
-        else if(read_only)result=[{receipt:snapshot()}];
+        assert.equal(read_only,false);
+        if(query.startsWith('BEGIN READ ONLY;')&&query.includes("'gateClosed'"))result=[{receipt:catalogue}];
+        else if(query.startsWith('BEGIN READ ONLY;'))result=[{receipt:snapshot()}];
         else if(query.includes('INSERT INTO public.soignants')) {state.seeded=true;result=[{receipt:{runId:m.sql.runId,missionId:m.sql.ids.mission,montantOriginal:80,commissionTtc:14.4,signatureSynthetique:true,qualificationVerifiee:false,mfaProuve:false,periodeDebut:'2026-09-21',periodeFin:'2026-09-27'}}];}
         else {state.linked=true;result=[{receipt:{linked:true}}];}
       }else result={id:PROJECT,status:'ACTIVE_HEALTHY',database:{host:`db.${PROJECT}.supabase.co`}};
@@ -147,4 +148,15 @@ test('catalogue casts internal char and calendar witness injects holidays only i
   const calendar=calendarProofSql();assert.match(calendar,/injected_holidays\(day\) AS \(VALUES/);
   assert.match(calendar,/week_start=expected_week/);assert.match(calendar,/2026-04-06/);assert.match(calendar,/2026-05-25/);
   assert.doesNotMatch(calendar,/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP)\b/i);
+});
+
+test('operator catalogue reads preserve Vault guard inside a PostgreSQL read-only transaction',()=>{
+  const sql=readOnlySql(preflightSql());
+  assert.match(sql,/^BEGIN READ ONLY;/);assert.match(sql,/ROLLBACK;$/);
+  assert.match(sql,/current_setting\('transaction_read_only'\)<>'on'/);
+  assert.match(sql,/current_user NOT IN \('postgres','supabase_admin'\)/);
+  assert.match(sql,/FROM vault\.decrypted_secrets/);assert.match(sql,/'supportStagingExact'/);
+  assert.doesNotMatch(sql,/\b(?:COMMIT|GRANT|REVOKE)\b/);
+  assert.throws(()=>readOnlySql('BEGIN; SELECT 1; COMMIT;'),/READ_ONLY_SELECT_REQUIRED/);
+  assert.throws(()=>readOnlySql('SELECT 1; COMMIT; UPDATE public.notifications SET lu=true;'),/READ_ONLY_SELECT_REQUIRED/);
 });

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { newManifest, validateManifest, validateSnapshot, PROJECT } from './connect-test-fixture.mjs';
+import { newManifest, validateManifest, validateSnapshot, readOnlySql, PROJECT } from './connect-test-fixture.mjs';
 import { catalogueSqlFixture, snapshotSql, literal } from './connect-test-fixture-sql.mjs';
 
 export const SEED_SHA256='57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9badc4020ab';
@@ -18,6 +18,22 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 class Refusal extends Error {constructor(code){super(code);this.code=code;}}
 const check=(condition,code)=>{if(!condition)throw new Refusal(code);};
 const selectBody=sql=>sql.replace(/;\s*$/,'');
+const SQL_STATES=new Set(['42501','25006','42601','42703','42883','42725','42P01','57014','53300','08000','08001','08006','57P01','XX000','P0001','23505','23502','23503','22023']);
+async function httpDiagnostic(response,phase) {
+  const diagnostic={phase,httpStatus:Number.isInteger(response.status)&&response.status>=100&&response.status<=599?response.status:null,sqlState:null,category:response.redirected?'REDIRECT':'HTTP_REFUSED'};
+  if(response.redirected)return diagnostic;
+  try {
+    const body=await response.json();
+    const message=[body?.message,body?.error?.message,typeof body?.error==='string'?body.error:null].filter(x=>typeof x==='string').join('\n').slice(0,65536);
+    const state=[body?.code,body?.error?.code,message.match(/\bERROR:\s+([0-9A-Z]{5}):/)?.[1]].find(x=>SQL_STATES.has(x));
+    diagnostic.sqlState=state??null;
+    if(/permission denied for function (?:vault\.)?_crypto_aead_det_decrypt\b/i.test(message))diagnostic.category='VAULT_EXECUTE_DENIED';
+    else if(state==='42501'||/permission denied/i.test(message))diagnostic.category='PRIVILEGE_DENIED';
+    else if(state==='25006')diagnostic.category='READ_ONLY_VIOLATION';
+    else if(state==='57014')diagnostic.category='STATEMENT_TIMEOUT';
+  }catch{/* An absent/non-JSON error body never makes a failed request succeed. */}
+  return diagnostic;
+}
 export function loadSeed() {const seed=readFileSync(new URL('./connect-test-fixture-prepare.sql',import.meta.url),'utf8');check(sha(seed)===SEED_SHA256,'SEED_SOURCE_DRIFT');return seed;}
 export function context(env,localSha) {
   check(env.GITHUB_ACTIONS==='true'&&env.GITHUB_EVENT_NAME==='pull_request'&&env.GITHUB_REPOSITORY==='Gabpcd/JJJJJ'
@@ -128,11 +144,12 @@ ROLLBACK;
 }
 export async function executeWitness({env,localSha,seed=loadSeed(),fetcher=fetch,record=()=>{}}) {
   const m=context(env,localSha),report={schemaVersion:1,projectRef:PROJECT,sourceSha:localSha,seedSha256:SEED_SHA256,
-    success:false,attempted:false,rollbackSentinel:false,independentRead:false,authHttp:false,edgeCalled:false,stripeCalled:false,phase:'preflight',code:null};
+    success:false,attempted:false,rollbackSentinel:false,independentRead:false,authHttp:false,edgeCalled:false,stripeCalled:false,phase:'preflight',code:null,httpFailures:[]};
   check(sha(seed)===SEED_SHA256,'SEED_SOURCE_DRIFT');
   const request=async(query,readOnly)=>{
-    try {const response=await fetcher(ENDPOINT,{method:'POST',redirect:'error',signal:AbortSignal.timeout(readOnly?30000:110000),headers:{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({query,read_only:readOnly})});
-      check(response.ok&&!response.redirected,'SQL_HTTP_REFUSED');return await response.json();
+    try {const response=await fetcher(ENDPOINT,{method:'POST',redirect:'error',signal:AbortSignal.timeout(readOnly?40000:110000),headers:{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({query:readOnly?readOnlySql(query):query,read_only:false})});
+      if(!response.ok||response.redirected){report.httpFailures.push(await httpDiagnostic(response,report.phase));throw new Refusal('SQL_HTTP_REFUSED');}
+      return await response.json();
     }catch(error){if(error instanceof Refusal)throw error;throw new Refusal('SQL_TRANSPORT_OR_JSON');}
   };
   let before;
