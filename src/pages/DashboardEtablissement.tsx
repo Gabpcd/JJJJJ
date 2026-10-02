@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -54,20 +54,40 @@ export default function DashboardEtablissement() {
   const { user, parcours, etablissementId, loading: scopeLoading, resolved: scopeResolved, error: scopeError, retry: relancerScope } = scope;
   const queryClient = useQueryClient();
   const { afficherNotification } = useNotification();
+  const lectureSuspenduePourDepart = useRef(false);
 
   useEffect(() => {
     const queryKey = ['dashboard-etablissement', user?.id, etablissementId];
     // Un départ du document ne démonte pas nécessairement React (bfcache).
     // Annuler la lecture exacte, puis la reprendre si ce document est restauré.
-    const quitterDocument = () => { void queryClient.cancelQueries({ queryKey, exact: true }); };
+    const quitterDocument = () => {
+      lectureSuspenduePourDepart.current = true;
+      void queryClient.cancelQueries({ queryKey, exact: true });
+    };
+    const reprendreLecture = () => {
+      if (!lectureSuspenduePourDepart.current || document.visibilityState === 'hidden') return;
+      lectureSuspenduePourDepart.current = false;
+      void queryClient.refetchQueries({ queryKey, exact: true, type: 'active' });
+    };
     const restaurerDocument = (event: PageTransitionEvent) => {
-      if (event.persisted) void queryClient.refetchQueries({ queryKey, exact: true, type: 'active' });
+      if (event.persisted) lectureSuspenduePourDepart.current = true;
+      reprendreLecture();
     };
     window.addEventListener('pagehide', quitterDocument);
     window.addEventListener('pageshow', restaurerDocument);
+    // Un départ refusé/interrompu peut conserver ce document sans pageshow.
+    // Reprendre sur retour du focus ou interaction, jamais via une temporisation
+    // qui lancerait une nouvelle lecture pendant une navigation encore en cours.
+    window.addEventListener('focus', reprendreLecture);
+    window.addEventListener('pointerdown', reprendreLecture);
+    window.addEventListener('keydown', reprendreLecture);
     return () => {
+      lectureSuspenduePourDepart.current = false;
       window.removeEventListener('pagehide', quitterDocument);
       window.removeEventListener('pageshow', restaurerDocument);
+      window.removeEventListener('focus', reprendreLecture);
+      window.removeEventListener('pointerdown', reprendreLecture);
+      window.removeEventListener('keydown', reprendreLecture);
     };
   }, [queryClient, user?.id, etablissementId]);
   interface EtabInfo {
@@ -125,9 +145,13 @@ export default function DashboardEtablissement() {
   // défaut pour garder la vue par défaut focalisée sur l'action.
   const [statsOuvertes, setStatsOuvertes] = useState(false);
 
-  const { data: dashData, isLoading: dashboardLoading } = useQuery({
+  const { data: dashData, isPending: dashboardPending, isFetching: dashboardFetching } = useQuery({
     queryKey: ['dashboard-etablissement', user?.id, etablissementId],
     queryFn: async ({ signal }) => {
+      // AbortSignal.throwIfAborted n'existe pas sur iOS 15.0–15.3.
+      const verifierLectureActive = () => {
+        if (signal.aborted) throw signal.reason ?? new DOMException('Chargement annulé', 'AbortError');
+      };
       let partialError = false;
       const now = new Date();
       const debutMois = debutMoisParis(now).toISOString();
@@ -167,7 +191,7 @@ export default function DashboardEtablissement() {
           supabase.rpc('fn_stats_dashboard_etablissement' as any).abortSignal(signal),
           supabase.rpc('fn_mes_soignants_etablissement').abortSignal(signal),
         ]);
-        signal.throwIfAborted();
+        verifierLectureActive();
 
         if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); partialError = true; }
         else if (resEtab.data) etabResult = resEtab.data;
@@ -181,7 +205,7 @@ export default function DashboardEtablissement() {
           const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
           if (sgIds.length > 0) {
             const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds).abortSignal(signal);
-            signal.throwIfAborted();
+            verifierLectureActive();
             if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
           }
         }
@@ -202,14 +226,14 @@ export default function DashboardEtablissement() {
                 idsMissionsRecentes,
                 { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal },
               );
-              signal.throwIfAborted();
+              verifierLectureActive();
               for (const creneau of creneauxRecents as CreneauPlanning[]) {
                 const liste = creneauxRecentsParMission.get(creneau.mission_id) ?? [];
                 liste.push(creneau);
                 creneauxRecentsParMission.set(creneau.mission_id, liste);
               }
             } catch (erreurCreneauxRecents) {
-              signal.throwIfAborted();
+              verifierLectureActive();
               logger.warn('[DashboardEtab] Erreur planning des dernières missions', erreurCreneauxRecents);
               partialError = true;
               creneauxRecentsDisponibles = false;
@@ -270,7 +294,7 @@ export default function DashboardEtablissement() {
               .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
               .order('debut_le', { ascending: true }).abortSignal(signal),
           ]);
-          signal.throwIfAborted();
+          verifierLectureActive();
 
           if (resCout.error) {
             logger.warn('[DashboardEtab] Erreur coût/top soignants', resCout.error);
@@ -294,7 +318,7 @@ export default function DashboardEtablissement() {
             const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
             if (missingIds.length > 0) {
               const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds).abortSignal(signal);
-              signal.throwIfAborted();
+              verifierLectureActive();
               if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
             }
             topSoignantsResult = sorted.map(([id, count]) => {
@@ -317,7 +341,7 @@ export default function DashboardEtablissement() {
                 missionsPlanning.map((mission) => mission.id),
                 { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal },
               ) as CreneauPlanning[];
-              signal.throwIfAborted();
+              verifierLectureActive();
             }
 
             const creneauxParMission = new Map<string, CreneauPlanning[]>();
@@ -345,7 +369,7 @@ export default function DashboardEtablissement() {
             );
           }
         } catch (err) {
-          signal.throwIfAborted();
+          verifierLectureActive();
           logger.warn('[DashboardEtab] Erreur chargement planning', err);
           partialError = true;
           erreurPlanningResult = 'Le planning n\'a pas pu être chargé. Réessayez dans un instant.';
@@ -360,7 +384,7 @@ export default function DashboardEtablissement() {
             .eq('statut', 'TERMINEE')
             .not('soignant_assigne_id', 'is', null)
             .limit(50).abortSignal(signal);
-          signal.throwIfAborted();
+          verifierLectureActive();
           if (msTerminees && msTerminees.length > 0) {
             const idsTerminees = msTerminees.map((m: any) => m.id);
             // Deux sources d'évaluation à croiser : evaluations (modale post-mission)
@@ -369,7 +393,7 @@ export default function DashboardEtablissement() {
               supabase.from('evaluations').select('mission_id').eq('type_evaluateur', 'ETABLISSEMENT').in('mission_id', idsTerminees).abortSignal(signal),
               supabase.from('notations_missions' as any).select('mission_id').eq('sens', 'ETAB_VERS_SOIGNANT').in('mission_id', idsTerminees).abortSignal(signal),
             ]);
-            signal.throwIfAborted();
+            verifierLectureActive();
             const evalSet = new Set([
               ...(resEvals.data || []).map((e: any) => e.mission_id),
               ...((resNotes.data || []) as any[]).map((n: any) => n.mission_id),
@@ -378,18 +402,18 @@ export default function DashboardEtablissement() {
             evaluationsEnAttenteResult = { count: nonEvaluees.length, premiereMissionId: nonEvaluees[0] ?? null };
           }
         } catch (err) {
-          signal.throwIfAborted();
+          verifierLectureActive();
           logger.warn('[DashboardEtab] Erreur évaluations en attente', err);
         }
 
       } catch (err) {
-        signal.throwIfAborted();
+        verifierLectureActive();
         handleErrorSilent(err, '[DashboardEtab] Erreur critique');
         partialError = true;
       }
 
       // Ne pas lancer d'audit ni publier un résultat partiel après annulation.
-      signal.throwIfAborted();
+      verifierLectureActive();
       // L'audit déjà envoyé n'est pas annulé : c'est une écriture de consultation.
       try {
         await supabase.rpc('fn_ecrire_audit_safe', {
@@ -398,10 +422,10 @@ export default function DashboardEtablissement() {
           p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
         });
       } catch (err) {
-        signal.throwIfAborted();
+        verifierLectureActive();
         logger.warn('[DashboardEtab] Erreur audit HDS', err);
       }
-      signal.throwIfAborted();
+      verifierLectureActive();
 
       return {
         etab: etabResult,
@@ -423,6 +447,19 @@ export default function DashboardEtablissement() {
     staleTime: 60_000,
     enabled: !!user && !!etablissementId,
   });
+
+  useEffect(() => {
+    if (!dashboardFetching) return;
+    const quitterDocument = () => {
+      lectureSuspenduePourDepart.current = true;
+      void queryClient.cancelQueries({ queryKey: ['dashboard-etablissement', user?.id, etablissementId], exact: true });
+    };
+    // WebKit rejette les fetch avant pagehide : arrêter leurs consommateurs dès
+    // beforeunload. Aucun prompt ni prévention du départ. Écoute limitée à la
+    // lecture en cours pour préserver le cache de navigation des pages prêtes.
+    window.addEventListener('beforeunload', quitterDocument);
+    return () => window.removeEventListener('beforeunload', quitterDocument);
+  }, [dashboardFetching, queryClient, user?.id, etablissementId]);
 
   const etab = useMemo(() => dashData?.etab ?? null, [dashData]);
   const tauxCommissionHt = Number(etab?.taux_commission_negocie ?? 15);
@@ -447,7 +484,9 @@ export default function DashboardEtablissement() {
   const evaluationsEnAttente = useMemo(() => dashData?.evaluationsEnAttente ?? { count: 0, premiereMissionId: null }, [dashData]);
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
-  const loading = scopeLoading || !scopeResolved || dashboardLoading;
+  // Une lecture annulée sans données reste pending/idle : ne pas afficher de
+  // faux zéros si le navigateur garde le document après un départ interrompu.
+  const loading = scopeLoading || !scopeResolved || (!!user && !!etablissementId && dashboardPending);
   const { estProlonge: chargementProlonge, reinitialiser: reinitialiserChargement } = useChargementProlonge(loading);
 
   const relancerDashboard = () => {
