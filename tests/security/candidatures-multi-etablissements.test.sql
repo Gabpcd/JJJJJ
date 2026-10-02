@@ -208,12 +208,13 @@ SELECT pg_temp.cand_id(n),pg_temp.cand_id(CASE n WHEN 101 THEN 1 WHEN 103 THEN 3
 FROM generate_series(101,105) n;
 -- Le trigger réel a créé le créneau initial. Ajouter ensuite les témoins de
 -- tri, pause et effectif AVANT les candidatures (planning verrouillé ensuite).
+-- L’ordre est unique par mission, tous types confondus ; le prévisionnel initial occupe 1.
 INSERT INTO public.mission_creneaux(id,mission_id,debut,fin,est_pause,type_pause,type_creneau,ordre)
 VALUES
  (pg_temp.cand_id(302),pg_temp.cand_id(102),current_date+interval '12 days 09 hours',current_date+interval '12 days 13 hours',false,NULL,'PREVISIONNEL',3),
  (pg_temp.cand_id(301),pg_temp.cand_id(102),current_date+interval '11 days 09 hours',current_date+interval '11 days 13 hours',false,NULL,'PREVISIONNEL',2),
  (pg_temp.cand_id(303),pg_temp.cand_id(102),current_date+interval '10 days 13 hours',current_date+interval '10 days 14 hours',true,'PAUSE','PREVISIONNEL',4),
- (pg_temp.cand_id(304),pg_temp.cand_id(102),current_date+interval '10 days 09 hours',current_date+interval '10 days 12 hours',false,NULL,'EFFECTIF',1);
+ (pg_temp.cand_id(304),pg_temp.cand_id(102),current_date+interval '10 days 09 hours',current_date+interval '10 days 12 hours',false,NULL,'EFFECTIF',5);
 -- Une adhésion active de famille SOIGNANT est interdite par le trigger réel
 -- fn_protect_famille_compte_membre_etablissement : aucun faux positif SOIGNANT+RH
 -- n’est fabriqué ici en neutralisant cette protection. Le soignant tiers 21
