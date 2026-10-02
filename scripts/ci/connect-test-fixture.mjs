@@ -24,6 +24,19 @@ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Obje
 const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 const only=rows=>{requireThat(Array.isArray(rows)&&rows.length===1&&Object.keys(rows[0]).join()==='receipt','SQL_SHAPE');return rows[0].receipt;};
 
+// Keep the operator role needed by Vault; enforce read-only in PostgreSQL
+// instead of the Management API's restricted read_only role. Never change ACLs.
+export function readOnlySql(sql) {
+  requireThat(/^SELECT\b/.test(sql.trim())&&!/\b(?:BEGIN|START TRANSACTION|COMMIT|END|ROLLBACK|ABORT)\s*;|^[ \t]*\\/im.test(sql),'READ_ONLY_SELECT_REQUIRED');
+  return `BEGIN READ ONLY; SET LOCAL statement_timeout='30s'; SET LOCAL TIME ZONE 'UTC';
+DO $fixture_read_only$ BEGIN
+  IF current_setting('transaction_read_only')<>'on' OR current_user NOT IN ('postgres','supabase_admin')
+    OR session_user NOT IN ('postgres','supabase_admin') THEN RAISE EXCEPTION 'CONNECT_FIXTURE_READ_ONLY_CONTEXT'; END IF;
+END $fixture_read_only$;
+${sql}
+ROLLBACK;`;
+}
+
 function siret(id) {
   const stem=`99${BigInt(`0x${id.replaceAll('-','').slice(0,10)}`).toString().padStart(11,'0').slice(-11)}`;
   for(let n=0;n<10;n++) {const v=stem+n;
@@ -146,7 +159,7 @@ export async function executePreparation({manifest:m,contract:c,env,seed,local,f
       requireThat(response.ok&&!response.redirected,'HTTP_REFUSED');const text=await response.text();requireThat(Buffer.byteLength(text)<2_000_000,'RESPONSE_TOO_LARGE');return JSON.parse(text);
     }catch(error){if(error instanceof Refusal)throw error;throw new Refusal('TRANSPORT_OR_JSON_UNCERTAIN');}
   };
-  const query=async(sql,readOnly=true)=>only(await request('management','/database/query',{method:'POST',body:{query:sql,read_only:readOnly}}));
+  const query=async(sql,readOnly=true)=>only(await request('management','/database/query',{method:'POST',body:{query:readOnly?readOnlySql(sql):sql,read_only:false}}));
   const snapshot=async phase=>{const r=await query(snapshotSql(m.sql));validateSnapshot(r,m,phase);return r;};
   const preflight=async()=>{
     checkContract(c,m,seed);
