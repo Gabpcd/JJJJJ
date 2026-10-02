@@ -22,8 +22,8 @@ function harness(m,options={}) {
   const state={auth:[],seeded:false,linked:false,generated:false,calls:[],writes:[],...options.state};
   const snapshot=()=>({auth:state.auth,soignants:state.seeded?[{id:m.members[0].id,email:m.members[0].email,test:true,source:'RECETTE_CONNECT_TEST_SYNTHETIQUE',account:state.linked?'acct_fixture':null,sms:false,smsAlerts:false,defacto:false}]:[],
     etablissements:state.seeded?[{id:m.members[1].id,email:m.members[1].email,test:true,source:'RECETTE_CONNECT_TEST_SYNTHETIQUE',customer:state.linked?'cus_fixture':null,sms:false,chorus:false}]:[],
-    mission:state.seeded?{id:m.sql.ids.mission,soignant:m.members[0].id,etablissement:m.members[1].id,status:'EN_COURS',label:`RECETTE CONNECT TEST SYNTHETIQUE ${m.sql.runId}`,hours:8,effective:4,net:160,commission:24}:null,
-    preferencesClosed:state.seeded,activeAdmin:0,payments:0,emailQueue:0,emailRetries:0,emailSkips:state.generated?2:0,
+    mission:state.seeded?{id:m.sql.ids.mission,soignant:m.members[0].id,etablissement:m.members[1].id,status:'EN_COURS',label:`RECETTE CONNECT TEST SYNTHETIQUE ${m.sql.runId}`,hours:8,effective:4,net:160,commission:24,startsOn:options.missionStartsOn??'2026-09-21',endsOn:'2026-10-09'}:null,
+    preferencesClosed:state.seeded,activeAdmin:0,payments:0,paymentClaims:0,emailQueue:0,emailRetries:0,emailSkips:state.generated?2:0,
     onboarding:state.linked?[{account:'acct_fixture',soignant:m.members[0].id,status:'EN_COURS',complete:false,charges:false,payouts:false,details:false}]:[],
     invoices:state.generated?[{id:invoiceId,soignant:m.members[0].id,etablissement:m.members[1].id,status:'EMISE',kind:'FACTURE',nature:'ORIGINALE',total:80,paid:false,versions:1,pdf:'invoices/synthetic.pdf',xml:'invoices/synthetic.xml'}]:[],
     commissions:state.generated?[{id:commissionId,honoraire:invoiceId,status:'EMISE',kind:'FACTURE',total:14.4,linked:false}]:[]});
@@ -115,4 +115,27 @@ test('private journal files are 0600 and permissive reads are rejected',async()=
   try {await privateWrite(path,{test:1});assert.equal((await stat(path)).mode&0o777,0o600);assert.deepEqual(await privateRead(path),{test:1});
     await privateWrite(path,{test:2},true);assert.deepEqual(await privateRead(path),{test:2});await chmod(path,0o644);await assert.rejects(privateRead(path),/PRIVATE_FILE/);
   }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+// This check reads the actual versioned schema, not mocked HTTP results. It is
+// deliberately limited to the commission SELECT where the missing column lived.
+test('commission snapshot references existing columns in the versioned factures table',async()=>{
+  const schema=await readFile(new URL('../../supabase/schema/public.sql',import.meta.url),'utf8');
+  const table=schema.match(/CREATE TABLE IF NOT EXISTS "public"\."factures" \(([\s\S]*?)\n\);/)[1];
+  const columns=new Set([...table.matchAll(/^    "([^"]+)"/gm)].map(x=>x[1]));
+  const expression=snapshotSql(manifest().sql).match(/'commissions',\(SELECT ([\s\S]*?) FROM public\.factures WHERE/)[1];
+  const words=expression.replace(/'(?:[^']|'')*'/g,' ').match(/[a-z_][a-z0-9_]*/gi);
+  const syntax=new Set(['coalesce','jsonb_agg','jsonb_build_object','is','not','null','or']);
+  for(const word of words)assert.ok(syntax.has(word.toLowerCase())||columns.has(word),`Unknown factures column: ${word}`);
+});
+test('a preexisting payment claim blocks preparation even without a transfer row',()=>{
+  const m=manifest(),h=harness(m),r=h.snapshot();r.paymentClaims=1;assert.throws(()=>validateSnapshot(r,m,'empty'),/UNEXPECTED_EFFECTS/);
+  assert.match(snapshotSql(m.sql),/FROM public\.stripe_payment_flow_claims WHERE resource_key='MISSION:'/);
+});
+test('an invoice period outside mission bounds is refused before Stripe creations',async()=>{
+  const m=manifest(),h=harness(m,{missionStartsOn:'2026-09-22'});
+  await assert.rejects(run(m,h),/PERIOD_OUTSIDE_MISSION/);
+  assert.equal(h.state.writes.filter(x=>x.url.startsWith('https://api.stripe.com')).length,0);
+  assert.match(seed,/INTO semaine FROM generate_series[\s\S]*?interval '-7 days'[\s\S]*?WHERE NOT public\.fn_est_jour_ferie/);
+  assert.match(seed,/passe := semaine;/);assert.match(seed,/debut_le::date=semaine/);
 });
