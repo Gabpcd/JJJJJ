@@ -10,6 +10,8 @@ import {qualifiedSession,QUALIFICATION_DB,SQL_DIAGNOSTIC_CATEGORIES,expectedDefa
 import {compareRequired} from './extensions.mjs';
 export const QUALIFICATION_BRANCH='ci/qualification-pg17-candidatures-20261002';
 export const PRODUCT_SHA='7bec1138ae79131ab940137369e1706ebf0ec860';
+export const VAULT_PROVENANCE_PATH='supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql';
+export const VAULT_PROVENANCE_SHA='c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf';
 export const TEST_PATH='tests/security/candidatures-multi-etablissements.test.sql';
 export const SCAFFOLD_PATHS=[
  '.github/workflows/restore-local-bootstrap.yml',
@@ -104,10 +106,7 @@ BEGIN
  THEN RAISE EXCEPTION 'QUALIFICATION_CRON_DEACTIVATION_REQUIRED'; END IF;
 END $stop_crons$;
 COMMIT;`;
-export const QUIESCENCE=`BEGIN READ ONLY;
-SET LOCAL row_security=off;
-${LOCAL_GUARD}
-SELECT jsonb_build_object(
+const QUIESCENCE_COUNTS=`jsonb_build_object(
  'auth_users',(SELECT count(*) FROM auth.users),
  'auth_sessions',(SELECT count(*) FROM auth.sessions),
  'soignants',(SELECT count(*) FROM public.soignants),
@@ -121,7 +120,11 @@ SELECT jsonb_build_object(
  'cron_executions',(SELECT count(*) FROM cron.job_run_details),
  'http_queue',(SELECT count(*) FROM net.http_request_queue),
  'http_responses',(SELECT count(*) FROM net._http_response),
- 'vault_secrets',(SELECT count(*) FROM vault.secrets));
+ 'vault_secrets',(SELECT count(*) FROM vault.secrets))`;
+export const QUIESCENCE=`BEGIN READ ONLY;
+SET LOCAL row_security=off;
+${LOCAL_GUARD}
+SELECT ${QUIESCENCE_COUNTS};
 ROLLBACK;`;
 const ZERO_KEYS=['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'];
 export function projectQuiescence(text){
@@ -134,6 +137,59 @@ export function projectQuiescence(text){
 }
 export function zeros(text){
  const value=projectQuiescence(text);if(Object.values(value).some(x=>x!==0))refuse('QUALIFICATION_NONEMPTY');return value;
+}
+// Only nonsensitive identity metadata leaves SQL, and remains private in this process.
+export const VAULT_METADATA_PROBE=`BEGIN READ ONLY;
+SET LOCAL row_security=off;
+${LOCAL_GUARD}
+SELECT jsonb_build_object(
+ 'total',count(*),
+ 'metadata_exact',coalesce(bool_and(name='cron_automations_key' AND description='Secret dédié aux appels pg_cron vers les Edge Functions Jolene'),false),
+ 'receipt',CASE WHEN count(*)=1 THEN jsonb_build_object(
+  'id',min(id::text),'created_epoch',min(extract(epoch FROM created_at)::text),'updated_epoch',min(extract(epoch FROM updated_at)::text)) ELSE NULL END)
+FROM vault.secrets;
+ROLLBACK;`;
+function validVaultReceipt(value){
+ return !!value&&typeof value==='object'&&!Array.isArray(value)
+  &&Object.keys(value).sort().join()==='created_epoch,id,updated_epoch'
+  &&typeof value.id==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value.id)
+  &&typeof value.created_epoch==='string'&&/^\d{10}\.\d{6}$/.test(value.created_epoch)
+  &&value.updated_epoch===value.created_epoch;
+}
+export function readVaultMetadata(raw,{after=false}={}){
+ let value;try{value=JSON.parse(raw);}catch{refuse('QUALIFICATION_LOCAL_VAULT_REFUSED');}
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join()!=='metadata_exact,receipt,total'
+  ||value.total!==(after?1:0)||value.metadata_exact!==after
+  ||(after?!validVaultReceipt(value.receipt):value.receipt!==null))refuse('QUALIFICATION_LOCAL_VAULT_REFUSED');
+ return after?{id:value.receipt.id,created_epoch:value.receipt.created_epoch,updated_epoch:value.receipt.updated_epoch}:null;
+}
+export function localVaultCleanupSQL(receipt){
+ if(!validVaultReceipt(receipt))refuse('QUALIFICATION_LOCAL_VAULT_REFUSED');
+ const empty=Object.fromEntries(ZERO_KEYS.map(k=>[k,0])),before={...empty,vault_secrets:1};
+ return `BEGIN;
+SET LOCAL row_security=off;
+${LOCAL_GUARD}
+DO $vault_cleanup$
+DECLARE removed bigint;
+BEGIN
+ IF (SELECT rolsuper FROM pg_roles WHERE rolname=current_user) IS DISTINCT FROM false
+  OR has_table_privilege(current_user,'vault.secrets','DELETE') IS DISTINCT FROM true
+ THEN RAISE EXCEPTION 'QUALIFICATION_LOCAL_VAULT_PRIVILEGE'; END IF;
+ LOCK TABLE vault.secrets IN EXCLUSIVE MODE;
+ IF (${QUIESCENCE_COUNTS}) IS DISTINCT FROM '${JSON.stringify(before)}'::jsonb
+  OR NOT EXISTS(SELECT 1 FROM vault.secrets WHERE id='${receipt.id}'::uuid
+   AND name='cron_automations_key' AND description='Secret dédié aux appels pg_cron vers les Edge Functions Jolene'
+   AND extract(epoch FROM created_at)::text='${receipt.created_epoch}' AND extract(epoch FROM updated_at)::text='${receipt.updated_epoch}')
+ THEN RAISE EXCEPTION 'QUALIFICATION_LOCAL_VAULT_PROVENANCE'; END IF;
+ DELETE FROM vault.secrets WHERE id='${receipt.id}'::uuid
+  AND name='cron_automations_key' AND description='Secret dédié aux appels pg_cron vers les Edge Functions Jolene'
+  AND extract(epoch FROM created_at)::text='${receipt.created_epoch}' AND extract(epoch FROM updated_at)::text='${receipt.updated_epoch}';
+ GET DIAGNOSTICS removed = ROW_COUNT;
+ IF removed<>1 OR (${QUIESCENCE_COUNTS}) IS DISTINCT FROM '${JSON.stringify(empty)}'::jsonb
+ THEN RAISE EXCEPTION 'QUALIFICATION_LOCAL_VAULT_CLEANUP'; END IF;
+END $vault_cleanup$;
+SELECT jsonb_build_object('removed_count',1,'after_cleanup_count',(SELECT count(*) FROM vault.secrets));
+COMMIT;`;
 }
 export function exactExtensions(requirements,runtime){
  const result=compareRequired(requirements,runtime);
@@ -327,7 +383,7 @@ export function projectNotationPreflight(raw){
  return {...Object.fromEntries([...NOTATION_BOOLS,...NOTATION_HASHES].map(k=>[k,v[k]])),notation_acl_entries:rows};
 }
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','QUALIFICATION_QUIESCENCE_REPORT','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED','QUALIFICATION_BASELINE_DEFAULT_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','QUALIFICATION_QUIESCENCE_REPORT','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED','QUALIFICATION_BASELINE_DEFAULT_REFUSED','QUALIFICATION_LOCAL_VAULT_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -342,6 +398,9 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   migrations:[],phase:'local_preflight',canonical_test_passed:false,rollback_verified:false,cloud_contacted:false};
  save(report);
  try{
+  const vaultItems=evidence.migrations.filter(x=>x.path===VAULT_PROVENANCE_PATH);
+  if(vaultItems.length!==1||vaultItems[0].sha256!==VAULT_PROVENANCE_SHA||hash(vaultItems[0].bytes)!==VAULT_PROVENANCE_SHA)refuse('QUALIFICATION_LOCAL_VAULT_REFUSED');
+  let localVaultReceipt=null;
   if(runtime.run!==evidence.run)refuse('QUALIFICATION_RUNTIME_RUN_CHANGED');
   runtime.verify();runtime.sql(Buffer.from(LOCAL_GUARD));
   report.phase='native_owner_probe';save(report);
@@ -377,8 +436,17 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
      report.notation_preflight={path:item.path,sha256:item.sha256,...projectNotationPreflight(runtime.sql(Buffer.from(sql)))};
      save(report);report.phase='integral_replay';
     }
+   if(item.path===VAULT_PROVENANCE_PATH){
+    report.phase='local_vault_provenance_before';save(report);runtime.verify();
+    readVaultMetadata(runtime.sql(Buffer.from(VAULT_METADATA_PROBE)));report.local_vault={before_count:0};save(report);report.phase='integral_replay';
+   }
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);
    runtime.sql(item.bytes,{migration:true});current.completed=true;save(report);
+   if(item.path===VAULT_PROVENANCE_PATH){
+    report.phase='local_vault_provenance_after';save(report);runtime.verify();
+    localVaultReceipt=readVaultMetadata(runtime.sql(Buffer.from(VAULT_METADATA_PROBE)),{after:true});
+    report.local_vault={...report.local_vault,after_count:1,metadata_exact:true,provenance_verified:true};save(report);report.phase='integral_replay';
+   }
    if(item.path===BASELINE_PATH){
     report.phase='baseline_service_default_restore_verification';save(report);runtime.verify();
     const restored=runtime.probeBaselineServiceDefault();report.baseline_service_default_after_baseline=projectBaselineServiceDefault(restored);save(report);
@@ -389,6 +457,10 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   const crons=JSON.parse(runtime.sql(Buffer.from(STOP_CRONS)));
   if(Object.keys(crons).join()!=='locally_disabled_jobs'||!Number.isSafeInteger(crons.locally_disabled_jobs)||crons.locally_disabled_jobs<0)refuse('QUALIFICATION_CRON_REPORT');
   report.locally_disabled_jobs=crons.locally_disabled_jobs;
+  report.phase='local_vault_cleanup';save(report);runtime.verify();
+  const vaultCleanup=JSON.parse(runtime.sql(Buffer.from(localVaultCleanupSQL(localVaultReceipt))));
+  if(!isDeepStrictEqual(vaultCleanup,{removed_count:1,after_cleanup_count:0}))refuse('QUALIFICATION_LOCAL_VAULT_REFUSED');
+  report.local_vault={...report.local_vault,removed_count:1,after_cleanup_count:0};save(report);
   report.phase='canonical_preflight';save(report);
   report.extension_checks=exactExtensions(requirements,JSON.parse(runtime.sql(extensionSQL)));
   runtime.verify();report.before=projectQuiescence(runtime.sql(Buffer.from(QUIESCENCE)));save(report);zeros(JSON.stringify(report.before));

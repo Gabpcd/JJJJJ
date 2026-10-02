@@ -2,15 +2,18 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {BASELINE_SERVICE_DEFAULT_PROBE,BASELINE_SERVICE_DEFAULT_SUSPEND,expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,projectQuiescence,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {VAULT_PROVENANCE_PATH,VAULT_PROVENANCE_SHA,VAULT_METADATA_PROBE,readVaultMetadata,localVaultCleanupSQL,BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,projectQuiescence,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
 const requirements=JSON.parse(readFileSync(new URL('../export/scope.json',import.meta.url))).extensions;
 const secrets={source:{password:'SOURCE_CANARY',jwt:'LOCAL_CANARY'},target:{password:'TARGET_CANARY',jwt:'OTHER_CANARY'}};
-const paths=['supabase/migrations/20261002064017_lire_candidatures_mission_habilitee.sql','supabase/migrations/00000000000000_baseline_prod.sql','supabase/migrations/20260101000000_before.sql'];
+const paths=['supabase/migrations/20261002064017_lire_candidatures_mission_habilitee.sql','supabase/migrations/00000000000000_baseline_prod.sql','supabase/migrations/20260101000000_before.sql',VAULT_PROVENANCE_PATH];
 const byteMap=new Map([...paths,TEST_PATH].map((p,i)=>[p,Buffer.from('-- '+i+'\r\nSELECT '+i+';\r\n')]));
+byteMap.set(VAULT_PROVENANCE_PATH,readFileSync(new URL('../../../../'+VAULT_PROVENANCE_PATH,import.meta.url)));
 const load=p=>byteMap.get(p);
+const vaultReceipt=()=>({id:'33333333-4444-5555-6666-777777777777',created_epoch:'1790955000.123456',updated_epoch:'1790955000.123456'});
+const vaultMetadata=(after=false)=>({total:after?1:0,metadata_exact:after,receipt:after?vaultReceipt():null});
 const replay=()=>buildReplay(paths,load,load);
 const evidence=()=>({...checkIdentity(env,head,['tools/restore-local/scripts/restore/qualify-import.mjs'],''),...replay()});
 const runtimeExtensions=()=>({postgres_major:17,extensions:requirements.map(e=>({name:e.name,installed:{version:e.version,schema:e.schema},available_count:1,available_truncated:false,available_versions:[{version:e.version,superuser:true,trusted:false,relocatable:false,schema:e.schema,requires:null}]}))});
@@ -20,7 +23,7 @@ const nativeDefaults=(aligned=false)=>({local_empty_context:true,postgres_superu
 const serviceDefault=(phase='before')=>({local_isolated_context:true,local_empty_context:phase!=='restored',postgres_superuser:false,global_service_function_grants:0,client_grants:0,
  target_grants:phase==='suspended'?[]:[{grantor:'postgres',privilege:'EXECUTE',is_grantable:false}],other_acl_count:110,other_acl_md5:'b'.repeat(32)});
 function fakeRuntime(options={}){
- let repaired=false,defaultsAligned=false,serviceSuspended=false,baselineReplayed=false;
+ let repaired=false,defaultsAligned=false,serviceSuspended=false,baselineReplayed=false,vaultCreated=false;
  const calls=[],extensionSQL=Buffer.from('CANONICAL_EXTENSION_SQL');
  return {calls,extensionSQL,run,
  probeDatabaseOwner(){calls.push({ownerProbe:true,repaired});return structuredClone(repaired?(options.ownerAfter??nativeOwner(true)):(options.ownerBefore??nativeOwner()));},
@@ -32,6 +35,9 @@ function fakeRuntime(options={}){
  verify(){calls.push({verify:true});},sql(bytes,flags={}){
   calls.push({bytes,flags});if(options.failOn&&options.failOn(bytes,flags))throw Error('CANARY_SECRET');
    if(bytes===load(BASELINE_PATH))baselineReplayed=true;
+   if(bytes===load(VAULT_PROVENANCE_PATH))vaultCreated=true;
+   if(bytes.toString()===VAULT_METADATA_PROBE)return JSON.stringify(vaultMetadata(vaultCreated));
+   if(bytes.toString().includes('DO $vault_cleanup$'))return JSON.stringify({removed_count:1,after_cleanup_count:0});
   if(bytes.toString()===STOP_CRONS)return JSON.stringify({locally_disabled_jobs:4});
   if(bytes.toString()===QUIESCENCE)return JSON.stringify(zeroValue());
   if(bytes.equals(extensionSQL))return JSON.stringify(runtimeExtensions());
@@ -46,7 +52,7 @@ test('qualification identity accepts only manual branch with exact product ances
 });
 test('ordered full replay uses exact Buffer objects; no newline or statement normalization',()=>{
  const result=replay();assert.equal(result.migrations.length,paths.length);assert.deepEqual(result.migrations.map(x=>x.path),[...paths].sort());
- for(const x of [...result.migrations,result.test]){assert.equal(x.bytes,load(x.path));assert.equal(x.sha256,hash(load(x.path)));assert.ok(x.bytes.includes(Buffer.from('\r\n')));}
+ for(const x of [...result.migrations,result.test]){assert.equal(x.bytes,load(x.path));assert.equal(x.sha256,hash(load(x.path)));if(x.path!==VAULT_PROVENANCE_PATH)assert.ok(x.bytes.includes(Buffer.from('\r\n')));}
  assert.equal(result.test.path,TEST_PATH);
 });
 test('missing baseline, last migration, duplicate or unexpected extension refuses rather than skips',()=>{
@@ -74,7 +80,7 @@ test('memory success executes all canonical files once, then local cron stop, ex
  const e=evidence(),r=fakeRuntime(),reports=[];const result=qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x)));
  assert.equal(result.result,'ISOLATED_IMPORT_AND_SQL_TEST_PASSED');assert.equal(result.canonical_test_passed,true);assert.equal(result.rollback_verified,true);
  const sql=r.calls.filter(x=>x.bytes);assert.equal(sql[0].bytes.toString(),LOCAL_GUARD);
- e.migrations.forEach((m,i)=>assert.equal(sql[i+1].bytes,m.bytes));
+ e.migrations.forEach((m,i)=>assert.equal(sql.filter(x=>x.flags.migration)[i].bytes,m.bytes));
  assert.equal(sql.filter(x=>x.flags.test===true).length,1);assert.equal(sql.find(x=>x.flags.test).bytes,e.test.bytes);
  assert.ok(sql.findIndex(x=>x.bytes.toString()===STOP_CRONS)>e.migrations.length);assert.equal(result.locally_disabled_jobs,4);assert.equal(reports.at(-1).migrations.every(x=>x.completed),true);
 });
@@ -157,7 +163,7 @@ test('only canonical migrations use one transaction; test and fixed probes retai
 });
 test('whole explicit transactions and ON COMMIT DROP files remain byte-identical migration inputs',()=>{
  const e=evidence();e.migrations[1].bytes=Buffer.from('CREATE TEMP TABLE t (id int) ON COMMIT DROP;\nINSERT INTO t VALUES (1);\n');
- e.migrations[2].bytes=Buffer.from('BEGIN;\nSELECT 2;\nCOMMIT;\n');const r=fakeRuntime();qualify(e,r,r.extensionSQL,requirements,()=>{});
+ e.migrations.at(-1).bytes=Buffer.from('BEGIN;\nSELECT 2;\nCOMMIT;\n');const r=fakeRuntime();qualify(e,r,r.extensionSQL,requirements,()=>{});
  const actual=r.calls.filter(x=>x.flags?.migration);assert.equal(actual.length,e.migrations.length);
  e.migrations.forEach((m,i)=>{assert.equal(actual[i].bytes,m.bytes);assert.deepEqual(actual[i].flags,{migration:true});});
  assert.deepEqual(r.calls.find(x=>x.flags?.test).flags,{test:true});
@@ -207,15 +213,15 @@ test('projection only admits source signatures, exact expected hashes, bounded c
 test('probe precedes exactly the historical migration, records diagnostic but does not bypass its failure',()=>{
  const e=evidence(),item={path:HISTORICAL_MANIFEST_PATH,sha256:HISTORICAL_MANIFEST_SHA,bytes:historicalBytes};e.migrations.push(item);e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
  const r=fakeRuntime(),original=r.sql,proof=[],v=cleanHistorical();v.matched_count=421;v.differences=[{...historicalEntries[0],kind:'hash_mismatch',actual_md5:'0'.repeat(32)}];
- r.sql=(bytes,flags={})=>{if(bytes.toString().startsWith('BEGIN READ ONLY;')){r.calls.push({bytes,flags});return JSON.stringify(v);}if(bytes===historicalBytes){r.calls.push({bytes,flags});throw Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{sqlstate:'P0001',line:525,assertion:null,category:'HISTORICAL_MANIFEST_BODY_CHANGED'}});}return original(bytes,flags);};
+ r.sql=(bytes,flags={})=>{if((bytes.toString().startsWith('BEGIN READ ONLY;')&&bytes.toString()!==VAULT_METADATA_PROBE)){r.calls.push({bytes,flags});return JSON.stringify(v);}if(bytes===historicalBytes){r.calls.push({bytes,flags});throw Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{sqlstate:'P0001',line:525,assertion:null,category:'HISTORICAL_MANIFEST_BODY_CHANGED'}});}return original(bytes,flags);};
  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
- const pi=r.calls.findIndex(x=>x.bytes?.toString().startsWith('BEGIN READ ONLY;')),mi=r.calls.findIndex(x=>x.bytes===historicalBytes);assert.ok(pi>=0&&pi<mi);assert.deepEqual(r.calls[pi].flags,{});assert.deepEqual(r.calls[mi].flags,{migration:true});
+ const pi=r.calls.findIndex(x=>(x.bytes?.toString().startsWith('BEGIN READ ONLY;')&&x.bytes?.toString()!==VAULT_METADATA_PROBE)),mi=r.calls.findIndex(x=>x.bytes===historicalBytes);assert.ok(pi>=0&&pi<mi);assert.deepEqual(r.calls[pi].flags,{});assert.deepEqual(r.calls[mi].flags,{migration:true});
  const last=proof.at(-1);assert.deepEqual(last.historical_manifest,{path:item.path,sha256:item.sha256,...v});assert.equal(last.failure.category,'HISTORICAL_MANIFEST_BODY_CHANGED');assert.equal(last.canonical_test_passed,false);
  assert.equal(last.migrations.at(-1).completed,false);assert.equal(r.calls.some(x=>x.flags?.test),false);assert.equal(r.calls.filter(x=>x.bytes===historicalBytes).length,1);
 });
 test('unsafe historical diagnostic refuses before its migration, no arbitrary values saved',()=>{
  const e=evidence();e.migrations.push({path:HISTORICAL_MANIFEST_PATH,sha256:HISTORICAL_MANIFEST_SHA,bytes:historicalBytes});e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
- const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString().startsWith('BEGIN READ ONLY;')?JSON.stringify({...cleanHistorical(),CANARY:'CANARY'}):original(bytes,flags);
+ const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>(bytes.toString().startsWith('BEGIN READ ONLY;')&&bytes.toString()!==VAULT_METADATA_PROBE)?JSON.stringify({...cleanHistorical(),CANARY:'CANARY'}):original(bytes,flags);
  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));assert.equal(r.calls.some(x=>x.bytes===historicalBytes),false);assert.equal(proof.at(-1).failure.code,'QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
 });
 
@@ -324,7 +330,7 @@ test('invalid notation projection or altered pin refuses before guarded migratio
   const e=evidence(),item={path:NOTATION_PREFLIGHT_PATH,sha256:NOTATION_PREFLIGHT_SHA,bytes:notationBytes};
   if(kind==='bytes')item.bytes=Buffer.concat([notationBytes,Buffer.from('\n')]);if(kind==='sha')item.sha256='0'.repeat(64);
   e.migrations.push(item);e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
-  const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString().startsWith('BEGIN READ ONLY;')?JSON.stringify({...notationValue(),prosrc:'CANARY'}):original(bytes,flags);
+  const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>(bytes.toString().startsWith('BEGIN READ ONLY;')&&bytes.toString()!==VAULT_METADATA_PROBE)?JSON.stringify({...notationValue(),prosrc:'CANARY'}):original(bytes,flags);
   assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
   assert.equal(r.calls.some(x=>x.bytes===item.bytes),false);assert.equal(r.calls.some(x=>x.flags?.test),false);
   assert.equal(proof.at(-1).failure.code,'QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
@@ -449,5 +455,71 @@ test('malformed quiescence is never persisted and its raw contents cannot escape
   const last=proof.at(-1);assert.equal(last.failure.code,'QUALIFICATION_QUIESCENCE_REPORT');assert.equal(last.rollback_verified,false);
   assert.equal(last[malformedAt===1?'before':'after'],undefined);assert.ok(!JSON.stringify(proof).includes('CANARY_SECRET'));
   assert.equal(r.calls.filter(x=>x.flags?.test).length,malformedAt-1);
+ }
+});
+
+test('local Vault provenance requires exactly one byte-identical pinned migration before any SQL',()=>{
+ for(const mutate of [e=>e.migrations=e.migrations.filter(x=>x.path!==VAULT_PROVENANCE_PATH),e=>e.migrations.push(e.migrations.find(x=>x.path===VAULT_PROVENANCE_PATH)),e=>e.migrations.find(x=>x.path===VAULT_PROVENANCE_PATH).sha256='0'.repeat(64),e=>e.migrations.find(x=>x.path===VAULT_PROVENANCE_PATH).bytes=Buffer.from('CANARY')]){
+  const e=evidence(),r=fakeRuntime(),proof=[];mutate(e);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))),/QUALIFICATION_LOCAL_VAULT_REFUSED/);
+  assert.equal(r.calls.length,0);assert.equal(proof.at(-1).canonical_test_passed,false);assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
+ assert.equal(hash(load(VAULT_PROVENANCE_PATH)),VAULT_PROVENANCE_SHA);
+});
+test('Vault probes enclose only the pinned migration and retain identity privately while public evidence contains counts and booleans',()=>{
+ const e=evidence(),r=fakeRuntime(),proof=[];const result=qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x)));
+ const sql=r.calls.filter(x=>x.bytes),mi=sql.findIndex(x=>x.bytes===load(VAULT_PROVENANCE_PATH));
+ assert.equal(sql[mi-1].bytes.toString(),VAULT_METADATA_PROBE);assert.equal(sql[mi+1].bytes.toString(),VAULT_METADATA_PROBE);
+ assert.deepEqual(sql[mi].flags,{migration:true});assert.equal(sql.filter(x=>x.bytes.toString()===VAULT_METADATA_PROBE).length,2);
+ const cleanup=sql.findIndex(x=>x.bytes.toString().includes('DO $vault_cleanup$'));
+ assert.ok(cleanup>sql.findIndex(x=>x.bytes.toString()===STOP_CRONS));assert.ok(cleanup<sql.findIndex(x=>x.flags.test));
+ assert.deepEqual(result.local_vault,{before_count:0,after_count:1,metadata_exact:true,provenance_verified:true,removed_count:1,after_cleanup_count:0});
+ for(const privateValue of Object.values(vaultReceipt()))assert.ok(!JSON.stringify(proof).includes(privateValue));
+ assert.deepEqual(result.before,zeroValue());assert.deepEqual(result.after,zeroValue());
+});
+test('Vault identity uses exact epoch strings and refuses malformed, unbounded or extra metadata before interpolation',()=>{
+ assert.equal(readVaultMetadata(JSON.stringify(vaultMetadata())),null);assert.deepEqual(readVaultMetadata(JSON.stringify(vaultMetadata(true)),{after:true}),vaultReceipt());
+ const mutations=[v=>v.total=2,v=>v.metadata_exact=false,v=>v.receipt.id="';DELETE",v=>v.receipt.created_epoch=1790955000.123456,v=>v.receipt.created_epoch='1e10',v=>v.receipt.created_epoch='1790955000.1234567',v=>v.receipt.updated_epoch='1790955000.123457',v=>v.receipt.extra='CANARY',v=>v.extra='CANARY',v=>delete v.receipt.created_epoch,v=>v.receipt=null];
+ for(const mutate of mutations){const v=vaultMetadata(true);mutate(v);assert.throws(()=>readVaultMetadata(JSON.stringify(v),{after:true}),/QUALIFICATION_LOCAL_VAULT_REFUSED/);}
+ for(const raw of ['CANARY','null','[]'])assert.throws(()=>readVaultMetadata(raw,{after:true}));
+ for(const receipt of [null,{}, {...vaultReceipt(),id:"';DROP"},{...vaultReceipt(),created_epoch:'1790955000.123456 OR true'}, {...vaultReceipt(),extra:'CANARY'}])assert.throws(()=>localVaultCleanupSQL(receipt),/QUALIFICATION_LOCAL_VAULT_REFUSED/);
+});
+test('preexisting or unexpected post-migration Vault metadata refuses before any cleanup or canonical test',()=>{
+ for(const badAt of [1,2])for(const malformed of [vaultMetadata(true),{total:2,metadata_exact:true,receipt:null},{...vaultMetadata(true),receipt:{...vaultReceipt(),extra:'CANARY'}},'CANARY']){
+  const e=evidence(),r=fakeRuntime(),sql=r.sql,proof=[];let n=0;
+  const bad=badAt===2&&malformed?.total===1&&!malformed.receipt?.extra?{...malformed,metadata_exact:false}:malformed;
+  r.sql=(bytes,flags={})=>bytes.toString()===VAULT_METADATA_PROBE&&++n===badAt?(typeof bad==='string'?bad:JSON.stringify(bad)):sql(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))),/QUALIFICATION_LOCAL_VAULT_REFUSED/);
+  assert.equal(r.calls.some(x=>x.bytes?.toString().includes('DO $vault_cleanup$')),false);assert.equal(r.calls.some(x=>x.flags?.test),false);
+  assert.equal(r.calls.some(x=>x.bytes===e.migrations.at(-1).bytes),false);assert.equal(proof.at(-1).phase,badAt===1?'local_vault_provenance_before':'local_vault_provenance_after');
+  assert.equal(r.calls.some(x=>x.bytes===load(VAULT_PROVENANCE_PATH)),badAt===2);assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
+});
+test('local Vault cleanup uses existing rights, locked exact identity and zero guards without decryption or broad delete',()=>{
+ const sql=localVaultCleanupSQL(vaultReceipt());
+ assert.ok(VAULT_METADATA_PROBE.startsWith('BEGIN READ ONLY;\nSET LOCAL row_security=off;\n'+LOCAL_GUARD));
+ assert.ok(sql.startsWith('BEGIN;\nSET LOCAL row_security=off;\n'+LOCAL_GUARD));assert.ok(sql.endsWith('COMMIT;'));
+ assert.ok(sql.includes("has_table_privilege(current_user,'vault.secrets','DELETE') IS DISTINCT FROM true"));assert.ok(sql.includes('rolsuper'));
+ assert.ok(sql.indexOf('LOCK TABLE vault.secrets IN EXCLUSIVE MODE;')<sql.indexOf('DELETE FROM vault.secrets'));
+ assert.equal((sql.match(/DELETE FROM vault\.secrets/g)||[]).length,1);assert.ok(sql.includes("DELETE FROM vault.secrets WHERE id='"+vaultReceipt().id+"'::uuid"));
+ assert.equal((sql.match(/name='cron_automations_key' AND description='Secret dédié aux appels pg_cron vers les Edge Functions Jolene'/g)||[]).length,2);
+ assert.equal((sql.match(/extract\(epoch FROM created_at\)::text='1790955000\.123456'/g)||[]).length,2);
+ assert.ok(sql.includes('GET DIAGNOSTICS removed = ROW_COUNT;'));assert.ok(sql.includes('IF removed<>1 OR'));
+ assert.ok(sql.includes(JSON.stringify({...zeroValue(),vault_secrets:1})));assert.ok(sql.includes(JSON.stringify(zeroValue())));
+ for(const text of [sql,VAULT_METADATA_PROBE])assert.ok(!/decrypted_secrets|decrypted_secret|\bkey_id\b|\bnonce\b|\bsecret\b|SELECT \*|RETURNING \*|GRANT |ALTER ROLE|SET ROLE|TRUNCATE|DROP |INSERT INTO|CREATE /.test(text));
+});
+test('refused SQL cleanup never retries or runs the canonical test and cannot leak private identity',()=>{
+ const e=evidence(),r=fakeRuntime({failOn:bytes=>bytes.toString().includes('DO $vault_cleanup$')}),proof=[];
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+ assert.equal(r.calls.filter(x=>x.bytes?.toString().includes('DO $vault_cleanup$')).length,1);assert.equal(r.calls.some(x=>x.flags?.test),false);
+ assert.equal(proof.at(-1).phase,'local_vault_cleanup');assert.equal(proof.at(-1).local_vault.removed_count,undefined);
+ assert.equal(proof.at(-1).rollback_verified,false);for(const v of [...Object.values(vaultReceipt()),'CANARY'])assert.ok(!JSON.stringify(proof).includes(v));
+});
+test('only exactly one removed local artifact and an empty Vault permit canonical preflight',()=>{
+ for(const result of [{removed_count:0,after_cleanup_count:0},{removed_count:2,after_cleanup_count:0},{removed_count:1,after_cleanup_count:1},{removed_count:1,after_cleanup_count:0,extra:'CANARY'},'CANARY']){
+  const e=evidence(),r=fakeRuntime(),sql=r.sql,proof=[];
+  r.sql=(bytes,flags={})=>bytes.toString().includes('DO $vault_cleanup$')?(typeof result==='string'?result:JSON.stringify(result)):sql(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(proof.at(-1).phase,'local_vault_cleanup');assert.equal(proof.at(-1).local_vault.removed_count,undefined);assert.equal(r.calls.some(x=>x.flags?.test),false);assert.ok(!JSON.stringify(proof).includes('CANARY'));
  }
 });

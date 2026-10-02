@@ -165,3 +165,33 @@ conserve cette seule projection avant d'appliquer le même refus. Cela vaut auss
 pour la vérification après le test. Un champ supplémentaire, manquant ou mal typé
 refuse sans conserver le contenu brut. Aucun nom, secret ou contenu de ligne
 n'est lu ni exporté. Une cause métier n'est pas déduite avant la preuve runtime.
+
+### Retrait du seul artefact Vault créé par le replay local (v11)
+
+Le reçu37057056492 confirme Vault=1 et les treize autres compteurs à zéro,
+après les 218 imports et l'arrêt de six jobs. La migration132
+20260729121442_securiser_auth_et_crons_critiques.sql,
+SHA256 c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf,
+crée un secret aléatoire local nommé cron_automations_key. Aucun secret cloud
+n'est introduit dans ce banc fermé.
+
+V11 exige un Vault vide juste avant ce fichier inchangé, puis une seule ligne
+juste après, avec nom et description exacts. L'identité UUID et les timestamps
+en secondes décimales exactes restent seulement en mémoire du processus : le
+reçu public ne contient que compteurs et booléens. Aucune valeur chiffrée ou
+déchiffrée, clé ou nonce n'est lue par les sondes. La provenance repose sur les
+lectures encadrant la migration et l'isolation continue ; elle ne prétend pas
+comparer le contenu secret.
+
+Après replay complet et arrêt des jobs, une transaction garde la même base,
+connexion locale, rôle postgres non superutilisateur, workers arrêtés et réseau
+fermé. Elle exige les droits DELETE déjà présents, verrouille vault.secrets,
+revérifie la ligne unique et ses métadonnées, Vault=1 et les treize autres zéros,
+puis retire exactement cette ligne locale. Tout écart refuse sans autre tentative
+ni augmentation de droits. Le nombre supprimé doit être un et les quatorze
+compteurs doivent être zéro avant COMMIT. Les contrôles zéro avant et après
+le test canonique, son SQL et toutes les migrations restent inchangés.
+
+Structure officielle de Vault0.3.1 consultée :
+https://raw.githubusercontent.com/supabase/vault/v0.3.1/sql/supabase_vault--0.3.0.sql
+Aucune exécution runtime de cette adaptation n'est prouvée par les tests mémoire.
