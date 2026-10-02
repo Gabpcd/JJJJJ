@@ -53,6 +53,20 @@ if reference_path:
   assert measure(mutation)[changed]!=original[changed]
   assert measure()==original
  print('CONNECT_CATALOGUE_DETECTE_MUTATIONS_ACL_CORPS_HORS_PERIMETRE_ET_DONNEES',flush=True)
+ # La vue existe dans les deux constats comparés : sa seule création ne doit
+ # pas masquer un détecteur qui oublierait les options de sécurité de relation.
+ view="CREATE VIEW private.connect_vue_temoin WITH(security_invoker=true,security_barrier=true) AS SELECT id FROM auth.users;"
+ view_reference=measure(view)
+ assert measure()==original
+ for option in ['security_invoker','security_barrier']:
+  weakened=measure(view+f'ALTER VIEW private.connect_vue_temoin SET({option}=false);')
+  assert weakened['outside']!=view_reference['outside'],option
+  assert weakened['allowed']==view_reference['allowed'] and weakened['rows']==view_reference['rows']
+  assert measure()==original
+ # Un ordre différent des mêmes options n'est pas une modification des droits.
+ assert measure(view.replace('security_invoker=true,security_barrier=true','security_barrier=true,security_invoker=true'))==view_reference
+ assert measure()==original
+ print('CONNECT_CATALOGUE_DETECTE_OPTIONS_SECURITE_VUE_ET_ROLLBACK',flush=True)
  reference=json.loads(sql(query))
  assert reference['counts']['routines']==34 and reference['counts']['relations']==3
  assert reference['counts']['triggers']==2 and reference['counts']['inventory']==19

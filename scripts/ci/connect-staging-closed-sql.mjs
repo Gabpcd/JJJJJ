@@ -17,7 +17,8 @@ export const structuralJsonSql = `jsonb_build_object(
  'routines',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),
    pg_get_functiondef(p.oid),pg_get_userbyid(p.proowner),p.proacl) ORDER BY n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)),'[]')
    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private','auth') AND p.prokind IN ('f','p')),
- 'relations',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,c.relkind,pg_get_userbyid(c.relowner),c.relacl,c.relrowsecurity,c.relforcerowsecurity)
+ 'relations',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,c.relkind,pg_get_userbyid(c.relowner),c.relacl,c.relrowsecurity,c.relforcerowsecurity,
+   ARRAY(SELECT option FROM unnest(c.reloptions) AS options(option) ORDER BY option))
    ORDER BY n.nspname,c.relname),'[]') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','private','auth') AND c.relkind IN ('r','p','v','m','S')),
  'views',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,pg_get_viewdef(c.oid,true)) ORDER BY n.nspname,c.relname),'[]') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','private','auth') AND c.relkind IN ('v','m')),
  'columns',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl,pg_get_expr(d.adbin,d.adrelid))
