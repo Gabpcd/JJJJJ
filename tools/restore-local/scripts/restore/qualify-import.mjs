@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {qualifiedSession,QUALIFICATION_DB,SQL_DIAGNOSTIC_CATEGORIES} from './bootstrap.mjs';
+import {qualifiedSession,QUALIFICATION_DB,SQL_DIAGNOSTIC_CATEGORIES,expectedDefaultAclGrants} from './bootstrap.mjs';
 import {compareRequired} from './extensions.mjs';
 export const QUALIFICATION_BRANCH='ci/qualification-pg17-candidatures-20261002';
 export const PRODUCT_SHA='7bec1138ae79131ab940137369e1706ebf0ec860';
@@ -118,6 +118,27 @@ export function ownerProbe(value,{repaired=false}={}){
   postgres_superuser:false,admin_superuser:true};
  if(!isDeepStrictEqual(value,expected))refuse('QUALIFICATION_OWNER_REFUSED');return expected;
 }
+export function projectDefaultAclProbe(value){
+ const bool=k=>typeof value?.[k]==='boolean'?value[k]:null;
+ const count=k=>Number.isSafeInteger(value?.[k])&&value[k]>=0&&value[k]<=10000?value[k]:null;
+ const privileges=new Set(expectedDefaultAclGrants().map(x=>x.privilege));
+ const grants=Array.isArray(value?.target_grants)&&value.target_grants.length<=100?value.target_grants.map(row=>({
+  object_type:['r','S','f'].includes(row?.object_type)?row.object_type:'other',
+  grantee:['anon','authenticated'].includes(row?.grantee)?row.grantee:'other',
+  grantor:row?.grantor==='postgres'?'postgres':'other',
+  privilege:privileges.has(row?.privilege)?row.privilege:'other',
+  is_grantable:typeof row?.is_grantable==='boolean'?row.is_grantable:null,
+ })):null;
+ return {local_empty_context:bool('local_empty_context'),postgres_superuser:bool('postgres_superuser'),global_client_grants:count('global_client_grants'),
+  target_grants:grants,other_acl_count:count('other_acl_count'),other_acl_md5:/^[a-f0-9]{32}$/.test(value?.other_acl_md5??'')?value.other_acl_md5:null};
+}
+export function checkDefaultAclProbe(value,{aligned=false,before}={}){
+ const p=projectDefaultAclProbe(value);
+ if(!isDeepStrictEqual(value,p)||p.local_empty_context!==true||p.postgres_superuser!==false||p.global_client_grants!==0
+  ||p.other_acl_count===null||p.other_acl_md5===null||!isDeepStrictEqual(p.target_grants,aligned?[]:expectedDefaultAclGrants())
+  ||(aligned&&(!before||p.other_acl_count!==before.other_acl_count||p.other_acl_md5!==before.other_acl_md5)))refuse('QUALIFICATION_DEFAULT_ACL_REFUSED');
+ return p;
+}
 export const HISTORICAL_MANIFEST_PATH='supabase/migrations/20260729121443_figer_inventaire_security_definer.sql';
 export const HISTORICAL_MANIFEST_SHA='160626d9fab04c230e517f8774101a7644a52b014d6bf5c1e8f10f66e1c6aa6f';
 export function historicalManifestEntries(bytes){
@@ -172,7 +193,7 @@ export function projectHistoricalManifest(raw,entries){
  return {expected_count:422,matched_count:value.matched_count,missing_exposed_count:value.missing_exposed_count,differences};
 }
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -197,6 +218,11 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   report.phase='native_owner_repair';save(report);runtime.repairDatabaseOwner();
   const after=runtime.probeDatabaseOwner();report.ownership_after=projectOwnerProbe(after);save(report);ownerProbe(after,{repaired:true});
   report.local_database_owner_reconciled=true;
+  report.phase='native_default_acl_probe';save(report);
+  const defaultsBefore=runtime.probeDefaultAcls();report.default_acl_before=projectDefaultAclProbe(defaultsBefore);save(report);checkDefaultAclProbe(defaultsBefore);
+  report.phase='native_default_acl_alignment';save(report);runtime.alignDefaultAcls();
+  const defaultsAfter=runtime.probeDefaultAcls();report.default_acl_after=projectDefaultAclProbe(defaultsAfter);save(report);
+  checkDefaultAclProbe(defaultsAfter,{aligned:true,before:defaultsBefore});report.local_default_acls_aligned=true;
   report.phase='integral_replay';
   for(const item of evidence.migrations){
    if(item.path===HISTORICAL_MANIFEST_PATH){

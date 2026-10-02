@@ -236,6 +236,56 @@ BEGIN
 END $owner$;
 ALTER DATABASE jolene_candidatures_pg17_test OWNER TO postgres;
 COMMIT;`;
+export function expectedDefaultAclGrants(){
+ const privileges={r:['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN'],S:['USAGE','SELECT','UPDATE'],f:['EXECUTE']};
+ return Object.entries(privileges).flatMap(([object_type,names])=>['anon','authenticated'].flatMap(grantee=>names.map(privilege=>({object_type,grantee,grantor:'postgres',privilege,is_grantable:false}))))
+  .sort((a,b)=>`${a.object_type}|${a.grantee}|${a.privilege}`<`${b.object_type}|${b.grantee}|${b.privilege}`?-1:1);
+}
+const DEFAULT_ACL_TARGET=`defaclrole='postgres'::regrole AND defaclnamespace='public'::regnamespace AND defaclobjtype IN ('r','S','f') AND grantee IN ('anon'::regrole,'authenticated'::regrole)`;
+const DEFAULT_ACL_EMPTY=`(${QUALIFICATION_OWNER_CONTEXT})
+ AND session_user='postgres' AND current_user=session_user
+ AND (SELECT rolsuper FROM pg_roles WHERE rolname='postgres') IS FALSE
+ AND (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database())='postgres'
+ AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','private'))
+ AND NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private'))
+ AND NOT EXISTS(SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname IN ('public','private'))`;
+export const QUALIFICATION_DEFAULT_ACL_SNAPSHOT=`WITH aclrows AS (
+ SELECT d.defaclrole,d.defaclnamespace,d.defaclobjtype::text AS defaclobjtype,a.*
+ FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+)
+SELECT jsonb_build_object(
+ 'local_empty_context',(${DEFAULT_ACL_EMPTY}),
+ 'postgres_superuser',(SELECT rolsuper FROM pg_roles WHERE rolname='postgres'),
+ 'global_client_grants',(SELECT count(*) FROM aclrows WHERE defaclrole='postgres'::regrole AND defaclnamespace=0 AND grantee IN ('anon'::regrole,'authenticated'::regrole)),
+ 'target_grants',coalesce((SELECT jsonb_agg(jsonb_build_object('object_type',defaclobjtype,'grantee',pg_get_userbyid(grantee),'grantor',pg_get_userbyid(grantor),'privilege',privilege_type,'is_grantable',is_grantable) ORDER BY defaclobjtype COLLATE "C",pg_get_userbyid(grantee) COLLATE "C",privilege_type COLLATE "C") FROM aclrows WHERE ${DEFAULT_ACL_TARGET}),'[]'::jsonb),
+ 'other_acl_count',(SELECT count(*) FROM aclrows WHERE NOT(${DEFAULT_ACL_TARGET})),
+ 'other_acl_md5',(SELECT md5(coalesce(jsonb_agg(jsonb_build_array(defaclrole,defaclnamespace,defaclobjtype,grantor,grantee,privilege_type,is_grantable) ORDER BY defaclrole,defaclnamespace,defaclobjtype COLLATE "C",grantor,grantee,privilege_type COLLATE "C",is_grantable)::text,'[]')) FROM aclrows WHERE NOT(${DEFAULT_ACL_TARGET}))
+)`;
+export const QUALIFICATION_DEFAULT_ACL_PROBE=`BEGIN READ ONLY;\n${QUALIFICATION_DEFAULT_ACL_SNAPSHOT};\nROLLBACK;`;
+export const QUALIFICATION_DEFAULT_ACL_ALIGN=`BEGIN;
+DO $defaults$
+DECLARE before_acl jsonb; after_acl jsonb;
+BEGIN
+ before_acl:=(${QUALIFICATION_DEFAULT_ACL_SNAPSHOT});
+ IF before_acl->'local_empty_context' IS DISTINCT FROM 'true'::jsonb
+  OR before_acl->'postgres_superuser' IS DISTINCT FROM 'false'::jsonb
+  OR before_acl->'global_client_grants' IS DISTINCT FROM '0'::jsonb
+  OR before_acl->'target_grants' IS DISTINCT FROM '${JSON.stringify(expectedDefaultAclGrants())}'::jsonb
+ THEN RAISE EXCEPTION 'QUALIFICATION_DEFAULT_ACL_EXACT_NATIVE_REQUIRED'; END IF;
+ -- Exactly the preparation already versioned in deploy-supabase-staging.yml.
+ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
+ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+ after_acl:=(${QUALIFICATION_DEFAULT_ACL_SNAPSHOT});
+ IF after_acl->'local_empty_context' IS DISTINCT FROM 'true'::jsonb
+  OR after_acl->'postgres_superuser' IS DISTINCT FROM 'false'::jsonb
+  OR after_acl->'global_client_grants' IS DISTINCT FROM '0'::jsonb
+  OR after_acl->'target_grants' IS DISTINCT FROM '[]'::jsonb
+  OR after_acl->'other_acl_count' IS DISTINCT FROM before_acl->'other_acl_count'
+  OR after_acl->'other_acl_md5' IS DISTINCT FROM before_acl->'other_acl_md5'
+ THEN RAISE EXCEPTION 'QUALIFICATION_DEFAULT_ACL_PRESERVATION_REQUIRED'; END IF;
+END $defaults$;
+COMMIT;`;
 export function ownerRepairPsqlArgs(run){
  const args=qualificationPsqlArgs(run);args[args.indexOf('-U')+1]='supabase_admin';return args;
 }
@@ -286,6 +336,8 @@ export function qualifiedSession(dir){
  return {run:m.run,verify,
   probeDatabaseOwner:()=>JSON.parse(invoke(qualificationPsqlArgs(m.run),QUALIFICATION_OWNER_PROBE)),
   repairDatabaseOwner:()=>{verify();invoke(ownerRepairPsqlArgs(m.run),QUALIFICATION_OWNER_REPAIR);},
+  probeDefaultAcls:()=>JSON.parse(invoke(qualificationPsqlArgs(m.run),QUALIFICATION_DEFAULT_ACL_PROBE)),
+  alignDefaultAcls:()=>{verify();invoke(qualificationPsqlArgs(m.run),QUALIFICATION_DEFAULT_ACL_ALIGN);},
   sql:(bytes,options={})=>{
   try{return invoke(qualificationPsqlArgs(m.run,options),bytes);}
   catch(error){

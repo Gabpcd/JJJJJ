@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
+import {projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -16,12 +16,15 @@ const evidence=()=>({...checkIdentity(env,head,['tools/restore-local/scripts/res
 const runtimeExtensions=()=>({postgres_major:17,extensions:requirements.map(e=>({name:e.name,installed:{version:e.version,schema:e.schema},available_count:1,available_truncated:false,available_versions:[{version:e.version,superuser:true,trusted:false,relocatable:false,schema:e.schema,requires:null}]}))});
 const zeroValue=()=>Object.fromEntries(['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'].map(k=>[k,0]));
 const nativeOwner=(repaired=false)=>({local_empty_context:true,session_postgres:true,named_owner:repaired?'postgres':'supabase_admin',native_owner:'postgres',named_create:repaired,native_create:true,named_connect:true,native_connect:true,named_temp:true,native_temp:true,postgres_superuser:false,admin_superuser:true});
+const nativeDefaults=(aligned=false)=>({local_empty_context:true,postgres_superuser:false,global_client_grants:0,target_grants:aligned?[]:expectedDefaultAclGrants(),other_acl_count:111,other_acl_md5:'a'.repeat(32)});
 function fakeRuntime(options={}){
- let repaired=false;
+ let repaired=false,defaultsAligned=false;
  const calls=[],extensionSQL=Buffer.from('CANONICAL_EXTENSION_SQL');
  return {calls,extensionSQL,run,
  probeDatabaseOwner(){calls.push({ownerProbe:true,repaired});return structuredClone(repaired?(options.ownerAfter??nativeOwner(true)):(options.ownerBefore??nativeOwner()));},
  repairDatabaseOwner(){calls.push({ownerRepair:true});repaired=true;},
+  probeDefaultAcls(){calls.push({defaultsProbe:true,defaultsAligned});return structuredClone(defaultsAligned?(options.defaultsAfter??nativeDefaults(true)):(options.defaultsBefore??nativeDefaults()));},
+  alignDefaultAcls(){calls.push({defaultsAlign:true});defaultsAligned=true;},
  verify(){calls.push({verify:true});},sql(bytes,flags={}){
   calls.push({bytes,flags});if(options.failOn&&options.failOn(bytes,flags))throw Error('CANARY_SECRET');
   if(bytes.toString()===STOP_CRONS)return JSON.stringify({locally_disabled_jobs:4});
@@ -209,4 +212,40 @@ test('unsafe historical diagnostic refuses before its migration, no arbitrary va
  const e=evidence();e.migrations.push({path:HISTORICAL_MANIFEST_PATH,sha256:HISTORICAL_MANIFEST_SHA,bytes:historicalBytes});e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
  const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString().startsWith('BEGIN READ ONLY;')?JSON.stringify({...cleanHistorical(),CANARY:'CANARY'}):original(bytes,flags);
  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));assert.equal(r.calls.some(x=>x.bytes===historicalBytes),false);assert.equal(proof.at(-1).failure.code,'QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
+});
+
+
+test('native default ACL target is exactly PG17 postgres/public grants for two client roles',()=>{
+ const grants=expectedDefaultAclGrants();assert.equal(grants.length,24);assert.equal(grants.filter(x=>x.object_type==='r').length,16);assert.equal(grants.filter(x=>x.object_type==='S').length,6);assert.equal(grants.filter(x=>x.object_type==='f').length,2);
+ assert.ok(grants.every(x=>['anon','authenticated'].includes(x.grantee)&&x.grantor==='postgres'&&x.is_grantable===false));
+ assert.deepEqual(checkDefaultAclProbe(nativeDefaults()),nativeDefaults());assert.deepEqual(checkDefaultAclProbe(nativeDefaults(true),{aligned:true,before:nativeDefaults()}),nativeDefaults(true));
+});
+test('fixed local alignment matches the existing staging preparation, with transaction rollback on changed other ACL',()=>{
+ const workflow=readFileSync(new URL('../../../../.github/workflows/deploy-supabase-staging.yml',import.meta.url),'utf8').replace(/\s+/g,' ');
+ const statements=[...QUALIFICATION_DEFAULT_ACL_ALIGN.matchAll(/ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON (?:TABLES|SEQUENCES|FUNCTIONS) FROM anon, authenticated;/g)].map(m=>m[0]);assert.equal(statements.length,3);for(const q of statements)assert.ok(workflow.includes(q));
+ assert.ok(QUALIFICATION_DEFAULT_ACL_ALIGN.startsWith('BEGIN;'));assert.ok(QUALIFICATION_DEFAULT_ACL_ALIGN.endsWith('COMMIT;'));
+ assert.ok(QUALIFICATION_DEFAULT_ACL_PROBE.startsWith('BEGIN READ ONLY;'));assert.ok(QUALIFICATION_DEFAULT_ACL_PROBE.endsWith('ROLLBACK;'));
+ assert.match(QUALIFICATION_DEFAULT_ACL_ALIGN,/current_database\(\)='jolene_candidatures_pg17_test'/);assert.match(QUALIFICATION_DEFAULT_ACL_ALIGN,/inet_server_addr\(\) IS NULL/);assert.match(QUALIFICATION_DEFAULT_ACL_ALIGN,/session_user='postgres'/);
+ assert.match(QUALIFICATION_DEFAULT_ACL_ALIGN,/WHERE n.nspname IN \('public','private'\)/);assert.match(QUALIFICATION_DEFAULT_ACL_ALIGN,/other_acl_md5' IS DISTINCT FROM before_acl/);
+ assert.ok(!/REVOKE ALL ON ALL|REVOKE ALL ON FUNCTION public|ALTER ROLE|ALTER USER|SET ROLE|CREATE |DROP |GRANT /.test(QUALIFICATION_DEFAULT_ACL_ALIGN));
+});
+test('default ACL alignment happens once after owner reconciliation and before baseline, not during or after replay',()=>{
+ const e=evidence(),r=fakeRuntime(),result=qualify(e,r,r.extensionSQL,requirements,()=>{});
+ assert.equal(r.calls.filter(x=>x.defaultsAlign).length,1);const i=r.calls.findIndex(x=>x.defaultsAlign);assert.ok(i>r.calls.findIndex(x=>x.ownerRepair));assert.ok(i<r.calls.findIndex(x=>x.bytes===e.migrations[0].bytes));
+ assert.deepEqual(result.default_acl_before,nativeDefaults());assert.deepEqual(result.default_acl_after,nativeDefaults(true));assert.equal(result.local_default_acls_aligned,true);
+ assert.equal(r.calls.filter(x=>x.defaultsProbe).length,2);
+});
+test('unexpected default ACL context, grants, grantor or global access refuses before alignment and baseline',()=>{
+ const variants=[{local_empty_context:false},{postgres_superuser:true},{global_client_grants:1},{target_grants:[]},{other_acl_count:null},{other_acl_md5:'CANARY'},{extra:'CANARY'}];
+ for(const patch of variants){const e=evidence(),r=fakeRuntime({defaultsBefore:{...nativeDefaults(),...patch}}),proof=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));assert.equal(r.calls.some(x=>x.defaultsAlign),false);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);assert.equal(proof.at(-1).failure.code,'QUALIFICATION_DEFAULT_ACL_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));}
+ for(const patch of [{grantor:'supabase_admin'},{grantee:'PUBLIC'},{privilege:'CANARY'},{is_grantable:true},{object_type:'T'},{extra:'CANARY'}]){const v=nativeDefaults();Object.assign(v.target_grants[0],patch);assert.throws(()=>checkDefaultAclProbe(v));}
+});
+test('changed other default ACLs or remaining client grants refuse before any import',()=>{
+ for(const patch of [{other_acl_count:110},{other_acl_md5:'b'.repeat(32)},{target_grants:expectedDefaultAclGrants()},{postgres_superuser:true},{local_empty_context:false}]){
+  const e=evidence(),r=fakeRuntime({defaultsAfter:{...nativeDefaults(true),...patch}}),proof=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));assert.equal(r.calls.filter(x=>x.defaultsAlign).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);assert.equal(proof.at(-1).canonical_test_passed,false);
+ }
+});
+test('default ACL projection never exposes unknown role, privilege, payload or unbounded rows',()=>{
+ const v=nativeDefaults();v.target_grants[0]={object_type:'CANARY',grantee:'CANARY',grantor:'CANARY',privilege:'CANARY',is_grantable:'CANARY',secret:'CANARY'};v.other_acl_md5='CANARY';v.extra='CANARY';const p=projectDefaultAclProbe(v);assert.ok(!JSON.stringify(p).includes('CANARY'));assert.equal(p.target_grants[0].grantee,'other');assert.equal(p.other_acl_md5,null);
+ assert.equal(projectDefaultAclProbe({...nativeDefaults(),target_grants:Array(101).fill({})}).target_grants,null);
 });
