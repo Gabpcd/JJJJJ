@@ -247,19 +247,19 @@ function MissionDetail({ mission }: { mission: any }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
+        className="w-full flex flex-col items-stretch gap-3 p-3 hover:bg-muted/30 transition-colors text-left sm:flex-row sm:items-start sm:justify-between"
         aria-expanded={open}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2 gap-y-1">
             {open ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+              <ChevronDown className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <ChevronRight className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
             )}
-            <span className="font-semibold text-foreground text-sm">{mission.intitule}</span>
+            <span className="min-w-0 break-words font-semibold text-foreground text-sm">{mission.intitule}</span>
             {mission.soignant_nom && (
-              <span className="text-xs text-muted-foreground">· {mission.soignant_nom}</span>
+              <span className="col-start-2 min-w-0 break-words text-xs text-muted-foreground">· {mission.soignant_nom}</span>
             )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1 ml-6">
@@ -276,7 +276,7 @@ function MissionDetail({ mission }: { mission: any }) {
               : `${Number(mission.duree_heures ?? 0)} h ${mission.piece_honoraires ? 'facturées' : 'retenues'}`}</span>
           </div>
         </div>
-        <div className="text-right shrink-0 ml-3">
+        <div className="self-end shrink-0 text-right sm:self-start">
           <p className="text-sm font-bold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</p>
           <p className="text-[10px] text-muted-foreground">commission HT</p>
         </div>
