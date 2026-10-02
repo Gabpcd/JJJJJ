@@ -68,7 +68,7 @@ jobs:
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
 
       - name: Tester la préparation Connect staging fermée sans réseau
-        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs
+        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs tests/node/connect-staging-catalogue.node.mjs
 
       - name: Contrats du pilote documentaire F1 sans réseau ni credentials
         run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
@@ -283,6 +283,17 @@ jobs:
     name: Migrations + sécurité SQL (transaction annulée)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    services:
+      postgres-connect-reference:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: connect_pretransfer_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d connect_pretransfer_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
     concurrency:
       # Même verrou que le bootstrap staging : leurs écritures ne doivent
       # jamais s'exécuter simultanément sur la base partagée.
@@ -293,6 +304,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       # Les migrations PR sont testées puis annulées. Seul le schéma de base
       # main peut être synchronisé durablement ; ce job ne déploie pas la PR.
@@ -322,6 +335,12 @@ jobs:
           fi
           echo "has_f1_regression=$has_f1_regression" >> "$GITHUB_OUTPUT"
 
+          if git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql' | grep -Fxq 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql'; then
+            echo "has_connect_candidate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_connect_candidate=false" >> "$GITHUB_OUTPUT"
+          fi
+
           if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/fixtures/contrat-service-v11/**' \
             'tests/security/contrat-service-v11.test.sql' \
@@ -340,8 +359,8 @@ jobs:
             echo "has_contract_fixture=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Node pour la fixture contrat annulée
-        if: steps.migration_scope.outputs.has_contract_fixture == 'true'
+      - name: Setup Node pour les preuves annulées
+        if: steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -674,6 +693,37 @@ jobs:
             exit 1
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+      - name: Connect — référence du delta fermé dans PostgreSQL 17 éphémère
+        if: steps.migration_scope.outputs.has_connect_candidate == 'true'
+        env:
+          JOLENE_CONNECT_WITNESS: CI_EPHEMERE
+          PGHOST: 127.0.0.1
+          PGPORT: '54329'
+          PGDATABASE: connect_pretransfer_temoin
+          PGUSER: postgres
+          PGPASSWORD: fixture-ci-ephemere
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          JOLENE_CONNECT_CATALOGUE_REFERENCE: ${{ runner.temp }}/connect-catalogue-reference.json
+        run: python3 scripts/ci/connect-staging-admission-pg17.py
+
+      - name: Connect — delta exact staging annulé puis relecture indépendante
+        if: steps.migration_scope.outputs.has_connect_candidate == 'true'
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/connect-staging-catalogue-proof.mjs proof
+
+      - name: Connect — seules les empreintes et assertions vérifiées sont conservées
+        if: success() && steps.migration_scope.outputs.has_connect_candidate == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: connect-closed-catalogue-proof-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/connect-catalogue-proof.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Numérotation — SELECT indépendant après succès ou échec
         if: always() && steps.migration_scope.outputs.has_migrations == 'true'

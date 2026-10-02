@@ -26,6 +26,40 @@ assert sql(dependency_fingerprint)==before
 assert sql("SELECT to_regclass('private.stripe_connect_test_capacities') IS NULL")=='t'
 sql('BEGIN;'+capacity+render+'COMMIT;')
 print(json.dumps({'supplement_sha256':hashlib.sha256(render.encode()).hexdigest(),'rollback_exact':True,'gate_generale':False,'fournisseur':False}),flush=True)
+# Export optionnel du seul delta fermé, AVANT la création des fixtures métier.
+# Le job suivant ne recevra que des empreintes, pas le catalogue ou des lignes.
+reference_path=os.environ.get('JOLENE_CONNECT_CATALOGUE_REFERENCE')
+if reference_path:
+ reference_file=Path(reference_path)
+ runner_temp=Path(os.environ.get('RUNNER_TEMP',''))
+ assert runner_temp.is_absolute() and reference_file.is_absolute() and reference_file.is_relative_to(runner_temp)
+ query=subprocess.run(['node','scripts/ci/connect-staging-catalogue-proof.mjs','reference-sql'],
+  cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
+ detector=subprocess.run(['node','scripts/ci/connect-staging-catalogue-proof.mjs','detector-sql'],
+  cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
+ def measure(mutation=''):
+  return json.loads(sql('BEGIN;'+mutation+detector+'ROLLBACK;'))
+ original=measure()
+ # Ces changements restent eux-mêmes annulés. Le même SQL de partition que la
+ # preuve distante doit les détecter ; aucune capture de leurs nouveaux hashes
+ # n'est acceptée comme référence.
+ for mutation,changed in [
+  ('GRANT EXECUTE ON FUNCTION private.fn_connect_exiger_service() TO anon;','allowed'),
+  ('ALTER FUNCTION private.fn_connect_exiger_service() SECURITY DEFINER;','allowed'),
+  ("CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;",'outside'),
+  ('CREATE TABLE private.connect_objet_etranger(id integer);','outside'),
+  ("INSERT INTO auth.users(id) VALUES('f1561000-0000-4000-8000-000000000099');",'rows'),
+ ]:
+  assert measure(mutation)[changed]!=original[changed]
+  assert measure()==original
+ print('CONNECT_CATALOGUE_DETECTE_MUTATIONS_ACL_CORPS_HORS_PERIMETRE_ET_DONNEES',flush=True)
+ reference=json.loads(sql(query))
+ assert reference['counts']['routines']==34 and reference['counts']['relations']==3
+ assert reference['counts']['triggers']==2 and reference['counts']['inventory']==19
+ with reference_file.open('x') as handle:
+  reference_file.chmod(0o600)
+  json.dump(reference,handle)
+ print('CONNECT_CATALOGUE_REFERENCE_PG17_EXPORTÉE',flush=True)
 S,E,M,H,C,T,L,OWNER,CAP,FOREIGN=[f'f1561000-0000-4000-8000-{n:012d}' for n in range(1,11)]
 for role in ['anon','authenticated','service_role']:
  assert sql(f"SELECT has_table_privilege('{role}','private.stripe_connect_test_capacities','SELECT,INSERT,UPDATE,DELETE')")=='f'
