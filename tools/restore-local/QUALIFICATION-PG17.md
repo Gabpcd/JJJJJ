@@ -1,12 +1,12 @@
 # Qualification isolée du replay PostgreSQL 17 — branche temporaire uniquement
 
-Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `86e8eb2cb500c96bceb42ccfaf4360797e4b2e95`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
+Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `4107722ae6aeb55446aafda37f0df0a6661fcf06`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
 
 ## Source intégrale et refus fermés
 
-Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 86e8…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
+Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 4107…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
 
-Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `92b0b390806f663fbc17ef9d0bf6e99de9a5415377ddaef5fd8f2a0c8076f64a`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
+Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `da68be3468f5c7c4d6d896ad422659e21a03dfb79277b91a0d84537759db51ff`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
 
 ## Infrastructure et arrêt des travaux automatiques
 
@@ -218,3 +218,25 @@ Le nouveau SHA du test est indiqué en tête de document. Les anciennes preuves
 restent attachées à leur ancien SHA ; aucune réussite SQL n'est déduite du
 renommage avant la nouvelle exécution réelle. Cette branche reste sans PR et
 ne doit pas être fusionnée telle quelle.
+
+
+### Méthode de comparaison RLS — v13
+
+Le run 37059553000 passe la préparation et le bloc catalogue corrigé, puis
+refuse la comparaison RLS à la ligne 136. La source d'acquisition des deux
+reçus LIVE du 2 octobre utilise pg_get_expr(expression, table, true), alors que
+le test omettait ce troisième argument. Les cinq JSON attendus ont été
+rapprochés exactement des reçus production ET staging ; ils ne changent pas.
+
+Le commit produit local 4107722ae6aeb55446aafda37f0df0a6661fcf06 ajoute seulement
+true aux deux appels de décompilation USING et WITH CHECK du test. Ce correctif
+aligne la méthode de comparaison sur celle de la collecte. Les rôles, expressions
+attendues, flags RLS/FORCE et le refus de toute policy supplémentaire sont
+conservés. Un éventuel écart réel du catalogue fera donc toujours échouer le
+prochain run. Le search_path du test reste public,pg_catalog ; celui de la
+collecte historique n'avait pas été enregistré. Aucune équivalence runtime
+n'est proclamée avant cette nouvelle mesure.
+
+La nouvelle référence produit et le SHA du test figurent en tête. Les 218
+migrations restent inchangées. La branche de qualification n'est pas une PR
+produit à fusionner ; main, D et les comptes staging sont inchangés.
