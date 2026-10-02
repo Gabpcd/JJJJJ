@@ -619,6 +619,10 @@ function FacturationEtablissementContent() {
       toast.error(extraireMessageErreur({ code: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' }));
       return;
     }
+    if (!stripePromise) {
+      toast.error('Le paiement par carte est momentanément indisponible. Réessayez plus tard.');
+      return;
+    }
     const paymentKey = factureHonoraireId;
     setConnectPayingId(paymentKey);
     const loadingToastId = toast.loading('Préparation du paiement…');

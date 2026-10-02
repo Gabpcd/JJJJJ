@@ -63,6 +63,21 @@ describe('Déclaration paiement — erreur locale et envoi unique',()=>{
   const dialog=await ouvrir('facture');fireEvent.click(dialog.getByRole('button',{name:'Valider la déclaration'}));
   expect(await dialog.findByRole('alert')).toHaveTextContent(mode==='session'?'Votre session a expiré':'Erreur de connexion');expect(dialog.getByRole('button',{name:'Valider la déclaration'})).toBeEnabled();expect(mocks.invoke).not.toHaveBeenCalled();expect(mocks.success).not.toHaveBeenCalled();
  });
+ it('refuse Connect sans clé avant toute préparation et conserve la page après rechargement',async()=>{
+  preparer('facture');const lire=mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation(async(name:string,body:unknown)=>{
+   const result=await lire(name,body);
+   if(name==='fn_obligations_financieres')result.data.missions_non_payees[0].soignant_stripe_connect=true;
+   return result;
+  });
+  const first=render(<MemoryRouter><FacturationEtablissement/></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button',{name:'Payer via Stripe'}));
+  expect(mocks.error).toHaveBeenLastCalledWith('Le paiement par carte est momentanément indisponible. Réessayez plus tard.');
+  expect(mocks.invoke).not.toHaveBeenCalled();expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  first.unmount();render(<MemoryRouter><FacturationEtablissement/></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button',{name:'Payer via Stripe'}));
+  expect(mocks.error).toHaveBeenCalledTimes(2);expect(mocks.invoke).not.toHaveBeenCalled();
+ });
  it('conserve la redirection informative Stripe sans déclarer de paiement',async()=>{
   declaration.mockResolvedValueOnce({data:{error:'use_stripe_connect'},error:null});const dialog=await ouvrir('facture');fireEvent.click(dialog.getByRole('button',{name:'Valider la déclaration'}));
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());expect(mocks.info).toHaveBeenCalledTimes(1);expect(mocks.invoke).not.toHaveBeenCalled();expect(mocks.success).not.toHaveBeenCalled();
