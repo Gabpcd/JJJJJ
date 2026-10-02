@@ -124,8 +124,16 @@ SELECT jsonb_build_object(
  'vault_secrets',(SELECT count(*) FROM vault.secrets));
 ROLLBACK;`;
 const ZERO_KEYS=['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'];
+export function projectQuiescence(text){
+ const fail=()=>refuse('QUALIFICATION_QUIESCENCE_REPORT');
+ let value;try{value=JSON.parse(text);}catch{fail();}
+ if(!value||typeof value!=='object'||Array.isArray(value)
+  ||Object.keys(value).sort().join()!==[...ZERO_KEYS].sort().join()
+  ||ZERO_KEYS.some(k=>!Number.isSafeInteger(value[k])||value[k]<0))fail();
+ return Object.fromEntries(ZERO_KEYS.map(k=>[k,value[k]]));
+}
 export function zeros(text){
- const value=JSON.parse(text);if(Object.keys(value).sort().join()!==[...ZERO_KEYS].sort().join()||Object.values(value).some(x=>x!==0))refuse('QUALIFICATION_NONEMPTY');return value;
+ const value=projectQuiescence(text);if(Object.values(value).some(x=>x!==0))refuse('QUALIFICATION_NONEMPTY');return value;
 }
 export function exactExtensions(requirements,runtime){
  const result=compareRequired(requirements,runtime);
@@ -319,7 +327,7 @@ export function projectNotationPreflight(raw){
  return {...Object.fromEntries([...NOTATION_BOOLS,...NOTATION_HASHES].map(k=>[k,v[k]])),notation_acl_entries:rows};
 }
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED','QUALIFICATION_BASELINE_DEFAULT_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','QUALIFICATION_QUIESCENCE_REPORT','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED','QUALIFICATION_BASELINE_DEFAULT_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -383,11 +391,11 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   report.locally_disabled_jobs=crons.locally_disabled_jobs;
   report.phase='canonical_preflight';save(report);
   report.extension_checks=exactExtensions(requirements,JSON.parse(runtime.sql(extensionSQL)));
-  runtime.verify();report.before=zeros(runtime.sql(Buffer.from(QUIESCENCE)));save(report);
+  runtime.verify();report.before=projectQuiescence(runtime.sql(Buffer.from(QUIESCENCE)));save(report);zeros(JSON.stringify(report.before));
   report.phase='unchanged_canonical_test';save(report);
   runtime.sql(evidence.test.bytes,{test:true});report.canonical_test_passed=true;
   report.phase='rollback_verification';save(report);
-  runtime.verify();report.after=zeros(runtime.sql(Buffer.from(QUIESCENCE)));
+  runtime.verify();report.after=projectQuiescence(runtime.sql(Buffer.from(QUIESCENCE)));save(report);zeros(JSON.stringify(report.after));
   report.rollback_verified=true;report.phase='complete';report.result='ISOLATED_IMPORT_AND_SQL_TEST_PASSED';save(report);
   return report;
  }catch(error){report.failure=safeFailure(error);save(report);throw error;}

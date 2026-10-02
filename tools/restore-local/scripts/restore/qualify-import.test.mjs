@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {BASELINE_SERVICE_DEFAULT_PROBE,BASELINE_SERVICE_DEFAULT_SUSPEND,expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,projectQuiescence,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -408,5 +408,46 @@ test('malformed cron result cannot advertise successful deactivation or continue
   const e=evidence(),r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString()===STOP_CRONS?JSON.stringify(value):original(bytes,flags);
   assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
   assert.equal(proof.at(-1).failure.code,'QUALIFICATION_CRON_REPORT');assert.equal(r.calls.some(x=>x.flags?.test),false);assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
+});
+
+
+test('quiescence projection accepts exactly the known nonnegative safe integer counters',()=>{
+ for(const key of Object.keys(zeroValue())){
+  const value={...zeroValue(),[key]:Number.MAX_SAFE_INTEGER};assert.deepEqual(projectQuiescence(JSON.stringify(value)),value);
+  assert.throws(()=>zeros(JSON.stringify(value)),/QUALIFICATION_NONEMPTY/);
+ }
+ const missing=zeroValue();delete missing.auth_users;
+ for(const raw of ['CANARY_SECRET','null','[]','"CANARY_SECRET"',JSON.stringify(missing),JSON.stringify({...zeroValue(),extra:'CANARY_SECRET'}),
+  ...[-1,0.5,Number.MAX_SAFE_INTEGER+1,'0',null,false,{},[]].map(v=>JSON.stringify({...zeroValue(),auth_users:v}))]){
+  assert.throws(()=>projectQuiescence(raw),/QUALIFICATION_QUIESCENCE_REPORT/);
+ }
+});
+test('each nonzero preflight counter is preserved before refusal without executing the canonical test',()=>{
+ for(const key of Object.keys(zeroValue())){
+  const value={...zeroValue(),[key]:1},e=evidence(),r=fakeRuntime(),sql=r.sql,proof=[];
+  r.sql=(bytes,flags={})=>bytes.toString()===QUIESCENCE?JSON.stringify(value):sql(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))),/QUALIFICATION_NONEMPTY/);
+  const last=proof.at(-1);assert.deepEqual(last.before,value);assert.equal(last.after,undefined);
+  assert.ok(proof.some(x=>x.before?.[key]===1&&!x.failure));assert.equal(last.phase,'canonical_preflight');
+  assert.equal(last.canonical_test_passed,false);assert.equal(last.rollback_verified,false);assert.equal(r.calls.some(x=>x.flags?.test),false);
+ }
+});
+test('nonzero post-test counter is preserved but cannot confirm rollback or a successful qualification',()=>{
+ const value={...zeroValue(),vault_secrets:1},e=evidence(),r=fakeRuntime(),sql=r.sql,proof=[];let probes=0;
+ r.sql=(bytes,flags={})=>bytes.toString()===QUIESCENCE?JSON.stringify(++probes===1?zeroValue():value):sql(bytes,flags);
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))),/QUALIFICATION_NONEMPTY/);
+ const last=proof.at(-1);assert.deepEqual(last.before,zeroValue());assert.deepEqual(last.after,value);assert.equal(last.phase,'rollback_verification');
+ assert.equal(last.canonical_test_passed,true);assert.equal(last.rollback_verified,false);assert.equal(last.result,'IMPORT_NOT_PROVEN');
+ assert.equal(r.calls.filter(x=>x.flags?.test).length,1);
+});
+test('malformed quiescence is never persisted and its raw contents cannot escape through failure reports',()=>{
+ for(const malformedAt of [1,2])for(const raw of ['CANARY_SECRET',JSON.stringify({...zeroValue(),vault_secrets:'CANARY_SECRET'}),JSON.stringify({...zeroValue(),extra:'CANARY_SECRET'})]){
+  const e=evidence(),r=fakeRuntime(),sql=r.sql,proof=[];let probes=0;
+  r.sql=(bytes,flags={})=>bytes.toString()===QUIESCENCE?(++probes===malformedAt?raw:JSON.stringify(zeroValue())):sql(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))),/QUALIFICATION_QUIESCENCE_REPORT/);
+  const last=proof.at(-1);assert.equal(last.failure.code,'QUALIFICATION_QUIESCENCE_REPORT');assert.equal(last.rollback_verified,false);
+  assert.equal(last[malformedAt===1?'before':'after'],undefined);assert.ok(!JSON.stringify(proof).includes('CANARY_SECRET'));
+  assert.equal(r.calls.filter(x=>x.flags?.test).length,malformedAt-1);
  }
 });

@@ -152,3 +152,16 @@ Sources :
 - https://raw.githubusercontent.com/supabase/postgres/a431c10a356be4c700d2e3f2af8551e2fec5e250/ansible/files/postgresql_extension_custom_scripts/pg_cron/after-create.sql
 - https://raw.githubusercontent.com/citusdata/pg_cron/v1.6.4/pg_cron--1.3--1.4.sql
 - https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-ROW-SECURITY
+
+
+### Compteurs de quiescence avant refus (v10)
+
+Le run37056193902 importe les 218 fichiers, désactive six jobs locaux et valide
+les neuf extensions attendues. Il refuse ensuite QUALIFICATION_NONEMPTY avant
+le test canonique ; le reçu précédent ne conservait pas le compteur concerné.
+V10 ne change ni la requête READ ONLY ni l'exigence de zéro : il valide d'abord
+les quatorze noms de compteurs exacts et leurs entiers sûrs non négatifs, puis
+conserve cette seule projection avant d'appliquer le même refus. Cela vaut aussi
+pour la vérification après le test. Un champ supplémentaire, manquant ou mal typé
+refuse sans conserver le contenu brut. Aucun nom, secret ou contenu de ligne
+n'est lu ni exporté. Une cause métier n'est pas déduite avant la preuve runtime.
