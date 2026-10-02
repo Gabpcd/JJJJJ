@@ -70,28 +70,28 @@ INSERT INTO cand_helpers VALUES
  ('public.fn_a_permission_etablissement(text,uuid)', '1ee98c0e7094db4e98277b85ce71c6ec'),
  ('public.mon_etablissement_id()', 'dc3ef839d2920fb33cf6d7b320842c10');
 DO $catalogue$
-DECLARE p pg_proc%ROWTYPE;
+DECLARE v_rpc pg_proc%ROWTYPE;
 BEGIN
   IF EXISTS (SELECT 1 FROM cand_helpers h LEFT JOIN pg_proc p
       ON p.oid=to_regprocedure(h.signature) WHERE md5(p.prosrc) IS DISTINCT FROM h.corps_md5)
   THEN RAISE EXCEPTION 'CAND_MULTI_HELPER_LIVE_DIFFERENT'; END IF;
-  SELECT * INTO STRICT p FROM pg_proc
+  SELECT * INTO STRICT v_rpc FROM pg_proc
   WHERE oid='public.fn_lire_candidatures_mission_habilitee(uuid)'::regprocedure;
-  IF NOT p.prosecdef OR p.provolatile <> 's'
-     OR pg_get_userbyid(p.proowner) <> 'postgres'
-     OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
-     OR p.prorettype <> 'jsonb'::regtype
+  IF NOT v_rpc.prosecdef OR v_rpc.provolatile <> 's'
+     OR pg_get_userbyid(v_rpc.proowner) <> 'postgres'
+     OR v_rpc.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+     OR v_rpc.prorettype <> 'jsonb'::regtype
   THEN RAISE EXCEPTION 'CAND_MULTI_RPC_CONFIGURATION'; END IF;
-  IF has_function_privilege('anon', p.oid, 'EXECUTE')
-     OR has_function_privilege('service_role', p.oid, 'EXECUTE')
-     OR NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
-     OR EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
+  IF has_function_privilege('anon', v_rpc.oid, 'EXECUTE')
+     OR has_function_privilege('service_role', v_rpc.oid, 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', v_rpc.oid, 'EXECUTE')
+     OR EXISTS (SELECT 1 FROM aclexplode(COALESCE(v_rpc.proacl,acldefault('f',v_rpc.proowner))) a
        WHERE a.grantee=0 AND a.privilege_type='EXECUTE')
   THEN RAISE EXCEPTION 'CAND_MULTI_ACL'; END IF;
   IF NOT EXISTS (SELECT 1 FROM private.security_definer_inventory i
       WHERE i.signature='fn_lire_candidatures_mission_habilitee(uuid)'
         AND i.categorie='RPC_UTILISATEUR_AUTH_INTERNE'
-        AND i.definition_md5=md5(p.prosrc) AND length(btrim(i.justification))>0)
+        AND i.definition_md5=md5(v_rpc.prosrc) AND length(btrim(i.justification))>0)
   THEN RAISE EXCEPTION 'CAND_MULTI_INVENTAIRE_MD5_PROSRC'; END IF;
 END;
 $catalogue$;
