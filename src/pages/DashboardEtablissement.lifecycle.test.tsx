@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import DashboardEtablissement from './DashboardEtablissement';
 
 type Resultat = { data: unknown; error: { message: string } | null };
@@ -28,6 +28,21 @@ vi.mock('@/components/SkeletonCard', () => ({ SkeletonDashboard: () => <p>Charge
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: vi.fn() }));
 
 let lectures: LectureStats[];
+const annulationNative = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'throwIfAborted');
+beforeAll(() => {
+  // La version de jsdom du dépôt ne fournit pas encore cette API navigateur.
+  // Reproduire uniquement sa sémantique, sans remplacer le signal React Query.
+  if (!annulationNative) Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', {
+    configurable: true,
+    value(this: AbortSignal) {
+      if (this.aborted) throw this.reason ?? new DOMException('Chargement annulé', 'AbortError');
+    },
+  });
+});
+afterAll(() => {
+  if (!annulationNative) Reflect.deleteProperty(AbortSignal.prototype, 'throwIfAborted');
+});
+
 function requete(resultat: Resultat, suspendre = false) {
   let signal: AbortSignal | undefined;
   const builder: Record<string, any> = {};
@@ -54,12 +69,22 @@ beforeEach(() => {
   mocks.compte = 'etab-a';
   lectures = [];
   mocks.from.mockImplementation(() => requete({ data: [], error: null }));
-  mocks.rpc.mockImplementation((nom: string) => requete({
-    data: nom === 'fn_mon_etablissement_complet'
-      ? { nom: mocks.compte, peut_publier_missions: true }
-      : [],
-    error: null,
-  }, nom === 'fn_stats_dashboard_etablissement'));
+  mocks.rpc.mockImplementation((nom: string) => {
+    const reponses: Record<string, unknown> = {
+      fn_mon_etablissement_complet: { nom: mocks.compte, peut_publier_missions: true },
+      fn_mes_soignants_etablissement: [],
+      fn_stats_dashboard_etablissement: null,
+      fn_ecrire_audit_safe: null,
+      fn_mon_score_etab: { score_qualite: null, niveau: null, composantes: {
+        notation_pct: null, nb_notations: 0, paiement_pct: null, nb_factures: 0, nb_litiges_perdus: 0,
+      } },
+      fn_bfa_info: { eligible: false },
+      fn_stats_etab_complements: { soignants_mois_precedent: 0, cout_brut_ce_mois: 0, heures_ce_mois: 0,
+        missions_pourvues_ce_mois: 0, missions_publiees_ce_mois: 0 },
+    };
+    if (!(nom in reponses)) throw new Error(`RPC non prévue dans cette simulation : ${nom}`);
+    return requete({ data: reponses[nom], error: null }, nom === 'fn_stats_dashboard_etablissement');
+  });
 });
 
 function afficher() {
