@@ -1218,9 +1218,9 @@ function FacturationEtablissementContent() {
                             size="sm"
                             onClick={() => payerStripeConnect(m.mission_id, m.facture_honoraires_id)}
                             disabled={connectPayingId === (m.facture_honoraires_id || m.mission_id) || enLitige}
-                            className="w-full"
+                            className="w-full hover:scale-100"
+                            iconeGauche={<CreditCard className="w-4 h-4" aria-hidden="true" />}
                           >
-                            <CreditCard className="w-4 h-4 mr-2" />
                             {connectPayingId === (m.facture_honoraires_id || m.mission_id) ? 'Préparation…' : 'Payer via Stripe'}
                           </BoutonY2K>
                           {permissions.contrats && m.facture_honoraires_id && !enLitige && (
@@ -1240,9 +1240,9 @@ function FacturationEtablissementContent() {
                             size="sm"
                             onClick={() => ouvrirDialogDeclarer(m)}
                             disabled={declaringId === (m.facture_honoraires_id || m.mission_id) || enLitige}
-                            className="w-full"
+                            className="w-full hover:scale-100"
+                            iconeGauche={<Banknote className="w-4 h-4" aria-hidden="true" />}
                           >
-                            <Banknote className="w-4 h-4 mr-2" />
                             {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
                           </BoutonY2K>
                           {permissions.contrats && m.facture_honoraires_id && !enLitige && (

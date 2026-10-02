@@ -20,6 +20,22 @@ async function action(page: Page, cible: Locator) {
   await cible.scrollIntoViewIfNeeded();
   if (test.info().project.use.hasTouch) await cible.tap(); else await cible.click();
 }
+async function verifierActionsPaiement(piece: Locator, nom: string) {
+  const payer = piece.getByRole('button', { name: nom, exact: true });
+  const contester = piece.getByRole('button', { name: 'Contester', exact: true });
+  await payer.scrollIntoViewIfNeeded();
+  if (!test.info().project.use.hasTouch) await payer.hover();
+  await expect.poll(async () => {
+    const [p, c, icone, texte] = await Promise.all([
+      payer.boundingBox(), contester.boundingBox(), payer.locator('svg').boundingBox(),
+      payer.getByText(nom, { exact: true }).boundingBox(),
+    ]);
+    if (!p || !c || !icone || !texte) return false;
+    const separes = p.x + p.width <= c.x || c.x + c.width <= p.x || p.y + p.height <= c.y || c.y + c.height <= p.y;
+    const centresAlignes = Math.abs(icone.y + icone.height / 2 - texte.y - texte.height / 2) <= 2;
+    return separes && centresAlignes && icone.x + icone.width <= texte.x;
+  }, { message: 'Icône alignée avec le texte et actions de paiement sans recouvrement au survol' }).toBe(true);
+}
 async function fixture(page: Page, connect = false, commission = false) {
   const simulation = creerSuiviSimule(), { state } = simulation;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
@@ -160,6 +176,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? `Connect EN_COURS
     await expect(page.getByText('FACTURE-AUTRE-MISSION',{exact:true})).toHaveCount(0);
     const piece = page.getByText('FACTURE-RECTIFICATIVE-60',{exact:true}).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
     await expect(piece).toContainText(/60,00\s*€/);
+    await verifierActionsPaiement(piece, connect ? 'Payer via Stripe' : 'Déclarer un paiement');
     if (connect) {
       await action(page,piece.getByRole('button',{name:'Payer via Stripe',exact:true}));
       await expect(page.getByText(configurationFictive ? refusAttendu : indisponible,{exact:true})).toBeVisible();
