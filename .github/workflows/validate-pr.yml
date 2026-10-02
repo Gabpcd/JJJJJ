@@ -74,7 +74,10 @@ jobs:
         run: node --test tests/node/connect-test-fixture-rollback.node.mjs
 
       - name: Contrats du pilote documentaire F1 sans réseau ni credentials
-        run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs tests/node/recette-navigation-html.node.mjs
+        run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
+
+      - name: Navigation HTML — transport loopback sans navigateur
+        run: node --test tests/node/recette-navigation-html.node.mjs
 
       - name: Deno figé pour le chargement des polices Edge
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
