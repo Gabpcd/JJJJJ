@@ -122,8 +122,8 @@ BEGIN
       ON p.polrelid=to_regclass('public.'||e.table_nom) AND p.polname=e.policy_nom
     WHERE jsonb_build_object('roles',(SELECT jsonb_agg(CASE WHEN r=0 THEN 'PUBLIC'
         ELSE pg_get_userbyid(r) END ORDER BY r) FROM unnest(p.polroles) r),
-      'using',pg_get_expr(p.polqual,p.polrelid),'commande',p.polcmd,
-      'permissive',p.polpermissive,'with_check',pg_get_expr(p.polwithcheck,p.polrelid))
+      'using',pg_get_expr(p.polqual,p.polrelid,true),'commande',p.polcmd,
+      'permissive',p.polpermissive,'with_check',pg_get_expr(p.polwithcheck,p.polrelid,true))
       IS DISTINCT FROM e.preuve)
     OR EXISTS (SELECT 1 FROM pg_policy p
       WHERE p.polrelid IN ('public.missions'::regclass,'public.candidatures'::regclass)
