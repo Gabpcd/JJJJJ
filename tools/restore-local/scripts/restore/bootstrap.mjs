@@ -286,6 +286,55 @@ BEGIN
  THEN RAISE EXCEPTION 'QUALIFICATION_DEFAULT_ACL_PRESERVATION_REQUIRED'; END IF;
 END $defaults$;
 COMMIT;`;
+const BASELINE_SERVICE_TARGET=`defaclrole='postgres'::regrole AND defaclnamespace='public'::regnamespace AND defaclobjtype='f' AND grantee='service_role'::regrole`;
+const BASELINE_SERVICE_LOCAL=`current_database()='${QUALIFICATION_DB}' AND inet_server_addr() IS NULL
+ AND session_user='postgres' AND current_user=session_user
+ AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
+ AND current_setting('cron.database_name')='${QUALIFICATION_DB}' AND current_setting('cron.launch_active_jobs')='off'
+ AND current_setting('max_worker_processes')='0'
+ AND NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE backend_type IN ('pg_cron launcher','pg_cron worker','pg_net worker'))
+ AND (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database())='postgres'`;
+export const BASELINE_SERVICE_DEFAULT_SNAPSHOT=`WITH aclrows AS (
+ SELECT d.defaclrole,d.defaclnamespace,d.defaclobjtype::text AS defaclobjtype,a.*
+ FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+)
+SELECT jsonb_build_object(
+ 'local_isolated_context',(${BASELINE_SERVICE_LOCAL}),
+ 'local_empty_context',(${DEFAULT_ACL_EMPTY}),
+ 'postgres_superuser',(SELECT rolsuper FROM pg_roles WHERE rolname='postgres'),
+ 'global_service_function_grants',(SELECT count(*) FROM aclrows WHERE defaclrole='postgres'::regrole AND defaclnamespace=0 AND defaclobjtype='f' AND grantee='service_role'::regrole),
+ 'client_grants',(SELECT count(*) FROM aclrows WHERE (${DEFAULT_ACL_TARGET}) OR (defaclrole='postgres'::regrole AND defaclnamespace=0 AND grantee IN ('anon'::regrole,'authenticated'::regrole))),
+ 'target_grants',coalesce((SELECT jsonb_agg(jsonb_build_object('grantor',CASE WHEN grantor='postgres'::regrole THEN 'postgres' ELSE 'other' END,'privilege',CASE WHEN privilege_type='EXECUTE' THEN 'EXECUTE' ELSE 'other' END,'is_grantable',is_grantable)) FROM aclrows WHERE ${BASELINE_SERVICE_TARGET}),'[]'::jsonb),
+ 'other_acl_count',(SELECT count(*) FROM aclrows WHERE NOT(${BASELINE_SERVICE_TARGET})),
+ 'other_acl_md5',(SELECT md5(coalesce(jsonb_agg(jsonb_build_array(defaclrole,defaclnamespace,defaclobjtype,grantor,grantee,privilege_type,is_grantable) ORDER BY defaclrole,defaclnamespace,defaclobjtype COLLATE "C",grantor,grantee,privilege_type COLLATE "C",is_grantable)::text,'[]')) FROM aclrows WHERE NOT(${BASELINE_SERVICE_TARGET}))
+)`;
+export const BASELINE_SERVICE_DEFAULT_PROBE=`BEGIN READ ONLY;\n${BASELINE_SERVICE_DEFAULT_SNAPSHOT};\nROLLBACK;`;
+export const BASELINE_SERVICE_DEFAULT_SUSPEND=`BEGIN;
+DO $baseline_default$
+DECLARE before_acl jsonb; after_acl jsonb;
+BEGIN
+ before_acl:=(${BASELINE_SERVICE_DEFAULT_SNAPSHOT});
+ IF before_acl->'local_isolated_context' IS DISTINCT FROM 'true'::jsonb
+  OR before_acl->'local_empty_context' IS DISTINCT FROM 'true'::jsonb
+  OR before_acl->'postgres_superuser' IS DISTINCT FROM 'false'::jsonb
+  OR before_acl->'global_service_function_grants' IS DISTINCT FROM '0'::jsonb
+  OR before_acl->'client_grants' IS DISTINCT FROM '0'::jsonb
+  OR before_acl->'target_grants' IS DISTINCT FROM '[{"grantor":"postgres","privilege":"EXECUTE","is_grantable":false}]'::jsonb
+ THEN RAISE EXCEPTION 'QUALIFICATION_BASELINE_DEFAULT_EXACT_REQUIRED'; END IF;
+ -- Future functions only, before any public/private object exists. No imported object ACL is edited.
+ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM service_role;
+ after_acl:=(${BASELINE_SERVICE_DEFAULT_SNAPSHOT});
+ IF after_acl->'local_isolated_context' IS DISTINCT FROM 'true'::jsonb
+  OR after_acl->'local_empty_context' IS DISTINCT FROM 'true'::jsonb
+  OR after_acl->'postgres_superuser' IS DISTINCT FROM 'false'::jsonb
+  OR after_acl->'global_service_function_grants' IS DISTINCT FROM '0'::jsonb
+  OR after_acl->'client_grants' IS DISTINCT FROM '0'::jsonb
+  OR after_acl->'target_grants' IS DISTINCT FROM '[]'::jsonb
+  OR after_acl->'other_acl_count' IS DISTINCT FROM before_acl->'other_acl_count'
+  OR after_acl->'other_acl_md5' IS DISTINCT FROM before_acl->'other_acl_md5'
+ THEN RAISE EXCEPTION 'QUALIFICATION_BASELINE_DEFAULT_PRESERVATION_REQUIRED'; END IF;
+END $baseline_default$;
+COMMIT;`;
 export function ownerRepairPsqlArgs(run){
  const args=qualificationPsqlArgs(run);args[args.indexOf('-U')+1]='supabase_admin';return args;
 }
@@ -340,6 +389,8 @@ export function qualifiedSession(dir){
   repairDatabaseOwner:()=>{verify();invoke(ownerRepairPsqlArgs(m.run),QUALIFICATION_OWNER_REPAIR);},
   probeDefaultAcls:()=>JSON.parse(invoke(qualificationPsqlArgs(m.run),QUALIFICATION_DEFAULT_ACL_PROBE)),
   alignDefaultAcls:()=>{verify();invoke(qualificationPsqlArgs(m.run),QUALIFICATION_DEFAULT_ACL_ALIGN);},
+   probeBaselineServiceDefault:()=>JSON.parse(invoke(qualificationPsqlArgs(m.run),BASELINE_SERVICE_DEFAULT_PROBE)),
+   suspendBaselineServiceDefault:()=>{verify();invoke(qualificationPsqlArgs(m.run),BASELINE_SERVICE_DEFAULT_SUSPEND);},
   sql:(bytes,options={})=>{
   try{return invoke(qualificationPsqlArgs(m.run,options),bytes);}
   catch(error){

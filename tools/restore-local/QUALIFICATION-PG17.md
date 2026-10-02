@@ -107,3 +107,25 @@ Trois catégories fermées distinguent les exceptions d'audit, de définition/AC
 et d'inventaire. La sonde n'ajuste aucun droit : la migration originale s'exécute
 ensuite intacte, une seule fois, et son refus arrête toujours le replay. Aucun
 alignement d'ordre ni changement de comparaison n'est autorisé par ce diagnostic.
+
+
+### Préparation du défaut de fonction service_role (v8)
+
+La sonde du run37052403017 confirme toutes les préconditions de notation sauf
+l'ordre du tableau ACL : postgres/service_role/authenticated, avec le même
+ensemble exact de droits, dimensions, grantor et grant option. Le DEFAULT
+EXECUTE natif de service_role crée ce droit avant les GRANT de la baseline.
+
+Après la préparation anon/authenticated inchangée, v8 suspend uniquement le
+DEFAULT EXECUTE postgres/public/FUNCTIONS vers service_role, dans une transaction
+locale et avant tout objet public/private. Un droit global namespace0, un autre
+grantor, une grant option ou un contexte non vide refuse cette préparation.
+La sonde avant/après exige le hash et le nombre identiques de tous les autres
+DEFAULT ACL ; aucun droit d'objet déjà importé n'est modifié.
+
+La baseline byte-identique rétablit elle-même ce DEFAULT avec son GRANT existant
+(ligne50153). Immédiatement après ce fichier et avant le suivant, une lecture
+exige la restitution exacte du droit et de tous les autres DEFAULT ACL. Si elle
+échoue, le replay s'arrête ; aucun GRANT correctif ni modification de migration
+ou du garde notation n'est exécuté. Les sondes notation et les tests canoniques
+restent inchangés. Cette adaptation est limitée à l'image et au catalogue épinglés.

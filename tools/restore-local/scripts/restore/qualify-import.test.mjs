@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {BASELINE_SERVICE_DEFAULT_PROBE,BASELINE_SERVICE_DEFAULT_SUSPEND,expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
+import {BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -17,16 +17,21 @@ const runtimeExtensions=()=>({postgres_major:17,extensions:requirements.map(e=>(
 const zeroValue=()=>Object.fromEntries(['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'].map(k=>[k,0]));
 const nativeOwner=(repaired=false)=>({local_empty_context:true,session_postgres:true,named_owner:repaired?'postgres':'supabase_admin',native_owner:'postgres',named_create:repaired,native_create:true,named_connect:true,native_connect:true,named_temp:true,native_temp:true,postgres_superuser:false,admin_superuser:true});
 const nativeDefaults=(aligned=false)=>({local_empty_context:true,postgres_superuser:false,global_client_grants:0,target_grants:aligned?[]:expectedDefaultAclGrants(),other_acl_count:111,other_acl_md5:'a'.repeat(32)});
+const serviceDefault=(phase='before')=>({local_isolated_context:true,local_empty_context:phase!=='restored',postgres_superuser:false,global_service_function_grants:0,client_grants:0,
+ target_grants:phase==='suspended'?[]:[{grantor:'postgres',privilege:'EXECUTE',is_grantable:false}],other_acl_count:110,other_acl_md5:'b'.repeat(32)});
 function fakeRuntime(options={}){
- let repaired=false,defaultsAligned=false;
+ let repaired=false,defaultsAligned=false,serviceSuspended=false,baselineReplayed=false;
  const calls=[],extensionSQL=Buffer.from('CANONICAL_EXTENSION_SQL');
  return {calls,extensionSQL,run,
  probeDatabaseOwner(){calls.push({ownerProbe:true,repaired});return structuredClone(repaired?(options.ownerAfter??nativeOwner(true)):(options.ownerBefore??nativeOwner()));},
  repairDatabaseOwner(){calls.push({ownerRepair:true});repaired=true;},
   probeDefaultAcls(){calls.push({defaultsProbe:true,defaultsAligned});return structuredClone(defaultsAligned?(options.defaultsAfter??nativeDefaults(true)):(options.defaultsBefore??nativeDefaults()));},
   alignDefaultAcls(){calls.push({defaultsAlign:true});defaultsAligned=true;},
+  probeBaselineServiceDefault(){const phase=baselineReplayed?'restored':serviceSuspended?'suspended':'before';calls.push({serviceDefaultProbe:phase});return structuredClone(options['service_'+phase]??serviceDefault(phase));},
+  suspendBaselineServiceDefault(){calls.push({serviceDefaultSuspend:true});serviceSuspended=true;},
  verify(){calls.push({verify:true});},sql(bytes,flags={}){
   calls.push({bytes,flags});if(options.failOn&&options.failOn(bytes,flags))throw Error('CANARY_SECRET');
+   if(bytes===load(BASELINE_PATH))baselineReplayed=true;
   if(bytes.toString()===STOP_CRONS)return JSON.stringify({locally_disabled_jobs:4});
   if(bytes.toString()===QUIESCENCE)return JSON.stringify(zeroValue());
   if(bytes.equals(extensionSQL))return JSON.stringify(runtimeExtensions());
@@ -324,4 +329,51 @@ test('invalid notation projection or altered pin refuses before guarded migratio
   assert.equal(r.calls.some(x=>x.bytes===item.bytes),false);assert.equal(r.calls.some(x=>x.flags?.test),false);
   assert.equal(proof.at(-1).failure.code,'QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
  }
+});
+
+
+test('service default suspension touches only future postgres/public functions before an empty import',()=>{
+ assert.ok(BASELINE_SERVICE_DEFAULT_PROBE.startsWith('BEGIN READ ONLY;'));assert.ok(BASELINE_SERVICE_DEFAULT_PROBE.endsWith('ROLLBACK;'));
+ assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.startsWith('BEGIN;'));assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.endsWith('COMMIT;'));
+ assert.equal((BASELINE_SERVICE_DEFAULT_SUSPEND.match(/ALTER DEFAULT PRIVILEGES/g)||[]).length,1);
+ assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.includes('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM service_role;'));
+ assert.ok(!/REVOKE .* ON FUNCTION public|GRANT |ALTER ROLE|UPDATE |INSERT |DELETE |DROP |CREATE /.test(BASELINE_SERVICE_DEFAULT_SUSPEND));
+ assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.includes("defaclnamespace=0 AND defaclobjtype='f' AND grantee='service_role'::regrole"));
+ assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.includes("WHERE n.nspname IN ('public','private')"));
+ assert.ok(BASELINE_SERVICE_DEFAULT_SUSPEND.includes("after_acl->'other_acl_md5' IS DISTINCT FROM before_acl->'other_acl_md5'"));
+ const baseline=readFileSync(new URL('../../../../'+BASELINE_PATH,import.meta.url),'utf8');
+ assert.ok(baseline.includes('ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";'));
+});
+test('service default suspended exactly once before baseline and restored by baseline before next migration',()=>{
+ const e=evidence(),r=fakeRuntime(),result=qualify(e,r,r.extensionSQL,requirements,()=>{});
+ const si=r.calls.findIndex(x=>x.serviceDefaultSuspend),bi=r.calls.findIndex(x=>x.bytes===e.migrations[0].bytes),ri=r.calls.findIndex(x=>x.serviceDefaultProbe==='restored'),next=r.calls.findIndex(x=>x.bytes===e.migrations[1].bytes);
+ assert.ok(si>r.calls.findIndex(x=>x.defaultsAlign)&&si<bi&&bi<ri&&ri<next);
+ assert.equal(r.calls.filter(x=>x.serviceDefaultSuspend).length,1);assert.equal(r.calls.filter(x=>x.serviceDefaultProbe).length,3);
+ assert.deepEqual(result.baseline_service_default_before,serviceDefault());assert.deepEqual(result.baseline_service_default_suspended,serviceDefault('suspended'));
+ assert.deepEqual(result.baseline_service_default_after_baseline,serviceDefault('restored'));assert.equal(result.baseline_service_default_restored,true);
+});
+test('service default refuses global inheritance, unexpected privilege, actor or nonempty context before mutation',()=>{
+ for(const patch of [{global_service_function_grants:1},{client_grants:1},{local_empty_context:false},{local_isolated_context:false},{postgres_superuser:true},{target_grants:[]},{target_grants:[{grantor:'other',privilege:'EXECUTE',is_grantable:false}]},{target_grants:[{grantor:'postgres',privilege:'EXECUTE',is_grantable:true}]},{extra:'CANARY'}]){
+  const e=evidence(),r=fakeRuntime({service_before:{...serviceDefault(),...patch}}),proof=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(r.calls.some(x=>x.serviceDefaultSuspend),false);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);
+  assert.equal(proof.at(-1).failure.code,'QUALIFICATION_BASELINE_DEFAULT_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
+});
+test('changed other defaults or ineffective suspension refuses before any baseline bytes',()=>{
+ for(const patch of [{other_acl_count:109},{other_acl_md5:'c'.repeat(32)},{target_grants:serviceDefault().target_grants},{global_service_function_grants:1}]){
+  const e=evidence(),r=fakeRuntime({service_suspended:{...serviceDefault('suspended'),...patch}}),proof=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(r.calls.filter(x=>x.serviceDefaultSuspend).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[0].bytes),false);assert.equal(proof.at(-1).canonical_test_passed,false);
+ }
+});
+test('baseline itself must restore original default and all other defaults before continuing, without corrective GRANT',()=>{
+ for(const patch of [{target_grants:[]},{other_acl_count:109},{other_acl_md5:'c'.repeat(32)},{local_empty_context:true},{global_service_function_grants:1}]){
+  const e=evidence(),r=fakeRuntime({service_restored:{...serviceDefault('restored'),...patch}}),proof=[];assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(r.calls.filter(x=>x.bytes===e.migrations[0].bytes).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[1].bytes),false);
+  assert.equal(r.calls.some(x=>x.flags?.test),false);assert.equal(r.calls.filter(x=>x.serviceDefaultSuspend).length,1);assert.equal(proof.at(-1).baseline_service_default_restored,undefined);
+ }
+});
+test('service default projection publishes only bounded fixed metadata and refuses hidden fields',()=>{
+ const bad={...serviceDefault(),other_acl_md5:'CANARY',target_grants:[{grantor:'CANARY',privilege:'CANARY',is_grantable:'CANARY',secret:'CANARY'}],secret:'CANARY'};
+ assert.ok(!JSON.stringify(projectBaselineServiceDefault(bad)).includes('CANARY'));assert.throws(()=>checkBaselineServiceDefault(bad));
+ assert.throws(()=>checkBaselineServiceDefault(serviceDefault(),{phase:'other'}));assert.throws(()=>checkBaselineServiceDefault(serviceDefault('suspended'),{phase:'suspended'}));
 });

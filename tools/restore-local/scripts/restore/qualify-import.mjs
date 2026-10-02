@@ -139,6 +139,24 @@ export function checkDefaultAclProbe(value,{aligned=false,before}={}){
   ||(aligned&&(!before||p.other_acl_count!==before.other_acl_count||p.other_acl_md5!==before.other_acl_md5)))refuse('QUALIFICATION_DEFAULT_ACL_REFUSED');
  return p;
 }
+export const BASELINE_PATH='supabase/migrations/00000000000000_baseline_prod.sql';
+export function projectBaselineServiceDefault(value){
+ const bool=k=>typeof value?.[k]==='boolean'?value[k]:null;
+ const count=k=>Number.isSafeInteger(value?.[k])&&value[k]>=0&&value[k]<=10000?value[k]:null;
+ return {local_isolated_context:bool('local_isolated_context'),local_empty_context:bool('local_empty_context'),postgres_superuser:bool('postgres_superuser'),
+  global_service_function_grants:count('global_service_function_grants'),client_grants:count('client_grants'),
+  target_grants:Array.isArray(value?.target_grants)&&value.target_grants.length<=16?value.target_grants.map(v=>({grantor:v?.grantor==='postgres'?'postgres':'other',privilege:v?.privilege==='EXECUTE'?'EXECUTE':'other',is_grantable:typeof v?.is_grantable==='boolean'?v.is_grantable:null})):null,
+  other_acl_count:count('other_acl_count'),other_acl_md5:typeof value?.other_acl_md5==='string'&&/^[a-f0-9]{32}$/.test(value.other_acl_md5)?value.other_acl_md5:null};
+}
+export function checkBaselineServiceDefault(value,{phase='before',before}={}){
+ const p=projectBaselineServiceDefault(value),expected=phase==='suspended'?[]:[{grantor:'postgres',privilege:'EXECUTE',is_grantable:false}];
+ if(!['before','suspended','restored'].includes(phase)||!isDeepStrictEqual(value,p)
+  ||p.local_isolated_context!==true||p.local_empty_context!==(phase!=='restored')||p.postgres_superuser!==false
+  ||p.global_service_function_grants!==0||p.client_grants!==0||!isDeepStrictEqual(p.target_grants,expected)
+  ||p.other_acl_count===null||p.other_acl_md5===null
+  ||(phase!=='before'&&(!before||p.other_acl_count!==before.other_acl_count||p.other_acl_md5!==before.other_acl_md5)))refuse('QUALIFICATION_BASELINE_DEFAULT_REFUSED');
+ return p;
+}
 export const HISTORICAL_MANIFEST_PATH='supabase/migrations/20260729121443_figer_inventaire_security_definer.sql';
 export const HISTORICAL_MANIFEST_SHA='160626d9fab04c230e517f8774101a7644a52b014d6bf5c1e8f10f66e1c6aa6f';
 export function historicalManifestEntries(bytes){
@@ -275,7 +293,7 @@ export function projectNotationPreflight(raw){
  return {...Object.fromEntries([...NOTATION_BOOLS,...NOTATION_HASHES].map(k=>[k,v[k]])),notation_acl_entries:rows};
 }
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED','QUALIFICATION_DEFAULT_ACL_REFUSED','QUALIFICATION_NOTATION_DIAGNOSTIC_REFUSED','QUALIFICATION_BASELINE_DEFAULT_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
@@ -305,8 +323,14 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   report.phase='native_default_acl_alignment';save(report);runtime.alignDefaultAcls();
   const defaultsAfter=runtime.probeDefaultAcls();report.default_acl_after=projectDefaultAclProbe(defaultsAfter);save(report);
   checkDefaultAclProbe(defaultsAfter,{aligned:true,before:defaultsBefore});report.local_default_acls_aligned=true;
-  report.phase='integral_replay';
-  for(const item of evidence.migrations){
+   if(evidence.migrations[0]?.path!==BASELINE_PATH)refuse('QUALIFICATION_BASELINE_DEFAULT_REFUSED');
+   report.phase='baseline_service_default_probe';save(report);
+   const serviceBefore=runtime.probeBaselineServiceDefault();report.baseline_service_default_before=projectBaselineServiceDefault(serviceBefore);save(report);checkBaselineServiceDefault(serviceBefore);
+   report.phase='baseline_service_default_suspend';save(report);runtime.suspendBaselineServiceDefault();
+   const serviceSuspended=runtime.probeBaselineServiceDefault();report.baseline_service_default_suspended=projectBaselineServiceDefault(serviceSuspended);save(report);
+   checkBaselineServiceDefault(serviceSuspended,{phase:'suspended',before:serviceBefore});
+   report.phase='integral_replay';
+   for(const item of evidence.migrations){
    if(item.path===HISTORICAL_MANIFEST_PATH){
     const entries=historicalManifestEntries(item.bytes);report.phase='historical_manifest_read_only_probe';save(report);runtime.verify();
     report.historical_manifest={path:item.path,sha256:item.sha256,...projectHistoricalManifest(runtime.sql(Buffer.from(historicalManifestSQL(entries))),entries)};
@@ -321,6 +345,11 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
     }
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);
    runtime.sql(item.bytes,{migration:true});current.completed=true;save(report);
+   if(item.path===BASELINE_PATH){
+    report.phase='baseline_service_default_restore_verification';save(report);runtime.verify();
+    const restored=runtime.probeBaselineServiceDefault();report.baseline_service_default_after_baseline=projectBaselineServiceDefault(restored);save(report);
+    checkBaselineServiceDefault(restored,{phase:'restored',before:serviceBefore});report.baseline_service_default_restored=true;save(report);report.phase='integral_replay';
+   }
   }
   report.phase='stop_local_crons';save(report);
   const crons=JSON.parse(runtime.sql(Buffer.from(STOP_CRONS)));
