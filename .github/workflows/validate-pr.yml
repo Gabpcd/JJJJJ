@@ -366,6 +366,7 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci/contrat-v11-sql-proof.mjs
 
       # Source staging déjà installée et catalogue épinglé : pas de bootstrap,
