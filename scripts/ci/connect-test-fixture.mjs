@@ -87,7 +87,7 @@ export function validateAccount(x,m) {
 export function validateSnapshot(r,m,phase) {
   requireThat(r&&Array.isArray(r.auth)&&Array.isArray(r.soignants)&&Array.isArray(r.etablissements)
     &&Array.isArray(r.onboarding)&&Array.isArray(r.invoices)&&Array.isArray(r.commissions),'SNAPSHOT_SHAPE');
-  requireThat(r.payments===0&&r.emailQueue===0&&r.emailRetries===0&&r.activeAdmin===0,'UNEXPECTED_EFFECTS');
+  requireThat(r.payments===0&&r.paymentClaims===0&&r.emailQueue===0&&r.emailRetries===0&&r.activeAdmin===0,'UNEXPECTED_EFFECTS');
   for(const user of r.auth) {const member=m.members.find(x=>x.id===user.id);requireThat(member,'HISTORICAL_AUTH');validateAuth(user,member,m);}
   requireThat(new Set(r.auth.map(x=>x.id)).size===r.auth.length,'AUTH_DUPLICATES');
   if(phase==='empty') {
@@ -101,6 +101,9 @@ export function validateSnapshot(r,m,phase) {
     &&e.test===true&&e.source==='RECETTE_CONNECT_TEST_SYNTHETIQUE'&&e.sms===false&&e.chorus===false,'PROFILE_OWNERSHIP');
   requireThat(mission?.id===m.sql.ids.mission&&mission.soignant===s.id&&mission.etablissement===e.id&&mission.status==='EN_COURS'
     &&mission.label===`RECETTE CONNECT TEST SYNTHETIQUE ${m.sql.runId}`&&mission.hours===8&&mission.effective===4&&mission.net===160&&mission.commission===24,'SYNTHETIC_MISSION');
+  const period=m.steps.seed?.result;
+  requireThat(/^\d{4}-\d{2}-\d{2}$/.test(mission.startsOn??'')&&/^\d{4}-\d{2}-\d{2}$/.test(mission.endsOn??'')
+    &&period?.periodeDebut>=mission.startsOn&&period?.periodeFin<=mission.endsOn,'PERIOD_OUTSIDE_MISSION');
   if(m.steps.link?.state==='done') {
     requireThat(s.account===m.steps.account.result.id&&e.customer===m.steps.customer.result.id&&r.onboarding.length===1,'STRIPE_LINK');
     const o=r.onboarding[0];requireThat(o.account===s.account&&o.soignant===s.id&&o.status==='EN_COURS'&&[o.complete,o.charges,o.payouts,o.details].every(x=>x===false),'ONBOARDING_CHANGED');

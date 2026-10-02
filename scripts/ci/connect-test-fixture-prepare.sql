@@ -18,7 +18,7 @@ DECLARE
   m uuid := (v#>>'{ids,mission}')::uuid;
   team uuid := (v#>>'{ids,equipeAdmin}')::uuid;
   presence uuid := (v#>>'{ids,presence}')::uuid;
-  semaine date := date_trunc('week',current_date)::date-7;
+  semaine date;
   passe date;
   futur date;
   mandat text;
@@ -54,9 +54,15 @@ BEGIN
     AND u.email LIKE '%@example.invalid'
     AND u.raw_app_meta_data->>'role'=CASE u.id WHEN s THEN 'SOIGNANT' WHEN e THEN 'ADMIN_ETABLISSEMENT' ELSE 'ADMIN_PLATEFORME' END)<>3
   THEN RAISE EXCEPTION 'CONNECT TEST filiation Auth incorrecte'; END IF;
-  SELECT d::date INTO passe FROM generate_series(semaine,semaine+4,interval '1 day') d
-    WHERE NOT public.fn_est_jour_ferie(d::date) ORDER BY d LIMIT 1;
-  SELECT d::date INTO futur FROM generate_series(semaine+14,semaine+18,interval '1 day') d
+  -- Une semaine dont le lundi est ouvré garde periodeDebut dans la mission.
+  -- Un lundi férié ne doit pas décaler le premier créneau après cette borne.
+  SELECT d::date INTO semaine FROM generate_series(date_trunc('week',current_date)::date-7,
+    date_trunc('week',current_date)::date-35,interval '-7 days') d
+    WHERE NOT public.fn_est_jour_ferie(d::date) ORDER BY d DESC LIMIT 1;
+  passe := semaine;
+  -- Reste futur même si la semaine facturable a reculé à cause d'un jour férié.
+  SELECT d::date INTO futur FROM generate_series(date_trunc('week',current_date)::date+7,
+    date_trunc('week',current_date)::date+11,interval '1 day') d
     WHERE NOT public.fn_est_jour_ferie(d::date) ORDER BY d LIMIT 1;
   IF passe IS NULL OR futur IS NULL OR semaine+6>=current_date THEN RAISE EXCEPTION 'CONNECT TEST calendrier invalide'; END IF;
   INSERT INTO public.soignants(id,prenom,nom,email,profession,type_exercice,date_naissance,est_compte_test,
@@ -114,7 +120,8 @@ BEGIN
   UPDATE public.equipe_admin SET actif=false WHERE id=team AND user_id=a;
   IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=m AND statut='EN_COURS' AND nb_creneaux=2
     AND duree_heures=8 AND duree_heures_effective=4 AND net_a_payer=160 AND montant_commission_ht=24
-    AND statut_validation_tva='CONFIRMEE' AND fige_le IS NULL)
+    AND statut_validation_tva='CONFIRMEE' AND fige_le IS NULL
+    AND debut_le::date=semaine AND fin_le::date=futur AND semaine+6<fin_le::date)
     OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=m)
     OR EXISTS(SELECT 1 FROM public.stripe_transfers WHERE mission_id=m)
     OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(s,e))
