@@ -77,6 +77,23 @@ export async function verifyProvenance(env,contract,sources,fetcher=fetch) {
   requireThat(files.every((x,i)=>x.type==='file'&&x.encoding==='base64'&&sha(Buffer.from(x.content,'base64'))===contract.sourcePins[SOURCE_FILES[i]]
     &&sha(sources[SOURCE_FILES[i]])===contract.sourcePins[SOURCE_FILES[i]]),'CI_REVIEWED_BYTES');
 }
+export async function resolveStagingApiKeys(env,fetcher=fetch) {
+  requireThat(typeof env.STAGING_SUPABASE_ACCESS_TOKEN==='string'&&env.STAGING_SUPABASE_ACCESS_TOKEN.length>10,'CI_MANAGEMENT_TOKEN');
+  const read=async path=>{try {
+    const response=await fetcher(`https://api.supabase.com/v1/projects/${PROJECT}${path}`,{headers:{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`},redirect:'error',signal:AbortSignal.timeout(15000)});
+    requireThat(response.ok&&!response.redirected,'CI_STAGING_API_READ');const text=await response.text();requireThat(Buffer.byteLength(text)<1024*1024,'CI_STAGING_API_SIZE');return JSON.parse(text);
+  }catch{throw new Refusal('CI_STAGING_API_READ');}};
+  const project=await read('');
+  requireThat(project?.id===PROJECT&&project.status==='ACTIVE_HEALTHY'&&project.database?.host===`db.${PROJECT}.supabase.co`,'CI_STAGING_PROJECT');
+  const rows=await read('/api-keys');requireThat(Array.isArray(rows),'CI_STAGING_KEYS');
+  const keys={};
+  for(const [name,variable]of [['anon','STAGING_SUPABASE_ANON_KEY'],['service_role','STAGING_SUPABASE_SERVICE_ROLE_KEY']]) {
+    const matches=rows.filter(x=>x?.name===name);
+    requireThat(matches.length===1&&typeof matches[0].api_key==='string'&&matches[0].api_key.length>10&&!/\s/.test(matches[0].api_key),'CI_STAGING_KEYS');
+    keys[variable]=matches[0].api_key;
+  }
+  requireThat(keys.STAGING_SUPABASE_ANON_KEY!==keys.STAGING_SUPABASE_SERVICE_ROLE_KEY,'CI_STAGING_KEYS');return keys;
+}
 export async function runCi({env,local,contract,sources,fetcher=fetch,prepare=executePreparation,writePrivateJournal,writeCheckpoint,writeSummary}) {
   const {manifest,fixtureContract,key}=checkCi(env,local,contract,sources);
   const summary={preparationAttempted:false,prepared:false,encryptedCheckpoint:false,failed:false,onboardingComplete:false,uiPaymentVerified:false,paymentCreated:false,capabilityAllocated:false};
@@ -88,8 +105,10 @@ export async function runCi({env,local,contract,sources,fetcher=fetch,prepare=ex
   await checkpoint();
   try {
     await verifyProvenance(env,contract,sources,fetcher);
+    const keys=await resolveStagingApiKeys(env,fetcher);
+    const preparationEnv={STAGING_SUPABASE_ACCESS_TOKEN:env.STAGING_SUPABASE_ACCESS_TOKEN,STRIPE_TEST_SECRET_KEY:env.STRIPE_TEST_SECRET_KEY,...keys};
     summary.preparationAttempted=true;await checkpoint();
-    result=await prepare({manifest,contract:fixtureContract,env,seed:sources[SOURCE_FILES[2]],local,fetcher,save:checkpoint});
+    result=await prepare({manifest,contract:fixtureContract,env:preparationEnv,seed:sources[SOURCE_FILES[2]],local,fetcher,save:checkpoint});
     summary.prepared=result?.prepared===true;requireThat(summary.prepared,'CI_PREPARATION_RECEIPT');await checkpoint();return summary;
   }catch(error){summary.prepared=false;summary.failed=true;
     // Keep the last persisted encrypted intent even if the final save itself fails.
