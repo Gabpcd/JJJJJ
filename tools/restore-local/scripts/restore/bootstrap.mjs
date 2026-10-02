@@ -245,6 +245,24 @@ export function qualificationPsqlArgs(run,{test=false,migration=false}={}){
   name(run,'source','db'),'psql','-X','-q','-A','-t',...(migration?['--single-transaction']:[]),'-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
   '-U','postgres','-h','/var/run/postgresql','-d',QUALIFICATION_DB,'-f','-'];
 }
+export const SQL_DIAGNOSTIC_CATEGORIES=Object.freeze([
+ 'HISTORICAL_MANIFEST_UNCLASSIFIED','HISTORICAL_MANIFEST_ORPHAN','HISTORICAL_MANIFEST_BODY_CHANGED',
+ 'HISTORICAL_MANIFEST_TOTAL','HISTORICAL_MANIFEST_USER_COUNT','HISTORICAL_MANIFEST_ADMIN_COUNT',
+ 'HISTORICAL_MANIFEST_MIXED_COUNT','HISTORICAL_MANIFEST_PUBLIC_COUNT','HISTORICAL_MANIFEST_SERVICE_COUNT',
+]);
+export function projectSqlDiagnostic(stderr){
+ // Select the ERROR/FATAL record itself, never an earlier BEGIN warning or later CONTEXT.
+ const records=String(stderr).split(/\r?\n/),record=records.map(s=>/^(?:psql:<stdin>:(\d+):\s*)?(?:ERROR|FATAL):\s+([0-9A-Z]{5}):\s*(.*)$/.exec(s)).find(Boolean);
+ if(!record)return {sqlstate:null,line:null,assertion:null};
+ const [,line,state,message]=record,assertion=/^(CAND_MULTI_[A-Z_]{1,80})(?=\s|$|:)/.exec(message)?.[1]??null;
+ const labels=[
+  /^SECURITY DEFINER non classées : /,/^Signatures SECURITY DEFINER obsolètes : /,/^Corps SECURITY DEFINER modifiés sans revue : /,
+  /^Manifest SECURITY DEFINER incomplet : /,/^Compte RPC_UTILISATEUR_AUTH_INTERNE inattendu$/,/^Compte ADMIN_EST_ADMIN_VALIDE inattendu$/,
+  /^Compte MIXTE_TENANT_ADMIN inattendu$/,/^Compte PUBLIC_VOLONTAIRE inattendu$/,/^Compte SERVICE_ONLY_REVOQUE inattendu$/,
+ ];
+ const index=state==='P0001'?labels.findIndex(re=>re.test(message)):-1;
+ return {sqlstate:state,line:line?Number(line):null,assertion,...(index>=0?{category:SQL_DIAGNOSTIC_CATEGORIES[index]}:{})};
+}
 export function qualifiedSession(dir){
  const {m,plan}=readRun(dir);verifySources();localDocker();
  if(m.qualification!==true||m.database!==QUALIFICATION_DB)fail('QUALIFICATION_REQUIRED');
@@ -271,11 +289,9 @@ export function qualifiedSession(dir){
   sql:(bytes,options={})=>{
   try{return invoke(qualificationPsqlArgs(m.run,options),bytes);}
   catch(error){
-   // Only machine codes and input line number leave process memory; never SQL, notices or credentials.
-   const stderr=String(error?.detail?.stderr??''),state=stderr.match(/(?:ERROR|FATAL):\s+([0-9A-Z]{5}):/),line=stderr.match(/psql:<stdin>:(\d+):/);
-   const code=stderr.match(/\b(CAND_MULTI_[A-Z_]{1,80})\b/);
+   // Only machine codes, fixed categories and the ERROR input line leave process memory.
    const safe=new Error('QUALIFICATION_SQL_FAILED');
-   safe.diagnostic={sqlstate:state?.[1]??null,line:line?Number(line[1]):null,assertion:code?.[1]??null};
+   safe.diagnostic=projectSqlDiagnostic(error?.detail?.stderr??'');
    throw safe;
   }
  }};

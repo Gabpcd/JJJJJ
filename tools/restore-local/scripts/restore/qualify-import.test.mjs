@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
-import {PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
+import {projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
+import {HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+QUALIFICATION_BRANCH,GITHUB_RUN_ID:'12345',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:head};
 const lock=JSON.parse(readFileSync(new URL('../../images.lock.json',import.meta.url)));
@@ -160,4 +160,53 @@ test('transaction failure stops before next file and test without an autocommit 
  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x))));
  assert.equal(r.calls.filter(x=>x.bytes===e.migrations[1].bytes).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[2].bytes),false);
  assert.equal(r.calls.some(x=>x.flags?.test),false);assert.equal(reports.at(-1).canonical_test_passed,false);assert.equal(reports.at(-1).rollback_verified,false);
+});
+
+
+const historicalBytes=readFileSync(new URL('../../../../'+HISTORICAL_MANIFEST_PATH,import.meta.url));
+const historicalEntries=historicalManifestEntries(historicalBytes);
+const cleanHistorical=()=>({expected_count:422,matched_count:422,missing_exposed_count:0,differences:[]});
+test('diagnostic input line belongs to ERROR, not prior BEGIN warning or later CONTEXT',()=>{
+ const message='psql:<stdin>:7: WARNING:  25001: there is already a transaction in progress\npsql:<stdin>:525: ERROR:  P0001: Corps SECURITY DEFINER modifiés sans revue : CANARY\nCONTEXT: PL/pgSQL function inline_code_block line 62 at RAISE';
+ const d=projectSqlDiagnostic(message);assert.deepEqual(d,{sqlstate:'P0001',line:525,assertion:null,category:'HISTORICAL_MANIFEST_BODY_CHANGED'});
+ assert.deepEqual(safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:d})),{code:'QUALIFICATION_SQL_FAILED',sqlstate:'P0001',input_line:525,assertion:null,category:'HISTORICAL_MANIFEST_BODY_CHANGED'});
+ assert.ok(!JSON.stringify(d).includes('CANARY'));
+ assert.deepEqual(projectSqlDiagnostic('psql:<stdin>:7: WARNING:  P0001: CANARY'),{sqlstate:null,line:null,assertion:null});
+ assert.deepEqual(projectSqlDiagnostic('ERROR:  42P01: CANARY'),{sqlstate:'42P01',line:null,assertion:null});
+});
+test('all nine historical raises map only to closed category names, never payload',()=>{
+ const labels=['SECURITY DEFINER non classées : CANARY','Signatures SECURITY DEFINER obsolètes : CANARY','Corps SECURITY DEFINER modifiés sans revue : CANARY','Manifest SECURITY DEFINER incomplet : CANARY','Compte RPC_UTILISATEUR_AUTH_INTERNE inattendu','Compte ADMIN_EST_ADMIN_VALIDE inattendu','Compte MIXTE_TENANT_ADMIN inattendu','Compte PUBLIC_VOLONTAIRE inattendu','Compte SERVICE_ONLY_REVOQUE inattendu'];
+ labels.forEach((label,i)=>{const d=projectSqlDiagnostic('psql:<stdin>:525: ERROR:  P0001: '+label);assert.equal(d.category,SQL_DIAGNOSTIC_CATEGORIES[i]);assert.ok(!JSON.stringify(d).includes('CANARY'));});
+ assert.equal(projectSqlDiagnostic('psql:<stdin>:5: ERROR:  P0001: CANARY').category,undefined);
+ assert.equal(projectSqlDiagnostic('psql:<stdin>:5: ERROR:  42501: '+labels[0]).category,undefined);
+ assert.equal(projectSqlDiagnostic('psql:<stdin>:5: ERROR:  P0001: CAND_MULTI_HELPER_LIVE_DIFFERENT').assertion,'CAND_MULTI_HELPER_LIVE_DIFFERENT');
+ const d=safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{category:'CANARY'}}));assert.equal(d.category,undefined);
+});
+test('historical diagnostic reads only byte-pinned 422 literals and emits a read-only local query',()=>{
+ assert.equal(hash(historicalBytes),HISTORICAL_MANIFEST_SHA);assert.equal(historicalEntries.length,422);
+ assert.throws(()=>historicalManifestEntries(Buffer.concat([historicalBytes,Buffer.from('\n')])));
+ const sql=historicalManifestSQL(historicalEntries);assert.ok(sql.startsWith('BEGIN READ ONLY;\n'+LOCAL_GUARD));assert.ok(sql.endsWith('\nROLLBACK;'));
+ assert.ok(sql.includes('md5(p.prosrc)'));assert.ok(!/\b(?:INSERT INTO|UPDATE |DELETE FROM|TRUNCATE |ALTER |CREATE |DROP |GRANT |REVOKE )/.test(sql));
+ assert.ok(!sql.includes('jsonb_build_object(\'prosrc\''));assert.ok(!sql.includes('pg_get_functiondef'));
+ assert.deepEqual(projectHistoricalManifest(JSON.stringify(cleanHistorical()),historicalEntries),cleanHistorical());
+});
+test('projection only admits source signatures, exact expected hashes, bounded counts and two difference kinds',()=>{
+ const source=historicalEntries[0],v=cleanHistorical();v.matched_count=421;v.missing_exposed_count=2;v.differences=[{...source,kind:'hash_mismatch',actual_md5:'0'.repeat(32)}];
+ assert.deepEqual(projectHistoricalManifest(JSON.stringify(v),historicalEntries),v);
+ for(const mutate of [x=>x.differences[0].signature='CANARY',x=>x.differences[0].expected_md5='0'.repeat(32),x=>x.differences[0].actual_md5='CANARY',x=>x.differences[0].kind='CANARY',x=>x.differences[0].prosrc='CANARY',x=>x.missing_exposed_count=-1,x=>x.matched_count=422,x=>x.differences.push(x.differences[0]),x=>x.unexpected='CANARY']){const bad=structuredClone(v);mutate(bad);assert.throws(()=>projectHistoricalManifest(JSON.stringify(bad),historicalEntries));}
+ const absent=structuredClone(v);absent.differences[0].kind='missing_or_not_definer';absent.differences[0].actual_md5=null;assert.deepEqual(projectHistoricalManifest(JSON.stringify(absent),historicalEntries),absent);
+});
+test('probe precedes exactly the historical migration, records diagnostic but does not bypass its failure',()=>{
+ const e=evidence(),item={path:HISTORICAL_MANIFEST_PATH,sha256:HISTORICAL_MANIFEST_SHA,bytes:historicalBytes};e.migrations.push(item);e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
+ const r=fakeRuntime(),original=r.sql,proof=[],v=cleanHistorical();v.matched_count=421;v.differences=[{...historicalEntries[0],kind:'hash_mismatch',actual_md5:'0'.repeat(32)}];
+ r.sql=(bytes,flags={})=>{if(bytes.toString().startsWith('BEGIN READ ONLY;')){r.calls.push({bytes,flags});return JSON.stringify(v);}if(bytes===historicalBytes){r.calls.push({bytes,flags});throw Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{sqlstate:'P0001',line:525,assertion:null,category:'HISTORICAL_MANIFEST_BODY_CHANGED'}});}return original(bytes,flags);};
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+ const pi=r.calls.findIndex(x=>x.bytes?.toString().startsWith('BEGIN READ ONLY;')),mi=r.calls.findIndex(x=>x.bytes===historicalBytes);assert.ok(pi>=0&&pi<mi);assert.deepEqual(r.calls[pi].flags,{});assert.deepEqual(r.calls[mi].flags,{migration:true});
+ const last=proof.at(-1);assert.deepEqual(last.historical_manifest,{path:item.path,sha256:item.sha256,...v});assert.equal(last.failure.category,'HISTORICAL_MANIFEST_BODY_CHANGED');assert.equal(last.canonical_test_passed,false);
+ assert.equal(last.migrations.at(-1).completed,false);assert.equal(r.calls.some(x=>x.flags?.test),false);assert.equal(r.calls.filter(x=>x.bytes===historicalBytes).length,1);
+});
+test('unsafe historical diagnostic refuses before its migration, no arbitrary values saved',()=>{
+ const e=evidence();e.migrations.push({path:HISTORICAL_MANIFEST_PATH,sha256:HISTORICAL_MANIFEST_SHA,bytes:historicalBytes});e.migrations.sort((a,b)=>a.path.localeCompare(b.path));
+ const r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString().startsWith('BEGIN READ ONLY;')?JSON.stringify({...cleanHistorical(),CANARY:'CANARY'}):original(bytes,flags);
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));assert.equal(r.calls.some(x=>x.bytes===historicalBytes),false);assert.equal(proof.at(-1).failure.code,'QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');assert.ok(!JSON.stringify(proof).includes('CANARY'));
 });

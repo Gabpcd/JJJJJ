@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {qualifiedSession,QUALIFICATION_DB} from './bootstrap.mjs';
+import {qualifiedSession,QUALIFICATION_DB,SQL_DIAGNOSTIC_CATEGORIES} from './bootstrap.mjs';
 import {compareRequired} from './extensions.mjs';
 export const QUALIFICATION_BRANCH='ci/qualification-pg17-candidatures-20261002';
 export const PRODUCT_SHA='7bec1138ae79131ab940137369e1706ebf0ec860';
@@ -118,13 +118,67 @@ export function ownerProbe(value,{repaired=false}={}){
   postgres_superuser:false,admin_superuser:true};
  if(!isDeepStrictEqual(value,expected))refuse('QUALIFICATION_OWNER_REFUSED');return expected;
 }
+export const HISTORICAL_MANIFEST_PATH='supabase/migrations/20260729121443_figer_inventaire_security_definer.sql';
+export const HISTORICAL_MANIFEST_SHA='160626d9fab04c230e517f8774101a7644a52b014d6bf5c1e8f10f66e1c6aa6f';
+export function historicalManifestEntries(bytes){
+ if(!Buffer.isBuffer(bytes)||hash(bytes)!==HISTORICAL_MANIFEST_SHA)refuse('QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');
+ const rows=[...bytes.toString().matchAll(/^  \('([^']+)', '[A-Z_]+', '([a-f0-9]{32})',/gm)].map(m=>({signature:m[1],expected_md5:m[2]}));
+ if(rows.length!==422||new Set(rows.map(r=>r.signature)).size!==422)refuse('QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');
+ return rows;
+}
+export function historicalManifestSQL(entries){
+ // Entries only come from the byte-pinned historical manifest, never live recapture.
+ if(entries.length!==422)refuse('QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');
+ const quote=x=>"'"+x.replaceAll("'","''")+"'";
+ return `BEGIN READ ONLY;\n${LOCAL_GUARD}
+WITH expected(signature,expected_md5) AS (VALUES ${entries.map(r=>'('+quote(r.signature)+','+quote(r.expected_md5)+')').join(',')}),
+actual AS (
+ SELECT p.oid::regprocedure::text AS signature,md5(p.prosrc) AS actual_md5,p.oid,p.prosecdef,p.prokind
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
+), compared AS (
+ SELECT e.signature,e.expected_md5,a.actual_md5,
+ CASE WHEN a.oid IS NULL OR a.prosecdef IS NOT TRUE OR a.prokind<>'f' THEN 'missing_or_not_definer'
+      WHEN a.actual_md5<>e.expected_md5 THEN 'hash_mismatch' ELSE 'match' END AS kind
+ FROM expected e LEFT JOIN actual a USING(signature)
+)
+SELECT jsonb_build_object(
+ 'expected_count',(SELECT count(*) FROM expected),
+ 'matched_count',(SELECT count(*) FROM compared WHERE kind='match'),
+ 'missing_exposed_count',(SELECT count(*) FROM actual a WHERE a.prosecdef IS TRUE AND a.prokind='f'
+   AND (has_function_privilege('anon',a.oid,'EXECUTE') OR has_function_privilege('authenticated',a.oid,'EXECUTE')
+     OR a.signature IN ('fn_doit_notifier(uuid,type_evenement_notification,canal_notification)','fn_sms_doit_envoyer(uuid,text,integer)',
+       'fn_generer_numero_contrat_safe(text)','fn_conflit_planning_soignant(uuid,uuid)','fn_calculer_score_matching(uuid,uuid)'))
+   AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.signature=a.signature)),
+ 'differences',coalesce((SELECT jsonb_agg(jsonb_build_object('signature',signature,'kind',kind,'expected_md5',expected_md5,'actual_md5',actual_md5) ORDER BY signature) FROM compared WHERE kind<>'match'),'[]'::jsonb)
+);\nROLLBACK;`;
+}
+export function projectHistoricalManifest(raw,entries){
+ const fail=()=>refuse('QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED');
+ let value;try{value=JSON.parse(raw);}catch{fail();}
+ const keys=['expected_count','matched_count','missing_exposed_count','differences'];
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length!==keys.length||keys.some(k=>!(k in value)))fail();
+ if(value.expected_count!==422||!Number.isSafeInteger(value.matched_count)||value.matched_count<0||value.matched_count>422
+  ||!Number.isSafeInteger(value.missing_exposed_count)||value.missing_exposed_count<0||value.missing_exposed_count>10000||!Array.isArray(value.differences)
+  ||value.differences.length+value.matched_count!==422)fail();
+ const expected=new Map(entries.map(x=>[x.signature,x.expected_md5])),seen=new Set();
+ const differences=value.differences.map(row=>{
+  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join()!=='actual_md5,expected_md5,kind,signature'
+   ||!expected.has(row.signature)||seen.has(row.signature)||row.expected_md5!==expected.get(row.signature)
+   ||!['missing_or_not_definer','hash_mismatch'].includes(row.kind)
+   ||!(row.actual_md5===null||/^[a-f0-9]{32}$/.test(row.actual_md5))
+   ||(row.kind==='hash_mismatch'&&(row.actual_md5===null||row.actual_md5===row.expected_md5)))fail();
+  seen.add(row.signature);return {signature:row.signature,kind:row.kind,expected_md5:row.expected_md5,actual_md5:row.actual_md5};
+ });
+ return {expected_count:422,matched_count:value.matched_count,missing_exposed_count:value.missing_exposed_count,differences};
+}
 export function safeFailure(error){
- const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED'];
+ const codes=['QUALIFICATION_IDENTITY_REFUSED','SOURCE_GIT_REFUSED','MIGRATION_ORDER_REFUSED','CANONICAL_BYTES_CHANGED','CANONICAL_FILE_TYPE','QUALIFICATION_SQL_FAILED','QUALIFICATION_NONEMPTY','EXTENSION_EXACT_INSTALL_REQUIRED','QUALIFICATION_RUNTIME_RUN_CHANGED','QUALIFICATION_REPORT_PATH','QUALIFICATION_CRON_REPORT','QUALIFICATION_VERCEL_REFUSED','QUALIFICATION_OWNER_REFUSED','QUALIFICATION_MANIFEST_DIAGNOSTIC_REFUSED'];
  const code=codes.includes(error?.message)?error.message:'QUALIFICATION_REFUSED';
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
   input_line:Number.isSafeInteger(diagnostic?.line)&&diagnostic.line>0?diagnostic.line:null,
-  assertion:/^CAND_MULTI_[A-Z_]{1,80}$/.test(diagnostic?.assertion??'')?diagnostic.assertion:null}:{})};
+  assertion:/^CAND_MULTI_[A-Z_]{1,80}$/.test(diagnostic?.assertion??'')?diagnostic.assertion:null,
+  ...(SQL_DIAGNOSTIC_CATEGORIES.includes(diagnostic?.category)?{category:diagnostic.category}:{})}:{})};
 }
 export function qualify(evidence,runtime,extensionSQL,requirements,save){
  const report={result:'IMPORT_NOT_PROVEN',product_sha:evidence.product_sha,harness_sha:evidence.harness_sha,run:evidence.run,
@@ -145,6 +199,11 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   report.local_database_owner_reconciled=true;
   report.phase='integral_replay';
   for(const item of evidence.migrations){
+   if(item.path===HISTORICAL_MANIFEST_PATH){
+    const entries=historicalManifestEntries(item.bytes);report.phase='historical_manifest_read_only_probe';save(report);runtime.verify();
+    report.historical_manifest={path:item.path,sha256:item.sha256,...projectHistoricalManifest(runtime.sql(Buffer.from(historicalManifestSQL(entries))),entries)};
+    save(report);report.phase='integral_replay';
+   }
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);
    runtime.sql(item.bytes,{migration:true});current.completed=true;save(report);
   }
