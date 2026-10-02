@@ -5,7 +5,7 @@ import { creerBanc, genererDocuments, verifierXml, sha256, ids } from '../tests/
 import { simulerSoignant, entrer as entrerSoignant, aller, recharger } from './helpers/recette-complete-soignant';
 import { simulerEtablissement, entrer as entrerEtablissement, allerA, stabiliserLectures, ids as idsEtab, etablissement } from './helpers/recette-complete-etablissement';
 import { creerSuiviSimule } from './helpers/recette-complete-suivi-mission';
-import { ids as idsMission } from './helpers/recette-complete-mission';
+import { ids as idsMission, chargerHtmlLocal } from './helpers/recette-complete-mission';
 import { stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
 
 // Vrais générateurs et vrais boutons. Seules les IO sont fictives et fermées.
@@ -85,7 +85,7 @@ async function encadrer(page: Page, banc: Banc, refusHttpAttendus: Record<string
       interdits.push(`${req.method()} ${url.pathname}`); return route.abort();
     }
     if (req.isNavigationRequest() && req.resourceType() === 'document') {
-      const response = await route.fetch({ maxRedirects: 0 });
+      const response = await chargerHtmlLocal(route, 0);
       expect(response.status()).toBe(200);
       return route.fulfill({ response, body: (await response.text())
         .replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi, '')

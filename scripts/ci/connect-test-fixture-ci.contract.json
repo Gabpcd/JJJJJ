@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "ready": false,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "reviewedFixtureSha": null,
+  "reviewedFixtureTree": null,
+  "sourcePins": null,
+  "pgProof": null,
+  "fixtureContract": null,
+  "expiresAt": null,
+  "reviewedBy": null,
+  "reason": "Préparation CI fermée : sources fixture, preuve SQL et catalogue staging à relire avant le premier acteur TEST."
+}

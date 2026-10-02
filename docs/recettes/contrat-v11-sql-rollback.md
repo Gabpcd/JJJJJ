@@ -18,6 +18,19 @@ Ce n'est pas un nouveau workflow manuel.
 
 Le runner exige un contexte PR, les SHA base/exécuté, run/attempt et le seul
 projet autorisé `mejpriaetwgtcstbgfid`. Seul le token Management staging est lu.
+Le rapport `sha` identifie la révision head réellement extraite (`SOURCE_SHA`) ;
+`eventSha` conserve séparément le commit de fusion de l’événement GitHub. Les
+deux empreintes sont validées, sans substitution implicite.
+
+Le catalogue attendu inclut l’anonymisation des notations déjà livrée par
+`20260930161816_permettre_anonymisation_auteur_notation.sql` : auteur nullable
+uniquement si `notateur_anonymise IS TRUE`. Le 2 octobre, une lecture indépendante
+du staging a montré que seule l’empreinte de `notations_missions` différait.
+En reconstruisant son JSON structurel avant ces deux changements (NOT NULL et
+contrainte nommée), l’ancienne empreinte `0224c64bdeac038e5ead98bb41c45042` a été
+retrouvée exactement ; la nouvelle est `64e296abc99ae6ff942de83ecb3390f7`.
+Les autres tables, fonctions, droits, résidus et garde-fous concordent. Aucune
+structure ni donnée distante n’a été modifiée pour cette actualisation.
 Trois requêtes au maximum, sans redirection ni reprise automatique :
 
 1. SELECT de préflight, comparaison exacte avec le catalogue versionné.

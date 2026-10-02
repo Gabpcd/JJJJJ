@@ -94,9 +94,14 @@ export function StripeEmbeddedCheckout({
       setClientSecret(null);
       setError(null);
 
-      if (preparedClientSecret) {
-        setClientSecret(preparedClientSecret);
+      const appliquerClientSecret = (secret: string) => {
+        if (stripePromise) setClientSecret(secret);
+        else setError('Le paiement par carte est momentanément indisponible. Réessayez plus tard.');
         setLoadingCheckout(false);
+      };
+
+      if (preparedClientSecret) {
+        appliquerClientSecret(preparedClientSecret);
         return;
       }
 
@@ -108,15 +113,14 @@ export function StripeEmbeddedCheckout({
 
       if (cancelled) return;
 
-      if (!fnError && !stripePromise && data?.url) {
+      if (!fnError && data?.url) {
         toast.info('Redirection vers le paiement sécurisé…');
         window.location.assign(data.url);
         return;
       }
 
       if (!fnError && data?.client_secret) {
-        setClientSecret(data.client_secret);
-        setLoadingCheckout(false);
+        appliquerClientSecret(data.client_secret);
         return;
       }
 
@@ -211,7 +215,7 @@ export function StripeEmbeddedCheckout({
             <p className="text-destructive text-sm mb-4">{error}</p>
             <button onClick={onClose} className="btn-secondary text-sm">Fermer</button>
           </div>
-        ) : (
+        ) : clientSecret && stripePromise ? (
           <div className="p-4" id="stripe-checkout-container">
             <EmbeddedCheckoutProvider
               stripe={stripePromise}
@@ -223,7 +227,7 @@ export function StripeEmbeddedCheckout({
               <EmbeddedCheckout />
             </EmbeddedCheckoutProvider>
           </div>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   );

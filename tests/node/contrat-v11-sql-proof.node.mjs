@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 
 const root = resolve(import.meta.dirname, '../..');
 const env = { STAGING_SUPABASE_PROJECT_REF: STAGING_REF, STAGING_SUPABASE_ACCESS_TOKEN: 'CANARI_JETON_prive',
-  GITHUB_EVENT_NAME: 'pull_request', BASE_SHA: 'a'.repeat(40), GITHUB_SHA: 'b'.repeat(40), GITHUB_RUN_ID: '36700000000', GITHUB_RUN_ATTEMPT: '1' };
+  GITHUB_EVENT_NAME: 'pull_request', BASE_SHA: 'a'.repeat(40), GITHUB_SHA: 'b'.repeat(40), SOURCE_SHA: 'c'.repeat(40), GITHUB_RUN_ID: '36700000000', GITHUB_RUN_ATTEMPT: '1' };
 const preuve = [{ preuve: 'CONTRAT_V11_SQL_ROLLBACK', annule: true }];
 const workflow = parse(readFileSync(join(root, '.github/workflows/validate-pr.yml'), 'utf8'));
 const sqlJob = workflow.jobs['sql-transaction'];
@@ -31,12 +31,15 @@ function sansSecret(value) { assert.ok(!JSON.stringify(value).includes('CANARI')
 
 test('destination et contexte refusés avant réseau, sans repli ni sortie sensible', async () => {
   for (const extra of [{ STAGING_SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz' }, { STAGING_SUPABASE_PROJECT_REF: '' },
-    { STAGING_SUPABASE_ACCESS_TOKEN: '' }, { GITHUB_EVENT_NAME: 'push' }, { BASE_SHA: '' }, { GITHUB_SHA: codePrive }, { GITHUB_RUN_ATTEMPT: '0' }]) {
+    { STAGING_SUPABASE_ACCESS_TOKEN: '' }, { GITHUB_EVENT_NAME: 'push' }, { BASE_SHA: '' }, { GITHUB_SHA: codePrive }, { SOURCE_SHA: '' }, { SOURCE_SHA: codePrive }, { GITHUB_RUN_ATTEMPT: '0' }]) {
     const t = transport(entrees());
     await assert.rejects(executerPreuve({ ...env, ...extra }, t.options), error => { sansSecret(error.message); return true; });
     assert.equal(t.appels.length, 0);
   }
   assert.equal(contexte(env).projet, STAGING_REF);
+  assert.equal(contexte(env).sha, env.SOURCE_SHA);
+  assert.equal(contexte(env).eventSha, env.GITHUB_SHA);
+  assert.notEqual(contexte(env).sha, contexte(env).eventSha);
 });
 
 test('assemblage : DDL exact dans savepoint, suite et garde répétée, aucune validation par COMMIT', () => {
@@ -113,6 +116,10 @@ test('contrôle indépendant divergent après sentinelle : aucun succès ni nett
   assert.equal(t.appels.length, 3); assert.equal(t.rapports[0].sentinelle, true); assert.equal(t.rapports[0].succes, false);
 });
 
+function scopeAttendu(overrides = {}) {
+  return { has_migrations: 'false', has_f1_regression: 'false',
+    has_connect_fixture: 'false', has_contract_fixture: 'false', ...overrides };
+}
 function scopeReel(t, changes) {
   const dir = mkdtempSync(join(tmpdir(), 'jolene-contrat-v11-scope-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -125,19 +132,34 @@ function scopeReel(t, changes) {
   const result = spawnSync('bash', ['-c', scope], { cwd: dir, env: { ...process.env, BASE_SHA: base, GITHUB_OUTPUT: output }, encoding: 'utf8' });
   return { result, outputs: Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map(l => l.split('='))) };
 }
-function executeCondition(step, outputs) {
-  if (!step.if) return true;
-  const condition = step.if.replace(/^always\(\) && /, '');
+function executeCondition(step, outputs, successful = true) {
+  if (!step.if) return successful;
+  // Une branche OR après un statut explicite doit être interprétée séparément.
+  // Ce format est absent du workflow : le refuser plutôt que simuler sa priorité.
+  assert.ok(!/^(always|success)\(\) && .* \|\| /.test(step.if), 'condition nouvelle non couverte');
+  const status = step.if.startsWith('always() && ') || successful;
+  const condition = step.if.replace(/^(always|success)\(\) && /, '');
   const terms = condition.split(' || ').map(group => group.split(' && ').map(term => {
-    const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture) == '(true|false)'$/.exec(term);
+    const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture|has_connect_fixture) == '(true|false)'$/.exec(term);
     assert.ok(match, 'condition nouvelle non couverte');
+    assert.ok(Object.hasOwn(outputs, match[1]), 'output manquant dans le scénario');
     return outputs[match[1]] === match[2];
   }).every(Boolean));
-  return terms.some(Boolean);
+  return status && terms.some(Boolean);
 }
+test('le témoin contrôle le SHA de la révision réellement extraite, sans credentials Git persistants', () => {
+  const checkout = sqlJob.steps.find(step => step.uses?.startsWith('actions/checkout@'));
+  const witness = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs');
+  assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
+  assert.equal(witness.env.SOURCE_SHA, checkout.with.ref);
+  assert.equal(checkout.with['persist-credentials'], false);
+  assert.equal(checkout.with['fetch-depth'], 0);
+  const draft = sqlJob.steps.find(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs');
+  assert.equal(draft.env.SOURCE_SHA, checkout.with.ref);
+});
 test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni régressions migration', t => {
   const s = scopeReel(t, ['tests/fixtures/contrat-service-v11/draft.sql']);
-  assert.equal(s.result.status, 0); assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'false', has_contract_fixture: 'true' });
+  assert.equal(s.result.status, 0); assert.deepEqual(s.outputs, scopeAttendu({ has_contract_fixture: 'true' }));
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(actifs.some(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
   assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || /supabase (?:link|db push)|CREATE EXTENSION/.test(step.run || '')));
@@ -147,22 +169,55 @@ test('scope YAML refuse le mélange fixture/migration avant réseau ; changement
   const mix = scopeReel(t, ['tests/security/contrat-service-v11.test.sql', 'supabase/migrations/20260930000000_fixture.sql']);
   assert.notEqual(mix.result.status, 0);
   const normal = scopeReel(t, ['docs/fixture.md']);
-  assert.equal(normal.result.status, 0); assert.deepEqual(normal.outputs, { has_migrations: 'false', has_f1_regression: 'false', has_contract_fixture: 'false' });
+  assert.equal(normal.result.status, 0); assert.deepEqual(normal.outputs, scopeAttendu());
   const migration = scopeReel(t, ['supabase/migrations/20260930000000_fixture.sql']);
-  assert.equal(migration.result.status, 0); assert.deepEqual(migration.outputs, { has_migrations: 'true', has_f1_regression: 'false', has_contract_fixture: 'false' });
+  assert.equal(migration.result.status, 0); assert.deepEqual(migration.outputs, scopeAttendu({ has_migrations: 'true' }));
 });
 test('le harnais Node reste testé en CI sans déclencher une recette contrat distante', t => {
   const s = scopeReel(t, ['tests/node/contrat-v11-sql-proof.node.mjs']);
   assert.equal(s.result.status, 0);
-  assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'false', has_contract_fixture: 'false' });
+  assert.deepEqual(s.outputs, scopeAttendu());
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(!actifs.some(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs'));
   assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/contrat-v11-sql-proof.node.mjs'));
 });
+test('chaque entrée du seed Connect active seulement sa preuve, sans bootstrap, candidate, F1 ni draft contrat', t => {
+  for (const path of ['scripts/ci/connect-test-fixture.mjs', 'scripts/ci/connect-test-fixture-ci.mjs',
+    'scripts/ci/connect-test-fixture-rollback.mjs', 'scripts/ci/connect-test-fixture-prepare.sql',
+    'tests/node/connect-test-fixture.node.mjs', 'tests/node/connect-test-fixture-ci.node.mjs',
+    'tests/node/connect-test-fixture-rollback.node.mjs']) {
+    const s = scopeReel(t, [path]);
+    assert.equal(s.result.status, 0, path);
+    assert.deepEqual(s.outputs, scopeAttendu({ has_connect_fixture: 'true' }), path);
+    const actifs = sqlJob.steps.filter(step => step.id !== 'migration_scope' && executeCondition(step, s.outputs));
+    assert.ok(actifs.some(step => step.uses?.startsWith('actions/setup-node@')));
+    assert.ok(actifs.some(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs'));
+    assert.ok(actifs.some(step => step.with?.path === '${{ runner.temp }}/connect-test-fixture-rollback.json'));
+    assert.ok(!actifs.some(step => step.uses?.startsWith('supabase/') || step.env?.HAS_MIGRATIONS ||
+      /supabase (?:link|db push)|CREATE EXTENSION|contrat-v11-sql-proof|connect-staging-(?:admission-pg17|catalogue-proof)/.test(step.run || '')));
+  }
+  const horsScope = scopeReel(t, ['docs/connect-test-fixture-ci.md', 'scripts/ci/connect-test-fixture-ci.contract.json',
+    'scripts/ci/prepare-staging-api-env.mjs', 'tests/node/fixture-ordinaire.node.mjs']);
+  assert.equal(horsScope.result.status, 0); assert.deepEqual(horsScope.outputs, scopeAttendu());
+});
+test('le seed Connect reste indépendant du draft et conserve seulement son rapport après échec', () => {
+  const seed = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs');
+  const seedArtifact = sqlJob.steps.find(step => step.with?.path === '${{ runner.temp }}/connect-test-fixture-rollback.json');
+  const setup = sqlJob.steps.find(step => step.uses?.startsWith('actions/setup-node@'));
+  for (const step of [seed, seedArtifact, setup]) assert.ok(step);
+  for (const has_connect_fixture of ['true', 'false']) for (const has_contract_fixture of ['true', 'false'])
+    for (const successful of [true, false]) {
+      const outputs = scopeAttendu({ has_connect_fixture, has_contract_fixture });
+      assert.equal(executeCondition(seed, outputs, successful), successful && has_connect_fixture === 'true');
+      assert.equal(executeCondition(seedArtifact, outputs, successful), has_connect_fixture === 'true');
+      assert.equal(executeCondition(setup, outputs, successful), successful &&
+        [has_contract_fixture, has_connect_fixture].includes('true'));
+    }
+});
 test('F1 active sa transaction et son contrôle indépendant, sans activer le draft contrat', t => {
   const s = scopeReel(t, ['tests/security/facturation-remplacement-commission-f1.test.sql']);
   assert.equal(s.result.status, 0);
-  assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  assert.deepEqual(s.outputs, scopeAttendu({ has_f1_regression: 'true' }));
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(actifs.some(step => step.env?.HAS_MIGRATIONS));
   assert.ok(actifs.some(step => step.name === 'F1 — SELECT indépendant après succès ou échec SQL'));
@@ -174,7 +229,7 @@ test('F1 active sa transaction et son contrôle indépendant, sans activer le dr
 test('le chaînage heures F1 conserve la voie test-only, le contrôle indépendant et le refus du mélange contrat', t => {
   const s = scopeReel(t, ['tests/security/facturation-heures-ajustees-chainage-f1.test.sql']);
   assert.equal(s.result.status, 0);
-  assert.deepEqual(s.outputs, { has_migrations: 'false', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  assert.deepEqual(s.outputs, scopeAttendu({ has_f1_regression: 'true' }));
   const actifs = sqlJob.steps.filter(step => executeCondition(step, s.outputs));
   assert.ok(actifs.some(step => step.env?.HAS_MIGRATIONS));
   assert.ok(actifs.some(step => step.name === 'F1 — SELECT indépendant après succès ou échec SQL'));
@@ -184,8 +239,14 @@ test('le chaînage heures F1 conserve la voie test-only, le contrôle indépenda
   assert.match(mix.result.stderr + mix.result.stdout, /fixture contrat et la recette F1 doivent rester séparées/);
 });
 test('les conditions SQL non reconnues ne sont pas considérées actives par défaut', () => {
-  for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true"])
-    assert.throws(() => executeCondition({ if: condition }, {}), /condition nouvelle non couverte/);
+  for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true",
+    "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || unknown()",
+    "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
+    "always() && steps.migration_scope.outputs.has_connect_fixture == 'false' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
+    "always() && steps.migration_scope.outputs.has_connect_fixture == 'false' && unknown()"])
+    for (const successful of [true, false])
+      assert.throws(() => executeCondition({ if: condition }, scopeAttendu(), successful), /condition nouvelle non couverte/);
+  assert.throws(() => executeCondition({ if: "steps.migration_scope.outputs.has_connect_fixture == 'true'" }, {}), /output manquant/);
 });
 
 test('le témoin avant migration exige migration ET recette F1, jamais un seul des deux', t => {
@@ -202,7 +263,7 @@ test('le témoin avant migration exige migration ET recette F1, jamais un seul d
     'tests/security/facturation-heures-ajustees-chainage-f1.test.sql',
   ]);
   assert.equal(s.result.status, 0);
-  assert.deepEqual(s.outputs, { has_migrations: 'true', has_f1_regression: 'true', has_contract_fixture: 'false' });
+  assert.deepEqual(s.outputs, scopeAttendu({ has_migrations: 'true', has_f1_regression: 'true' }));
   assert.equal(executeCondition(step, s.outputs), true);
   for (const condition of ["steps.migration_scope.outputs.has_migrations == 'false' && unknown()",
     "steps.migration_scope.outputs.has_migrations == 'true' || unknown()"])

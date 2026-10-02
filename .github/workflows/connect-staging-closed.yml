@@ -1,0 +1,70 @@
+name: Préparer Connect staging fermé (manuel)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: SHA main exact portant cet exécuteur relu
+        required: true
+        type: string
+      candidate_sha:
+        description: SHA candidat exact déjà inscrit dans le contrat revu
+        required: true
+        type: string
+      candidate_tree:
+        description: Arbre Git exact déjà inscrit dans le contrat revu
+        required: true
+        type: string
+      manifest_sha256:
+        description: Empreinte du manifeste explicitement approuvé
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: jolene-supabase-staging-writes
+  queue: max
+  cancel-in-progress: false
+jobs:
+  prepare-closed:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      EXPECTED_CANDIDATE_TREE: ${{ inputs.candidate_tree }}
+      EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      - name: Tests sans secret ni réseau
+        run: node --test tests/node/connect-staging-closed.node.mjs
+      - name: Refuser avant credentials tout contexte ou pin non approuvé
+        id: pin
+        run: node scripts/ci/connect-staging-closed.mjs resolve
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ steps.pin.outputs.candidate }}
+          path: candidate
+          persist-credentials: false
+      - name: Prouver le rollback puis installer une seule fois, barrière fermée
+        timeout-minutes: 10
+        run: node scripts/ci/connect-staging-closed.mjs apply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Rapport fermé uniquement
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: connect-staging-closed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/connect-staging-closed/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: false

@@ -121,7 +121,7 @@ describe('Facturation — confirmation Stripe Connect par pièce fail-closed', (
     const helper = vi.fn().mockResolvedValue({ result: { client_secret: 'cs_fixture_secret', total: 72 }, error: null });
     const setSecret = vi.fn(), setContext = vi.fn();
     const prepare = callback<(mission: string, facture?: string) => Promise<void>>('payerStripeConnect', {
-      canManagePayments: true, missionsARapprocher: new Set(),
+      canManagePayments: true, missionsARapprocher: new Set(), stripePromise: Promise.resolve({ fixture: true }),
       supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'fixture-token' } } }) } },
       payerMissionStripeConnectAvecGenerationAuto: helper, setConnectPayingId: vi.fn(),
       setConnectClientSecret: setSecret, setConnectPaymentContext: setContext,

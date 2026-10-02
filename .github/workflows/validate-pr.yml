@@ -67,8 +67,17 @@ jobs:
       - name: Gardes du déploiement generate-invoice staging sans réseau ni secrets
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
 
+      - name: Tester la préparation Connect staging fermée sans réseau
+        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
+
+      - name: Gardes du témoin seed Connect sans réseau
+        run: node --test tests/node/connect-test-fixture-rollback.node.mjs
+
       - name: Contrats du pilote documentaire F1 sans réseau ni credentials
         run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
+
+      - name: Navigation HTML — transport loopback sans navigateur
+        run: node --test tests/node/recette-navigation-html.node.mjs
 
       - name: Deno figé pour le chargement des polices Edge
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
@@ -290,6 +299,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       # Les migrations PR sont testées puis annulées. Seul le schéma de base
       # main peut être synchronisé durablement ; ce job ne déploie pas la PR.
@@ -320,6 +331,15 @@ jobs:
           echo "has_f1_regression=$has_f1_regression" >> "$GITHUB_OUTPUT"
 
           if git diff --quiet "$BASE_SHA"...HEAD -- \
+            'scripts/ci/connect-test-fixture*.mjs' \
+            'scripts/ci/connect-test-fixture-prepare.sql' \
+            'tests/node/connect-test-fixture*.node.mjs'; then
+            echo "has_connect_fixture=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_connect_fixture=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          if git diff --quiet "$BASE_SHA"...HEAD -- \
             'tests/fixtures/contrat-service-v11/**' \
             'tests/security/contrat-service-v11.test.sql' \
             'scripts/ci/contrat-v11-sql-proof.mjs'; then
@@ -337,8 +357,8 @@ jobs:
             echo "has_contract_fixture=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Node pour la fixture contrat annulée
-        if: steps.migration_scope.outputs.has_contract_fixture == 'true'
+      - name: Setup Node pour les preuves annulées
+        if: steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -349,7 +369,28 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci/contrat-v11-sql-proof.mjs
+
+      # Source staging déjà installée et catalogue épinglé : pas de bootstrap,
+      # aucune migration ni ouverture Connect pour ce témoin du seed seul.
+      - name: Connect — seed exact sous SAVEPOINT et ROLLBACK puis relecture
+        if: steps.migration_scope.outputs.has_connect_fixture == 'true'
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/connect-test-fixture-rollback.mjs
+
+      - name: Conserver le verdict assaini du témoin seed Connect
+        if: always() && steps.migration_scope.outputs.has_connect_fixture == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-test-fixture-rollback-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/connect-test-fixture-rollback.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Setup Supabase CLI
         if: steps.migration_scope.outputs.has_migrations == 'true'
@@ -759,6 +800,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Deux écrivains, observateur et reprises exactes
         run: python3 scripts/ci/paiements-concurrence-pg17.py
+      - name: Catalogue F1 — cast du type interne et états des triggers
+        run: node --test tests/postgres/f1-cloud-catalogue-cast.pg17.mjs
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17
