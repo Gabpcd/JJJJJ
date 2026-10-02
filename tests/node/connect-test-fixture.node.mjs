@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newManifest, validateManifest, checkContract, validateAuth, validateCustomer, validateAccount, validateSnapshot,
   executePreparation, privateRead, privateWrite, CLOSED_CONTRACT, PROJECT, PLATFORM, EXCLUDED_ACCOUNT } from '../../scripts/ci/connect-test-fixture.mjs';
-import { preflightSql, snapshotSql, transactionSql, linkSql } from '../../scripts/ci/connect-test-fixture-sql.mjs';
+import { preflightSql, snapshotSql, transactionSql, linkSql, catalogueSqlFixture, calendarProofSql } from '../../scripts/ci/connect-test-fixture-sql.mjs';
 const seed=await readFile(new URL('../../scripts/ci/connect-test-fixture-prepare.sql',import.meta.url),'utf8');
 const sha='a'.repeat(40),hash=createHash('sha256').update(seed).digest('hex');
 const manifest=()=>newManifest('connect-test-node-proof',sha);
@@ -138,4 +138,13 @@ test('an invoice period outside mission bounds is refused before Stripe creation
   assert.equal(h.state.writes.filter(x=>x.url.startsWith('https://api.stripe.com')).length,0);
   assert.match(seed,/INTO semaine FROM generate_series[\s\S]*?interval '-7 days'[\s\S]*?WHERE NOT public\.fn_est_jour_ferie/);
   assert.match(seed,/passe := semaine;/);assert.match(seed,/debut_le::date=semaine/);
+});
+
+test('catalogue casts internal char and calendar witness injects holidays only in SELECT CTEs',()=>{
+  const catalogue=catalogueSqlFixture();assert.match(catalogue,/t\.tgenabled::text/);
+  assert.doesNotMatch(catalogue,/\|\|t\.tgenabled(?!::text)/);
+  for(const column of ['n.nspname','c.relname','a.attname'])assert.ok(catalogue.includes(`${column}::text||`));
+  const calendar=calendarProofSql();assert.match(calendar,/injected_holidays\(day\) AS \(VALUES/);
+  assert.match(calendar,/week_start=expected_week/);assert.match(calendar,/2026-04-06/);assert.match(calendar,/2026-05-25/);
+  assert.doesNotMatch(calendar,/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP)\b/i);
 });

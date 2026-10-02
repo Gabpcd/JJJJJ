@@ -1,13 +1,48 @@
-import { catalogueSqlF1 } from './f1-cloud-sql.mjs';
-
 export const literal = value => `'${String(value).replaceAll("'", "''")}'`;
-// Catalogue read only; neither the F1 executor nor its readiness is invoked.
+// Adapted from the read-only F1 inventory. Explicit casts are required for
+// PostgreSQL's internal "char" (tgenabled); do not invoke or alter the F1 pilot.
+export function catalogueSqlFixture() {
+  return `SELECT jsonb_build_object(
+    'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\\n' ORDER BY p.oid::regprocedure::text))
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
+    'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||c.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\\n' ORDER BY n.nspname,c.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+      WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
+    'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
+    'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
+    'activeCrons',(SELECT count(*)::int FROM cron.job WHERE active),
+    'runningCrons',(SELECT count(*)::int FROM cron.job_run_details WHERE end_time IS NULL AND status IN ('starting','running','connecting','sending')),
+    'generationUrlAbsent',NOT EXISTS(SELECT 1 FROM public.parametres_litiges WHERE cle='generate_invoice_url' AND coalesce(length(valeur),0)>0),
+    'supportStagingExact',coalesce((SELECT nullif(btrim(decrypted_secret),'')='https://mejpriaetwgtcstbgfid.supabase.co' FROM vault.decrypted_secrets WHERE name='supabase_url' LIMIT 1),false)
+  ) AS catalogue;`;
+}
+// Read-only witness: injected holidays cover the branch even when staging's
+// holiday reference table is empty. These dates never change stored data.
+export function calendarProofSql() {
+  return `WITH scenarios(today,expected_week) AS (VALUES (DATE '2026-04-13',DATE '2026-03-30'),(DATE '2026-06-01',DATE '2026-05-18')),
+  injected_holidays(day) AS (VALUES (DATE '2026-04-06'),(DATE '2026-05-25'))
+  SELECT today,expected_week,week_start,week_start+6 AS week_end,future_date,
+    public.fn_est_jour_ferie(date_trunc('week',today)::date-7) AS reference_previous_monday_holiday,
+    EXISTS(SELECT 1 FROM injected_holidays WHERE day=date_trunc('week',today)::date-7) AS injected_previous_monday_holiday,
+    week_start=expected_week AND extract(isodow from week_start)=1 AND week_start+6<today
+      AND future_date>today AND week_start+6<future_date AS branch_verified
+  FROM scenarios
+  CROSS JOIN LATERAL (SELECT d::date AS week_start FROM generate_series(date_trunc('week',today)::date-7,
+    date_trunc('week',today)::date-35,interval '-7 days') d
+    WHERE NOT (public.fn_est_jour_ferie(d::date) OR EXISTS(SELECT 1 FROM injected_holidays WHERE day=d::date)) ORDER BY d DESC LIMIT 1) past
+  CROSS JOIN LATERAL (SELECT d::date AS future_date FROM generate_series(date_trunc('week',today)::date+7,
+    date_trunc('week',today)::date+11,interval '1 day') d
+    WHERE NOT (public.fn_est_jour_ferie(d::date) OR EXISTS(SELECT 1 FROM injected_holidays WHERE day=d::date)) ORDER BY d LIMIT 1) future;`;
+}
 export function preflightSql() {
   return `SELECT catalogue || jsonb_build_object(
     'gateClosed',(SELECT count(*)=1 AND bool_and(protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE) FROM private.stripe_connect_release_gate),
     'capacitiesEmpty',NOT EXISTS(SELECT 1 FROM private.stripe_connect_test_capacities),
     'operationsEmpty',NOT EXISTS(SELECT 1 FROM private.stripe_connect_avant_transfert)
-  ) AS receipt FROM (${catalogueSqlF1().replace(/;\s*$/, '')}) c;`;
+  ) AS receipt FROM (${catalogueSqlFixture().replace(/;\s*$/, '')}) c;`;
 }
 export function guardSql(expected) {
   return `DO $fixture_guard$ DECLARE c jsonb; BEGIN
