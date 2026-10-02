@@ -144,6 +144,14 @@ function executeCondition(step, outputs, successful = true) {
   }).every(Boolean));
   return status && terms.some(Boolean);
 }
+test('le témoin contrôle le SHA de la révision réellement extraite, sans credentials Git persistants', () => {
+  const checkout = sqlJob.steps.find(step => step.uses?.startsWith('actions/checkout@'));
+  const witness = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs');
+  assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
+  assert.equal(witness.env.SOURCE_SHA, checkout.with.ref);
+  assert.equal(checkout.with['persist-credentials'], false);
+  assert.equal(checkout.with['fetch-depth'], 0);
+});
 test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni régressions migration', t => {
   const s = scopeReel(t, ['tests/fixtures/contrat-service-v11/draft.sql']);
   assert.equal(s.result.status, 0); assert.deepEqual(s.outputs, scopeAttendu({ has_contract_fixture: 'true' }));
