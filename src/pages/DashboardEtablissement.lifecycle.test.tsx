@@ -30,17 +30,12 @@ vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: vi.fn() }));
 let lectures: LectureStats[];
 const annulationNative = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'throwIfAborted');
 beforeAll(() => {
-  // La version de jsdom du dépôt ne fournit pas encore cette API navigateur.
-  // Reproduire uniquement sa sémantique, sans remplacer le signal React Query.
-  if (!annulationNative) Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', {
-    configurable: true,
-    value(this: AbortSignal) {
-      if (this.aborted) throw this.reason ?? new DOMException('Chargement annulé', 'AbortError');
-    },
-  });
+  // Exercer aussi la cible iOS 15.0, où cette API moderne est absente.
+  Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', { configurable: true, value: undefined });
 });
 afterAll(() => {
-  if (!annulationNative) Reflect.deleteProperty(AbortSignal.prototype, 'throwIfAborted');
+  if (annulationNative) Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', annulationNative);
+  else Reflect.deleteProperty(AbortSignal.prototype, 'throwIfAborted');
 });
 
 function requete(resultat: Resultat, suspendre = false) {
@@ -105,6 +100,17 @@ async function terminerStats(index: number) {
 }
 
 describe('Lectures du dashboard établissement pendant une navigation', () => {
+  it('charge sans AbortSignal.throwIfAborted comme sur iOS 15.0', async () => {
+    const { client } = afficher();
+    await waitFor(() => expect(lectures).toHaveLength(1));
+    expect(lectures[0].signal?.throwIfAborted).toBeUndefined();
+    await terminerStats(0);
+    expect(client.getQueryData(['dashboard-etablissement', 'etab-a', 'etab-a'])).toMatchObject({
+      etab: { nom: 'etab-a' }, erreurPartielle: false,
+    });
+    expect(mocks.error).not.toHaveBeenCalled();
+  });
+
   it('annule au démontage, ne publie pas de résultat partiel et recharge au retour', async () => {
     const { client } = afficher();
     await waitFor(() => expect(lectures).toHaveLength(1));
@@ -142,6 +148,26 @@ describe('Lectures du dashboard établissement pendant une navigation', () => {
     await terminerStats(1);
     expect(screen.queryByText('Chargement du tableau de bord')).not.toBeInTheDocument();
     expect(mocks.error).not.toHaveBeenCalled();
+  });
+
+  it('reprend après un départ refusé sans afficher un dashboard vide entre-temps', async () => {
+    afficher();
+    await waitFor(() => expect(lectures).toHaveLength(1));
+    const refuser = (event: Event) => event.preventDefault();
+    window.addEventListener('beforeunload', refuser);
+    try {
+      const depart = new Event('beforeunload', { cancelable: true });
+      await act(async () => { window.dispatchEvent(depart); });
+      expect(depart.defaultPrevented).toBe(true);
+      expect(lectures[0].signal?.aborted).toBe(true);
+      expect(screen.queryByTestId('dashboard-etablissement-ready')).not.toBeInTheDocument();
+      expect(screen.getByText('Chargement du tableau de bord')).toBeVisible();
+      expect(mocks.error).not.toHaveBeenCalled();
+      fireEvent.focus(window);
+      await waitFor(() => expect(lectures).toHaveLength(2));
+      await terminerStats(1);
+      expect(mocks.error).not.toHaveBeenCalled();
+    } finally { window.removeEventListener('beforeunload', refuser); }
   });
 
   it('annule la lecture de l’ancien compte sans interrompre celle du nouveau', async () => {
