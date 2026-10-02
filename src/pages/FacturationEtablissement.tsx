@@ -1697,9 +1697,10 @@ function FacturationEtablissementContent() {
                     <BoutonY2K
                       size="sm"
                       className="w-full sm:w-auto"
+                      iconeGauche={<Landmark className="h-4 w-4" aria-hidden="true" />}
                       onClick={() => navigate('/etablissement/parametres?tab=profil')}
                     >
-                      <Landmark className="w-4 h-4 mr-2" /> Activer le prélèvement automatique
+                      Activer le prélèvement automatique
                     </BoutonY2K>
                   </div>
 

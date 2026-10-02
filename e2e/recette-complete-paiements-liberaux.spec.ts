@@ -370,6 +370,20 @@ test('Détail commission liée payée : historique annoncé sans faux filtre ni 
     const commissions = page.getByRole('button', { name: 'Commissions Jolene (0)', exact: true });
     if (await commissions.getAttribute('aria-expanded') === 'false') await action(page, commissions);
     await expect(commissions).toHaveAttribute('aria-expanded', 'true');
+    const activerPrelevement = page.getByRole('button', { name: 'Activer le prélèvement automatique', exact: true });
+    await activerPrelevement.scrollIntoViewIfNeeded();
+    if (!test.info().project.use.hasTouch) await activerPrelevement.hover();
+    await expect.poll(async () => {
+      const [bouton, icone, texte] = await Promise.all([
+        activerPrelevement.boundingBox(), activerPrelevement.locator('svg').boundingBox(),
+        activerPrelevement.getByText('Activer le prélèvement automatique', { exact: true }).boundingBox(),
+      ]);
+      if (!bouton || !icone || !texte) return false;
+      const centresAlignes = Math.abs(icone.y + icone.height / 2 - texte.y - texte.height / 2) <= 2;
+      const contenusDansBouton = [icone, texte].every(b => b.x >= bouton.x && b.y >= bouton.y
+        && b.x + b.width <= bouton.x + bouton.width && b.y + b.height <= bouton.y + bouton.height);
+      return centresAlignes && icone.x + icone.width <= texte.x && contenusDansBouton;
+    }, { message: 'Activation du prélèvement : icône à gauche du texte et centres alignés, sans débordement' }).toBe(true);
     const historiqueCommissions = page.getByRole('button', { name: 'Historique factures commission (1 payée)', exact: true });
     if (await historiqueCommissions.getAttribute('aria-expanded') === 'false') await action(page, historiqueCommissions);
     await expect(historiqueCommissions).toHaveAttribute('aria-expanded', 'true');
