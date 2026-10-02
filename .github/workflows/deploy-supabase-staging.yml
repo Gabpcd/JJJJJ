@@ -698,6 +698,20 @@ jobs:
           cd supabase/functions
           for dir in */; do
             fn="${dir%/}"
+            # Même compatibilité de state PSC qu'en production : ne jamais
+            # publier l'émetteur avant que son callback soit confirmé.
+            if [ "$fn" = "psc-callback" ]; then continue; fi
+            if [ "$fn" = "psc-authorize" ]; then
+              echo "::group::Deploying psc-callback before psc-authorize (staging)"
+              if ! supabase functions deploy "psc-callback" \
+                   --project-ref "$SUPABASE_PROJECT_REF" \
+                   --use-api; then
+                echo "::error::psc-authorize conservé : callback compatible staging non confirmé"
+                echo "::endgroup::"
+                exit 1
+              fi
+              echo "::endgroup::"
+            fi
             if [ -f "$fn/index.ts" ]; then
               echo "::group::Deploying $fn (staging)"
               supabase functions deploy "$fn" \

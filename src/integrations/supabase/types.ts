@@ -9597,6 +9597,10 @@ export type Database = {
         Returns: Json
       }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
+      fn_lire_candidatures_mission_habilitee: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_lire_secret_cron: { Args: never; Returns: string }
       fn_list_admin_user_ids: { Args: never; Returns: string[] }
       fn_lister_factures_a_regenerer: {

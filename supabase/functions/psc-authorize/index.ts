@@ -2,6 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { retourMissionPsc, signerEtatPsc } from "../_shared/psc-return.ts";
 import { resolvePscEnvironment } from "../_shared/psc-security.ts";
 
 // Endpoints PSC selon ANS (Agence du Numérique en Santé)
@@ -93,8 +94,18 @@ Deno.serve(async (req) => {
       ? "signup"
       : "login";
 
-    // Générer PKCE + state + nonce
-    const state = randomString(32);
+    const retour = body.return_to == null ? null : retourMissionPsc(body.return_to);
+    if (body.return_to != null && !retour) {
+      return jsonResponse(req, { error: "Destination de retour invalide" }, 400);
+    }
+    const secretEtat = Deno.env.get("PSC_CLIENT_SECRET");
+    if (retour && !secretEtat) {
+      return jsonResponse(req, { error: "Pro Santé Connect indisponible" }, 503);
+    }
+    // Le state signé complet est conservé en base : un state tronqué ne peut
+    // pas retrouver la session. Le nonce et PKCE restent indépendants.
+    const aleaEtat = randomString(32);
+    const state = retour ? await signerEtatPsc(aleaEtat, retour, secretEtat!) : aleaEtat;
     const nonce = randomString(32);
     const codeVerifier = randomString(64);
     const codeChallengeBytes = await sha256(codeVerifier);

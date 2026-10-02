@@ -3,10 +3,12 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ModalePscPreAuth } from '@/components/ModalePscPreAuth';
+import { retourMissionNotification } from '@/lib/navigationNotification';
 import { ouvrirUrlPsc } from '@/lib/pscNavigation';
 
 interface Props {
   intention?: 'login' | 'signup';
+  retourMission?: string | null;
   fullWidth?: boolean;
   onSwitchToEmail?: () => void;
 }
@@ -33,7 +35,7 @@ function LogoPSC({ className }: { className?: string }) {
   );
 }
 
-export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, onSwitchToEmail }: Props) {
+export function BoutonProSanteConnect({ intention = 'login', retourMission, fullWidth = true, onSwitchToEmail }: Props) {
   const [loading, setLoading] = useState(false);
   const [modaleOuverte, setModaleOuverte] = useState(false);
 
@@ -47,8 +49,9 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, o
   const lancerRedirection = async () => {
     setLoading(true);
     try {
+      const retour = retourMissionNotification(retourMission);
       const { data, error } = await supabase.functions.invoke('psc-authorize', {
-        body: { intention },
+        body: { intention, ...(retour ? { return_to: retour } : {}) },
       });
 
       if (error) {

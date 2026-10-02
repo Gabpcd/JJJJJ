@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { telechargerOuPartagerPdf } from './telechargement';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -32,23 +33,26 @@ import {
  */
 export async function telechargerFactureCommissionPDF(factureId: string) {
   try {
-    const { data: f } = await supabase
+    const { data: f, error: factureError } = await supabase
       .from('factures')
       .select('*')
       .eq('id', factureId)
       .maybeSingle();
+    if (factureError) throw new Error('Impossible de charger la facture. Réessayez.');
     if (!f) {
       toast.error('Facture introuvable');
       return;
     }
 
-    const [{ data: etab }] = await Promise.all([
+    const [{ data: etab, error: etablissementError }] = await Promise.all([
       supabase
         .from('etablissements')
         .select('nom, adresse_rue, adresse_code_postal, adresse_ville, siret, email_contact')
         .eq('id', (f as any).etablissement_id)
         .maybeSingle(),
     ]);
+
+    if (etablissementError || !etab) throw new Error('Impossible de vérifier le destinataire de la facture. Réessayez.');
 
     // Missions rattachées : soit la seule mission_id (facture par-mission), soit
     // celles reliées via facture_id pour les factures mensuelles groupées.
@@ -65,16 +69,18 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       'montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id';
     let missions: any[] = [];
     if ((f as any).mission_id) {
-      const { data: m } = await supabase
+      const { data: m, error: missionError } = await supabase
         .from('missions')
         .select(missionSelect)
         .eq('id', (f as any).mission_id);
+      if (missionError) throw new Error('Impossible de charger les missions facturées. Réessayez.');
       missions = m || [];
     } else {
-      const { data: m } = await supabase
+      const { data: m, error: missionError } = await supabase
         .from('missions')
         .select(missionSelect)
         .eq('facture_id', (f as any).id);
+      if (missionError) throw new Error('Impossible de charger les missions facturées. Réessayez.');
       missions = m || [];
     }
 
@@ -82,26 +88,25 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     // créneaux prévisionnels (fallback quand pas de pointages réels).
     const soignantIds = [...new Set(missions.map((m) => m.soignant_assigne_id).filter(Boolean))];
     const missionIds = missions.map((m) => m.id);
-    const [{ data: soignants }, { data: allPresences }, { data: allCreneaux }] = await Promise.all([
+    const [{ data: soignants, error: soignantsError }, { data: allPresences, error: presencesError }, allCreneaux] = await Promise.all([
       soignantIds.length > 0
         ? supabase.from('soignants').select('id, prenom, nom, profession, specialites').in('id', soignantIds)
-        : Promise.resolve({ data: [] as any[] }),
+        : Promise.resolve({ data: [] as any[], error: null }),
       missionIds.length > 0
         ? supabase
             .from('presences')
             .select('mission_id, pointage_arrivee_le, pointage_depart_le, pause_debut_le, pause_fin_le, duree_pause_min, heures_reelles')
             .in('mission_id', missionIds)
             .order('pointage_arrivee_le', { ascending: true })
-        : Promise.resolve({ data: [] as any[] }),
-      missionIds.length > 0
-        ? supabase
-            .from('mission_creneaux')
-            .select('mission_id, debut_le, fin_le, type_creneau, duree_heures')
-            .in('mission_id', missionIds)
-            .eq('type_creneau', 'PREVISIONNEL')
-            .order('debut_le', { ascending: true })
-        : Promise.resolve({ data: [] as any[] }),
+        : Promise.resolve({ data: [] as any[], error: null }),
+      // Les créneaux portent debut/fin ; leur durée se déduit des instants.
+      // Le chargeur paginé refuse un planning tronqué ou non vérifiable.
+      chargerCreneauxMissionsPagines(missionIds, {
+        typeCreneau: 'PREVISIONNEL', exclurePauses: true,
+      }).catch(() => { throw new Error('Impossible de vérifier les créneaux de la mission. Réessayez.'); }),
     ]);
+    if (soignantsError) throw new Error('Impossible de vérifier les soignants de la facture. Réessayez.');
+    if (presencesError) throw new Error('Impossible de vérifier les pointages de la facture. Réessayez.');
     const soignantMap = new Map(
       (soignants || []).map((s: any) => [
         s.id,
@@ -261,7 +266,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
 
         // ── PASSE 3 : Section pointages ──
         const pres = (presencesByMission.get(m.id) || []).filter((p) => !factureMonoMission || dansPeriodeFacturee(p.pointage_arrivee_le));
-        const cren = (creneauxByMission.get(m.id) || []).filter((c) => !factureMonoMission || dansPeriodeFacturee(c.debut_le));
+        const cren = (creneauxByMission.get(m.id) || []).filter((c) => !factureMonoMission || dansPeriodeFacturee(c.debut));
         if (pres.length > 0) {
           doc.setTextColor(...JOLENE_COLORS.text);
           doc.setFont('helvetica', 'bold');
@@ -298,12 +303,20 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           autoTable(doc, {
             startY: y,
             head: [['Date', 'Début', 'Fin', 'Durée prév.']],
-            body: cren.map((c) => [
-              c.debut_le ? format(new Date(c.debut_le), 'dd/MM', { locale: fr }) : '-',
-              c.debut_le ? format(new Date(c.debut_le), "HH'h'mm", { locale: fr }) : '-',
-              c.fin_le ? format(new Date(c.fin_le), "HH'h'mm", { locale: fr }) : '-',
-              c.duree_heures ? `${Number(c.duree_heures).toFixed(1)} h` : '-',
-            ]),
+            body: cren.map((c) => {
+              const debut = new Date(c.debut);
+              const fin = c.fin ? new Date(c.fin) : null;
+              const dureeHeures = fin ? (fin.getTime() - debut.getTime()) / 3_600_000 : NaN;
+              if (!Number.isFinite(dureeHeures) || dureeHeures <= 0) {
+                throw new Error('Le planning prévisionnel est incomplet. Vérifiez la mission avant de télécharger la facture.');
+              }
+              return [
+                format(debut, 'dd/MM', { locale: fr }),
+                format(debut, "HH'h'mm", { locale: fr }),
+                format(fin!, "HH'h'mm", { locale: fr }),
+                `${dureeHeures.toFixed(1)} h`,
+              ];
+            }),
             styles: { fontSize: 7, cellPadding: 1.5, textColor: JOLENE_COLORS.textMuted as any },
             headStyles: { fillColor: JOLENE_COLORS.border as any, textColor: JOLENE_COLORS.text as any, fontStyle: 'bold' },
             margin: { left: PAGE.margin + 4, right: PAGE.margin },
