@@ -19,9 +19,8 @@ describe('régressions lancement — paiements critiques', () => {
     expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId, checkoutSessionId: result.checkout_session_id })');
     expect(facturation).toContain('if (!estSessionCheckout(result.checkout_session_id))');
     expect(checkout).toContain('preparedClientSecret?: string | null');
-    expect(checkout).toContain('if (preparedClientSecret)');
-    expect(checkout).toContain('setClientSecret(preparedClientSecret)');
-    expect(checkout).toContain('if (preparedClientSecret) {');
+    // La transmission du secret préparé et l'absence d'un nouvel appel serveur
+    // sont vérifiées en montant le vrai composant dans sa suite configuration.
   });
 
   it('ne recompte pas le miroir paiements_soignant des transfers Connect', () => {

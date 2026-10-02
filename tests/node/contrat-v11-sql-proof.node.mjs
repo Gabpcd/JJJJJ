@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 
 const root = resolve(import.meta.dirname, '../..');
 const env = { STAGING_SUPABASE_PROJECT_REF: STAGING_REF, STAGING_SUPABASE_ACCESS_TOKEN: 'CANARI_JETON_prive',
-  GITHUB_EVENT_NAME: 'pull_request', BASE_SHA: 'a'.repeat(40), GITHUB_SHA: 'b'.repeat(40), GITHUB_RUN_ID: '36700000000', GITHUB_RUN_ATTEMPT: '1' };
+  GITHUB_EVENT_NAME: 'pull_request', BASE_SHA: 'a'.repeat(40), GITHUB_SHA: 'b'.repeat(40), SOURCE_SHA: 'c'.repeat(40), GITHUB_RUN_ID: '36700000000', GITHUB_RUN_ATTEMPT: '1' };
 const preuve = [{ preuve: 'CONTRAT_V11_SQL_ROLLBACK', annule: true }];
 const workflow = parse(readFileSync(join(root, '.github/workflows/validate-pr.yml'), 'utf8'));
 const sqlJob = workflow.jobs['sql-transaction'];
@@ -31,12 +31,15 @@ function sansSecret(value) { assert.ok(!JSON.stringify(value).includes('CANARI')
 
 test('destination et contexte refusés avant réseau, sans repli ni sortie sensible', async () => {
   for (const extra of [{ STAGING_SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz' }, { STAGING_SUPABASE_PROJECT_REF: '' },
-    { STAGING_SUPABASE_ACCESS_TOKEN: '' }, { GITHUB_EVENT_NAME: 'push' }, { BASE_SHA: '' }, { GITHUB_SHA: codePrive }, { GITHUB_RUN_ATTEMPT: '0' }]) {
+    { STAGING_SUPABASE_ACCESS_TOKEN: '' }, { GITHUB_EVENT_NAME: 'push' }, { BASE_SHA: '' }, { GITHUB_SHA: codePrive }, { SOURCE_SHA: '' }, { SOURCE_SHA: codePrive }, { GITHUB_RUN_ATTEMPT: '0' }]) {
     const t = transport(entrees());
     await assert.rejects(executerPreuve({ ...env, ...extra }, t.options), error => { sansSecret(error.message); return true; });
     assert.equal(t.appels.length, 0);
   }
   assert.equal(contexte(env).projet, STAGING_REF);
+  assert.equal(contexte(env).sha, env.SOURCE_SHA);
+  assert.equal(contexte(env).eventSha, env.GITHUB_SHA);
+  assert.notEqual(contexte(env).sha, contexte(env).eventSha);
 });
 
 test('assemblage : DDL exact dans savepoint, suite et garde répétée, aucune validation par COMMIT', () => {
@@ -148,6 +151,16 @@ function executeCondition(step, outputs, successful = true) {
   }).every(Boolean));
   return status && terms.some(Boolean);
 }
+test('le témoin contrôle le SHA de la révision réellement extraite, sans credentials Git persistants', () => {
+  const checkout = sqlJob.steps.find(step => step.uses?.startsWith('actions/checkout@'));
+  const witness = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs');
+  assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
+  assert.equal(witness.env.SOURCE_SHA, checkout.with.ref);
+  assert.equal(checkout.with['persist-credentials'], false);
+  assert.equal(checkout.with['fetch-depth'], 0);
+  const draft = sqlJob.steps.find(step => step.run === 'node scripts/ci/contrat-v11-sql-proof.mjs');
+  assert.equal(draft.env.SOURCE_SHA, checkout.with.ref);
+});
 test('vrai scope YAML : fixture seule active le runner sans bootstrap, CLI ni régressions migration', t => {
   const s = scopeReel(t, ['tests/fixtures/contrat-service-v11/draft.sql']);
   assert.equal(s.result.status, 0); assert.deepEqual(s.outputs, scopeAttendu({ has_contract_fixture: 'true' }));
@@ -263,6 +276,8 @@ test('les conditions SQL non reconnues ne sont pas considérées actives par dé
   for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true",
     "success() && steps.migration_scope.outputs.has_connect_candidate == 'true' || unknown()",
     "success() && steps.migration_scope.outputs.has_connect_candidate == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true'",
+    "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || unknown()",
+    "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
     "always() && steps.migration_scope.outputs.has_connect_fixture == 'false' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
     "always() && steps.migration_scope.outputs.has_connect_fixture == 'false' && unknown()"])
     for (const successful of [true, false])

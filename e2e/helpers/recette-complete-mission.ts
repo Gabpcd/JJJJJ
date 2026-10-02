@@ -1,4 +1,4 @@
-import { expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Route, type TestInfo } from '@playwright/test';
 
 /** Contrat frontend uniquement : ni SQL/RLS, ni SMS/paiement réels ne sont exercés. */
 export const ids = {
@@ -12,6 +12,12 @@ export const ids = {
 export type RoleRecette = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 export const now = '2026-09-24T06:55:00.000Z';
 export const hash = 'a'.repeat(64);
+
+// Appelé uniquement dans les branches de navigation HTML locale des harnais.
+// Conserver le défaut de redirection existant ; F1 impose explicitement zéro.
+export function chargerHtmlLocal(route: Route, maxRedirects?: number) {
+  return route.fetch({ maxRetries: route.request().method() === 'GET' ? 1 : 0, timeout: 12_000, maxRedirects });
+}
 
 export function creerMissionSimulee() {
   const soignant = { id: ids.soignant, prenom: 'Camille', nom: 'Recette', profession: 'MEDECIN',
@@ -101,7 +107,7 @@ export function creerMissionSimulee() {
           // Retirer uniquement ces hints évite aussi toute connexion anticipée externe.
           // Reprendre une seule rupture TCP du GET HTML local, jamais une écriture.
           // Une erreur HTTP ou une deuxième coupure restent bloquantes pour la recette.
-          const response=await route.fetch({maxRetries:req.method()==='GET'?1:0,timeout:12_000});
+          const response=await chargerHtmlLocal(route);
           const html=(await response.text()).replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi,'');
           return route.fulfill({response,body:html});
         }

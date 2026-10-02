@@ -9,7 +9,7 @@ export const STAGING_REF = 'mejpriaetwgtcstbgfid';
 export const DRAFT_SHA256 = '534a2efae44ba72270868cd182efd9f1b1e8246e2f413dbe1bb1391d735b169e';
 const SUITE_SHA256 = '993de56a51846556ee9084bce13fd55f4faa08504950afd57273ddbc6c472aee';
 const CATALOGUE_SHA256 = '526d2c57717bdc69684f1724c2bee1c9362fc0ff7225128129a61cc49ccf180f';
-const ATTENDU_SHA256 = 'dd73a31d3eb8868a9c7cb7af2f44e5160e57623acdd4ed626188b58d11c8266a';
+const ATTENDU_SHA256 = '29484731fabffcaf215f8738ca1ca9c82679985a89a087816f28fa87b594c76d';
 const ENDPOINT = `https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`;
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const sha = text => createHash('sha256').update(text).digest('hex');
@@ -21,8 +21,9 @@ export function contexte(env) {
   if (typeof env.STAGING_SUPABASE_ACCESS_TOKEN !== 'string' || !env.STAGING_SUPABASE_ACCESS_TOKEN.trim()) refuser('acces_absent');
   if (env.GITHUB_EVENT_NAME !== 'pull_request'
     || !/^[a-f0-9]{40}$/.test(env.BASE_SHA || '') || !/^[a-f0-9]{40}$/.test(env.GITHUB_SHA || '')
+    || !/^[a-f0-9]{40}$/.test(env.SOURCE_SHA || '')
     || !/^\d{1,20}$/.test(env.GITHUB_RUN_ID || '') || !/^[1-9]\d{0,3}$/.test(env.GITHUB_RUN_ATTEMPT || '')) refuser('contexte_ci_refuse');
-  return { run: env.GITHUB_RUN_ID, tentative: Number(env.GITHUB_RUN_ATTEMPT), sha: env.GITHUB_SHA, base: env.BASE_SHA, projet: STAGING_REF };
+  return { run: env.GITHUB_RUN_ID, tentative: Number(env.GITHUB_RUN_ATTEMPT), sha: env.SOURCE_SHA, eventSha: env.GITHUB_SHA, base: env.BASE_SHA, projet: STAGING_REF };
 }
 
 export function chargerEntrees() {

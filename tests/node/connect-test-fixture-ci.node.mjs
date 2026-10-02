@@ -60,10 +60,34 @@ function runner(options={}) {
   return {args,checkpoints,privateJournals,summaries,g,m,calls};
 }
 
-test('versioned contract refuses before every transport and before preparation',async()=>{
-  const closed=JSON.parse(await readFile(new URL('../../scripts/ci/connect-test-fixture-ci.contract.json',import.meta.url),'utf8'));
-  assert.equal(closed.ready,false);for(const key of ['reviewedFixtureSha','reviewedFixtureTree','sourcePins','pgProof','fixtureContract'])assert.equal(closed[key],null);
-  let calls=0;await assert.rejects(runCi({contract:closed,fetcher:()=>{calls++;},prepare:()=>{calls++;}}),/CI_READINESS_CLOSED/);assert.equal(calls,0);
+test('versioned contract validates closed or explicitly pinned readiness without enabling a transport',async()=>{
+  const versioned=JSON.parse(await readFile(new URL('../../scripts/ci/connect-test-fixture-ci.contract.json',import.meta.url),'utf8'));
+  assert.equal(typeof versioned.ready,'boolean');
+  let calls=0;
+  await assert.rejects(runCi({contract:{...versioned,ready:false},fetcher:()=>{calls++;},prepare:()=>{calls++;}}),/CI_READINESS_CLOSED/);
+  assert.equal(calls,0);
+  if(versioned.ready===false) {
+    for(const key of ['reviewedFixtureSha','reviewedFixtureTree','sourcePins','pgProof','fixtureContract','expiresAt','reviewedBy'])assert.equal(versioned[key],null);
+    return;
+  }
+  const reviewedSources=Object.fromEntries(await Promise.all(SOURCE_FILES.map(async path=>[
+    path,await readFile(new URL('../../'+path,import.meta.url),'utf8'),
+  ])));
+  assert.match(versioned.expiresAt,/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/);
+  const expiry=Date.parse(versioned.expiresAt);assert.ok(Number.isFinite(expiry));
+  // Structural proof at a deterministic point within the declared window.
+  // An expired historical contract must not break unrelated future PRs;
+  // the runtime still uses Date.now() and refuses expiration before any effect.
+  const checked=checkCi(env(),local,versioned,reviewedSources,expiry-3600000);
+  assert.equal(checked.fixtureContract.protocolEnabled,false);
+  assert.equal(checked.fixtureContract.capabilityEnabled,false);
+  assert.equal(checked.fixtureContract.notificationsTestSkipReviewed,true);
+  assert.equal(checked.manifest.sql.sourceSha,mainSha);
+  assert.throws(()=>checkCi(env(),local,versioned,reviewedSources,expiry),/CI_CONTRACT/);
+  assert.throws(()=>checkCi(env(),local,versioned,reviewedSources,expiry-4*3600000-1),/CI_CONTRACT/);
+  await assert.rejects(runCi({env:{...env(),GITHUB_EVENT_NAME:'pull_request'},local,contract:versioned,sources:reviewedSources,
+    fetcher:()=>{calls++;},prepare:()=>{calls++;}}),/CI_TRUSTED_MAIN/);
+  assert.equal(calls,0);
 });
 test('exact main, first attempt, expiry, source bytes and explicit SQL review are mandatory',()=>{
   for(const change of [{GITHUB_EVENT_NAME:'pull_request'},{GITHUB_REF:'refs/heads/fix'},{GITHUB_RUN_ATTEMPT:'2'},{EXPECTED_MAIN_SHA:fixtureSha},{GITHUB_REPOSITORY:'fork/JJJJJ'}])assert.throws(()=>checkCi({...env(),...change},local,contract(),sources),/CI_TRUSTED_MAIN/);

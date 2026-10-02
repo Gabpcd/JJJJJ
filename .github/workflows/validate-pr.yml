@@ -76,6 +76,9 @@ jobs:
       - name: Contrats du pilote documentaire F1 sans réseau ni credentials
         run: node --test tests/node/f1-cloud-pilot.node.mjs tests/node/f1-cloud-adapter.node.mjs tests/node/f1-cloud-documents.node.mjs tests/node/f1-cloud-network.node.mjs tests/node/f1-cloud-workflow.node.mjs
 
+      - name: Navigation HTML — transport loopback sans navigateur
+        run: node --test tests/node/recette-navigation-html.node.mjs
+
       - name: Deno figé pour le chargement des polices Edge
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
@@ -383,6 +386,7 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci/contrat-v11-sql-proof.mjs
 
       # Source staging déjà installée et catalogue épinglé : pas de bootstrap,
@@ -849,6 +853,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Deux écrivains, observateur et reprises exactes
         run: python3 scripts/ci/paiements-concurrence-pg17.py
+      - name: Catalogue F1 — cast du type interne et états des triggers
+        run: node --test tests/postgres/f1-cloud-catalogue-cast.pg17.mjs
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17

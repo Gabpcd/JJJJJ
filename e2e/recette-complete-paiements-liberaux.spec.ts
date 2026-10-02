@@ -5,17 +5,22 @@ import { stabiliserActionsNationales } from './helpers/recette-complete-actions-
 
 // Simulation explicite : réponses API fictives, aucune déclaration, aucun email
 // ni paiement fournisseur. Le backend transactionnel possède sa preuve distincte.
+// Seule l'exécution ciblée configurée utilise cette valeur fictive compilée.
+const configurationFictive = process.env.RECETTE_STRIPE_CONFIGURATION === 'fictive';
+const indisponible = 'Le paiement par carte est momentanément indisponible. Réessayez plus tard.';
+const commissionId = '71000000-0000-4000-8000-000000000097';
+const hostedUrl = 'https://checkout.stripe.com/c/pay/cs_test_fixture_configuration';
 const autreMission = '71000000-0000-4000-8000-000000000093';
 const originale = '71000000-0000-4000-8000-000000000080';
 const remplacement = '71000000-0000-4000-8000-000000000060';
 const seconde = '71000000-0000-4000-8000-000000000081';
 const autreFacture = '71000000-0000-4000-8000-000000000090';
-const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
+const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_detail_facture','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
 async function action(page: Page, cible: Locator) {
   await cible.scrollIntoViewIfNeeded();
   if (test.info().project.use.hasTouch) await cible.tap(); else await cible.click();
 }
-async function fixture(page: Page, connect = false) {
+async function fixture(page: Page, connect = false, commission = false) {
   const simulation = creerSuiviSimule(), { state } = simulation;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
     soignant_assigne_id: ids.soignant, taux_horaire_base: 20, total_brut: 160, net_a_payer: 160,
@@ -26,7 +31,7 @@ async function fixture(page: Page, connect = false) {
   await simulation.installer(page.context(), 'ADMIN_ETABLISSEMENT');
   await page.clock.setFixedTime(new Date('2026-10-01T10:00:00Z'));
   const erreurs: string[] = [], interdits: string[] = [], mutations: { name: string; body: unknown }[] = [];
-  const controle = { modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
+  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
   page.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()); });
   page.on('pageerror', e => erreurs.push(e.message));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -44,14 +49,31 @@ async function fixture(page: Page, connect = false) {
     soignant_id: ids.soignant, soignant_nom: 'Camille Recette', soignant_profession: 'MEDECIN',
     soignant_stripe_connect: connect, net_a_payer: net, montant_commission_ttc: 0, heures: 4,
     periode_debut: id === seconde ? '2026-09-21' : '2026-09-14', periode_fin: id === seconde ? '2026-09-27' : '2026-09-20', debut_le: state.mission.debut_le, fin_le: state.mission.fin_le, jours_depuis_fin: 1 });
+  const factureCommission = { id: commissionId, facture_id: commissionId, numero_facture: 'COMMISSION-SIMULATION',
+    etablissement_id: ids.etablissement, statut: 'EMISE', type_document: 'FACTURE', est_secteur_public: false,
+    montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 0,
+    date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30' };
   await page.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').at(-1)!;
     const json = (data: unknown, count = Array.isArray(data) ? data.length : 0, offset = 0) => route.fulfill({ json: data, headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers':'content-range', ...(Array.isArray(data)?{'content-range':data.length?`${offset}-${offset+data.length-1}/${count}`:`*/${count}`}:{}) } });
     // Ressources externes neutralisées localement, jamais téléchargées.
     if (url.origin === 'https://fonts.googleapis.com' && req.method() === 'GET') return route.fulfill({contentType:'text/css',body:''});
-    if (url.origin === 'https://js.stripe.com' && url.pathname === '/clover/stripe.js' && req.method() === 'GET') return route.fulfill({contentType:'application/javascript',body:'window.Stripe = function(){ throw Error("Fournisseur interdit dans la simulation"); };'});
+    if (url.origin === 'https://js.stripe.com' && url.pathname === '/clover/stripe.js' && req.method() === 'GET') {
+      return route.fulfill({contentType:'application/javascript',body: configurationFictive
+        ? `window.Stripe = function(key){ if(key !== 'pk_test_JOLENE_SIMULATION_CONFIGURATION') throw Error('Clé réelle interdite'); window.__joleneStripeConfigurationFictive=true; const refuse=()=>{throw Error('Paiement fournisseur interdit');}; return {_registerWrapper(){},registerAppInfo(){},elements:refuse,createToken:refuse,createPaymentMethod:refuse,confirmCardPayment:refuse,initEmbeddedCheckout:refuse}; };`
+        : 'window.Stripe = function(){ throw Error("Fournisseur interdit dans la simulation sans clé"); };'});
+    }
+    if (commission && req.url() === hostedUrl && req.isNavigationRequest() && req.method() === 'GET') {
+      return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html lang="fr"><meta charset="utf-8"><title>Paiement simulé</title><h1>Paiement hébergé simulé</h1></html>'});
+    }
     if (!['127.0.0.1','localhost'].includes(url.hostname)) { interdits.push(`${req.method()} ${url.origin}${url.pathname}`); return route.abort(); }
     if (url.pathname.startsWith('/functions/')) {
+      if (commission) {
+        expect(name).toBe('create-invoice-payment'); expect(req.method()).toBe('POST');
+        expect(req.postDataJSON()).toEqual({ facture_id: commissionId, embedded: false });
+        mutations.push({ name, body: req.postDataJSON() });
+        return json(controle.checkoutHeberge ? { url: hostedUrl } : { client_secret: 'cs_test_fixture_secret', resumed: true });
+      }
       expect(name).toBe('stripe-connect-pay-mission'); expect(connect).toBe(true); expect(req.method()).toBe('POST');
       expect(req.postDataJSON()).toEqual({ mission_id: ids.mission, facture_honoraire_id: remplacement });
       mutations.push({ name, body: req.postDataJSON() });
@@ -72,6 +94,15 @@ async function fixture(page: Page, connect = false) {
           source: 'CONNECT_AVANT_TRANSFERT', visibilite_montants: 'TOTAL_ETABLISSEMENT', paiement_statut: 'ECHOUE', operations: [], lecture_complete: true });
       }
       if (!lectureRpc.has(name)) { interdits.push(`RPC ${name}`); return route.abort(); }
+      if (commission && name === 'fn_mes_factures') return json([factureCommission]);
+      if (commission && name === 'fn_detail_facture') {
+        expect(body).toEqual({ p_facture_id: commissionId });
+        return json({ facture: factureCommission, missions: [] });
+      }
+      if (commission && name === 'fn_obligations_financieres') return json({ total_du: 14.4,
+        total_soignants_du: 0, total_commissions_du: 14.4, missions_non_payees: [],
+        factures_impayees: [factureCommission], paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
+        factures_commission_historique: [], missions_non_facturees: [] });
       if (name === 'fn_mode_paiement_mission') return json(controle.modeInvalide ? {} : { type_contrat_applique: controle.salarie ? 'SALARIE' : 'LIBERAL', mode_recommande: controle.salarie ? 'VIREMENT_PAIE' : connect ? 'STRIPE_CONNECT' : 'VIREMENT_NOTE_HONORAIRES', montant_soignant: 160, commission_ttc: 24, total: 184 });
       if (name === 'fn_obligations_financieres') return json({ total_du: 230, total_soignants_du: 230, total_commissions_du: 0, nb_missions_non_payees: 2,
         missions_non_payees: [obligation(remplacement,60),obligation(seconde,80),obligation(autreFacture,90,autreMission)],
@@ -110,7 +141,7 @@ async function fixture(page: Page, connect = false) {
   return { ...simulation, controle, mutations, docs,
     verifier(erreursAttendues: string[] = []) { expect(interdits).toEqual([]); expect(erreurs).toEqual(erreursAttendues); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]); expect(state.errors).toEqual([]); expect(state.emails).toEqual([]); expect(state.sms).toEqual([]); expect(state.signatures).toEqual([]); } };
 }
-for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS' : 'virement TERMINEE'} : détail → pièce exacte, filtre et reprise`, async ({ page }, info) => {
+for (const connect of [false,true]) test(`Libéral ${connect ? `Connect EN_COURS (${configurationFictive ? 'configuration fictive' : 'sans clé'})` : 'virement TERMINEE'} : détail → pièce exacte, filtre et reprise`, async ({ page }, info) => {
   const f = await fixture(page, connect); await page.goto(`/etablissement/missions/${ids.mission}`);
   const carte = page.getByText('Paiement par facture', { exact: true }).locator('..');
   await expect(carte).toBeVisible(); if (!connect) await action(page,page.getByRole('button',{name:'Fermer',exact:true})); await expect(carte).not.toContainText(/160,00/);
@@ -131,7 +162,8 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
     await expect(piece).toContainText(/60,00\s*€/);
     if (connect) {
       await action(page,piece.getByRole('button',{name:'Payer via Stripe',exact:true}));
-      await expect(page.getByText(refusAttendu,{exact:true})).toBeVisible();
+      await expect(page.getByText(configurationFictive ? refusAttendu : indisponible,{exact:true})).toBeVisible();
+      if (configurationFictive) await expect.poll(() => page.evaluate(() => Boolean((window as unknown as { __joleneStripeConfigurationFictive?: boolean }).__joleneStripeConfigurationFictive))).toBe(true);
     } else {
       await action(page,piece.getByRole('button',{name:'Déclarer un paiement',exact:true}));
       const dialog = page.getByRole('dialog'); await expect(dialog.getByLabel('Montant des honoraires versés')).toHaveValue('60.00');
@@ -142,7 +174,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
       await expect(dialog.getByRole('alert')).toHaveText(refusAttendu);
       await action(page,dialog.getByRole('button',{name:'Annuler',exact:true}));
     }
-    expect(f.mutations).toHaveLength(reload?2:1);
+    expect(f.mutations).toHaveLength(connect && !configurationFictive ? 0 : reload?2:1);
   }
   if (connect) {
     f.controle.retour=true;
@@ -154,7 +186,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? 'Connect EN_COURS
     await expect(page).toHaveURL(new RegExp(`mission=${ids.mission}`));
     await expect(page).not.toHaveURL(/paiement=|facture_honoraire=|session_id=/);
     await expect(page.getByText('FACTURE-AUTRE-MISSION',{exact:true})).toHaveCount(0);
-    expect(f.mutations).toHaveLength(2);
+    expect(f.mutations).toHaveLength(configurationFictive ? 2 : 0);
     await stabiliserActionsNationales(page);
     await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&paiement=succes`);
     await expect(page.getByText('Le retour Stripe ne permet pas d’identifier exactement ce paiement. Consultez son suivi avant de réessayer.',{exact:true})).toBeVisible();
@@ -228,6 +260,30 @@ test('Salarié : bulletin explicite, montant partiel refusé et escrow conservé
   expect(f.mutations).toEqual([]); f.verifier();
 });
 
+// Ces deux routes font partie de la CI ordinaire compilée sans clé. L'exécution
+// configurée ciblée couvre séparément les refus API Connect, y compris ceux ci-dessous.
+for (const detail of [false, true]) test(`Stripe sans clé — commission depuis ${detail ? 'le détail facture' : 'la facturation'}`, async ({ page }, info) => {
+  const f = await fixture(page, false, true);
+  const path = detail ? `/etablissement/facturation/${commissionId}` : '/etablissement/facturation?tab=commissions';
+  await page.goto(path);
+  const payer = () => page.getByRole('button', { name: detail ? 'Payer' : 'Payer par carte', exact: true });
+  await action(page, payer());
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(indisponible, { exact: true })).toBeVisible();
+  await expect(page.locator('#stripe-checkout-container')).toHaveCount(0);
+  expect(f.mutations).toHaveLength(1);
+  await page.screenshot({ path: info.outputPath('stripe-sans-cle.png'), scale: 'css', animations: 'disabled' });
+  await action(page, dialog.getByText(indisponible, { exact: true }).locator('..').getByRole('button', { name: 'Fermer', exact: true }));
+  await expect(dialog).toHaveCount(0);
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(payer()).toBeVisible(); expect(f.mutations).toHaveLength(1);
+  f.controle.checkoutHeberge = true;
+  await action(page, payer());
+  await expect(page).toHaveURL(hostedUrl);
+  await expect(page.getByRole('heading', { name: 'Paiement hébergé simulé' })).toBeVisible();
+  expect(f.mutations).toHaveLength(2); f.verifier();
+});
+
 for (const refus of [
   {
     code: 'CONNECT_REFUND_RECONCILIATION_REQUIRED', status: 409, statusText: 'Conflict',
@@ -241,7 +297,7 @@ for (const refus of [
     code: 'CONNECT_CLIENT_VERSION_REQUIRED', status: 503, statusText: 'Service Unavailable',
     message: 'Cette version du paiement est indisponible. Rechargez Facturation avant de réessayer.',
   },
-]) test(`Connect : ${refus.code} explique le refus sans ouvrir un paiement`, async ({ page }, info) => {
+]) test(`Connect (${configurationFictive ? 'configuration fictive' : 'sans clé'}) : ${refus.code} explique le refus sans ouvrir un paiement`, async ({ page }, info) => {
   const f = await fixture(page, true);
   f.controle.refus = refus.code;
   f.controle.refusMessage = refus.message;
@@ -249,13 +305,13 @@ for (const refus of [
   await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}`);
   const piece = page.getByText('FACTURE-RECTIFICATIVE-60', { exact: true }).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
   await action(page, piece.getByRole('button', { name: 'Payer via Stripe', exact: true }));
-  await expect(page.getByText(f.controle.refusMessage, { exact: true })).toBeVisible();
+  await expect(page.getByText(configurationFictive ? f.controle.refusMessage : indisponible, { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Paiement confirmé et enregistré.', { exact: true })).toHaveCount(0);
-  expect(f.mutations).toEqual([{ name: 'stripe-connect-pay-mission', body: { mission_id: ids.mission, facture_honoraire_id: remplacement } }]);
+  expect(f.mutations).toEqual(configurationFictive ? [{ name: 'stripe-connect-pay-mission', body: { mission_id: ids.mission, facture_honoraire_id: remplacement } }] : []);
   await page.screenshot({ path: info.outputPath(`${refus.code.toLowerCase()}.png`), scale: 'css', animations: 'disabled' });
   await stabiliserActionsNationales(page); await page.reload();
   await expect(piece).toBeVisible();
-  expect(f.mutations).toHaveLength(1);
-  f.verifier([`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`]);
+  expect(f.mutations).toHaveLength(configurationFictive ? 1 : 0);
+  f.verifier(configurationFictive ? [`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`] : []);
 });
