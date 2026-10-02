@@ -1,13 +1,67 @@
 {
   "schemaVersion": 1,
-  "ready": false,
+  "ready": true,
   "projectRef": "mejpriaetwgtcstbgfid",
-  "reviewedFixtureSha": null,
-  "reviewedFixtureTree": null,
-  "sourcePins": null,
-  "pgProof": null,
-  "fixtureContract": null,
-  "expiresAt": null,
-  "reviewedBy": null,
-  "reason": "Préparation CI fermée : sources fixture, preuve SQL et catalogue staging à relire avant le premier acteur TEST."
+  "reviewedFixtureSha": "ee3fc8d5de227495a0ad6dbbe8810a97aff2a3c2",
+  "reviewedFixtureTree": "3b0b93fd01b4568606c2444da3fd13a4620934ed",
+  "sourcePins": {
+    "scripts/ci/connect-test-fixture.mjs": "c90e10a07609694fe0cb5c622cf746b5628f0c03d97a7ee81b5a77ba98a765a8",
+    "scripts/ci/connect-test-fixture-sql.mjs": "6873caa7db2b72322d70ce45c60cfede794f0db6aca1aad7e2bd72e6a9f40741",
+    "scripts/ci/connect-test-fixture-prepare.sql": "57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9badc4020ab"
+  },
+  "pgProof": {
+    "runId": "36949937894",
+    "runAttempt": 1,
+    "jobName": "Migrations + sécurité SQL (transaction annulée)",
+    "workflowPath": ".github/workflows/validate-pr.yml",
+    "fixtureSqlReviewed": true
+  },
+  "fixtureContract": {
+    "schemaVersion": 1,
+    "ready": true,
+    "projectRef": "mejpriaetwgtcstbgfid",
+    "stripePlatformId": "acct_1T9pt0EVhQ7cb53W",
+    "sourceSha": null,
+    "seedSha256": "57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9badc4020ab",
+    "expiresAt": "2026-10-02T08:09:53.413Z",
+    "reviewedBy": "Codex — revue indépendante du reçu C et des sources EE3, 2 octobre 2026",
+    "notificationsTestSkipReviewed": true,
+    "catalogue": {
+      "columns": "5f5bca9c529e6f23d789d5fbf9ce6fce",
+      "routines": "a15634807e9e18306870d315e5fe03d2",
+      "triggers": "52aa2c5a87c4f259a5bdf7828e964c93",
+      "gateClosed": true,
+      "activeCrons": 0,
+      "runningCrons": 0,
+      "queuedRequests": 0,
+      "capacitiesEmpty": true,
+      "operationsEmpty": true,
+      "commissionHelper": "c736c66d76001b64ba425484f77c6ea2",
+      "generationUrlAbsent": true,
+      "supportStagingExact": true
+    },
+    "edges": {
+      "generate-invoice": {
+        "version": 16,
+        "verify_jwt": false,
+        "ezbr_sha256": "9f5b5fd3511eb526d21c7a2ebfd428a50e58d49f5fc9ce552d3cd6e0f01dd86c"
+      },
+      "send-email": {
+        "version": 15,
+        "verify_jwt": false,
+        "ezbr_sha256": "0b0921af084dc71d6651d4dc8077c50b82e1e53323583259ef46ba5c2847bb94"
+      },
+      "notify-support": {
+        "version": 14,
+        "verify_jwt": false,
+        "ezbr_sha256": "be47fcbc1681f0fe6a80f9aa0bf1fc225dacb994589df94e0b0ea98535597b97"
+      }
+    },
+    "protocolEnabled": false,
+    "capabilityEnabled": false,
+    "reason": "Acteurs synthétiques et facture via generate-invoice uniquement ; aucune capacité ni paiement."
+  },
+  "expiresAt": "2026-10-02T08:09:53.413Z",
+  "reviewedBy": "Codex — revue indépendante du reçu C et des sources EE3, 2 octobre 2026",
+  "reason": "Pins issus du reçu SQL C exécuté puis annulé, relus avant installation fermée ; protocole général et capacités fermés."
 }
