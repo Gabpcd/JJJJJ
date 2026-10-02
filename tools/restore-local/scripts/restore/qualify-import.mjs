@@ -78,10 +78,35 @@ BEGIN
   OR EXISTS(SELECT 1 FROM pg_stat_activity WHERE backend_type IN ('pg_cron launcher','pg_cron worker','pg_net worker'))
  THEN RAISE EXCEPTION 'QUALIFICATION_LOCAL_CONTEXT_REQUIRED'; END IF;
 END $local$;`;
-export const STOP_CRONS=LOCAL_GUARD+`
-WITH changed AS (UPDATE cron.job SET active=false WHERE active RETURNING 1)
-SELECT jsonb_build_object('locally_disabled_jobs',count(*)) FROM changed;`;
-export const QUIESCENCE=LOCAL_GUARD+`
+export const STOP_CRONS=`BEGIN;
+SET LOCAL row_security=off;
+${LOCAL_GUARD}
+DO $cron_guard$
+BEGIN
+ IF (SELECT rolsuper FROM pg_roles WHERE rolname=current_user) IS DISTINCT FROM false
+  OR has_function_privilege(current_user,'cron.alter_job(bigint,text,text,text,text,boolean)','EXECUTE') IS DISTINCT FROM true
+ THEN RAISE EXCEPTION 'QUALIFICATION_CRON_API_CONTEXT_REQUIRED'; END IF;
+ -- row_security=off raises if a policy would hide jobs; it never grants BYPASSRLS.
+ IF EXISTS(SELECT 1 FROM cron.job WHERE username IS DISTINCT FROM current_user)
+ THEN RAISE EXCEPTION 'QUALIFICATION_CRON_OWNERSHIP_REQUIRED'; END IF;
+END $cron_guard$;
+-- This count is consumed only if the complete transaction below succeeds.
+SELECT jsonb_build_object('locally_disabled_jobs',count(*)) FROM cron.job WHERE active;
+DO $stop_crons$
+DECLARE job record; before_jobs jsonb;
+BEGIN
+ SELECT coalesce(jsonb_agg(to_jsonb(j)-'active' ORDER BY j.jobid),'[]'::jsonb) INTO before_jobs FROM cron.job j;
+ FOR job IN SELECT jobid FROM cron.job WHERE active AND username=current_user ORDER BY jobid LOOP
+  PERFORM cron.alter_job(job.jobid,active:=false);
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM cron.job WHERE active)
+  OR before_jobs IS DISTINCT FROM (SELECT coalesce(jsonb_agg(to_jsonb(j)-'active' ORDER BY j.jobid),'[]'::jsonb) FROM cron.job j)
+ THEN RAISE EXCEPTION 'QUALIFICATION_CRON_DEACTIVATION_REQUIRED'; END IF;
+END $stop_crons$;
+COMMIT;`;
+export const QUIESCENCE=`BEGIN READ ONLY;
+SET LOCAL row_security=off;
+${LOCAL_GUARD}
 SELECT jsonb_build_object(
  'auth_users',(SELECT count(*) FROM auth.users),
  'auth_sessions',(SELECT count(*) FROM auth.sessions),
@@ -96,7 +121,8 @@ SELECT jsonb_build_object(
  'cron_executions',(SELECT count(*) FROM cron.job_run_details),
  'http_queue',(SELECT count(*) FROM net.http_request_queue),
  'http_responses',(SELECT count(*) FROM net._http_response),
- 'vault_secrets',(SELECT count(*) FROM vault.secrets));`;
+ 'vault_secrets',(SELECT count(*) FROM vault.secrets));
+ROLLBACK;`;
 const ZERO_KEYS=['auth_users','auth_sessions','soignants','etablissements','missions','candidatures','members','externalisations','storage_objects','active_crons','cron_executions','http_queue','http_responses','vault_secrets'];
 export function zeros(text){
  const value=JSON.parse(text);if(Object.keys(value).sort().join()!==[...ZERO_KEYS].sort().join()||Object.values(value).some(x=>x!==0))refuse('QUALIFICATION_NONEMPTY');return value;

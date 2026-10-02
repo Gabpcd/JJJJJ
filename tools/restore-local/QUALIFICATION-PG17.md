@@ -129,3 +129,26 @@ exige la restitution exacte du droit et de tous les autres DEFAULT ACL. Si elle
 échoue, le replay s'arrête ; aucun GRANT correctif ni modification de migration
 ou du garde notation n'est exécuté. Les sondes notation et les tests canoniques
 restent inchangés. Cette adaptation est limitée à l'image et au catalogue épinglés.
+
+
+### Arrêt des jobs importés via pg_cron (v9)
+
+Le run37054105248 importe les 218 fichiers et valide le préflight notation,
+mais postgres ne possède pas UPDATE direct sur cron.job dans l'image Supabase.
+Le script officiel after-create.sql accorde SELECT sur cette table et l'accès
+aux fonctions cron ; v9 utilise donc cron.alter_job(jobid, active:=false).
+
+L'opération reste transactionnelle, sous LOCAL_GUARD, sans superutilisateur ni
+augmentation de droits. SET LOCAL row_security=off fait refuser une lecture
+qui serait filtrée ; ce réglage n'accorde pas BYPASSRLS. Tous les jobs doivent
+appartenir au rôle postgres de la session. Seuls les jobs actifs sont désactivés ;
+le nombre de jobs et toutes les autres colonnes sont comparés avant/après,
+et aucun job actif ne doit rester. Les commandes ne sont ni retournées ni exécutées.
+Les destinations database historiques ne sont pas réécrites. Les workers restent
+arrêtés depuis le démarrage. Les lectures de quiescence sont aussi protégées
+contre une visibilité RLS partielle, dans leur transaction READ ONLY.
+
+Sources :
+- https://raw.githubusercontent.com/supabase/postgres/a431c10a356be4c700d2e3f2af8551e2fec5e250/ansible/files/postgresql_extension_custom_scripts/pg_cron/after-create.sql
+- https://raw.githubusercontent.com/citusdata/pg_cron/v1.6.4/pg_cron--1.3--1.4.sql
+- https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-ROW-SECURITY

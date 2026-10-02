@@ -377,3 +377,36 @@ test('service default projection publishes only bounded fixed metadata and refus
  assert.ok(!JSON.stringify(projectBaselineServiceDefault(bad)).includes('CANARY'));assert.throws(()=>checkBaselineServiceDefault(bad));
  assert.throws(()=>checkBaselineServiceDefault(serviceDefault(),{phase:'other'}));assert.throws(()=>checkBaselineServiceDefault(serviceDefault('suspended'),{phase:'suspended'}));
 });
+
+
+test('cron stop uses the official API transactionally without direct table writes or added privileges',()=>{
+ assert.ok(STOP_CRONS.startsWith('BEGIN;\nSET LOCAL row_security=off;\n'+LOCAL_GUARD));assert.ok(STOP_CRONS.endsWith('COMMIT;'));
+ assert.ok(STOP_CRONS.includes("has_function_privilege(current_user,'cron.alter_job(bigint,text,text,text,text,boolean)','EXECUTE')"));
+ assert.ok(STOP_CRONS.includes('WHERE username IS DISTINCT FROM current_user'));
+ assert.ok(STOP_CRONS.includes('WHERE active AND username=current_user ORDER BY jobid'));
+ assert.ok(STOP_CRONS.includes('PERFORM cron.alter_job(job.jobid,active:=false);'));
+ assert.ok(STOP_CRONS.includes("before_jobs IS DISTINCT FROM (SELECT coalesce(jsonb_agg(to_jsonb(j)-'active' ORDER BY j.jobid)"));
+ assert.ok(!/UPDATE cron\.job|DELETE FROM|INSERT INTO|ALTER ROLE|GRANT |BYPASSRLS;|SET ROLE|CREATE /.test(STOP_CRONS));
+ assert.ok(!STOP_CRONS.includes('database=current_database()'));
+});
+test('quiescence reads cannot silently pass through row-filtered cron or business tables',()=>{
+ assert.ok(QUIESCENCE.startsWith('BEGIN READ ONLY;\nSET LOCAL row_security=off;\n'+LOCAL_GUARD));assert.ok(QUIESCENCE.endsWith('ROLLBACK;'));
+ assert.ok(QUIESCENCE.includes("'active_crons',(SELECT count(*) FROM cron.job WHERE active)"));
+ assert.ok(QUIESCENCE.includes("'cron_executions',(SELECT count(*) FROM cron.job_run_details)"));
+ assert.deepEqual(zeros(JSON.stringify(zeroValue())),zeroValue());
+ for(const key of ['active_crons','cron_executions'])assert.throws(()=>zeros(JSON.stringify({...zeroValue(),[key]:1})));
+});
+test('refused cron ownership, RLS or API permissions aborts qualification before canonical test',()=>{
+ const e=evidence(),r=fakeRuntime({failOn:bytes=>bytes.toString()===STOP_CRONS}),proof=[];
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+ assert.equal(proof.at(-1).migrations.every(x=>x.completed),true);assert.equal(proof.at(-1).phase,'stop_local_crons');
+ assert.equal(proof.at(-1).canonical_test_passed,false);assert.equal(proof.at(-1).rollback_verified,false);
+ assert.equal(r.calls.filter(x=>x.bytes?.toString()===STOP_CRONS).length,1);assert.equal(r.calls.some(x=>x.flags?.test),false);
+});
+test('malformed cron result cannot advertise successful deactivation or continue the SQL test',()=>{
+ for(const value of [{locally_disabled_jobs:-1},{locally_disabled_jobs:'4'},{locally_disabled_jobs:4,extra:'CANARY'}]){
+  const e=evidence(),r=fakeRuntime(),original=r.sql,proof=[];r.sql=(bytes,flags={})=>bytes.toString()===STOP_CRONS?JSON.stringify(value):original(bytes,flags);
+  assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>proof.push(structuredClone(x))));
+  assert.equal(proof.at(-1).failure.code,'QUALIFICATION_CRON_REPORT');assert.equal(r.calls.some(x=>x.flags?.test),false);assert.ok(!JSON.stringify(proof).includes('CANARY'));
+ }
+});
