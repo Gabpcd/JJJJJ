@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { SOURCE_FILES, recipientKey, sealJournal, openJournal, checkCi, verifyProvenance, runCi } from '../../scripts/ci/connect-test-fixture-ci.mjs';
+import { SOURCE_FILES, recipientKey, sealJournal, openJournal, checkCi, verifyProvenance, resolveStagingApiKeys, runCi } from '../../scripts/ci/connect-test-fixture-ci.mjs';
 import { Refusal as FixtureRefusal } from '../../scripts/ci/connect-test-fixture.mjs';
 
 const pair=generateKeyPairSync('rsa',{modulusLength:4096}),pem=pair.publicKey.export({type:'spki',format:'pem'});
@@ -16,8 +16,9 @@ const mainSha='a'.repeat(40),fixtureSha='b'.repeat(40),tree='c'.repeat(40);
 const sources=Object.fromEntries(SOURCE_FILES.map((p,i)=>[p,`reviewed fixture ${i}`]));
 const catalogue={routines:'1'.repeat(32),triggers:'2'.repeat(32),columns:'3'.repeat(32),commissionHelper:'4'.repeat(32),queuedRequests:0,activeCrons:0,runningCrons:0,generationUrlAbsent:true,supportStagingExact:true,gateClosed:true,capacitiesEmpty:true,operationsEmpty:true};
 const edges=Object.fromEntries(['generate-invoice','send-email','notify-support'].map(p=>[p,{version:3,verify_jwt:false,ezbr_sha256:'a'.repeat(64)}]));
+const resolvedKeys={STAGING_SUPABASE_ANON_KEY:'anon-resolved-canary-do-not-export',STAGING_SUPABASE_SERVICE_ROLE_KEY:'service-resolved-canary-do-not-export'};
 const env=()=>({GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_REF:'refs/heads/main',EXPECTED_MAIN_SHA:mainSha,GITHUB_SHA:mainSha,GITHUB_RUN_ID:'12345678',GITHUB_RUN_ATTEMPT:'1',GITHUB_TOKEN:'github-token-kept-in-ci',RECIPIENT_PUBLIC_KEY:pem,RECIPIENT_SHA256:fp,
-  STAGING_SUPABASE_ACCESS_TOKEN:'management-canary-do-not-export',STAGING_SUPABASE_SERVICE_ROLE_KEY:'service-canary-do-not-export',STAGING_SUPABASE_ANON_KEY:'anon-canary-do-not-export',STRIPE_TEST_SECRET_KEY:'rk_test_canaryNeverExport'});
+  STAGING_SUPABASE_ACCESS_TOKEN:'management-canary-do-not-export',STRIPE_TEST_SECRET_KEY:'rk_test_canaryNeverExport'});
 const local={sha:mainSha,clean:true};
 const contract=()=>({schemaVersion:1,ready:true,projectRef:'mejpriaetwgtcstbgfid',reviewedFixtureSha:fixtureSha,reviewedFixtureTree:tree,
   sourcePins:Object.fromEntries(SOURCE_FILES.map(p=>[p,hash(sources[p])])),expiresAt:new Date(Date.now()+3600000).toISOString(),reviewedBy:'independent fixture review',
@@ -39,12 +40,24 @@ function github(overrides={}) {
     return {ok:true,redirected:false,text:async()=>JSON.stringify(value)};
   };return {fetcher,calls};
 }
+function management(options={}) {
+  const calls=[],base='https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid';
+  const fetcher=async(url,init)=>{
+    calls.push(url);assert.ok([base,`${base}/api-keys`].includes(url));assert.equal(init.redirect,'error');
+    assert.equal(init.headers.Authorization,`Bearer ${env().STAGING_SUPABASE_ACCESS_TOKEN}`);
+    if(options.httpFailure===true||options.httpFailure==='keys'&&url.endsWith('/api-keys'))return {ok:false,text:async()=>{assert.fail('A rejected provider body must not be read');}};
+    const value=url===base?(options.project??{id:'mejpriaetwgtcstbgfid',status:'ACTIVE_HEALTHY',database:{host:'db.mejpriaetwgtcstbgfid.supabase.co'}})
+      :(options.rows??[{name:'anon',api_key:resolvedKeys.STAGING_SUPABASE_ANON_KEY},{name:'service_role',api_key:resolvedKeys.STAGING_SUPABASE_SERVICE_ROLE_KEY}]);
+    return {ok:true,redirected:false,text:async()=>options.invalidJson?'provider-secret-body':JSON.stringify(value)};
+  };return {fetcher,calls};
+}
 function runner(options={}) {
-  const checkpoints=[],privateJournals=[],summaries=[],g=github(options.github);
-  const args={env:env(),local,contract:contract(),sources,fetcher:g.fetcher,
+  const checkpoints=[],privateJournals=[],summaries=[],g=github(options.github),m=management(options.management),calls=[];
+  const fetcher=async(url,init)=>{calls.push(url);return url.startsWith('https://api.github.com/')?g.fetcher(url,init):m.fetcher(url,init);};
+  const args={env:env(),local,contract:contract(),sources,fetcher,
     writePrivateJournal:async value=>privateJournals.push(structuredClone(value)),
     writeCheckpoint:async value=>checkpoints.push(structuredClone(value)),writeSummary:async value=>summaries.push(value),...options};
-  return {args,checkpoints,privateJournals,summaries,g};
+  return {args,checkpoints,privateJournals,summaries,g,m,calls};
 }
 
 test('versioned contract refuses before every transport and before preparation',async()=>{
@@ -79,17 +92,46 @@ test('GitHub attests the reviewed tree, exact PG run/job, same bytes, and a sing
     ['/contents/',x=>({...x,content:Buffer.from('other source').toString('base64')}),'CI_REVIEWED_BYTES'],
   ])await assert.rejects(verifyProvenance(env(),contract(),sources,github({transform:(x,u)=>u.pathname.includes(segment)?change(x):x}).fetcher),new RegExp(code));
 });
+test('API keys are resolved only from the verified staging project, in memory without inherited-key fallback',async()=>{
+  const m=management();assert.deepEqual(await resolveStagingApiKeys(env(),m.fetcher),resolvedKeys);
+  assert.deepEqual(m.calls,['https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid','https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/api-keys']);
+  assert.equal(env().STAGING_SUPABASE_SERVICE_ROLE_KEY,undefined);
+  for(const rows of [[],[{name:'anon',api_key:'valid-anon-key'}],[{name:'service_role',api_key:'valid-service-key'}],[{name:'anon',api_key:'valid-anon-key'},{name:'anon',api_key:'duplicate-anon-key'},{name:'service_role',api_key:'valid-service-key'}],
+    [{name:'anon',api_key:'valid-anon-key'},{name:'service_role',api_key:'valid-service-key'},{name:'service_role',api_key:'duplicate-service-key'}],
+    [{name:'anon',api_key:'shared-key-canary'},{name:'service_role',api_key:'shared-key-canary'}]]) {
+    await assert.rejects(resolveStagingApiKeys({...env(),...resolvedKeys},management({rows}).fetcher),/CI_STAGING_KEYS/);
+  }
+});
+test('wrong project, canonical host, HTTP and JSON failures close before preparation without provider bodies',async()=>{
+  for(const project of [{id:'another-project',status:'ACTIVE_HEALTHY',database:{host:'db.mejpriaetwgtcstbgfid.supabase.co'}},
+    {id:'mejpriaetwgtcstbgfid',status:'ACTIVE_HEALTHY',database:{host:'db.other.supabase.co'}}]) {
+    const m=management({project});await assert.rejects(resolveStagingApiKeys(env(),m.fetcher),/CI_STAGING_PROJECT/);assert.equal(m.calls.length,1);
+  }
+  for(const options of [{httpFailure:true},{httpFailure:'keys'},{invalidJson:true}])await assert.rejects(resolveStagingApiKeys(env(),management(options).fetcher),error=>error.message==='CI_STAGING_API_READ'&&!error.message.includes('provider-secret-body'));
+  const r=runner({management:{rows:[]},prepare:async()=>assert.fail('Preparation must not start')});
+  await assert.rejects(runCi(r.args),/CI_STAGING_KEYS/);assert.equal(r.summaries.at(-1).preparationAttempted,false);
+});
+test('a provenance refusal never resolves staging API keys',async()=>{
+  const r=runner({github:{transform:(x,u)=>u.pathname.includes('/git/ref/')?{...x,object:{sha:fixtureSha,type:'commit'}}:x},prepare:async()=>assert.fail('Preparation must not start')});
+  await assert.rejects(runCi(r.args),/CI_MAIN_MOVED/);assert.equal(r.m.calls.length,0);
+});
 test('real preparer save contract persists encrypted intent before effect and receipt afterwards, without CI secrets',async()=>{
-  const r=runner({prepare:async({manifest,save})=>{
+  const r=runner({prepare:async({manifest,save,env:preparedEnv})=>{
+    assert.deepEqual(preparedEnv,{STAGING_SUPABASE_ACCESS_TOKEN:env().STAGING_SUPABASE_ACCESS_TOKEN,STRIPE_TEST_SECRET_KEY:env().STRIPE_TEST_SECRET_KEY,...resolvedKeys});
+    assert.ok(r.calls.slice(0,8).every(url=>url.startsWith('https://api.github.com/')));
+    assert.ok(r.calls.slice(8).every(url=>url.startsWith('https://api.supabase.com/')));
     manifest.steps.customer={state:'intent'};await save(manifest);
     assert.equal(openJournal(r.checkpoints.at(-1),privatePem,fp).manifest.steps.customer.state,'intent');
     manifest.steps.customer={state:'done',result:{id:'cus_test'}};await save(manifest);
     return {prepared:true,invoiceId:'10000000-0000-4000-8000-000000000001',commissionId:'10000000-0000-4000-8000-000000000002'};
   }});
   const result=await runCi(r.args);assert.equal(result.prepared,true);assert.equal(r.checkpoints.length,5);
+  assert.equal(r.args.env.STAGING_SUPABASE_ANON_KEY,undefined);assert.equal(r.args.env.STAGING_SUPABASE_SERVICE_ROLE_KEY,undefined);
   const opened=openJournal(r.checkpoints.at(-1),privatePem,fp);assert.equal(opened.manifest.steps.customer.result.id,'cus_test');
   const clear=JSON.stringify(opened),publicFiles=JSON.stringify([r.checkpoints,r.summaries]);
-  for(const name of ['GITHUB_TOKEN','STAGING_SUPABASE_ACCESS_TOKEN','STAGING_SUPABASE_SERVICE_ROLE_KEY','STAGING_SUPABASE_ANON_KEY','STRIPE_TEST_SECRET_KEY']){assert.ok(!clear.includes(r.args.env[name]));assert.ok(!publicFiles.includes(r.args.env[name]));}
+  for(const value of [r.args.env.GITHUB_TOKEN,r.args.env.STAGING_SUPABASE_ACCESS_TOKEN,r.args.env.STRIPE_TEST_SECRET_KEY,...Object.values(resolvedKeys)]) {
+    assert.ok(!clear.includes(value));assert.ok(!publicFiles.includes(value));assert.ok(!JSON.stringify(r.privateJournals).includes(value));
+  }
   for(const member of opened.manifest.members)assert.ok(!publicFiles.includes(member.password));
   assert.ok(r.summaries.every(x=>Object.values(x).every(v=>typeof v==='boolean')));
 });
@@ -113,6 +155,7 @@ test('workflow is manual trusted main only, Node-only before credentials and upl
   assert.ok(text.indexOf('node --test')<secrets);assert.doesNotMatch(text.slice(0,text.indexOf('connect-test-fixture-ci.mjs run')),/secrets\./);
   assert.match(text,/connect-test-fixture-proof\/fixture\.encrypted\.json/);assert.match(text,/connect-test-fixture-proof\/result\.json/);
   assert.doesNotMatch(text,/\/\*|manifest\.private|journal\.private|recipient_private/);
+  assert.doesNotMatch(text,/secrets\.STAGING_SUPABASE_SERVICE_ROLE_KEY|secrets\.STAGING_SUPABASE_ANON_KEY|GITHUB_ENV/);
 });
 test('offline open CLI writes only private files and its frontend handoff excludes the admin and every CI key',async()=>{
   const directory=await mkdtemp(join(await realpath(tmpdir()),'connect-ci-open-'));

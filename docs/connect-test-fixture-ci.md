@@ -6,6 +6,8 @@ Avant l'ouverture du contrat, renseigner explicitement le SHA/arbre de la fixtur
 
 Créer localement une paire RSA4096 éphémère, conserver la clé privée en fichier `0600`, et transmettre uniquement la clé publique PEM et son SHA256 SPKI DER dans les deux inputs destinataire. Ne jamais fournir une clé privée à GitHub. Les tests Node et le contrôle fermé précèdent l'unique étape qui reçoit les accès Supabase/Stripe TEST. Aucun npm, navigateur ou build n'est lancé par ce job.
 
+Cette étape reçoit seulement les accès Management staging, Stripe TEST et le token GitHub en lecture. Après vérification de la provenance, elle vérifie l'identité et l'hôte du projet staging, puis résout ses seules clés `anon` et `service_role` par l'API Management. Ces valeurs sont transmises en mémoire au préparateur ; elles ne passent ni par `GITHUB_ENV`, ni par un fichier, un processus enfant, les logs ou le journal chiffré. Une clé absente, dupliquée ou une réponse ambiguë arrête la préparation.
+
 Le préparateur crée les identifiants synthétiques dans le runner. Chaque intention et reçu est écrit en privé dans `RUNNER_TEMP`, puis chiffré AES-256-GCM avec une clé enveloppée RSA-OAEP-SHA256 pour le destinataire local, avant de poursuivre. Seuls `fixture.encrypted.json` et un résumé de booléens sont publiés, pendant un jour. Le journal ne contient jamais les clés de service, Management, Stripe ni les sessions Auth. Les credentials S/E de recette sont uniquement dans le journal chiffré. Télécharger ce petit artefact, vérifier son run et conserver son SHA256, puis ouvrir localement :
 
 ```sh
