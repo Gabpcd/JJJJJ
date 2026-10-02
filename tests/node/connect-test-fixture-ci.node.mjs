@@ -1,0 +1,135 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash, generateKeyPairSync } from 'node:crypto';
+import { readFile, mkdtemp, writeFile, stat, rm, realpath } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { SOURCE_FILES, recipientKey, sealJournal, openJournal, checkCi, verifyProvenance, runCi } from '../../scripts/ci/connect-test-fixture-ci.mjs';
+import { Refusal as FixtureRefusal } from '../../scripts/ci/connect-test-fixture.mjs';
+
+const pair=generateKeyPairSync('rsa',{modulusLength:4096}),pem=pair.publicKey.export({type:'spki',format:'pem'});
+const privatePem=pair.privateKey.export({type:'pkcs8',format:'pem'});
+const hash=x=>createHash('sha256').update(x).digest('hex'),fp=hash(pair.publicKey.export({type:'spki',format:'der'}));
+const mainSha='a'.repeat(40),fixtureSha='b'.repeat(40),tree='c'.repeat(40);
+const sources=Object.fromEntries(SOURCE_FILES.map((p,i)=>[p,`reviewed fixture ${i}`]));
+const catalogue={routines:'1'.repeat(32),triggers:'2'.repeat(32),columns:'3'.repeat(32),commissionHelper:'4'.repeat(32),queuedRequests:0,activeCrons:0,runningCrons:0,generationUrlAbsent:true,supportStagingExact:true,gateClosed:true,capacitiesEmpty:true,operationsEmpty:true};
+const edges=Object.fromEntries(['generate-invoice','send-email','notify-support'].map(p=>[p,{version:3,verify_jwt:false,ezbr_sha256:'a'.repeat(64)}]));
+const env=()=>({GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_REF:'refs/heads/main',EXPECTED_MAIN_SHA:mainSha,GITHUB_SHA:mainSha,GITHUB_RUN_ID:'12345678',GITHUB_RUN_ATTEMPT:'1',GITHUB_TOKEN:'github-token-kept-in-ci',RECIPIENT_PUBLIC_KEY:pem,RECIPIENT_SHA256:fp,
+  STAGING_SUPABASE_ACCESS_TOKEN:'management-canary-do-not-export',STAGING_SUPABASE_SERVICE_ROLE_KEY:'service-canary-do-not-export',STAGING_SUPABASE_ANON_KEY:'anon-canary-do-not-export',STRIPE_TEST_SECRET_KEY:'rk_test_canaryNeverExport'});
+const local={sha:mainSha,clean:true};
+const contract=()=>({schemaVersion:1,ready:true,projectRef:'mejpriaetwgtcstbgfid',reviewedFixtureSha:fixtureSha,reviewedFixtureTree:tree,
+  sourcePins:Object.fromEntries(SOURCE_FILES.map(p=>[p,hash(sources[p])])),expiresAt:new Date(Date.now()+3600000).toISOString(),reviewedBy:'independent fixture review',
+  pgProof:{runId:'87654321',runAttempt:1,jobName:'Fixture SQL PostgreSQL 17',workflowPath:'.github/workflows/validate-pr.yml',fixtureSqlReviewed:true},
+  fixtureContract:{schemaVersion:1,ready:true,projectRef:'mejpriaetwgtcstbgfid',stripePlatformId:'acct_1T9pt0EVhQ7cb53W',seedSha256:hash(sources[SOURCE_FILES[2]]),protocolEnabled:false,capabilityEnabled:false,notificationsTestSkipReviewed:true,catalogue,edges}});
+function github(overrides={}) {
+  const calls=[];
+  const fetcher=async(url,options)=>{
+    const u=new URL(url);calls.push({url,options});assert.equal(u.origin,'https://api.github.com');assert.equal(options.redirect,'error');
+    let value;
+    if(u.pathname.endsWith('/git/ref/heads/main'))value={ref:'refs/heads/main',object:{sha:mainSha,type:'commit'}};
+    else if(u.pathname.includes('/git/commits/'))value={sha:fixtureSha,tree:{sha:tree}};
+    else if(u.pathname.endsWith('/actions/runs/87654321'))value={id:87654321,run_attempt:1,head_sha:fixtureSha,path:'.github/workflows/validate-pr.yml',repository:{full_name:'Gabpcd/JJJJJ'},head_repository:{full_name:'Gabpcd/JJJJJ'},status:'completed',conclusion:'success'};
+    else if(u.pathname.endsWith('/jobs'))value={total_count:1,jobs:[{name:'Fixture SQL PostgreSQL 17',status:'completed',conclusion:'success'}]};
+    else if(u.pathname.endsWith('/connect-test-fixture.yml/runs'))value={total_count:1,workflow_runs:[{id:12345678,path:'.github/workflows/connect-test-fixture.yml'}]};
+    else if(u.pathname.includes('/contents/')){const path=u.pathname.split('/contents/')[1];assert.equal(u.searchParams.get('ref'),fixtureSha);value={type:'file',encoding:'base64',content:Buffer.from(sources[path]).toString('base64')};}
+    else assert.fail(`Unexpected API path: ${u.pathname}`);
+    if(overrides.transform)value=overrides.transform(value,u);
+    return {ok:true,redirected:false,text:async()=>JSON.stringify(value)};
+  };return {fetcher,calls};
+}
+function runner(options={}) {
+  const checkpoints=[],privateJournals=[],summaries=[],g=github(options.github);
+  const args={env:env(),local,contract:contract(),sources,fetcher:g.fetcher,
+    writePrivateJournal:async value=>privateJournals.push(structuredClone(value)),
+    writeCheckpoint:async value=>checkpoints.push(structuredClone(value)),writeSummary:async value=>summaries.push(value),...options};
+  return {args,checkpoints,privateJournals,summaries,g};
+}
+
+test('versioned contract refuses before every transport and before preparation',async()=>{
+  const closed=JSON.parse(await readFile(new URL('../../scripts/ci/connect-test-fixture-ci.contract.json',import.meta.url),'utf8'));
+  assert.equal(closed.ready,false);for(const key of ['reviewedFixtureSha','reviewedFixtureTree','sourcePins','pgProof','fixtureContract'])assert.equal(closed[key],null);
+  let calls=0;await assert.rejects(runCi({contract:closed,fetcher:()=>{calls++;},prepare:()=>{calls++;}}),/CI_READINESS_CLOSED/);assert.equal(calls,0);
+});
+test('exact main, first attempt, expiry, source bytes and explicit SQL review are mandatory',()=>{
+  for(const change of [{GITHUB_EVENT_NAME:'pull_request'},{GITHUB_REF:'refs/heads/fix'},{GITHUB_RUN_ATTEMPT:'2'},{EXPECTED_MAIN_SHA:fixtureSha},{GITHUB_REPOSITORY:'fork/JJJJJ'}])assert.throws(()=>checkCi({...env(),...change},local,contract(),sources),/CI_TRUSTED_MAIN/);
+  assert.throws(()=>checkCi(env(),{...local,clean:false},contract(),sources),/CI_TRUSTED_MAIN/);
+  assert.throws(()=>checkCi(env(),local,{...contract(),expiresAt:new Date(Date.now()-1).toISOString()},sources),/CI_CONTRACT/);
+  assert.throws(()=>checkCi(env(),local,contract(),{...sources,[SOURCE_FILES[1]]:'changed'}),/CI_SOURCE_PINS/);
+  const c=contract();c.pgProof.fixtureSqlReviewed=false;assert.throws(()=>checkCi(env(),local,c,sources),/CI_PG_PROOF/);
+  const checked=checkCi(env(),local,contract(),sources);assert.equal(checked.manifest.sql.sourceSha,mainSha);assert.equal(checked.fixtureContract.sourceSha,mainSha);
+});
+test('recipient is only the matching RSA4096 public key; authenticated encryption rejects alterations',()=>{
+  const c=checkCi(env(),local,contract(),sources),payload={format:'JOLENE_CONNECT_FIXTURE_PRIVATE_V1',projectRef:'mejpriaetwgtcstbgfid',manifest:c.manifest};
+  assert.throws(()=>recipientKey(pem,'d'.repeat(64)),/CI_RECIPIENT/);
+  assert.throws(()=>recipientKey(pair.privateKey.export({type:'pkcs8',format:'pem'}),fp),/CI_RECIPIENT/);
+  const encrypted=sealJournal(payload,c.key);assert.deepEqual(openJournal(encrypted,privatePem,fp),payload);
+  const altered={...encrypted,ciphertext:Buffer.from('different ciphertext').toString('base64')};assert.throws(()=>openJournal(altered,privatePem,fp));
+  assert.throws(()=>openJournal(encrypted,privatePem,'d'.repeat(64)),/CI_RECIPIENT/);
+});
+test('GitHub attests the reviewed tree, exact PG run/job, same bytes, and a single dispatch',async()=>{
+  await verifyProvenance(env(),contract(),sources,github().fetcher);
+  for(const [segment,change,code]of [
+    ['/git/ref/',x=>({...x,object:{sha:fixtureSha,type:'commit'}}),'CI_MAIN_MOVED'],
+    ['/git/commits/',x=>({...x,tree:{sha:mainSha}}),'CI_REVIEWED_SOURCE'],
+    ['/actions/runs/87654321',x=>({...x,conclusion:'failure'}),'CI_SQL_RUN'],
+    ['/jobs',x=>({...x,jobs:[]}),'CI_SQL_JOB'],
+    ['/connect-test-fixture.yml/runs',x=>({...x,total_count:2}),'CI_PREVIOUS_DISPATCH'],
+    ['/contents/',x=>({...x,content:Buffer.from('other source').toString('base64')}),'CI_REVIEWED_BYTES'],
+  ])await assert.rejects(verifyProvenance(env(),contract(),sources,github({transform:(x,u)=>u.pathname.includes(segment)?change(x):x}).fetcher),new RegExp(code));
+});
+test('real preparer save contract persists encrypted intent before effect and receipt afterwards, without CI secrets',async()=>{
+  const r=runner({prepare:async({manifest,save})=>{
+    manifest.steps.customer={state:'intent'};await save(manifest);
+    assert.equal(openJournal(r.checkpoints.at(-1),privatePem,fp).manifest.steps.customer.state,'intent');
+    manifest.steps.customer={state:'done',result:{id:'cus_test'}};await save(manifest);
+    return {prepared:true,invoiceId:'10000000-0000-4000-8000-000000000001',commissionId:'10000000-0000-4000-8000-000000000002'};
+  }});
+  const result=await runCi(r.args);assert.equal(result.prepared,true);assert.equal(r.checkpoints.length,5);
+  const opened=openJournal(r.checkpoints.at(-1),privatePem,fp);assert.equal(opened.manifest.steps.customer.result.id,'cus_test');
+  const clear=JSON.stringify(opened),publicFiles=JSON.stringify([r.checkpoints,r.summaries]);
+  for(const name of ['GITHUB_TOKEN','STAGING_SUPABASE_ACCESS_TOKEN','STAGING_SUPABASE_SERVICE_ROLE_KEY','STAGING_SUPABASE_ANON_KEY','STRIPE_TEST_SECRET_KEY']){assert.ok(!clear.includes(r.args.env[name]));assert.ok(!publicFiles.includes(r.args.env[name]));}
+  for(const member of opened.manifest.members)assert.ok(!publicFiles.includes(member.password));
+  assert.ok(r.summaries.every(x=>Object.values(x).every(v=>typeof v==='boolean')));
+});
+test('uncertain preparation keeps the same encrypted intent and a failed boolean summary',async()=>{
+  const r=runner({prepare:async({manifest,save})=>{manifest.steps.account={state:'intent'};await save(manifest);throw new FixtureRefusal('TRANSPORT_OR_JSON_UNCERTAIN');}});
+  await assert.rejects(runCi(r.args),/TRANSPORT_OR_JSON_UNCERTAIN/);
+  assert.equal(openJournal(r.checkpoints.at(-1),privatePem,fp).manifest.steps.account.state,'intent');
+  assert.equal(r.summaries.at(-1).prepared,false);assert.equal(r.summaries.at(-1).failed,true);
+});
+test('checkpoint failure prevents the next remote effect and retains the last encrypted intent',async()=>{
+  let writes=0,effects=0;
+  const r=runner({prepare:async({manifest,save})=>{manifest.steps.account={state:'intent'};await save(manifest);effects++;}});
+  r.args.writeCheckpoint=async envelope=>{writes++;if(writes>=3)throw Error('disk unavailable');r.checkpoints.push(envelope);};
+  await assert.rejects(runCi(r.args),/disk unavailable/);assert.equal(effects,0);assert.equal(r.checkpoints.length,2);assert.equal(r.summaries.at(-1).failed,true);
+});
+test('workflow is manual trusted main only, Node-only before credentials and uploads two exact safe paths',async()=>{
+  const text=await readFile(new URL('../../.github/workflows/connect-test-fixture.yml',import.meta.url),'utf8');
+  assert.match(text,/workflow_dispatch:/);assert.doesNotMatch(text,/pull_request:|\n  push:|schedule:|npm ci|deploy|AccountLink/);
+  assert.match(text,/github\.ref == 'refs\/heads\/main'/);assert.match(text,/group: jolene-supabase-staging-writes/);
+  const secrets=text.indexOf('secrets.STAGING_SUPABASE_ACCESS_TOKEN');assert.ok(secrets>text.indexOf('connect-test-fixture-ci.mjs check'));
+  assert.ok(text.indexOf('node --test')<secrets);assert.doesNotMatch(text.slice(0,text.indexOf('connect-test-fixture-ci.mjs run')),/secrets\./);
+  assert.match(text,/connect-test-fixture-proof\/fixture\.encrypted\.json/);assert.match(text,/connect-test-fixture-proof\/result\.json/);
+  assert.doesNotMatch(text,/\/\*|manifest\.private|journal\.private|recipient_private/);
+});
+test('offline open CLI writes only private files and its frontend handoff excludes the admin and every CI key',async()=>{
+  const directory=await mkdtemp(join(await realpath(tmpdir()),'connect-ci-open-'));
+  try {
+    const c=checkCi(env(),local,contract(),sources),payload={format:'JOLENE_CONNECT_FIXTURE_PRIVATE_V1',projectRef:'mejpriaetwgtcstbgfid',mainSha,
+      manifest:c.manifest,result:null};
+    const encrypted=JSON.stringify(sealJournal(payload,c.key)),input=join(directory,'fixture.encrypted.json'),keyPath=join(directory,'local.private.pem'),output=join(directory,'opened');
+    await writeFile(input,encrypted,{mode:0o600});await writeFile(keyPath,privatePem,{mode:0o600});
+    const script=fileURLToPath(new URL('../../scripts/ci/connect-test-fixture-ci.mjs',import.meta.url));
+    const response=spawnSync(process.execPath,[script,'open',input,keyPath,hash(encrypted),fp,output],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
+    assert.equal(response.status,0);assert.deepEqual(JSON.parse(response.stdout),{opened:true,credentialsPrinted:false,serviceCredentialsIncluded:false});
+    const frontend=JSON.parse(await readFile(join(output,'frontend.private.json'),'utf8'));
+    assert.equal(frontend.members.length,2);assert.deepEqual(frontend.members.map(x=>x.role),['SOIGNANT','ADMIN_ETABLISSEMENT']);
+    assert.ok(!JSON.stringify(frontend).includes(c.manifest.members[2].password));
+    for(const name of ['journal.private.json','manifest.private.json','frontend.private.json'])assert.equal((await stat(join(output,name))).mode&0o777,0o600);
+    assert.equal((await stat(output)).mode&0o777,0o700);
+    for(const member of c.manifest.members)assert.ok(!`${response.stdout}${response.stderr}`.includes(member.password));
+    const duplicate=spawnSync(process.execPath,[script,'open',input,keyPath,hash(encrypted),fp,output],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});assert.equal(duplicate.status,1);
+  } finally {await rm(directory,{recursive:true,force:true});}
+});

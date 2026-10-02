@@ -1,0 +1,64 @@
+name: Préparer les acteurs Connect TEST (manuel fermé)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: SHA main exact portant l'opérateur et son contrat relus
+        required: true
+        type: string
+      recipient_public_key:
+        description: Clé publique RSA4096 PEM éphémère locale (jamais la clé privée)
+        required: true
+        type: string
+      recipient_sha256:
+        description: SHA256 du SPKI DER de cette seule clé publique
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: jolene-supabase-staging-writes
+  queue: max
+  cancel-in-progress: false
+jobs:
+  prepare-fixture:
+    if: github.repository == 'Gabpcd/JJJJJ' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
+      RECIPIENT_SHA256: ${{ inputs.recipient_sha256 }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      - name: Contrats et chiffrement sans secret ni réseau
+        run: node --test tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
+      - name: Refuser tout contexte, source, destinataire ou contrat non revu
+        run: node scripts/ci/connect-test-fixture-ci.mjs check
+      - name: Préparer la seule fixture ; chiffrer chaque intention et reçu
+        timeout-minutes: 9
+        run: node scripts/ci/connect-test-fixture-ci.mjs run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Conserver seulement le journal chiffré et les booléens
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: connect-test-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/connect-test-fixture-proof/fixture.encrypted.json
+            ${{ runner.temp }}/connect-test-fixture-proof/result.json
+          retention-days: 1
+          if-no-files-found: ignore
+          include-hidden-files: false
