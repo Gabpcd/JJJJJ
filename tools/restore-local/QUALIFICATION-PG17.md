@@ -1,12 +1,12 @@
 # Qualification isolée du replay PostgreSQL 17 — branche temporaire uniquement
 
-Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `7bec1138ae79131ab940137369e1706ebf0ec860`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
+Ce candidat est un banc de qualification, pas une migration de staging, pas une restauration prouvée et pas une livraison. Il doit rester sur une branche **sans PR** `ci/qualification-pg17-candidatures-20261002`, issue du produit exact `86e8eb2cb500c96bceb42ccfaf4360797e4b2e95`. Il ne doit pas être fusionné tel quel : il spécialise temporairement le workflow déjà enregistré `restore-local-bootstrap.yml`. Main M et le candidat financier D restent inchangés.
 
 ## Source intégrale et refus fermés
 
-Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 7bec…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
+Le driver exige le SHA Actions exact, l'événement manuel, le dépôt attendu, la branche dédiée, une ascendance contenant le SHA produit, un checkout propre et un delta limité à ses six fichiers de préparation. Le catalogue provient uniquement du dépôt : les **218** fichiers `supabase/migrations/*.sql`, baseline `00000000000000_baseline_prod.sql` incluse, triés par nom complet. Chacun est comparé octet par octet à `git show 86e8…:<chemin>`, puis fourni entier à `psql` par stdin, sans filtre ni modification, avec `-X -v ON_ERROR_STOP=1 --single-transaction -f -` pour chaque migration. Une erreur arrête le replay immédiatement ; aucune migration n'est sautée, aucun retry SQL, aucune déclaration de registre synthétique.
 
-Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `76717f04219cc07aad5884c4f0ec95e503113bdc810b7c909a8b8415b6ed12f4`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
+Le test `tests/security/candidatures-multi-etablissements.test.sql` reste identique au produit (SHA256 `92b0b390806f663fbc17ef9d0bf6e99de9a5415377ddaef5fd8f2a0c8076f64a`). Ses huit MD5 de helpers, son inventaire, ses policies, ACL, rôles, erreurs attendues et son `ROLLBACK` sont inchangés. Aucun helper factice, trigger désactivé ou sous-schéma de remplacement. Le replay ordonné a pour SHA256 de manifeste chemins/empreintes `589da3b77b876dfb5923dbca6890982ab1709722b25cebb8e2d803ca435b4835`.
 
 ## Infrastructure et arrêt des travaux automatiques
 
@@ -16,7 +16,7 @@ Le mode explicite `plan-qualification` utilise `jolene_candidatures_pg17_test` d
 
 Les images exécutent leurs propres migrations Auth/Storage ; les scripts vendoriés gardent leurs empreintes. Le [script migrate.sh officiel au commit de l'image](https://github.com/supabase/postgres/blob/a431c10a356be4c700d2e3f2af8551e2fec5e250/migrations/db/migrate.sh) exporte PGDATABASE depuis POSTGRES_DB et l'utilise pour les scripts init/migrations. Son ALTER DATABASE postgres concerne la propriété de la base système. Le jwt.sql vendorié règle encore l'expiration de la base système postgres ; il est conservé, et le test ne s'appuie pas sur ce paramètre. La prise en charge réelle de l'ensemble des scripts natifs dans la base nommée sera mesurée par la qualification ; elle n'est pas présumée acquise. Le [code pg_cron v1.6.4](https://github.com/citusdata/pg_cron/blob/v1.6.4/src/pg_cron.c) déclare les paramètres cron utilisés ; le contrôle live exige leurs valeurs.
 
-Le bootstrap vérifie d'abord le cœur vide, les trois routes locales, l'absence de sortie HTTPS et la compatibilité des neuf extensions sur les deux piles. Puis le driver arrête les huit services Auth/REST/Storage/Kong des deux piles, vérifie qu'ils restent arrêtés et que seules les deux DB restent démarrées. Il contrôle le socket, PostgreSQL17, la base exacte, le rôle postgres, les paramètres et l'absence des workers cron/net avant le premier SQL applicatif. Les jobs créés par le replay ne peuvent donc pas démarrer. Après le replay, un `UPDATE cron.job SET active=false WHERE active` local explicite les désactive avant le test ; le nombre de jobs désactivés est rapporté. Aucun cron distant n'est modifié.
+Le bootstrap vérifie d'abord le cœur vide, les trois routes locales, l'absence de sortie HTTPS et la compatibilité des neuf extensions sur les deux piles. Puis le driver arrête les huit services Auth/REST/Storage/Kong des deux piles, vérifie qu'ils restent arrêtés et que seules les deux DB restent démarrées. Il contrôle le socket, PostgreSQL17, la base exacte, le rôle postgres, les paramètres et l'absence des workers cron/net avant le premier SQL applicatif. Les jobs créés par le replay ne peuvent donc pas démarrer. Après le replay, un appel local à `cron.alter_job(jobid, active:=false)` les désactive avant le test ; le nombre de jobs désactivés est rapporté. Aucun cron distant n'est modifié.
 
 Les neuf versions/schémas d'extensions doivent ensuite être exactement installés. Toute divergence, corps de helper différent, personnalisation Auth/Storage absente, précondition historique inexécutable, donnée métier ou file HTTP inattendue arrête le banc. Les 14 comptages de quiescence sont exigés à zéro avant le test et après fermeture de sa transaction annulée. Une réussite ne prouverait que ce replay et ce test SQL sur cette image ; aucune équivalence universelle avec la plateforme Supabase, aucun paiement, remboursement, notification physique ni parcours frontend n'est impliqué.
 
@@ -195,3 +195,26 @@ le test canonique, son SQL et toutes les migrations restent inchangés.
 Structure officielle de Vault0.3.1 consultée :
 https://raw.githubusercontent.com/supabase/vault/v0.3.1/sql/supabase_vault--0.3.0.sql
 Aucune exécution runtime de cette adaptation n'est prouvée par les tests mémoire.
+
+
+### Correction du test canonique — v12
+
+Le run 37058412522 prouve la préparation complète : 218 migrations, six jobs
+désactivés, provenance Vault 0 → 1 puis retrait du seul artefact local, et les
+14 compteurs à zéro. Le test canonique atteint ensuite son bloc catalogue et
+refuse avec SQLSTATE 42702 à la ligne 97 : le nom p désigne à la fois une variable
+PL/pgSQL pg_proc%ROWTYPE et un alias SQL dans ce bloc.
+
+Le commit produit local 86e8eb2cb500c96bceb42ccfaf4360797e4b2e95 renomme seulement
+les treize usages de cette variable en v_rpc. L'alias SQL p reste intact.
+L'inversion de ce renommage restitue l'ancien fichier octet pour octet : aucune
+assertion, attente, permission ou politique n'est changée. La nouvelle référence
+produit est intégrée dans cette branche de qualification ; elle comprend aussi
+les changements de présentation et de documentation déjà vérifiés localement.
+Les 218 migrations sont identiques à celles de 7bec1138. Le manifeste ordonné
+reste inchangé. Main M, candidat financier D et les comptes staging ne changent pas.
+
+Le nouveau SHA du test est indiqué en tête de document. Les anciennes preuves
+restent attachées à leur ancien SHA ; aucune réussite SQL n'est déduite du
+renommage avant la nouvelle exécution réelle. Cette branche reste sans PR et
+ne doit pas être fusionnée telle quelle.

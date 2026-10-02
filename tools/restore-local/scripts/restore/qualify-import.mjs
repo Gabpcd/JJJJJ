@@ -9,7 +9,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {qualifiedSession,QUALIFICATION_DB,SQL_DIAGNOSTIC_CATEGORIES,expectedDefaultAclGrants} from './bootstrap.mjs';
 import {compareRequired} from './extensions.mjs';
 export const QUALIFICATION_BRANCH='ci/qualification-pg17-candidatures-20261002';
-export const PRODUCT_SHA='7bec1138ae79131ab940137369e1706ebf0ec860';
+export const PRODUCT_SHA='86e8eb2cb500c96bceb42ccfaf4360797e4b2e95';
 export const VAULT_PROVENANCE_PATH='supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql';
 export const VAULT_PROVENANCE_SHA='c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf';
 export const TEST_PATH='tests/security/candidatures-multi-etablissements.test.sql';
