@@ -73,7 +73,7 @@ export function renderStagingAdmission(migration,helpers){
 REVOKE ALL ON FUNCTION public.fn_connect_remboursements_test_a_traiter(integer,uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.fn_connect_remboursements_test_a_traiter(integer,uuid) TO service_role;`);
  return `-- CANDIDAT staging, sans allocation. Installation via job revu seulement.\nDO $source$ BEGIN\n${guards.join('\n')}\nEND $source$;\n${helpers}\n${changes.join('\n\n')}\nDO $inventory$ DECLARE p record; BEGIN
- FOR p IN SELECT oid,proname||'('||pg_catalog.oidvectortypes(proargtypes)||')' AS signature FROM pg_proc WHERE pronamespace='public'::regnamespace
+ FOR p IN SELECT oid,regexp_replace(oid::regprocedure::text,'^public[.]','') AS signature FROM pg_proc WHERE pronamespace='public'::regnamespace
   AND proname IN('fn_connect_test_capacite_lire','fn_connect_test_checkout_autoriser','fn_connect_checkout_preparer',
     'fn_connect_avant_transfert_arbitrer','fn_connect_remboursement_demarrer','fn_stripe_payment_flow_claim_connect_test_v1',
     'fn_stripe_webhook_event_claim_connect_test_v1','fn_connect_remboursements_test_a_traiter')

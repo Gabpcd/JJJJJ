@@ -25,6 +25,15 @@ sql('BEGIN;'+capacity+render+'ROLLBACK;')
 assert sql(dependency_fingerprint)==before
 assert sql("SELECT to_regclass('private.stripe_connect_test_capacities') IS NULL")=='t'
 sql('BEGIN;'+capacity+render+'COMMIT;')
+# Les trois fonctions redéfinies doivent mettre à jour leur ligne canonique,
+# sans en insérer une seconde avec des espaces ajoutés entre les arguments.
+for signature in ['fn_connect_checkout_preparer(uuid,uuid,text)',
+                  'fn_connect_avant_transfert_arbitrer(uuid,uuid,jsonb)',
+                  'fn_connect_remboursement_demarrer(uuid,uuid)']:
+ assert sql(f"""SELECT count(*)=1 AND bool_and(i.signature='{signature}'
+   AND i.definition_md5=(SELECT md5(prosrc) FROM pg_proc WHERE oid=to_regprocedure('public.{signature}')))
+ FROM private.security_definer_inventory i
+ WHERE regexp_replace(i.signature,'[[:space:]]','','g') IN ('{signature}','public.{signature}')""")=='t',signature
 print(json.dumps({'supplement_sha256':hashlib.sha256(render.encode()).hexdigest(),'rollback_exact':True,'gate_generale':False,'fournisseur':False}),flush=True)
 # Export optionnel du seul delta fermé, AVANT la création des fixtures métier.
 # Le job suivant ne recevra que des empreintes, pas le catalogue ou des lignes.
@@ -68,6 +77,7 @@ if reference_path:
  assert measure()==original
  print('CONNECT_CATALOGUE_DETECTE_OPTIONS_SECURITE_VUE_ET_ROLLBACK',flush=True)
  reference=json.loads(sql(query))
+ print(json.dumps({'reference_counts':reference['counts']}),flush=True)
  assert reference['counts']['routines']==34 and reference['counts']['relations']==3
  assert reference['counts']['triggers']==2 and reference['counts']['inventory']==19
  with reference_file.open('x') as handle:
