@@ -4,6 +4,14 @@ Ce supplément ne doit être installé que dans `mejpriaetwgtcstbgfid`. Il ne mo
 
 L'installation complète reste celle du lot fermé : migration Connect entière, table privée de capacités vide, puis supplément produit par `renderStagingAdmission(migration, helpers)`. Le générateur exige les corps d'origine exacts avant de modifier les cinq fonctions du moteur et de créer les signatures TEST distinctes. Il n'exécute pas de SQL. `connect-staging-admission-pg17.py` réutilise le prélude du témoin PG17 et s'arrête avant son ouverture générale ; il teste ensuite le raccord dans cette seule base éphémère.
 
+## État actuel au 2 octobre 2026
+
+Le témoin PostgreSQL 17 a été exécuté sur le candidat EE3 (`ee3fc8d5de227495a0ad6dbbe8810a97aff2a3c2`) : [run 36949937876](https://github.com/Gabpcd/JJJJJ/actions/runs/36949937876). Sa vérification SQL staging sous ROLLBACK et la preuve seed figurent dans [Validate 36949937894, tentative 1](https://github.com/Gabpcd/JJJJJ/actions/runs/36949937894). Le reçu catalogue C, distinct de cette provenance EE3, figure dans [Validate 36959993485, tentative 2](https://github.com/Gabpcd/JJJJJ/actions/runs/36959993485/attempts/2). La première tentative C a refusé un catalogue déplacé ; elle n'est pas une preuve réussie.
+
+Le contrat d'installation fermée est désormais épinglé sur EE3, avec `ready:true`, `protocolEnabled:false` et `capabilityEnabled:false`. Il ne déploie aucune Edge, ne prépare aucun acteur et ne prouve aucun paiement. Le contrat de préparation des acteurs est séparé (`connect-test-fixture-ci.contract.json`) et doit être vérifié sur le vrai main utilisé, avec sa fenêtre d'expiration, ses pins et sa revue. Aucun de ces fichiers ne déclenche automatiquement l'installation ni la recette.
+
+Avant la première exécution, la révision finale doit intégrer le main réel, passer tous ses contrôles et sa revue, et conserver les sources financières et les sources fixture EE3. Il reste ensuite l'installation staging fermée, la préparation unique des acteurs, la vérification documentaire dans l'interface, l'onboarding Express, le déploiement ciblé et l'allocation d'une seule capacité TEST. Le paiement → confirmation → remboursement réel dans le frontend et chez Stripe TEST n'est pas encore acquis. Les sections de vérification datées du 1er octobre ci-dessous conservent les constats à ces étapes ; elles ne remplacent pas cet état actuel ni les preuves finales.
+
 ## Activation d'un seul scénario, après revue
 
 1. Choisir une facture d'honoraires existante réellement générée et sa commission exacte, les comptes E/S TEST qui la possèdent, et les objets Stripe déjà rattachés canoniquement à ces mêmes acteurs. Vérifier le mandat/document et la règle métier dans l'interface. Un ancien compte ou Customer appartenant à un autre acteur ne doit pas être réattribué. Le paiement d'une facture remplacée est refusé : choisir explicitement le remplacement.
@@ -15,11 +23,10 @@ L'installation complète reste celle du lot fermé : migration Connect entière,
 7. Le worker en configuration de recette ne lit ni ne traite les queues historiques. Il sélectionne seulement l'UUID de capacité configuré. Le bail, la limite d'idempotence de 20 heures et les sources Session/PI/Charge/Refund réelles restent ceux du moteur. Un timeout conserve la même opération et la même clé : un seul objet Refund possible, aucune nouvelle tentative d'un autre paiement. Relever le statut réel, observer la confirmation dans l'UI, puis recharger. iPhone/Android/iPad/ordinateur et E/S/admin observent ensuite ces mêmes objets ; on ne génère pas cinq paiements.
 8. Révoquer la seule capacité (`enabled=false`, `revoked_at=clock_timestamp()`). Une requête déjà autorisée peut être en vol : attendre son terme et rapprocher les objets existants. Les GET et constats de cet objet exact restent possibles après révocation, mais aucun nouveau Checkout/Refund/Transfer. Ne pas supprimer les traces ou pièces. Désactiver le réglage de recette après le constat final.
 
-## Ce qui reste nécessaire avant la première exécution réelle
+## Conditions avant la première exécution réelle
 
-- Revue indépendante du supplément et des six modules Edge concernés ; témoin PG17 et parcours intégré à exécuter sur la base finale (la syntaxe et les garde-fous purs ne suffisent pas).
-- Le témoin PG17 ajouté est un fichier de code, pas une preuve déjà acquise. Les tests ont uniquement des transporteurs en mémoire ; aucun `Refund` réel n'a été créé par ce lot.
-- Intégrer l'installation fermée et le déploiement ciblé dans une opération staging revue ; le contrat `ae745e7a` n'est pas ouvert automatiquement. Si l'ordre ou le nom de la migration change, actualiser la source explicitement et refaire sa revue ; aucun recalage automatique des empreintes.
+- Revue indépendante du supplément et des six modules Edge concernés, contrôles complets sur la révision finale et comparaison de ses sources aux preuves EE3/C. Les tests avec transports en mémoire ne prouvent aucun `Refund` fournisseur.
+- Exécuter l'installation fermée et le déploiement ciblé dans les opérations staging revues. Si l'ordre ou le nom de la migration change, actualiser la source explicitement et refaire sa revue ; aucun recalage automatique des empreintes.
 - Relire les acteurs/FH/C et la liaison canonique Customer/destination, puis produire les valeurs exactes du manifeste. Aucun client n'est inventé pour compenser une donnée manquante.
 - Exécuter la recette depuis le frontend avec Auth/REST/Edge/Stripe réels. Les captures simulées du suivi ne sont pas cette preuve.
 
@@ -44,7 +51,7 @@ Le nouveau fichier `stripe-connect-staging-pay-runtime.test.ts` exécute le vrai
 
 Le contrôle des traces cherche aussi une autre trace de la FH **ou de la commission**, sans se limiter à la plus récente. La reprise liée exige un claim présent et exact. Le RPC inscrit `claim_reserved_at` dans la même transaction que son claim neuf, sous le verrou existant de la ressource : une réponse perdue avant la réservation de l'opération peut être reprise sans confondre ce claim neuf avec un ancien. Le témoin PG17 contient ce scénario mais reste à exécuter. Les tests Node du supplément sont maintenant au nombre de 42.
 
-## Intégration CI fermée
+## Intégration CI fermée — historique du 1er octobre
 
 La migration est renommée `20261001201055_reserver_remboursement_connect_avant_transfert.sql`, horodatage créé avec `supabase migration new`, après les migrations admin de 19:42. Ses octets sont conservés. Le workflow PostgreSQL utilise deux entrées de matrice : chacune reçoit son propre service postgres neuf et ses propres rôles, sans reset ni fixtures partagées. Le second runner s'arrête avant l'ouverture générale du prélude et installe le supplément fermé. Validate PR exécute les tests Node des deux lots.
 
