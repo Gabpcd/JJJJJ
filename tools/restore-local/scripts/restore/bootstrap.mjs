@@ -239,10 +239,10 @@ COMMIT;`;
 export function ownerRepairPsqlArgs(run){
  const args=qualificationPsqlArgs(run);args[args.indexOf('-U')+1]='supabase_admin';return args;
 }
-export function qualificationPsqlArgs(run,{test=false}={}){
- runName(run);if(typeof test!=='boolean')fail('QUALIFICATION_MODE_INVALID');
+export function qualificationPsqlArgs(run,{test=false,migration=false}={}){
+ runName(run);if(typeof test!=='boolean'||typeof migration!=='boolean'||(test&&migration))fail('QUALIFICATION_MODE_INVALID');
  return ['exec','-i',...(test?['--env','PGOPTIONS=-c jolene.test_isolated=candidatures_multi_pg17']:[]),
-  name(run,'source','db'),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
+  name(run,'source','db'),'psql','-X','-q','-A','-t',...(migration?['--single-transaction']:[]),'-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
   '-U','postgres','-h','/var/run/postgresql','-d',QUALIFICATION_DB,'-f','-'];
 }
 export function qualifiedSession(dir){

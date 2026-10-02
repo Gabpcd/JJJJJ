@@ -146,7 +146,7 @@ export function qualify(evidence,runtime,extensionSQL,requirements,save){
   report.phase='integral_replay';
   for(const item of evidence.migrations){
    const current={path:item.path,sha256:item.sha256,completed:false};report.migrations.push(current);save(report);
-   runtime.sql(item.bytes);current.completed=true;save(report);
+   runtime.sql(item.bytes,{migration:true});current.completed=true;save(report);
   }
   report.phase='stop_local_crons';save(report);
   const crons=JSON.parse(runtime.sql(Buffer.from(STOP_CRONS)));

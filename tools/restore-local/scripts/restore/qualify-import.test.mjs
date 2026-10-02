@@ -139,3 +139,25 @@ test('ownership projection retains only fixed names and booleans; no arbitrary c
  const result=projectOwnerProbe({named_owner:'CANARY_SECRET',native_owner:'postgres',local_empty_context:'CANARY_SECRET',extra:'CANARY_SECRET'});
  assert.equal(result.named_owner,'other');assert.equal(result.native_owner,'postgres');assert.equal(result.local_empty_context,null);assert.ok(!JSON.stringify(result).includes('CANARY'));assert.throws(()=>ownerProbe(result));
 });
+
+
+test('only canonical migrations use one transaction; test and fixed probes retain their semantics',()=>{
+ const migration=qualificationPsqlArgs(run,{migration:true});assert.equal(migration.filter(x=>x==='--single-transaction').length,1);
+ for(const args of [qualificationPsqlArgs(run),qualificationPsqlArgs(run,{test:true}),ownerRepairPsqlArgs(run)])assert.equal(args.includes('--single-transaction'),false);
+ assert.equal(migration.includes('--env'),false);assert.ok(migration.includes('ON_ERROR_STOP=1'));assert.equal(migration[migration.indexOf('-f')+1],'-');
+ for(const flags of [{migration:'true'},{migration:1},{migration:true,test:true}])assert.throws(()=>qualificationPsqlArgs(run,flags));
+});
+test('whole explicit transactions and ON COMMIT DROP files remain byte-identical migration inputs',()=>{
+ const e=evidence();e.migrations[1].bytes=Buffer.from('CREATE TEMP TABLE t (id int) ON COMMIT DROP;\nINSERT INTO t VALUES (1);\n');
+ e.migrations[2].bytes=Buffer.from('BEGIN;\nSELECT 2;\nCOMMIT;\n');const r=fakeRuntime();qualify(e,r,r.extensionSQL,requirements,()=>{});
+ const actual=r.calls.filter(x=>x.flags?.migration);assert.equal(actual.length,e.migrations.length);
+ e.migrations.forEach((m,i)=>{assert.equal(actual[i].bytes,m.bytes);assert.deepEqual(actual[i].flags,{migration:true});});
+ assert.deepEqual(r.calls.find(x=>x.flags?.test).flags,{test:true});
+ for(const c of r.calls.filter(x=>x.bytes&&!e.migrations.some(m=>m.bytes===x.bytes)))assert.equal(c.flags.migration,undefined);
+});
+test('transaction failure stops before next file and test without an autocommit retry',()=>{
+ const e=evidence(),r=fakeRuntime({failOn:(bytes,flags)=>bytes===e.migrations[1].bytes&&flags.migration===true}),reports=[];
+ assert.throws(()=>qualify(e,r,r.extensionSQL,requirements,x=>reports.push(structuredClone(x))));
+ assert.equal(r.calls.filter(x=>x.bytes===e.migrations[1].bytes).length,1);assert.equal(r.calls.some(x=>x.bytes===e.migrations[2].bytes),false);
+ assert.equal(r.calls.some(x=>x.flags?.test),false);assert.equal(reports.at(-1).canonical_test_passed,false);assert.equal(reports.at(-1).rollback_verified,false);
+});
