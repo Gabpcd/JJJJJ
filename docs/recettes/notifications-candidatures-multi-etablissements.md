@@ -6,6 +6,16 @@ Le point d’entrée reste `/etablissement/missions/<uuid>`. Pour un compte éta
 
 Aucune policy, RPC de décision, liste de destinataires ou règle de livraison push n’est modifiée. Le reste de l’application conserve son établissement canonique. La liste existante reçoit deux lecteurs bornés ; elle revalide le planning avant confirmation. Les messages et retours asynchrones appartiennent au couple utilisateur/mission courant. Le retour vers l’espace et le nom de l’établissement restent visibles.
 
+## État vérifié au 3 octobre 2026
+
+Les sections de préparation ci-dessous conservent leurs limites initiales. La qualification PostgreSQL 17 isolée est depuis réussie : [run 37062151311](https://github.com/Gabpcd/JJJJJ/actions/runs/37062151311), source produit `2ce64a8afb57fcefc797fac9d0884aeba6cad1ea`. Les 218 migrations ont été importées octet pour octet ; huit empreintes de helpers, policies et permissions concordent avec la référence. Accès autorisés et refus, projections et révocations ont été exécutés avec les vrais helpers ; rollback confirmé par quatorze compteurs nuls avant/après. Le nettoyage indépendant ne retrouve aucun conteneur, volume ou réseau de cette recette.
+
+Trois défauts du banc ont été corrigés sans changer les permissions produit : variable SQL ambiguë, comparaison RLS avec un format différent de la collecte, ordre de créneau fictif dupliqué. Le test final a pour SHA256 `7373d4a3` (préfixe ; empreinte complète dans la preuve du run). Ces correctifs restent inclus dans la branche produit.
+
+La simulation frontend avec réponses synthétiques a réussi 45/45 observations : neuf scénarios sur iPhone, Android, iPad portrait, iPad paysage et ordinateur. Elle couvre connexion, résolution de rôle, accès/refus/révocation, reprise et rechargement. Le premier essai37/45 reste conservé ; la reprise complète suit la correction de l'interception PSC et de l'attente avant rechargement, sans retrait d'assertion.
+
+Ces résultats ne sont ni un déploiement de la migration, ni une connexion au fournisseur PSC, ni une réception push physique. Les scénarios fournisseur et les actions réelles avec comptes autorisés après déploiement restent à qualifier. Le parcours SOIGNANT + adhésion établissement est interdit par le schéma ; son positif DOM injecté ne démontre aucun accès métier réel. Aucun build mobile, OTA ou store n'est déclenché par cette recette.
+
 ## Reprise après connexion
 
 Le lien canonique survit à la connexion par mot de passe ou biométrie pour les rôles reconnus ; l’accès est ensuite contrôlé par la garde et la RPC.
