@@ -182,9 +182,16 @@ test('connexion : erreurs françaises, affichage du mot de passe, récupération
   await page.getByTestId('login-submit').click();
   await expect(page.getByText('Email ou mot de passe incorrect.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Email', { exact: true })).toHaveValue('recette@example.invalid');
+  await page.getByRole('alert').filter({ hasText: 'Email ou mot de passe incorrect.' })
+    .getByRole('button', { name: 'Fermer la notification', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
   state.authError = 'email_not_confirmed'; await page.getByTestId('login-submit').click();
   await expect(page.getByText('Veuillez confirmer votre adresse email avant de vous connecter.', { exact: true })).toBeVisible();
   await preuve(page, info, 'connexion-erreurs');
+  // Sur mobile, une alerte en cours d’entrée peut recouvrir l’action suivante.
+  await page.getByRole('alert').filter({ hasText: 'Veuillez confirmer votre adresse email avant de vous connecter.' })
+    .getByRole('button', { name: 'Fermer la notification', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: 'Mot de passe oublié ?' }).click();
   await page.getByLabel('Email de votre compte', { exact: true }).fill('RECETTE@example.invalid');
   await page.getByRole('button', { name: 'Envoyer le lien', exact: true }).click();
