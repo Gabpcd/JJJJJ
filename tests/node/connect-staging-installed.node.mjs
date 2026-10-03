@@ -41,12 +41,13 @@ test('staging vierge conserve le chemin initial, sans écriture ni assouplisseme
   const s=scenario(); s.responses.push([{present:0}]);
   s.args.changes.push(['A','supabase/migrations/20990101000000_future.sql']);
   assert.deepEqual(await s.inspect(),{mode:'empty'});
-  assert.equal(s.calls.length,1); assert.equal(s.calls[0].read_only,true);
+  assert.equal(s.calls.length,1); assert.equal(s.calls[0].read_only,false); assert.match(s.calls[0].query,/^BEGIN READ ONLY;/);
 });
 test('installation reconnue uniquement par source, catalogue, registre, témoin et cohorte fermée',async()=>{
   const s=scenario(); s.responses.push([{present:3}],[s.snapshot]);
   assert.deepEqual(await s.inspect(),{mode:'installed',snapshot:s.snapshot});
-  assert.deepEqual(s.calls.map(c=>c.read_only),[true,true]);
+  assert.deepEqual(s.calls.map(c=>c.read_only),[false,false]);
+  assert.ok(s.calls.every(c=>c.query.startsWith('BEGIN READ ONLY;') && c.query.trimEnd().endsWith('ROLLBACK;')));
 });
 for(const present of [1,2,4,'3',null]) test(`installation partielle/ambiguë refuse sans fallback (${present})`,async()=>{
   const s=scenario(); s.responses.push([{present}]);
@@ -76,12 +77,13 @@ for(const [key,value] of [
   ...['quiescent','gate_closed','capacity_revoked','operation_terminal','cohort_known','no_transfer','read_only'].map(k=>[k,false]),
 ]) test(`préflight refuse ${key}=${JSON.stringify(value)}`,async()=>{
   const s=scenario(); s.snapshot[key]=value; s.responses.push([s.snapshot]);
-  await assert.rejects(s.run()); assert.equal(s.calls.length,1); assert.equal(s.calls[0].read_only,true);
+  await assert.rejects(s.run()); assert.equal(s.calls.length,1); assert.equal(s.calls[0].read_only,false); assert.match(s.calls[0].query,/^BEGIN READ ONLY;/);
 });
 test('suites conservées sous rollback et trois transports, aucune nouvelle installation',async()=>{
   const s=scenario(); s.responses.push([s.snapshot],[],[structuredClone(s.snapshot)]);
   const proof=await s.run(); assert.equal(proof.rollbackVerified,true); assert.equal(proof.migrationReapplied,false);
-  assert.deepEqual(s.calls.map(c=>c.read_only),[true,false,true]);
+  assert.deepEqual(s.calls.map(c=>c.read_only),[false,false,false]);
+  for (const index of [0,2]) assert.match(s.calls[index].query,/^BEGIN READ ONLY;/);
   assert.equal(s.calls[1].query,s.args.sql); assert.equal(s.calls[0].query,s.calls[2].query);
   assert.doesNotMatch(JSON.stringify(proof),/SENTINELLE/);
 });
@@ -93,7 +95,8 @@ for(const key of ['rows','all_rows','connect_rows','default_acl_md5','sequences_
 test('réponse perdue : une seule transaction puis relecture indépendante, jamais un retry',async()=>{
   const s=scenario(); s.responses.push([s.snapshot],new Error('SENTINELLE'),[s.snapshot]);
   await assert.rejects(s.run(),/REGRESSIONS_TRANSPORT_REFUSED/);
-  assert.deepEqual(s.calls.map(c=>c.read_only),[true,false,true]);
+  assert.deepEqual(s.calls.map(c=>c.read_only),[false,false,false]);
+  for (const index of [0,2]) assert.match(s.calls[index].query,/^BEGIN READ ONLY;/);
 });
 for(const sql of ['SELECT 1;', 'BEGIN;\nCOMMIT;', 'BEGIN;\n-- migration: forbidden\nROLLBACK;',
   'BEGIN;\nCOMMIT;\nBEGIN;\nROLLBACK;']) test('transaction de régression ambiguë refuse avant transport',async()=>{
@@ -145,4 +148,12 @@ test('diagnostic distingue le second SELECT et ne rejoue aucune requête',async(
     : {ok:false,status:503,text:async()=>JSON.stringify({message:'PRIVATE_SENTINELLE'})};
   await assert.rejects(s.inspect(),/INSPECT_HTTP_503_BYTES_\d+_SQLSTATE_UNAVAILABLE_QUERY_REFUSED/);
   assert.equal(calls,2);
+});
+
+test('le rôle opérateur est conservé sans élargissement SQL ni fallback de rôle',()=>{
+  const source=readFileSync('scripts/ci/connect-staging-installed-proof.mjs','utf8');
+  assert.match(source,/body:JSON\.stringify\(\{query:sql, read_only:false\}\)/);
+  assert.match(source,/s\.database_role === 'postgres'/);
+  assert.match(source,/'read_only'/);
+  assert.doesNotMatch(installedSql(),/\b(?:GRANT|ALTER ROLE|SET (?:LOCAL )?ROLE)\b/i);
 });

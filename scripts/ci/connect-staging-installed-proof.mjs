@@ -101,6 +101,7 @@ export function checkInstalled(rows, contract, reference, versions) {
 
 function transport(env, fetcher) {
   return async (sql, readOnly, phase) => {
+    requireThat(!readOnly || (sql.startsWith('BEGIN READ ONLY;') && sql.trimEnd().endsWith('ROLLBACK;')), 'READ_ONLY_SQL_REQUIRED');
     let response, body;
     // Only fixed phase names, HTTP status, byte count and known SQLSTATE codes
     // may escape. Never emit a response body, SQL, headers or an exception text.
@@ -108,7 +109,10 @@ function transport(env, fetcher) {
       response = await fetcher(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`, {
         method:'POST', redirect:'error', signal:AbortSignal.timeout(180000),
         headers:{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`, 'Content-Type':'application/json'},
-        body:JSON.stringify({query:sql, read_only:readOnly}),
+        // As in connect-test-fixture: retain the existing operator role.
+        // PostgreSQL enforces READ ONLY; the API flag would select its
+        // restricted role. No ACL change, role switch or fallback is used.
+        body:JSON.stringify({query:sql, read_only:false}),
       });
       body = await response.text();
     } catch { refuse(`${phase}_TRANSPORT_REFUSED`); }

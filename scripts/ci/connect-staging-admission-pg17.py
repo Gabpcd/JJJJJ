@@ -193,6 +193,11 @@ for field in ['gate_closed','capacity_revoked','operation_terminal','cohort_know
  assert installed[field] is True,field
 assert installed['capacity_count']==installed['operation_count']==1
 assert installed['database_role']=='postgres' and installed['read_only'] is True
+# The actual reader transaction still forbids writes with the operator role:
+# the Management API flag is not the read-only enforcement boundary.
+refused(probe.removesuffix('ROLLBACK;')+f"UPDATE public.soignants SET prenom='Forbidden read-only write' WHERE id='{S}'; ROLLBACK;",'25006')
+assert installed_measure()==installed
+print('CONNECT_INSTALLED_POSTGRES_READ_ONLY_REFUSE_ECRITURE_25006',flush=True)
 for mutation,changed in [
  ("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon;",'default_acl_md5'),
  (f"UPDATE private.stripe_connect_test_capacities SET enabled=true,revoked_at=NULL WHERE id='{CAP}';",'connect_rows'),
