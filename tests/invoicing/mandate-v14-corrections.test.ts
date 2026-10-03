@@ -77,10 +77,16 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
 
   it('garde les détails de mission lisibles pendant le déploiement de la migration TVA', () => {
     const caregiverPrimaryStart = caregiverMission.indexOf("supabase.from('missions').select(`");
-    const caregiverPrimaryEnd = caregiverMission.indexOf("`).eq('id', id).single()", caregiverPrimaryStart);
+    // Borner le SELECT lui-même : les filtres et le signal d'annulation qui
+    // suivent ne font pas partie de la liste des colonnes critiques.
+    const caregiverPrimaryEnd = caregiverMission.indexOf('`)', caregiverPrimaryStart);
+    expect(caregiverPrimaryStart).toBeGreaterThanOrEqual(0);
+    expect(caregiverPrimaryEnd).toBeGreaterThan(caregiverPrimaryStart);
     const caregiverPrimary = caregiverMission.slice(caregiverPrimaryStart, caregiverPrimaryEnd);
     const establishmentPrimaryStart = establishmentMission.indexOf(".from('missions')\n          .select(`");
     const establishmentPrimaryEnd = establishmentMission.indexOf("`)\n          .eq('id', id)", establishmentPrimaryStart);
+    expect(establishmentPrimaryStart).toBeGreaterThanOrEqual(0);
+    expect(establishmentPrimaryEnd).toBeGreaterThan(establishmentPrimaryStart);
     const establishmentPrimary = establishmentMission.slice(establishmentPrimaryStart, establishmentPrimaryEnd);
 
     expect(caregiverPrimary).not.toContain('nature_tva_prestation');
