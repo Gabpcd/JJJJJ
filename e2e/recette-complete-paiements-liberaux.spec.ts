@@ -20,6 +20,22 @@ async function action(page: Page, cible: Locator) {
   await cible.scrollIntoViewIfNeeded();
   if (test.info().project.use.hasTouch) await cible.tap(); else await cible.click();
 }
+async function verifierActionsPaiement(piece: Locator, nom: string) {
+  const payer = piece.getByRole('button', { name: nom, exact: true });
+  const contester = piece.getByRole('button', { name: 'Contester', exact: true });
+  await payer.scrollIntoViewIfNeeded();
+  if (!test.info().project.use.hasTouch) await payer.hover();
+  await expect.poll(async () => {
+    const [p, c, icone, texte] = await Promise.all([
+      payer.boundingBox(), contester.boundingBox(), payer.locator('svg').boundingBox(),
+      payer.getByText(nom, { exact: true }).boundingBox(),
+    ]);
+    if (!p || !c || !icone || !texte) return false;
+    const separes = p.x + p.width <= c.x || c.x + c.width <= p.x || p.y + p.height <= c.y || c.y + c.height <= p.y;
+    const centresAlignes = Math.abs(icone.y + icone.height / 2 - texte.y - texte.height / 2) <= 2;
+    return separes && centresAlignes && icone.x + icone.width <= texte.x;
+  }, { message: 'Icône alignée avec le texte et actions de paiement sans recouvrement au survol' }).toBe(true);
+}
 async function fixture(page: Page, connect = false, commission = false) {
   const simulation = creerSuiviSimule(), { state } = simulation;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
@@ -31,7 +47,7 @@ async function fixture(page: Page, connect = false, commission = false) {
   await simulation.installer(page.context(), 'ADMIN_ETABLISSEMENT');
   await page.clock.setFixedTime(new Date('2026-10-01T10:00:00Z'));
   const erreurs: string[] = [], interdits: string[] = [], mutations: { name: string; body: unknown }[] = [];
-  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER' };
+  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
   page.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()); });
   page.on('pageerror', e => erreurs.push(e.message));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -77,7 +93,7 @@ async function fixture(page: Page, connect = false, commission = false) {
       expect(name).toBe('stripe-connect-pay-mission'); expect(connect).toBe(true); expect(req.method()).toBe('POST');
       expect(req.postDataJSON()).toEqual({ mission_id: ids.mission, facture_honoraire_id: remplacement });
       mutations.push({ name, body: req.postDataJSON() });
-      return json({ error: controle.refus });
+      return route.fulfill({ status: controle.refusStatus, json: { error: controle.refus, ...(controle.refusMessage ? { message: controle.refusMessage } : {}) } });
     }
     if (url.pathname.startsWith('/storage/')) { interdits.push(`${req.method()} ${url.pathname}`); return route.abort(); }
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
@@ -86,6 +102,12 @@ async function fixture(page: Page, connect = false, commission = false) {
       if (name === 'fn_declarer_paiement_facture_soignant') {
         expect(connect).toBe(false); expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_montant: 60, p_methode: 'VIREMENT', p_reference: 'VIR-2026-060', p_date_paiement: '2026-10-01', p_attestation_sur_l_honneur: true });
         mutations.push({ name, body }); return json({ error: controle.refus });
+      }
+      if (name === 'fn_suivi_remboursements_connect_facture') {
+        expect(connect && controle.retour).toBe(true);
+        expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_checkout_session_id: 'cs_test_retour_liberal' });
+        return json({ facture_honoraire_id: remplacement, mission_id: ids.mission, checkout_session_id_filtre: 'cs_test_retour_liberal',
+          source: 'CONNECT_AVANT_TRANSFERT', visibilite_montants: 'TOTAL_ETABLISSEMENT', paiement_statut: 'ECHOUE', operations: [], lecture_complete: true });
       }
       if (!lectureRpc.has(name)) { interdits.push(`RPC ${name}`); return route.abort(); }
       if (commission && name === 'fn_mes_factures') return json([factureCommission]);
@@ -105,9 +127,7 @@ async function fixture(page: Page, connect = false, commission = false) {
     if (url.pathname.startsWith('/rest/') && !url.pathname.includes('/rpc/')) {
       if (!['GET','HEAD'].includes(req.method())) { interdits.push(`${req.method()} ${name}`); return route.abort(); }
       if (name === 'stripe_transfers' && url.searchParams.get('select') === 'statut' && controle.retour) {
-        expect(url.searchParams.get('mission_id')).toBe(`eq.${ids.mission}`);
-        expect(url.searchParams.get('facture_honoraire_id')).toBe(`eq.${remplacement}`);
-        return json({statut:'ECHOUE'});
+        interdits.push('Retour déduit de la dernière trace sans Session exacte'); return route.abort();
       }
       if (name === 'factures_honoraires') {
         let rows = docs;
@@ -156,6 +176,7 @@ for (const connect of [false,true]) test(`Libéral ${connect ? `Connect EN_COURS
     await expect(page.getByText('FACTURE-AUTRE-MISSION',{exact:true})).toHaveCount(0);
     const piece = page.getByText('FACTURE-RECTIFICATIVE-60',{exact:true}).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
     await expect(piece).toContainText(/60,00\s*€/);
+    await verifierActionsPaiement(piece, connect ? 'Payer via Stripe' : 'Déclarer un paiement');
     if (connect) {
       await action(page,piece.getByRole('button',{name:'Payer via Stripe',exact:true}));
       await expect(page.getByText(configurationFictive ? refusAttendu : indisponible,{exact:true})).toBeVisible();
@@ -175,15 +196,17 @@ for (const connect of [false,true]) test(`Libéral ${connect ? `Connect EN_COURS
   if (connect) {
     f.controle.retour=true;
     await stabiliserActionsNationales(page);
-    await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&facture_honoraire=${remplacement}&paiement=succes`);
-    await expect(page.getByText('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.',{exact:true})).toBeVisible();
+    await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&facture_honoraire=${remplacement}&paiement=succes&session_id=cs_test_retour_liberal`);
+    await expect(page.getByText('La situation de ce paiement nécessite une vérification. Consultez son suivi avant de réessayer.',{exact:true})).toBeVisible();
+    await expect(page.getByRole('dialog')).toContainText('La situation de ce paiement nécessite une vérification');
+    await expect(page.getByText(/Aucun paiement n’a été enregistré/)).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`mission=${ids.mission}`));
-    await expect(page).not.toHaveURL(/paiement=|facture_honoraire=/);
+    await expect(page).not.toHaveURL(/paiement=|facture_honoraire=|session_id=/);
     await expect(page.getByText('FACTURE-AUTRE-MISSION',{exact:true})).toHaveCount(0);
     expect(f.mutations).toHaveLength(configurationFictive ? 2 : 0);
     await stabiliserActionsNationales(page);
     await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}&paiement=succes`);
-    await expect(page.getByText('Retour Stripe reçu sans facture identifiée. Le paiement reste en attente de rapprochement ; aucune confirmation n’est déduite de la mission.',{exact:true})).toBeVisible();
+    await expect(page.getByText('Le retour Stripe ne permet pas d’identifier exactement ce paiement. Consultez son suivi avant de réessayer.',{exact:true})).toBeVisible();
     await expect(page.getByText('Paiement confirmé et enregistré.',{exact:true})).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`mission=${ids.mission}`));
   }
@@ -255,7 +278,7 @@ test('Salarié : bulletin explicite, montant partiel refusé et escrow conservé
 });
 
 // Ces deux routes font partie de la CI ordinaire compilée sans clé. L'exécution
-// configurée ciblée ci-dessus conserve séparément les anciens refus API Connect.
+// configurée ciblée couvre séparément les refus API Connect, y compris ceux ci-dessous.
 for (const detail of [false, true]) test(`Stripe sans clé — commission depuis ${detail ? 'le détail facture' : 'la facturation'}`, async ({ page }, info) => {
   const f = await fixture(page, false, true);
   const path = detail ? `/etablissement/facturation/${commissionId}` : '/etablissement/facturation?tab=commissions';
@@ -276,4 +299,36 @@ for (const detail of [false, true]) test(`Stripe sans clé — commission depuis
   await expect(page).toHaveURL(hostedUrl);
   await expect(page.getByRole('heading', { name: 'Paiement hébergé simulé' })).toBeVisible();
   expect(f.mutations).toHaveLength(2); f.verifier();
+});
+
+for (const refus of [
+  {
+    code: 'CONNECT_REFUND_RECONCILIATION_REQUIRED', status: 409, statusText: 'Conflict',
+    message: 'Un remboursement est lié à cette tentative de paiement. Son rapprochement doit être terminé avant tout nouveau règlement de cette facture.',
+  },
+  {
+    code: 'CONNECT_RELEASE_CLOSED', status: 503, statusText: 'Service Unavailable',
+    message: 'Le paiement de cette facture est temporairement indisponible pendant une mise à jour. Réessayez plus tard depuis Facturation.',
+  },
+  {
+    code: 'CONNECT_CLIENT_VERSION_REQUIRED', status: 503, statusText: 'Service Unavailable',
+    message: 'Cette version du paiement est indisponible. Rechargez Facturation avant de réessayer.',
+  },
+]) test(`Connect (${configurationFictive ? 'configuration fictive' : 'sans clé'}) : ${refus.code} explique le refus sans ouvrir un paiement`, async ({ page }, info) => {
+  const f = await fixture(page, true);
+  f.controle.refus = refus.code;
+  f.controle.refusMessage = refus.message;
+  f.controle.refusStatus = refus.status;
+  await page.goto(`/etablissement/facturation?tab=missions-a-payer&mission=${ids.mission}`);
+  const piece = page.getByText('FACTURE-RECTIFICATIVE-60', { exact: true }).locator('xpath=ancestor::div[contains(@class,"card-base")][1]');
+  await action(page, piece.getByRole('button', { name: 'Payer via Stripe', exact: true }));
+  await expect(page.getByText(configurationFictive ? f.controle.refusMessage : indisponible, { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Paiement confirmé et enregistré.', { exact: true })).toHaveCount(0);
+  expect(f.mutations).toEqual(configurationFictive ? [{ name: 'stripe-connect-pay-mission', body: { mission_id: ids.mission, facture_honoraire_id: remplacement } }] : []);
+  await page.screenshot({ path: info.outputPath(`${refus.code.toLowerCase()}.png`), scale: 'css', animations: 'disabled' });
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(piece).toBeVisible();
+  expect(f.mutations).toHaveLength(configurationFictive ? 1 : 0);
+  f.verifier(configurationFictive ? [`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`] : []);
 });

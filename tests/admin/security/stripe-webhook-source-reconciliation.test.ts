@@ -29,6 +29,14 @@ describe('Stripe webhook — frontières de source P0', () => {
     );
   });
 
+  it('les constats Refund sont PLATFORM uniquement et ne créent jamais de mouvement',()=>{
+    const block=handler.slice(handler.indexOf('// Ces événements ne portent aucun droit de création.'),handler.indexOf('// ── charge.refunded'));
+    expect(block).toContain('verified.source === "PLATFORM" && ["refund.updated", "refund.failed"].includes(event.type)');
+    expect(block).toContain('stripe.refunds.retrieve');
+    expect(block).toContain('{ allowCreate: false }');
+    expect(block).not.toContain('refunds.create');
+  });
+
   it.each([
     'account.updated',
     'payout.created',

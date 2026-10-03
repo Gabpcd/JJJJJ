@@ -37,20 +37,20 @@ env:
 
 jobs:
   simulation-interfaces:
-    name: Simulation interfaces (${{ matrix.project }}, lot ${{ matrix.shard }}/2)
+    name: Simulation interfaces (${{ matrix.project }}, lot ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    # Un lot WebKit peut prendre 24 min, hors préparation et dépôt des preuves.
-    # Garder une marge bornée pour terminer le job après les assertions.
+    # Les 309 scénarios par format sont répartis en trois lots disjoints.
+    # La borne Playwright de 30 min laisse une marge pour déposer les preuves.
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         project: [ipad-portrait, ipad-paysage, iphone, android, ordinateur]
-        # Conserver les 140 scénarios, sans dépasser la limite du job iPad.
-        shard: [1, 2]
+        # Conserver tout le corpus, sans allonger les limites des assertions.
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -68,7 +68,7 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ''
           VITE_ENV: test
       - name: Parcours publics, inscription, connexion et espaces métier
-        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
+        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }} --shard=${{ matrix.shard }}/3 --global-timeout=1800000
         env:
           RECETTE_START_SERVER: '1'
           CI: 'true'

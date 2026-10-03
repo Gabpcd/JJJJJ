@@ -12,7 +12,7 @@ export const ROUTES = [
     events: ['charge.dispute.closed', 'charge.dispute.created', 'charge.expired', 'charge.failed',
       'charge.pending', 'charge.refunded', 'charge.succeeded', 'checkout.session.expired',
       'checkout.session.completed', 'invoice.payment_failed', 'payment_intent.payment_failed',
-      'payment_intent.succeeded', 'transfer.created', 'transfer.reversed', 'transfer.updated'] },
+      'payment_intent.succeeded', 'refund.updated', 'refund.failed', 'transfer.created', 'transfer.reversed', 'transfer.updated'] },
   { slug: 'stripe-connect-webhook', secretName: 'STRIPE_CONNECT_WEBHOOK_SECRET', connect: true,
     events: ['account.updated', 'payout.canceled', 'payout.created', 'payout.failed', 'payout.paid'] },
 ];

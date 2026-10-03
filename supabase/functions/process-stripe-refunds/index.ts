@@ -1,3 +1,4 @@
+import { stagingConnectConfig, verifyStagingStripeIdentity, requireStagingRefundScope } from "../_shared/stripe-connect-staging-test.ts";
 // process-stripe-refunds — remboursements Stripe rapprochés exactement.
 //
 // Un appel refunds.create n'est pas un succès financier : un Refund peut
@@ -14,6 +15,7 @@ import {
   verifyCronServiceAuth,
 } from "../_shared/cron-service-auth.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import { processConnectRefundBatch } from "../_shared/stripe-connect-pretransfer.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -620,6 +622,18 @@ Deno.serve(async (req) => {
 
     assertStripeSecretMode(STRIPE_KEY);
     const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2026-02-25.clover" });
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    if (testRuntime) {
+      await verifyStagingStripeIdentity(stripe, testRuntime);
+      const pretransfer = await processConnectRefundBatch(sb, stripe, () => crypto.randomUUID(), {
+        testCapacityId: testRuntime.capabilityId,
+        beforeCreate: op => requireStagingRefundScope(sb, testRuntime, op),
+      });
+      const success = pretransfer.failed === 0 && pretransfer.errors.length === 0;
+      return new Response(JSON.stringify({ success, pretransfer, testOnly: true }), {
+        status: success ? 200 : 500, headers: { "Content-Type": "application/json" },
+      });
+    }
     const leaseBefore = new Date(Date.now() - LEASE_MS).toISOString();
     const { data: excluded, error: excludedError } = await sb.rpc(
       "fn_compter_files_finance_exclues_test",
@@ -753,10 +767,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const success = failed === 0;
+    // Origine privée distincte : pas d'AVOIR fictif, de reversal, d'email ni
+    // d'élargissement de la queue historique. Deux intentions au plus.
+    const pretransfer = await processConnectRefundBatch(sb, stripe, () => crypto.randomUUID());
+    const success = failed === 0 && pretransfer.failed === 0 && pretransfer.errors.length === 0;
     return new Response(JSON.stringify({
       success,
       processed: queue.length,
+      pretransfer,
       succeeded,
       pending,
       failed,

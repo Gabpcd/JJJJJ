@@ -1,0 +1,71 @@
+name: Connect avant transfert — PostgreSQL isolé
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/connect-pretransfer-pg17.yml'
+      - 'scripts/ci/connect-pretransfer-pg17.py'
+      - 'scripts/ci/connect-staging-*'
+      - 'tests/node/connect-staging-*.node.mjs'
+      - 'supabase/functions/_shared/stripe-connect-staging-test.ts'
+      - 'tests/fixtures/connect-pretransfer-*.sql'
+      - 'tests/fixtures/connect-pretransfer-auth-dependencies.json'
+      - 'tests/node/connect-pretransfer-pg17.node.mjs'
+      - 'supabase/schema/public.sql'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/_shared/stripe-connect-pretransfer.ts'
+      - 'supabase/functions/_shared/stripe-payment-flow-claim.ts'
+      - 'supabase/functions/_shared/stripe-webhook-handler.ts'
+      - 'supabase/functions/stripe-connect-pay-mission/**'
+      - 'supabase/functions/process-stripe-refunds/**'
+      - 'tests/admin/security/stripe-connect-*.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-isole:
+    name: Connect ${{ matrix.scenario }} — PostgreSQL 17 sans fournisseur
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [pretransfer, staging-admission]
+    services:
+      postgres:
+        # Image officielle identique aux bancs paiements/numérotation relus.
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: connect_pretransfer_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d connect_pretransfer_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_CONNECT_WITNESS: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '54329'
+      PGDATABASE: connect_pretransfer_temoin
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Refus effectif des destinations hors du banc
+        run: node --test tests/node/connect-pretransfer-pg17.node.mjs
+      - name: Transitions, atomicité et écrivains concurrents sans cloud
+        if: matrix.scenario == 'pretransfer'
+        # Le runner refuse une destination autre que cette base neuve loopback.
+        # Routines Auth réelles, tables annexes locales ; aucun compte distant.
+        run: python3 scripts/ci/connect-pretransfer-pg17.py
+      - name: Admission TEST sur une autre base neuve, gate générale fermée
+        if: matrix.scenario == 'staging-admission'
+        # Chaque entrée de matrice a son propre service postgres et ses rôles.
+        # Aucun reset d'une base existante ni partage des fixtures du premier banc.
+        run: python3 scripts/ci/connect-staging-admission-pg17.py

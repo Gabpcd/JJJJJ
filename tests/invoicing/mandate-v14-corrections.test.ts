@@ -17,6 +17,7 @@ const sharedCii = read('supabase/functions/_shared/facturx-builder.ts');
 const adminDisputeModal = read('src/components/admin/litiges/LitigeResolutionModal.tsx');
 const mandateEdge = read('supabase/functions/sign-invoicing-mandate/index.ts');
 const webhook = read('supabase/functions/_shared/stripe-webhook-handler.ts');
+const connectRefundMigration = read('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql');
 const billingPage = read('src/pages/FacturationEtablissement.tsx');
 const disputeWizard = read('src/components/litige/WizardOuvertureLitige.tsx');
 const disputeLoader = read('src/lib/facturesContestables.ts');
@@ -76,10 +77,16 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
 
   it('garde les détails de mission lisibles pendant le déploiement de la migration TVA', () => {
     const caregiverPrimaryStart = caregiverMission.indexOf("supabase.from('missions').select(`");
-    const caregiverPrimaryEnd = caregiverMission.indexOf("`).eq('id', id).single()", caregiverPrimaryStart);
+    // Borner le SELECT lui-même : les filtres et le signal d'annulation qui
+    // suivent ne font pas partie de la liste des colonnes critiques.
+    const caregiverPrimaryEnd = caregiverMission.indexOf('`)', caregiverPrimaryStart);
+    expect(caregiverPrimaryStart).toBeGreaterThanOrEqual(0);
+    expect(caregiverPrimaryEnd).toBeGreaterThan(caregiverPrimaryStart);
     const caregiverPrimary = caregiverMission.slice(caregiverPrimaryStart, caregiverPrimaryEnd);
     const establishmentPrimaryStart = establishmentMission.indexOf(".from('missions')\n          .select(`");
     const establishmentPrimaryEnd = establishmentMission.indexOf("`)\n          .eq('id', id)", establishmentPrimaryStart);
+    expect(establishmentPrimaryStart).toBeGreaterThanOrEqual(0);
+    expect(establishmentPrimaryEnd).toBeGreaterThan(establishmentPrimaryStart);
     const establishmentPrimary = establishmentMission.slice(establishmentPrimaryStart, establishmentPrimaryEnd);
 
     expect(caregiverPrimary).not.toContain('nature_tva_prestation');
@@ -194,7 +201,11 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(billingPage).toContain('facturesBloqueesParLitige');
     expect(billingPage).toContain('Échéance indépendante');
     expect(connect).toContain('FACTURE_EN_LITIGE');
-    expect(webhook).toContain('CONNECT_REMBOURSE_AVANT_TRANSFERT_POUR_LITIGE');
+    // L’audit est désormais atomique avec le constat SQL confirmé. Il ne doit
+    // plus être écrit directement par le webhook avant la confirmation Stripe.
+    expect(webhook).toContain('await processConnectPretransferRefund(supabaseAdmin, stripe, operation');
+    expect(connectRefundMigration).toContain("IF st='SUCCEEDED' AND o.refund_status<>'SUCCEEDED' THEN");
+    expect(connectRefundMigration).toContain("'CONNECT_REMBOURSE_AVANT_TRANSFERT_POUR_LITIGE'");
     expect(expireDisputeCheckout).toContain('checkout.sessions.expire');
     expect(expireDisputeCheckout).toContain('CHECKOUT_EXPIRE_AVANT_CORRECTION_LITIGE');
     expect(expireDisputeCheckout.indexOf('await writeRequiredFinancialAudit')).toBeLessThan(

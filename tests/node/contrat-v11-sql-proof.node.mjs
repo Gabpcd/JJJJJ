@@ -116,23 +116,27 @@ test('contrôle indépendant divergent après sentinelle : aucun succès ni nett
   assert.equal(t.appels.length, 3); assert.equal(t.rapports[0].sentinelle, true); assert.equal(t.rapports[0].succes, false);
 });
 
+const candidateMigration = 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql';
 function scopeAttendu(overrides = {}) {
-  return { has_migrations: 'false', has_f1_regression: 'false',
+  return { has_migrations: 'false', has_f1_regression: 'false', has_connect_candidate: 'false',
     has_connect_fixture: 'false', has_contract_fixture: 'false', ...overrides };
 }
-function scopeReel(t, changes) {
+function scopeReel(t, changes, { existing = [], removed = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'jolene-contrat-v11-scope-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
-  writeFileSync(join(dir, 'base.txt'), 'base'); git('add', '.'); git('commit', '-qm', 'base'); const base = git('rev-parse', 'HEAD');
+  writeFileSync(join(dir, 'base.txt'), 'base');
+  for (const name of [...existing, ...removed]) { mkdirSync(dirname(join(dir, name)), { recursive: true }); writeFileSync(join(dir, name), 'base fixture'); }
+  git('add', '.'); git('commit', '-qm', 'base'); const base = git('rev-parse', 'HEAD');
   for (const name of changes) { mkdirSync(dirname(join(dir, name)), { recursive: true }); writeFileSync(join(dir, name), 'fixture'); }
+  for (const name of removed) rmSync(join(dir, name));
   git('add', '.'); git('commit', '-qm', 'test');
   const output = join(dir, 'output'); writeFileSync(output, '');
   const result = spawnSync('bash', ['-c', scope], { cwd: dir, env: { ...process.env, BASE_SHA: base, GITHUB_OUTPUT: output }, encoding: 'utf8' });
   return { result, outputs: Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map(l => l.split('='))) };
 }
-function executeCondition(step, outputs, successful = true) {
+function executeCondition(step, outputs, successful = true, installationMode = '') {
   if (!step.if) return successful;
   // Une branche OR après un statut explicite doit être interprétée séparément.
   // Ce format est absent du workflow : le refuser plutôt que simuler sa priorité.
@@ -140,7 +144,12 @@ function executeCondition(step, outputs, successful = true) {
   const status = step.if.startsWith('always() && ') || successful;
   const condition = step.if.replace(/^(always|success)\(\) && /, '');
   const terms = condition.split(' || ').map(group => group.split(' && ').map(term => {
-    const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture|has_connect_fixture) == '(true|false)'$/.exec(term);
+    const installation = /^steps\.connect_installation\.outputs\.mode (==|!=) '(empty|installed)'$/.exec(term);
+    if (installation) {
+      assert.ok(['','empty','installed'].includes(installationMode), 'mode installation non couvert');
+      return installation[1] === '==' ? installationMode === installation[2] : installationMode !== installation[2];
+    }
+    const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture|has_connect_candidate|has_connect_fixture) == '(true|false)'$/.exec(term);
     assert.ok(match, 'condition nouvelle non couverte');
     assert.ok(Object.hasOwn(outputs, match[1]), 'output manquant dans le scénario');
     return outputs[match[1]] === match[2];
@@ -200,18 +209,48 @@ test('chaque entrée du seed Connect active seulement sa preuve, sans bootstrap,
     'scripts/ci/prepare-staging-api-env.mjs', 'tests/node/fixture-ordinaire.node.mjs']);
   assert.equal(horsScope.result.status, 0); assert.deepEqual(horsScope.outputs, scopeAttendu());
 });
-test('le seed Connect reste indépendant du draft et conserve seulement son rapport après échec', () => {
+test('la preuve candidate Connect exige l’ajout de sa migration exacte, pas sa modification ni sa suppression', t => {
+  const ajout = scopeReel(t, [candidateMigration]);
+  assert.equal(ajout.result.status, 0);
+  assert.deepEqual(ajout.outputs, scopeAttendu({ has_migrations: 'true', has_connect_candidate: 'true' }));
+  const actifs = sqlJob.steps.filter(step => step.id !== 'migration_scope' && executeCondition(step, ajout.outputs, true, 'empty'));
+  for (const run of ['python3 scripts/ci/connect-staging-admission-pg17.py', 'node scripts/ci/connect-staging-catalogue-proof.mjs proof'])
+    assert.ok(actifs.some(step => step.run === run));
+  assert.ok(actifs.some(step => step.with?.path === '${{ runner.temp }}/connect-catalogue-proof.json'));
+  assert.ok(!actifs.some(step => /connect-test-fixture-rollback|contrat-v11-sql-proof/.test(step.run || '') || step.name?.startsWith('F1 —')));
+  for (const s of [scopeReel(t, [candidateMigration], { existing: [candidateMigration] }),
+    scopeReel(t, [], { removed: [candidateMigration] }),
+    scopeReel(t, [candidateMigration.replace('20261001201055', '20261001201056')])]) {
+    assert.equal(s.result.status, 0);
+    assert.deepEqual(s.outputs, scopeAttendu({ has_migrations: 'true' }));
+    assert.ok(!sqlJob.steps.filter(step => executeCondition(step, s.outputs)).some(step =>
+      /connect-staging-(?:admission-pg17|catalogue-proof)/.test(step.run || '') ||
+      step.with?.path === '${{ runner.temp }}/connect-catalogue-proof.json'));
+  }
+  const mix = scopeReel(t, [candidateMigration, 'tests/fixtures/contrat-service-v11/draft.sql']);
+  assert.notEqual(mix.result.status, 0);
+  assert.match(mix.result.stderr + mix.result.stdout, /recette contrat doit rester sans migration produit/);
+});
+test('seed et candidate Connect gardent leurs conditions propres et la collecte après échec reste bornée', t => {
+  const s = scopeReel(t, [candidateMigration, 'scripts/ci/connect-test-fixture-prepare.sql']);
+  assert.equal(s.result.status, 0);
+  assert.deepEqual(s.outputs, scopeAttendu({ has_migrations: 'true', has_connect_candidate: 'true', has_connect_fixture: 'true' }));
   const seed = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-test-fixture-rollback.mjs');
   const seedArtifact = sqlJob.steps.find(step => step.with?.path === '${{ runner.temp }}/connect-test-fixture-rollback.json');
+  const candidate = sqlJob.steps.find(step => step.run === 'node scripts/ci/connect-staging-catalogue-proof.mjs proof');
+  const candidatePg = sqlJob.steps.find(step => step.run === 'python3 scripts/ci/connect-staging-admission-pg17.py');
+  const candidateArtifact = sqlJob.steps.find(step => step.with?.path === '${{ runner.temp }}/connect-catalogue-proof.json');
   const setup = sqlJob.steps.find(step => step.uses?.startsWith('actions/setup-node@'));
-  for (const step of [seed, seedArtifact, setup]) assert.ok(step);
-  for (const has_connect_fixture of ['true', 'false']) for (const has_contract_fixture of ['true', 'false'])
-    for (const successful of [true, false]) {
-      const outputs = scopeAttendu({ has_connect_fixture, has_contract_fixture });
+  for (const step of [seed, seedArtifact, candidate, candidatePg, candidateArtifact, setup]) assert.ok(step);
+  for (const has_connect_candidate of ['true', 'false']) for (const has_connect_fixture of ['true', 'false'])
+    for (const has_contract_fixture of ['true', 'false']) for (const successful of [true, false]) {
+      const outputs = scopeAttendu({ has_connect_candidate, has_connect_fixture, has_contract_fixture });
       assert.equal(executeCondition(seed, outputs, successful), successful && has_connect_fixture === 'true');
       assert.equal(executeCondition(seedArtifact, outputs, successful), has_connect_fixture === 'true');
+      for (const step of [candidate, candidatePg, candidateArtifact])
+        assert.equal(executeCondition(step, outputs, successful, 'empty'), successful && has_connect_candidate === 'true');
       assert.equal(executeCondition(setup, outputs, successful), successful &&
-        [has_contract_fixture, has_connect_fixture].includes('true'));
+        [has_contract_fixture, has_connect_candidate, has_connect_fixture].includes('true'));
     }
 });
 test('F1 active sa transaction et son contrôle indépendant, sans activer le draft contrat', t => {
@@ -240,6 +279,8 @@ test('le chaînage heures F1 conserve la voie test-only, le contrôle indépenda
 });
 test('les conditions SQL non reconnues ne sont pas considérées actives par défaut', () => {
   for (const condition of ["success()", "steps.migration_scope.outputs.unknown == 'true'", "always() || true",
+    "success() && steps.migration_scope.outputs.has_connect_candidate == 'true' || unknown()",
+    "success() && steps.migration_scope.outputs.has_connect_candidate == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true'",
     "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || unknown()",
     "success() && steps.migration_scope.outputs.has_connect_fixture == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
     "always() && steps.migration_scope.outputs.has_connect_fixture == 'false' || steps.migration_scope.outputs.has_connect_fixture == 'true'",
@@ -277,4 +318,23 @@ test('double échec garde les deux catégories sans exposer la réponse fourniss
   assert.equal(t.rapports[0].erreur_transaction, 'transport_refuse');
   assert.equal(t.rapports[0].erreur_controle, 'catalogue_divergent');
   assert.equal(t.rapports[0].succes, false); sansSecret(t.rapports);
+});
+
+test('scope Connect installé conserve PG17 et suites, sans bootstrap ni preuve d’installation vierge', t => {
+  const s=scopeReel(t,[candidateMigration]);
+  assert.equal(s.result.status,0);
+  for (const installationMode of ['empty','installed']) {
+    const actifs=sqlJob.steps.filter(step=>step.id!=='migration_scope' && executeCondition(step,s.outputs,true,installationMode));
+    assert.ok(actifs.some(step=>step.run==='python3 scripts/ci/connect-staging-admission-pg17.py'));
+    assert.ok(actifs.some(step=>step.run==='node scripts/ci/connect-staging-installed-proof.mjs inspect'));
+    assert.ok(actifs.some(step=>step.env?.HAS_MIGRATIONS));
+    assert.equal(actifs.some(step=>step.name==='Synchroniser le schéma main vers le staging'),installationMode==='empty');
+    assert.equal(actifs.some(step=>step.run==='node scripts/ci/connect-staging-catalogue-proof.mjs proof'),installationMode==='empty');
+    assert.equal(actifs.some(step=>step.with?.path==='${{ runner.temp }}/connect-installed-proof.json'),installationMode==='installed');
+    assert.ok(!actifs.some(step=>/connect-test-fixture-rollback|contrat-v11-sql-proof/.test(step.run||'')));
+    const apresEchec=sqlJob.steps.filter(step=>executeCondition(step,s.outputs,false,installationMode));
+    assert.ok(!apresEchec.some(step=>step.env?.HAS_MIGRATIONS||step.run==='node scripts/ci/connect-staging-installed-proof.mjs inspect'));
+  }
+  assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.mode == 'installed'"},s.outputs,true,'invalid'),/mode installation non couvert/);
+  assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.unknown == 'installed'"},s.outputs),/condition nouvelle non couverte/);
 });

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { SuiviRemboursementConnectDialog } from '@/components/SuiviRemboursementConnectDialog';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import {
   factureEstAvoir,
@@ -58,11 +59,13 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [erreurTelechargement, setErreurTelechargement] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [suiviConnect, setSuiviConnect] = useState<{ factureId: string; numeroFacture: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setSuiviConnect(null);
       setFactures([]);
       setErreurChargement(null);
       setErreurTelechargement(null);
@@ -268,6 +271,8 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
                 </div>
               </div>
 
+              {!estAvoir && <BoutonY2K size="sm" variant="secondary" className="min-h-[44px] text-xs"
+                onClick={() => setSuiviConnect({ factureId: facture.id, numeroFacture: facture.numero_facture })}>Suivi du paiement par carte</BoutonY2K>}
               {peutTelecharger && (
                 <BoutonY2K
                   size="sm"
@@ -293,6 +298,7 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
           Conservez chaque facture et avoir comme justificatif comptable.
         </p>
       )}
+      {suiviConnect && <SuiviRemboursementConnectDialog {...suiviConnect} onClose={() => setSuiviConnect(null)} />}
     </div>
   );
 }
