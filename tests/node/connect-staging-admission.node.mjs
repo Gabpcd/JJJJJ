@@ -19,6 +19,23 @@ const db={rpc:async()=>({data:row,error:null})};
 const stripe={accounts:{retrieve:async()=>({id:config.platformAccountId})},balance:{retrieve:async()=>({livemode:false})}};
 test('configuration absente ne lit aucun autre environnement',()=>{const keys=[];assert.equal(stagingConnectConfig(k=>{keys.push(k);return undefined;}),null);assert.deepEqual(keys,['CONNECT_STAGING_TEST_RUN']);});
 test('configuration staging exacte acceptée sans effet réseau',()=>assert.deepEqual(stagingConnectConfig(k=>env[k]),config));
+for(const key of ['sk_test_SyntheticOnly','rk_test_SyntheticOnly'])
+ test(`projet staging épinglé accepte le label réservé absent avec ${key.split('_')[0]} TEST`,()=>{
+  const runtime={...env,SUPABASE_ENV:undefined,STRIPE_SECRET_KEY:key};
+  assert.deepEqual(stagingConnectConfig(name=>runtime[name]),config);
+ });
+for(const [name,change] of [
+ ['projet production',{SUPABASE_URL:'https://flripxtsyegjshnhzjkz.supabase.co'}],
+ ['autre projet',{SUPABASE_URL:'https://anotherproject.supabase.co'}],
+ ['suffixe hostile',{SUPABASE_URL:'https://mejpriaetwgtcstbgfid.supabase.co.evil.example'}],
+ ['URL absente',{SUPABASE_URL:undefined}],
+ ['clé live',{STRIPE_SECRET_KEY:'sk_live_SyntheticOnly'}],
+ ['clé restreinte live',{STRIPE_SECRET_KEY:'rk_live_SyntheticOnly'}],
+ ['clé absente',{STRIPE_SECRET_KEY:undefined}],
+ ['clé vide',{STRIPE_SECRET_KEY:''}],
+])test(`label absent refuse ${name}`,()=>assert.throws(()=>stagingConnectConfig(name=>({...env,SUPABASE_ENV:undefined,...change})[name])));
+for(const value of ['','production','prod','PRODUCTION',' staging','test '])
+ test(`label explicite invalide reste refusé ${JSON.stringify(value)}`,()=>assert.throws(()=>stagingConnectConfig(name=>({...env,SUPABASE_ENV:value})[name])));
 for(const [i,change] of [{SUPABASE_URL:'https://flripxtsyegjshnhzjkz.supabase.co'},{STRIPE_SECRET_KEY:'sk_live_SYNTHETIC'},{SUPABASE_ENV:'production'},{CONNECT_STAGING_TEST_RUN:'{}'},
  {CONNECT_STAGING_TEST_RUN:JSON.stringify({...config,returnOrigin:'https://evil.example'})},{CONNECT_STAGING_TEST_RUN:JSON.stringify({...config,extra:'x'})}].entries())
  test(`runtime invalide ${i}`,()=>assert.throws(()=>stagingConnectConfig(k=>({...env,...change})[k])));
