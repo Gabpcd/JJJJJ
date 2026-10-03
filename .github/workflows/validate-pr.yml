@@ -246,6 +246,8 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
+      - name: Mission caregiver loading lifecycle (blocking)
+        run: npx vitest run src/pages/DetailMissionSoignant.chargement.test.tsx
       - name: test:regression:derivation (pur, toujours bloquant)
         run: npm run test:regression:derivation
 

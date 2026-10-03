@@ -184,7 +184,10 @@ export default function DetailMissionSoignant() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { parcours } = useRole();
+  const { parcours, resolved: roleResolu } = useRole();
+  const userId = user?.id;
+  const modeInscription = Boolean(parcours);
+  const professionInscription = parcours?.donnees.profession ?? null;
   const [mission, setMission] = useState<any>(null);
   const [etablissement, setEtablissement] = useState<any>(null);
   // 7c : données safe de l'étab (capacité ⚡ paiement rapide + jour de paie).
@@ -195,6 +198,9 @@ export default function DetailMissionSoignant() {
   const [chargementProlonge, setChargementProlonge] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [tentativeChargement, setTentativeChargement] = useState(0);
+  const cleContexte = JSON.stringify([userId, id, modeInscription, professionInscription]);
+  const [contexteAffiche, setContexteAffiche] = useState<string | null>(null);
+  const contextePrecedentRef = useRef<string | null>(null);
   const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
   const [erreurCreneaux, setErreurCreneaux] = useState(false);
   const [chargementCreneaux, setChargementCreneaux] = useState(true);
@@ -229,15 +235,46 @@ export default function DetailMissionSoignant() {
   const [actionsSecondairesOuvertes, setActionsSecondairesOuvertes] = useState(false);
 
   useEffect(() => {
-    if (!user || !id) return;
+    if (!userId || !id || !roleResolu) {
+      setContexteAffiche(null);
+      return;
+    }
 
     let annule = false;
+    let critiqueController: AbortController | null = null;
+    let annulerAttenteReprise: (() => void) | null = null;
     const planningController = new AbortController();
     const tvaController = new AbortController();
     const minuteurChargementProlonge = setTimeout(() => {
       if (!annule) setChargementProlonge(true);
     }, 6_000);
 
+    // La clé masque déjà l'ancien contenu au rendu, avant cet effet. Les
+    // enrichissements facultatifs ne doivent jamais survivre à leur mission.
+    setContexteAffiche(cleContexte);
+    setMission(null);
+    setSoignant(null);
+    setEtablissement(null);
+    setEtabSafe(null);
+    setCountMissions(0);
+    setCreneauxPlanifies([]);
+    setNoteMoyenne(null);
+    setConformiteOk(false);
+    setShowEvaluation(true);
+    setCandidatureEnvoyee(false);
+    setCandidatureRec(null);
+    if (contextePrecedentRef.current !== cleContexte) {
+      contextePrecedentRef.current = cleContexte;
+      setMessageCandidature('');
+      setModalConfirm(false);
+      setModalAnnuler(false);
+      setModalCodeTravail(null);
+      setModalPerdu(false);
+      setAnimationSucces(false);
+      setChoixContratDialog({ open: false, options: [], action: 'postuler' });
+      setModalAnnulationCandidature(false);
+      setActionsSecondairesOuvertes(false);
+    }
     setLoading(true);
     setChargementProlonge(false);
     setErreurChargement(null);
@@ -246,21 +283,36 @@ export default function DetailMissionSoignant() {
     setLitigeMission(null);
 
     const chargerDonneesCritiques = async () => {
-      if (parcours) {
-        const [offre] = await chargerMissionsInscription(id);
-        return { mission: offre ?? null, introuvable: !offre, soignant: {
-          id: user.id, prenom: '', nom: '', profession: parcours.donnees.profession,
-          adresse_lat: null, adresse_lng: null, tous_documents_valides: false,
-        } };
-      }
       let derniereErreur: unknown;
 
-      // Une reprise automatique absorbe les rares coupures de session/réseau.
-      // Chaque tentative recrée les requêtes Supabase : un thenable déjà rejeté
-      // ne doit jamais être réutilisé.
+      // Chaque tentative possède ses lectures. Un délai ou un changement de
+      // contexte les annule côté client avant toute reprise.
       for (let tentative = 0; tentative < 2; tentative += 1) {
+        if (annule) throw new DOMException('Chargement annulé', 'AbortError');
+        const controller = new AbortController();
+        critiqueController = controller;
+        const avecDelaiCritique = <T,>(operation: PromiseLike<T>) => {
+          const annulation = new Promise<never>((_, reject) => {
+            controller.signal.addEventListener('abort', () => {
+              reject(new DOMException('Chargement annulé', 'AbortError'));
+            }, { once: true });
+          });
+          return avecDelai(
+            Promise.race([Promise.resolve(operation), annulation]),
+            8_000,
+            'Le détail de la mission met trop de temps à répondre.',
+          );
+        };
+
         try {
-          const [resultatMission, resultatSoignant] = await avecDelai(
+          if (modeInscription) {
+            const [offre] = await avecDelaiCritique(chargerMissionsInscription(id, controller.signal));
+            return { mission: offre ?? null, introuvable: !offre, soignant: {
+              id: userId, prenom: '', nom: '', profession: professionInscription,
+              adresse_lat: null, adresse_lng: null, tous_documents_valides: false,
+            } };
+          }
+          const [resultatMission, resultatSoignant] = await avecDelaiCritique(
             Promise.all([
               supabase.from('missions').select(`
                 id, intitule, description, service, profession_requise,
@@ -273,11 +325,9 @@ export default function DetailMissionSoignant() {
                 type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
                 numero_note_honoraires,
                 mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
-              `).eq('id', id).single(),
-              supabase.rpc('fn_mon_profil_soignant_complet' as any),
+              `).eq('id', id).abortSignal(controller.signal).single(),
+              supabase.rpc('fn_mon_profil_soignant_complet' as any).abortSignal(controller.signal),
             ]),
-            8_000,
-            'Le détail de la mission met trop de temps à répondre.',
           );
 
           if (resultatMission.error) {
@@ -298,10 +348,23 @@ export default function DetailMissionSoignant() {
             introuvable: false,
           } as const;
         } catch (error) {
+          if (annule) throw error;
           derniereErreur = error;
-          if (tentative === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 350));
-          }
+        } finally {
+          controller.abort();
+          critiqueController = null;
+        }
+        if (tentative === 0) {
+          await new Promise<void>((resolve) => {
+            const minuteur = setTimeout(() => {
+              annulerAttenteReprise = null;
+              resolve();
+            }, 350);
+            annulerAttenteReprise = () => {
+              clearTimeout(minuteur);
+              resolve();
+            };
+          });
         }
       }
 
@@ -378,7 +441,7 @@ export default function DetailMissionSoignant() {
         })
         .catch((error) => handleErrorSilent(error, 'DetailMissionSoignant.etablissement-safe'));
 
-      if (m.soignant_assigne_id === user.id) {
+      if (m.soignant_assigne_id === userId) {
         void (async () => {
           try {
             const { data, error } = await supabase.rpc('fn_litige_pour_mission' as any, {
@@ -411,7 +474,7 @@ export default function DetailMissionSoignant() {
         void (async () => {
           try {
             const { data: cands, error } = await supabase.from('candidatures')
-              .select('id').eq('mission_id', id).eq('soignant_id', user.id).limit(1);
+              .select('id').eq('mission_id', id).eq('soignant_id', userId).limit(1);
             if (error) throw error;
             if (!annule && cands && cands.length > 0) setCandidatureEnvoyee(true);
           } catch (error) {
@@ -420,13 +483,13 @@ export default function DetailMissionSoignant() {
         })();
       }
 
-      if (m.soignant_assigne_id === user.id && ['ASSIGNEE', 'EN_COURS'].includes(m.statut)) {
+      if (m.soignant_assigne_id === userId && ['ASSIGNEE', 'EN_COURS'].includes(m.statut)) {
         void (async () => {
           try {
             const { data: candRec, error } = await supabase.from('candidatures' as any)
               .select('id, acceptee_a, statut')
               .eq('mission_id', id)
-              .eq('soignant_id', user.id)
+              .eq('soignant_id', userId)
               .eq('statut', 'ACCEPTEE')
               .order('acceptee_a', { ascending: false })
               .limit(1)
@@ -461,7 +524,7 @@ export default function DetailMissionSoignant() {
         // facultatives partent ensuite en arrière-plan.
         setMission(resultat.mission);
         setSoignant(resultat.soignant as any);
-        if (parcours) {
+        if (modeInscription) {
           setEtablissement(resultat.mission.etablissements);
           setCreneauxPlanifies(resultat.mission.creneaux ?? []);
           setChargementCreneaux(false);
@@ -482,20 +545,25 @@ export default function DetailMissionSoignant() {
 
     return () => {
       annule = true;
+      critiqueController?.abort();
+      annulerAttenteReprise?.();
       planningController.abort();
       tvaController.abort();
       clearTimeout(minuteurChargementProlonge);
     };
-  }, [user, id, tentativeChargement, parcours]);
+  }, [userId, id, tentativeChargement, roleResolu, modeInscription, professionInscription, cleContexte]);
 
   // Fetch average rating for the establishment
   useEffect(() => {
     if (!mission?.etablissement_id) return;
+    let annule = false;
     supabase.rpc('fn_note_moyenne' as any, { p_user_id: mission.etablissement_id })
       .then(({ data }: any) => {
+        if (annule) return;
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
       }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.noteMoyenne'));
+    return () => { annule = true; };
   }, [mission?.etablissement_id]);
 
   const missionCandidateHebdo = useMemo(() => mission ? {
@@ -509,7 +577,7 @@ export default function DetailMissionSoignant() {
     type_contrat_recherche: mission.type_contrat_recherche,
   } : undefined, [mission]);
 
-  if (loading && !chargementProlonge) {
+  if (!userId || !roleResolu || contexteAffiche !== cleContexte || (loading && !chargementProlonge)) {
     return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
   }
   if (loading && chargementProlonge) {
