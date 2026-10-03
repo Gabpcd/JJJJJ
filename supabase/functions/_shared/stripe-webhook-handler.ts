@@ -1,4 +1,4 @@
-import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope } from "./stripe-connect-staging-test.ts";
+import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope, requireStagingRefundEventScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -18,7 +18,7 @@ import {
   type EscrowPayoutExpectation,
 } from "./stripe-escrow-payout.ts";
 import { resolveOperationalTestAccount } from "./test-account.ts";
-import { arbitrateConnectOperation, readConnectOperation, processConnectPretransferRefund } from "./stripe-connect-pretransfer.ts";
+import { arbitrateConnectOperation, readConnectOperation, processConnectPretransferRefund, assertConnectRefund } from "./stripe-connect-pretransfer.ts";
 
 export type StripeWebhookSource = "PLATFORM" | "CONNECT";
 
@@ -593,6 +593,21 @@ export async function handleStripeWebhook(
         stagingConnectEvent = true;
       }
     }
+    // Seuls ces événements d'un Refund déjà lié peuvent franchir la
+    // neutralisation TEST. Le RPC spécialisé TEST reste réservé aux Checkout.
+    let stagingConnectRefundId: string | null = null;
+    if (testRuntime && testClassification.isTest && verified.source === "PLATFORM"
+      && event.livemode === false && ["refund.updated", "refund.failed"].includes(event.type)) {
+      const refund = event.data.object as Stripe.Refund;
+      if (refund.metadata?.source === "jolene_connect_pretransfer") {
+        const operation = await readConnectOperation(supabaseAdmin, refund.metadata.session_id || "");
+        if (!operation) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+        assertConnectRefund(operation, refund);
+        await requireStagingRefundEventScope(supabaseAdmin, testRuntime, operation, refund.id);
+        await verifyStagingStripeIdentity(stripe, testRuntime);
+        stagingConnectRefundId = refund.id;
+      }
+    }
     const refundOptions = stagingConnectEvent && testRuntime
       ? { allowCreate: true, beforeCreate: (op: Parameters<typeof requireStagingRefundScope>[2]) => requireStagingRefundScope(supabaseAdmin, testRuntime, op) }
       : { allowCreate: true };
@@ -657,7 +672,7 @@ export async function handleStripeWebhook(
     // peuvent encore émettre des webhooks. Après claim idempotent mais avant
     // toute mutation métier, transfert, notification ou lecture Stripe
     // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
-    if (testClassification.isTest && !stagingConnectEvent) {
+    if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId) {
       await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
@@ -2782,6 +2797,8 @@ export async function handleStripeWebhook(
     // Refund courant ; les queues avoir/escrow restent suivies par leur worker.
     if (verified.source === "PLATFORM" && ["refund.updated", "refund.failed"].includes(event.type)) {
       const refund = await stripe.refunds.retrieve((event.data.object as Stripe.Refund).id);
+      if (stagingConnectRefundId && (refund.id !== stagingConnectRefundId
+        || refund.metadata?.source !== "jolene_connect_pretransfer")) throw new Error("CONNECT_STAGING_TEST_REFUSED");
       if (refund.metadata?.source !== "jolene_connect_pretransfer") {
         await markEventProcessed();
         return new Response(JSON.stringify({ received: true, skipped: "other_refund_origin" }), {
@@ -2791,6 +2808,12 @@ export async function handleStripeWebhook(
       const operation = await readConnectOperation(supabaseAdmin, refund.metadata.session_id || "");
       if (!operation || operation.orientation !== "REFUND" || operation.id !== refund.metadata.operation_id
         || (operation.refund_id && operation.refund_id !== refund.id)) throw new Error("CONNECT_REFUND_SOURCE_MISMATCH");
+      if (stagingConnectRefundId && testRuntime) {
+        // Relire la capacité après le claim et le GET fournisseur. Le statut
+        // vient du Refund courant, jamais de l'instantané de l'événement.
+        assertConnectRefund(operation, refund);
+        await requireStagingRefundEventScope(supabaseAdmin, testRuntime, operation, stagingConnectRefundId);
+      }
       const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), { allowCreate: false });
       await markEventProcessed();
       return new Response(JSON.stringify({ received: true, refunded: result.refunded, refund_status: result.status }), {
