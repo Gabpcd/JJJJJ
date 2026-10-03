@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { inspectInstallation, proveInstalledRegressions, installedSql } from '../../scripts/ci/connect-staging-installed-proof.mjs';
+import { inspectInstallation, proveInstalledRegressions, installedSql, auditSuiteBody, AUDIT_SUITE, checkRestoration } from '../../scripts/ci/connect-staging-installed-proof.mjs';
 import { MIGRATION, CAPACITY, ADMISSION, canonical, digest } from '../../scripts/ci/connect-staging-closed.mjs';
 import { renderStagingAdmission } from '../../scripts/ci/connect-staging-admission-render.mjs';
 
@@ -18,7 +18,8 @@ function scenario() {
   const versions = ['20261001194201'];
   const snapshot = {catalogue:contract.expectedAfter.catalogue,registry:contract.expectedAfter.registry,
     rows:'1'.repeat(32),all_rows:'2'.repeat(32),connect_rows:'3'.repeat(32),delta_md5:reference.deltaMd5,
-    default_acl_md5:'4'.repeat(32),sequences_md5:'5'.repeat(32),versions:[...versions,'20261001201055'],
+    default_acl_md5:'4'.repeat(32),sequences_md5:'5'.repeat(32),sequence_metadata_md5:'6'.repeat(32),other_sequences_md5:'7'.repeat(32),
+    audit_sequence:{value:'236',called:true,conformant:true},versions:[...versions,'20261001201055'],
     capacity_count:1,operation_count:1,quiescent:true,gate_closed:true,capacity_revoked:true,
     operation_terminal:true,cohort_known:true,no_transfer:true,database_role:'postgres',read_only:true};
   const env = {GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',
@@ -32,10 +33,12 @@ function scenario() {
     return {ok:true,status:200,text:async()=>JSON.stringify(next)};
   };
   const args = {env,source,contract,reference,versions,changes:[['A',MIGRATION]],fetcher,
-    sql:'BEGIN;\nSET LOCAL statement_timeout=\'120s\';\nSAVEPOINT test;\nSELECT 1;\nROLLBACK TO SAVEPOINT test;\nRELEASE SAVEPOINT test;\nROLLBACK;\n'};
+    sql:`BEGIN;\nSET LOCAL statement_timeout='120s';\n-- regression: ${AUDIT_SUITE}\nSAVEPOINT test;\n${auditSuiteBody()}ROLLBACK TO SAVEPOINT test;\nRELEASE SAVEPOINT test;\nROLLBACK;\n`};
   return {args,snapshot,calls,responses,
     inspect:()=>inspectInstallation(args), run:()=>proveInstalledRegressions(args)};
 }
+
+const afterAudit = s => ({...structuredClone(s),sequences_md5:'8'.repeat(32),audit_sequence:{...s.audit_sequence,value:String(BigInt(s.audit_sequence.value)+4n)}});
 
 test('staging vierge conserve le chemin initial, sans écriture ni assouplissement des pins installés',async()=>{
   const s=scenario(); s.responses.push([{present:0}]);
@@ -80,20 +83,20 @@ for(const [key,value] of [
   await assert.rejects(s.run()); assert.equal(s.calls.length,1); assert.equal(s.calls[0].read_only,false); assert.match(s.calls[0].query,/^BEGIN READ ONLY;/);
 });
 test('suites conservées sous rollback et trois transports, aucune nouvelle installation',async()=>{
-  const s=scenario(); s.responses.push([s.snapshot],[],[structuredClone(s.snapshot)]);
-  const proof=await s.run(); assert.equal(proof.rollbackVerified,true); assert.equal(proof.migrationReapplied,false);
+  const s=scenario(); s.responses.push([s.snapshot],[],[afterAudit(s.snapshot)]);
+  const proof=await s.run(); assert.equal(proof.businessRowsRestored,true); assert.equal(proof.auditSequenceAdvance.delta,4); assert.equal(proof.migrationReapplied,false);
   assert.deepEqual(s.calls.map(c=>c.read_only),[false,false,false]);
   for (const index of [0,2]) assert.match(s.calls[index].query,/^BEGIN READ ONLY;/);
   assert.equal(s.calls[1].query,s.args.sql); assert.equal(s.calls[0].query,s.calls[2].query);
   assert.doesNotMatch(JSON.stringify(proof),/SENTINELLE/);
 });
-for(const key of ['rows','all_rows','connect_rows','default_acl_md5','sequences_md5']) test(`aucun succès si ${key} change malgré rollback`,async()=>{
-  const s=scenario(); const after=structuredClone(s.snapshot); after[key]='9'.repeat(32);
+for(const key of ['rows','all_rows','connect_rows','default_acl_md5','sequence_metadata_md5','other_sequences_md5']) test(`aucun succès si ${key} change malgré rollback`,async()=>{
+  const s=scenario(); const after=afterAudit(s.snapshot); after[key]='9'.repeat(32);
   s.responses.push([s.snapshot],[],[after]);
   await assert.rejects(s.run(),/ROLLBACK_NOT_RESTORED/); assert.equal(s.calls.length,3);
 });
 test('réponse perdue : une seule transaction puis relecture indépendante, jamais un retry',async()=>{
-  const s=scenario(); s.responses.push([s.snapshot],new Error('SENTINELLE'),[s.snapshot]);
+  const s=scenario(); s.responses.push([s.snapshot],new Error('SENTINELLE'),[afterAudit(s.snapshot)]);
   await assert.rejects(s.run(),/REGRESSIONS_TRANSPORT_REFUSED/);
   assert.deepEqual(s.calls.map(c=>c.read_only),[false,false,false]);
   for (const index of [0,2]) assert.match(s.calls[index].query,/^BEGIN READ ONLY;/);
@@ -166,4 +169,19 @@ test('refus de cohorte nomme seulement champs et types connus, jamais leurs vale
     assert.doesNotMatch(error.message,/PRIVATE_SENTINELLE/); return true;
   });
   assert.equal(s.calls.length,1); assert.match(s.calls[0].query,/^BEGIN READ ONLY;/);
+});
+
+for (const delta of [-1,0,1,3,5,100]) test(`compteur audit refuse delta ${delta}, jamais de remise à zéro`,()=>{
+  const s=scenario(); const after=afterAudit(s.snapshot); after.audit_sequence.value=String(BigInt(s.snapshot.audit_sequence.value)+BigInt(delta));
+  assert.throws(()=>checkRestoration(s.snapshot,after),/AUDIT_SEQUENCE_ADVANCE_NOT_FOUR/);
+});
+for (const [field,value] of [['called',false],['conformant',false],['value',236]]) test(`compteur audit refuse état ${field}`,async()=>{
+  const s=scenario(); s.snapshot.audit_sequence[field]=value;s.responses.push([s.snapshot]);
+  await assert.rejects(s.run(),/AUDIT_SEQUENCE_STATE/);assert.equal(s.calls.length,1);
+});
+test('quatre IDs audit autorisés seulement avec la suite exacte, une fois',async()=>{
+  for (const mutate of [sql=>sql.replace(auditSuiteBody(),'SELECT 1;\n'), sql=>sql.replace(auditSuiteBody(),auditSuiteBody()+auditSuiteBody())]) {
+    const s=scenario();s.args.sql=mutate(s.args.sql);
+    await assert.rejects(s.run(),/AUDIT_SUITE_REQUIRED_ONCE/);assert.equal(s.calls.length,0);
+  }
 });

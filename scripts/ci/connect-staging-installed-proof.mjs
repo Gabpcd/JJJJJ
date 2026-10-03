@@ -9,13 +9,20 @@ import { structuralJsonSql, catalogueSelect } from './connect-staging-closed-sql
 import { sourceManifest, checkReference, partitionSql } from './connect-staging-catalogue-proof.mjs';
 
 export const VERSION = '20261001201055';
+export const AUDIT_SUITE = 'tests/security/copies-bulletins-officiels.test.sql';
+export const AUDIT_SUITE_SHA = 'e1a3e81d652fe319adae728c926d9a756e5304d0f9c9cf6714ab8e802487b50f';
+export function auditSuiteBody() {
+  const source = readFileSync(new URL(`../../${AUDIT_SUITE}`,import.meta.url),'utf8');
+  requireThat(digest(source) === AUDIT_SUITE_SHA, 'AUDIT_SUITE_SOURCE_CHANGED');
+  return source.split('\n').filter(line=>!/^\s*(?:\\|(?:BEGIN|COMMIT|ROLLBACK);\s*$)/.test(line)).join('\n');
+}
 const hex = (v, n) => typeof v === 'string' && new RegExp(`^[a-f0-9]{${n}}$`).test(v);
 const refuse = code => { throw new Error(`CONNECT_INSTALLED_${code}`); };
 const requireThat = (condition, code) => { if (!condition) refuse(code); };
 const keys = value => Object.keys(value ?? {}).sort();
 const relationNames = ['private.stripe_connect_avant_transfert', 'private.stripe_connect_release_gate', 'private.stripe_connect_test_capacities'];
 const countKeys = ['capacity_count', 'operation_count'];
-const hashKeys = ['catalogue', 'registry', 'rows', 'all_rows', 'connect_rows', 'delta_md5', 'default_acl_md5', 'sequences_md5'];
+const hashKeys = ['catalogue', 'registry', 'rows', 'all_rows', 'connect_rows', 'delta_md5', 'default_acl_md5', 'sequences_md5', 'sequence_metadata_md5', 'other_sequences_md5'];
 const flagKeys = ['quiescent', 'gate_closed', 'capacity_revoked', 'operation_terminal', 'cohort_known', 'no_transfer', 'read_only'];
 
 export function checkContext(env, source, contract, reference, versions, changes, installed = true) {
@@ -52,12 +59,19 @@ export function installedSql(json = false) {
       n.nspname,c.relname),false,false,''))::text) ORDER BY n.nspname,c.relname)::text,'[]'))
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname IN('public','private','auth') AND c.relkind IN('r','p'))`;
-  const sequences = `(SELECT md5(COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,
-    pg_get_userbyid(c.relowner),c.relacl,s.seqtypid,s.seqstart,s.seqincrement,s.seqmax,s.seqmin,s.seqcache,s.seqcycle,
+  const sequenceFingerprint = (state = true, excludeAudit = false) => `(SELECT md5(COALESCE(jsonb_agg(jsonb_build_array(n.nspname,c.relname,
+    pg_get_userbyid(c.relowner),c.relacl,s.seqtypid,s.seqstart,s.seqincrement,s.seqmax,s.seqmin,s.seqcache,s.seqcycle${state ? `,
     xpath('/table/row/digest/text()',query_to_xml(format(
-      'SELECT md5(jsonb_build_array(last_value,is_called)::text) AS digest FROM %I.%I',n.nspname,c.relname),false,false,''))::text)
+      'SELECT md5(jsonb_build_array(last_value,is_called)::text) AS digest FROM %I.%I',n.nspname,c.relname),false,false,''))::text` : ''})
     ORDER BY n.nspname,c.relname)::text,'[]')) FROM pg_sequence s JOIN pg_class c ON c.oid=s.seqrelid
-    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','private','auth'))`;
+    JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','private','auth')
+    ${excludeAudit ? "AND NOT(n.nspname='private' AND c.relname='audit_copies_bulletins_id_seq')" : ''})`;
+  const auditSequence = `(SELECT jsonb_build_object('value',a.last_value::text,'called',a.is_called,
+    'conformant',pg_get_userbyid(c.relowner)='postgres' AND s.seqtypid='int8'::regtype AND s.seqstart=1
+      AND s.seqincrement=1 AND s.seqmin=1 AND s.seqmax=9223372036854775807 AND s.seqcache=1 AND NOT s.seqcycle
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(COALESCE(c.relacl,acldefault('s',c.relowner))) acl WHERE acl.grantee<>c.relowner))
+    FROM private.audit_copies_bulletins_id_seq a CROSS JOIN pg_sequence s JOIN pg_class c ON c.oid=s.seqrelid
+    WHERE s.seqrelid='private.audit_copies_bulletins_id_seq'::regclass)`;
   const connectRows = `md5(jsonb_build_array(
     (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM private.stripe_connect_test_capacities c),
     (SELECT jsonb_agg(to_jsonb(o) ORDER BY o.id) FROM private.stripe_connect_avant_transfert o),
@@ -65,7 +79,8 @@ export function installedSql(json = false) {
   const select = `SELECT s.catalogue,s.registry,s.versions,s.rows,s.quiescent,${allRows} AS all_rows,
       current_user AS database_role,current_setting('transaction_read_only')='on' AS read_only,
       ${connectRows} AS connect_rows,md5((${partitionSql(structuralJsonSql, true)})::text) AS delta_md5,
-      ${defaults} AS default_acl_md5,${sequences} AS sequences_md5,
+      ${defaults} AS default_acl_md5,${sequenceFingerprint()} AS sequences_md5,
+      ${sequenceFingerprint(false)} AS sequence_metadata_md5,${sequenceFingerprint(true,true)} AS other_sequences_md5,${auditSequence} AS audit_sequence,
       (SELECT count(*) FROM private.stripe_connect_test_capacities) AS capacity_count,
       (SELECT count(*) FROM private.stripe_connect_avant_transfert) AS operation_count,
       (SELECT count(*)=1 AND bool_and(protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE)
@@ -90,8 +105,11 @@ export function installedSql(json = false) {
 
 export function checkInstalled(rows, contract, reference, versions) {
   requireThat(Array.isArray(rows) && rows.length === 1 && rows[0]
-    && same(keys(rows[0]), [...hashKeys, ...flagKeys, ...countKeys, 'versions', 'database_role'].sort()), 'SNAPSHOT_SHAPE');
+    && same(keys(rows[0]), [...hashKeys, ...flagKeys, ...countKeys, 'versions', 'database_role', 'audit_sequence'].sort()), 'SNAPSHOT_SHAPE');
   const s = rows[0];
+  requireThat(same(keys(s.audit_sequence),['called','conformant','value']) && s.audit_sequence.called === true
+    && s.audit_sequence.conformant === true && typeof s.audit_sequence.value === 'string'
+    && /^[1-9]\d{0,18}$/.test(s.audit_sequence.value) && BigInt(s.audit_sequence.value) <= 9223372036854775803n, 'AUDIT_SEQUENCE_STATE');
   // Field names come only from the fixed schema; never echo a transport value.
   const invalid = [];
   if (s.database_role !== 'postgres') invalid.push(`database_role:TYPE_${typeof s.database_role}`);
@@ -102,6 +120,15 @@ export function checkInstalled(rows, contract, reference, versions) {
   requireThat(s.catalogue === contract.expectedAfter.catalogue && s.registry === contract.expectedAfter.registry
     && s.delta_md5 === reference.deltaMd5 && same(s.versions, [...versions, VERSION].sort()), 'CATALOGUE_OR_REGISTRY_DRIFT');
   return s;
+}
+
+export function checkRestoration(before, after) {
+  const strict = ({sequences_md5, audit_sequence, ...other}) => other;
+  requireThat(same(strict(before),strict(after)), 'ROLLBACK_NOT_RESTORED');
+  requireThat(before.audit_sequence.called === true && after.audit_sequence.called === true
+    && before.audit_sequence.conformant === true && after.audit_sequence.conformant === true
+    && BigInt(after.audit_sequence.value) === BigInt(before.audit_sequence.value)+4n
+    && before.sequences_md5 !== after.sequences_md5, 'AUDIT_SEQUENCE_ADVANCE_NOT_FOUR');
 }
 
 function transport(env, fetcher) {
@@ -156,19 +183,24 @@ export async function proveInstalledRegressions(args) {
     && (sql.match(/^\s*BEGIN;\s*$/gm) ?? []).length === 1
     && (sql.match(/^\s*ROLLBACK;\s*$/gm) ?? []).length === 1
     && !/^\s*COMMIT;\s*$/im.test(sql) && !sql.includes('-- migration:'), 'REGRESSION_TRANSACTION_REFUSED');
+  const auditBody = auditSuiteBody();
+  requireThat(sql.split(`-- regression: ${AUDIT_SUITE}\n`).length === 2
+    && sql.split(auditBody).length === 2, 'AUDIT_SUITE_REQUIRED_ONCE');
   const query = transport(env, fetcher);
   const before = checkInstalled(await query(installedSql(), true, 'BEFORE'), contract, reference, versions);
   let transactionError;
   try { await query(sql, false, 'REGRESSIONS'); } catch (error) { transactionError = error; }
   // Independent read even if the transaction response was lost. Never retry it.
   const after = checkInstalled(await query(installedSql(), true, 'AFTER'), contract, reference, versions);
-  requireThat(same(before, after), 'ROLLBACK_NOT_RESTORED');
+  checkRestoration(before,after);
   if (transactionError) throw transactionError;
   return {schemaVersion:1, mode:'installed', projectRef:PROJECT, candidate:source.candidate,
     sourcePins:Object.fromEntries(['migrationSha256','capacitySha256','admissionSha256'].map(k=>[k,source[k]])),
     referenceDeltaMd5:reference.deltaMd5, catalogue:after.catalogue, registry:after.registry,
-    regressionSqlSha256:digest(sql), snapshots:{before,after}, rollbackVerified:true,
-    installedCatalogueVerified:true, extraFingerprintsPreserved:true, protocolEnabled:false,
+    regressionSqlSha256:digest(sql), snapshots:{before,after}, businessRowsRestored:true,
+    installedCatalogueVerified:true, defaultAclPreserved:true, sequenceMetadataPreserved:true, otherSequencesPreserved:true,
+    auditSequenceAdvance:{sequence:'private.audit_copies_bulletins_id_seq',before:before.audit_sequence.value,
+      after:after.audit_sequence.value,delta:4,sourceTestSha256:AUDIT_SUITE_SHA}, protocolEnabled:false,
     capabilityEnabled:false, providerInvoked:false, migrationReapplied:false};
 }
 
@@ -199,7 +231,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const sql = readFileSync(resolve(process.argv[3]),'utf8');
       const proof = await proveInstalledRegressions({...args,sql});
       writeFileSync(resolve(dir,'connect-installed-proof.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx',mode:0o600});
-      console.log('CONNECT_INSTALLED_CATALOGUE_ET_ROLLBACK_VERIFIES');
+      console.log('CONNECT_INSTALLED_CATALOGUE_DONNEES_ET_AUDIT_PLUS_QUATRE_VERIFIES');
     }
     }
   } catch (error) {

@@ -182,6 +182,10 @@ sql("CREATE SCHEMA cron; CREATE SCHEMA net; CREATE SCHEMA supabase_migrations;"
     "CREATE TABLE cron.job_run_details(end_time timestamptz,status text);"
     "CREATE TABLE net.http_request_queue(id bigint);"
     "CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]);")
+# Explicit sequence-only adapter: this witness checks the controller's audit
+# allowance, not a replacement for the real four-emission bulletin SQL suite.
+sql('CREATE SEQUENCE private.audit_copies_bulletins_id_seq AS bigint INCREMENT BY 1 MINVALUE 1 START 1 CACHE 1 NO CYCLE;')
+sql("SELECT nextval('private.audit_copies_bulletins_id_seq');")
 probe=subprocess.run(['node','scripts/ci/connect-staging-installed-proof.mjs','probe-sql'],
  cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
 assert probe.startswith('BEGIN READ ONLY;') and probe.endswith('ROLLBACK;')
@@ -215,3 +219,38 @@ seq_after=installed_measure("DO $seq$ BEGIN PERFORM nextval('private.connect_ci_
 assert seq_after['sequences_md5']!=seq_before['sequences_md5']
 assert installed_measure()['sequences_md5']==seq_after['sequences_md5']
 print('CONNECT_INSTALLED_LECTURE_TERMINALE_ET_DETECTEURS_PG17_OK',flush=True)
+
+# Same controller, measured PG17 states after rollback; no sequence reset.
+def restoration(before,after):
+ code="import {checkRestoration} from './scripts/ci/connect-staging-installed-proof.mjs'; try {checkRestoration(JSON.parse(process.argv[1]),JSON.parse(process.argv[2]));} catch(e) {console.error(e.message);process.exitCode=2;}"
+ return subprocess.run(['node','--input-type=module','-e',code,json.dumps(before),json.dumps(after)],cwd=ROOT,capture_output=True,text=True,timeout=15)
+def audit_next(count):
+ return "DO $audit$ BEGIN FOR i IN 1.."+str(count)+" LOOP PERFORM nextval('private.audit_copies_bulletins_id_seq'); END LOOP; END $audit$;"
+audit_before=installed_measure()
+installed_measure(audit_next(4))
+audit_after=installed_measure()
+assert restoration(audit_before,audit_after).returncode==0
+assert installed_measure()==audit_after
+for advance in [1,3,5]:
+ before=installed_measure(); installed_measure(audit_next(advance)); after=installed_measure()
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'AUDIT_SEQUENCE_ADVANCE_NOT_FOUR' in verdict.stderr
+ assert installed_measure()==after
+# Changes to sequence settings/ACLs, Auth and invoice sequences stay forbidden,
+# even when the audit counter advances by exactly four alongside them.
+for sequence in ['auth.refresh_tokens_id_seq','private.factures_numerotation_temoin']:
+ sql('CREATE SEQUENCE '+sequence+';')
+ before=installed_measure()
+ installed_measure(audit_next(4)+"DO $other$ BEGIN PERFORM nextval('"+sequence+"'); END $other$;")
+ after=installed_measure()
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'ROLLBACK_NOT_RESTORED' in verdict.stderr
+for mutation in ['ALTER SEQUENCE private.audit_copies_bulletins_id_seq CACHE 2;',
+                 'GRANT USAGE ON SEQUENCE private.audit_copies_bulletins_id_seq TO anon;']:
+ before=installed_measure('DO $noop$ BEGIN NULL; END $noop$;'); after=installed_measure(mutation)
+ assert after['audit_sequence']['conformant'] is False
+ assert after['sequence_metadata_md5']!=before['sequence_metadata_md5']
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'ROLLBACK_NOT_RESTORED' in verdict.stderr
+ assert installed_measure('DO $noop$ BEGIN NULL; END $noop$;')==before
+print('CONNECT_INSTALLED_AUDIT_PLUS_QUATRE_SEUL_AUTORISE_AUTRES_ET_METADATA_REFUSES',flush=True)
