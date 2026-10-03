@@ -169,3 +169,88 @@ assert sql("SELECT count(*) FROM public.stripe_transfers WHERE stripe_transfer_i
 assert sql("SELECT count(*) FROM public.soignants WHERE est_compte_test IS TRUE")=='1'
 assert sql("SELECT count(*) FROM public.etablissements WHERE est_compte_test IS TRUE")=='1'
 print('CONNECT_STAGING_TEST_PG17_SOURCE_OK_AUCUN_FOURNISSEUR',flush=True)
+
+# Exercise the new read-only installed-state reader against the SAME terminal,
+# revoked fixture above. Extra public tables use their real snapshot DDL;
+# operational cron/net/registry tables are explicit local metadata adapters.
+for name in ['paiements_mission','escrow_release_queue','externalisation_actions',
+             'invoice_audit_log','notifications','email_queue']:
+ definition=exact(r'CREATE TABLE IF NOT EXISTS "public"\."'+name+r'" \(.*?\n\);',snapshot)
+ sql(definition)
+sql("CREATE SCHEMA cron; CREATE SCHEMA net; CREATE SCHEMA supabase_migrations;"
+    "CREATE TABLE cron.job(active boolean);"
+    "CREATE TABLE cron.job_run_details(end_time timestamptz,status text);"
+    "CREATE TABLE net.http_request_queue(id bigint);"
+    "CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]);")
+# Explicit sequence-only adapter: this witness checks the controller's audit
+# allowance, not a replacement for the real four-emission bulletin SQL suite.
+sql('CREATE SEQUENCE private.audit_copies_bulletins_id_seq AS bigint INCREMENT BY 1 MINVALUE 1 START 1 CACHE 1 NO CYCLE;')
+sql("SELECT nextval('private.audit_copies_bulletins_id_seq');")
+probe=subprocess.run(['node','scripts/ci/connect-staging-installed-proof.mjs','probe-sql'],
+ cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
+assert probe.startswith('BEGIN READ ONLY;') and probe.endswith('ROLLBACK;')
+probe_body=probe.replace('BEGIN READ ONLY;','',1).removesuffix('ROLLBACK;')
+def installed_measure(mutation=''):
+ return json.loads(sql('BEGIN;'+mutation+probe_body+'ROLLBACK;' if mutation else probe))
+installed=installed_measure()
+for field in ['gate_closed','capacity_revoked','operation_terminal','cohort_known','no_transfer','quiescent']:
+ assert installed[field] is True,field
+assert installed['capacity_count']==installed['operation_count']==1
+assert installed['database_role']=='postgres' and installed['read_only'] is True
+# The actual reader transaction still forbids writes with the operator role:
+# the Management API flag is not the read-only enforcement boundary.
+refused(probe.removesuffix('ROLLBACK;')+f"UPDATE public.soignants SET prenom='Forbidden read-only write' WHERE id='{S}'; ROLLBACK;",'25006')
+assert installed_measure()==installed
+print('CONNECT_INSTALLED_POSTGRES_READ_ONLY_REFUSE_ECRITURE_25006',flush=True)
+for mutation,changed in [
+ ("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon;",'default_acl_md5'),
+ (f"UPDATE private.stripe_connect_test_capacities SET enabled=true,revoked_at=NULL WHERE id='{CAP}';",'connect_rows'),
+ (f"UPDATE public.soignants SET prenom='Changed locally' WHERE id='{S}';",'all_rows'),
+ ("UPDATE private.security_definer_inventory SET recense_le=clock_timestamp();",'all_rows'),
+]:
+ assert installed_measure(mutation)[changed]!=installed[changed],changed
+ assert installed_measure()==installed
+assert installed_measure(f"UPDATE private.stripe_connect_test_capacities SET enabled=true,revoked_at=NULL WHERE id='{CAP}';")['capacity_revoked'] is False
+# Sequence increments intentionally survive rollback. Detect them; never reset
+# a value. This sequence exists only in this disposable PostgreSQL witness.
+sql('CREATE SEQUENCE private.connect_ci_sequence;')
+seq_before=installed_measure()
+seq_after=installed_measure("DO $seq$ BEGIN PERFORM nextval('private.connect_ci_sequence'); END $seq$;")
+assert seq_after['sequences_md5']!=seq_before['sequences_md5']
+assert installed_measure()['sequences_md5']==seq_after['sequences_md5']
+print('CONNECT_INSTALLED_LECTURE_TERMINALE_ET_DETECTEURS_PG17_OK',flush=True)
+
+# Same controller, measured PG17 states after rollback; no sequence reset.
+def restoration(before,after):
+ code="import {checkRestoration} from './scripts/ci/connect-staging-installed-proof.mjs'; try {checkRestoration(JSON.parse(process.argv[1]),JSON.parse(process.argv[2]));} catch(e) {console.error(e.message);process.exitCode=2;}"
+ return subprocess.run(['node','--input-type=module','-e',code,json.dumps(before),json.dumps(after)],cwd=ROOT,capture_output=True,text=True,timeout=15)
+def audit_next(count):
+ return "DO $audit$ BEGIN FOR i IN 1.."+str(count)+" LOOP PERFORM nextval('private.audit_copies_bulletins_id_seq'); END LOOP; END $audit$;"
+audit_before=installed_measure()
+installed_measure(audit_next(4))
+audit_after=installed_measure()
+assert restoration(audit_before,audit_after).returncode==0
+assert installed_measure()==audit_after
+for advance in [1,3,5]:
+ before=installed_measure(); installed_measure(audit_next(advance)); after=installed_measure()
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'AUDIT_SEQUENCE_ADVANCE_NOT_FOUR' in verdict.stderr
+ assert installed_measure()==after
+# Changes to sequence settings/ACLs, Auth and invoice sequences stay forbidden,
+# even when the audit counter advances by exactly four alongside them.
+for sequence in ['auth.refresh_tokens_id_seq','private.factures_numerotation_temoin']:
+ sql('CREATE SEQUENCE '+sequence+';')
+ before=installed_measure()
+ installed_measure(audit_next(4)+"DO $other$ BEGIN PERFORM nextval('"+sequence+"'); END $other$;")
+ after=installed_measure()
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'ROLLBACK_NOT_RESTORED' in verdict.stderr
+for mutation in ['ALTER SEQUENCE private.audit_copies_bulletins_id_seq CACHE 2;',
+                 'GRANT USAGE ON SEQUENCE private.audit_copies_bulletins_id_seq TO anon;']:
+ before=installed_measure('DO $noop$ BEGIN NULL; END $noop$;'); after=installed_measure(mutation)
+ assert after['audit_sequence']['conformant'] is False
+ assert after['sequence_metadata_md5']!=before['sequence_metadata_md5']
+ verdict=restoration(before,after)
+ assert verdict.returncode==2 and 'ROLLBACK_NOT_RESTORED' in verdict.stderr
+ assert installed_measure('DO $noop$ BEGIN NULL; END $noop$;')==before
+print('CONNECT_INSTALLED_AUDIT_PLUS_QUATRE_SEUL_AUTORISE_AUTRES_ET_METADATA_REFUSES',flush=True)

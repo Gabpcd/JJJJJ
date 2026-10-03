@@ -15,8 +15,10 @@ export type StagingConnectCapacity = { id: string; missionId: string; etablissem
 export function stagingConnectConfig(getEnv: (name: string)=>string|undefined): StagingConnectConfig | null {
   const raw=getEnv('CONNECT_STAGING_TEST_RUN');
   if(!raw) return null;
+  // Hosted Supabase reserves SUPABASE_* names; an absent custom label is allowed only for this exact staging URL and a TEST key.
+  const declaredEnvironment=getEnv('SUPABASE_ENV');
   if(getEnv('SUPABASE_URL')!=='https://mejpriaetwgtcstbgfid.supabase.co'
-    || !['staging','test'].includes(getEnv('SUPABASE_ENV') || '')
+    || (declaredEnvironment!==undefined && !['staging','test'].includes(declaredEnvironment))
     || !/^(sk|rk)_test_[A-Za-z0-9]+$/.test(getEnv('STRIPE_SECRET_KEY') || '')) fail();
   let c: Dict;try{c=obj(JSON.parse(raw));}catch{fail();}
   const keys=['serverSha','uiSha','manifestSha256','platformAccountId','capabilityId','returnOrigin'];

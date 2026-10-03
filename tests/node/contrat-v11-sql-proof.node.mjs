@@ -136,7 +136,7 @@ function scopeReel(t, changes, { existing = [], removed = [] } = {}) {
   const result = spawnSync('bash', ['-c', scope], { cwd: dir, env: { ...process.env, BASE_SHA: base, GITHUB_OUTPUT: output }, encoding: 'utf8' });
   return { result, outputs: Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map(l => l.split('='))) };
 }
-function executeCondition(step, outputs, successful = true) {
+function executeCondition(step, outputs, successful = true, installationMode = '') {
   if (!step.if) return successful;
   // Une branche OR après un statut explicite doit être interprétée séparément.
   // Ce format est absent du workflow : le refuser plutôt que simuler sa priorité.
@@ -144,6 +144,11 @@ function executeCondition(step, outputs, successful = true) {
   const status = step.if.startsWith('always() && ') || successful;
   const condition = step.if.replace(/^(always|success)\(\) && /, '');
   const terms = condition.split(' || ').map(group => group.split(' && ').map(term => {
+    const installation = /^steps\.connect_installation\.outputs\.mode (==|!=) '(empty|installed)'$/.exec(term);
+    if (installation) {
+      assert.ok(['','empty','installed'].includes(installationMode), 'mode installation non couvert');
+      return installation[1] === '==' ? installationMode === installation[2] : installationMode !== installation[2];
+    }
     const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture|has_connect_candidate|has_connect_fixture) == '(true|false)'$/.exec(term);
     assert.ok(match, 'condition nouvelle non couverte');
     assert.ok(Object.hasOwn(outputs, match[1]), 'output manquant dans le scénario');
@@ -208,7 +213,7 @@ test('la preuve candidate Connect exige l’ajout de sa migration exacte, pas sa
   const ajout = scopeReel(t, [candidateMigration]);
   assert.equal(ajout.result.status, 0);
   assert.deepEqual(ajout.outputs, scopeAttendu({ has_migrations: 'true', has_connect_candidate: 'true' }));
-  const actifs = sqlJob.steps.filter(step => step.id !== 'migration_scope' && executeCondition(step, ajout.outputs));
+  const actifs = sqlJob.steps.filter(step => step.id !== 'migration_scope' && executeCondition(step, ajout.outputs, true, 'empty'));
   for (const run of ['python3 scripts/ci/connect-staging-admission-pg17.py', 'node scripts/ci/connect-staging-catalogue-proof.mjs proof'])
     assert.ok(actifs.some(step => step.run === run));
   assert.ok(actifs.some(step => step.with?.path === '${{ runner.temp }}/connect-catalogue-proof.json'));
@@ -243,7 +248,7 @@ test('seed et candidate Connect gardent leurs conditions propres et la collecte 
       assert.equal(executeCondition(seed, outputs, successful), successful && has_connect_fixture === 'true');
       assert.equal(executeCondition(seedArtifact, outputs, successful), has_connect_fixture === 'true');
       for (const step of [candidate, candidatePg, candidateArtifact])
-        assert.equal(executeCondition(step, outputs, successful), successful && has_connect_candidate === 'true');
+        assert.equal(executeCondition(step, outputs, successful, 'empty'), successful && has_connect_candidate === 'true');
       assert.equal(executeCondition(setup, outputs, successful), successful &&
         [has_contract_fixture, has_connect_candidate, has_connect_fixture].includes('true'));
     }
@@ -313,4 +318,23 @@ test('double échec garde les deux catégories sans exposer la réponse fourniss
   assert.equal(t.rapports[0].erreur_transaction, 'transport_refuse');
   assert.equal(t.rapports[0].erreur_controle, 'catalogue_divergent');
   assert.equal(t.rapports[0].succes, false); sansSecret(t.rapports);
+});
+
+test('scope Connect installé conserve PG17 et suites, sans bootstrap ni preuve d’installation vierge', t => {
+  const s=scopeReel(t,[candidateMigration]);
+  assert.equal(s.result.status,0);
+  for (const installationMode of ['empty','installed']) {
+    const actifs=sqlJob.steps.filter(step=>step.id!=='migration_scope' && executeCondition(step,s.outputs,true,installationMode));
+    assert.ok(actifs.some(step=>step.run==='python3 scripts/ci/connect-staging-admission-pg17.py'));
+    assert.ok(actifs.some(step=>step.run==='node scripts/ci/connect-staging-installed-proof.mjs inspect'));
+    assert.ok(actifs.some(step=>step.env?.HAS_MIGRATIONS));
+    assert.equal(actifs.some(step=>step.name==='Synchroniser le schéma main vers le staging'),installationMode==='empty');
+    assert.equal(actifs.some(step=>step.run==='node scripts/ci/connect-staging-catalogue-proof.mjs proof'),installationMode==='empty');
+    assert.equal(actifs.some(step=>step.with?.path==='${{ runner.temp }}/connect-installed-proof.json'),installationMode==='installed');
+    assert.ok(!actifs.some(step=>/connect-test-fixture-rollback|contrat-v11-sql-proof/.test(step.run||'')));
+    const apresEchec=sqlJob.steps.filter(step=>executeCondition(step,s.outputs,false,installationMode));
+    assert.ok(!apresEchec.some(step=>step.env?.HAS_MIGRATIONS||step.run==='node scripts/ci/connect-staging-installed-proof.mjs inspect'));
+  }
+  assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.mode == 'installed'"},s.outputs,true,'invalid'),/mode installation non couvert/);
+  assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.unknown == 'installed'"},s.outputs),/condition nouvelle non couverte/);
 });
