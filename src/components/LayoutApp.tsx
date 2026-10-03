@@ -109,7 +109,7 @@ function CadreApplication({ role, children, pleinEcran = false }: LayoutAppProps
               reste sur les pages publiques/SEO. */}
         </main>
       </div>
-      <DemandePermissionPush />
+      <DemandePermissionPush role={role} />
       <BandeauInstallerPWA />
       {/* FAB « ? » retiré (Lot 6a.4) et FAB « Publier » retiré (Lot 11) : tout
           élément flottant finit par recouvrir un CTA (KPI, Enregistrer GPS,
