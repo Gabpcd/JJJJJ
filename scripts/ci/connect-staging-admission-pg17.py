@@ -169,3 +169,44 @@ assert sql("SELECT count(*) FROM public.stripe_transfers WHERE stripe_transfer_i
 assert sql("SELECT count(*) FROM public.soignants WHERE est_compte_test IS TRUE")=='1'
 assert sql("SELECT count(*) FROM public.etablissements WHERE est_compte_test IS TRUE")=='1'
 print('CONNECT_STAGING_TEST_PG17_SOURCE_OK_AUCUN_FOURNISSEUR',flush=True)
+
+# Exercise the new read-only installed-state reader against the SAME terminal,
+# revoked fixture above. Extra public tables use their real snapshot DDL;
+# operational cron/net/registry tables are explicit local metadata adapters.
+for name in ['paiements_mission','escrow_release_queue','externalisation_actions',
+             'invoice_audit_log','notifications','email_queue']:
+ definition=exact(r'CREATE TABLE IF NOT EXISTS "public"\."'+name+r'" \(.*?\n\);',snapshot)
+ sql(definition)
+sql("CREATE SCHEMA cron; CREATE SCHEMA net; CREATE SCHEMA supabase_migrations;"
+    "CREATE TABLE cron.job(active boolean);"
+    "CREATE TABLE cron.job_run_details(end_time timestamptz,status text);"
+    "CREATE TABLE net.http_request_queue(id bigint);"
+    "CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]);")
+probe=subprocess.run(['node','scripts/ci/connect-staging-installed-proof.mjs','probe-sql'],
+ cwd=ROOT,capture_output=True,text=True,check=True,timeout=15).stdout
+assert probe.startswith('BEGIN READ ONLY;') and probe.endswith('ROLLBACK;')
+probe_body=probe.replace('BEGIN READ ONLY;','',1).removesuffix('ROLLBACK;')
+def installed_measure(mutation=''):
+ return json.loads(sql('BEGIN;'+mutation+probe_body+'ROLLBACK;' if mutation else probe))
+installed=installed_measure()
+for field in ['gate_closed','capacity_revoked','operation_terminal','cohort_known','no_transfer','quiescent']:
+ assert installed[field] is True,field
+assert installed['capacity_count']==installed['operation_count']==1
+assert installed['database_role']=='postgres' and installed['read_only'] is True
+for mutation,changed in [
+ ("ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO anon;",'default_acl_md5'),
+ (f"UPDATE private.stripe_connect_test_capacities SET enabled=true,revoked_at=NULL WHERE id='{CAP}';",'connect_rows'),
+ (f"UPDATE public.soignants SET prenom='Changed locally' WHERE id='{S}';",'all_rows'),
+ ("UPDATE private.security_definer_inventory SET recense_le=clock_timestamp();",'all_rows'),
+]:
+ assert installed_measure(mutation)[changed]!=installed[changed],changed
+ assert installed_measure()==installed
+assert installed_measure(f"UPDATE private.stripe_connect_test_capacities SET enabled=true,revoked_at=NULL WHERE id='{CAP}';")['capacity_revoked'] is False
+# Sequence increments intentionally survive rollback. Detect them; never reset
+# a value. This sequence exists only in this disposable PostgreSQL witness.
+sql('CREATE SEQUENCE private.connect_ci_sequence;')
+seq_before=installed_measure()
+seq_after=installed_measure("DO $seq$ BEGIN PERFORM nextval('private.connect_ci_sequence'); END $seq$;")
+assert seq_after['sequences_md5']!=seq_before['sequences_md5']
+assert installed_measure()['sequences_md5']==seq_after['sequences_md5']
+print('CONNECT_INSTALLED_LECTURE_TERMINALE_ET_DETECTEURS_PG17_OK',flush=True)

@@ -56,7 +56,7 @@ export function baselineSql() {
 
 // Toute surcharge supplémentaire modifie aussi ce fingerprint : aucune règle
 // LIKE/prefixe n'autorise implicitement une nouvelle routine ou un nouveau trigger.
-function partitionSql(structure, permitted) {
+export function partitionSql(structure, permitted) {
   const belongs = `CASE
     WHEN part.key='routines' THEN ((item->>0)||'.'||(item->>1))=ANY(${array(ROUTINES)})
     WHEN part.key IN('relations','columns','constraints','indexes') THEN ((item->>0)||'.'||(item->>1))=ANY(${array(TABLES)})
