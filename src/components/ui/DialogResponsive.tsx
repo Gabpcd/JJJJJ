@@ -108,7 +108,7 @@ const DialogResponsiveHeader = React.forwardRef<
     <div className="flex-1 min-w-0">{children}</div>
     <DialogPrimitive.Close
       aria-label="Fermer"
-      className="rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[32px] min-w-[32px] flex items-center justify-center"
+      className="h-11 w-11 shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center justify-center"
     >
       <X className="h-4 w-4" aria-hidden="true" />
     </DialogPrimitive.Close>
