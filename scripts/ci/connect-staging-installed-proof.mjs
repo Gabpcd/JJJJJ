@@ -92,8 +92,13 @@ export function checkInstalled(rows, contract, reference, versions) {
   requireThat(Array.isArray(rows) && rows.length === 1 && rows[0]
     && same(keys(rows[0]), [...hashKeys, ...flagKeys, ...countKeys, 'versions', 'database_role'].sort()), 'SNAPSHOT_SHAPE');
   const s = rows[0];
-  requireThat(s.database_role === 'postgres' && hashKeys.every(k => hex(s[k], 32)) && flagKeys.every(k => s[k] === true)
-    && countKeys.every(k => s[k] === 1), 'CLOSED_TERMINAL_COHORT_REQUIRED');
+  // Field names come only from the fixed schema; never echo a transport value.
+  const invalid = [];
+  if (s.database_role !== 'postgres') invalid.push(`database_role:TYPE_${typeof s.database_role}`);
+  for (const key of hashKeys) if (!hex(s[key], 32)) invalid.push(`${key}:HASH_FORMAT:TYPE_${typeof s[key]}`);
+  for (const key of flagKeys) if (s[key] !== true) invalid.push(`${key}:${s[key] === false ? 'FALSE' : `TYPE_${typeof s[key]}`}`);
+  for (const key of countKeys) if (s[key] !== 1) invalid.push(`${key}:EXPECTED_ONE:TYPE_${typeof s[key]}`);
+  requireThat(invalid.length === 0, `CLOSED_TERMINAL_COHORT_REQUIRED:${invalid.join(',')}`);
   requireThat(s.catalogue === contract.expectedAfter.catalogue && s.registry === contract.expectedAfter.registry
     && s.delta_md5 === reference.deltaMd5 && same(s.versions, [...versions, VERSION].sort()), 'CATALOGUE_OR_REGISTRY_DRIFT');
   return s;

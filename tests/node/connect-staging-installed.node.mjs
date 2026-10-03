@@ -153,7 +153,17 @@ test('diagnostic distingue le second SELECT et ne rejoue aucune requête',async(
 test('le rôle opérateur est conservé sans élargissement SQL ni fallback de rôle',()=>{
   const source=readFileSync('scripts/ci/connect-staging-installed-proof.mjs','utf8');
   assert.match(source,/body:JSON\.stringify\(\{query:sql, read_only:false\}\)/);
-  assert.match(source,/s\.database_role === 'postgres'/);
   assert.match(source,/'read_only'/);
   assert.doesNotMatch(installedSql(),/\b(?:GRANT|ALTER ROLE|SET (?:LOCAL )?ROLE)\b/i);
+});
+
+test('refus de cohorte nomme seulement champs et types connus, jamais leurs valeurs',async()=>{
+  const s=scenario();
+  Object.assign(s.snapshot,{database_role:'PRIVATE_SENTINELLE',all_rows:'PRIVATE_SENTINELLE',quiescent:false,capacity_count:'PRIVATE_SENTINELLE'});
+  s.responses.push([s.snapshot]);
+  await assert.rejects(s.run(),error=>{
+    assert.equal(error.message,'CONNECT_INSTALLED_CLOSED_TERMINAL_COHORT_REQUIRED:database_role:TYPE_string,all_rows:HASH_FORMAT:TYPE_string,quiescent:FALSE,capacity_count:EXPECTED_ONE:TYPE_string');
+    assert.doesNotMatch(error.message,/PRIVATE_SENTINELLE/); return true;
+  });
+  assert.equal(s.calls.length,1); assert.match(s.calls[0].query,/^BEGIN READ ONLY;/);
 });
