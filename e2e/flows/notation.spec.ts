@@ -33,11 +33,12 @@ import {
 import { TEST_ACCOUNTS } from '../helpers/auth';
 import { adminClient, userClient } from '../helpers/db';
 
-test.describe('Flow notation bidirectionnelle', () => {
-  // Conserver aussi le premier essai en échec : une trace du seul retry réussi
-  // ne permet pas de diagnostiquer un refus de chargement des données critiques.
-  test.use({ trace: 'retain-on-failure' });
+// Conserver aussi le premier essai en échec : une trace du seul retry réussi
+// ne permet pas de diagnostiquer un refus de chargement des données critiques.
+// L'option trace configure le worker et doit rester au niveau du fichier.
+test.use({ trace: 'retain-on-failure' });
 
+test.describe('Flow notation bidirectionnelle', () => {
   // Ce parcours exécute le cycle métier complet en base (candidature,
   // contrat, transitions puis purge FK). En CI, ce setup consomme à lui seul
   // l'essentiel des 30 s par défaut avant même les assertions d'interface.
