@@ -13,7 +13,7 @@ const quiet = `(NOT EXISTS(SELECT 1 FROM cron.job WHERE active)
  AND NOT EXISTS(SELECT 1 FROM public.stripe_transfers WHERE statut IN ('EN_ATTENTE','CHARGE_REUSSI'))
  AND NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
    AND backend_type='client backend' AND state IS DISTINCT FROM 'idle'))`;
-const structural = `md5(jsonb_build_object(
+export const structuralJsonSql = `jsonb_build_object(
  'routines',(SELECT COALESCE(jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),
    pg_get_functiondef(p.oid),pg_get_userbyid(p.proowner),p.proacl) ORDER BY n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)),'[]')
    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private','auth') AND p.prokind IN ('f','p')),
@@ -32,10 +32,11 @@ const structural = `md5(jsonb_build_object(
    FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','private','auth') AND NOT t.tgisinternal),
  'policies',(SELECT COALESCE(jsonb_agg(to_jsonb(p) ORDER BY p.schemaname,p.tablename,p.policyname),'[]') FROM pg_policies p WHERE p.schemaname IN ('public','private','auth')),
  'inventory',(SELECT COALESCE(jsonb_agg(to_jsonb(i)-'recense_le' ORDER BY signature),'[]') FROM private.security_definer_inventory i)
- )::text)`;
+ )`;
+const structural = `md5((${structuralJsonSql})::text)`;
 const registry = `(SELECT md5(COALESCE(jsonb_agg(to_jsonb(m) ORDER BY version)::text,'[]')) FROM supabase_migrations.schema_migrations m)`;
 const version = `(SELECT COALESCE(jsonb_agg(version ORDER BY version),'[]') FROM supabase_migrations.schema_migrations)`;
-function catalogueSelect(after) {
+export function catalogueSelect(after) {
   const gate=after?`((SELECT count(*) FROM private.stripe_connect_release_gate)=1
     AND EXISTS(SELECT 1 FROM private.stripe_connect_release_gate WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE)
     AND NOT EXISTS(SELECT 1 FROM private.stripe_connect_avant_transfert))`:

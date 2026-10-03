@@ -340,6 +340,73 @@ function captureFreshAccountTransport(
   };
 }
 
+type RoleRpcDiagnostic = {
+  timestamp: string;
+  route: string;
+  matrixIndex: number;
+  phase: TransportPhase;
+  navigationId: number;
+  documentId: number;
+  requestId: number;
+  requestDocumentId: number | null;
+  scope: 'previous-document' | 'current-document' | 'unknown';
+  event: 'request' | 'response' | 'requestfinished' | 'requestfailed';
+  httpStatus: number | null;
+  failureCode: 'HTTP2_NO_ERROR' | 'CANCELLED_OR_ABORTED' | 'OTHER' | null;
+};
+
+function captureRoleRpcTransport(page: Page, role: FreshAccountRole) {
+  const matrix = role === 'etab' ? ROUTES_ETABLISSEMENT : ROUTES_SOIGNANT;
+  const events: RoleRpcDiagnostic[] = [];
+  const requests = new WeakMap<Request, { id: number; documentId: number | null; navigationId: number }>();
+  let requestId = 0, navigationId = 0, documentId = 0, matrixIndex = -1;
+  let phase: TransportPhase = 'settling';
+  let committed = true, truncated = false;
+  const record = (event: RoleRpcDiagnostic['event'], request: Request, status: number | null = null) => {
+    // Une seule RPC, aucune URL/query, aucun header/corps ni erreur brute conservés.
+    if (new URL(request.url()).pathname !== '/rest/v1/rpc/fn_get_my_role') return;
+    if (events.length >= 2048) { truncated = true; return; }
+    let origin = requests.get(request);
+    if (!origin) {
+      origin = { id: ++requestId, documentId: event === 'request' && committed ? documentId : null, navigationId };
+      requests.set(request, origin);
+    }
+    const failure = event === 'requestfailed' ? request.failure()?.errorText ?? '' : '';
+    events.push({
+      timestamp: new Date().toISOString(),
+      route: matrixIndex < 0 ? 'before-matrix' : matrix[matrixIndex].split('?')[0],
+      matrixIndex, phase, navigationId, documentId,
+      requestId: origin.id, requestDocumentId: origin.documentId,
+      scope: origin.documentId === null ? 'unknown'
+        : origin.documentId < documentId || origin.navigationId < navigationId
+          ? 'previous-document' : 'current-document',
+      event, httpStatus: status,
+      failureCode: !failure ? null : failure.includes('HTTP/2 Error: NO_ERROR') ? 'HTTP2_NO_ERROR'
+        : /cancelled|canceled|aborted/i.test(failure) ? 'CANCELLED_OR_ABORTED' : 'OTHER',
+    });
+  };
+  const onRequest = (request: Request) => record('request', request);
+  const onResponse = (response: Response) => record('response', response.request(), response.status());
+  const onFinished = (request: Request) => record('requestfinished', request);
+  const onFailed = (request: Request) => record('requestfailed', request);
+  const onNavigation = (frame: ReturnType<Page['mainFrame']>) => {
+    if (!committed && frame === page.mainFrame()) { documentId++; committed = true; }
+  };
+  page.on('request', onRequest); page.on('response', onResponse);
+  page.on('requestfinished', onFinished); page.on('requestfailed', onFailed);
+  page.on('framenavigated', onNavigation);
+  return {
+    navigate(route: string) { navigationId++; matrixIndex = matrix.findIndex((entry) => entry === route); phase = 'navigation'; committed = false; },
+    setPhase(value: TransportPhase) { phase = value; },
+    stop() {
+      page.off('request', onRequest); page.off('response', onResponse);
+      page.off('requestfinished', onFinished); page.off('requestfailed', onFailed);
+      page.off('framenavigated', onNavigation);
+    },
+    snapshot() { return { truncated, events }; },
+  };
+}
+
 type FreshAccountRouteAudit = {
   route: string;
   finalUrl: string;
@@ -373,6 +440,7 @@ async function auditFreshAccountRoute(
   role: FreshAccountRole,
   route: string,
   transportDiagnostics: TransportDiagnostic[],
+  roleHttp: ReturnType<typeof captureRoleRpcTransport>,
 ): Promise<FreshAccountRouteAudit> {
   const transport = captureFreshAccountTransport(page, role, route, transportDiagnostics);
   const consoleErrors: string[] = [];
@@ -401,8 +469,10 @@ async function auditFreshAccountRoute(
   page.on('response', onResponse);
 
   try {
+    roleHttp.navigate(route);
     await page.goto(route, { waitUntil: 'domcontentloaded' });
     transport.setPhase('settling');
+    roleHttp.setPhase('settling');
     await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -425,6 +495,7 @@ async function auditFreshAccountRoute(
     }
 
     transport.setPhase('inspection');
+    roleHttp.setPhase('inspection');
     const metrics = await page.evaluate(() => {
       const visible = (element: Element) => {
         if (element.getAttribute('aria-hidden') === 'true' || element.closest('[aria-hidden="true"]')) {
@@ -572,14 +643,19 @@ async function auditFreshAccountRoutes(
   await settleFreshAccountDashboard(page);
   const results: FreshAccountRouteAudit[] = [];
   const transportDiagnostics: TransportDiagnostic[] = [];
+  const roleHttp = captureRoleRpcTransport(page, role);
   try {
     for (const viewport of freshAccountViewports(testInfo)) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const route of routes) {
-        results.push(await auditFreshAccountRoute(page, role, route, transportDiagnostics));
+        results.push(await auditFreshAccountRoute(page, role, route, transportDiagnostics, roleHttp));
       }
     }
   } finally {
+    roleHttp.stop();
+    await testInfo.attach(`audit-compte-neuf-role-http-${role}.json`, {
+      body: Buffer.from(JSON.stringify(roleHttp.snapshot(), null, 2)), contentType: 'application/json',
+    });
     await testInfo.attach(`audit-compte-neuf-transport-${role}.json`, {
       body: Buffer.from(JSON.stringify(transportDiagnostics, null, 2)),
       contentType: 'application/json',

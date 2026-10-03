@@ -108,7 +108,7 @@ if (path.basename(process.argv[1]) === 'supabase') {
   const env = { ...process.env, BASE_SHA: baseSha, RUNNER_TEMP: runner, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
     STAGING_SUPABASE_ACCESS_TOKEN: 'fake-token-never-log', STAGING_SUPABASE_PROJECT_REF: 'mejpriaetwgtcstbgfid',
     STAGING_SUPABASE_DB_PASSWORD: 'fake-password-never-log', FIXTURE_STATE: stateFile,
-    FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200), FIXTURE_SQL_STATUS: String(options.sqlStatus ?? 200), HAS_MIGRATIONS: 'true' };
+    CONNECT_INSTALLATION_MODE: '', FIXTURE_REGISTRY_STATUS: String(options.registryStatus ?? 200), FIXTURE_SQL_STATUS: String(options.sqlStatus ?? 200), HAS_MIGRATIONS: 'true' };
   function run(script, extraEnv = {}) {
     // macOS fournit Bash 3 ; l'équivalent de mapfile permet d'exécuter le même
     // bloc prévu pour Bash 5 sur le runner, sans changer ses commandes SQL.
@@ -233,6 +233,7 @@ test('un fichier PR recopié dans le worktree main est refusé même sans versio
 });
 test('workflow conserve le verrou staging et exécute ces simulations en CI', () => {
   assert.deepEqual(sqlJob.concurrency, { group: 'jolene-supabase-staging-writes', queue: 'max', 'cancel-in-progress': false });
+  assert.equal(sqlJob.steps.find(step => step.run === rollback).env.CONNECT_INSTALLATION_MODE, '${{ steps.connect_installation.outputs.mode }}');
   assert.equal(sqlJob.steps.find(step => step.run === rollback).env.HAS_MIGRATIONS, '${{ steps.migration_scope.outputs.has_migrations }}');
   assert.ok(workflow.jobs['typecheck-and-build'].steps.some(step => step.run === 'node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs'));
 });

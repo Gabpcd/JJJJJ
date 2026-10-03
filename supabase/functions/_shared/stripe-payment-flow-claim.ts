@@ -1,3 +1,27 @@
+import type { StripeErrorMapped } from "./stripe-errors.ts";
+
+type ConnectProtocolCode = "CONNECT_RELEASE_CLOSED" | "CONNECT_CLIENT_VERSION_REQUIRED";
+
+export class StripeConnectProtocolError extends Error {
+  constructor(readonly code: ConnectProtocolCode) {
+    super(code);
+    this.name = "StripeConnectProtocolError";
+  }
+}
+
+export function mapStripeConnectProtocolError(error: unknown): StripeErrorMapped | null {
+  if (!(error instanceof StripeConnectProtocolError)) return null;
+  return {
+    status: 503,
+    code: error.code,
+    userMessage: error.code === "CONNECT_RELEASE_CLOSED"
+      ? "Le paiement de cette facture est temporairement indisponible pendant une mise à jour. Réessayez plus tard depuis Facturation."
+      : "Cette version du paiement est indisponible. Rechargez Facturation avant de réessayer.",
+    retryable: false,
+    logLevel: "warn",
+  };
+}
+
 export type StripePaymentFlow =
   | "CHECKOUT_INVOICE"
   | "SEPA_INVOICE"
@@ -27,14 +51,23 @@ type SupabaseLike = {
 export async function acquireStripePaymentFlowClaim(
   supabase: SupabaseLike,
   expected: StripePaymentFlowClaimExpected,
+  stagingTest = false,
 ): Promise<{ acquired: boolean; claim: StripePaymentFlowClaim }> {
-  const { data, error } = await supabase.rpc("fn_stripe_payment_flow_claim", {
+  if (stagingTest && expected.flow !== "CONNECT_INVOICE") throw new Error("CONNECT_TEST_INVOICE_REQUIRED");
+  const claimRpc = stagingTest ? "fn_stripe_payment_flow_claim_connect_test_v1" : expected.flow === "CONNECT_MISSION" || expected.flow === "CONNECT_INVOICE"
+    ? "fn_stripe_payment_flow_claim_connect_v1"
+    : "fn_stripe_payment_flow_claim";
+  const { data, error } = await supabase.rpc(claimRpc, {
     p_flow: expected.flow,
     p_owner_token: expected.owner_token,
     p_facture_id: expected.facture_id,
     p_mission_id: expected.mission_id,
   });
   if (error || !data || typeof data !== "object") {
+    if (claimRpc === "fn_stripe_payment_flow_claim_connect_v1"
+      && (error?.message === "CONNECT_RELEASE_CLOSED" || error?.message === "CONNECT_CLIENT_VERSION_REQUIRED")) {
+      throw new StripeConnectProtocolError(error.message);
+    }
     throw new Error(
       `Stripe payment claim RPC failed: ${error?.message || "invalid response"}`,
     );

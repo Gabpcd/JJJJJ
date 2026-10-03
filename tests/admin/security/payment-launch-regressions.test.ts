@@ -16,7 +16,8 @@ describe('régressions lancement — paiements critiques', () => {
     expect(workflow).toContain('Voir les factures de cette mission');
     expect(facturation).toContain('setConnectClientSecret(result.client_secret)');
     expect(facturation).toContain('clientSecret: connectClientSecret');
-    expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId })');
+    expect(facturation).toContain('setConnectPaymentContext({ missionId, factureHonoraireId, checkoutSessionId: result.checkout_session_id })');
+    expect(facturation).toContain('if (!estSessionCheckout(result.checkout_session_id))');
     expect(checkout).toContain('preparedClientSecret?: string | null');
     // La transmission du secret préparé et l'absence d'un nouvel appel serveur
     // sont vérifiées en montant le vrai composant dans sa suite configuration.

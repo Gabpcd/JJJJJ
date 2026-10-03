@@ -68,7 +68,7 @@ jobs:
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
 
       - name: Tester la préparation Connect staging fermée sans réseau
-        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
+        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs tests/node/connect-staging-catalogue.node.mjs tests/node/connect-staging-installed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
 
       - name: Gardes du témoin seed Connect sans réseau
         run: node --test tests/node/connect-test-fixture-rollback.node.mjs
@@ -289,6 +289,17 @@ jobs:
     name: Migrations + sécurité SQL (transaction annulée)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    services:
+      postgres-connect-reference:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: connect_pretransfer_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d connect_pretransfer_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
     concurrency:
       # Même verrou que le bootstrap staging : leurs écritures ne doivent
       # jamais s'exécuter simultanément sur la base partagée.
@@ -330,6 +341,12 @@ jobs:
           fi
           echo "has_f1_regression=$has_f1_regression" >> "$GITHUB_OUTPUT"
 
+          if git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql' | grep -Fxq 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql'; then
+            echo "has_connect_candidate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_connect_candidate=false" >> "$GITHUB_OUTPUT"
+          fi
+
           if git diff --quiet "$BASE_SHA"...HEAD -- \
             'scripts/ci/connect-test-fixture*.mjs' \
             'scripts/ci/connect-test-fixture-prepare.sql' \
@@ -358,10 +375,33 @@ jobs:
           fi
 
       - name: Setup Node pour les preuves annulées
-        if: steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'
+        if: steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: '24'
+
+      - name: Connect — référence du delta fermé dans PostgreSQL 17 éphémère
+        if: steps.migration_scope.outputs.has_connect_candidate == 'true'
+        env:
+          JOLENE_CONNECT_WITNESS: CI_EPHEMERE
+          PGHOST: 127.0.0.1
+          PGPORT: '54329'
+          PGDATABASE: connect_pretransfer_temoin
+          PGUSER: postgres
+          PGPASSWORD: fixture-ci-ephemere
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          JOLENE_CONNECT_CATALOGUE_REFERENCE: ${{ runner.temp }}/connect-catalogue-reference.json
+        run: python3 scripts/ci/connect-staging-admission-pg17.py
+
+      - name: Connect — reconnaître strictement le staging installé et fermé
+        id: connect_installation
+        if: steps.migration_scope.outputs.has_connect_candidate == 'true'
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/connect-staging-installed-proof.mjs inspect
 
       - name: Contrat v1.1 draft — preuve SQL seulement, puis contrôle indépendant
         if: steps.migration_scope.outputs.has_contract_fixture == 'true'
@@ -399,7 +439,7 @@ jobs:
           version: 2.98.0
 
       - name: Synchroniser le schéma main vers le staging
-        if: steps.migration_scope.outputs.has_migrations == 'true'
+        if: steps.migration_scope.outputs.has_migrations == 'true' && steps.connect_installation.outputs.mode != 'installed'
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
@@ -586,6 +626,8 @@ jobs:
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HAS_MIGRATIONS: ${{ steps.migration_scope.outputs.has_migrations }}
+          CONNECT_INSTALLATION_MODE: ${{ steps.connect_installation.outputs.mode }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           if [ -z "$STAGING_SUPABASE_ACCESS_TOKEN" ] || [ -z "$STAGING_SUPABASE_PROJECT_REF" ] || [ -z "$BASE_SHA" ]; then
@@ -601,6 +643,13 @@ jobs:
           mapfile -t MIGRATIONS < <(
             git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql' | sort
           )
+          # Le témoin PG17 a rejoué la migration. Sur l'installation reconnue,
+          # conserver toutes les suites SQL, sans réinstaller le moteur/cohorte.
+          if [ "$CONNECT_INSTALLATION_MODE" = 'installed' ]; then
+            test "${#MIGRATIONS[@]}" -eq 1
+            test "${MIGRATIONS[0]}" = 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql'
+            MIGRATIONS=()
+          fi
           SQL_TESTS=(
             tests/admin/security/admin-launch-access-guard.test.sql
             tests/admin/security/admin-document-moderation-hardening.test.sql
@@ -677,7 +726,12 @@ jobs:
             echo "SET LOCAL lock_timeout = '10s';"
             for file in "${MIGRATIONS[@]}"; do
               printf '\n-- migration: %s\n' "$file"
+              # Le COMMIT réel remet ces réglages locaux à leur valeur initiale.
+              # Sous ROLLBACK global, restaurer le contexte du banc évite qu’un
+              # search_path de migration rende les types des suites invisibles.
+              echo "SELECT pg_catalog.set_config('jolene.pr_validation_settings', pg_catalog.jsonb_build_object('search_path', pg_catalog.current_setting('search_path'), 'statement_timeout', pg_catalog.current_setting('statement_timeout'), 'lock_timeout', pg_catalog.current_setting('lock_timeout'), 'TimeZone', pg_catalog.current_setting('TimeZone'))::text, true);"
               sed -E '/^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
+              echo "SELECT pg_catalog.set_config(setting.key, setting.value, true) FROM pg_catalog.jsonb_each_text(pg_catalog.current_setting('jolene.pr_validation_settings')::jsonb) AS setting;"
             done
             test_index=0
             for file in "${SQL_TESTS[@]}"; do
@@ -693,20 +747,52 @@ jobs:
             echo 'ROLLBACK;'
           } > /tmp/jolene-pr-validation.sql
 
-          jq -Rs '{query: .}' /tmp/jolene-pr-validation.sql > /tmp/jolene-pr-validation.json
-          code=$(curl -sS --connect-timeout 10 --max-time 180 \
-            -o /tmp/jolene-pr-validation-response.json -w '%{http_code}' \
-            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
-            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
-            -H 'Content-Type: application/json' \
-            --data-binary @/tmp/jolene-pr-validation.json)
-          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
-            echo "::error::Validation SQL transactionnelle refusée par Supabase (HTTP $code)."
-            jq -r '.message // .error // "Erreur SQL non détaillée"' \
-              /tmp/jolene-pr-validation-response.json 2>/dev/null || true
-            exit 1
+          if [ "$CONNECT_INSTALLATION_MODE" = 'installed' ]; then
+            # Relecture indépendante même après erreur ; aucun retry, reset ou repair.
+            node scripts/ci/connect-staging-installed-proof.mjs regressions /tmp/jolene-pr-validation.sql
+          else
+            jq -Rs '{query: .}' /tmp/jolene-pr-validation.sql > /tmp/jolene-pr-validation.json
+            code=$(curl -sS --connect-timeout 10 --max-time 180 \
+              -o /tmp/jolene-pr-validation-response.json -w '%{http_code}' \
+              -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @/tmp/jolene-pr-validation.json)
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              echo "::error::Validation SQL transactionnelle refusée par Supabase (HTTP $code)."
+              jq -r '.message // .error // "Erreur SQL non détaillée"' \
+                /tmp/jolene-pr-validation-response.json 2>/dev/null || true
+              exit 1
+            fi
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+      - name: Connect — delta exact staging annulé puis relecture indépendante
+        if: steps.migration_scope.outputs.has_connect_candidate == 'true' && steps.connect_installation.outputs.mode == 'empty'
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/connect-staging-catalogue-proof.mjs proof
+
+      - name: Connect — seules les empreintes et assertions vérifiées sont conservées
+        if: success() && steps.migration_scope.outputs.has_connect_candidate == 'true' && steps.connect_installation.outputs.mode == 'empty'
+        uses: actions/upload-artifact@v5
+        with:
+          name: connect-closed-catalogue-proof-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/connect-catalogue-proof.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Connect — preuve de conservation de l'installation et de la cohorte
+        if: success() && steps.migration_scope.outputs.has_connect_candidate == 'true' && steps.connect_installation.outputs.mode == 'installed'
+        uses: actions/upload-artifact@v5
+        with:
+          name: connect-installed-catalogue-proof-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/connect-installed-proof.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Numérotation — SELECT indépendant après succès ou échec
         if: always() && steps.migration_scope.outputs.has_migrations == 'true'

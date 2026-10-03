@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
 import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
+import { SuiviRemboursementConnectDialog } from '@/components/SuiviRemboursementConnectDialog';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import {
@@ -151,6 +152,7 @@ export function MesFacturesHonorairesContent() {
   }, [user, reloadKey]);
 
   const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
+  const [suiviConnect, setSuiviConnect] = useState<{ factureId: string; numeroFacture: string } | null>(null);
   const [factureLitige, setFactureLitige] = useState<{
     facture: any;
     initialType: 'PAIEMENT' | 'AUTRE';
@@ -434,6 +436,8 @@ export function MesFacturesHonorairesContent() {
                   case 'actions':
                     return (
                       <div className="flex flex-wrap items-center justify-end gap-1">
+                        {!estAvoir && <BoutonY2K size="sm" variant="secondary" className="min-h-[44px] text-xs"
+                          onClick={e => { e.stopPropagation(); setSuiviConnect({ factureId: f.id, numeroFacture: f.numero_facture }); }}>Suivi du paiement par carte</BoutonY2K>}
                         {verification?.ouverte && !f.acceptee_explicitement_le && (
                           <BoutonY2K
                             size="sm"
@@ -530,6 +534,8 @@ export function MesFacturesHonorairesContent() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
+                      {!estAvoir && <BoutonY2K size="sm" variant="secondary" className="min-h-[44px]"
+                        onClick={e => { e.stopPropagation(); setSuiviConnect({ factureId: f.id, numeroFacture: f.numero_facture }); }}>Suivi du paiement par carte</BoutonY2K>}
                       {verification?.ouverte && !f.acceptee_explicitement_le && (
                         <BoutonY2K
                           size="sm"
@@ -608,6 +614,7 @@ export function MesFacturesHonorairesContent() {
           onSuccess={onCessionSuccess}
         />
       )}
+      {suiviConnect && <SuiviRemboursementConnectDialog {...suiviConnect} onClose={() => setSuiviConnect(null)} />}
       {factureLitige?.facture?.mission_id && (
         <WizardOuvertureLitige
           missionId={factureLitige.facture.mission_id}

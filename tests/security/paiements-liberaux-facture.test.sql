@@ -132,6 +132,8 @@ DECLARE
   v_cas integer:=0;
   v_statut text;
   v_code text;
+  v_gate_avant jsonb;
+  v_flow text;
 BEGIN
   -- Ce fichier est raccordé uniquement au job staging à verrou global. Aucun
   -- cron ne doit consommer d'outbox ; toutes les écritures restent invisibles.
@@ -173,7 +175,43 @@ BEGIN
   IF v_jour_passe IS NULL OR v_jour_futur IS NULL OR v_semaine+6>=current_date
   THEN RAISE EXCEPTION 'Paiement F152 : calendrier de fixture indisponible'; END IF;
 
+  -- La barrière reste fermée pour les autres sessions. Sa photo inclut toutes
+  -- les colonnes ; l'ouverture ci-dessous appartient à la sous-transaction JP153.
+  SELECT to_jsonb(g) INTO v_gate_avant FROM private.stripe_connect_release_gate g
+    WHERE protocol='CONNECT_PRETRANSFER_V1';
+  IF (SELECT count(*) FROM private.stripe_connect_release_gate)<>1
+    OR v_gate_avant->'enabled' IS DISTINCT FROM 'false'::jsonb THEN
+    RAISE EXCEPTION 'Paiement F152 : barrière unique fermée requise'; END IF;
+
   BEGIN
+    FOREACH v_flow IN ARRAY ARRAY['CONNECT_INVOICE','CONNECT_MISSION'] LOOP
+      BEGIN
+        PERFORM public.fn_stripe_payment_flow_claim(v_flow,'F152_PROTOCOLE_FERME',NULL,NULL);
+        RAISE EXCEPTION 'Paiement F152 : ancien protocole accepté avant ouverture';
+      EXCEPTION WHEN SQLSTATE '55000' THEN
+        IF SQLERRM<>'CONNECT_CLIENT_VERSION_REQUIRED' THEN RAISE; END IF;
+      END;
+      BEGIN
+        PERFORM public.fn_stripe_payment_flow_claim_connect_v1(v_flow,'F152_PROTOCOLE_FERME',NULL,NULL);
+        RAISE EXCEPTION 'Paiement F152 : nouveau protocole accepté barrière fermée';
+      EXCEPTION WHEN SQLSTATE '55000' THEN
+        IF SQLERRM<>'CONNECT_RELEASE_CLOSED' THEN RAISE; END IF;
+      END;
+    END LOOP;
+    UPDATE private.stripe_connect_release_gate SET enabled=true
+      WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled=false;
+    IF NOT FOUND OR (SELECT to_jsonb(g) FROM private.stripe_connect_release_gate g
+      WHERE protocol='CONNECT_PRETRANSFER_V1') IS DISTINCT FROM
+      (v_gate_avant || '{"enabled":true}'::jsonb) THEN
+      RAISE EXCEPTION 'Paiement F152 : ouverture transactionnelle incorrecte'; END IF;
+    FOREACH v_flow IN ARRAY ARRAY['CONNECT_INVOICE','CONNECT_MISSION'] LOOP
+      BEGIN
+        PERFORM public.fn_stripe_payment_flow_claim(v_flow,'F152_PROTOCOLE_OUVERT',NULL,NULL);
+        RAISE EXCEPTION 'Paiement F152 : ancien protocole accepté après ouverture';
+      EXCEPTION WHEN SQLSTATE '55000' THEN
+        IF SQLERRM<>'CONNECT_CLIENT_VERSION_REQUIRED' THEN RAISE; END IF;
+      END;
+    END LOOP;
     -- INSERT SQL Auth seulement : pas de session/token/SMTP/hook Auth HTTP.
     INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
     VALUES (v_soignant,'00000000-0000-0000-0000-000000000000','f152-soignant@example.invalid','authenticated','authenticated',
@@ -317,7 +355,7 @@ BEGIN
       PERFORM set_config('request.jwt.claim.sub','',true);
       PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
       BEGIN
-        PERFORM public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
+        PERFORM public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
         RAISE EXCEPTION 'Paiement F152 : claim après déclaration accepté';
       EXCEPTION WHEN check_violation THEN IF SQLERRM<>'PAIEMENT_FACTURE_DEJA_DECLARE' THEN RAISE; END IF; END;
       RAISE EXCEPTION 'F152_MANUEL_ANNULE' USING ERRCODE='JP151';
@@ -328,10 +366,10 @@ BEGIN
     PERFORM set_config('request.jwt.claim.role','service_role',true);
     PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
     BEGIN
-      v_resultat:=public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
+      v_resultat:=public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
       IF v_resultat->'acquired' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'Paiement F152 : réservation refusée'; END IF;
       BEGIN
-        PERFORM public.fn_stripe_payment_flow_claim('CONNECT_MISSION','connect:'||v_mission::text,NULL,v_mission);
+        PERFORM public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_MISSION','connect:'||v_mission::text,NULL,v_mission);
         RAISE EXCEPTION 'Paiement F152 : claims croisés acceptés';
       EXCEPTION WHEN check_violation THEN IF SQLERRM<>'PAIEMENT_STRIPE_EN_COURS' THEN RAISE; END IF; END;
       PERFORM set_config('request.jwt.claim.sub',v_etab::text,true);
@@ -384,7 +422,7 @@ BEGIN
       VALUES(v_doublon,public.next_avoir_number(v_soignant),v_soignant,v_etab,v_mission,
         80,80,0,0,v_semaine,v_semaine+6,'BROUILLON','AVOIR','AVOIR','VIREMENT_MANUEL',false,v_honoraire);
       BEGIN
-        PERFORM public.fn_stripe_payment_flow_claim('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
+        PERFORM public.fn_stripe_payment_flow_claim_connect_v1('CONNECT_INVOICE','connect-invoice:'||v_honoraire::text,v_commission,NULL);
         RAISE EXCEPTION 'Paiement F152 : nouveau claim malgré avoir accepté';
       EXCEPTION WHEN check_violation THEN IF SQLERRM<>'AVOIR_A_RAPPROCHER' THEN RAISE; END IF; END;
       PERFORM set_config('request.jwt.claim.sub',v_etab::text,true);
@@ -453,7 +491,10 @@ BEGIN
     IF has_function_privilege('anon','private.fn_garder_paiement_liberal_facture()','EXECUTE')
       OR has_function_privilege('authenticated','private.fn_garder_paiement_liberal_facture()','EXECUTE')
       OR has_function_privilege('service_role','private.fn_garder_reservation_connect()','EXECUTE')
-      OR has_function_privilege('authenticated','public.fn_stripe_payment_flow_claim(text,text,uuid,uuid)','EXECUTE') THEN
+      OR has_function_privilege('authenticated','public.fn_stripe_payment_flow_claim(text,text,uuid,uuid)','EXECUTE')
+      OR has_function_privilege('anon','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE')
+      OR has_function_privilege('authenticated','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE')
+      OR NOT has_function_privilege('service_role','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE') THEN
       RAISE EXCEPTION 'Paiement F152 : ACL ouverte'; END IF;
     v_cas:=v_cas+1;
     -- Trace explicitement synthétique, montant/identité acquis au sens du SQL.
@@ -571,6 +612,10 @@ BEGIN
     IF SQLERRM<>'F152_ANNULATION_ATTENDUE' THEN RAISE; END IF;
     v_annule:=true;
   END;
+  IF (SELECT count(*) FROM private.stripe_connect_release_gate)<>1
+    OR (SELECT to_jsonb(g) FROM private.stripe_connect_release_gate g
+      WHERE protocol='CONNECT_PRETRANSFER_V1') IS DISTINCT FROM v_gate_avant THEN
+    RAISE EXCEPTION 'Paiement F152 : barrière non restaurée après annulation'; END IF;
   IF NOT v_annule OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab,v_soignant_tiers))
     OR EXISTS(SELECT 1 FROM public.soignants WHERE id IN(v_soignant,v_soignant_tiers))
     OR EXISTS(SELECT 1 FROM public.missions WHERE id IN(v_mission,v_salarie))

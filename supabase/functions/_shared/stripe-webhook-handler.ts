@@ -1,3 +1,4 @@
+import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -17,6 +18,7 @@ import {
   type EscrowPayoutExpectation,
 } from "./stripe-escrow-payout.ts";
 import { resolveOperationalTestAccount } from "./test-account.ts";
+import { arbitrateConnectOperation, readConnectOperation, processConnectPretransferRefund } from "./stripe-connect-pretransfer.ts";
 
 export type StripeWebhookSource = "PLATFORM" | "CONNECT";
 
@@ -41,6 +43,8 @@ const PLATFORM_EVENT_TYPES = new Set([
   "invoice.payment_failed",
   "payment_intent.payment_failed",
   "payment_intent.succeeded",
+  "refund.updated",
+  "refund.failed",
   "transfer.created",
   "transfer.reversed",
   "transfer.updated",
@@ -573,8 +577,31 @@ export async function handleStripeWebhook(
 
     // Idempotence stricte par event.id (iter4 audit fix)
     // Empêche le re-traitement si Stripe renvoie le même webhook 2x.
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    let stagingConnectEvent = false;
+    if (testRuntime && testClassification.isTest && verified.source === "PLATFORM"
+      && event.livemode === false && event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.metadata?.type === "CONNECT_MISSION_PAYMENT") {
+        await verifyStagingStripeIdentity(stripe, testRuntime);
+        const cap = await readStagingConnectCapacity(supabaseAdmin, testRuntime, session.metadata.facture_honoraires_id || "");
+        if (!cap.operationId || cap.operationId !== session.metadata.connect_operation_id || cap.sessionId !== session.id
+          || cap.missionId !== session.client_reference_id || cap.etablissementId !== session.metadata.etablissement_id
+          || cap.soignantId !== session.metadata.soignant_id || session.livemode !== false) {
+          throw new Error("CONNECT_STAGING_TEST_REFUSED");
+        }
+        stagingConnectEvent = true;
+      }
+    }
+    const refundOptions = stagingConnectEvent && testRuntime
+      ? { allowCreate: true, beforeCreate: (op: Parameters<typeof requireStagingRefundScope>[2]) => requireStagingRefundScope(supabaseAdmin, testRuntime, op) }
+      : { allowCreate: true };
+    const eventClaimRpc = stagingConnectEvent ? "fn_stripe_webhook_event_claim_connect_test_v1" : event.type === "checkout.session.completed"
+      && (event.data.object as Stripe.Checkout.Session).metadata?.type === "CONNECT_MISSION_PAYMENT"
+      ? "fn_stripe_webhook_event_claim_connect_v1"
+      : "fn_stripe_webhook_event_claim";
     const { data: claimStatus, error: idempErr } = await supabaseAdmin.rpc(
-      "fn_stripe_webhook_event_claim" as never,
+      eventClaimRpc as never,
       {
         p_event_id: event.id,
         p_event_type: event.type,
@@ -630,7 +657,7 @@ export async function handleStripeWebhook(
     // peuvent encore émettre des webhooks. Après claim idempotent mais avant
     // toute mutation métier, transfert, notification ou lecture Stripe
     // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
-    if (testClassification.isTest) {
+    if (testClassification.isTest && !stagingConnectEvent) {
       await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
@@ -1001,6 +1028,18 @@ export async function handleStripeWebhook(
           });
         }
 
+        // Une intention REFUND reste gelée après clôture du litige. Reprendre
+        // avant les validations de paiement ordinaires, sans nouveau transfert.
+        const existingOperation = await readConnectOperation(supabaseAdmin, session.id);
+        if (existingOperation?.orientation === "REFUND") {
+          const result = await processConnectPretransferRefund(supabaseAdmin, stripe, existingOperation, crypto.randomUUID(), refundOptions);
+          await markEventProcessed();
+          return new Response(JSON.stringify({ received: true, refunded: result.refunded,
+            refund_status: result.status, reason: "active_dispute" }), {
+            status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          });
+        }
+
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || null;
@@ -1241,75 +1280,22 @@ export async function handleStripeWebhook(
           throw new Error("Paid Connect checkout has no source charge");
         }
 
-        // Un litige peut être ouvert après la création du Checkout mais juste
-        // avant sa validation. Dans ce cas, ne jamais transférer des honoraires
-        // contestés : on rembourse intégralement le paiement tardif et laisse
-        // les deux factures ouvertes jusqu'à la résolution comptable.
-        let litigeActifQuery = supabaseAdmin
-          .from("litiges")
-          .select("id, facture_id, statut")
-          .eq("mission_id", missionId)
-          .in("statut", [
-            "OUVERT",
-            "EN_DISCUSSION",
-            "EN_MEDIATION",
-            "MEDIATION_EN_COURS",
-            "REVUE_ADMIN",
-          ]);
-        litigeActifQuery = factureHonorairesId
-          ? litigeActifQuery.or(`facture_id.eq.${factureHonorairesId},facture_id.is.null`)
-          : litigeActifQuery.is("facture_id", null);
-        const { data: litigeActif, error: litigeActifError } = await litigeActifQuery
-          .limit(1)
-          .maybeSingle();
-        if (litigeActifError) {
-          throw new Error(`Active dispute lookup failed: ${litigeActifError.message}`);
-        }
-        if (litigeActif) {
-          const refund = await stripe.refunds.create({
-            payment_intent: paymentIntentId,
-            reason: "requested_by_customer",
-            metadata: {
-              litige_id: litigeActif.id,
-              mission_id: missionId,
-              facture_honoraires_id: factureHonorairesId || "",
-              motif: "LITIGE_OUVERT_AVANT_TRANSFERT",
-            },
-          }, { idempotencyKey: `refund_litige_${session.id}` });
-          await supabaseAdmin
-            .from("stripe_transfers")
-            .update({
-              statut: "REMBOURSE",
-              erreur: `Paiement remboursé avant transfert — litige ${litigeActif.id}`,
-            })
-            .eq("id", validatedTransferClaim!.id)
-            .eq("stripe_checkout_session_id", session.id);
-          await writeRequiredFinancialAudit(supabaseAdmin, {
-            p_acteur_id: validatedMission.etablissement_id,
-            p_type_acteur: "SYSTEME",
-            p_action: "ADMIN_ACTION",
-            p_type_ressource: "factures_honoraires",
-            p_id_ressource: factureHonorairesId,
-            p_cle_s3: null,
-            p_details: {
-              evenement: "CONNECT_REMBOURSE_AVANT_TRANSFERT_POUR_LITIGE",
-              litige_id: litigeActif.id,
-              stripe_session_id: session.id,
-              stripe_payment_intent_id: paymentIntentId,
-              stripe_refund_id: refund.id,
-            },
-            p_ip: null,
-            p_navigateur: "stripe-webhook",
-          }, "Dispute refund audit failed");
-          await markEventProcessed();
-          return new Response(JSON.stringify({
-            received: true,
-            refunded: true,
-            reason: "active_dispute",
-          }), {
-            status: 200,
-            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-          });
+        // Arbitrage transactionnel commun aux DEUX producteurs de transfert.
+        // Il exige l'admission d'un Checkout neuf, réserve une orientation une
+        // fois et conserve la décision existante de remboursement intégral tardif.
+        const transferAlreadyProven = Boolean(validatedTransferClaim?.stripe_transfer_id
+          && ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(validatedTransferClaim.statut));
+        if (!transferAlreadyProven) {
+          const operation = await arbitrateConnectOperation(supabaseAdmin, stripe, validatedTransferClaim!.id, session.id);
+          if (stagingConnectEvent && operation.orientation !== "REFUND") throw new Error("CONNECT_TEST_TRANSFER_FORBIDDEN");
+          if (operation.orientation === "REFUND") {
+            const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), refundOptions);
+            await markEventProcessed();
+            return new Response(JSON.stringify({ received: true, refunded: result.refunded,
+              refund_status: result.status, reason: "active_dispute" }), {
+              status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+            });
+          }
         }
 
         // Le PaymentIntent peut rester `succeeded` après un remboursement ou
@@ -2792,6 +2778,26 @@ export async function handleStripeWebhook(
       console.log(`charge.dispute.closed handled: ${dispute.id} → ${dispute.status}`);
     }
 
+    // Ces événements ne portent aucun droit de création. Ils relisent le
+    // Refund courant ; les queues avoir/escrow restent suivies par leur worker.
+    if (verified.source === "PLATFORM" && ["refund.updated", "refund.failed"].includes(event.type)) {
+      const refund = await stripe.refunds.retrieve((event.data.object as Stripe.Refund).id);
+      if (refund.metadata?.source !== "jolene_connect_pretransfer") {
+        await markEventProcessed();
+        return new Response(JSON.stringify({ received: true, skipped: "other_refund_origin" }), {
+          status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      const operation = await readConnectOperation(supabaseAdmin, refund.metadata.session_id || "");
+      if (!operation || operation.orientation !== "REFUND" || operation.id !== refund.metadata.operation_id
+        || (operation.refund_id && operation.refund_id !== refund.id)) throw new Error("CONNECT_REFUND_SOURCE_MISMATCH");
+      const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), { allowCreate: false });
+      await markEventProcessed();
+      return new Response(JSON.stringify({ received: true, refunded: result.refunded, refund_status: result.status }), {
+        status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // ── charge.refunded : rapprochement exact Refund → queue → avoir/escrow ──
     if (verified.source === "PLATFORM" && event.type === "charge.refunded") {
       // Un retry d'un ancien événement doit comparer les remboursements aux
@@ -2830,6 +2836,19 @@ export async function handleStripeWebhook(
         throw new Error(
           `Refunded charge ${charge.id} amount mismatch (${succeededRefundAmount}/${charge.amount_refunded})`,
         );
+      }
+
+      const pretransferRefunds = refunds.filter(refund => refund.metadata?.source === "jolene_connect_pretransfer");
+      if (pretransferRefunds.length > 0) {
+        if (pretransferRefunds.length !== 1 || refunds.length !== 1) throw new Error("CONNECT_REFUND_FOREIGN_MOVEMENT");
+        const operation = await readConnectOperation(supabaseAdmin, pretransferRefunds[0].metadata.session_id || "");
+        if (!operation || operation.orientation !== "REFUND" || operation.charge_id !== charge.id
+          || operation.payment_intent_id !== paymentIntentId) throw new Error("CONNECT_REFUND_SOURCE_MISMATCH");
+        const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), { allowCreate: false });
+        await markEventProcessed();
+        return new Response(JSON.stringify({ received: true, refunded: result.refunded, refund_status: result.status }), {
+          status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
       }
 
       const queueRefunds = refunds.filter((refund) => Boolean(refund.metadata?.queue_id));

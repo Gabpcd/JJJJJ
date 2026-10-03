@@ -56,7 +56,10 @@ describe('Stripe Connect — aucune seconde charge après capture', () => {
     expect(flowClaimMigration).toContain('resource_key text PRIMARY KEY');
     expect(flowClaimMigration).toContain("'CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION', 'LEGACY_UNKNOWN'");
     expect(weeklyInvoiceMigration).toContain("'CONNECT_INVOICE'");
-    expect(flowClaim).toContain('.rpc("fn_stripe_payment_flow_claim"');
+    expect(flowClaim).toContain('supabase.rpc(claimRpc, {');
+    expect(flowClaim).toContain('expected.flow === "CONNECT_MISSION" || expected.flow === "CONNECT_INVOICE"');
+    expect(flowClaim).toContain('? "fn_stripe_payment_flow_claim_connect_v1"');
+    expect(flowClaim).toContain(': "fn_stripe_payment_flow_claim"');
     expect(standardAcquire).toBeGreaterThan(0);
     expect(standardAcquire).toBeLessThan(standardCreate);
     expect(standardBind).toBeGreaterThan(standardCreate);
