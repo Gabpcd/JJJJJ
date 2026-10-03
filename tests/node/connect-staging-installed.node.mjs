@@ -29,7 +29,7 @@ function scenario() {
     assert.equal(url,'https://api.supabase.com/v1/projects/mejpriaetwgtcstbgfid/database/query');
     assert.equal(options.redirect,'error'); calls.push(JSON.parse(options.body));
     const next = responses.shift(); if (next instanceof Error) throw next;
-    return {ok:true,text:async()=>JSON.stringify(next)};
+    return {ok:true,status:200,text:async()=>JSON.stringify(next)};
   };
   const args = {env,source,contract,reference,versions,changes:[['A',MIGRATION]],fetcher,
     sql:'BEGIN;\nSET LOCAL statement_timeout=\'120s\';\nSAVEPOINT test;\nSELECT 1;\nROLLBACK TO SAVEPOINT test;\nRELEASE SAVEPOINT test;\nROLLBACK;\n'};
@@ -92,7 +92,7 @@ for(const key of ['rows','all_rows','connect_rows','default_acl_md5','sequences_
 });
 test('réponse perdue : une seule transaction puis relecture indépendante, jamais un retry',async()=>{
   const s=scenario(); s.responses.push([s.snapshot],new Error('SENTINELLE'),[s.snapshot]);
-  await assert.rejects(s.run(),/TRANSPORT_OR_QUERY_REFUSED/);
+  await assert.rejects(s.run(),/REGRESSIONS_TRANSPORT_REFUSED/);
   assert.deepEqual(s.calls.map(c=>c.read_only),[true,false,true]);
 });
 for(const sql of ['SELECT 1;', 'BEGIN;\nCOMMIT;', 'BEGIN;\n-- migration: forbidden\nROLLBACK;',
@@ -122,4 +122,27 @@ test('le chemin installé reste limité à la PR qui ajoute Connect, sans change
   assert.match(workflow,/if: steps\.migration_scope\.outputs\.has_migrations == 'true' && steps\.connect_installation\.outputs\.mode != 'installed'/);
   assert.match(workflow,/MIGRATIONS=\(\)/);
   assert.match(workflow,/true\) ;;\n\s+\*\) echo/); // No shortening of the existing regression suites.
+});
+
+for (const [name,response,expected] of [
+  ['HTTP SQL', {ok:false,status:403,text:async()=>JSON.stringify({code:'42501',message:'PRIVATE_SENTINELLE'})}, /PRESENCE_HTTP_403_BYTES_\d+_SQLSTATE_42501_QUERY_REFUSED/],
+  ['HTTP sans code SQL', {ok:false,status:502,text:async()=>JSON.stringify({message:'PRIVATE_SENTINELLE'})}, /PRESENCE_HTTP_502_BYTES_\d+_SQLSTATE_UNAVAILABLE_QUERY_REFUSED/],
+  ['code non autorisé', {ok:false,status:400,text:async()=>JSON.stringify({code:'PRIVATE_SENTINELLE'})}, /SQLSTATE_UNAVAILABLE_QUERY_REFUSED/],
+  ['réponse non JSON', {ok:true,status:200,text:async()=>'PRIVATE_SENTINELLE'}, /PRESENCE_HTTP_200_BYTES_18_INVALID_JSON/],
+  ['taille excessive', {ok:true,status:200,text:async()=>'x'.repeat(100000)}, /PRESENCE_HTTP_200_BYTES_100000_RESPONSE_TOO_LARGE/],
+]) test(`diagnostic expurgé refuse sans fallback : ${name}`,async()=>{
+  const s=scenario(); let calls=0;
+  s.args.fetcher=async()=>{ calls++; return response; };
+  await assert.rejects(s.inspect(),error=>{
+    assert.match(error.message,expected); assert.doesNotMatch(error.message,/PRIVATE_SENTINELLE|SENTINELLE_NON_CREDENTIAL/); return true;
+  });
+  assert.equal(calls,1);
+});
+test('diagnostic distingue le second SELECT et ne rejoue aucune requête',async()=>{
+  const s=scenario(); let calls=0;
+  s.args.fetcher=async()=> ++calls===1
+    ? {ok:true,status:200,text:async()=>JSON.stringify([{present:3}])}
+    : {ok:false,status:503,text:async()=>JSON.stringify({message:'PRIVATE_SENTINELLE'})};
+  await assert.rejects(s.inspect(),/INSPECT_HTTP_503_BYTES_\d+_SQLSTATE_UNAVAILABLE_QUERY_REFUSED/);
+  assert.equal(calls,2);
 });

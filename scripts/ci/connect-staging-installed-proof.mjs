@@ -100,29 +100,43 @@ export function checkInstalled(rows, contract, reference, versions) {
 }
 
 function transport(env, fetcher) {
-  return async (sql, readOnly) => {
+  return async (sql, readOnly, phase) => {
+    let response, body;
+    // Only fixed phase names, HTTP status, byte count and known SQLSTATE codes
+    // may escape. Never emit a response body, SQL, headers or an exception text.
     try {
-      const response = await fetcher(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`, {
+      response = await fetcher(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`, {
         method:'POST', redirect:'error', signal:AbortSignal.timeout(180000),
         headers:{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`, 'Content-Type':'application/json'},
         body:JSON.stringify({query:sql, read_only:readOnly}),
       });
-      requireThat(response.ok, 'QUERY_REFUSED');
-      const text = await response.text(); requireThat(text.length < 100000, 'RESPONSE_TOO_LARGE');
-      return JSON.parse(text);
-    } catch { refuse('TRANSPORT_OR_QUERY_REFUSED'); }
+      body = await response.text();
+    } catch { refuse(`${phase}_TRANSPORT_REFUSED`); }
+    const status = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
+      ? response.status : 'UNKNOWN';
+    const bytes = Buffer.byteLength(body);
+    const diagnostic = `${phase}_HTTP_${status}_BYTES_${bytes}`;
+    requireThat(bytes < 100000, `${diagnostic}_RESPONSE_TOO_LARGE`);
+    let parsed;
+    try { parsed = JSON.parse(body); } catch { refuse(`${diagnostic}_INVALID_JSON`); }
+    if (!response.ok) {
+      const code = parsed?.code ?? parsed?.error?.code;
+      const known = new Set(['42501','25006','42P01','42883','42703','57014','40001','40P01','42601','0A000','53300','08000','08006','57P01']);
+      refuse(`${diagnostic}_SQLSTATE_${known.has(code) ? code : 'UNAVAILABLE'}_QUERY_REFUSED`);
+    }
+    return parsed;
   };
 }
 
 export async function inspectInstallation(args) {
   const {env, source, contract, reference, versions, changes, fetcher=fetch} = args;
   checkContext(env, source, contract, reference, versions, changes, false);
-  const query = transport(env, fetcher), presence = await query(presenceSql(), true);
+  const query = transport(env, fetcher), presence = await query(presenceSql(), true, 'PRESENCE');
   requireThat(Array.isArray(presence) && presence.length === 1 && same(keys(presence[0]), ['present'])
     && [0,3].includes(presence[0].present), 'PARTIAL_INSTALLATION_REFUSED');
   if (presence[0].present === 0) return {mode:'empty'};
   checkContext(env, source, contract, reference, versions, changes);
-  const snapshot = checkInstalled(await query(installedSql(), true), contract, reference, versions);
+  const snapshot = checkInstalled(await query(installedSql(), true, 'INSPECT'), contract, reference, versions);
   return {mode:'installed', snapshot};
 }
 
@@ -134,11 +148,11 @@ export async function proveInstalledRegressions(args) {
     && (sql.match(/^\s*ROLLBACK;\s*$/gm) ?? []).length === 1
     && !/^\s*COMMIT;\s*$/im.test(sql) && !sql.includes('-- migration:'), 'REGRESSION_TRANSACTION_REFUSED');
   const query = transport(env, fetcher);
-  const before = checkInstalled(await query(installedSql(), true), contract, reference, versions);
+  const before = checkInstalled(await query(installedSql(), true, 'BEFORE'), contract, reference, versions);
   let transactionError;
-  try { await query(sql, false); } catch (error) { transactionError = error; }
+  try { await query(sql, false, 'REGRESSIONS'); } catch (error) { transactionError = error; }
   // Independent read even if the transaction response was lost. Never retry it.
-  const after = checkInstalled(await query(installedSql(), true), contract, reference, versions);
+  const after = checkInstalled(await query(installedSql(), true, 'AFTER'), contract, reference, versions);
   requireThat(same(before, after), 'ROLLBACK_NOT_RESTORED');
   if (transactionError) throw transactionError;
   return {schemaVersion:1, mode:'installed', projectRef:PROJECT, candidate:source.candidate,
