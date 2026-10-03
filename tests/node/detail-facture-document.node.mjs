@@ -147,6 +147,22 @@ test('les commissions mensuelles distinctes conservent leurs modes et permission
   assert.match(html, /utilise le prélèvement SEPA/); assert.ok(!html.includes('programmé'));
 });
 
+test('un virement déclaré ne propose aucun nouveau paiement de commission', () => {
+  for (const type_document of ['FACTURE', 'FACTURE_COMPLEMENTAIRE']) {
+    const invoice = { ...facture, facture_honoraire_id: null, mission_id: null, type_document, statut: 'VIREMENT_DECLARE' };
+    const presentation = exports.presentationPaiementCommission(invoice, {}, true);
+    assert.equal(presentation.canPay, false, `${type_document} : virement déjà déclaré`);
+    assert.equal(presentation.canPayCard, false, `${type_document} : carte après virement déclaré`);
+    // renderPage garde showCheckout=true : le contenu dormant doit rester absent.
+    const html = renderPage({ invoice, fees: null, etab: {}, allowed: true });
+    assert.match(html, /Virement déclaré — en attente de vérification/);
+    for (const forbidden of ['AUTONOMOUS_CHECKOUT', 'AUTONOMOUS_TRANSFER']) {
+      assert.ok(!html.includes(forbidden), `${type_document} : ${forbidden}`);
+    }
+    assert.doesNotMatch(html, />\s*Payer<\/button>/);
+  }
+});
+
 test('les deux lectures sont bornées à la facture et à son établissement', async () => {
   const client = clientWith({ factures: { data: facture }, factures_honoraires: { data: honoraires } });
   const result = await exports.chargerContexteFactureCommission(client, 'commission', 'etab');

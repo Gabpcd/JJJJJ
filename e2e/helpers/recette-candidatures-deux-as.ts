@@ -107,6 +107,12 @@ export function creerCandidaturesDeuxAs() {
           case 'fn_etablissement_public': return json(null); // Les comptes test sont exclus de la fiche publique.
           case 'fn_etablissement_pour_mission': return json(etablissement);
           case 'fn_etablissements_safe': return json([etablissement]);
+          case 'fn_lire_candidatures_mission_habilitee': {
+            // La route secondaire conserve le refus SQL pour un établissement tiers.
+            expect(acteur).toBe('tiers');
+            expect(body).toEqual({ p_mission_id: mission.id });
+            return json({ code: '42501', message: 'Mission indisponible ou accès refusé' }, 403);
+          }
           case 'fn_soignant_pour_etablissement': {
             const candidat = acteur === 'etablissement' ? soignants.find(s => s.id === body.p_soignant_id) : null;
             // Le RPC LIVE conserve le prénom mais masque le nom et le téléphone

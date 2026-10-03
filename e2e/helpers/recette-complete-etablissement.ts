@@ -104,6 +104,16 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
     data=object?(rows[0]??null):rows;
    }
    else if(nom==='mission_creneaux')data=etat.donnees?[creneau]:[];
+   else if(nom==='fn_lire_candidatures_mission_habilitee'&&req.method()==='POST'&&url.pathname==='/rest/v1/rpc/fn_lire_candidatures_mission_habilitee'&&!etat.donnees){
+    const payload=req.postDataJSON();
+    expect(payload).toEqual({p_mission_id:ids.mission});
+    etat.operations.push({nom,payload});
+    return repondre({status:403,json:{code:'42501',message:'Mission indisponible ou accès refusé'}});
+   }
+   // Le détail de commission lit aussi son contexte, même lorsque le RPC ne trouve aucune facture.
+   else if(nom==='factures'&&req.method()==='GET'&&object&&etat.mode==='complet'
+    &&url.searchParams.get('id')===`eq.${ids.facture}`&&url.searchParams.get('etablissement_id')===`eq.${ids.etab}`
+    &&url.searchParams.get('select')==='id,etablissement_id,mission_id,facture_honoraire_id,type_document,mode_paiement')data=null;
    else if(nom==='fn_compte_auth_actif')data=true;
    else if(nom==='fn_capacite_alertes_recherches')data=false;
    else if(nom==='fn_messages_non_lus')data=0;

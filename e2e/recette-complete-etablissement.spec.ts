@@ -13,7 +13,7 @@ export const routesEtablissement = [
  ['soignants','Aucun soignant ne correspond à vos critères.','Annuaire des soignants'],
  [`soignants/${ids.soignant}`,'Profil soignant indisponible.','Profil soignant'],
  ['missions','Publiez votre première mission'],['missions/creer','Publier une mission'],
- [`missions/${ids.mission}`,'Mission introuvable'],
+ [`missions/${ids.mission}`,'Impossible de charger la mission'],
  [`missions/${ids.mission}/modifier`,'Planning indisponible'],
  ['presences','Aucune présence à valider','Présences'],
  ['contrats','Aucun contrat','Contrats'],
@@ -85,8 +85,18 @@ for(const entree of ['connexion','inscription'] as const){
   for(const route of routesEtablissement){
    const [path,complet,minimal]=route;
    await test.step(path,async()=>{
+    const missionRefusee=path===`missions/${ids.mission}`;
+    const debutLectures=etat.appels.length;
+    const refus=missionRefusee?page.waitForResponse(response=>new URL(response.url()).pathname==='/rest/v1/rpc/fn_lire_candidatures_mission_habilitee'):null;
     await allerA(page,`/etablissement/${path}`);
     try{
+     if(refus){
+      const reponse=await refus;
+      expect(reponse.request().method()).toBe('POST');
+      expect(reponse.request().postDataJSON()).toEqual({p_mission_id:ids.mission});
+      expect(reponse.status()).toBe(403);
+      expect(await reponse.json()).toEqual({code:'42501',message:'Mission indisponible ou accès refusé'});
+     }
      if(mode==='minimal'&&['activer','parametres'].includes(path)){
       await expect(page).toHaveURL(/\/inscription\/completer$/);
       await expect(page.getByRole('button',{name:'Enregistrer mon établissement',exact:true})).toBeVisible();
@@ -95,6 +105,12 @@ for(const entree of ['connexion','inscription'] as const){
      await pasDeDebordement(page);
     }catch(error){expect.soft(false,`${mode} /${path}: ${String(error)}`).toBe(true);}
     await stabiliserLectures(page);
+    if(missionRefusee){
+     await expect(page.getByText(mission.intitule,{exact:true})).toHaveCount(0);
+     await expect(page.getByRole('button',{name:'Accepter cette candidature',exact:true})).toHaveCount(0);
+     expect(etat.appels.slice(debutLectures).filter(appel=>['GET candidatures','GET mission_creneaux','GET soignants','POST fn_soignant_pour_etablissement'].includes(appel))).toEqual([]);
+     expect(etat.operations.filter(operation=>operation.nom==='fn_lire_candidatures_mission_habilitee')).toEqual([{nom:'fn_lire_candidatures_mission_habilitee',payload:{p_mission_id:ids.mission}}]);
+    }
     await preuve(page,`${entree}-${mode}-${path.replaceAll('/','-')}`,info);
    });
   }
