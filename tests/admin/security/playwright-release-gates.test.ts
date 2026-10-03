@@ -197,6 +197,29 @@ describe('FIFO limitée aux jobs de base de la tentative courante', () => {
     expect(h.fetchImpl.mock.calls.every(([url]) => !/cancel|rerun|dispatch/.test(url))).toBe(true);
   });
 
+  it('reconnaît les quinze lots isolés sur trois sans attendre leur fin après le nettoyage Chromium', async () => {
+    const formats = ['ipad-portrait', 'ipad-paysage', 'iphone', 'android', 'ordinateur'];
+    const simulations = formats.flatMap((format, index) => [1, 2, 3].map(shard => simulation({
+      id: 200 + index * 3 + shard,
+      name: `Simulation interfaces (${format}, lot ${shard}/3)`,
+    })));
+    expect(simulations).toHaveLength(15);
+    const h = harness({ jobs: [job(), ...simulations] });
+    await h.execute();
+    expect(h.elapsed()).toBe(0);
+    expect(h.fetchImpl.mock.calls.every(([url]) => !/cancel|rerun|dispatch/.test(url))).toBe(true);
+    expect(sharedDatabaseJobsFinished([
+      job({ status: 'in_progress', conclusion: null }), ...simulations,
+    ], 'pull_request')).toBe(false);
+  });
+
+  it.each(['Simulation interfaces (ipad-portrait)',
+    'Simulation interfaces (ipad-portrait, lot 1/2)',
+    'Simulation interfaces (ipad-portrait, lot 2/2)',
+  ])('conserve la reconnaissance historique exacte : %s', name => {
+    expect(sharedDatabaseJobsFinished([job(), simulation({ name })], 'pull_request')).toBe(true);
+  });
+
   it('attend la fin du job complet, même si ses tests ont déjà réussi pendant le nettoyage', async () => {
     const h = harness({ override: (url, turn) => url.pathname.includes('/attempts/')
       ? { total_count: 2, jobs: [job({ status: turn === 0 ? 'in_progress' : 'completed',
@@ -219,6 +242,9 @@ describe('FIFO limitée aux jobs de base de la tentative courante', () => {
     ['job base absent', [simulation()]],
     ['jobs absents', []],
     ['nom trompeur de simulation', [job(), simulation({ name: 'Simulation interfaces (nouvelle-base)' })]],
+    ['lot historique impossible 3/2', [job(), simulation({ name: 'Simulation interfaces (ipad-portrait, lot 3/2)' })]],
+    ['lot nouveau impossible 4/3', [job(), simulation({ name: 'Simulation interfaces (ipad-portrait, lot 4/3)' })]],
+    ['format inconnu avec trois lots', [job(), simulation({ name: 'Simulation interfaces (nouvelle-base, lot 1/3)' })]],
   ])('reste fermé si %s', async (_nom, jobs) => {
     const h = harness({ jobs: jobs as ReturnType<typeof job>[] });
     await expect(h.execute()).rejects.toThrow('Timeout FIFO');
