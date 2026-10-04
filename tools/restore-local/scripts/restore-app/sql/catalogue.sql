@@ -1,6 +1,31 @@
 BEGIN READ ONLY;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='45s';
+-- Native PG17 regression: the old expression must be ambiguous, the cast must
+-- resolve to text. All values below are constants; no catalogue row is exported.
+DO $catalogue_type_guard$
+DECLARE old_expression_ambiguous boolean := false; corrected text;
+BEGIN
+  IF current_database()<>'jolene_candidatures_pg17_test' OR inet_server_addr() IS NOT NULL
+    OR session_user<>'postgres' OR current_user<>session_user
+    OR current_setting('server_version_num')::integer NOT BETWEEN 170000 AND 179999
+    OR current_setting('cron.launch_active_jobs')<>'off' OR current_setting('max_worker_processes')<>'0'
+    OR NOT EXISTS (SELECT 1 FROM pg_attribute
+      WHERE attrelid='pg_catalog.pg_default_acl'::regclass AND attname='defaclobjtype'
+        AND atttypid='"char"'::regtype AND NOT attisdropped)
+  THEN RAISE EXCEPTION USING ERRCODE='55000', MESSAGE='RESTORE_CATALOGUE_TYPE_CONTEXT'; END IF;
+  BEGIN
+    EXECUTE $old_expression$SELECT 'prefix.'::text || 'r'::"char"$old_expression$;
+  EXCEPTION WHEN SQLSTATE '42725' THEN old_expression_ambiguous := true;
+  END;
+  IF old_expression_ambiguous IS NOT TRUE THEN
+    RAISE EXCEPTION USING ERRCODE='55000', MESSAGE='RESTORE_CATALOGUE_AMBIGUITY_EXPECTED';
+  END IF;
+  SELECT 'prefix.'::text || ('r'::"char")::text INTO corrected;
+  IF corrected IS DISTINCT FROM 'prefix.r' THEN
+    RAISE EXCEPTION USING ERRCODE='55000', MESSAGE='RESTORE_CATALOGUE_CAST_REQUIRED';
+  END IF;
+END $catalogue_type_guard$;
 WITH facts AS (
  SELECT 'relation' AS kind,n.nspname||'.'||c.relname AS name,
    jsonb_build_array(c.relkind,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner),c.relacl) AS value
@@ -26,7 +51,7 @@ WITH facts AS (
  FROM pg_indexes WHERE schemaname IN('public','private','auth','storage')
  UNION ALL SELECT 'extension',e.extname,jsonb_build_array(e.extversion,n.nspname,pg_get_userbyid(e.extowner))
  FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace
- UNION ALL SELECT 'default_acl',pg_get_userbyid(d.defaclrole)||'.'||coalesce(n.nspname,'global')||'.'||d.defaclobjtype,
+ UNION ALL SELECT 'default_acl',pg_get_userbyid(d.defaclrole)||'.'||coalesce(n.nspname,'global')||'.'||d.defaclobjtype::text,
    to_jsonb(d.defaclacl) FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
 )
 SELECT jsonb_build_object(

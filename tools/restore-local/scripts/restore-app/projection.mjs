@@ -1,9 +1,10 @@
 import { phaseFailure, FAILURE_CODES } from './failure.mjs';
 import { hash } from './identity.mjs';
+import { CAPTURE_STAGES } from './snapshot-restore.mjs';
 const required = (ok, code, diagnostic) => { if (!ok) throw phaseFailure(code, diagnostic); };
 const SHA = /^[a-f0-9]{64}$/;
 export const STAGES = Object.freeze(['identity', 'units', 'plan', 'preload', 'preflight', 'up', 'inspect', 'extensions',
-  'import', 'current_product_witness', 'source_api_restart', 'source_seed', 'object_readback', 'capture', 'source_off', 'complete', 'cleanup', 'absence']);
+  'import', 'current_product_witness', 'source_api_restart', 'source_seed', 'object_readback', 'capture', ...CAPTURE_STAGES, 'source_off', 'complete', 'cleanup', 'absence']);
 const KINDS = Object.freeze(['ENCODING', 'STDSTRINGS', 'SEARCHPATH', 'MATERIALIZED VIEW DATA', 'MATERIALIZED VIEW', 'SEQUENCE OWNED BY', 'DEFAULT ACL', 'TABLE DATA',
   'SEQUENCE SET', 'FK CONSTRAINT', 'ROW SECURITY', 'EVENT TRIGGER', 'PUBLICATION TABLE', 'PUBLICATION', 'PROCEDURE',
   'SCHEMA', 'EXTENSION', 'COMMENT', 'TYPE', 'DOMAIN', 'FUNCTION', 'AGGREGATE', 'OPERATOR CLASS', 'OPERATOR FAMILY', 'OPERATOR',

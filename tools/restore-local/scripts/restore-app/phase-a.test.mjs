@@ -10,7 +10,7 @@ import { parseTap } from './phase-a.mjs';
 import { newSourceFixture, seedSource, sqlJson } from './source-fixture.mjs';
 import { phaseFailure } from './failure.mjs';
 import { runPhaseA } from './phase-a-core.mjs';
-import { captureSource } from './snapshot-restore.mjs';
+import { captureSource, CAPTURE_STAGES } from './snapshot-restore.mjs';
 
 const head = 'a'.repeat(40), run = 'jolene-restore-drill-123456-1';
 const env = { GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', GITHUB_EVENT_NAME: 'workflow_dispatch',
@@ -275,4 +275,45 @@ test('current-product certificate witness uses the real baseline columns and mig
   assert.equal(checked.length, 1, 'witness must check the explicit private column');
   for (const column of checked) assert.ok(actualColumns.has(column), 'witness refers to a nonexistent product column');
   assert.deepEqual(checked, revoked, 'witness must check the column revoked by the real migration');
+});
+
+
+test('capture distinguishes checkpoint, catalogue and archive stages without leaking SQL diagnostics', async () => {
+  for (const failedStage of CAPTURE_STAGES) {
+    const directory = mkdtempSync(join(tmpdir(), 'phase-a-stage-'));
+    const canary = randomBytes(24).toString('hex'), seen = [];
+    let lastStage = 'capture', dumpStarted = false;
+    const failure = Object.assign(Error(canary), { diagnostic: { sqlstate: '42725', line: 36 }, raw: canary });
+    const failHere = () => { if (lastStage === failedStage) throw failure; };
+    const runtime = { run, stopApis: async () => {}, verifyState: async () => {},
+      sqlJson: async () => { failHere(); return { unchanged: true }; },
+      catalogue: async () => { failHere(); return { synthetic: true }; },
+      databaseTool: async () => { dumpStarted = true; failHere(); return Buffer.from('PGDMPsynthetic'); },
+      archiveList: async () => { failHere(); return toc(); }, privateWrite: async () => {},
+      copyFilesOut: async (_side, destination) => {
+        failHere(); mkdirSync(destination); writeFileSync(join(destination, 'synthetic.pdf'), 'pdf');
+        writeFileSync(join(destination, 'synthetic.xml'), 'xml');
+      },
+    };
+    try {
+      await assert.rejects(captureSource(runtime, directory, 'synthetic-checkpoint', stage => { lastStage = stage; seen.push(stage); }), error => {
+        assert.equal(error, failure);
+        const report = closedFailure(error, lastStage);
+        assert.equal(report.stage, failedStage); assert.equal(report.sqlstate, '42725'); assert.equal(report.sqlLine, 36);
+        assert.equal(JSON.stringify(report).includes(canary), false); return true;
+      });
+      assert.deepEqual(seen, CAPTURE_STAGES.slice(0, CAPTURE_STAGES.indexOf(failedStage) + 1));
+      if (['capture_checkpoint_before', 'capture_catalogue'].includes(failedStage)) assert.equal(dumpStarted, false);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
+});
+
+test('phase A forwards native capture substages into its closed public progress', async () => {
+  const h = harness();
+  h.dependencies.capture = async (_runtime, _directory, _checkpoint, enter) => {
+    for (const stage of CAPTURE_STAGES) enter(stage);
+    return h.captured;
+  };
+  await h.execute();
+  assert.deepEqual(h.reports.map(value => value.stage).filter(stage => CAPTURE_STAGES.includes(stage)), [...CAPTURE_STAGES]);
 });

@@ -7,6 +7,8 @@ import { join } from 'node:path';
 
 const DB = 'jolene_candidatures_pg17_test';
 const requireValue = (ok, code, diagnostic) => { if (!ok) throw phaseFailure(code, diagnostic); };
+export const CAPTURE_STAGES = Object.freeze(['capture_checkpoint_before', 'capture_catalogue', 'capture_dump',
+  'capture_toc', 'capture_files', 'capture_checkpoint_after']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function normalizedToc(bytes) {
   const lines = bytes.toString('utf8').split(/\r?\n/).filter(line => line && !line.startsWith(';'));
@@ -44,26 +46,32 @@ export function assertEmptyFileTree(directory) {
   requireValue(fileTree(directory).length === 0, 'RESTORE_TARGET_FILES_NOT_EMPTY');
 }
 
-export async function captureSource(runtime, privateDir, checkpointSql) {
+export async function captureSource(runtime, privateDir, checkpointSql, reportStage = () => {}) {
   // Snapshot PRECEDES all UI logins, so session/refresh tables are genuinely empty.
   await runtime.stopApis('source');
   await runtime.verifyState({ source: 'db-only', target: 'db-only', browser: 'absent' });
+  reportStage('capture_checkpoint_before');
   const before = await runtime.sqlJson('source', checkpointSql);
+  reportStage('capture_catalogue');
   const catalogue = await runtime.catalogue('source');
+  reportStage('capture_dump');
   const dump = await runtime.databaseTool('source', 'pg_dump', [
     '-Fc', '--no-password', '-U', 'supabase_admin', '-h', '/var/run/postgresql', '-d', DB,
   ]);
   requireValue(dump.subarray(0, 5).toString() === 'PGDMP' && dump.length < 64 * 1024 * 1024, 'RESTORE_ARCHIVE_FORMAT');
   await runtime.privateWrite(join(privateDir, 'database.dump'), dump);
+  reportStage('capture_toc');
   const toc = await runtime.archiveList('source', dump);
   const normalized = normalizedToc(toc);
   await runtime.privateWrite(join(privateDir, 'archive-toc.private.txt'), toc);
   await runtime.privateWrite(join(privateDir, 'archive-toc-normalized.private.txt'), normalized);
   // docker cp reads the already stopped Storage container's mounted file volume.
   // All bytes, versions and internal layout are preserved; no API re-upload target.
+  reportStage('capture_files');
   await runtime.copyFilesOut('source', join(privateDir, 'files'));
   const files = fileTree(join(privateDir, 'files'));
   requireValue(files.length >= 2, 'RESTORE_STORAGE_BYTES_MISSING');
+  reportStage('capture_checkpoint_after');
   const after = await runtime.sqlJson('source', checkpointSql);
   requireValue(JSON.stringify(before) === JSON.stringify(after), 'RESTORE_SOURCE_CHANGED_DURING_BACKUP');
   const snapshot = { before, catalogue, files, archiveSha256: digest(dump), tocSha256: digest(normalized), run: runtime.run };

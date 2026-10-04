@@ -161,8 +161,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a-core.mjs",
-      "bytes": 5923,
-      "sha256": "2184d5e1b74f3a7eeda780f1797fcf3a397cd67b2b37c553bf15752d66a258ff"
+      "bytes": 5930,
+      "sha256": "fdf37335b787530f8365b9546a7db54f5e8067834ada6d3aeb8f862971c3902d"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.mjs",
@@ -171,18 +171,18 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 20358,
-      "sha256": "66d62db5497b5603186c7d21e88fcb2d9b92fcd83783cc5c3cffff07b79f411f"
+      "bytes": 22771,
+      "sha256": "8b856c77a1041b31af6056aa8a423d8299e62a54f496b7c888a3c7a6f81ddf4e"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
-      "bytes": 5303,
-      "sha256": "4b45101d9a1040de0c917acd32809e71749b0fda65049416db635b82fbffb4a0"
+      "bytes": 5379,
+      "sha256": "a3eee9549386ef80d9d991bd0e156ee7f9751bbde7a30da995bf0ccedc315372"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
-      "bytes": 4290,
-      "sha256": "8fcb74fb3091e08c5b275febc5f69e9e47de8738b27b6194b3ee3bd033f27769"
+      "bytes": 4705,
+      "sha256": "07f690e3199f56e19529fcdbd8e6a5f423cd69da2b6d14582225aa3bc1eeed4c"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/source-fixture.mjs",
@@ -191,8 +191,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/catalogue.sql",
-      "bytes": 3281,
-      "sha256": "54c196769645d61bfae2e446c40f742c33fb49618ad96c775a191eab078819f8"
+      "bytes": 4734,
+      "sha256": "29098b4dc0caf44f2a4501517603ee8fa78b2b00ab84a0ca7a34031dadc63969"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/checkpoint.sql",

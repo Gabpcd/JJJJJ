@@ -53,7 +53,7 @@ export async function runPhaseA(evidence, paths, save, dependencies = {}) {
   const snapshotDirectory = join(paths.stack, 'snapshot');
   (dependencies.makeDirectory ?? (path => mkdirSync(path, { mode: 0o700 })))(snapshotDirectory);
   const checkpoint = dependencies.checkpointSql ?? readFileSync(new URL('./sql/checkpoint.sql', import.meta.url), 'utf8');
-  const snapshot = await (dependencies.capture ?? captureSource)(runtime, snapshotDirectory, checkpoint);
+  const snapshot = await (dependencies.capture ?? captureSource)(runtime, snapshotDirectory, checkpoint, enter);
   const snapshotReceipt = projectSnapshot(snapshot, fixture);
   const toc = projectToc((dependencies.readToc ?? (directory => readFileSync(join(directory, 'archive-toc.private.txt'))))(snapshotDirectory));
   required(toc.normalizedSha256 === snapshot.tocSha256, 'PHASE_A_TOC_HASH_CHANGED');
