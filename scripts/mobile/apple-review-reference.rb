@@ -13,7 +13,7 @@ module AppleReviewReference
              read_failed http_refused response_invalid pagination_refused pagination_loop
              pagination_limit duplicate_resource resource_limit inventory_changed budget_exceeded
              notes_review_required attachments_review_required opaque_account_reference
-             required_account_missing reference_limit auth_unavailable output_failed source_refused].freeze
+             required_account_missing account_requirement_unknown reference_limit auth_unavailable output_failed source_refused].freeze
   # Closed coordinates only: no provider key, value, ID, URL or error text.
   ENDPOINTS = %w[apps versions review_detail beta_detail attachments].freeze
   CHECKS = %w[body json root data links meta paging total resource_type id attributes
@@ -239,7 +239,8 @@ module AppleReviewReference
     invalid!(endpoint, 'data', field_type(response, 'data')) unless data.is_a?(Hash)
     invalid!(endpoint, 'resource_type', data['type'].is_a?(String) ? 'mismatch' : field_type(data, 'type')) unless data['type'] == type
     identifier = id(data['id'], endpoint: endpoint, present: data.key?('id')); a = attributes(data, FIELDS.split(','))
-    invalid!(endpoint, 'demo_account_required', observed(a['demoAccountRequired'])) unless [true, false].include?(a['demoAccountRequired'])
+    # Apple may leave this optional boolean null; preserve it as unknown, never false.
+    invalid!(endpoint, 'demo_account_required', observed(a['demoAccountRequired'])) unless [true, false, nil].include?(a['demoAccountRequired'])
     { 'demoAccountName' => 'demo_account_name', 'notes' => 'notes' }.each do |key, check|
       value = a[key]; next if value.nil?
       invalid!(endpoint, check, observed(value)) unless value.is_a?(String)
@@ -277,6 +278,7 @@ module AppleReviewReference
       name = d['demoAccountName']; ref = reference(name)
       refs << ref if ref
       reasons << 'opaque_account_reference' if name && !name.empty? && !ref
+      reasons << 'account_requirement_unknown' if d['demoAccountRequired'].nil?
       reasons << 'required_account_missing' if d['demoAccountRequired'] && !ref
       reasons << 'notes_review_required' if d['notes'] && !d['notes'].strip.empty?
       reasons << 'attachments_review_required' unless d['attachments'].empty?

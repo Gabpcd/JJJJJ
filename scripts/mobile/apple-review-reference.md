@@ -32,7 +32,13 @@ récent et aucune édition stores concurrente ne doit être ignorée.
 Les noms sont retenus comme références seulement s’ils sont une adresse email
 entière ou un UUID ; ils sont normalisés en minuscules, dédupliqués, bornés à 100.
 Un nom opaque, un compte requis absent, toute note non vide ou pièce jointe garde
-`appleComplete=false`. Une note n’est jamais interprétée par une extraction regex
+`appleComplete=false`. Pour App Review comme pour TestFlight, une valeur explicite
+`demoAccountRequired=null` est conservée comme inconnue : elle ajoute le motif fermé
+`account_requirement_unknown`, même si un nom de compte est présent. Tous les noms
+stockés restent collectés selon les mêmes règles et transmis au chiffrement.
+Le reçu reste `review_required`, `appleComplete=false`, `confinementReady=false`,
+et le CLI sort avec le code 1. La valeur n’est jamais convertie en `false` ; un
+champ manquant ou un autre type reste refusé. Une note n’est jamais interprétée par une extraction regex
 pour proclamer la complétude. TestFlight est contrôlé séparément ; ses détails
 n’ont pas de relation de pièces jointes dans le schéma Apple documenté.
 
@@ -52,15 +58,19 @@ des cinq lectures, le contrôle déjà existant et un type/constat (`null`, `mis
 valeur d’attribut, URL ou message fournisseur n’y figure. La liste est vérifiée à
 la création de l’erreur puis de nouveau avant écriture du reçu. Une coordonnée
 inconnue supprime le diagnostic entier ; elle ne modifie jamais le refus.
-`response_invalid` reste le motif des réponses de structure invalide ; les autres
-motifs et les conditions d’acceptation restent inchangés. Une erreur JSON garde
+`response_invalid` reste le motif des réponses de structure invalide. La seule
+exception de type est le `null` explicite de `demoAccountRequired`, qui produit
+une collecte chiffrée incomplète avec `account_requirement_unknown`. Une erreur JSON garde
 notamment `read_failed`, avec le seul constat fermé `json/malformed`.
 
 Le premier run réel `37234417053` a seulement produit `response_invalid`, sans
 enveloppe CMS. Ce reçu ne permet pas de connaître sa cause. Ces diagnostics doivent
 être relus après une nouvelle exécution autorisée du lecteur ; aucune hypothèse
 sur le contenu Apple ne justifie d’assouplir les gardes de champs, de pagination
-ou de périmètre.
+ou de périmètre. La documentation officielle des deux ressources décrit
+`demoAccountRequired` comme un booléen optionnel. Accepter sa valeur `null` sans
+conclure à sa valeur permet de conserver les références ; cela ne résout pas
+l’exigence de compte inconnue ni les autres conditions de confinement.
 
 Le JSON privé sélectionné (références exactes et notes pour revue) reste en mémoire
 jusqu’au chiffrement. Les notes sont traitées comme potentiellement sensibles,
@@ -115,3 +125,10 @@ La qualification réelle de cette version OpenSSL runner reste requise avant API
 - [Nature des pièces jointes](https://developer.apple.com/documentation/appstoreconnectapi/appstorereviewattachment) : elles peuvent contenir des instructions ou identifiants.
 - [Curseurs et portée de token](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests).
 - [CMS OpenSSL 3.0](https://docs.openssl.org/3.0/man1/openssl-cms/) et [3.5](https://docs.openssl.org/3.5/man1/openssl-cms/) : AES-GCM et paramètres RSA-OAEP documentés.
+
+Vérification complémentaire du 5 octobre 2026 : les schémas officiels des attributs
+[App Review](https://developer.apple.com/documentation/appstoreconnectapi/appstorereviewdetail/attributes-data.dictionary)
+et [TestFlight](https://developer.apple.com/documentation/appstoreconnectapi/betaappreviewdetail/attributes-data.dictionary)
+décrivent `demoAccountRequired` comme `boolean`, avec `required=false` dans leur
+représentation JSON de documentation. Cette optionalité ne transforme pas `null`
+en une valeur connue ; le lecteur conserve donc un motif bloquant.
