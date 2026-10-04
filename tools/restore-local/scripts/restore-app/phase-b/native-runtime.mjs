@@ -5,7 +5,62 @@ import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
-import { DB, digest, requireValue, projectRestoreCall } from './contract.mjs';
+import { DB, digest, requireValue, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
+
+// PG17 pg_backup_db.c emits the first error and then "Command was:" even
+// without --verbose. TOC INFO lines are suppressed, so do not depend on them.
+// Advisory classification only: raw messages, identifiers and SQL stay private.
+export function classifyPgRestoreStderr(value) {
+  const limit=64*1024,isBuffer=Buffer.isBuffer(value),isString=typeof value==='string';
+  if(!isBuffer&&!isString)return projectPgRestoreDiagnostic({parser:'INVALID_INPUT'});
+  const inputTruncated=value.length>limit;
+  const text=isBuffer?value.subarray(0,limit).toString('utf8'):value.slice(0,limit);
+  const lines=text.split(/\r?\n/),first=lines.findIndex(line=>line.startsWith('pg_restore: error: '));
+  const result={parser:!text?'EMPTY':first<0?'NO_PRIMARY_ERROR':'FIRST_ERROR',inputTruncated};
+  if(first<0)return projectPgRestoreDiagnostic(result);
+  // Stop before any subsequent primary error; a later error cannot replace it.
+  const later=lines.findIndex((line,index)=>index>first&&line.startsWith('pg_restore: error: '));
+  const section=lines.slice(first+1,later<0?undefined:later);
+  const primary=lines[first].slice('pg_restore: error: '.length,4096);
+  const sql=primary.match(/^(?:could not execute query|could not start database transaction|could not commit database transaction|query failed|COPY failed for table "[^"\r\n]*"): (?:ERROR|FATAL|PANIC):\s+(.*)$/);
+  const message=sql?sql[1]:primary;
+  const rules=[
+    ['OBJECT_EXISTS',/^(?:schema|relation|type|function|extension|constraint|trigger|policy|publication|event trigger|operator|collation) .+ already exists$/],
+    ['OBJECT_MISSING',/^(?:schema|relation|type|function|role|extension|operator|collation) .+ does not exist(?:$|[ (])/],
+    ['OWNER_REQUIRED',/^must be owner of /],
+    ['ROLE_REQUIRED',/^(?:must be member of role|must be able to SET ROLE|permission denied to set role) /],
+    ['PERMISSION_DENIED',/^permission denied (?:for|to) /],
+    ['SUPERUSER_REQUIRED',/^(?:must be superuser|only superusers can|superuser privilege is required)/],
+    ['EXTENSION_UNAVAILABLE',/^(?:extension .+ is not available|could not open extension control file )/],
+    ['EXTENSION_LIBRARY',/^(?:could not (?:access|load) (?:file|library)|incompatible library|undefined symbol)/],
+    ['EXTENSION_PREREQUISITE',/^(?:required extension .+ is not installed|can only create extension in database |unrecognized configuration parameter "cron\.|pg_cron can only be loaded via shared_preload_libraries)/],
+    ['TRANSACTION_RESTRICTION',/^(?:.+ cannot (?:run|be executed) inside a transaction block|cannot (?:run|execute) .+ (?:inside|within) a transaction)/],
+    ['CONFIGURATION',/^(?:unrecognized configuration parameter|invalid value for parameter|parameter .+ cannot be changed)/],
+    ['CONSTRAINT',/^(?:duplicate key value violates|insert or update on table .+ violates|new row for relation .+ violates|null value in column .+ violates)/],
+    ['DATA',/^(?:invalid input syntax|value too long|invalid byte sequence|missing data for column|extra data after last expected column|invalid command)/],
+    ['DEPENDENCY',/^(?:cannot drop .+ because other objects depend on it|cannot alter .+ because it is being used|cannot change .+ because extension .+ requires it)/],
+    ['RESOURCE',/^(?:out of memory|out of shared memory|could not (?:extend|write|resize)|disk full|remaining connection slots)/],
+    ['CONNECTION',/^(?:connection to (?:server|database)|reconnection failed|server closed the connection|could not connect|no connection to the server)/],
+    ['ARCHIVE_FORMAT',/^(?:unsupported version|did not find magic string|input file (?:does not appear|appears)|unrecognized (?:archive|data block)|invalid archive|cannot restore from compressed archive)/],
+    ['ARCHIVE_READ',/^(?:could not read from input file|could not read from input stream|could not uncompress data|unexpected end of file|could not find block ID|could not seek)/],
+  ];
+  result.category=rules.find(([,pattern])=>pattern.test(message))?.[0]??(sql?'SQL_OTHER':'UNKNOWN');
+  // Hints are projected through finite enums a second time at publication.
+  // Never publish the rest of this line, even when it contains a known prefix.
+  const commandLines=section.filter(line=>line.startsWith('Command was: '));
+  const command=commandLines.length===1?commandLines[0].slice('Command was: '.length,4096).trimStart():'';
+  const create=command.match(/^CREATE\s+(?:OR REPLACE\s+)?(EVENT TRIGGER|SCHEMA|EXTENSION|TABLE|SEQUENCE|FUNCTION|TYPE|(?:UNIQUE\s+)?INDEX|(?:MATERIALIZED\s+)?VIEW|TRIGGER|POLICY|PUBLICATION)\b/);
+  result.command=create?'CREATE_'+create[1].replace(/^(?:UNIQUE|MATERIALIZED)\s+/,'').replace(/ /g,'_')
+    :command.match(/^(SET|SELECT|BEGIN|COMMIT|COPY|INSERT|ALTER|GRANT|REVOKE|COMMENT|DO)\b/)?.[1]
+      ??(/^SECURITY LABEL\b/.test(command)?'SECURITY_LABEL':sql&&primary.startsWith('COPY failed')?'COPY':'UNKNOWN');
+  const identifier='(?:"([a-z_][a-z_0-9-]*)"|([a-z_][a-z_0-9-]*))';
+  const schema=command.match(new RegExp('^CREATE SCHEMA '+identifier+'(?:[ ;]|$)'))
+    ??message.match(new RegExp('^(?:schema |permission denied for schema |must be owner of schema )'+identifier+'(?:[ ;]|$)'));
+  const extension=command.match(new RegExp('^CREATE EXTENSION (?:IF NOT EXISTS )?'+identifier+'(?:[ ;]|$)'))
+    ??message.match(new RegExp('^(?:extension |required extension |must be owner of extension )'+identifier+'(?:[ ;]|$)'));
+  result.schema=schema?.[1]??schema?.[2];result.extension=extension?.[1]??extension?.[2];
+  return projectPgRestoreDiagnostic(result);
+}
 
 // Names instead of cluster-local OIDs; values remain in the private snapshot.
 export const SETTINGS_SQL = `BEGIN READ ONLY; SET LOCAL statement_timeout='15s';
@@ -57,7 +112,8 @@ export function nativeRuntime(privateDir) {
     if(result.error||result.status!==0||result.signal!==null) {
       const error=Object.assign(Error('B_CALL'),{code:'B_CALL',diagnostic:projectSqlDiagnostic(result.stderr?.toString()??'')});
       if(restoreOperation!==null)error.restoreCall=projectRestoreCall({operation:restoreOperation,exitCode:result.status,
-        signal:result.signal,systemError:result.error?.code??null});
+        signal:result.signal,systemError:result.error?.code??null,
+        ...(restoreOperation==='TARGET_ARCHIVE_RESTORE'?{pgRestore:classifyPgRestoreStderr(result.stderr)}:{})});
       throw error;
     }
     return result.stdout;

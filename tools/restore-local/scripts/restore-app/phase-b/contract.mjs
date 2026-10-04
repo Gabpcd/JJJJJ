@@ -17,13 +17,34 @@ export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_DATABASE_RECREATE'
  'TARGET_ARCHIVE_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN']);
 const RESTORE_SIGNALS = new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE']);
 const RESTORE_SYSTEM_ERRORS = new Set(['ETIMEDOUT','ENOENT','EACCES','EPERM','ENOMEM','ENOBUFS','E2BIG','EAGAIN','ENOEXEC']);
+export const PG_RESTORE_CATEGORIES = Object.freeze(['UNKNOWN','SQL_OTHER','OBJECT_EXISTS','OBJECT_MISSING',
+ 'PERMISSION_DENIED','OWNER_REQUIRED','ROLE_REQUIRED','SUPERUSER_REQUIRED','EXTENSION_UNAVAILABLE',
+ 'EXTENSION_LIBRARY','EXTENSION_PREREQUISITE','TRANSACTION_RESTRICTION','CONFIGURATION',
+ 'CONSTRAINT','DATA','DEPENDENCY','RESOURCE','CONNECTION','ARCHIVE_FORMAT','ARCHIVE_READ']);
+export const PG_RESTORE_COMMANDS = Object.freeze(['UNKNOWN','SET','SELECT','BEGIN','COMMIT','COPY','INSERT',
+ 'CREATE_SCHEMA','CREATE_EXTENSION','CREATE_TABLE','CREATE_SEQUENCE','CREATE_FUNCTION','CREATE_TYPE',
+ 'CREATE_INDEX','CREATE_VIEW','CREATE_TRIGGER','CREATE_EVENT_TRIGGER','CREATE_POLICY','CREATE_PUBLICATION',
+ 'ALTER','GRANT','REVOKE','COMMENT','SECURITY_LABEL','DO']);
+export const PG_RESTORE_SCHEMAS = Object.freeze(['auth','storage','public','extensions','pg_catalog','cron',
+ 'graphql','graphql_public','pgbouncer','private','supabase_functions','vault','realtime']);
+export const PG_RESTORE_EXTENSIONS = Object.freeze(['pg_cron','pg_net','pg_stat_statements','pg_trgm',
+ 'pgcrypto','pgjwt','plpgsql','supabase_vault','uuid-ossp']);
+export function projectPgRestoreDiagnostic(value) {
+ return {schemaVersion:1,parser:['FIRST_ERROR','NO_PRIMARY_ERROR','EMPTY','INVALID_INPUT'].includes(value?.parser)?value.parser:'INVALID_INPUT',
+  inputTruncated:value?.inputTruncated===true,
+  category:PG_RESTORE_CATEGORIES.includes(value?.category)?value.category:'UNKNOWN',
+  command:PG_RESTORE_COMMANDS.includes(value?.command)?value.command:'UNKNOWN',
+  schema:PG_RESTORE_SCHEMAS.includes(value?.schema)?value.schema:null,
+  extension:PG_RESTORE_EXTENSIONS.includes(value?.extension)?value.extension:null};
+}
 // Diagnostic only: no arguments, SQL, paths, stderr, stdout or dump bytes.
 export function projectRestoreCall(value) {
  const systemError=value?.systemError===null?null:RESTORE_SYSTEM_ERRORS.has(value?.systemError)?value.systemError:'OTHER';
  return {schemaVersion:1,operation:RESTORE_CALL_OPERATIONS.includes(value?.operation)?value.operation:'UNKNOWN',
   exitCode:Number.isInteger(value?.exitCode)&&value.exitCode>=0&&value.exitCode<=255?value.exitCode:null,
   signal:value?.signal===null?null:RESTORE_SIGNALS.has(value?.signal)?value.signal:'OTHER',
-  systemError,timedOut:systemError==='ETIMEDOUT'};
+  systemError,timedOut:systemError==='ETIMEDOUT',
+  ...(value?.operation==='TARGET_ARCHIVE_RESTORE'&&value?.pgRestore?{pgRestore:projectPgRestoreDiagnostic(value.pgRestore)}:{})};
 }
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,

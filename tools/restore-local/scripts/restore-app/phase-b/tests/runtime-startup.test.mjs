@@ -115,13 +115,16 @@ for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attrib
    assert.equal(args[2],join(snapshotDir,'files')+'/.');assert.equal(args[3],run+'-target-storage:/var/lib/storage/');
    operation='TARGET_FILES_COPY_IN';
   }else assert.fail('UNEXPECTED_RESTORE_STUB_CALL');
-  operations.push(operation);return output('',operation===failedOperation?1:0,canary);
+  operations.push(operation);const stderr=operation==='TARGET_ARCHIVE_RESTORE'?'pg_restore: error: could not execute query: ERROR:  must be owner of schema public\nCommand was: ALTER SCHEMA public OWNER TO '+canary+';\n':canary;
+  return output('',operation===failedOperation?1:0,stderr);
  });
  const snapshot={run,archiveSha256:digest(dump),tocSha256:'b'.repeat(64),files:fileTree(join(snapshotDir,'files')),before:{},catalogue:{}};
  const reviewed={nativeRestoreTocSha256:snapshot.tocSha256,nativeRoleSettingsReviewed:true};
  await assert.rejects(()=>restoreTarget(nativeRuntime(directory),snapshotDir,snapshot,reviewed,'unused'),error=>{
   const publicResult=closedFailure(error,'restore');assert.equal(publicResult.code,'B_CALL');
   assert.equal(publicResult.restoreCall.operation,failedOperation);assert.equal(publicResult.restoreCall.exitCode,1);
+  if(failedOperation==='TARGET_ARCHIVE_RESTORE')assert.deepEqual(publicResult.restoreCall.pgRestore,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category:'OWNER_REQUIRED',command:'ALTER',schema:'public',extension:null});
+  else assert.equal(publicResult.restoreCall.pgRestore,undefined);
   assert.ok(!JSON.stringify(publicResult).includes(canary));return true;
  });
  assert.deepEqual(operations,RESTORE_CALL_OPERATIONS.slice(0,RESTORE_CALL_OPERATIONS.indexOf(failedOperation)+1));

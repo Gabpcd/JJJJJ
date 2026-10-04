@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync,lstatSync,realpathSync,symlinkSync,linkSync,chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BRANCH,PRODUCT_SHA,IMAGE,assertReview,assertNativeReview,closedFailure,validateBrowserReceipt,STAGES,digest,projectRestoreCall,RESTORE_CALL_OPERATIONS } from '../contract.mjs';
+import { BRANCH,PRODUCT_SHA,IMAGE,assertReview,assertNativeReview,closedFailure,validateBrowserReceipt,STAGES,digest,projectRestoreCall,RESTORE_CALL_OPERATIONS,projectPgRestoreDiagnostic } from '../contract.mjs';
 import { executionIdentity,checkIdentity,checkVercel } from '../identity.mjs';
 import { restoreTarget } from '../restore-target.mjs';
 import { fileTree } from '../../snapshot-restore.mjs';
 import { STAGES as A_STAGES } from '../../projection.mjs';
-import { SETTINGS_SQL,ROLE_SETTINGS_SQL,assertObjectWitness,proveControlledMissingPdf } from '../native-runtime.mjs';
+import { SETTINGS_SQL,ROLE_SETTINGS_SQL,assertObjectWitness,proveControlledMissingPdf,classifyPgRestoreStderr } from '../native-runtime.mjs';
 import { makePlan } from '../../../restore/bootstrap.mjs';
 import { localBuildEnvironment } from '../build-app.mjs';
 import { validateBrowser,boundedOutput } from '../browser-driver.mjs';
@@ -198,4 +198,87 @@ test('A V9 native version projection permits new installation date but B rejects
   native:{...review.native,storage:{count:1,sha256:fingerprint({...row,...change})}},sourceStopped:true,targetNativeEmpty:true,targetFilesEmpty:true});
  assertNativeReview(result({executed_at:'2001-01-01'}),review);
  for(const change of [{hash:'b'.repeat(40)},{name:'different'},{id:1}])assert.throws(()=>assertNativeReview(result(change),review),e=>e.code==='B_REVIEW');
+});
+
+
+test('pg_restore classifies the first error without verbose TOC or leaking query identifiers',()=>{
+ const canary='PRIVATE_AUTH_IDENTITY_DUMP_SQL_PATH_CANARY';
+ const fixture=(message,command='ALTER TABLE public.'+canary+' OWNER TO '+canary+';')=>
+  'pg_restore: error: could not execute query: ERROR:  '+message+'\nDETAIL: '+canary+'\nCONTEXT: '+canary+'\nCommand was: '+command+'\n';
+ const cases=[
+  ['schema "public" already exists','CREATE SCHEMA public;','OBJECT_EXISTS','CREATE_SCHEMA','public',null],
+  ['relation "'+canary+'" already exists','CREATE TABLE public.'+canary+' ();','OBJECT_EXISTS','CREATE_TABLE',null,null],
+  ['schema "auth" does not exist','ALTER TABLE auth.'+canary+' ADD COLUMN x int;','OBJECT_MISSING','ALTER','auth',null],
+  ['permission denied for schema storage','CREATE TABLE storage.'+canary+' ();','PERMISSION_DENIED','CREATE_TABLE','storage',null],
+  ['must be owner of extension pg_cron','COMMENT ON EXTENSION pg_cron IS NULL;','OWNER_REQUIRED','COMMENT',null,'pg_cron'],
+  ['must be able to SET ROLE "'+canary+'"','ALTER TABLE public.'+canary+' OWNER TO '+canary+';','ROLE_REQUIRED','ALTER',null,null],
+  ['must be superuser to create an event trigger','CREATE EVENT TRIGGER '+canary+' ON ddl_command_start EXECUTE FUNCTION x();','SUPERUSER_REQUIRED','CREATE_EVENT_TRIGGER',null,null],
+  ['extension "pgjwt" is not available','CREATE EXTENSION IF NOT EXISTS pgjwt WITH SCHEMA extensions;','EXTENSION_UNAVAILABLE','CREATE_EXTENSION',null,'pgjwt'],
+  ['could not open extension control file "'+canary+'": No such file or directory','CREATE EXTENSION pgjwt;','EXTENSION_UNAVAILABLE','CREATE_EXTENSION',null,'pgjwt'],
+  ['could not load library "'+canary+'"','CREATE EXTENSION pg_net;','EXTENSION_LIBRARY','CREATE_EXTENSION',null,'pg_net'],
+  ['can only create extension in database postgres','CREATE EXTENSION pg_cron;','EXTENSION_PREREQUISITE','CREATE_EXTENSION',null,'pg_cron'],
+  ['CREATE INDEX CONCURRENTLY cannot run inside a transaction block','CREATE UNIQUE INDEX '+canary+' ON x(id);','TRANSACTION_RESTRICTION','CREATE_INDEX',null,null],
+  ['unrecognized configuration parameter "'+canary+'"','SET '+canary+' = 0;','CONFIGURATION','SET',null,null],
+  ['duplicate key value violates unique constraint "'+canary+'"','INSERT INTO auth.users VALUES (\''+canary+'\');','CONSTRAINT','INSERT',null,null],
+  ['invalid input syntax for type uuid: "'+canary+'"','COPY auth.users FROM stdin;','DATA','COPY',null,null],
+  ['cannot drop extension "'+canary+'" because other objects depend on it','ALTER EXTENSION x DROP TABLE y;','DEPENDENCY','ALTER',null,null],
+  ['out of shared memory','CREATE TABLE public.'+canary+' ();','RESOURCE','CREATE_TABLE',null,null],
+  ['server closed the connection unexpectedly','CREATE TABLE public.'+canary+' ();','CONNECTION','CREATE_TABLE',null,null],
+  [canary,'SELECT '+canary+'();','SQL_OTHER','SELECT',null,null],
+ ];
+ for(const [message,command,category,expectedCommand,schema,extension]of cases){
+  const result=classifyPgRestoreStderr(Buffer.from(fixture(message,command)));
+  assert.deepEqual(result,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category,command:expectedCommand,schema,extension});
+  assert.ok(!JSON.stringify(result).includes(canary));
+  assert.deepEqual(projectPgRestoreDiagnostic({...result,sql:canary,message:canary,raw:canary}),result);
+ }
+ const copy=classifyPgRestoreStderr('pg_restore: error: COPY failed for table "'+canary+'": ERROR:  duplicate key value violates unique constraint "'+canary+'"\nDETAIL: '+canary+'\n');
+ assert.equal(copy.category,'CONSTRAINT');assert.equal(copy.command,'COPY');
+ const first=fixture('must be owner of schema public','ALTER SCHEMA public OWNER TO '+canary+';');
+ const later=fixture('schema "auth" already exists','CREATE SCHEMA auth;');
+ assert.deepEqual(classifyPgRestoreStderr(first+later),classifyPgRestoreStderr(first));
+});
+
+test('pg_restore unknown malformed oversized and injected diagnostics remain closed',()=>{
+ const canary='PRIVATE_AUTH_IDENTITY_DUMP_SQL_PATH_CANARY';
+ for(const [message,expected]of [
+  ['unsupported version (99.99) in file header','ARCHIVE_FORMAT'],
+  ['did not find magic string in file header','ARCHIVE_FORMAT'],
+  ['could not read from input file: '+canary,'ARCHIVE_READ'],
+  ['unexpected end of file','ARCHIVE_READ'],
+  ['connection to server on socket "'+canary+'" failed: '+canary,'CONNECTION'],
+  [canary,'UNKNOWN']]){
+  const result=classifyPgRestoreStderr('pg_restore: error: '+message+'\n');
+  assert.equal(result.category,expected);assert.ok(!JSON.stringify(result).includes(canary));
+ }
+ for(const v of [undefined,null,{},[],true,1])assert.equal(classifyPgRestoreStderr(v).parser,'INVALID_INPUT');
+ assert.equal(classifyPgRestoreStderr('').parser,'EMPTY');assert.equal(classifyPgRestoreStderr(Buffer.alloc(0)).parser,'EMPTY');
+ for(const text of ['ERROR: schema "public" already exists','pg_restore: warning: '+canary,' '+ 'pg_restore: error: '+canary,'erreur : '+canary])
+  assert.equal(classifyPgRestoreStderr(text).parser,'NO_PRIMARY_ERROR');
+ const sql='pg_restore: error: could not execute query: ERROR:  '+canary+'\n';
+ const injected=sql+'DETAIL: schema "public" already exists\nHINT: permission denied for schema auth\nCONTEXT: '+canary+'\nCommand was: SELECT '+canary+'\nCommand was: CREATE SCHEMA auth;\n';
+ const result=classifyPgRestoreStderr(injected);assert.equal(result.category,'SQL_OTHER');assert.equal(result.command,'UNKNOWN');
+ assert.equal(result.schema,null);assert.equal(result.extension,null);
+ const unknown=classifyPgRestoreStderr('pg_restore: error: could not execute query: ERROR:  schema "'+canary+'" already exists\nCommand was: CREATE SCHEMA "'+canary+'";\n');
+ assert.equal(unknown.schema,null);assert.ok(!JSON.stringify(unknown).includes(canary));
+ const oversized=sql+'x'.repeat(128*1024)+'\nCommand was: CREATE SCHEMA auth;';
+ const bounded=classifyPgRestoreStderr(oversized);assert.equal(bounded.inputTruncated,true);assert.equal(bounded.command,'UNKNOWN');
+ const late='x'.repeat(64*1024)+'\npg_restore: error: unsupported version';
+ assert.equal(classifyPgRestoreStderr(late).parser,'NO_PRIMARY_ERROR');
+ assert.deepEqual(projectPgRestoreDiagnostic({parser:canary,inputTruncated:canary,category:canary,command:canary,schema:canary,extension:canary,raw:canary}),
+  {schemaVersion:1,parser:'INVALID_INPUT',inputTruncated:false,category:'UNKNOWN',command:'UNKNOWN',schema:null,extension:null});
+});
+
+test('pg_restore diagnostic is gated to archive restore and reprojected by the actual public bridge',async()=>{
+ const {runtimeFailure}=await import('../main.mjs');
+ const canary='PRIVATE_AUTH_IDENTITY_DUMP_SQL_PATH_CANARY';
+ const pgRestore=classifyPgRestoreStderr('pg_restore: error: could not execute query: ERROR:  schema "auth" already exists\nCommand was: CREATE SCHEMA auth;\n');
+ const error={code:'B_CALL',diagnostic:{sqlstate:'42501',line:2},restoreCall:{operation:'TARGET_ARCHIVE_RESTORE',exitCode:1,signal:null,systemError:null,pgRestore:{...pgRestore,raw:canary}}};
+ const result=runtimeFailure(error,'restore');
+ assert.deepEqual(result.restoreCall.pgRestore,pgRestore);assert.equal(result.code,'B_CALL');assert.equal(result.sqlstate,'42501');assert.equal(result.sqlLine,2);
+ assert.equal(result.restored,false);assert.equal(result.appVerified,false);assert.equal(result.readyForNationalLaunch,false);assert.ok(!JSON.stringify(result).includes(canary));
+ for(const operation of RESTORE_CALL_OPERATIONS.filter(v=>v!=='TARGET_ARCHIVE_RESTORE'))
+  assert.equal(projectRestoreCall({...error.restoreCall,operation}).pgRestore,undefined);
+ assert.equal(runtimeFailure(error,'browser_target').restoreCall,undefined);
+ assert.equal(runtimeFailure({...error,code:'B_FAILED'},'restore').restoreCall,undefined);
 });
