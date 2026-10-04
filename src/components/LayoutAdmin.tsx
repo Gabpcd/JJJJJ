@@ -127,9 +127,9 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!menuMobileOuvert) return;
-    previousFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : menuMobileTriggerRef.current;
+    // Sur Safari, toucher le bouton peut laisser BODY comme élément actif.
+    // Ce menu n'a qu'un déclencheur : lui rendre le focus à la fermeture.
+    previousFocusRef.current = menuMobileTriggerRef.current;
     const frame = window.requestAnimationFrame(() => {
       menuMobileRef.current?.querySelector<HTMLElement>('a, button:not([disabled])')?.focus();
     });
