@@ -4,7 +4,7 @@ import { CAPTURE_STAGES } from './snapshot-restore.mjs';
 const required = (ok, code, diagnostic) => { if (!ok) throw phaseFailure(code, diagnostic); };
 const SHA = /^[a-f0-9]{64}$/;
 export const STAGES = Object.freeze(['identity', 'units', 'plan', 'preload', 'preflight', 'up', 'inspect', 'extensions',
-  'import', 'current_product_witness', 'source_api_restart', 'source_seed', 'object_readback', 'capture', ...CAPTURE_STAGES, 'source_off', 'complete', 'cleanup', 'absence']);
+  'import', 'current_product_witness', 'source_api_restart', 'source_seed', 'object_readback', 'capture', ...CAPTURE_STAGES, 'project_toc', 'source_off', 'complete', 'cleanup', 'absence']);
 const KINDS = Object.freeze(['ENCODING', 'STDSTRINGS', 'SEARCHPATH', 'MATERIALIZED VIEW DATA', 'MATERIALIZED VIEW', 'SEQUENCE OWNED BY', 'DEFAULT ACL', 'TABLE DATA',
   'SEQUENCE SET', 'FK CONSTRAINT', 'ROW SECURITY', 'EVENT TRIGGER', 'PUBLICATION TABLE', 'PUBLICATION', 'PROCEDURE',
   'SCHEMA', 'EXTENSION', 'COMMENT', 'TYPE', 'DOMAIN', 'FUNCTION', 'AGGREGATE', 'OPERATOR CLASS', 'OPERATOR FAMILY', 'OPERATOR',
@@ -14,6 +14,32 @@ const SCHEMAS = new Set(['-', 'auth', 'storage', 'public', 'private', 'extension
   'graphql', 'graphql_public', 'realtime', 'supabase_functions', 'supabase_migrations', 'pgsodium', 'pgsodium_masks']);
 const REQUIRED_TABLES = Object.freeze(['auth.users', 'auth.identities', 'auth.sessions', 'auth.refresh_tokens',
   'storage.objects', 'storage.buckets', 'public.factures_honoraires', 'public.factures_honoraires_documents']);
+// Diagnostic labels only. None of these candidates is added to SCHEMAS or accepted.
+const NATIVE_SCHEMA_CANDIDATES = Object.freeze(['pgbouncer', '_realtime', '_analytics', 'pgmq', 'pgmq_public']);
+const TOKEN_CLASSES = Object.freeze(['empty_token', 'attach_after_table_or_index', 'quoted_token',
+  'known_native_candidate', 'other_identifier', 'invalid_token']);
+function tocSchemaDiagnostic(entryOrdinal, kind, token) {
+  const candidate = NATIVE_SCHEMA_CANDIDATES.find(value => value === token) ?? null;
+  const tokenClass = token === '' ? 'empty_token'
+    : ['TABLE', 'INDEX'].includes(kind) && token === 'ATTACH' ? 'attach_after_table_or_index'
+    : token.startsWith('"') ? 'quoted_token'
+    : candidate !== null ? 'known_native_candidate'
+    : /^[a-z_][a-z0-9_$]*$/.test(token) ? 'other_identifier' : 'invalid_token';
+  return { entryOrdinal: Math.min(entryOrdinal, 30_000), kind, tokenClass, candidate,
+    tokenSha256: candidate === null ? hash(token) : null };
+}
+function closedTocDiagnostic(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(['candidate', 'entryOrdinal', 'kind', 'tokenClass', 'tokenSha256'])
+    || !Number.isSafeInteger(value.entryOrdinal) || value.entryOrdinal < 1 || value.entryOrdinal > 30_000
+    || !KINDS.includes(value.kind) || !TOKEN_CLASSES.includes(value.tokenClass)) return null;
+  const known = value.tokenClass === 'known_native_candidate';
+  if (known ? !NATIVE_SCHEMA_CANDIDATES.includes(value.candidate) || value.tokenSha256 !== null
+    : value.candidate !== null || typeof value.tokenSha256 !== 'string' || !SHA.test(value.tokenSha256)) return null;
+  // Never spread the input: arbitrary fields, free tokens and toJSON stay private.
+  return { entryOrdinal: value.entryOrdinal, kind: value.kind, tokenClass: value.tokenClass,
+    candidate: value.candidate, tokenSha256: value.tokenSha256 };
+}
 export function projectToc(bytes) {
   const counts = {}, schemas = {}, requiredTables = Object.fromEntries(REQUIRED_TABLES.map(name => [name, { table: 0, data: 0 }]));
   const normalized = [];
@@ -23,7 +49,9 @@ export function projectToc(bytes) {
     const value = match[1], kind = KINDS.find(item => value.startsWith(item + ' '));
     required(kind, 'PHASE_A_TOC_KIND');
     const rest = value.slice(kind.length + 1), schema = rest.split(' ')[0];
-    required(SCHEMAS.has(schema), 'PHASE_A_TOC_SCHEMA');
+    required(SCHEMAS.has(schema), 'PHASE_A_TOC_SCHEMA', {
+      tocDiagnostic: tocSchemaDiagnostic(normalized.length + 1, kind, schema),
+    });
     normalized.push(value); counts[kind] = (counts[kind] ?? 0) + 1; schemas[schema] = (schemas[schema] ?? 0) + 1;
     if (kind === 'TABLE' || kind === 'TABLE DATA') {
       const tokens = rest.split(' '), name = tokens[0] + '.' + tokens[1];
@@ -41,6 +69,7 @@ export function closedFailure(error, stage) {
     code: FAILURE_CODES.has(error?.publicCode) ? error.publicCode : 'PHASE_A_FAILED',
     httpStatus: FAILURE_CODES.has(error?.publicCode) && Number.isInteger(error?.httpStatus)
       && error.httpStatus >= 100 && error.httpStatus <= 599 ? error.httpStatus : null,
+    toc: error?.publicCode === 'PHASE_A_TOC_SCHEMA' ? closedTocDiagnostic(error?.tocDiagnostic) : null,
     sqlstate: /^[A-Z0-9]{5}$/.test(diagnostic?.sqlstate ?? '') ? diagnostic.sqlstate : null,
     sqlLine: Number.isSafeInteger(diagnostic?.line) && diagnostic.line > 0 && diagnostic.line < 1_000_000 ? diagnostic.line : null,
     readyForRestore: false, readyForDispatchPhaseB: false, restored: false, appVerified: false };

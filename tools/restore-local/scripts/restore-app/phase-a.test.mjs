@@ -317,3 +317,67 @@ test('phase A forwards native capture substages into its closed public progress'
   await h.execute();
   assert.deepEqual(h.reports.map(value => value.stage).filter(stage => CAPTURE_STAGES.includes(stage)), [...CAPTURE_STAGES]);
 });
+
+test('TOC schema refusal keeps all guards and reports only a closed parser context', () => {
+  const canary = 'secret_' + randomBytes(24).toString('hex');
+  const baseline = toc(), expectedOrdinal = baseline.toString().split('\n').filter(line => line && !line.startsWith(';')).length + 1;
+  const cases = [
+    ...['pgbouncer', '_realtime', '_analytics', 'pgmq', 'pgmq_public'].map(token => ['FUNCTION', token, 'known_native_candidate', token]),
+    ['TABLE', 'ATTACH', 'attach_after_table_or_index', null],
+    ['INDEX', 'ATTACH', 'attach_after_table_or_index', null],
+    ['FUNCTION', '', 'empty_token', null],
+    ['FUNCTION', '"' + canary + '"', 'quoted_token', null],
+    ['FUNCTION', canary, 'other_identifier', null],
+    ['FUNCTION', canary + '!', 'invalid_token', null],
+  ];
+  for (const [kind, token, tokenClass, candidate] of cases) {
+    const listing = Buffer.concat([baseline, Buffer.from(`999; 0 0 ${kind} ${token} ${canary} ${canary}\n`)]);
+    assert.throws(() => projectToc(listing), error => {
+      const receipt = closedFailure(error, 'project_toc');
+      assert.equal(receipt.result, 'PHASE_A_REFUSED'); assert.equal(receipt.code, 'PHASE_A_TOC_SCHEMA');
+      assert.equal(receipt.stage, 'project_toc');
+      assert.deepEqual(receipt.toc, { entryOrdinal: expectedOrdinal, kind, tokenClass, candidate,
+        tokenSha256: candidate === null ? hash(token) : null });
+      assert.equal(JSON.stringify(receipt).includes(canary), false);
+      assert.equal(receipt.restored, false); assert.equal(receipt.readyForDispatchPhaseB, false);
+      return true;
+    });
+  }
+  // Unknown kinds remain rejected before schema diagnosis. No new kind is accepted.
+  assert.throws(() => projectToc(Buffer.concat([baseline, Buffer.from(`999; 0 0 ${canary} public object owner\n`)])), error => {
+    const receipt = closedFailure(error, 'project_toc');
+    assert.equal(receipt.code, 'PHASE_A_TOC_KIND'); assert.equal(receipt.toc, null);
+    assert.equal(JSON.stringify(receipt).includes(canary), false); return true;
+  });
+  assert.equal(projectToc(baseline).requiredTables['auth.identities'].data, 1);
+});
+
+test('TOC failure projection rejects forged fields, unbounded ordinals and non-enum strings', () => {
+  const canary = 'secret_' + randomBytes(24).toString('hex');
+  const valid = { entryOrdinal: 1, kind: 'FUNCTION', tokenClass: 'other_identifier', candidate: null, tokenSha256: hash(canary) };
+  const project = value => closedFailure(phaseFailure('PHASE_A_TOC_SCHEMA', { tocDiagnostic: value }), 'project_toc');
+  assert.deepEqual(project(valid).toc, valid);
+  for (const patch of [{ entryOrdinal: 0 }, { entryOrdinal: 30_001 }, { entryOrdinal: 1.5 },
+    { entryOrdinal: '1' }, { kind: canary }, { tokenClass: canary }, { candidate: canary },
+    { tokenSha256: canary }, { tokenSha256: { toJSON: () => canary } }, { rawToken: canary },
+    { toJSON: () => canary }, { tokenClass: 'known_native_candidate' },
+    { candidate: 'pgbouncer', tokenSha256: null }]) {
+    const receipt = project({ ...valid, ...patch });
+    assert.equal(receipt.toc, null); assert.equal(JSON.stringify(receipt).includes(canary), false);
+  }
+  assert.equal(closedFailure(Object.assign(Error(canary), { publicCode: 'PHASE_A_FAILED', tocDiagnostic: valid }), 'project_toc').toc, null);
+  for (const entryOrdinal of [1, 30_000]) assert.equal(project({ ...valid, entryOrdinal }).toc.entryOrdinal, entryOrdinal);
+});
+
+test('TOC projection has its own stage and a V6-style refusal cannot continue to source-off', async () => {
+  const canary = 'secret_' + randomBytes(24).toString('hex');
+  const h = harness({ readToc: () => Buffer.concat([toc(), Buffer.from(`999; 0 0 FUNCTION ${canary} object owner\n`)]) });
+  await assert.rejects(h.execute(), error => {
+    const receipt = closedFailure(error, h.reports.at(-1).stage);
+    assert.equal(receipt.stage, 'project_toc'); assert.equal(receipt.code, 'PHASE_A_TOC_SCHEMA');
+    assert.equal(receipt.toc.tokenSha256, hash(canary));
+    assert.equal(JSON.stringify(receipt).includes(canary), false); return true;
+  });
+  assert.equal(h.calls.some(([kind]) => ['native-version', 'stop-source', 'copy-target'].includes(kind)), false);
+  assert.equal(h.reports.some(value => value.result === 'PHASE_A_NATIVE_CAPTURE_PASSED'), false);
+});

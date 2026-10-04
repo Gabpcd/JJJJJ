@@ -87,5 +87,7 @@ export function phaseFailure(code, diagnostic = {}) {
   error.publicCode = safeCode;
   if (Number.isInteger(diagnostic.httpStatus) && diagnostic.httpStatus >= 100 && diagnostic.httpStatus <= 599)
     error.httpStatus = diagnostic.httpStatus;
+  // Internal only; closedFailure revalidates every field before public projection.
+  if (safeCode === 'PHASE_A_TOC_SCHEMA') error.tocDiagnostic = diagnostic.tocDiagnostic;
   return error;
 }
