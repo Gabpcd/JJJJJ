@@ -14,7 +14,10 @@ const factureId = '71000000-0000-4000-8000-000000000081';
 const remplacementId = '71000000-0000-4000-8000-000000000082';
 const litigeId = '71000000-0000-4000-8000-000000000090';
 const observations = new Map<TestInfo, unknown>();
+const liberationsMessages = new Map<TestInfo, () => void>();
 test.afterEach(async ({}, info) => {
+  liberationsMessages.get(info)?.();
+  liberationsMessages.delete(info);
   await info.attach('transport-local', { body: JSON.stringify(observations.get(info), null, 2), contentType: 'application/json' });
   observations.delete(info);
 });
@@ -34,8 +37,11 @@ async function preuve(page: Page, info: TestInfo, nom: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 }
 
-for (const scenario of cas) {
-  test(`Remplacement commission F1 taux ${scenario.taux} : décision admin et montants des parties après recharge`, async ({ page, browser }, info) => {
+for (const { scenario, messagesRetardes } of [
+  ...cas.map(scenario => ({ scenario, messagesRetardes: false })),
+  { scenario: cas[0], messagesRetardes: true },
+]) {
+  test(`Remplacement commission F1 taux ${scenario.taux}${messagesRetardes ? ' — arrivée tardive des messages sans déplacement' : ''} : décision admin et montants des parties après recharge`, async ({ page, browser }, info) => {
     const activer = (element: Locator) => info.project.use.hasTouch ? element.tap() : element.click();
     const demandes: unknown[] = [], inertes: string[] = [], interdits: string[] = [], erreurs: string[] = [];
     const surveiller = (p: Page) => {
@@ -132,9 +138,66 @@ for (const scenario of cas) {
       });
     }
     await fermerReseau(page, 'ADMIN_PLATEFORME');
-    await page.goto(`/admin/litiges?litige=${litigeId}`);
+    let lectureMessagesRetenue = false;
+    let libererMessages = () => {};
+    if (messagesRetardes) {
+      const attente = new Promise<void>(resolve => { libererMessages = resolve; });
+      liberationsMessages.set(info, libererMessages);
+      await page.route('**/rest/v1/messages_litige?**', async route => {
+        const req = route.request(), url = new URL(req.url());
+        expect(req.method()).toBe('GET');
+        expect(url.searchParams.get('litige_id')).toBe(`eq.${litigeId}`);
+        if (lectureMessagesRetenue) return route.fallback();
+        lectureMessagesRetenue = true;
+        await attente;
+        await route.fallback();
+      });
+    }
+    // Les deux parcours historiques gardent le deep-link et le tap immédiat.
+    // Le témoin ouvre le dossier par l'UI pour isoler l'arrivée des messages
+    // du défilement explicite de navigation du deep-link.
+    await page.goto(messagesRetardes ? '/admin/litiges' : `/admin/litiges?litige=${litigeId}`);
     await expect(page.getByRole('heading', { name: 'Litiges — Supervision admin' })).toBeVisible();
-    await activer(page.getByRole('button', { name: 'Résoudre (financier + statut)', exact: true }));
+    const boutonResolution = page.getByRole('button', { name: 'Résoudre (financier + statut)', exact: true });
+    if (messagesRetardes) {
+      await activer(page.getByRole('button', { name: /^Tous 1$/ }));
+      await activer(page.locator(`[data-litige-id="${litigeId}"] button[aria-expanded]`));
+      await expect.poll(() => lectureMessagesRetenue).toBe(true);
+      await boutonResolution.scrollIntoViewIfNeeded();
+      const avant = await boutonResolution.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return { scrollX, scrollY, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      });
+      const reponseMessages = page.waitForResponse(response => response.request().method() === 'GET'
+        && new URL(response.url()).pathname === '/rest/v1/messages_litige'
+        && new URL(response.url()).searchParams.get('litige_id') === `eq.${litigeId}`);
+      libererMessages();
+      const response = await reponseMessages;
+      expect(response.status()).toBe(200); expect(await response.finished()).toBeNull();
+      await expect(page.getByText('Aucun message pour le moment', { exact: true })).toBeVisible();
+      // Mesure bornée, pas attente d'une fin de mouvement : tout déplacement
+      // depuis AVANT la réponse échoue, y compris l'ancien timer à 100 ms.
+      const immobilite = await boutonResolution.evaluate(async (element, initial) => {
+        const debut = performance.now();
+        let ecartScroll = 0, ecartBouton = 0;
+        const mesurer = () => {
+          const rect = element.getBoundingClientRect();
+          ecartScroll = Math.max(ecartScroll, Math.abs(scrollX - initial.scrollX), Math.abs(scrollY - initial.scrollY));
+          ecartBouton = Math.max(ecartBouton, Math.abs(rect.x - initial.x), Math.abs(rect.y - initial.y),
+            Math.abs(rect.width - initial.width), Math.abs(rect.height - initial.height));
+        };
+        mesurer();
+        await new Promise<void>(resolve => {
+          const frame = () => { mesurer(); if (performance.now() - debut >= 400) resolve(); else requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+        });
+        return { ecartScroll, ecartBouton };
+      }, avant);
+      await info.attach('arrivee-messages-viewport', { body: JSON.stringify({ avant, ...immobilite }), contentType: 'application/json' });
+      expect(immobilite.ecartScroll, 'Le chargement des messages ne déplace pas la page').toBeLessThanOrEqual(1);
+      expect(immobilite.ecartBouton, 'Le bouton garde sa position et ses dimensions dans le viewport').toBeLessThanOrEqual(1);
+    }
+    await activer(boutonResolution);
     const dialog = page.getByRole('dialog', { name: 'Résoudre le litige', exact: true });
     await expect(dialog.getByText(original.numero_facture, { exact: false }).first()).toBeVisible();
     await dialog.getByRole('textbox', { name: 'Résolution', exact: true }).fill('Décision fictive de correction du taux.');

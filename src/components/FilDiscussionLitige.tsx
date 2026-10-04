@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -42,7 +42,6 @@ export function FilDiscussionLitige({ litige, onUpdate, roleUtilisateur }: Props
   const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [newMsg, setNewMsg] = useState('');
   const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const chargerMessages = useCallback(async () => {
     const { data } = await supabase
@@ -52,7 +51,6 @@ export function FilDiscussionLitige({ litige, onUpdate, roleUtilisateur }: Props
       .order('cree_le', { ascending: true });
     setMessages(data || []);
     setLoadingMsgs(false);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [litige.id]);
 
   useEffect(() => { void chargerMessages(); }, [chargerMessages]);
@@ -173,7 +171,6 @@ export function FilDiscussionLitige({ litige, onUpdate, roleUtilisateur }: Props
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* Accord progress */}
