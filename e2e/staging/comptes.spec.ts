@@ -111,6 +111,9 @@ test.beforeEach(async ({ page }) => {
 
 type FixtureSession = Awaited<ReturnType<typeof compteJetable>>;
 type RoleSession = 'soignant' | 'etablissement';
+// Même contrat que @supabase/auth-js/lib/fetch : sinon l'API legacy
+// renvoie error_code, et non code, même lorsque le refus HTTP est correct.
+const authApiVersion = '2024-01-01';
 
 async function verifierFixtureSession(fixture: FixtureSession, role: RoleSession) {
   const identity = await admin.auth.admin.getUserById(fixture.id);
@@ -191,21 +194,45 @@ async function identiteNavigateur(page: Page, fixtureId: string) {
   // Le client web réel persiste dans sessionStorage (auth-storage.ts).
   // Le JWT et la réponse Auth restent dans le navigateur ; seuls ces trois
   // résultats bornés reviennent au test. Aucune session n'est injectée.
-  return page.evaluate(async ({ authUrl, publicKey, id }) => {
+  return page.evaluate(async ({ authUrl, publicKey, id, apiVersion }) => {
     const result = { status: 0, sameUser: false, sessionMissing: false };
     try {
       const key = `sb-${new URL(authUrl).hostname.split('.')[0]}-auth-token`;
       const session = JSON.parse(sessionStorage.getItem(key) || 'null');
       if (typeof session?.access_token !== 'string') return result;
       const response = await fetch(`${authUrl}/auth/v1/user`, {
-        headers: { apikey: publicKey, Authorization: `Bearer ${session.access_token}` },
+        headers: { apikey: publicKey, Authorization: `Bearer ${session.access_token}`, 'X-Supabase-Api-Version': apiVersion },
         signal: AbortSignal.timeout(15_000),
       });
       const identity = await response.json();
       return { status: response.status, sameUser: response.ok && identity?.id === id,
-        sessionMissing: identity?.code === 'session_not_found' };
+        sessionMissing: (typeof identity?.code === 'string' ? identity.code : identity?.error_code) === 'session_not_found' };
     } catch { return result; }
-  }, { authUrl: url!, publicKey: anon!, id: fixtureId });
+  }, { authUrl: url!, publicKey: anon!, id: fixtureId, apiVersion: authApiVersion });
+}
+
+async function renouvellementNavigateur(page: Page, fixtureId: string) {
+  // Dernier contrôle du parcours : renouvellement Auth réel, sans installer
+  // les nouveaux jetons dans le SDK/storage. Ce n'est pas un refresh UI autonome.
+  return page.evaluate(async ({ authUrl, publicKey, id, apiVersion }) => {
+    const result = { status: 0, sameUser: false, tokensIssued: false, refreshMissing: false };
+    try {
+      const key = `sb-${new URL(authUrl).hostname.split('.')[0]}-auth-token`;
+      const session = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (typeof session?.refresh_token !== 'string' || !session.refresh_token) return result;
+      const response = await fetch(`${authUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: publicKey, 'Content-Type': 'application/json', 'X-Supabase-Api-Version': apiVersion },
+        body: JSON.stringify({ refresh_token: session.refresh_token }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const refreshed = await response.json();
+      return { status: response.status, sameUser: response.ok && refreshed?.user?.id === id,
+        tokensIssued: response.ok && typeof refreshed?.access_token === 'string' && !!refreshed.access_token
+          && typeof refreshed?.refresh_token === 'string' && !!refreshed.refresh_token,
+        refreshMissing: (typeof refreshed?.code === 'string' ? refreshed.code : refreshed?.error_code) === 'refresh_token_not_found' };
+    } catch { return result; }
+  }, { authUrl: url!, publicKey: anon!, id: fixtureId, apiVersion: authApiVersion });
 }
 
 const viewportsSession = [
@@ -247,6 +274,7 @@ for (const role of ['soignant', 'etablissement'] as const) {
         await expect(page.getByRole('heading', { name: role === 'soignant' ? 'Connexion & sécurité' : 'Paramètres de l’établissement', exact: true })).toBeVisible();
         await expect(page.getByTestId('login-submit')).toHaveCount(0);
         expect(await identiteNavigateur(page, fixture.id)).toEqual(expected);
+        expect(await renouvellementNavigateur(page, fixture.id)).toEqual({ status: 200, sameUser: true, tokensIssued: true, refreshMissing: false });
       } finally {
         await page.close().catch(() => {});
         await fixture.cleanup();
@@ -273,6 +301,7 @@ test('sonde CI témoin négatif : logout sans scope invalide une autre session d
     });
     expect(response.status).toBe(204);
     expect(await identiteNavigateur(page, fixture.id)).toEqual({ status: 403, sameUser: false, sessionMissing: true });
+    expect(await renouvellementNavigateur(page, fixture.id)).toEqual({ status: 400, sameUser: false, tokensIssued: false, refreshMissing: true });
   } finally {
     await page.close().catch(() => {});
     await fixture.cleanup();
