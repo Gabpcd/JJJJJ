@@ -37,6 +37,8 @@ jobs:
           persist-credentials: false
       - name: Vérifier le SHA exécuté
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Vérifier la préparation du banc après actualisation du schéma
+        run: python3 -B -m unittest discover -s tests/python -p test_signature_otp_witness.py
       - name: Qualification du correctif et rollback intégral
         run: python3 scripts/ci/signature-otp-fix-pg17.py > signature-otp-fixed-public.json
       - name: Reçu fermé uniquement
