@@ -1,3 +1,4 @@
+import { requireFixturePassword, assertFixtureAccount, FIXTURES } from '../../scripts/lib/playwright-fixtures.mjs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const EMAIL_ETABLISSEMENT_PLAYWRIGHT = 'playwright-etab@jolene.app';
@@ -14,10 +15,8 @@ const PAUSES_REESSAI_AUTH_MS = [2_000, 5_000] as const;
 
 function diagnosticErreurAuth(error: ErreurAuth): string {
   return JSON.stringify({
-    name: error.name || error.constructor?.name || 'ErreurAuthInconnue',
-    message: error.message || String(error),
-    status: error.status,
-    code: error.code,
+    status: Number.isInteger(error.status) ? error.status : 0,
+    code: ['request_timeout', 'forbidden'].includes(error.code || '') ? error.code : 'auth_error',
   });
 }
 
@@ -45,6 +44,9 @@ export async function synchroniserAuthEtablissementPlaywright(
   attendre: (ms: number) => Promise<void> = (ms) =>
     new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<void> {
+  requireFixturePassword(password);
+  const checkedId = await assertFixtureAccount(admin, FIXTURES.etab);
+  if (checkedId !== userId) throw new Error('FIXTURE_ID_MISMATCH');
   for (let tentative = 1; tentative <= PAUSES_REESSAI_AUTH_MS.length + 1; tentative += 1) {
     const { error } = await admin.auth.admin.updateUserById(userId, {
       password,
@@ -86,12 +88,7 @@ export async function synchroniserAuthEtablissementPlaywright(
 export async function garantirEtablissementPlaywright(
   admin: SupabaseClient,
 ): Promise<string> {
-  const password = process.env.PLAYWRIGHT_TEST_PASSWORD;
-  if (!password) {
-    throw new Error(
-      '[compte-etablissement-playwright] PLAYWRIGHT_TEST_PASSWORD absent',
-    );
-  }
+  const password = requireFixturePassword(process.env.PLAYWRIGHT_TEST_PASSWORD);
 
   const { data: userIdBrut, error: userIdError } = await admin.rpc(
     'fn_admin_get_user_id_by_email',

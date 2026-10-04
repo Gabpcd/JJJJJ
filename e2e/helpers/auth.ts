@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
@@ -12,12 +13,12 @@ import { expect } from '@playwright/test';
 export const TEST_ACCOUNTS = {
   soignant: {
     email: 'playwright-soignant@jolene.app',
-    password: process.env.PLAYWRIGHT_TEST_PASSWORD || 'Playwright!Test2026',
+    password: process.env.PLAYWRIGHT_TEST_PASSWORD || '',
     role: 'SOIGNANT' as const,
   },
   etab: {
     email: 'playwright-etab@jolene.app',
-    password: process.env.PLAYWRIGHT_TEST_PASSWORD || 'Playwright!Test2026',
+    password: process.env.PLAYWRIGHT_TEST_PASSWORD || '',
     role: 'ADMIN_ETABLISSEMENT' as const,
   },
   admin: {
@@ -77,7 +78,7 @@ export function generateTestUser(prefix: 'soignant' | 'etab' = 'soignant') {
   const suffix = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
     email: `playwright-test-${suffix}@jolene.app`,
-    password: 'Playwright!Test2026',
+    password: randomBytes(32).toString('hex'),
     prenom: 'Test',
     nom: `Auto${suffix.slice(0, 4)}`,
     siret: `12345678901${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,

@@ -1,13 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
+import { FIXTURES } from '../../scripts/lib/playwright-fixtures.mjs';
 import { synchroniserAuthEtablissementPlaywright } from '../../e2e/helpers/garantir-etablissement-playwright';
 
 function creerClientUpdateUser(
   erreurs: Array<null | { message: string; status?: number; code?: string }>,
 ) {
   const updateUserById = vi.fn(async () => ({ error: erreurs.shift() ?? null }));
+  const userId = '00000000-0000-4000-8000-000000000001';
   const admin = {
-    auth: { admin: { updateUserById } },
+    rpc: vi.fn(async () => ({ data: userId, error: null })),
+    from: (table: string) => {
+      const chain: any = {
+        select: () => chain, eq: () => chain,
+        maybeSingle: async () => ({ data: { id: userId, est_compte_test: true }, error: null }),
+        limit: async () => ({ data: [], error: null }),
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return chain;
+    },
+    auth: { admin: { updateUserById, getUserById: vi.fn(async () => ({ data: { user: {
+      id: userId, email: FIXTURES.etab.email, app_metadata: { role: FIXTURES.etab.role },
+    } }, error: null })) } },
   } as unknown as SupabaseClient;
   return { admin, updateUserById };
 }
@@ -21,7 +35,7 @@ describe('synchroniserAuthEtablissementPlaywright', () => {
     const attendre = vi.fn(async () => undefined);
 
     await expect(
-      synchroniserAuthEtablissementPlaywright(admin, 'user-id', 'secret', attendre),
+      synchroniserAuthEtablissementPlaywright(admin, '00000000-0000-4000-8000-000000000001', 'a'.repeat(64), attendre),
     ).resolves.toBeUndefined();
 
     expect(updateUserById).toHaveBeenCalledTimes(2);
@@ -35,7 +49,7 @@ describe('synchroniserAuthEtablissementPlaywright', () => {
     const attendre = vi.fn(async () => undefined);
 
     await expect(
-      synchroniserAuthEtablissementPlaywright(admin, 'user-id', 'secret', attendre),
+      synchroniserAuthEtablissementPlaywright(admin, '00000000-0000-4000-8000-000000000001', 'a'.repeat(64), attendre),
     ).rejects.toThrow('"status":403');
 
     expect(updateUserById).toHaveBeenCalledTimes(1);
@@ -51,7 +65,7 @@ describe('synchroniserAuthEtablissementPlaywright', () => {
     const attendre = vi.fn(async () => undefined);
 
     await expect(
-      synchroniserAuthEtablissementPlaywright(admin, 'user-id', 'secret', attendre),
+      synchroniserAuthEtablissementPlaywright(admin, '00000000-0000-4000-8000-000000000001', 'a'.repeat(64), attendre),
     ).rejects.toThrow('"code":"request_timeout"');
 
     expect(updateUserById).toHaveBeenCalledTimes(3);

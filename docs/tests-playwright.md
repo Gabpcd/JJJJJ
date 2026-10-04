@@ -143,7 +143,7 @@ SUPABASE_URL=https://flripxtsyegjshnhzjkz.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 # Pour login compte test fixe (playwright-soignant@jolene.app)
-PLAYWRIGHT_TEST_PASSWORD=Playwright!Test2026
+PLAYWRIGHT_TEST_PASSWORD=<secret privé PLAYWRIGHT_FIXTURE_PASSWORD, 64 caractères hexadécimaux>
 ```
 
 ⚠️ **Le service_role key bypass RLS.** À utiliser uniquement en local ou CI, JAMAIS dans le code applicatif ou commité.
@@ -401,3 +401,8 @@ Ajouter un nouveau test régression : commit fix de référence en commentaire.
 - **Local** : `npm run test:e2e` avant chaque commit qui touche le frontend.
 - **PR** : workflow CI lance la suite automatiquement.
 - **Production** : 1×/jour idéalement (cron CI sur preview Vercel) pour catch les drift backend.
+
+
+### Identifiants des fixtures techniques
+
+Les deux comptes fixes utilisent exclusivement le secret privé GitHub `PLAYWRIGHT_FIXTURE_PASSWORD`, injecté dans `PLAYWRIGHT_TEST_PASSWORD`. Aucun repli public. Générer 32 octets aléatoires, encodés en 64 caractères hexadécimaux ; ne jamais les copier dans un ticket, un rapport ou le dépôt. La rotation manuelle est décrite dans `docs/rotation-fixtures-playwright.md`. Les secrets administrateur, App Review et load-tests staging restent distincts et inchangés.

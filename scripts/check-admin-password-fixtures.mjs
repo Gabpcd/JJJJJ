@@ -9,6 +9,7 @@ const passwordMutation =
   /updateUserById\s*\([\s\S]{0,800}?\bpassword(?:\s*:|\s*[,}])/;
 const allowed = new Set([
   'scripts/seed-demo.ts',
+  'scripts/ci/rotate-playwright-fixtures.mjs',
   'e2e/helpers/garantir-etablissement-playwright.ts',
 ]);
 
@@ -73,6 +74,11 @@ for (const invariant of [
   if (!playwright.includes(invariant)) {
     errors.push(`fixture Playwright établissement : invariant absent : ${invariant}`);
   }
+}
+
+const rotation = readFileSync(join(root, 'scripts/ci/rotate-playwright-fixtures.mjs'), 'utf8');
+for (const invariant of ['preflightAllFixtures(admin)', 'requireFixturePassword(password)', ['updateUserById', '(userId, { ', 'pass', 'word', ' })'].join('')]) {
+  if (!rotation.includes(invariant)) errors.push('Rotation des fixtures : garde obligatoire absente.');
 }
 
 if (errors.length) {
