@@ -101,6 +101,35 @@ async function sourceLocation(spec, reportRoot, cwd) {
   return { file: path.relative(cwd, candidate).split(path.sep).join('/'), line: spec.line, column: spec.column };
 }
 
+// Only a coordinate in the already-published spec may leave the private report.
+// Messages, code frames, function names, arbitrary paths and stack bytes never do.
+async function failureLocation(result, location, cwd) {
+  if (!['failed', 'timedOut'].includes(result.status)) return undefined;
+  const candidate = path.join(cwd, location.file);
+  if (await realpath(candidate) !== candidate || !(await lstat(candidate)).isFile()) return undefined;
+  const lines = (await readFile(candidate, 'utf8')).split('\n');
+  const coordinate = value => {
+    if (!object(value) || ![candidate, location.file].includes(value.file)) return undefined;
+    if (!integer(value.line, lines.length) || value.line === 0) return undefined;
+    if (!integer(value.column, lines[value.line - 1].length + 1) || value.column === 0) return undefined;
+    return { file: location.file, line: value.line, column: value.column };
+  };
+  const errors = [...result.errors.slice(0, 20), result.error].filter(object);
+  for (const error of errors) {
+    const structured = coordinate(error.location);
+    if (structured) return structured;
+    if (typeof error.stack !== 'string' || error.stack.length > 64 * 1024) continue;
+    for (const frame of error.stack.split('\n').slice(0, 100)) {
+      // Match a complete frame only; its captured path still must be the exact known spec.
+      const match = /^\s+at (?:[^()\r\n]{1,512} \()?([^()\r\n]+):([0-9]{1,6}):([0-9]{1,6})\)?$/.exec(frame);
+      if (!match) continue;
+      const parsed = coordinate({ file: match[1], line: Number(match[2]), column: Number(match[3]) });
+      if (parsed) return parsed;
+    }
+  }
+  return undefined;
+}
+
 function outcomeOf(results, expectedStatus) {
   const executed = results.filter(result => !['skipped', 'interrupted'].includes(result.status));
   const expected = executed.filter(result => result.status === expectedStatus).length;
@@ -131,16 +160,18 @@ export async function projectReport(report, { phase, cwd }) {
           requireValue(object(test) && PHASES[phase].includes(test.projectName));
           requireValue(STATUSES.has(test.expectedStatus) && OUTCOMES.includes(test.status) && Array.isArray(test.results));
           requireValue(test.results.length <= 1000 && tests.length < 100_000);
-          const attempts = test.results.map((result, index) => {
+          const attempts = await Promise.all(test.results.map(async (result, index) => {
             requireValue(object(result) && STATUSES.has(result.status) && duration(result.duration) && result.retry === index);
             requireValue(Array.isArray(result.errors));
             requireValue(!['passed', 'skipped'].includes(result.status) || (result.errors.length === 0 && !result.error), 'REPORT_INCONSISTENT');
+            const assertion = await failureLocation(result, location, cwd);
             return {
+              ...(assertion ? { failureLocation: assertion } : {}),
               retry: index, status: result.status, durationMs: result.duration,
               code: result.status === 'timedOut' ? 'TIMEOUT' : result.status === 'interrupted' ? 'INTERRUPTED'
                 : result.status === 'failed' ? 'TEST_FAILED' : result.status === 'skipped' ? 'SKIPPED' : 'PASSED',
             };
-          });
+          }));
           requireValue(outcomeOf(attempts, test.expectedStatus) === test.status, 'REPORT_INCONSISTENT');
           counts[test.status]++;
           tests.push({ ordinal: tests.length + 1, ...location, project: test.projectName, expectedStatus: test.expectedStatus, outcome: test.status, attempts });
