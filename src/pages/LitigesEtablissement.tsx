@@ -59,9 +59,9 @@ function LitigesEtablissementContent() {
   const [newMotif, setNewMotif] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const charger = useCallback(async () => {
+  const charger = useCallback(async (afficherChargement = true) => {
     if (!user || !etablissementId) return;
-    setLoading(true);
+    if (afficherChargement) setLoading(true);
     setErreurChargement(false);
     try {
       const { data, error } = await supabase.rpc(
@@ -73,7 +73,7 @@ function LitigesEtablissementContent() {
     } catch {
       setErreurChargement(true);
     } finally {
-      setLoading(false);
+      if (afficherChargement) setLoading(false);
     }
   }, [user, etablissementId]);
 
@@ -276,7 +276,7 @@ function LitigesEtablissementContent() {
                     <BoutonsActionLitige litige={litigeFull} role="ETABLISSEMENT" onUpdate={charger} />
                     <FilDiscussionLitige
                       litige={litigeFull}
-                      onUpdate={charger}
+                      onUpdate={() => { void charger(false); }}
                       roleUtilisateur="etablissement"
                     />
                   </div>

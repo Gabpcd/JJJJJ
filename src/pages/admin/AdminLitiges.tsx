@@ -391,7 +391,7 @@ export default function AdminLitiges() {
                         resolution: l.resolution,
                         missions: { intitule: l.missions?.intitule },
                       }}
-                      onUpdate={charger}
+                      onUpdate={() => { void charger(false); }}
                     />
                   </div>
                 )}
