@@ -38,6 +38,20 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await page.reload(); await expect(page.getByRole('heading', { name: 'Original synthétique signé', exact: true })).toBeVisible();
       expect(generations).toHaveLength(0); expect(state.contrat).toEqual(original);
       await preuveMission(page, info, role+'-original-apres-reload');
+      // Le hash serveur seul manque : le fallback HTML local ne doit pas autoriser un OTP.
+      Object.assign(state.contrat, { statut: role === 'SOIGNANT' ? 'SIGNE_ETABLISSEMENT' : 'SIGNE_SOIGNANT',
+        signature_soignant: role !== 'SOIGNANT', signature_etablissement: role === 'SOIGNANT', hash_document: null });
+      const sansEmpreinteServeur = structuredClone(state.contrat);
+      for (let lecture = 0; lecture < 2; lecture++) {
+        await page.reload();
+        await expect(page.getByRole('heading', { name: 'Original synthétique signé', exact: true })).toBeVisible();
+        await page.getByRole('checkbox', { name: /J'ai lu l'intégralité du contrat/ }).check();
+        await expect(page.getByRole('button', { name: 'Recevoir le code SMS pour signer', exact: true })).toBeDisabled();
+        expect(state.contrat).toEqual(sansEmpreinteServeur);
+        expect(state.calls.filter(call => ['fn_envoyer_otp_signature', 'fn_signer_contrat_otp'].includes(call.name))).toEqual([]);
+        expect(generations).toHaveLength(0);
+      }
+      await preuveMission(page, info, role+'-hash-serveur-manquant');
       // Une seule partie a signé : même interdiction de reconstitution automatique.
       Object.assign(state.contrat, { statut: role === 'SOIGNANT' ? 'SIGNE_ETABLISSEMENT' : 'SIGNE_SOIGNANT',
         signature_soignant: role !== 'SOIGNANT', signature_etablissement: role === 'SOIGNANT',

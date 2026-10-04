@@ -261,8 +261,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
 
       {etape === 'otp_envoye' && (
         <>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="min-w-0 text-muted-foreground">
               Code envoyé au <strong>{telMasked || 'numéro masqué'}</strong>
               {smsRestants !== null && (
                 <span className="ml-2 text-[10px] text-muted-foreground/70">
@@ -270,8 +270,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
                 </span>
               )}
             </span>
-            <span className={`inline-flex items-center gap-1 font-mono ${otpExpire ? 'text-destructive' : 'text-muted-foreground'}`}>
-              <Clock className="h-3 w-3" />
+            <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-mono ${otpExpire ? 'text-destructive' : 'text-muted-foreground'}`}>
+              <Clock className="h-3 w-3 shrink-0" />
               {otpExpire ? 'Expiré' : mmss}
             </span>
           </div>

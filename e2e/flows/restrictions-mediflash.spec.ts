@@ -105,6 +105,9 @@ test.describe('Matrice profession requise × établissement', () => {
 
   test('UI clinique : seul le mode libéral AS est bloqué, IDE reste sélectionnable, dentiste autorisé', async ({ page }) => {
     await loginAs(page, 'etab');
+    // Une URL SPA peut être acquise avant le montage du dashboard (WebKit).
+    await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.goto('/etablissement/missions/creer');
 
     await choisirProfession(page, 'AS');
