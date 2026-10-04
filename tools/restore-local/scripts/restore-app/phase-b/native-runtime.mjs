@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
-import { DB, digest, requireValue } from './contract.mjs';
+import { DB, digest, requireValue, projectRestoreCall } from './contract.mjs';
 
 // Names instead of cluster-local OIDs; values remain in the private snapshot.
 export const SETTINGS_SQL = `BEGIN READ ONLY; SET LOCAL statement_timeout='15s';
@@ -50,20 +50,23 @@ export async function proveControlledMissingPdf(runtime,fixture) {
 export function nativeRuntime(privateDir) {
   const base = localRuntime(privateDir), run = base.run;
   const callId=randomUUID();let command = 0, check = 0;
-  const call = (args, input) => {
+  const call = (args, input, restoreOperation = null) => {
     const result = spawnSync('docker', args, { input, encoding:null, maxBuffer:64*1024*1024, timeout:240_000,
       env:{PATH:process.env.PATH,HOME:process.env.HOME} });
     writeFileSync(join(privateDir,`phase-b-command-${callId}-${++command}.stderr.private`),result.stderr??Buffer.alloc(0),{mode:0o600,flag:'wx'});
     if(result.error||result.status!==0||result.signal!==null) {
-      const error=Object.assign(Error('B_CALL'),{code:'B_CALL',diagnostic:projectSqlDiagnostic(result.stderr?.toString()??'')});throw error;
+      const error=Object.assign(Error('B_CALL'),{code:'B_CALL',diagnostic:projectSqlDiagnostic(result.stderr?.toString()??'')});
+      if(restoreOperation!==null)error.restoreCall=projectRestoreCall({operation:restoreOperation,exitCode:result.status,
+        signal:result.signal,systemError:result.error?.code??null});
+      throw error;
     }
     return result.stdout;
   };
   const targetState=()=>base.verifyState({source:'off',target:'db-only',browser:'absent'});
-  const targetSql=async(body,database=DB)=>{
+  const targetSql=async(body,database=DB,restoreOperation=null)=>{
     requireValue([DB,'postgres'].includes(database)); await targetState();
     return call(['exec','-i',`${run}-target-db`,'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
-      '-U','supabase_admin','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body));
+      '-U','supabase_admin','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),restoreOperation);
   };
   const runtime={...base,
     catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL)}),
@@ -73,21 +76,21 @@ export function nativeRuntime(privateDir) {
     },
     recreateOwnedEmptyTargetDatabase:async database=>{
       requireValue(database===DB,'B_RESTORE');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
-      await targetSql(`DROP DATABASE ${DB};\nCREATE DATABASE ${DB} OWNER postgres TEMPLATE template0;`,'postgres');
-      await targetSql('DROP SCHEMA public;');
+      await targetSql(`DROP DATABASE ${DB};\nCREATE DATABASE ${DB} OWNER postgres TEMPLATE template0;`,'postgres','TARGET_DATABASE_RECREATE');
+      await targetSql('DROP SCHEMA public;',DB,'TARGET_PUBLIC_SCHEMA_DROP');
     },
     databaseTool:async(side,tool,args,bytes)=>{
       if(side==='source')return base.databaseTool(side,tool,args,bytes);
       requireValue(side==='target'&&tool==='pg_restore'&&JSON.stringify(args)===JSON.stringify(RESTORE_ARGS)
         &&Buffer.isBuffer(bytes)&&bytes.subarray(0,5).toString()==='PGDMP'&&bytes.length<64*1024*1024,'B_RESTORE');
-      await targetState();return call(['exec','-i',`${run}-target-db`,tool,...args],bytes);
+      await targetState();return call(['exec','-i',`${run}-target-db`,tool,...args],bytes,'TARGET_ARCHIVE_RESTORE');
     },
-    applyReviewedRoleSettings:async()=>targetSql(ROLE_SETTINGS_SQL),
+    applyReviewedRoleSettings:async()=>targetSql(ROLE_SETTINGS_SQL,DB,'TARGET_ROLE_SETTINGS'),
     copyFilesIn:async(side,source)=>{
       requireValue(side==='target'&&realpathSync(source)===resolve(source)
         &&resolve(source)===join(realpathSync(privateDir),'snapshot','files'),'B_FILES');
       const expected=fileTree(source);await targetState();await runtime.assertTargetFilesEmpty();
-      call(['cp','-a',source+'/.',`${run}-target-storage:/var/lib/storage/`]);
+      call(['cp','-a',source+'/.',`${run}-target-storage:/var/lib/storage/`],undefined,'TARGET_FILES_COPY_IN');
       const after=join(privateDir,'target-files-restored');await base.copyFilesOut('target',after);
       requireValue(JSON.stringify(fileTree(after))===JSON.stringify(expected),'B_FILES');
     },

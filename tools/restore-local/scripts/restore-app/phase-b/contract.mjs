@@ -13,9 +13,22 @@ export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CAL
 export const STAGES = new Set([...A_STAGES,'dependencies','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function requireValue(ok, code = 'B_CONTEXT') { if (!ok) { const error = new Error(CODES.has(code) ? code : 'B_FAILED'); error.code = error.message; throw error; } }
+export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_DATABASE_RECREATE','TARGET_PUBLIC_SCHEMA_DROP',
+ 'TARGET_ARCHIVE_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN']);
+const RESTORE_SIGNALS = new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE']);
+const RESTORE_SYSTEM_ERRORS = new Set(['ETIMEDOUT','ENOENT','EACCES','EPERM','ENOMEM','ENOBUFS','E2BIG','EAGAIN','ENOEXEC']);
+// Diagnostic only: no arguments, SQL, paths, stderr, stdout or dump bytes.
+export function projectRestoreCall(value) {
+ const systemError=value?.systemError===null?null:RESTORE_SYSTEM_ERRORS.has(value?.systemError)?value.systemError:'OTHER';
+ return {schemaVersion:1,operation:RESTORE_CALL_OPERATIONS.includes(value?.operation)?value.operation:'UNKNOWN',
+  exitCode:Number.isInteger(value?.exitCode)&&value.exitCode>=0&&value.exitCode<=255?value.exitCode:null,
+  signal:value?.signal===null?null:RESTORE_SIGNALS.has(value?.signal)?value.signal:'OTHER',
+  systemError,timedOut:systemError==='ETIMEDOUT'};
+}
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,
  sqlLine:Number.isSafeInteger(error?.diagnostic?.line)&&error.diagnostic.line>0&&error.diagnostic.line<1_000_000?error.diagnostic.line:null,
+ ...(stage==='restore'&&error?.code==='B_CALL'&&error?.restoreCall?{restoreCall:projectRestoreCall(error.restoreCall)}:{}),
  restored:false,appVerified:false,readyForNationalLaunch:false }; }
 export function assertReview(review) {
  requireValue(review?.productSha===PRODUCT_SHA && review?.approved===true && /^[a-f0-9]{40}$/.test(review.phaseAHarnessSha??'')

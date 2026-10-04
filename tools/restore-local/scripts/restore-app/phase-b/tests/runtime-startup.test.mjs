@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import cp from 'node:child_process';
 import crypto from 'node:crypto';
 import {syncBuiltinESMExports} from 'node:module';
-import {mkdtempSync,readFileSync,readdirSync,lstatSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,readdirSync,lstatSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {preparePlan,localRuntime} from '../../local-runtime.mjs';
 import {nativeRuntime} from '../native-runtime.mjs';
+import {restoreTarget} from '../restore-target.mjs';
+import {fileTree,digest} from '../../snapshot-restore.mjs';
+import {closedFailure,RESTORE_CALL_OPERATIONS} from '../contract.mjs';
 const run='jolene-restore-drill-987654-1';
 function fixture(t){
  const parent=realpathSync(mkdtempSync(join(tmpdir(),'restore-b-startup-')));t.after(()=>rmSync(parent,{recursive:true,force:true}));
@@ -75,6 +78,53 @@ test('actual native startup waits for DB healthy and complete plan before any AP
  assert.ok(h.events.indexOf('start-api')>h.events.indexOf('db-health:healthy'));
  for(let i=0;i<h.events.length;i++)if(h.events[i].startsWith('db-health:'))assert.equal(h.events[i-1],'full-plan');
  assert.equal(h.events.filter(v=>v==='start-api').length,4);
+});
+for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attributes first failing native call '+failedOperation,async t=>{
+ const {directory,plan}=fixture(t),operations=[],canary='PRIVATE_SQL_AUTH_DUMP_PATH_CANARY';
+ const snapshotDir=join(directory,'snapshot');mkdirSync(snapshotDir,{mode:0o700});mkdirSync(join(snapshotDir,'files'),{mode:0o700});
+ const dump=Buffer.from('PGDMPsynthetic-private-test');writeFileSync(join(snapshotDir,'database.dump'),dump,{mode:0o600});
+ writeFileSync(join(snapshotDir,'files','synthetic-file'),'synthetic',{mode:0o600});
+ const containers=Object.values(plan.services).map((s,i)=>({Id:'native'+i,Name:'/'+s.container_name,
+  Config:{Labels:s.labels,Image:s.image,Env:Object.entries(s.environment).map(([k,v])=>k+'='+v),Cmd:s.command},
+  NetworkSettings:{Networks:{[run+'-network']:{}}},HostConfig:{PortBindings:{},CapAdd:null,NetworkMode:run+'-network',LogConfig:{Type:'none'}},
+  Mounts:(s.volumes??[]).map(v=>v.type==='bind'?{Type:'bind',Source:v.source,Destination:v.target,RW:false}:{Type:'volume',Name:plan.volumes[v.source].name,Destination:v.target,RW:true}),
+  State:{Status:s.container_name===run+'-target-db'?'running':'exited',Health:{Status:'healthy'},OOMKilled:false}}));
+ const network={Name:run+'-network',Internal:true,Labels:{'org.jolene.restore-drill':run},Driver:'bridge',Attachable:false,EnableIPv6:false,Containers:{}};
+ const volumes=Object.values(plan.volumes).map(v=>({Name:v.name,Labels:v.labels,Driver:'local',Options:null}));
+ mocks(t,(command,args,options)=>{
+  assert.equal(command,'docker');let operation=null;
+  if(args[0]==='context')return output([{Endpoints:{docker:{Host:'unix:///synthetic.sock'}}}]);
+  if(args[0]==='ps')return output(containers.map(c=>c.Name.slice(1)).join('\n'));
+  if(args[0]==='network')return output([network]);
+  if(args[0]==='volume')return output(volumes);
+  if(args[0]==='inspect')return output(containers);
+  if(args[0]==='exec'){
+   assert.equal(args[2],run+'-target-db');
+   if(args[3]==='pg_restore'){
+    assert.deepEqual(args.slice(4),['--exit-on-error','--single-transaction','--no-password','-U','supabase_admin','-h','/var/run/postgresql','-d','jolene_candidatures_pg17_test']);
+    assert.deepEqual(options.input,dump);operation='TARGET_ARCHIVE_RESTORE';
+   }else{
+    assert.equal(args[3],'psql');const sql=options.input.toString();
+    if(sql.startsWith('DROP DATABASE '))operation='TARGET_DATABASE_RECREATE';
+    else if(sql==='DROP SCHEMA public;')operation='TARGET_PUBLIC_SCHEMA_DROP';
+    else if(sql.startsWith('ALTER ROLE authenticator'))operation='TARGET_ROLE_SETTINGS';
+    else {assert.ok(sql.includes('BEGIN READ ONLY;'));return output('');}
+   }
+  }else if(args[0]==='cp'){
+   if(args[2]===run+'-target-storage:/var/lib/storage/.')return output('');
+   assert.equal(args[2],join(snapshotDir,'files')+'/.');assert.equal(args[3],run+'-target-storage:/var/lib/storage/');
+   operation='TARGET_FILES_COPY_IN';
+  }else assert.fail('UNEXPECTED_RESTORE_STUB_CALL');
+  operations.push(operation);return output('',operation===failedOperation?1:0,canary);
+ });
+ const snapshot={run,archiveSha256:digest(dump),tocSha256:'b'.repeat(64),files:fileTree(join(snapshotDir,'files')),before:{},catalogue:{}};
+ const reviewed={nativeRestoreTocSha256:snapshot.tocSha256,nativeRoleSettingsReviewed:true};
+ await assert.rejects(()=>restoreTarget(nativeRuntime(directory),snapshotDir,snapshot,reviewed,'unused'),error=>{
+  const publicResult=closedFailure(error,'restore');assert.equal(publicResult.code,'B_CALL');
+  assert.equal(publicResult.restoreCall.operation,failedOperation);assert.equal(publicResult.restoreCall.exitCode,1);
+  assert.ok(!JSON.stringify(publicResult).includes(canary));return true;
+ });
+ assert.deepEqual(operations,RESTORE_CALL_OPERATIONS.slice(0,RESTORE_CALL_OPERATIONS.indexOf(failedOperation)+1));
 });
 for(const [name,options,code]of [
  ['exited DB',{exited:true},'RESTORE_SERVICE_STATE'],

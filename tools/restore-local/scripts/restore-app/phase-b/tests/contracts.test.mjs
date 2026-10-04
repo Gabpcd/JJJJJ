@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync,lstatSync,realpathSync,symlinkSync,linkSync,chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BRANCH,PRODUCT_SHA,IMAGE,assertReview,assertNativeReview,closedFailure,validateBrowserReceipt,STAGES,digest } from '../contract.mjs';
+import { BRANCH,PRODUCT_SHA,IMAGE,assertReview,assertNativeReview,closedFailure,validateBrowserReceipt,STAGES,digest,projectRestoreCall,RESTORE_CALL_OPERATIONS } from '../contract.mjs';
 import { executionIdentity,checkIdentity,checkVercel } from '../identity.mjs';
 import { restoreTarget } from '../restore-target.mjs';
 import { fileTree } from '../../snapshot-restore.mjs';
@@ -93,6 +93,25 @@ test('browser receipts require exact 2 or 25 pairs, single attempts and no leaks
  for(const edit of [r=>r.tests[0]=r.tests[1],r=>r.tests.pop(),r=>r.tests[0].attempts.push(r.tests[0].attempts[0]),r=>r.tests[0].project='unknown',r=>r.counts.expected=24,r=>r.globalErrorCount=1]){const r=receipt('target');edit(r);assert.throws(()=>validateBrowserReceipt(r,'target'));}
  const r=receipt('target');r.password='CANARY';r.tests[0].raw='CANARY';assert.ok(!JSON.stringify(validateBrowserReceipt(r,'target')).includes('CANARY'));
  const failed=receipt('target');failed.passed=false;failed.counts.expected--;failed.counts.unexpected++;failed.tests[0].outcome='unexpected';failed.tests[0].attempts=[{status:'failed',code:'TEST_FAILED',retry:0}];assert.equal(validateBrowserReceipt(failed,'target').passed,false);
+});
+test('restore call diagnostics retain only closed operation and process fields without changing failure',()=>{
+ const canary='PRIVATE_SQL_AUTH_DUMP_PATH_CANARY';
+ for(const operation of RESTORE_CALL_OPERATIONS){
+  const raw={operation,exitCode:1,signal:null,systemError:null,stderr:canary,args:[canary],input:canary};
+  const error={code:'B_CALL',restoreCall:raw,diagnostic:{sqlstate:'42501',line:2,message:canary}};
+  const projected=closedFailure(error,'restore');
+  assert.deepEqual(projected.restoreCall,{schemaVersion:1,operation,exitCode:1,signal:null,systemError:null,timedOut:false});
+  assert.equal(projected.code,'B_CALL');assert.equal(projected.stage,'restore');assert.equal(projected.sqlstate,'42501');
+  assert.equal(projected.restored,false);assert.equal(projected.appVerified,false);assert.ok(!JSON.stringify(projected).includes(canary));
+  assert.equal(closedFailure(error,'browser_source').restoreCall,undefined);
+  assert.equal(closedFailure({...error,code:'B_FAILED'},'restore').restoreCall,undefined);
+ }
+ assert.deepEqual(projectRestoreCall({operation:canary,exitCode:999,signal:canary,systemError:canary,timedOut:true}),
+  {schemaVersion:1,operation:'UNKNOWN',exitCode:null,signal:'OTHER',systemError:'OTHER',timedOut:false});
+ const timeout=projectRestoreCall({operation:'TARGET_ARCHIVE_RESTORE',exitCode:null,signal:'SIGTERM',systemError:'ETIMEDOUT'});
+ assert.equal(timeout.timedOut,true);assert.equal(timeout.signal,'SIGTERM');
+ for(const value of [-1,256,Infinity,NaN,1.5,canary])assert.equal(projectRestoreCall({exitCode:value}).exitCode,null);
+ assert.equal(closedFailure({code:'B_CALL'},'restore').restoreCall,undefined);
 });
 function restoreHarness(t,patch={}){const dir=mkdtempSync(join(tmpdir(),'restore-b-contract-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));mkdirSync(join(dir,'files'));writeFileSync(join(dir,'database.dump'),'PGDMPsynthetic');writeFileSync(join(dir,'files','file'),'synthetic');const calls=[];const snap={run,archiveSha256:digest('PGDMPsynthetic'),tocSha256:approved().nativeRestoreTocSha256,files:fileTree(join(dir,'files')),before:{rows:'synthetic'},catalogue:{catalogue:'synthetic'}};const r={run,verifyState:async v=>calls.push(['state',v]),assertTargetNativeEmpty:async()=>calls.push(['empty-db']),assertTargetFilesEmpty:async()=>calls.push(['empty-files']),recreateOwnedEmptyTargetDatabase:async n=>calls.push(['drop-create',n]),databaseTool:async(...args)=>calls.push(['restore',...args]),applyReviewedRoleSettings:async()=>calls.push(['roles']),copyFilesIn:async()=>calls.push(['copy']),sqlJson:async()=>snap.before,assertSourceOffAndTargetCatalogExact:async()=>calls.push(['catalogue']),startApis:async()=>calls.push(['start']),assertApiHealthy:async()=>calls.push(['healthy']),...patch};return{dir,snap,r,calls,execute:()=>restoreTarget(r,dir,snap,approved(),'checkpoint')};}
 test('restore volume checked before DROP and again immediately before copy; exact dump reused',async t=>{const h=restoreHarness(t);const r=await h.execute();assert.equal(r.restored,true);assert.deepEqual(h.calls.map(v=>v[0]),['state','empty-db','empty-files','drop-create','restore','roles','empty-files','copy','catalogue','start','healthy']);const restore=h.calls.find(v=>v[0]==='restore');assert.equal(restore[1],'target');assert.equal(restore[2],'pg_restore');assert.ok(restore[3].includes('--single-transaction'));assert.ok(!restore[3].includes('--clean'));assert.equal(restore[4].toString(),'PGDMPsynthetic');});
