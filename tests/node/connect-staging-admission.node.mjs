@@ -6,7 +6,7 @@ import {renderStagingAdmission} from '../../scripts/ci/connect-staging-admission
 const source=readFileSync('supabase/functions/_shared/stripe-connect-staging-test.ts','utf8');
 const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
 assert.deepEqual(output.diagnostics,[]);
-const {stagingConnectConfig,parseStagingConnectCapacity,readStagingConnectCapacity,verifyStagingStripeIdentity,authorizeStagingCheckout,requireStagingRefundScope}=await import(`data:text/javascript;base64,${Buffer.from(output.outputText).toString('base64')}`);
+const {stagingConnectConfig,parseStagingConnectCapacity,readStagingConnectCapacity,verifyStagingStripeIdentity,authorizeStagingCheckout,requireStagingRefundScope,requireStagingRefundEventScope}=await import(`data:text/javascript;base64,${Buffer.from(output.outputText).toString('base64')}`);
 const id=n=>`f1560000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const config={serverSha:'a'.repeat(40),uiSha:'b'.repeat(40),manifestSha256:'c'.repeat(64),platformAccountId:'acct_PlatformTEST',capabilityId:id(9),returnOrigin:'http://127.0.0.1:18491'};
 const env={SUPABASE_URL:'https://mejpriaetwgtcstbgfid.supabase.co',SUPABASE_ENV:'staging',STRIPE_SECRET_KEY:'sk_test_SyntheticOnly',CONNECT_STAGING_TEST_RUN:JSON.stringify(config)};
@@ -76,3 +76,21 @@ test('raccord conserve gate false et source gelée',()=>{
  assert.doesNotMatch(sql,/INSERT INTO private\.stripe_connect_test_capacities/i);assert.match(sql,/CONNECT_TEST_TRANSFER_FORBIDDEN/);
 });
 test('source incompatible refuse raccord partiel',()=>assert.throws(()=>renderStagingAdmission(migration.replace(' -- Une insertion neuve a trace_id NULL',' -- source modifiée'),helpers),/STAGING_PATCH_ANCHOR/));
+
+const existingRefundOperation={...op,trace_id:row.trace_id,mission_id:row.mission_id,etablissement_id:row.etablissement_id,
+ soignant_id:row.soignant_id,facture_commission_id:row.facture_commission_id,customer_id:row.customer_id,destination_id:row.destination_id,
+ payment_intent_id:'pi_TEST',charge_id:'ch_TEST',litige_id:id(6),refund_id:'re_TEST',refund_status:'PENDING',
+ soignant_cents:8000,commission_cents:1440,total_cents:9440};
+test('événement Refund : capacité active et opération complète exacte',async()=>{
+ await requireStagingRefundEventScope(db,config,existingRefundOperation,'re_TEST');
+});
+for(const [field,value] of Object.entries({id:id(55),trace_id:id(55),session_id:'cs_test_OTHER',mission_id:id(55),
+ etablissement_id:id(55),soignant_id:id(55),facture_honoraire_id:id(55),facture_commission_id:id(55),customer_id:'cus_OTHER',
+ destination_id:'acct_OTHER',soignant_cents:8001,commission_cents:1441,total_cents:9441,livemode:true,orientation:'TRANSFER',refund_id:null}))
+ test(`événement Refund : refuse corrélation ${field}`,async()=>assert.rejects(()=>
+  requireStagingRefundEventScope(db,config,{...existingRefundOperation,[field]:value},'re_TEST')));
+for(const [label,change] of [['expirée',{expires_at:'2020-01-01T00:00:00Z'}],['révoquée',{revoked_at:new Date().toISOString()}],
+ ['désactivée',{enabled:false}],['sans réservation',{claim_reserved_at:null}]])
+ test(`événement Refund : capacité ${label} refusée`,async()=>assert.rejects(()=>requireStagingRefundEventScope(
+  {rpc:async()=>({data:{...row,...change},error:null})},config,existingRefundOperation,'re_TEST')));
+test('événement Refund : autre objet refusé',async()=>assert.rejects(()=>requireStagingRefundEventScope(db,config,existingRefundOperation,'re_OTHER')));

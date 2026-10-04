@@ -1,3 +1,5 @@
+import type { ConnectOperation } from "./stripe-connect-pretransfer.ts";
+
 // Admission de la seule recette Connect explicitement allouée sur staging.
 // Ce module ne crée aucun objet Stripe ni capacité. Absent en configuration,
 // il ne fait aucune lecture et ne modifie aucun comportement de production.
@@ -89,4 +91,17 @@ export async function requireStagingRefundScope(sb: Client,c: StagingConnectConf
 }): Promise<void> {
   const cap=await readStagingConnectCapacity(sb,c,op.facture_honoraire_id,true);
   if(cap.operationId!==op.id||cap.sessionId!==op.session_id||op.livemode!==false||op.orientation!=='REFUND')fail();
+}
+
+// Admission d'un événement signé portant un Refund déjà persisté. Aucune
+// réservation ni création : les liens SQL canoniques et le budget restent inchangés.
+export async function requireStagingRefundEventScope(
+  sb: Client,c: StagingConnectConfig,op: ConnectOperation,refundId: string,
+): Promise<void> {
+  const cap=await readStagingConnectCapacity(sb,c,op.facture_honoraire_id,true);
+  if(op.livemode!==false || op.orientation!=='REFUND' || !op.refund_id || op.refund_id!==refundId
+    || !cap.claimReservedAt || cap.operationId!==op.id || cap.sessionId!==op.session_id || cap.traceId!==op.trace_id
+    || cap.missionId!==op.mission_id || cap.etablissementId!==op.etablissement_id || cap.soignantId!==op.soignant_id
+    || cap.factureCommissionId!==op.facture_commission_id || cap.customerId!==op.customer_id || cap.destinationId!==op.destination_id
+    || cap.soignantCents!==op.soignant_cents || cap.commissionCents!==op.commission_cents || cap.totalCents!==op.total_cents)fail();
 }

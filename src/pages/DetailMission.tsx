@@ -1213,7 +1213,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   )}
                 </div>
               )}
-              {/* Payment mode indicator — Connect réglé, Chorus Pro, puis facture mensuelle. */}
+              {/* Commission mission : indication de paiement connue ou estimation du planning. */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
                   {m.mode_paiement_soignant === 'STRIPE_CONNECT' && m.commission_facturee ? (
@@ -1221,7 +1221,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
                     <><Landmark className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
                   ) : (
-                    <><FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
+                    <><FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission prévisionnelle : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.montant_commission_ttc)} TTC — Consultez vos factures pour les montants et échéances.</span></>
                   )}
                 </div>
               )}
