@@ -1,5 +1,5 @@
--- LOCAL PG17 ONLY; exact preparation DO sha256 cdda7e0547827d9ea206f6024ff98afdffbd200b5fb64ea3ecf2bd8168b50178
--- Reviewed synthetic seed sha256 9212bddd09f51fbb326e20d3023213ce3a2ca90bf4ed67cd1b3d471355408959; no provider evidence is claimed.
+-- LOCAL PG17 ONLY; exact preparation DO sha256 d44cf3fe7618a292ca2470605d91b536a7f44f753ad223ed45657249e01c7b2a
+-- Reviewed synthetic seed sha256 bb4d14d7cc36ba089254d2c004c9b33e218532d000b09ee1fc114c9321196876; no provider evidence is claimed.
 BEGIN;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='90s';
@@ -1049,7 +1049,7 @@ jsonb_build_object(
  FOREACH evidence_pin_key IN ARRAY ARRAY['protocolSha256','adminAuthIntentSha256','adminAuthReceiptSha256','providerReadinessReceiptSha256',
   'providerHistoryReceiptSha256','edgeGenerationReceiptSha256','calendarReceiptSha256'] LOOP
   payload:=jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',evidence_pin_key,
-   'sqlModelSha256','005cbdbaa46c4446d6c99f06b92f0a1fd99c3970437acec21fb559a0d2051fe7','syntheticManifest',j);
+   'sqlModelSha256','9168901ab6a48afbb8c530e07c8b49e21f07bb4650bd326dd7ff31b013d108dd','syntheticManifest',j);
   payloads:=payloads||jsonb_build_object(evidence_pin_key,payload);
   evidence:=evidence||jsonb_build_object(evidence_pin_key,encode(extensions.digest(convert_to(payload::text,'UTF8'),'sha256'),'hex'));
  END LOOP;
@@ -1193,10 +1193,10 @@ BEGIN
     'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\n' ORDER BY p.oid::regprocedure::text))
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
     'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
-      FROM pg_trigger t JOIN pg_class historical_capacity ON historical_capacity.oid=t.tgrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
-    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||historical_capacity.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,historical_capacity.relname,a.attnum))
-      FROM pg_attribute a JOIN pg_class historical_capacity ON historical_capacity.oid=a.attrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||c.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,c.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
       WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
     'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
     'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
@@ -1508,7 +1508,7 @@ BEGIN
   THEN RAISE EXCEPTION 'WITNESS_CASE_ROLLBACK_CHANGED_STATE'; END IF;
  END LOOP;
 END $witness$;
-SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','model_sha256','005cbdbaa46c4446d6c99f06b92f0a1fd99c3970437acec21fb559a0d2051fe7',
+SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','model_sha256','9168901ab6a48afbb8c530e07c8b49e21f07bb4650bd326dd7ff31b013d108dd',
  'positive',1,'refusals',3,'subtransactions_restored',true,'provider',false) AS witness;
 
 -- CAPACITY OPERATOR MODELS: exact DO bodies; outer transaction remains synthetic and ROLLBACK-only.
@@ -1627,10 +1627,10 @@ BEGIN
     'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\n' ORDER BY p.oid::regprocedure::text))
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
     'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
-      FROM pg_trigger t JOIN pg_class historical_capacity ON historical_capacity.oid=t.tgrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
-    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||historical_capacity.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,historical_capacity.relname,a.attnum))
-      FROM pg_attribute a JOIN pg_class historical_capacity ON historical_capacity.oid=a.attrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||c.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,c.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
       WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
     'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
     'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),

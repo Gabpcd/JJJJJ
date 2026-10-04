@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {catalogueSqlFixture} from '../../../../scripts/ci/connect-test-fixture-sql.mjs';
 import {BASELINE_SERVICE_DEFAULT_PROBE,BASELINE_SERVICE_DEFAULT_SUSPEND,expectedDefaultAclGrants,QUALIFICATION_DEFAULT_ACL_ALIGN,QUALIFICATION_DEFAULT_ACL_PROBE,projectSqlDiagnostic,SQL_DIAGNOSTIC_CATEGORIES,makePlan,validatePlan,qualificationPsqlArgs,QUALIFICATION_DB,QUALIFICATION_ARGS,QUALIFICATION_OWNER_REPAIR,ownerRepairPsqlArgs,validateInspection} from './bootstrap.mjs';
 import {VAULT_PROVENANCE_PATH,VAULT_PROVENANCE_SHA,VAULT_METADATA_PROBE,readVaultMetadata,localVaultCleanupSQL,BASELINE_PATH,projectBaselineServiceDefault,checkBaselineServiceDefault,NOTATION_PREFLIGHT_PATH,NOTATION_PREFLIGHT_SHA,notationPreflightSQL,projectNotationPreflight,projectDefaultAclProbe,checkDefaultAclProbe,HISTORICAL_MANIFEST_PATH,HISTORICAL_MANIFEST_SHA,historicalManifestEntries,historicalManifestSQL,projectHistoricalManifest,PRODUCT_SHA,QUALIFICATION_BRANCH,TEST_PATH,TEST_SHA256,checkVercel,checkIdentity,buildReplay,qualify,hash,safeFailure,LOCAL_GUARD,STOP_CRONS,QUIESCENCE,projectQuiescence,zeros,ownerProbe,projectOwnerProbe} from './qualify-import.mjs';
 const run='jolene-restore-drill-12345-1',head='a'.repeat(40);
@@ -545,5 +546,20 @@ test('refund fixture assertion diagnostics expose bounded codes only, preserving
  for(const code of ['OTHER_CANARY','reuse_lowercase','WITNESS_'+ 'A'.repeat(81),'OPERATOR_'+ 'A'.repeat(81),'OPERATOR_CODE;CANARY']){
   assert.equal(projectSqlDiagnostic('ERROR:  P0001: '+code).assertion,null);
   assert.equal(safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{assertion:code}})).assertion,null);
+ }
+});
+
+test('both preparation copies and allocation keep the canonical catalogue outside composite bindings',()=>{
+ const sql=load(TEST_PATH).toString(),catalogue=catalogueSqlFixture().replace(/;\s*$/,'');
+ for(const [tag,count] of [['reuse_new_mission',2],['reviewed_reuse_allocation',1]]){
+  const start='DO $'+tag+'$',end='$'+tag+'$;';let cursor=0,found=0;
+  while((cursor=sql.indexOf(start,cursor))!==-1){
+   const stop=sql.indexOf(end,cursor)+end.length;assert.ok(stop>cursor);
+   const body=sql.slice(cursor,stop);assert.ok(body.includes(catalogue),'canonical catalogue drift in '+tag);
+   const composites=[...body.matchAll(/^\s*(\w+)\s+private\.\w+\s*;/gm)].map(m=>m[1]);
+   for(const match of body.matchAll(/\bJOIN pg_class (\w+) ON/g))assert.ok(!composites.includes(match[1]),'composite masks catalogue alias');
+   cursor=stop;found++;
+  }
+  assert.equal(found,count,tag+' exact copies');
  }
 });

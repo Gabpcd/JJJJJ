@@ -13,7 +13,7 @@ export const PRODUCT_SHA='01b135471e1e6ee7ee31439ffc248c8b8519260c';
 export const VAULT_PROVENANCE_PATH='supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql';
 export const VAULT_PROVENANCE_SHA='c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf';
 export const TEST_PATH='tests/security/refund-reuse-fixture-pg17.test.sql';
-export const TEST_SHA256='12639614a3d1dcee4e3c6841ecd76ef8932096b6115076a669899c3a33066451';
+export const TEST_SHA256='a30f5129ab260a5ad5961bed3f0a1c2c0a08b3d37a76b6e38c007877c0f57e0d';
 export const SCAFFOLD_PATHS=[
  TEST_PATH,
  '.github/workflows/restore-local-bootstrap.yml',
