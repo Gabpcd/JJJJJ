@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 
@@ -102,6 +107,176 @@ test.beforeEach(async ({ page }) => {
     if (host === 'flripxtsyegjshnhzjkz.supabase.co') throw new Error('Bundle configuré contre production : recette refusée.');
     return ['localhost', 'mejpriaetwgtcstbgfid.supabase.co'].includes(host) ? route.continue() : route.abort();
   });
+});
+
+type FixtureSession = Awaited<ReturnType<typeof compteJetable>>;
+type RoleSession = 'soignant' | 'etablissement';
+
+async function verifierFixtureSession(fixture: FixtureSession, role: RoleSession) {
+  const identity = await admin.auth.admin.getUserById(fixture.id);
+  const metadata = identity.data.user?.app_metadata;
+  expect(!identity.error && identity.data.user?.id === fixture.id
+    && identity.data.user?.email === fixture.email
+    && fixture.email.startsWith('playwright-test-national-')
+    && fixture.email.endsWith('@example.invalid')
+    && metadata?.is_test_playwright === true
+    && metadata?.role === (role === 'soignant' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT')
+    && (role === 'soignant' || metadata?.etablissement_id === fixture.id), 'Fixture Auth créée par ce test uniquement').toBe(true);
+  const profile = await admin.from(role === 'soignant' ? 'soignants' : 'etablissements')
+    .select('est_compte_test').eq('id', fixture.id).single();
+  expect(!profile.error && profile.data?.est_compte_test === true, 'Profil jetable marqué test').toBe(true);
+}
+
+async function sonderAvecResolveurReel(fixture: FixtureSession) {
+  const directory = await mkdtemp(path.join(process.env.RUNNER_TEMP || tmpdir(), 'jolene-session-probe-'));
+  try {
+    await chmod(directory, 0o700);
+    const environmentFile = path.join(directory, 'github-env');
+    await writeFile(environmentFile, '', { mode: 0o600 });
+    const receiptFile = path.join(directory, 'http-status.json');
+    const observerFile = path.join(directory, 'observe-fetch.mjs');
+    await writeFile(receiptFile, '[]', { mode: 0o600 });
+    // Observer le transport réel sans remplacer ses réponses ni changer ses
+    // arguments. Aucune lecture des headers/body ; quatre champs bornés seuls.
+    await writeFile(observerFile, `
+      import { writeFile } from 'node:fs/promises';
+      const realFetch = globalThis.fetch;
+      const calls = [];
+      globalThis.fetch = async (...args) => {
+        const response = await realFetch(...args);
+        const target = new URL(args[0]);
+        calls.push({
+          path: target.pathname,
+          localScope: target.searchParams.get('scope') === 'local' && [...target.searchParams].length === 1,
+          method: args[1]?.method || 'GET',
+          status: response.status,
+        });
+        await writeFile(${JSON.stringify(receiptFile)}, JSON.stringify(calls), { mode: 0o600 });
+        return response;
+      };
+    `, { mode: 0o600 });
+    const script = fileURLToPath(new URL('../../scripts/ci/resolve-playwright-admin-password.mjs', import.meta.url));
+    const successful = await new Promise<boolean>(resolve => {
+      const child = spawn(process.execPath, ['--import', pathToFileURL(observerFile).href, script], {
+        cwd: directory, stdio: 'ignore', timeout: 60_000, killSignal: 'SIGKILL',
+        // Aucun secret admin, fallback, service_role ou preload hérité. Le
+        // résolveur vérifie Auth : ces fixtures restent S/E, jamais ADMIN.
+        env: {
+          E2E_SUPABASE_URL: url!, E2E_PUBLISHABLE_KEY: anon!,
+          PLAYWRIGHT_ADMIN_EMAIL_PRIMARY: fixture.email,
+          PLAYWRIGHT_ADMIN_PASSWORD_PRIMARY: fixture.password,
+          GITHUB_ENV: environmentFile,
+        },
+      });
+      // Le résolveur émet ::add-mask:: avec le mot de passe brut : ses deux
+      // flux sont ignorés, jamais transmis au reporter ni à une pièce jointe.
+      child.once('error', () => resolve(false));
+      child.once('close', (code, signal) => resolve(code === 0 && signal === null));
+    });
+    expect(successful, 'Résolveur réel terminé sur la fixture unique').toBe(true);
+    const generated = await readFile(environmentFile, 'utf8');
+    expect(generated === `PLAYWRIGHT_ADMIN_EMAIL=${fixture.email}\n`
+      + `PLAYWRIGHT_ADMIN_PASSWORD<<JOLENE_ADMIN_EOF\n${fixture.password}\nJOLENE_ADMIN_EOF\n`,
+    'Le résolveur a sélectionné la fixture, sans exporter son contenu').toBe(true);
+    expect(JSON.parse(await readFile(receiptFile, 'utf8')), 'Connexion réelle et fermeture locale effective, sans autre endpoint').toEqual([
+      { path: '/auth/v1/token', localScope: false, method: 'POST', status: 200 },
+      { path: '/auth/v1/logout', localScope: true, method: 'POST', status: 204 },
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function identiteNavigateur(page: Page, fixtureId: string) {
+  // Le client web réel persiste dans sessionStorage (auth-storage.ts).
+  // Le JWT et la réponse Auth restent dans le navigateur ; seuls ces trois
+  // résultats bornés reviennent au test. Aucune session n'est injectée.
+  return page.evaluate(async ({ authUrl, publicKey, id }) => {
+    const result = { status: 0, sameUser: false, sessionMissing: false };
+    try {
+      const key = `sb-${new URL(authUrl).hostname.split('.')[0]}-auth-token`;
+      const session = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (typeof session?.access_token !== 'string') return result;
+      const response = await fetch(`${authUrl}/auth/v1/user`, {
+        headers: { apikey: publicKey, Authorization: `Bearer ${session.access_token}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const identity = await response.json();
+      return { status: response.status, sameUser: response.ok && identity?.id === id,
+        sessionMissing: identity?.code === 'session_not_found' };
+    } catch { return result; }
+  }, { authUrl: url!, publicKey: anon!, id: fixtureId });
+}
+
+const viewportsSession = [
+  { name: 'iPhone', width: 390, height: 844 },
+  { name: 'Android', width: 412, height: 915 },
+  { name: 'iPad portrait', width: 820, height: 1180 },
+  { name: 'iPad paysage', width: 1180, height: 820 },
+  { name: 'ordinateur', width: 1440, height: 900 },
+];
+
+// Intégration Auth staging réelle ; tailles d'écran Chromium, pas appareils
+// physiques ni WebKit. Réponses backend non simulées, comptes tous jetables.
+for (const role of ['soignant', 'etablissement'] as const) {
+  for (const viewport of viewportsSession) {
+    test(`sonde CI locale : ${role}, viewport Chromium ${viewport.name}, navigation et reload conservent la session`, async ({ page }) => {
+      test.setTimeout(120_000);
+      const fixture = await (role === 'soignant' ? compteJetable() : etablissementJetable());
+      try {
+        await verifierFixtureSession(fixture, role);
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await connexion(page, fixture.email, fixture.password, role);
+        const expected = { status: 200, sameUser: true, sessionMissing: false };
+        expect(await identiteNavigateur(page, fixture.id)).toEqual(expected);
+        await sonderAvecResolveurReel(fixture);
+        expect(await identiteNavigateur(page, fixture.id)).toEqual(expected);
+
+        const mobile = viewport.width < 768;
+        const navigation = page.getByRole('navigation', { name: mobile ? 'Navigation mobile' : 'Sidebar', exact: true });
+        await navigation.getByRole('button', { name: mobile ? (role === 'soignant' ? 'Profil' : 'Menu') : 'Mon compte', exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(`/${role}/mon-compte$`));
+        if (role === 'soignant') {
+          await expect(page.getByRole('heading', { name: 'Connexion & sécurité', exact: true })).toBeVisible();
+        } else {
+          await page.getByRole('button', { name: 'Sécurité & RGPD', exact: true }).click();
+          await expect(page).toHaveURL(/\/etablissement\/parametres\?tab=securite$/);
+          await expect(page.getByRole('tab', { name: 'Sécurité & RGPD', exact: true })).toHaveAttribute('aria-selected', 'true');
+        }
+        await page.reload();
+        await expect(page.getByRole('heading', { name: role === 'soignant' ? 'Connexion & sécurité' : 'Paramètres de l’établissement', exact: true })).toBeVisible();
+        await expect(page.getByTestId('login-submit')).toHaveCount(0);
+        expect(await identiteNavigateur(page, fixture.id)).toEqual(expected);
+      } finally {
+        await page.close().catch(() => {});
+        await fixture.cleanup();
+      }
+    });
+  }
+}
+
+test('sonde CI témoin négatif : logout sans scope invalide une autre session du seul compte jetable', async ({ page }) => {
+  const fixture = await compteJetable();
+  try {
+    await verifierFixtureSession(fixture, 'soignant');
+    await connexion(page, fixture.email, fixture.password);
+    expect(await identiteNavigateur(page, fixture.id)).toEqual({ status: 200, sameUser: true, sessionMissing: false });
+    const probe = await client().auth.signInWithPassword({ email: fixture.email, password: fixture.password });
+    expect(!probe.error && probe.data.user?.id === fixture.id && !!probe.data.session?.access_token,
+      'Seconde session Auth de la fixture').toBe(true);
+    // Témoin volontaire de l'ancien défaut, jamais un compte CI fixe/admin.
+    // Le contrôle de propriété précède immédiatement le seul logout global.
+    await verifierFixtureSession(fixture, 'soignant');
+    const response = await fetch(`${url}/auth/v1/logout`, {
+      method: 'POST', headers: { apikey: anon!, Authorization: `Bearer ${probe.data.session!.access_token}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    expect(response.status).toBe(204);
+    expect(await identiteNavigateur(page, fixture.id)).toEqual({ status: 403, sameUser: false, sessionMissing: true });
+  } finally {
+    await page.close().catch(() => {});
+    await fixture.cleanup();
+  }
 });
 
 test('mot de passe : refus ancien erroné, modification UI réelle, ancien refusé et nouveau accepté', async ({ page }) => {

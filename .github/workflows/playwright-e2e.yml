@@ -180,7 +180,7 @@ jobs:
           access_token=$(node -e 'const fs=require("fs");try{const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(d.access_token||"")}catch{}' "$auth_response")
           if [ -n "$access_token" ]; then
             curl -s -o /dev/null -X POST \
-              "$E2E_SUPABASE_URL/auth/v1/logout" \
+              "$E2E_SUPABASE_URL/auth/v1/logout?scope=local" \
               -H "apikey: $E2E_PUBLISHABLE_KEY" \
               -H "Authorization: Bearer $access_token" || true
           fi

@@ -82,7 +82,8 @@ for (const { name, email, password } of candidates) {
     `PLAYWRIGHT_ADMIN_EMAIL=${email}\n`
       + `PLAYWRIGHT_ADMIN_PASSWORD<<JOLENE_ADMIN_EOF\n${password}\nJOLENE_ADMIN_EOF\n`,
   );
-  await fetch(`${url}/auth/v1/logout`, {
+  // Close only this probe: the configured admin may also have a human session.
+  await fetch(`${url}/auth/v1/logout?scope=local`, {
     method: 'POST',
     headers: {
       apikey: publishableKey,

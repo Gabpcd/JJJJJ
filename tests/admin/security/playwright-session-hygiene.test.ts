@@ -52,7 +52,8 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(helper).toContain('suspensions_auth_admin');
     expect(setup).toContain('reactiverSoignantPlaywright(admin)');
     expect(teardown).toContain('reactiverSoignantPlaywright(admin)');
-    expect(workflow).toContain('auth/v1/logout');
+    const deconnexionsSonde = workflow.match(/auth\/v1\/logout[^"\s]*/g);
+    expect(deconnexionsSonde).toEqual(['auth/v1/logout?scope=local']);
     expect(workflow).toContain('access_token');
     expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
     expect(workflow).toContain('steps.playwright-tests.outcome');
