@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { CASE_IDS, PROJECT_IDS, assertRestoreMatrix } from '../matrix-contract.mjs';
+import { browserArguments } from '../browser-entry.mjs';
 
 function fixture(side = 'target') {
   const cases = side === 'source' ? CASE_IDS.slice(0, 2) : CASE_IDS;
@@ -64,4 +65,41 @@ test('source accepts exactly the two owners on desktop, never a duplicate or tar
   refused(() => assertRestoreMatrix(raw, projected, 'source'));
   const wrong = fixture('source'); wrong.raw.suites[0].specs[1].tests[0].projectName = 'iphone'; wrong.projected[1].project = 'iphone';
   refused(() => assertRestoreMatrix(wrong.raw, wrong.projected, 'source'));
+});
+
+// Actual Playwright 1.58.2 _grepTitleWithTags shape for the pinned source project.
+const fullSourceTitle = caseId => `ordinateur restore-app.spec.ts ${caseId}`;
+function selectedBySource(titles) {
+  const args = browserArguments('source');
+  const selectors = args.filter(value => value.startsWith('--grep='));
+  assert.equal(selectors.length, 1);
+  const expression = new RegExp(selectors[0].slice('--grep='.length), 'gi');
+  return titles.filter(title => { expression.lastIndex = 0; return expression.test(title); });
+}
+
+test('source CLI selects the two owners from complete Playwright titles', () => {
+  const args = browserArguments('source');
+  assert.deepEqual(args.filter(value => value.startsWith('--project=')), ['--project=ordinateur']);
+  assert.deepEqual(selectedBySource(CASE_IDS.map(fullSourceTitle)), CASE_IDS.slice(0, 2).map(fullSourceTitle));
+  const { raw, projected } = fixture('source');
+  assert.equal(assertRestoreMatrix(raw, projected, 'source').length, 2);
+});
+
+test('source CLI rejects extra owner-like titles and target retains all 25 cases', () => {
+  const extra = ['RESTORE_OWNER_ADMIN', 'RESTORE_OWNER_SS', 'NOT_RESTORE_OWNER_S',
+    'RESTORE_OWNER_S_EXTRA', 'RESTORE_OWNER_S extra', ...CASE_IDS.slice(2)];
+  assert.deepEqual(selectedBySource(extra.map(fullSourceTitle)), []);
+  const args = browserArguments('target');
+  assert.equal(args.some(value => value.startsWith('--grep=') || value.startsWith('--project=')), false);
+  const { raw, projected } = fixture('target');
+  assert.equal(assertRestoreMatrix(raw, projected, 'target').length, 25);
+  assert.throws(() => browserArguments('other'), error => error.code === 'B_BROWSER');
+});
+
+test('source matrix still refuses an empty or surplus selection', () => {
+  refused(() => assertRestoreMatrix({ suites: [{ specs: [] }] }, [], 'source'));
+  const { raw, projected } = fixture('source');
+  raw.suites[0].specs.push({ title: 'RESTORE_OTHER_S', tests: [{ projectName: 'ordinateur' }] });
+  projected.push({ ...projected[0] });
+  refused(() => assertRestoreMatrix(raw, projected, 'source'));
 });

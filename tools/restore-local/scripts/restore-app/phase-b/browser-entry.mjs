@@ -6,6 +6,14 @@ import { resolve } from 'node:path';
 import { startPrivateServer } from './private-app.mjs';
 import { assertRestoreMatrix } from './matrix-contract.mjs';
 import { PRODUCT_SHA, requireValue } from './contract.mjs';
+// Playwright matches grep against project + file + case, not the case alone.
+// A pure seam keeps the actual CLI selection covered before any browser starts.
+export function browserArguments(side) {
+ requireValue(['source','target'].includes(side),'B_BROWSER');
+ const args=['/node_modules/@playwright/test/cli.js','test','--config=/restore-code/e2e/restore-app.config.ts','--global-timeout='+(side==='source'?'180000':'600000')];
+ if(side==='source')args.push('--project=ordinateur','--grep= RESTORE_OWNER_[SE]$');
+ return args;
+}
 async function main(side) {
  requireValue(['source','target'].includes(side)&&process.env.JOLENE_RESTORE_BROWSER_INPUT==='/restore-private/input.json','B_BROWSER');
  const input=JSON.parse(readFileSync('/restore-private/input.json','utf8'));
@@ -19,8 +27,7 @@ async function main(side) {
  const server=await startPrivateServer('/restore-dist');
  let code=1;
  try {
-  const args=['/node_modules/@playwright/test/cli.js','test','--config=/restore-code/e2e/restore-app.config.ts','--global-timeout='+(side==='source'?'180000':'600000')];
-  if(side==='source')args.push('--project=ordinateur','--grep=^RESTORE_OWNER_');
+  const args=browserArguments(side);
   const out=openSync('/restore-output/playwright.stdout.private','wx',0o600),err=openSync('/restore-output/playwright.stderr.private','wx',0o600);
   try{code=await new Promise((done,reject)=>{const child=spawn(process.execPath,args,{cwd:'/restore-code',env:process.env,stdio:['ignore',out,err]});
     child.once('error',reject);child.once('exit',(status,signal)=>signal?reject(Error('B_BROWSER')):done(status??1));});}
