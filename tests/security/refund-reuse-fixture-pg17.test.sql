@@ -1065,6 +1065,24 @@ jsonb_build_object(
 END $synthetic_n$;
 
 -- END REVIEWED SYNTHETIC SEED
+-- The real preparation starts in a later transaction. The rollback-only witness
+-- shares the seed transaction, whose canonical TVA RPCs leave this local flag set.
+-- Require that exact residue and reject every other override before clearing only it.
+DO $seed_transaction_boundary$
+DECLARE boundary_setting text;
+BEGIN
+ IF current_setting('jolene.tva_mission_managed',true) IS DISTINCT FROM 'true'
+ THEN RAISE EXCEPTION 'WITNESS_EXPECTED_SEED_TVA_CONTEXT'; END IF;
+ FOREACH boundary_setting IN ARRAY ARRAY['jolene.admin_seed_override_reason','jolene.generate_invoice_context',
+  'jolene.creer_mission_context','jolene.admin_override_gel','jolene.admin_override_reason',
+  'app.internal_operation','app.test_bypass_protections'] LOOP
+  IF NULLIF(current_setting(boundary_setting,true),'') IS NOT NULL
+  THEN RAISE EXCEPTION 'WITNESS_UNEXPECTED_SEED_OVERRIDE'; END IF;
+ END LOOP;
+ PERFORM set_config('jolene.tva_mission_managed','',true);
+ IF NULLIF(current_setting('jolene.tva_mission_managed',true),'') IS NOT NULL
+ THEN RAISE EXCEPTION 'WITNESS_SEED_TVA_CONTEXT_NOT_CLEARED'; END IF;
+END $seed_transaction_boundary$;
 DO $witness$
 DECLARE
  j jsonb:=current_setting('jolene.connect_reuse_manifest')::jsonb;
@@ -1445,9 +1463,10 @@ BEGIN
  SELECT k.debut,k.fin INTO STRICT overlap_start,overlap_end
   FROM public.mission_creneaux k WHERE k.mission_id=hm AND k.type_creneau='PREVISIONNEL'
    AND k.debut<clock_timestamp();
- FOR i IN 0..3 LOOP
+ FOR i IN 0..4 LOOP
   expected:=CASE i WHEN 1 THEN 'REUSE_HISTORICAL_N_NOT_CLOSED'
-   WHEN 2 THEN 'REUSE_FRESH_SYNTHETIC_ADMIN_REQUIRED' WHEN 3 THEN 'REUSE_CALENDAR_REFUSED' END;
+   WHEN 2 THEN 'REUSE_FRESH_SYNTHETIC_ADMIN_REQUIRED' WHEN 3 THEN 'REUSE_CALENDAR_REFUSED'
+   WHEN 4 THEN 'REUSE_OVERRIDE_REFUSED' END;
   BEGIN
    IF i=1 THEN UPDATE private.stripe_connect_test_capacities SET revoked_at=NULL WHERE id=hc;
    ELSIF i=2 THEN UPDATE auth.users SET raw_app_meta_data=jsonb_set(raw_app_meta_data,
@@ -1455,6 +1474,7 @@ BEGIN
    ELSIF i=3 THEN PERFORM set_config('jolene.connect_reuse_manifest',jsonb_set(j,'{calendar}',
     (j->'calendar')||jsonb_build_object('periodStart',overlap_start::date,'periodEnd',overlap_start::date+6,
      'pastStart',overlap_start,'pastEnd',overlap_end))::text,true);
+   ELSIF i=4 THEN PERFORM set_config('jolene.tva_mission_managed','true',true);
    END IF;
    EXECUTE preparation;
    IF i<>0 THEN RAISE EXCEPTION 'WITNESS_EXPECTED_REFUSAL_MISSING'; END IF;
@@ -1505,11 +1525,12 @@ BEGIN
    OR EXISTS(SELECT 1 FROM public.mission_creneaux WHERE mission_id=m)
    OR EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=team OR user_id=a)
    OR current_setting('jolene.connect_reuse_manifest')::jsonb IS DISTINCT FROM j
+   OR NULLIF(current_setting('jolene.tva_mission_managed',true),'') IS NOT NULL
   THEN RAISE EXCEPTION 'WITNESS_CASE_ROLLBACK_CHANGED_STATE'; END IF;
  END LOOP;
 END $witness$;
 SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','model_sha256','9168901ab6a48afbb8c530e07c8b49e21f07bb4650bd326dd7ff31b013d108dd',
- 'positive',1,'refusals',3,'subtransactions_restored',true,'provider',false) AS witness;
+ 'positive',1,'refusals',4,'subtransactions_restored',true,'provider',false) AS witness;
 
 -- CAPACITY OPERATOR MODELS: exact DO bodies; outer transaction remains synthetic and ROLLBACK-only.
 -- Readback DO runs inside this writing fixture transaction: its readOnly=false is not hidden.
