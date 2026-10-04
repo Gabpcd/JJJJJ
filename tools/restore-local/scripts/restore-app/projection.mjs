@@ -11,11 +11,11 @@ const KINDS = Object.freeze(['ENCODING', 'STDSTRINGS', 'SEARCHPATH', 'MATERIALIZ
   'TABLE', 'SEQUENCE', 'VIEW', 'CONSTRAINT', 'INDEX', 'TRIGGER', 'RULE', 'POLICY', 'ACL', 'COLLATION', 'TEXT SEARCH CONFIGURATION',
   'TEXT SEARCH DICTIONARY', 'TEXT SEARCH PARSER', 'TEXT SEARCH TEMPLATE', 'TRANSFORM', 'CAST', 'ACCESS METHOD']);
 const SCHEMAS = new Set(['-', 'auth', 'storage', 'public', 'private', 'extensions', 'vault', 'net', 'cron', 'pg_catalog',
-  'graphql', 'graphql_public', 'realtime', 'supabase_functions', 'supabase_migrations', 'pgsodium', 'pgsodium_masks']);
+  'graphql', 'graphql_public', 'realtime', 'supabase_functions', 'supabase_migrations', 'pgsodium', 'pgsodium_masks', 'pgbouncer']);
 const REQUIRED_TABLES = Object.freeze(['auth.users', 'auth.identities', 'auth.sessions', 'auth.refresh_tokens',
   'storage.objects', 'storage.buckets', 'public.factures_honoraires', 'public.factures_honoraires_documents']);
 // Diagnostic labels only. None of these candidates is added to SCHEMAS or accepted.
-const NATIVE_SCHEMA_CANDIDATES = Object.freeze(['pgbouncer', '_realtime', '_analytics', 'pgmq', 'pgmq_public']);
+const NATIVE_SCHEMA_CANDIDATES = Object.freeze(['_realtime', '_analytics', 'pgmq', 'pgmq_public']);
 const TOKEN_CLASSES = Object.freeze(['empty_token', 'attach_after_table_or_index', 'quoted_token',
   'known_native_candidate', 'other_identifier', 'invalid_token']);
 function tocSchemaDiagnostic(entryOrdinal, kind, token) {

@@ -322,7 +322,7 @@ test('TOC schema refusal keeps all guards and reports only a closed parser conte
   const canary = 'secret_' + randomBytes(24).toString('hex');
   const baseline = toc(), expectedOrdinal = baseline.toString().split('\n').filter(line => line && !line.startsWith(';')).length + 1;
   const cases = [
-    ...['pgbouncer', '_realtime', '_analytics', 'pgmq', 'pgmq_public'].map(token => ['FUNCTION', token, 'known_native_candidate', token]),
+    ...['_realtime', '_analytics', 'pgmq', 'pgmq_public'].map(token => ['FUNCTION', token, 'known_native_candidate', token]),
     ['TABLE', 'ATTACH', 'attach_after_table_or_index', null],
     ['INDEX', 'ATTACH', 'attach_after_table_or_index', null],
     ['FUNCTION', '', 'empty_token', null],
@@ -361,12 +361,26 @@ test('TOC failure projection rejects forged fields, unbounded ordinals and non-e
     { entryOrdinal: '1' }, { kind: canary }, { tokenClass: canary }, { candidate: canary },
     { tokenSha256: canary }, { tokenSha256: { toJSON: () => canary } }, { rawToken: canary },
     { toJSON: () => canary }, { tokenClass: 'known_native_candidate' },
-    { candidate: 'pgbouncer', tokenSha256: null }]) {
+    { candidate: '_realtime', tokenSha256: null }]) {
     const receipt = project({ ...valid, ...patch });
     assert.equal(receipt.toc, null); assert.equal(JSON.stringify(receipt).includes(canary), false);
   }
   assert.equal(closedFailure(Object.assign(Error(canary), { publicCode: 'PHASE_A_FAILED', tocDiagnostic: valid }), 'project_toc').toc, null);
   for (const entryOrdinal of [1, 30_000]) assert.equal(project({ ...valid, entryOrdinal }).toc.entryOrdinal, entryOrdinal);
+});
+
+test('native pgbouncer schema observed in run 37228749020 is counted without exporting object names', () => {
+  const canary = 'private_' + randomBytes(24).toString('hex');
+  const listing = Buffer.concat([toc(), Buffer.from(`999; 0 0 FUNCTION pgbouncer ${canary}() ${canary}\n`)]);
+  const receipt = projectToc(listing);
+  assert.equal(receipt.schemas.pgbouncer, 1);
+  assert.equal(JSON.stringify(receipt).includes(canary), false);
+  for (const unknown of ['pgbouncer_extra', 'pgbouncer.' + canary, '_realtime']) {
+    assert.throws(() => projectToc(Buffer.concat([toc(), Buffer.from(`999; 0 0 FUNCTION ${unknown} object owner\n`)])),
+      error => error.publicCode === 'PHASE_A_TOC_SCHEMA');
+  }
+  assert.throws(() => projectToc(Buffer.from(listing.toString().replace(/^.*TABLE DATA auth identities.*\n/m, ''))),
+    error => error.publicCode === 'PHASE_A_TOC_REQUIRED_TABLE');
 });
 
 test('TOC projection has its own stage and a V6-style refusal cannot continue to source-off', async () => {

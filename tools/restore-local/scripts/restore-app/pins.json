@@ -171,13 +171,13 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 27045,
-      "sha256": "6ec0dc140e8e8a3cb483076ca28cc7bee359355f94637ddbb15aadc7b621069b"
+      "bytes": 27918,
+      "sha256": "cadb03f50e583adcf8e87034a3db5d65094919d3d46b6ee47a8c41b931ad427d"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
       "bytes": 7524,
-      "sha256": "7ec468bd99f3a2242f3db69176024a0919308f9cb5b2bdbe09be3c1bb64d7cdf"
+      "sha256": "d57d9bc48aca95ada9ec61541ab206a7af6060a179dd32d8f27d51b92b186ecc"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
