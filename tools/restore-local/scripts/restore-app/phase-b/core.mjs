@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, lstatSync, realpathSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { runPhaseA } from '../phase-a-core.mjs';
 import { newSourceFixture } from '../source-fixture.mjs';
@@ -9,6 +9,23 @@ import { writeBrowserInput } from './browser-input.mjs';
 import { browserDriver } from './browser-driver.mjs';
 import { verifyBuild } from './build-app.mjs';
 import { PRODUCT_SHA, assertReview, assertNativeReview, requireValue, validateBrowserReceipt } from './contract.mjs';
+
+// qualify() saves its progress repeatedly, including before it rethrows an
+// import failure. Replace only this private progress report atomically; command
+// diagnostics remain exclusive, immutable files owned by their runtimes.
+function saveImportProgress(directory, report) {
+ const dir=lstatSync(directory);
+ requireValue(dir.isDirectory()&&!dir.isSymbolicLink()&&realpathSync(directory)===directory
+  &&(dir.mode&0o077)===0,'B_CONTEXT');
+ const target=join(directory,'import-qualification.private.json');
+ let previous;
+ try { previous=lstatSync(target); } catch(error) { if(error.code!=='ENOENT')throw error; }
+ if(previous)requireValue(previous.isFile()&&!previous.isSymbolicLink()&&previous.nlink===1
+  &&(previous.mode&0o777)===0o600,'B_CONTEXT');
+ const temporary=target+'.writing';
+ writeFileSync(temporary,JSON.stringify(report)+'\n',{mode:0o600,flag:'wx'});
+ renameSync(temporary,target);
+}
 
 // Dependencies are pure-test seams, never environment/CLI overrides.
 export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
@@ -21,7 +38,7 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
   makeRuntime:directory=>(runtime=(dependencies.makeRuntime??nativeRuntime)(directory)),
   makeFixture:()=>(fixture=(dependencies.makeFixture??newSourceFixture)(PRODUCT_SHA,evidence.run)),
   capture:async(...args)=>(snapshot=await(dependencies.capture??captureSource)(...args)),
-  saveImport:report=>writeFileSync(join(paths.stack,'import-qualification.private.json'),JSON.stringify(report),{mode:0o600,flag:'wx'}),
+  saveImport:report=>saveImportProgress(paths.stack,report),
  });
  assertNativeReview(native,review);requireValue(runtime&&fixture&&snapshot&&snapshot.run===evidence.run,'B_CONTEXT');
  const browser=(dependencies.browserDriver??browserDriver)(paths.stack,evidence.productDirectory,runtime);

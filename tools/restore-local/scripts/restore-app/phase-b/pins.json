@@ -248,8 +248,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
-      "bytes": 4332,
-      "sha256": "7dc0b28ebae787daac0887af0e5bda09e9dbdb8389a66f3132dfc4c05e883421"
+      "bytes": 5199,
+      "sha256": "4d69fc1cf43522f834aaf4e5c53ba550067bb9a870e6857d027cd1ade4c8729d"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/e2e/restore-app.config.ts",
@@ -303,8 +303,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
-      "bytes": 25053,
-      "sha256": "89295dca2a09b8f9a2102bcbf07e7f5045b1e1268694a09cd55af0d1a4946089"
+      "bytes": 28386,
+      "sha256": "2a1b9e3304fa6611e5b4757999b074b9d95a7236eb44562007af9c92f2158cce"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/matrix-contract.test.mjs",

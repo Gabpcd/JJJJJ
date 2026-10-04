@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync } from 'node:fs';
+import { mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,readdirSync,lstatSync,realpathSync,symlinkSync,linkSync,chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BRANCH,PRODUCT_SHA,IMAGE,assertReview,assertNativeReview,closedFailure,validateBrowserReceipt,STAGES,digest } from '../contract.mjs';
@@ -17,6 +17,56 @@ const run='jolene-restore-drill-123456-1';
 const approved=()=>({productSha:PRODUCT_SHA,approved:true,phaseAHarnessSha:'a'.repeat(40),phaseARunId:'123456',nativeRestoreTocSha256:'b'.repeat(64),nativeRoleSettingsReviewed:true,native:{postgresVersionNum:170006,auth:{count:40,sha256:'c'.repeat(64)},storage:{count:30,sha256:'d'.repeat(64)}}});
 const receipt=side=>{const projects=side==='source'?['ordinateur']:['ipad-portrait','ipad-paysage','iphone','android','ordinateur'];const cases=side==='source'?['RESTORE_OWNER_S','RESTORE_OWNER_E']:['RESTORE_OWNER_S','RESTORE_OWNER_E','RESTORE_OTHER_S','RESTORE_OTHER_E','RESTORE_ANONYMOUS'];const tests=cases.flatMap(caseId=>projects.map(project=>({caseId,project,outcome:'expected',attempts:[{status:'passed',code:'PASSED',retry:0}]})));return {schemaVersion:1,productSha:PRODUCT_SHA,side,complete:true,passed:true,expectedCount:tests.length,globalErrorCount:0,counts:{expected:tests.length,unexpected:0,flaky:0,skipped:0},tests};};
 const env={GITHUB_REPOSITORY:'Gabpcd/JJJJJ',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/'+BRANCH,GITHUB_SHA:'f'.repeat(40),GITHUB_WORKFLOW_SHA:'f'.repeat(40),GITHUB_WORKFLOW_REF:'Gabpcd/JJJJJ/.github/workflows/restore-local-bootstrap.yml@refs/heads/'+BRANCH,GITHUB_RUN_ID:'123456',GITHUB_RUN_ATTEMPT:'1'};
+async function importProgress(directory,reports) {
+ const stop=Object.assign(new Error('SYNTHETIC_IMPORT_STOP'),{code:'TEST_IMPORT_STOP'});
+ return runPhaseB({}, {stack:directory},approved(),()=>{}, {
+  runPhaseA:(_e,_p,_save,{saveImport})=>{for(const report of reports)saveImport(report);throw stop;}
+ });
+}
+function progressDirectory(t) {
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'jolene-import-progress-')));
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));return dir;
+}
+test('private import progress preserves repeated updates and the original import failure',async t=>{
+ const dir=progressDirectory(t),reports=[{phase:'start'},{phase:'native_owner_probe'},
+  {phase:'integral_replay',migrations:[{completed:true}]},{phase:'failed',failure:{code:'SYNTHETIC_IMPORT'}}];
+ await assert.rejects(()=>importProgress(dir,reports),error=>error.code==='TEST_IMPORT_STOP');
+ const target=join(dir,'import-qualification.private.json');
+ assert.deepEqual(JSON.parse(readFileSync(target,'utf8')),reports.at(-1));
+ assert.equal(lstatSync(target).mode&0o777,0o600);
+ assert.deepEqual(readdirSync(dir),['import-qualification.private.json']);
+});
+test('private import progress refuses linked targets without touching their contents',async t=>{
+ for(const type of ['symlink','dangling','hardlink','directory']) {
+  const dir=progressDirectory(t),target=join(dir,'import-qualification.private.json'),other=join(dir,'other');
+  writeFileSync(other,'UNTOUCHED',{mode:0o600});
+  if(type==='symlink')symlinkSync(other,target);
+  if(type==='dangling')symlinkSync(join(dir,'absent'),target);
+  if(type==='hardlink')linkSync(other,target);
+  if(type==='directory')mkdirSync(target,{mode:0o700});
+  await assert.rejects(()=>importProgress(dir,[{phase:'start'}]),error=>error.code==='B_CONTEXT');
+  assert.equal(readFileSync(other,'utf8'),'UNTOUCHED');
+  assert.equal(readdirSync(dir).includes('import-qualification.private.json.writing'),false);
+ }
+});
+test('private import progress refuses an existing temporary file and preserves the last report',async t=>{
+ for(const type of ['file','dangling']) {
+  const dir=progressDirectory(t),target=join(dir,'import-qualification.private.json'),temporary=target+'.writing';
+  await assert.rejects(()=>importProgress(dir,[{phase:'first'}]),error=>error.code==='TEST_IMPORT_STOP');
+  if(type==='file')writeFileSync(temporary,'UNTOUCHED',{mode:0o600});else symlinkSync(join(dir,'absent'),temporary);
+  await assert.rejects(()=>importProgress(dir,[{phase:'second'}]),error=>error.code==='EEXIST');
+  assert.deepEqual(JSON.parse(readFileSync(target,'utf8')),{phase:'first'});
+  if(type==='file')assert.equal(readFileSync(temporary,'utf8'),'UNTOUCHED');else assert.equal(lstatSync(temporary).isSymbolicLink(),true);
+ }
+});
+test('private import progress rejects a public or aliased directory',async t=>{
+ const dir=progressDirectory(t);chmodSync(dir,0o755);
+ await assert.rejects(()=>importProgress(dir,[{phase:'start'}]),error=>error.code==='B_CONTEXT');
+ assert.equal(readdirSync(dir).length,0);chmodSync(dir,0o700);
+ const parent=progressDirectory(t),alias=join(parent,'alias');symlinkSync(dir,alias);
+ await assert.rejects(()=>importProgress(alias,[{phase:'start'}]),error=>error.code==='B_CONTEXT');
+ assert.equal(readdirSync(dir).length,0);
+});
 test('exact B dispatch and source scope reject branch event dirty source and product changes',()=>{
  assert.equal(executionIdentity(env,env.GITHUB_SHA).run,run);
  for(const patch of [{GITHUB_REF:'refs/heads/main'},{GITHUB_REF:'refs/heads/ci/restore-app-phase-a-20261004'},{GITHUB_EVENT_NAME:'pull_request'},{GITHUB_SHA:PRODUCT_SHA},{GITHUB_WORKFLOW_SHA:'e'.repeat(40)},{GITHUB_REPOSITORY:'foreign/repo'}])assert.throws(()=>executionIdentity({...env,...patch},env.GITHUB_SHA));
