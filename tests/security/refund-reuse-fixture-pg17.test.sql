@@ -1,5 +1,5 @@
 -- LOCAL PG17 ONLY; exact preparation DO sha256 d44cf3fe7618a292ca2470605d91b536a7f44f753ad223ed45657249e01c7b2a
--- Reviewed synthetic seed sha256 bb4d14d7cc36ba089254d2c004c9b33e218532d000b09ee1fc114c9321196876; no provider evidence is claimed.
+-- Reviewed synthetic seed sha256 920b4e4654040222feab487aec4b9d705f9eb42ee908823169cc78f1a0da8de5; no provider evidence is claimed.
 BEGIN;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='90s';
@@ -940,7 +940,7 @@ BEGIN
  THEN RAISE EXCEPTION 'WITNESS_CANONICAL_COMMISSION_REFUSED'; END IF;
  hf:=(r->>'facture_id')::uuid;
  INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token,stripe_checkout_session_id,stripe_payment_intent_id)
- VALUES('FACTURE:'||hf::text,'CONNECT_INVOICE','connect-invoice:'||hh::text,'cs_test_PG17SyntheticN','pi_PG17SyntheticN');
+ VALUES('FACTURE:'||hf::text,'CONNECT_INVOICE','connect-invoice:'||hh::text,'cs_test_PG17SyntheticN',NULL);
  -- Closed historical dispute; no mutation/settlement RPC or supplier action is being claimed.
  INSERT INTO public.litiges(id,mission_id,soignant_id,etablissement_id,initie_par,motif,statut,
   gel_facture_scope,resolu_le,resolution)
@@ -948,7 +948,7 @@ BEGIN
   'PG17_SYNTHETIC_ONLY no provider observed');
  INSERT INTO public.stripe_transfers(id,mission_id,facture_id,facture_honoraire_id,soignant_id,etablissement_id,
   montant_total,montant_commission,montant_soignant,stripe_checkout_session_id,stripe_payment_intent_id,stripe_charge_id,statut)
- VALUES(ht,hm,hf,hh,s,e,94.4,14.4,80,'cs_test_PG17SyntheticN','pi_PG17SyntheticN','ch_PG17SyntheticN','REMBOURSE');
+ VALUES(ht,hm,hf,hh,s,e,94.4,14.4,80,'cs_test_PG17SyntheticN',NULL,NULL,'REMBOURSE');
  INSERT INTO private.stripe_connect_avant_transfert(id,attempt_key,mission_id,etablissement_id,soignant_id,
   facture_honoraire_id,facture_commission_id,customer_id,destination_id,soignant_cents,commission_cents,total_cents,
   session_id,trace_id,payment_intent_id,charge_id,livemode,orientation,litige_id,refund_id,refund_status,first_attempt_at,succeeded_at)
@@ -2033,7 +2033,7 @@ BEGIN
  AND o.litige_id=(j#>>'{historicalN,litigeId}')::uuid
  AND o.succeeded_at IS NOT NULL AND o.review_code IS NULL AND o.owner_token IS NULL AND o.lease_until IS NULL
  AND t.id=ht AND t.statut='REMBOURSE' AND t.stripe_transfer_id IS NULL
- AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id=o.payment_intent_id AND t.stripe_charge_id=o.charge_id
+ AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id IS NULL AND t.stripe_charge_id IS NULL
  AND t.mission_id=hm AND t.facture_honoraire_id=hh AND t.facture_id=hf AND t.soignant_id=s AND t.etablissement_id=e
  AND old_admin.user_id=ha AND old_admin.actif IS FALSE)
  FROM private.stripe_connect_test_capacities h
@@ -2304,7 +2304,7 @@ jsonb_build_object(
  AND o.litige_id=(j#>>'{historicalN,litigeId}')::uuid
  AND o.succeeded_at IS NOT NULL AND o.review_code IS NULL AND o.owner_token IS NULL AND o.lease_until IS NULL
  AND t.id=ht AND t.statut='REMBOURSE' AND t.stripe_transfer_id IS NULL
- AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id=o.payment_intent_id AND t.stripe_charge_id=o.charge_id
+ AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id IS NULL AND t.stripe_charge_id IS NULL
  AND t.mission_id=hm AND t.facture_honoraire_id=hh AND t.facture_id=hf AND t.soignant_id=s AND t.etablissement_id=e
  AND old_admin.user_id=ha AND old_admin.actif IS FALSE)
  FROM private.stripe_connect_test_capacities h
@@ -2516,10 +2516,11 @@ BEGIN
  IF encode(extensions.digest(convert_to(w_baseline::text,'UTF8'),'sha256'),'hex') IS DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}'
  THEN RAISE EXCEPTION 'WITNESS_NEW_DOCUMENTS_CHANGED_N'; END IF;
  SELECT relacl::text INTO STRICT w_acl FROM pg_class WHERE oid='private.stripe_connect_test_capacities'::regclass;
- FOR w_i IN 0..5 LOOP
+ FOR w_i IN 0..7 LOOP
   w_input:=j;
   w_expected:=CASE WHEN w_i IN(1,2,3) THEN 'OPERATOR_EXACT_CLOSED_N_REQUIRED'
-   WHEN w_i=4 THEN 'OPERATOR_CAPACITY_ACL_REFUSED' WHEN w_i=5 THEN 'OPERATOR_IDENTITY_OR_WINDOW_REFUSED' END;
+   WHEN w_i=4 THEN 'OPERATOR_CAPACITY_ACL_REFUSED' WHEN w_i=5 THEN 'OPERATOR_IDENTITY_OR_WINDOW_REFUSED'
+   WHEN w_i IN(6,7) THEN 'CONNECT_REFUND_ORIENTATION_LOCKED' END;
   BEGIN
    IF w_i=1 THEN UPDATE private.stripe_connect_test_capacities SET revoked_at=NULL WHERE id=hc;
    ELSIF w_i=2 THEN
@@ -2533,6 +2534,8 @@ BEGIN
    ELSIF w_i=4 THEN GRANT SELECT ON private.stripe_connect_test_capacities TO authenticated;
    ELSIF w_i=5 THEN w_input:=jsonb_set(jsonb_set(j,'{windowStartsAt}',to_jsonb((j->>'windowStartsAt')::timestamptz-interval '2 hours')),
      '{capacity,expires_at}',to_jsonb((j#>>'{capacity,expires_at}')::timestamptz-interval '2 hours'));
+   ELSIF w_i=6 THEN UPDATE public.stripe_transfers SET stripe_payment_intent_id=j#>>'{historicalN,paymentIntentId}' WHERE id=ht;
+   ELSIF w_i=7 THEN UPDATE public.stripe_transfers SET stripe_charge_id=j#>>'{historicalN,chargeId}' WHERE id=ht;
    END IF;
    EXECUTE replace(replace(replace(w_allocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(w_input::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
    IF w_i<>0 THEN RAISE EXCEPTION 'WITNESS_CAPACITY_EXPECTED_REFUSAL_MISSING'; END IF;
@@ -2650,7 +2653,7 @@ BEGIN
   THEN RAISE EXCEPTION 'WITNESS_CAPACITY_CASE_RESTORATION_REQUIRED'; END IF;
  END LOOP;
 END $capacity_witness$;
-SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','allocationPositive',1,'allocationRefusals',5,
+SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','allocationPositive',1,'allocationRefusals',5,'historicalTraceMutationRefusals',2,
  'revocationTargetRefusal',1,'revocationIdempotent',true,'revocationWhileNDrifts',true,'readbackTwoHistories',true,
  'subtransactionsRestored',true,'documentFilesExist',false,'provider',false,'readOnlyEnvelopeExecuted',false) AS capacity_witness;
 ROLLBACK;
