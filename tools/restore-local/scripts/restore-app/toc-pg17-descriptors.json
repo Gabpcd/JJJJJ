@@ -1,0 +1,729 @@
+{
+  "schemaVersion": 1,
+  "postgresTag": "REL_17_6",
+  "officialSource": "https://github.com/postgres/postgres/tree/REL_17_6/src/bin/pg_dump",
+  "emittedDescriptorCount": 63,
+  "entries": [
+    {
+      "kind": "ACCESS METHOD",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 13321,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "ACL",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 15357,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "AGGREGATE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14537,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "BLOB METADATA",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3829,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "BLOBS",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 10665,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "CAST",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12812,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "CHECK CONSTRAINT",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17462,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 17481,
+          "source": "keyword"
+        }
+      ]
+    },
+    {
+      "kind": "COLLATION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14075,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "COMMENT",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3317,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 10229,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 10312,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 10337,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 12060,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "CONSTRAINT",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17392,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 17483,
+          "source": "keyword"
+        }
+      ]
+    },
+    {
+      "kind": "CONVERSION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14169,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "DATABASE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3285,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "DATABASE PROPERTIES",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3421,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "DEFAULT",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 16918,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "DEFAULT ACL",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 15231,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "DOMAIN",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 11710,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "ENCODING",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3578,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "EVENT TRIGGER",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 18084,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "EXTENSION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 10893,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "FK CONSTRAINT",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17431,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "FOREIGN DATA WRAPPER",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14951,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "FOREIGN TABLE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 16050,
+          "source": "reltypename"
+        }
+      ]
+    },
+    {
+      "kind": "FUNCTION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12519,
+          "source": "keyword"
+        }
+      ]
+    },
+    {
+      "kind": "INDEX",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17088,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "INDEX ATTACH",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17147,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "MATERIALIZED VIEW",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 16078,
+          "source": "reltypename"
+        }
+      ]
+    },
+    {
+      "kind": "MATERIALIZED VIEW DATA",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 2792,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "OPERATOR",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 13151,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "OPERATOR CLASS",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 13595,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "OPERATOR FAMILY",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 13817,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "POLICY",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 4213,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "PROCEDURAL LANGUAGE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12224,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "PROCEDURE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12517,
+          "source": "keyword"
+        }
+      ]
+    },
+    {
+      "kind": "PUBLICATION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 4410,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "PUBLICATION TABLE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 4744,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "PUBLICATION TABLES IN SCHEMA",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 4682,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "ROW SECURITY",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 4154,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "RULE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 18240,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SCHEMA",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 10753,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SEARCHPATH",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3657,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SECURITY LABEL",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3341,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 15452,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 15534,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SEQUENCE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17772,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SEQUENCE OWNED BY",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17812,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SEQUENCE SET",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17877,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SERVER",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 15038,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SHELL TYPE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12115,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "STATISTICS",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17212,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "STDSTRINGS",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3603,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SUBSCRIPTION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 5272,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "SUBSCRIPTION TABLE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 5138,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TABLE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 16031,
+          "source": "reltypename"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 16081,
+          "source": "reltypename"
+        }
+      ]
+    },
+    {
+      "kind": "TABLE ATTACH",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 16864,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TABLE DATA",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 2725,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TEXT SEARCH CONFIGURATION",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14887,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TEXT SEARCH DICTIONARY",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14709,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TEXT SEARCH PARSER",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14630,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TEXT SEARCH TEMPLATE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 14768,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TRANSFORM",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 12936,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TRIGGER",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 17996,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "TYPE",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 11056,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 11209,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 11280,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 11527,
+          "source": "literal"
+        },
+        {
+          "file": "pg_dump.c",
+          "line": 11947,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "USER MAPPING",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 15155,
+          "source": "literal"
+        }
+      ]
+    },
+    {
+      "kind": "VIEW",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 15984,
+          "source": "reltypename"
+        }
+      ]
+    },
+    {
+      "kind": "pg_largeobject",
+      "origins": [
+        {
+          "file": "pg_dump.c",
+          "line": 3496,
+          "source": "literal"
+        }
+      ]
+    }
+  ],
+  "compatibilityCandidatesOnly": [
+    "ACL LANGUAGE",
+    "BLOB",
+    "BLOB COMMENTS",
+    "WARNING"
+  ],
+  "sourceFiles": [
+    {
+      "file": "pg_dump.c",
+      "url": "https://raw.githubusercontent.com/postgres/postgres/REL_17_6/src/bin/pg_dump/pg_dump.c",
+      "bytes": 588399,
+      "sha256": "492bf92268986d0764664fd5f6edb606d111fcbe9b73af2787bd776cfd3c7f47"
+    },
+    {
+      "file": "pg_backup_archiver.c",
+      "url": "https://raw.githubusercontent.com/postgres/postgres/REL_17_6/src/bin/pg_dump/pg_backup_archiver.c",
+      "bytes": 134752,
+      "sha256": "9cf924eff28ad3d4471a16b6176c193b770d69df73f929d92d5674fce81680f9"
+    },
+    {
+      "file": "pg_backup_archiver.h",
+      "url": "https://raw.githubusercontent.com/postgres/postgres/REL_17_6/src/bin/pg_dump/pg_backup_archiver.h",
+      "bytes": 17559,
+      "sha256": "2d879f2d1a3cdb6e0ad10d9d02a8ad0630562fcf540fe6532100a08d653a0053"
+    }
+  ]
+}

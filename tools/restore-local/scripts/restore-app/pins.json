@@ -25,6 +25,7 @@
     "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
     "tools/restore-local/scripts/restore-app/sql/source-documents.sql",
     "tools/restore-local/scripts/restore-app/sql/source-mission.sql",
+    "tools/restore-local/scripts/restore-app/toc-pg17-descriptors.json",
     "tools/restore-local/scripts/restore/bootstrap.mjs",
     "tools/restore-local/scripts/restore/qualify-import.mjs",
     "tools/restore-local/scripts/restore/qualify-import.test.mjs",
@@ -146,8 +147,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/failure.mjs",
-      "bytes": 2902,
-      "sha256": "38b6b9ae8cc572794094020521ddb541352d5d2ce41e65d46e16e9d7a0c38e01"
+      "bytes": 2929,
+      "sha256": "def57b6f05b70ce47430955fc670109e71b9645c09c36c6e727edc99b28db769"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/identity.mjs",
@@ -171,13 +172,13 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 27918,
-      "sha256": "cadb03f50e583adcf8e87034a3db5d65094919d3d46b6ee47a8c41b931ad427d"
+      "bytes": 34644,
+      "sha256": "3105ae8eff2d1a0e00d60deeb76247e97ffb337146801fcaec9ece2104a15416"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
-      "bytes": 7524,
-      "sha256": "d57d9bc48aca95ada9ec61541ab206a7af6060a179dd32d8f27d51b92b186ecc"
+      "bytes": 9788,
+      "sha256": "1ea0f7131c75c8f8a6e5d5b56a203b2518dda3d7a58a3ed9259efbc4f648e593"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
@@ -206,8 +207,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
-      "bytes": 653,
-      "sha256": "acf7f81a694c0b6c679afdbd24ff04a1a5fb98b7a8de0e51afa50f4b36471883"
+      "bytes": 3800,
+      "sha256": "62d817f7cc9a5c4b076a56d65e65c1d572591a2531c231193878eeeb5ea300a2"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/source-documents.sql",
@@ -218,6 +219,11 @@
       "path": "tools/restore-local/scripts/restore-app/sql/source-mission.sql",
       "bytes": 10794,
       "sha256": "5338f5a1000910b8d68d0f921b4fb8916c7915596cd3df4545b28fb79417accd"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/toc-pg17-descriptors.json",
+      "bytes": 13568,
+      "sha256": "347343a7eadc728fab702f4cc5b9b4e1c0dd790fbac36c789af7e1d7f307f54a"
     },
     {
       "path": "tools/restore-local/scripts/restore/bootstrap.mjs",

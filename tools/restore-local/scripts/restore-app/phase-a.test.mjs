@@ -5,12 +5,12 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BRANCH, PRODUCT_SHA, MIGRATION_COUNT, WORKFLOW_PATH, checkIdentity, checkVercel, executionIdentity, hash } from './identity.mjs';
-import { projectToc, projectSnapshot, closedFailure } from './projection.mjs';
+import { projectToc, projectSnapshot, closedFailure, PG17_TOC_KINDS } from './projection.mjs';
 import { parseTap } from './phase-a.mjs';
 import { newSourceFixture, seedSource, sqlJson } from './source-fixture.mjs';
 import { phaseFailure } from './failure.mjs';
 import { runPhaseA } from './phase-a-core.mjs';
-import { captureSource, CAPTURE_STAGES } from './snapshot-restore.mjs';
+import { captureSource, CAPTURE_STAGES, normalizedToc } from './snapshot-restore.mjs';
 
 const head = 'a'.repeat(40), run = 'jolene-restore-drill-123456-1';
 const env = { GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', GITHUB_EVENT_NAME: 'workflow_dispatch',
@@ -92,7 +92,6 @@ test('TOC exposes only closed kinds/schemas/counts and refuses missing or duplic
   assert.equal(JSON.stringify(receipt).includes(canary), false);
   for (const bytes of [Buffer.from(listing.toString().replace(/^.*TABLE DATA auth identities.*\n/m, '')),
     Buffer.concat([listing, Buffer.from('999; 0 0 TABLE DATA auth identities synthetic_owner\n')]),
-    Buffer.concat([listing, Buffer.from('999; 0 0 DATABASE - ' + canary + '\n')]),
     Buffer.concat([listing, Buffer.from('999; 0 0 TABLE ' + canary + ' unknown owner\n')])])
     assert.throws(() => projectToc(bytes));
 });
@@ -323,8 +322,8 @@ test('TOC schema refusal keeps all guards and reports only a closed parser conte
   const baseline = toc(), expectedOrdinal = baseline.toString().split('\n').filter(line => line && !line.startsWith(';')).length + 1;
   const cases = [
     ...['_realtime', '_analytics', 'pgmq', 'pgmq_public'].map(token => ['FUNCTION', token, 'known_native_candidate', token]),
-    ['TABLE', 'ATTACH', 'attach_after_table_or_index', null],
-    ['INDEX', 'ATTACH', 'attach_after_table_or_index', null],
+    ['TABLE ATTACH', canary, 'other_identifier', null],
+    ['INDEX ATTACH', canary, 'other_identifier', null],
     ['FUNCTION', '', 'empty_token', null],
     ['FUNCTION', '"' + canary + '"', 'quoted_token', null],
     ['FUNCTION', canary, 'other_identifier', null],
@@ -343,10 +342,11 @@ test('TOC schema refusal keeps all guards and reports only a closed parser conte
       return true;
     });
   }
-  // Unknown kinds remain rejected before schema diagnosis. No new kind is accepted.
+  // Unknown descriptors remain rejected before schema diagnosis with a closed hash-only context.
   assert.throws(() => projectToc(Buffer.concat([baseline, Buffer.from(`999; 0 0 ${canary} public object owner\n`)])), error => {
     const receipt = closedFailure(error, 'project_toc');
-    assert.equal(receipt.code, 'PHASE_A_TOC_KIND'); assert.equal(receipt.toc, null);
+    assert.equal(receipt.code, 'PHASE_A_TOC_KIND'); assert.equal(receipt.toc.candidate, null);
+    assert.equal(receipt.toc.entryOrdinal, expectedOrdinal); assert.match(receipt.toc.prefixSha256,/^[a-f0-9]{64}$/);
     assert.equal(JSON.stringify(receipt).includes(canary), false); return true;
   });
   assert.equal(projectToc(baseline).requiredTables['auth.identities'].data, 1);
@@ -394,4 +394,90 @@ test('TOC projection has its own stage and a V6-style refusal cannot continue to
   });
   assert.equal(h.calls.some(([kind]) => ['native-version', 'stop-source', 'copy-target'].includes(kind)), false);
   assert.equal(h.reports.some(value => value.result === 'PHASE_A_NATIVE_CAPTURE_PASSED'), false);
+});
+
+
+test('official PG17 inventory covers every emitted descriptor and keeps names private',()=>{
+  const inventory=JSON.parse(readFileSync(new URL('./toc-pg17-descriptors.json',import.meta.url),'utf8'));
+  assert.equal(inventory.postgresTag,'REL_17_6');assert.equal(inventory.emittedDescriptorCount,63);
+  assert.deepEqual([...PG17_TOC_KINDS].sort(),inventory.entries.map(value=>value.kind).sort());
+  assert.equal(new Set(PG17_TOC_KINDS).size,63);
+  const canary='private_'+randomBytes(24).toString('hex'),before=projectToc(toc());
+  const additions=inventory.entries.map(({kind},i)=>`${1000+i}; 0 0 ${kind} public ${canary} ${canary}\n`).join('');
+  const result=projectToc(Buffer.concat([toc(),Buffer.from(additions)]));
+  for(const {kind,origins} of inventory.entries){assert.equal(result.kinds[kind],(before.kinds[kind]??0)+1);assert.ok(origins.length>0);}
+  assert.equal(JSON.stringify(result).includes(canary),false);assert.equal(result.requiredTables['auth.users'].table,1);
+});
+test('longest known descriptor wins across all overlapping PG17 families',()=>{
+  const kinds=['DEFAULT','DEFAULT ACL','INDEX','INDEX ATTACH','TABLE','TABLE ATTACH','TABLE DATA',
+    'PUBLICATION','PUBLICATION TABLE','PUBLICATION TABLES IN SCHEMA','MATERIALIZED VIEW','MATERIALIZED VIEW DATA',
+    'SEQUENCE','SEQUENCE SET','SEQUENCE OWNED BY','OPERATOR','OPERATOR CLASS','OPERATOR FAMILY',
+    'FK CONSTRAINT','CHECK CONSTRAINT','CONSTRAINT','DATABASE','DATABASE PROPERTIES','SUBSCRIPTION','SUBSCRIPTION TABLE'];
+  for(const kind of kinds){const result=projectToc(Buffer.concat([toc(),Buffer.from(`900; 0 0 ${kind} public object owner\n`)]));
+    assert.equal(result.kinds[kind],(projectToc(toc()).kinds[kind]??0)+1);assert.equal(result.schemas.public,projectToc(toc()).schemas.public+1);}
+});
+test('projection of a native descriptor cannot relax capture DATABASE or SUBSCRIPTION refusals',()=>{
+  for(const kind of ['DATABASE','DATABASE PROPERTIES','SUBSCRIPTION','SUBSCRIPTION TABLE']){
+    const listing=Buffer.concat([toc(),Buffer.from(`900; 0 0 ${kind} - synthetic owner\n`)]);
+    assert.equal(projectToc(listing).kinds[kind],1);
+    assert.throws(()=>normalizedToc(listing),/RESTORE_TOC_SCOPE/);
+  }
+});
+test('unknown and legacy-only descriptors refuse with no free names or owners',()=>{
+  const canary='secret_'+randomBytes(24).toString('hex');
+  for(const kind of [canary,'UNRECOGNIZED NATIVE DESCRIPTOR','<Init>','ACL LANGUAGE','BLOB','BLOB COMMENTS','WARNING']){
+    assert.throws(()=>projectToc(Buffer.concat([toc(),Buffer.from(`900; 0 0 ${kind} public ${canary} ${canary}\n`)])),error=>{
+      const receipt=closedFailure(error,'project_toc');assert.equal(receipt.code,'PHASE_A_TOC_KIND');
+      assert.equal(receipt.toc.candidate,['ACL LANGUAGE','BLOB','BLOB COMMENTS','WARNING'].includes(kind)?kind:null);
+      assert.match(receipt.toc.prefixSha256,/^[a-f0-9]{64}$/);assert.equal(JSON.stringify(receipt).includes(canary),false);return true;
+    });
+  }
+});
+test('kind failure diagnostic rejects forged field names values and unbounded ordinals',()=>{
+  const canary='private_'+randomBytes(24).toString('hex');
+  const valid={entryOrdinal:200,candidate:'BLOB COMMENTS',prefixSha256:hash(canary)};
+  const project=v=>closedFailure(phaseFailure('PHASE_A_TOC_KIND',{tocDiagnostic:v}),'project_toc');
+  assert.deepEqual(project(valid).toc,valid);
+  for(const change of [{entryOrdinal:0},{entryOrdinal:30001},{entryOrdinal:'1'},{candidate:canary},{prefixSha256:canary},
+    {rawLine:canary},{toJSON:()=>canary},{prefixSha256:{toJSON:()=>canary}}]){
+    const receipt=project({...valid,...change});assert.equal(receipt.toc,null);assert.equal(JSON.stringify(receipt).includes(canary),false);
+  }
+});
+test('complete descriptor inventory never expands schema names or required native tables',()=>{
+  const canary='unknown_'+randomBytes(24).toString('hex');
+  for(const kind of PG17_TOC_KINDS)assert.throws(()=>projectToc(Buffer.concat([toc(),Buffer.from(`900; 0 0 ${kind} ${canary} object owner\n`)])),/PHASE_A_TOC_SCHEMA/);
+  assert.throws(()=>projectToc(Buffer.from(toc().toString().replace(/^.*TABLE DATA storage objects.*\n/m,''))),/PHASE_A_TOC_REQUIRED_TABLE/);
+});
+
+test('native version SQL hashes stable migration identity and guards every native column', () => {
+  const sql=readFileSync(new URL('./sql/native-versions.sql',import.meta.url),'utf8');
+  const guard=JSON.parse(sql.match(/actual IS DISTINCT FROM '([\s\S]*?)'::jsonb/)[1]);
+  assert.deepEqual(guard,[['auth','schema_migrations','version','character varying(255)',true],
+    ['storage','migrations','executed_at','timestamp without time zone',false],
+    ['storage','migrations','hash','character varying(40)',true],
+    ['storage','migrations','id','integer',true],['storage','migrations','name','character varying(100)',true]]);
+  const resultSql=sql.slice(sql.indexOf("SELECT jsonb_build_object(\n 'postgresVersionNum'"));
+  const storageSql=resultSql.slice(resultSql.indexOf("'storage'"));
+  // Exercise the field projection selected by the real query, not an independent allowlist.
+  const omitted=[...storageSql.matchAll(/to_jsonb\(m\)-'([^']+)'/g)].map(match=>match[1]);
+  assert.deepEqual(omitted,['executed_at','executed_at']);
+  const fingerprint=row=>hash(JSON.stringify(Object.fromEntries(Object.entries(row)
+    .filter(([key])=>!omitted.includes(key)).sort(([a],[b])=>a.localeCompare(b)))));
+  const row={id:0,name:'synthetic',hash:'a'.repeat(40),executed_at:'2000-01-01'};
+  assert.equal(fingerprint(row),fingerprint({...row,executed_at:'2001-01-01'}));
+  for(const change of [{id:1},{name:'changed'},{hash:'b'.repeat(40)}])assert.notEqual(fingerprint(row),fingerprint({...row,...change}));
+  assert.match(resultSql,/jsonb_agg\(to_jsonb\(m\) ORDER BY to_jsonb\(m\)::text\)[\s\S]*FROM auth\.schema_migrations m/);
+  assert.match(sql,/same_a IS DISTINCT FROM same_b OR same_a IS NOT DISTINCT FROM changed/);
+  assert.match(sql,/PHASE_A_NATIVE_IDENTITY_WITNESS/);
+  assert.equal(/\b(?:CREATE|INSERT|UPDATE|DELETE|ALTER|DROP)\b/.test(sql.replace(/^--.*$/gm,'')),false);
+});
+test('same-run catalogue and checkpoint retain full native rows including installation timestamps', () => {
+  for(const file of ['catalogue.sql','checkpoint.sql']){
+    const sql=readFileSync(new URL('./sql/'+file,import.meta.url),'utf8');
+    assert.equal(sql.includes("-'executed_at'"),false);
+  }
+  const checkpoint=readFileSync(new URL('./sql/checkpoint.sql',import.meta.url),'utf8');
+  assert.match(checkpoint,/to_jsonb/);
+  assert.match(checkpoint,/n\.nspname IN\('auth','storage','public','private'\)/);
+  assert.match(checkpoint,/jsonb_agg\(to_jsonb\(t\) ORDER BY to_jsonb\(t\)::text\)/);
 });
