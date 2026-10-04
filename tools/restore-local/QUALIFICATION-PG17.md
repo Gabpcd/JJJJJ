@@ -2,7 +2,7 @@
 
 Branche temporaire sans PR : `ci/qualification-pg17-refund-20261004`, produit exact `01b135471e1e6ee7ee31439ffc248c8b8519260c`. Ce banc reprend les fichiers de préparation de `97afce0a0640df93862572e811cd1c8f06eaf2be` et conserve ses protections. Il ne doit pas être fusionné tel quel. Aucun SQL staging, fournisseur, frontend ou livraison n'est exécuté par ce job.
 
-Le seul témoin est `tests/security/refund-reuse-fixture-pg17.test.sql`, SHA256 `f22f01ea7962986424ff975131a13cefed4026307c7518b7ab74b7ce563ef164`. Il est nouveau sur la branche CI : le driver lit ce chemin exact dans le checkout et vérifie son hash constant. Les migrations restent toutes lues depuis PRODUCT_SHA et comparées octet par octet au checkout. Aucun changement de migration, helper factice ou trigger désactivé. Un échec interrompt le job, sans retry ni saut de fichier.
+Le seul témoin est `tests/security/refund-reuse-fixture-pg17.test.sql`, SHA256 `9de82691b08f94f4d2bc1581f11aca6e634aa043c479875cc562afbe2aa4e4fb`. Il est nouveau sur la branche CI : le driver lit ce chemin exact dans le checkout et vérifie son hash constant. Les migrations restent toutes lues depuis PRODUCT_SHA et comparées octet par octet au checkout. Aucun changement de migration, helper factice ou trigger désactivé. Un échec interrompt le job, sans retry ni saut de fichier.
 
 ## Portée du témoin
 

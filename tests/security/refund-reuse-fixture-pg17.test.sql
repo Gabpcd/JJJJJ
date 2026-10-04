@@ -1,5 +1,5 @@
 -- LOCAL PG17 ONLY; exact preparation DO sha256 b36863e4eaeffc147fba0efd5f13e23314060f74a0778344651561b7fb78b814
--- Reviewed synthetic seed sha256 955d65013886f4e70cc6663006d5c24219c014b610af660e33ce124c313959e3; no provider evidence is claimed.
+-- Reviewed synthetic seed sha256 125b9e525b018c445eda0977cc5026e560d89a206b64f2d048dd52e70be62ef5; no provider evidence is claimed.
 BEGIN;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='90s';
@@ -923,7 +923,7 @@ DECLARE
  evidence jsonb:=jsonb_build_object('reviewer','PG17_SYNTHETIC_ONLY; no external review, provider or Auth proof');
  payloads jsonb:='{}'::jsonb;
  payload jsonb;
- name text;
+ evidence_pin_key text;
 BEGIN
  -- Declared readiness fixture only; no KYC/onboarding claim outside this transaction.
  UPDATE public.stripe_connect_onboarding SET statut='COMPLET',onboarding_complete=true,
@@ -1036,12 +1036,12 @@ jsonb_build_object(
   ) AS catalogue) c;
  j:=jsonb_set(j,'{catalogue}',cat);
  -- These required hash-shaped pins are hashes of explicit LOCAL SYNTHETIC DECLARATIONS, not acquired proofs.
- FOREACH name IN ARRAY ARRAY['protocolSha256','adminAuthIntentSha256','adminAuthReceiptSha256','providerReadinessReceiptSha256',
+ FOREACH evidence_pin_key IN ARRAY ARRAY['protocolSha256','adminAuthIntentSha256','adminAuthReceiptSha256','providerReadinessReceiptSha256',
   'providerHistoryReceiptSha256','edgeGenerationReceiptSha256','calendarReceiptSha256'] LOOP
-  payload:=jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',name,
+  payload:=jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',evidence_pin_key,
    'sqlModelSha256','86727d374c0984df26e54890fccb2800c8cc927a2752d88d4ff99a1964a7409c','syntheticManifest',j);
-  payloads:=payloads||jsonb_build_object(name,payload);
-  evidence:=evidence||jsonb_build_object(name,encode(extensions.digest(convert_to(payload::text,'UTF8'),'sha256'),'hex'));
+  payloads:=payloads||jsonb_build_object(evidence_pin_key,payload);
+  evidence:=evidence||jsonb_build_object(evidence_pin_key,encode(extensions.digest(convert_to(payload::text,'UTF8'),'sha256'),'hex'));
  END LOOP;
  j:=j||jsonb_build_object('reviewedEvidence',evidence,'syntheticEvidencePayloads',payloads);
  IF (SELECT count(*) FROM auth.users)<>4 OR EXISTS(SELECT 1 FROM auth.sessions)
