@@ -13,7 +13,7 @@ export const PRODUCT_SHA='01b135471e1e6ee7ee31439ffc248c8b8519260c';
 export const VAULT_PROVENANCE_PATH='supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql';
 export const VAULT_PROVENANCE_SHA='c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf';
 export const TEST_PATH='tests/security/refund-reuse-fixture-pg17.test.sql';
-export const TEST_SHA256='1c459a1137589647549833818c575fd7f4927fb5295abfb43df80115fbede426';
+export const TEST_SHA256='12639614a3d1dcee4e3c6841ecd76ef8932096b6115076a669899c3a33066451';
 export const SCAFFOLD_PATHS=[
  TEST_PATH,
  '.github/workflows/restore-local-bootstrap.yml',
@@ -394,7 +394,7 @@ export function safeFailure(error){
  const diagnostic=error?.diagnostic;
  return {code,...(code==='QUALIFICATION_SQL_FAILED'?{sqlstate:/^[0-9A-Z]{5}$/.test(diagnostic?.sqlstate??'')?diagnostic.sqlstate:null,
   input_line:Number.isSafeInteger(diagnostic?.line)&&diagnostic.line>0?diagnostic.line:null,
-  assertion:/^(?:CAND_MULTI|REUSE|WITNESS)_[A-Z_]{1,80}$/.test(diagnostic?.assertion??'')?diagnostic.assertion:null,
+  assertion:/^(?:CAND_MULTI|REUSE|WITNESS|OPERATOR)_[A-Z_]{1,80}$/.test(diagnostic?.assertion??'')?diagnostic.assertion:null,
   ...(SQL_DIAGNOSTIC_CATEGORIES.includes(diagnostic?.category)?{category:diagnostic.category}:{})}:{})};
 }
 export function qualify(evidence,runtime,extensionSQL,requirements,save){

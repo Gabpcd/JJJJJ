@@ -354,7 +354,7 @@ export function projectSqlDiagnostic(stderr){
  // Select the ERROR/FATAL record itself, never an earlier BEGIN warning or later CONTEXT.
  const records=String(stderr).split(/\r?\n/),record=records.map(s=>/^(?:psql:<stdin>:(\d+):\s*)?(?:ERROR|FATAL):\s+([0-9A-Z]{5}):\s*(.*)$/.exec(s)).find(Boolean);
  if(!record)return {sqlstate:null,line:null,assertion:null};
- const [,line,state,message]=record,assertion=/^((?:CAND_MULTI|REUSE|WITNESS)_[A-Z_]{1,80})(?=\s|$|:)/.exec(message)?.[1]??null;
+ const [,line,state,message]=record,assertion=/^((?:CAND_MULTI|REUSE|WITNESS|OPERATOR)_[A-Z_]{1,80})(?=\s|$|:)/.exec(message)?.[1]??null;
  const labels=[
   /^SECURITY DEFINER non classées : /,/^Signatures SECURITY DEFINER obsolètes : /,/^Corps SECURITY DEFINER modifiés sans revue : /,
   /^Manifest SECURITY DEFINER incomplet : /,/^Compte RPC_UTILISATEUR_AUTH_INTERNE inattendu$/,/^Compte ADMIN_EST_ADMIN_VALIDE inattendu$/,

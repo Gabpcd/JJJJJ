@@ -1,5 +1,5 @@
--- LOCAL PG17 ONLY; exact preparation DO sha256 b36863e4eaeffc147fba0efd5f13e23314060f74a0778344651561b7fb78b814
--- Reviewed synthetic seed sha256 fa2f3e7e633c0adb328d6b12a63ef06b3bd03f188c61c90056448ab3968100ba; no provider evidence is claimed.
+-- LOCAL PG17 ONLY; exact preparation DO sha256 cdda7e0547827d9ea206f6024ff98afdffbd200b5fb64ea3ecf2bd8168b50178
+-- Reviewed synthetic seed sha256 9212bddd09f51fbb326e20d3023213ce3a2ca90bf4ed67cd1b3d471355408959; no provider evidence is claimed.
 BEGIN;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='90s';
@@ -1049,7 +1049,7 @@ jsonb_build_object(
  FOREACH evidence_pin_key IN ARRAY ARRAY['protocolSha256','adminAuthIntentSha256','adminAuthReceiptSha256','providerReadinessReceiptSha256',
   'providerHistoryReceiptSha256','edgeGenerationReceiptSha256','calendarReceiptSha256'] LOOP
   payload:=jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',evidence_pin_key,
-   'sqlModelSha256','86727d374c0984df26e54890fccb2800c8cc927a2752d88d4ff99a1964a7409c','syntheticManifest',j);
+   'sqlModelSha256','005cbdbaa46c4446d6c99f06b92f0a1fd99c3970437acec21fb559a0d2051fe7','syntheticManifest',j);
   payloads:=payloads||jsonb_build_object(evidence_pin_key,payload);
   evidence:=evidence||jsonb_build_object(evidence_pin_key,encode(extensions.digest(convert_to(payload::text,'UTF8'),'sha256'),'hex'));
  END LOOP;
@@ -1103,7 +1103,7 @@ DECLARE
  past_end timestamptz:=(j#>>'{calendar,pastEnd}')::timestamptz;
  future_start timestamptz:=(j#>>'{calendar,futureStart}')::timestamptz;
  future_end timestamptz:=(j#>>'{calendar,futureEnd}')::timestamptz;
- c private.stripe_connect_test_capacities;
+ historical_capacity private.stripe_connect_test_capacities;
  o private.stripe_connect_avant_transfert;
  before_state jsonb;
  after_state jsonb;
@@ -1166,19 +1166,19 @@ BEGIN
   OR (SELECT count(*) FROM private.stripe_connect_test_capacities)<>1
   OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
  THEN RAISE EXCEPTION 'REUSE_EXACT_CLOSED_N_REQUIRED'; END IF;
- SELECT * INTO STRICT c FROM private.stripe_connect_test_capacities WHERE id=hc;
+ SELECT * INTO STRICT historical_capacity FROM private.stripe_connect_test_capacities WHERE id=hc;
  SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE id=ho;
- IF c.enabled IS DISTINCT FROM FALSE OR c.revoked_at IS NULL OR c.revoked_at>clock_timestamp()
-  OR c.protocol<>'CONNECT_STAGING_TEST_V1' OR c.project_ref<>'mejpriaetwgtcstbgfid'
-  OR c.platform_account_id<>'acct_1T9pt0EVhQ7cb53W'
-  OR c.livemode IS DISTINCT FROM FALSE OR c.transfers_allowed IS DISTINCT FROM FALSE
-  OR c.max_checkouts<>1 OR c.max_refunds<>1 OR c.checkout_reserved_at IS NULL
-  OR c.refund_reserved_at IS NULL OR c.claim_reserved_at IS NULL OR c.operation_id IS DISTINCT FROM ho
-  OR c.etablissement_id IS DISTINCT FROM e OR c.soignant_id IS DISTINCT FROM s
-  OR c.mission_id IS DISTINCT FROM hm OR c.facture_honoraire_id IS DISTINCT FROM hh OR c.facture_commission_id IS DISTINCT FROM hf
-  OR c.customer_id IS DISTINCT FROM j#>>'{actorProvenance,customerId}'
-  OR c.destination_id IS DISTINCT FROM j#>>'{actorProvenance,destinationId}'
-  OR c.destination_id IN('acct_1T9pt0EVhQ7cb53W','acct_1UKlZCEVhQI2aaZg')
+ IF historical_capacity.enabled IS DISTINCT FROM FALSE OR historical_capacity.revoked_at IS NULL OR historical_capacity.revoked_at>clock_timestamp()
+  OR historical_capacity.protocol<>'CONNECT_STAGING_TEST_V1' OR historical_capacity.project_ref<>'mejpriaetwgtcstbgfid'
+  OR historical_capacity.platform_account_id<>'acct_1T9pt0EVhQ7cb53W'
+  OR historical_capacity.livemode IS DISTINCT FROM FALSE OR historical_capacity.transfers_allowed IS DISTINCT FROM FALSE
+  OR historical_capacity.max_checkouts<>1 OR historical_capacity.max_refunds<>1 OR historical_capacity.checkout_reserved_at IS NULL
+  OR historical_capacity.refund_reserved_at IS NULL OR historical_capacity.claim_reserved_at IS NULL OR historical_capacity.operation_id IS DISTINCT FROM ho
+  OR historical_capacity.etablissement_id IS DISTINCT FROM e OR historical_capacity.soignant_id IS DISTINCT FROM s
+  OR historical_capacity.mission_id IS DISTINCT FROM hm OR historical_capacity.facture_honoraire_id IS DISTINCT FROM hh OR historical_capacity.facture_commission_id IS DISTINCT FROM hf
+  OR historical_capacity.customer_id IS DISTINCT FROM j#>>'{actorProvenance,customerId}'
+  OR historical_capacity.destination_id IS DISTINCT FROM j#>>'{actorProvenance,destinationId}'
+  OR historical_capacity.destination_id IN('acct_1T9pt0EVhQ7cb53W','acct_1UKlZCEVhQI2aaZg')
   OR o.orientation IS DISTINCT FROM 'REFUND' OR o.refund_status IS DISTINCT FROM 'SUCCEEDED'
   OR o.refund_id IS DISTINCT FROM j#>>'{historicalN,refundId}' OR o.refund_id IS NULL
   OR o.session_id IS DISTINCT FROM j#>>'{historicalN,sessionId}' OR o.trace_id IS DISTINCT FROM ht
@@ -1193,10 +1193,10 @@ BEGIN
     'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\n' ORDER BY p.oid::regprocedure::text))
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
     'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
-      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+      FROM pg_trigger t JOIN pg_class historical_capacity ON historical_capacity.oid=t.tgrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace
       WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
-    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||c.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,c.relname,a.attnum))
-      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||historical_capacity.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,historical_capacity.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class historical_capacity ON historical_capacity.oid=a.attrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
       WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
     'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
     'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
@@ -1226,14 +1226,14 @@ BEGIN
    OR (u.id=e AND u.raw_app_meta_data->>'role'='ADMIN_ETABLISSEMENT' AND u.raw_app_meta_data->>'etablissement_id'=e::text)))<>2
   OR NOT EXISTS(SELECT 1 FROM public.soignants WHERE id=s AND est_compte_test IS TRUE
    AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND supprime_le IS NULL AND statut_compte::text='ACTIF'
-   AND stripe_account_id=c.destination_id AND type_exercice::text='LIBERAL'
+   AND stripe_account_id=historical_capacity.destination_id AND type_exercice::text='LIBERAL'
    AND mandat_facturation_signe IS TRUE AND mandat_facturation_version='1.4')
   OR NOT EXISTS(SELECT 1 FROM public.etablissements WHERE id=e AND est_compte_test IS TRUE
-   AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND supprime_le IS NULL AND stripe_customer_id=c.customer_id)
-  OR (SELECT count(*) FROM public.etablissements WHERE stripe_customer_id=c.customer_id)<>1
-  OR (SELECT count(*) FROM public.soignants WHERE stripe_account_id=c.destination_id)<>1
+   AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND supprime_le IS NULL AND stripe_customer_id=historical_capacity.customer_id)
+  OR (SELECT count(*) FROM public.etablissements WHERE stripe_customer_id=historical_capacity.customer_id)<>1
+  OR (SELECT count(*) FROM public.soignants WHERE stripe_account_id=historical_capacity.destination_id)<>1
   OR (SELECT count(*) FROM public.stripe_connect_onboarding WHERE soignant_id=s)<>1
-  OR NOT EXISTS(SELECT 1 FROM public.stripe_connect_onboarding WHERE soignant_id=s AND stripe_account_id=c.destination_id
+  OR NOT EXISTS(SELECT 1 FROM public.stripe_connect_onboarding WHERE soignant_id=s AND stripe_account_id=historical_capacity.destination_id
    AND statut='COMPLET' AND onboarding_complete IS TRUE AND charges_enabled IS TRUE AND payouts_enabled IS TRUE AND details_submitted IS TRUE)
   OR NOT EXISTS(SELECT 1 FROM public.mandats_facturation_signatures WHERE id=(j#>>'{actorProvenance,mandatId}')::uuid
    AND soignant_id=s AND version='1.4' AND revoked_at IS NULL)
@@ -1508,6 +1508,1128 @@ BEGIN
   THEN RAISE EXCEPTION 'WITNESS_CASE_ROLLBACK_CHANGED_STATE'; END IF;
  END LOOP;
 END $witness$;
-SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','model_sha256','86727d374c0984df26e54890fccb2800c8cc927a2752d88d4ff99a1964a7409c',
+SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','model_sha256','005cbdbaa46c4446d6c99f06b92f0a1fd99c3970437acec21fb559a0d2051fe7',
  'positive',1,'refusals',3,'subtransactions_restored',true,'provider',false) AS witness;
+
+-- CAPACITY OPERATOR MODELS: exact DO bodies; outer transaction remains synthetic and ROLLBACK-only.
+-- Readback DO runs inside this writing fixture transaction: its readOnly=false is not hidden.
+SET LOCAL standard_conforming_strings=on;
+-- Retain one new mission for capacity cases; this is the same preparation DO already tested above.
+DO $reuse_new_mission$
+DECLARE
+ j jsonb:=current_setting('jolene.connect_reuse_manifest')::jsonb;
+ s uuid:=(j#>>'{actorProvenance,soignantId}')::uuid;
+ e uuid:=(j#>>'{actorProvenance,etablissementId}')::uuid;
+ a uuid:=(j#>>'{new,adminId}')::uuid;
+ m uuid:=(j#>>'{new,missionId}')::uuid;
+ team uuid:=(j#>>'{new,adminTeamId}')::uuid;
+ hc uuid:=(j#>>'{historicalN,capacityId}')::uuid;
+ ho uuid:=(j#>>'{historicalN,operationId}')::uuid;
+ hm uuid:=(j#>>'{historicalN,missionId}')::uuid;
+ hh uuid:=(j#>>'{historicalN,honorairesId}')::uuid;
+ hf uuid:=(j#>>'{historicalN,commissionId}')::uuid;
+ ht uuid:=(j#>>'{historicalN,traceId}')::uuid;
+ ha uuid:=(j#>>'{historicalN,adminId}')::uuid;
+ hteam uuid:=(j#>>'{historicalN,adminTeamId}')::uuid;
+ week_start date:=(j#>>'{calendar,periodStart}')::date;
+ week_end date:=(j#>>'{calendar,periodEnd}')::date;
+ past_start timestamptz:=(j#>>'{calendar,pastStart}')::timestamptz;
+ past_end timestamptz:=(j#>>'{calendar,pastEnd}')::timestamptz;
+ future_start timestamptz:=(j#>>'{calendar,futureStart}')::timestamptz;
+ future_end timestamptz:=(j#>>'{calendar,futureEnd}')::timestamptz;
+ historical_capacity private.stripe_connect_test_capacities;
+ o private.stripe_connect_avant_transfert;
+ before_state jsonb;
+ after_state jsonb;
+ catalogue jsonb;
+ r jsonb;
+ n text;
+ v_count integer;
+ soignant_modified_before timestamptz;
+BEGIN
+ -- Ne pas masquer un appel utilisateur préexistant en remplaçant son contexte.
+ IF current_user<>'postgres' OR session_user NOT IN('postgres','supabase_admin')
+  OR current_setting('server_version_num')::integer/10000<>17
+  OR auth.uid() IS NOT NULL
+  OR j->'schemaVersion' IS DISTINCT FROM '1'::jsonb
+  OR j->>'purpose' IS DISTINCT FROM 'CONNECT_REFUND_REUSE_ACTORS_NEW_MISSION_V1'
+  OR j->'ready' IS DISTINCT FROM 'true'::jsonb
+  OR j->>'projectRef' IS DISTINCT FROM 'mejpriaetwgtcstbgfid'
+  OR COALESCE(j->>'sourceSha','') !~ '^[a-f0-9]{40}$'
+  OR COALESCE(j->>'runId','') !~ '^connect-test-[a-z0-9-]{8,64}$'
+  OR j->>'ownerMarker' IS DISTINCT FROM (j->>'runId')||':'||(j->>'sourceSha')
+  OR j->>'issuedAt' IS NULL OR j->>'expiresAt' IS NULL
+  OR (j->>'issuedAt')::timestamptz>clock_timestamp()
+  OR (j->>'expiresAt')::timestamptz<=clock_timestamp()
+  OR (j->>'expiresAt')::timestamptz-(j->>'issuedAt')::timestamptz>interval '4 hours'
+  OR j->>'runId' IS NOT DISTINCT FROM j#>>'{actorProvenance,runId}'
+  OR COALESCE(j#>>'{actorProvenance,sourceSha}','') !~ '^[a-f0-9]{40}$'
+  OR COALESCE(j#>>'{actorProvenance,runId}','') !~ '^connect-test-[a-z0-9-]{8,64}$'
+  OR j#>>'{actorProvenance,ownerMarker}' IS DISTINCT FROM (j#>>'{actorProvenance,runId}')||':'||(j#>>'{actorProvenance,sourceSha}')
+  OR COALESCE(j#>>'{actorProvenance,manifestSha256}','') !~ '^[a-f0-9]{64}$'
+  OR COALESCE(j#>>'{historicalN,proofSha256}','') !~ '^[a-f0-9]{64}$'
+  OR COALESCE(j#>>'{historicalN,protectedSnapshotSha256}','') !~ '^[a-f0-9]{64}$'
+  OR COALESCE(j#>>'{reviewedEvidence,reviewer}','')=''
+ THEN RAISE EXCEPTION 'REUSE_CONTEXT_OR_PROVENANCE_REFUSED'; END IF;
+ FOREACH n IN ARRAY ARRAY['protocolSha256','adminAuthIntentSha256','adminAuthReceiptSha256',
+  'providerReadinessReceiptSha256','providerHistoryReceiptSha256','edgeGenerationReceiptSha256','calendarReceiptSha256'] LOOP
+  IF COALESCE(j#>>ARRAY['reviewedEvidence',n],'') !~ '^[a-f0-9]{64}$'
+  THEN RAISE EXCEPTION 'REUSE_REVIEWED_EVIDENCE_REQUIRED'; END IF;
+ END LOOP;
+ FOREACH n IN ARRAY ARRAY['jolene.admin_seed_override_reason','jolene.generate_invoice_context',
+  'jolene.creer_mission_context','jolene.admin_override_gel','jolene.admin_override_reason',
+  'jolene.tva_mission_managed','app.internal_operation','app.test_bypass_protections'] LOOP
+  IF NULLIF(current_setting(n,true),'') IS NOT NULL THEN RAISE EXCEPTION 'REUSE_OVERRIDE_REFUSED'; END IF;
+ END LOOP;
+ IF (SELECT count(DISTINCT x) FROM unnest(ARRAY[s,e,a,m,team,hc,ho,hm,hh,hf,ht,ha,hteam]) x)<>13
+  OR EXISTS(SELECT 1 FROM public.missions WHERE id=m OR intitule='RECETTE CONNECT TEST SYNTHETIQUE '||(j->>'runId'))
+  OR EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=team OR user_id=a)
+  OR EXISTS(SELECT 1 FROM public.soignants WHERE id=a)
+  OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=a)
+  OR EXISTS(SELECT 1 FROM public.presences WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.mission_creneaux WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.factures WHERE mission_id=m)
+ THEN RAISE EXCEPTION 'REUSE_NEW_IDENTIFIERS_REQUIRED'; END IF;
+ -- Les modèles restent bornés à N seule : toute troisième histoire est refusée.
+ LOCK TABLE private.stripe_connect_release_gate IN SHARE MODE;
+ LOCK TABLE private.stripe_connect_test_capacities IN SHARE MODE;
+ LOCK TABLE private.stripe_connect_avant_transfert IN SHARE MODE;
+ IF (SELECT count(*) FROM private.stripe_connect_release_gate)<>1
+  OR NOT EXISTS(SELECT 1 FROM private.stripe_connect_release_gate WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE)
+  OR (SELECT count(*) FROM private.stripe_connect_test_capacities)<>1
+  OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
+ THEN RAISE EXCEPTION 'REUSE_EXACT_CLOSED_N_REQUIRED'; END IF;
+ SELECT * INTO STRICT historical_capacity FROM private.stripe_connect_test_capacities WHERE id=hc;
+ SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE id=ho;
+ IF historical_capacity.enabled IS DISTINCT FROM FALSE OR historical_capacity.revoked_at IS NULL OR historical_capacity.revoked_at>clock_timestamp()
+  OR historical_capacity.protocol<>'CONNECT_STAGING_TEST_V1' OR historical_capacity.project_ref<>'mejpriaetwgtcstbgfid'
+  OR historical_capacity.platform_account_id<>'acct_1T9pt0EVhQ7cb53W'
+  OR historical_capacity.livemode IS DISTINCT FROM FALSE OR historical_capacity.transfers_allowed IS DISTINCT FROM FALSE
+  OR historical_capacity.max_checkouts<>1 OR historical_capacity.max_refunds<>1 OR historical_capacity.checkout_reserved_at IS NULL
+  OR historical_capacity.refund_reserved_at IS NULL OR historical_capacity.claim_reserved_at IS NULL OR historical_capacity.operation_id IS DISTINCT FROM ho
+  OR historical_capacity.etablissement_id IS DISTINCT FROM e OR historical_capacity.soignant_id IS DISTINCT FROM s
+  OR historical_capacity.mission_id IS DISTINCT FROM hm OR historical_capacity.facture_honoraire_id IS DISTINCT FROM hh OR historical_capacity.facture_commission_id IS DISTINCT FROM hf
+  OR historical_capacity.customer_id IS DISTINCT FROM j#>>'{actorProvenance,customerId}'
+  OR historical_capacity.destination_id IS DISTINCT FROM j#>>'{actorProvenance,destinationId}'
+  OR historical_capacity.destination_id IN('acct_1T9pt0EVhQ7cb53W','acct_1UKlZCEVhQI2aaZg')
+  OR o.orientation IS DISTINCT FROM 'REFUND' OR o.refund_status IS DISTINCT FROM 'SUCCEEDED'
+  OR o.refund_id IS DISTINCT FROM j#>>'{historicalN,refundId}' OR o.refund_id IS NULL
+  OR o.session_id IS DISTINCT FROM j#>>'{historicalN,sessionId}' OR o.trace_id IS DISTINCT FROM ht
+  OR o.succeeded_at IS NULL OR o.review_code IS NOT NULL OR o.owner_token IS NOT NULL OR o.lease_until IS NOT NULL
+  OR o.livemode IS DISTINCT FROM FALSE OR NOT private.fn_connect_test_operation_connue(ho)
+  OR NOT EXISTS(SELECT 1 FROM public.stripe_transfers WHERE id=ht AND statut='REMBOURSE'
+   AND stripe_transfer_id IS NULL AND stripe_checkout_session_id=o.session_id)
+  OR NOT EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=hteam AND user_id=ha AND actif IS FALSE)
+ THEN RAISE EXCEPTION 'REUSE_HISTORICAL_N_NOT_CLOSED'; END IF;
+ -- Catalogue identique au préflight historique (booléen Vault seulement, aucune valeur exportée).
+ SELECT catalogue_source.catalogue INTO catalogue FROM (SELECT jsonb_build_object(
+    'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\n' ORDER BY p.oid::regprocedure::text))
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
+    'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
+      FROM pg_trigger t JOIN pg_class historical_capacity ON historical_capacity.oid=t.tgrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace
+      WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||historical_capacity.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,historical_capacity.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class historical_capacity ON historical_capacity.oid=a.attrelid JOIN pg_namespace n ON n.oid=historical_capacity.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+      WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
+    'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
+    'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
+    'activeCrons',(SELECT count(*)::int FROM cron.job WHERE active),
+    'runningCrons',(SELECT count(*)::int FROM cron.job_run_details WHERE end_time IS NULL AND status IN ('starting','running','connecting','sending')),
+    'generationUrlAbsent',NOT EXISTS(SELECT 1 FROM public.parametres_litiges WHERE cle='generate_invoice_url' AND coalesce(length(valeur),0)>0),
+    'supportStagingExact',coalesce((SELECT nullif(btrim(decrypted_secret),'')='https://mejpriaetwgtcstbgfid.supabase.co' FROM vault.decrypted_secrets WHERE name='supabase_url' LIMIT 1),false)
+  ) AS catalogue) catalogue_source;
+ IF catalogue IS DISTINCT FROM j->'catalogue'
+  OR catalogue->'queuedRequests' IS DISTINCT FROM '0'::jsonb
+  OR catalogue->'activeCrons' IS DISTINCT FROM '0'::jsonb
+  OR catalogue->'runningCrons' IS DISTINCT FROM '0'::jsonb
+  OR catalogue->'generationUrlAbsent' IS DISTINCT FROM 'true'::jsonb
+  OR catalogue->'supportStagingExact' IS DISTINCT FROM 'true'::jsonb
+  OR EXISTS(SELECT 1 FROM public.escrow_release_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+  OR EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+  OR EXISTS(SELECT 1 FROM public.stripe_webhook_events WHERE traitement_commence_le IS NOT NULL AND traite_le IS NULL)
+  OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(s,e))
+ THEN RAISE EXCEPTION 'REUSE_CATALOGUE_OR_QUIESCENCE_REFUSED'; END IF;
+ -- E/S exacts, liens et mandat existants : aucune réparation de profil dans ce modèle.
+ IF (SELECT count(*) FROM auth.users u WHERE u.id IN(s,e) AND u.deleted_at IS NULL
+  AND u.email_confirmed_at IS NOT NULL AND (u.banned_until IS NULL OR u.banned_until<=clock_timestamp())
+  AND u.raw_app_meta_data->'est_compte_test'='true'::jsonb
+  AND u.raw_app_meta_data->>'jolene_connect_fixture_owner'=j#>>'{actorProvenance,ownerMarker}'
+  AND u.email='connect-test-'||u.id::text||'@example.invalid'
+  AND ((u.id=s AND u.raw_app_meta_data->>'role'='SOIGNANT')
+   OR (u.id=e AND u.raw_app_meta_data->>'role'='ADMIN_ETABLISSEMENT' AND u.raw_app_meta_data->>'etablissement_id'=e::text)))<>2
+  OR NOT EXISTS(SELECT 1 FROM public.soignants WHERE id=s AND est_compte_test IS TRUE
+   AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND supprime_le IS NULL AND statut_compte::text='ACTIF'
+   AND stripe_account_id=historical_capacity.destination_id AND type_exercice::text='LIBERAL'
+   AND mandat_facturation_signe IS TRUE AND mandat_facturation_version='1.4')
+  OR NOT EXISTS(SELECT 1 FROM public.etablissements WHERE id=e AND est_compte_test IS TRUE
+   AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND supprime_le IS NULL AND stripe_customer_id=historical_capacity.customer_id)
+  OR (SELECT count(*) FROM public.etablissements WHERE stripe_customer_id=historical_capacity.customer_id)<>1
+  OR (SELECT count(*) FROM public.soignants WHERE stripe_account_id=historical_capacity.destination_id)<>1
+  OR (SELECT count(*) FROM public.stripe_connect_onboarding WHERE soignant_id=s)<>1
+  OR NOT EXISTS(SELECT 1 FROM public.stripe_connect_onboarding WHERE soignant_id=s AND stripe_account_id=historical_capacity.destination_id
+   AND statut='COMPLET' AND onboarding_complete IS TRUE AND charges_enabled IS TRUE AND payouts_enabled IS TRUE AND details_submitted IS TRUE)
+  OR NOT EXISTS(SELECT 1 FROM public.mandats_facturation_signatures WHERE id=(j#>>'{actorProvenance,mandatId}')::uuid
+   AND soignant_id=s AND version='1.4' AND revoked_at IS NULL)
+  OR (SELECT count(*) FROM public.preferences_notifications WHERE utilisateur_id IN(s,e)
+   AND NOT canal_email AND NOT canal_sms AND NOT canal_push AND NOT canal_in_app)<>2
+ THEN RAISE EXCEPTION 'REUSE_ACTORS_LINKS_MANDATE_REFUSED'; END IF;
+ -- A est un Auth synthétique créé pour cette exécution, jamais un admin historique.
+ IF NOT EXISTS(SELECT 1 FROM auth.users u WHERE u.id=a AND u.deleted_at IS NULL AND u.email_confirmed_at IS NOT NULL
+  AND (u.banned_until IS NULL OR u.banned_until<=clock_timestamp())
+  AND u.created_at>=(j->>'issuedAt')::timestamptz AND u.created_at<=clock_timestamp()
+  AND u.email='connect-test-'||a::text||'@example.invalid'
+  AND u.raw_app_meta_data->>'role'='ADMIN_PLATEFORME'
+  AND u.raw_app_meta_data->'est_compte_test'='true'::jsonb
+  AND u.raw_app_meta_data->'is_test_playwright'='true'::jsonb
+  AND u.raw_app_meta_data->>'jolene_connect_fixture_owner'=j->>'ownerMarker')
+  OR EXISTS(SELECT 1 FROM auth.sessions WHERE user_id=a)
+ THEN RAISE EXCEPTION 'REUSE_FRESH_SYNTHETIC_ADMIN_REQUIRED'; END IF;
+ SELECT jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+) INTO before_state;
+ IF encode(extensions.digest(convert_to(before_state::text,'UTF8'),'sha256'),'hex')
+  IS DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}'
+ THEN RAISE EXCEPTION 'REUSE_PROTECTED_BASELINE_CHANGED'; END IF;
+ SELECT modifie_le INTO STRICT soignant_modified_before FROM public.soignants WHERE id=s;
+ -- Horaires explicitement épinglés pour éviter de recopier 09h-13h sur N.
+ IF week_start IS NULL OR week_end IS NULL OR past_start IS NULL OR past_end IS NULL OR future_start IS NULL OR future_end IS NULL
+  OR extract(isodow FROM week_start)<>1 OR week_end<>week_start+6 OR week_end>=current_date
+  OR past_start::date<>week_start OR past_end::date<>week_start OR past_end-past_start<>interval '4 hours'
+  OR future_start::date<=current_date OR future_end::date<>future_start::date OR future_end-future_start<>interval '4 hours'
+  OR future_start::date>current_date+21 OR past_start::date<current_date-35
+  OR public.fn_est_jour_ferie(week_start) OR public.fn_est_jour_ferie(future_start::date)
+  OR EXISTS(SELECT 1 FROM public.mission_creneaux k JOIN public.missions x ON x.id=k.mission_id
+   WHERE x.soignant_assigne_id=s AND x.statut IN('ASSIGNEE','EN_COURS','TERMINEE')
+    AND ((k.debut<past_end AND k.fin>past_start) OR (k.debut<future_end AND k.fin>future_start)))
+ THEN RAISE EXCEPTION 'REUSE_CALENDAR_REFUSED'; END IF;
+ PERFORM set_config('request.jwt.claim.sub','',true);
+ PERFORM set_config('request.jwt.claim.role','service_role',true);
+ PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+ -- Bloc de création dérivé du seed Connect ; triggers actifs, aucun override.
+ INSERT INTO public.missions(id,etablissement_id,intitule,profession_requise,debut_le,fin_le,
+  duree_heures,taux_horaire_base,statut,soignant_assigne_id,type_contrat_recherche,type_contrat_applique,
+  choix_contrat_soignant,type_paiement_soignant,mode_paiement_soignant,strategie_facturation,est_urgente)
+ VALUES(m,e,'RECETTE CONNECT TEST SYNTHETIQUE '||(j->>'runId'),'IDE',future_start,future_end,
+  4,20,'EN_COURS',s,'LIBERAL',NULL,'LIBERAL','NOTE_HONORAIRES','DIRECT','HEBDO_ET_FINALE',false);
+ UPDATE public.missions SET type_contrat_applique='LIBERAL' WHERE id=m;
+ UPDATE public.mission_creneaux SET debut=past_start,fin=past_end WHERE mission_id=m AND type_creneau='PREVISIONNEL';
+ GET DIAGNOSTICS v_count=ROW_COUNT;
+ IF v_count<>1 THEN RAISE EXCEPTION 'REUSE_INITIAL_SLOT_NOT_UNIQUE'; END IF;
+ INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause,ordre)
+ VALUES(m,future_start,future_end,'PREVISIONNEL',false,2),(m,past_start,past_end,'EFFECTIF',false,3);
+ INSERT INTO public.equipe_admin(id,user_id,nom,prenom,email,poste,actif,acces_groupes)
+ VALUES(team,a,'SYNTHETIQUE','CONNECT REUSE TEST','connect-test-'||a::text||'@example.invalid','RECETTE CONNECT TEST SANS SESSION',true,
+  ARRAY['Dashboard','Utilisateurs','Missions','Litiges & contrats','Finances','Messagerie','Conformité & Technique','Fondateur']);
+ PERFORM set_config('request.jwt.claim.sub',a::text,true);
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ IF public.est_admin() IS NOT TRUE THEN RAISE EXCEPTION 'REUSE_CANONICAL_ADMIN_REFUSED'; END IF;
+ r:=public.fn_admin_proposer_nature_tva_mission(m,'SOIN_THERAPEUTIQUE_EXONERE',
+  'RECETTE SYNTHETIQUE sans prestation ni attestation réelle — '||(j->>'runId'));
+ IF r->'success' IS DISTINCT FROM 'true'::jsonb OR r->>'statut_validation_tva' IS DISTINCT FROM 'A_CONFIRMER'
+ THEN RAISE EXCEPTION 'REUSE_TVA_PROPOSAL_REFUSED'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',s::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',s,'role','authenticated')::text,true);
+ r:=public.fn_confirmer_nature_tva_mission(m,'SOIN_THERAPEUTIQUE_EXONERE');
+ IF r->'success' IS DISTINCT FROM 'true'::jsonb OR r->>'statut_validation_tva' IS DISTINCT FROM 'CONFIRMEE'
+ THEN RAISE EXCEPTION 'REUSE_TVA_CONFIRMATION_REFUSED'; END IF;
+ UPDATE public.equipe_admin SET actif=false WHERE id=team AND user_id=a AND actif IS TRUE;
+ GET DIAGNOSTICS v_count=ROW_COUNT;
+ IF v_count<>1 THEN RAISE EXCEPTION 'REUSE_ADMIN_DEACTIVATION_REFUSED'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',a::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',a,'role','authenticated')::text,true);
+ IF public.est_admin() IS NOT FALSE OR EXISTS(SELECT 1 FROM public.equipe_admin WHERE user_id=a AND actif)
+  OR EXISTS(SELECT 1 FROM auth.sessions WHERE user_id=a)
+ THEN RAISE EXCEPTION 'REUSE_ADMIN_STILL_PRIVILEGED'; END IF;
+ PERFORM set_config('request.jwt.claim.sub','',true);
+ PERFORM set_config('request.jwt.claim.role','service_role',true);
+ PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+ IF NOT EXISTS(SELECT 1 FROM public.missions WHERE id=m AND etablissement_id=e AND soignant_assigne_id=s
+  AND statut='EN_COURS' AND type_contrat_applique::text='LIBERAL' AND nb_creneaux=2
+  AND duree_heures=8 AND duree_heures_effective=4 AND net_a_payer=160 AND montant_commission_ht=24
+  AND statut_validation_tva='CONFIRMEE' AND nature_tva_declaree_par=a AND revue_tva_resolue_par=a
+  AND nature_tva_confirmee_par=s AND fige_le IS NULL AND debut_le::date=week_start AND fin_le::date=future_start::date)
+  OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.factures WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.stripe_transfers WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.paiements_soignant WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.paiements_mission WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=m)
+  OR EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='MISSION:'||m::text)
+  OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(s,e,a))
+  OR EXISTS(SELECT 1 FROM net.http_request_queue)
+  OR (SELECT count(*) FROM private.stripe_connect_test_capacities)<>1
+  OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
+ THEN RAISE EXCEPTION 'REUSE_UNEXPECTED_PREPARATION_EFFECT'; END IF;
+ r:=public.fn_calculer_montant_periode(m,week_start,week_end);
+ IF (r->>'montant_ht_periode')::numeric IS DISTINCT FROM 80 THEN RAISE EXCEPTION 'REUSE_PRORATA_REFUSED'; END IF;
+ SELECT jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+) INTO after_state;
+ IF after_state IS DISTINCT FROM before_state THEN RAISE EXCEPTION 'REUSE_PROTECTED_ROWS_CHANGED'; END IF;
+ IF (SELECT modifie_le FROM public.soignants WHERE id=s) IS DISTINCT FROM transaction_timestamp()
+  OR EXISTS(SELECT 1 FROM public.suivi_conversion_3200h WHERE soignant_id=s AND modifie_le IS DISTINCT FROM transaction_timestamp())
+ THEN RAISE EXCEPTION 'REUSE_NONCANONICAL_PROFILE_TIMESTAMP'; END IF;
+ PERFORM set_config('jolene.connect_reuse_receipt',jsonb_build_object('runId',j->>'runId','missionId',m,
+  'adminId',a,'adminTeamId',team,'adminActive',false,'periodStart',week_start,'periodEnd',week_end,
+  'honorairesExpected',80,'commissionExpected',14.4,'protectedSnapshotSha256',j#>>'{historicalN,protectedSnapshotSha256}',
+  'soignantModifiedBefore',soignant_modified_before,'soignantModifiedAfter',transaction_timestamp(),
+  'syntheticPreparation',true,'providerInvoked',false,'documentsGenerated',false,'capacityAllocated',false)::text,true);
+END;
+$reuse_new_mission$;
+DO $synthetic_documents$
+DECLARE
+ p jsonb:=current_setting('jolene.connect_reuse_manifest')::jsonb;
+ j jsonb;
+ w_s uuid:=(p#>>'{actorProvenance,soignantId}')::uuid;
+ w_e uuid:=(p#>>'{actorProvenance,etablissementId}')::uuid;
+ w_m uuid:=(p#>>'{new,missionId}')::uuid;
+ w_h uuid:='77000000-0000-4000-8000-000000000001';
+ w_c uuid;
+ w_result jsonb;
+ w_key text;
+ w_started timestamptz:=clock_timestamp()-interval '1 second';
+ w_pdf_declaration text:='PG17_SYNTHETIC_ONLY_NO_PDF_FILE_NEW_COHORT';
+ w_xml_declaration text:='PG17_SYNTHETIC_ONLY_NO_XML_FILE_NEW_COHORT';
+BEGIN
+ -- Declared document rows and declaration digests only. No file exists; no generation/provider is proved.
+ INSERT INTO public.factures_honoraires(id,numero_facture,soignant_id,etablissement_id,mission_id,
+  montant_ht,montant_tva,montant_ttc,taux_tva,statut,mandat_version,periode_debut,periode_fin,
+  est_facture_finale_mission,quantite_heures_snapshot,taux_horaire_snapshot,pdf_s3_key,facturx_xml_url)
+ VALUES(w_h,public.next_invoice_number(w_s),w_s,w_e,w_m,80,0,80,0,'EMISE','1.4',
+  (p#>>'{calendar,periodStart}')::date,(p#>>'{calendar,periodEnd}')::date,false,4,20,
+  'pg17-synthetic-only/new-no-file.pdf','pg17-synthetic-only/new-no-file.xml');
+ INSERT INTO public.factures_honoraires_documents(facture_honoraire_id,pdf_s3_key,facturx_xml_url,pdf_sha256,xml_sha256,motif_generation)
+ VALUES(w_h,'pg17-synthetic-only/new-no-file.pdf','pg17-synthetic-only/new-no-file.xml',
+  encode(extensions.digest(convert_to(w_pdf_declaration,'UTF8'),'sha256'),'hex'),
+  encode(extensions.digest(convert_to(w_xml_declaration,'UTF8'),'sha256'),'hex'),'PG17_SYNTHETIC_ONLY_NO_DOCUMENT_BYTES');
+ w_result:=public.fn_preparer_facture_commission_periode(w_h);
+ IF w_result->'success' IS DISTINCT FROM 'true'::jsonb OR (w_result->>'montant_ttc')::numeric IS DISTINCT FROM 14.4
+ THEN RAISE EXCEPTION 'WITNESS_NEW_COMMISSION_REFUSED'; END IF;
+ w_c:=(w_result->>'facture_id')::uuid;
+ j:=jsonb_build_object('schemaVersion',2,'ready',true,'purpose','CONNECT_STAGING_TEST_REUSE_CLOSED_N_V1',
+  'evidenceScope','PG17_SYNTHETIC_ONLY','providerEvidence',false,'documentFilesExist',false,
+  'windowStartsAt',w_started,'actorProvenance',p->'actorProvenance','catalogue',p->'catalogue',
+  'historicalN',(p->'historicalN')||jsonb_build_object('paymentIntentId','pi_PG17SyntheticN','chargeId','ch_PG17SyntheticN',
+   'litigeId',(SELECT litige_id FROM private.stripe_connect_avant_transfert WHERE id=(p#>>'{historicalN,operationId}')::uuid)),
+  'fixture',jsonb_build_object('sourceSha',p->>'sourceSha','runId',p->>'runId','ownerMarker',p->>'ownerMarker',
+   'adminId',p#>>'{new,adminId}','adminTeamId',p#>>'{new,adminTeamId}'),
+  'reviewedEvidence',jsonb_build_object('independentReviewPath','PG17_SYNTHETIC_ONLY_NOT_EXTERNAL_REVIEW',
+   'providerObservedAt',w_started),
+  'capacity',jsonb_build_object('id','77000000-0000-4000-8000-000000000002',
+   'protocol','CONNECT_STAGING_TEST_V1','project_ref','mejpriaetwgtcstbgfid','run_id','f1-PG17SyntheticReuse',
+   'server_sha','01b135471e1e6ee7ee31439ffc248c8b8519260c','ui_sha','01b135471e1e6ee7ee31439ffc248c8b8519260c','expires_at',w_started+interval '1 hour',
+   'etablissement_id',w_e,'soignant_id',w_s,'mission_id',w_m,'facture_honoraire_id',w_h,'facture_commission_id',w_c,
+   'platform_account_id','acct_1T9pt0EVhQ7cb53W','customer_id',p#>>'{actorProvenance,customerId}',
+   'destination_id',p#>>'{actorProvenance,destinationId}','soignant_cents',8000,'commission_cents',1440,'total_cents',9440));
+ FOREACH w_key IN ARRAY ARRAY['encryptedEnvelopeSha256','preparedReceiptSha256','documentsReceiptSha256','preparationSqlSha256'] LOOP
+  j:=jsonb_set(j,ARRAY['fixture',w_key],to_jsonb(encode(extensions.digest(convert_to(
+   jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',w_key,
+    'preparationReceipt',current_setting('jolene.connect_reuse_receipt')::jsonb,
+    'pdfDeclaration',w_pdf_declaration,'xmlDeclaration',w_xml_declaration)::text,'UTF8'),'sha256'),'hex')));
+ END LOOP;
+ FOREACH w_key IN ARRAY ARRAY['candidateSourceManifestSha256','closedInstallationReceiptSha256','edgeDeploymentReceiptSha256',
+  'exactBuildReceiptSha256','servedBuildReceiptSha256','customerAccountOnboardingReceiptSha256','providerHistoryBalanceReceiptSha256',
+  'pg17ReceiptSha256','operatorPreflightReceiptSha256'] LOOP
+  j:=jsonb_set(j,ARRAY['reviewedEvidence',w_key],to_jsonb(encode(extensions.digest(convert_to(
+   jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','notExternalEvidence',true,'field',w_key,'syntheticInput',p)::text,'UTF8'),'sha256'),'hex')));
+ END LOOP;
+ PERFORM set_config('jolene.capacity_reuse_synthetic_manifest',j::text,true);
+END $synthetic_documents$;
+DO $capacity_witness$
+DECLARE
+ j jsonb:=current_setting('jolene.capacity_reuse_synthetic_manifest')::jsonb;
+ s uuid:=(j#>>'{actorProvenance,soignantId}')::uuid;
+ e uuid:=(j#>>'{actorProvenance,etablissementId}')::uuid;
+ a uuid:=(j#>>'{fixture,adminId}')::uuid;
+ team uuid:=(j#>>'{fixture,adminTeamId}')::uuid;
+ hc uuid:=(j#>>'{historicalN,capacityId}')::uuid;
+ ho uuid:=(j#>>'{historicalN,operationId}')::uuid;
+ hm uuid:=(j#>>'{historicalN,missionId}')::uuid;
+ hh uuid:=(j#>>'{historicalN,honorairesId}')::uuid;
+ hf uuid:=(j#>>'{historicalN,commissionId}')::uuid;
+ ht uuid:=(j#>>'{historicalN,traceId}')::uuid;
+ ha uuid:=(j#>>'{historicalN,adminId}')::uuid;
+ hteam uuid:=(j#>>'{historicalN,adminTeamId}')::uuid;
+ w_m uuid:=(j#>>'{capacity,mission_id}')::uuid;
+ w_h uuid:=(j#>>'{capacity,facture_honoraire_id}')::uuid;
+ w_c uuid:=(j#>>'{capacity,facture_commission_id}')::uuid;
+ w_cap uuid:=(j#>>'{capacity,id}')::uuid;
+ w_op uuid:='77000000-0000-4000-8000-000000000003';
+ w_trace uuid:='77000000-0000-4000-8000-000000000004';
+ w_litige uuid:='77000000-0000-4000-8000-000000000005';
+ w_third uuid:='77000000-0000-4000-8000-000000000006';
+ w_allocation_template constant text:=$exact_allocation$DO $reviewed_reuse_allocation$
+DECLARE
+  j constant jsonb := {{ALLOCATION_JSON_LITERAL}}::jsonb;
+  manifest_sha constant text := '{{SHA256_EXACT_MANIFEST_BYTES}}';
+  d constant text := '{{FINAL_D_SHA40}}';
+  s uuid:=(j#>>'{actorProvenance,soignantId}')::uuid;
+  e uuid:=(j#>>'{actorProvenance,etablissementId}')::uuid;
+  a uuid:=(j#>>'{fixture,adminId}')::uuid;
+  team uuid:=(j#>>'{fixture,adminTeamId}')::uuid;
+  hc uuid:=(j#>>'{historicalN,capacityId}')::uuid;
+  ho uuid:=(j#>>'{historicalN,operationId}')::uuid;
+  hm uuid:=(j#>>'{historicalN,missionId}')::uuid;
+  hh uuid:=(j#>>'{historicalN,honorairesId}')::uuid;
+  hf uuid:=(j#>>'{historicalN,commissionId}')::uuid;
+  ht uuid:=(j#>>'{historicalN,traceId}')::uuid;
+  ha uuid:=(j#>>'{historicalN,adminId}')::uuid;
+  hteam uuid:=(j#>>'{historicalN,adminTeamId}')::uuid;
+  cap_id uuid:=(j#>>'{capacity,id}')::uuid;
+  new_capacity private.stripe_connect_test_capacities;
+  started timestamptz:=(j->>'windowStartsAt')::timestamptz;
+  catalogue jsonb;
+  before_n jsonb;
+  after_n jsonb;
+  role_name text;
+  evidence_key text;
+  n integer;
+BEGIN
+  IF current_user<>'postgres' OR session_user NOT IN('postgres','supabase_admin')
+    OR current_setting('server_version_num')::integer/10000<>17 OR auth.uid() IS NOT NULL
+    OR j->'schemaVersion' IS DISTINCT FROM '2'::jsonb OR j->'ready' IS DISTINCT FROM 'true'::jsonb
+    OR j->>'purpose' IS DISTINCT FROM 'CONNECT_STAGING_TEST_REUSE_CLOSED_N_V1'
+    OR d !~ '^[a-f0-9]{40}$' OR manifest_sha !~ '^[a-f0-9]{64}$'
+    OR cap_id IS NULL OR hc IS NULL OR cap_id=hc
+    OR j#>>'{capacity,server_sha}' IS DISTINCT FROM d OR j#>>'{capacity,ui_sha}' IS DISTINCT FROM d
+  THEN RAISE EXCEPTION 'OPERATOR_CONTEXT_REFUSED'; END IF;
+  -- Ces champs fixes ne viennent jamais du navigateur ou des documents métier.
+  new_capacity:=jsonb_populate_record(NULL::private.stripe_connect_test_capacities,
+    (j->'capacity') || jsonb_build_object('source_manifest_sha256',manifest_sha,
+      'enabled',false,'installed_at',clock_timestamp(),'livemode',false,
+      'max_checkouts',1,'max_refunds',1,'transfers_allowed',false,
+      'operation_id',NULL,'checkout_reserved_at',NULL,'refund_reserved_at',NULL,
+      'claim_reserved_at',NULL,'revoked_at',NULL));
+  IF new_capacity.etablissement_id IS DISTINCT FROM e OR new_capacity.soignant_id IS DISTINCT FROM s
+    OR new_capacity.customer_id IS DISTINCT FROM j#>>'{actorProvenance,customerId}'
+    OR new_capacity.destination_id IS DISTINCT FROM j#>>'{actorProvenance,destinationId}'
+    OR new_capacity.protocol IS DISTINCT FROM 'CONNECT_STAGING_TEST_V1' OR new_capacity.project_ref IS DISTINCT FROM 'mejpriaetwgtcstbgfid'
+    OR new_capacity.platform_account_id IS DISTINCT FROM 'acct_1T9pt0EVhQ7cb53W'
+    OR new_capacity.destination_id IN('acct_1T9pt0EVhQ7cb53W','acct_1UKlZCEVhQI2aaZg')
+    OR (new_capacity.soignant_cents,new_capacity.commission_cents,new_capacity.total_cents) IS DISTINCT FROM (8000::bigint,1440::bigint,9440::bigint)
+    OR started IS NULL OR new_capacity.expires_at IS NULL OR new_capacity.expires_at<>started+interval '1 hour'
+    OR clock_timestamp()<started OR new_capacity.expires_at-clock_timestamp()>interval '1 hour'
+    OR to_timestamp(floor(extract(epoch FROM new_capacity.expires_at)))-clock_timestamp()<interval '31 minutes'
+    OR COALESCE(new_capacity.run_id,'') !~ '^f1-[A-Za-z0-9-]{1,80}$'
+    OR COALESCE(j#>>'{fixture,sourceSha}','') !~ '^[a-f0-9]{40}$'
+    OR COALESCE(j#>>'{fixture,runId}','') !~ '^connect-test-[a-z0-9-]{8,64}$'
+    OR j#>>'{fixture,ownerMarker}' IS DISTINCT FROM (j#>>'{fixture,runId}')||':'||(j#>>'{fixture,sourceSha}')
+    OR COALESCE(j#>>'{actorProvenance,sourceSha}','') !~ '^[a-f0-9]{40}$'
+    OR COALESCE(j#>>'{actorProvenance,runId}','') !~ '^connect-test-[a-z0-9-]{8,64}$'
+    OR j#>>'{actorProvenance,ownerMarker}' IS DISTINCT FROM (j#>>'{actorProvenance,runId}')||':'||(j#>>'{actorProvenance,sourceSha}')
+    OR j#>>'{fixture,runId}' IS NOT DISTINCT FROM j#>>'{actorProvenance,runId}'
+    OR COALESCE(j#>>'{actorProvenance,manifestSha256}','') !~ '^[a-f0-9]{64}$'
+    OR COALESCE(j#>>'{historicalN,proofSha256}','') !~ '^[a-f0-9]{64}$'
+    OR COALESCE(j#>>'{historicalN,protectedSnapshotSha256}','') !~ '^[a-f0-9]{64}$'
+    OR (SELECT count(DISTINCT id) FROM unnest(ARRAY[s,e,a,team,hc,ho,hm,hh,hf,ht,ha,hteam,new_capacity.id,new_capacity.mission_id,new_capacity.facture_honoraire_id,new_capacity.facture_commission_id]) id)<>16
+  THEN RAISE EXCEPTION 'OPERATOR_IDENTITY_OR_WINDOW_REFUSED'; END IF;
+  FOREACH evidence_key IN ARRAY ARRAY['candidateSourceManifestSha256','closedInstallationReceiptSha256',
+    'edgeDeploymentReceiptSha256','exactBuildReceiptSha256','servedBuildReceiptSha256',
+    'customerAccountOnboardingReceiptSha256','providerHistoryBalanceReceiptSha256','pg17ReceiptSha256','operatorPreflightReceiptSha256'] LOOP
+    IF COALESCE(j#>>ARRAY['reviewedEvidence',evidence_key],'') !~ '^[a-f0-9]{64}$'
+    THEN RAISE EXCEPTION 'OPERATOR_EVIDENCE_REFUSED'; END IF;
+  END LOOP;
+  FOREACH evidence_key IN ARRAY ARRAY['encryptedEnvelopeSha256','preparedReceiptSha256','documentsReceiptSha256','preparationSqlSha256'] LOOP
+    IF COALESCE(j#>>ARRAY['fixture',evidence_key],'') !~ '^[a-f0-9]{64}$'
+    THEN RAISE EXCEPTION 'OPERATOR_EVIDENCE_REFUSED'; END IF;
+  END LOOP;
+  IF COALESCE(j#>>'{reviewedEvidence,independentReviewPath}','')=''
+    OR j#>>'{reviewedEvidence,providerObservedAt}' IS NULL
+    OR (j#>>'{reviewedEvidence,providerObservedAt}')::timestamptz>clock_timestamp()
+    OR (j#>>'{reviewedEvidence,providerObservedAt}')::timestamptz<clock_timestamp()-interval '60 seconds'
+  THEN RAISE EXCEPTION 'OPERATOR_FRESH_PROVIDER_EVIDENCE_REQUIRED'; END IF;
+  LOCK TABLE private.stripe_connect_test_capacities IN SHARE ROW EXCLUSIVE MODE;
+  LOCK TABLE private.stripe_connect_release_gate IN SHARE MODE;
+  LOCK TABLE private.stripe_connect_avant_transfert IN SHARE MODE;
+  IF (SELECT count(*) FROM private.stripe_connect_test_capacities)<>1
+    OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
+    OR EXISTS(SELECT 1 FROM private.stripe_connect_test_capacities WHERE id=new_capacity.id OR run_id=new_capacity.run_id)
+    OR (SELECT count(*) FROM private.stripe_connect_release_gate)<>1
+    OR NOT EXISTS(SELECT 1 FROM private.stripe_connect_release_gate WHERE protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE)
+    OR (SELECT count(*)=1 AND bool_and(
+ h.enabled IS FALSE AND h.revoked_at IS NOT NULL AND h.revoked_at<=clock_timestamp()
+ AND h.protocol='CONNECT_STAGING_TEST_V1' AND h.project_ref='mejpriaetwgtcstbgfid'
+ AND h.platform_account_id='acct_1T9pt0EVhQ7cb53W' AND h.livemode IS FALSE
+ AND h.transfers_allowed IS FALSE AND h.max_checkouts=1 AND h.max_refunds=1
+ AND h.checkout_reserved_at IS NOT NULL AND h.refund_reserved_at IS NOT NULL AND h.claim_reserved_at IS NOT NULL
+ AND h.soignant_id=s AND h.etablissement_id=e AND h.mission_id=hm
+ AND h.facture_honoraire_id=hh AND h.facture_commission_id=hf
+ AND h.customer_id=j#>>'{actorProvenance,customerId}' AND h.destination_id=j#>>'{actorProvenance,destinationId}'
+ AND o.id=ho AND o.orientation='REFUND' AND o.refund_status='SUCCEEDED' AND o.livemode IS FALSE
+ AND o.refund_id=j#>>'{historicalN,refundId}' AND o.session_id=j#>>'{historicalN,sessionId}'
+ AND o.payment_intent_id=j#>>'{historicalN,paymentIntentId}' AND o.charge_id=j#>>'{historicalN,chargeId}'
+ AND o.litige_id=(j#>>'{historicalN,litigeId}')::uuid
+ AND o.succeeded_at IS NOT NULL AND o.review_code IS NULL AND o.owner_token IS NULL AND o.lease_until IS NULL
+ AND t.id=ht AND t.statut='REMBOURSE' AND t.stripe_transfer_id IS NULL
+ AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id=o.payment_intent_id AND t.stripe_charge_id=o.charge_id
+ AND t.mission_id=hm AND t.facture_honoraire_id=hh AND t.facture_id=hf AND t.soignant_id=s AND t.etablissement_id=e
+ AND old_admin.user_id=ha AND old_admin.actif IS FALSE)
+ FROM private.stripe_connect_test_capacities h
+ JOIN private.stripe_connect_avant_transfert o ON o.id=h.operation_id
+ JOIN public.stripe_transfers t ON t.id=o.trace_id
+ JOIN public.equipe_admin old_admin ON old_admin.id=hteam WHERE h.id=hc) IS NOT TRUE
+  THEN RAISE EXCEPTION 'OPERATOR_EXACT_CLOSED_N_REQUIRED'; END IF;
+  IF private.fn_connect_test_operation_connue(ho) IS NOT TRUE THEN RAISE EXCEPTION 'OPERATOR_EXACT_CLOSED_N_REQUIRED'; END IF;
+  before_n:=-- Expression uniquement ; aliases PL/pgSQL j,s,e,a,team et hc/ho/hm/hh/hf/ht/ha/hteam.
+-- Valeurs sensibles Auth exclues : ni password/hash, ni recovery token, ni JWT.
+-- A/T neufs sont exclus ; toute autre équipe existante est conservée.
+jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+);
+  IF encode(extensions.digest(convert_to(before_n::text,'UTF8'),'sha256'),'hex') IS DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}'
+  THEN RAISE EXCEPTION 'OPERATOR_HISTORICAL_PIN_CHANGED'; END IF;
+  SELECT c0.catalogue INTO catalogue FROM (SELECT jsonb_build_object(
+    'routines', (SELECT md5(string_agg(p.oid::regprocedure::text||':'||md5(pg_get_functiondef(p.oid))||':'||coalesce(p.proacl::text,''),E'\n' ORDER BY p.oid::regprocedure::text))
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','private') AND p.prokind IN ('f','p')),
+    'triggers', (SELECT md5(string_agg(t.tgrelid::regclass::text||':'||pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,E'\n' ORDER BY t.tgrelid::regclass::text,t.tgname))
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE NOT t.tgisinternal AND n.nspname IN ('public','private','auth','storage')),
+    'columns', (SELECT md5(string_agg(n.nspname::text||'.'||c.relname::text||'.'||a.attname::text||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),''),E'\n' ORDER BY n.nspname,c.relname,a.attnum))
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+      WHERE a.attnum>0 AND NOT a.attisdropped AND n.nspname IN ('public','private','auth','storage')),
+    'commissionHelper',md5(pg_get_functiondef('public.fn_preparer_commission_remplacement_honoraires(uuid)'::regprocedure)),
+    'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
+    'activeCrons',(SELECT count(*)::int FROM cron.job WHERE active),
+    'runningCrons',(SELECT count(*)::int FROM cron.job_run_details WHERE end_time IS NULL AND status IN ('starting','running','connecting','sending')),
+    'generationUrlAbsent',NOT EXISTS(SELECT 1 FROM public.parametres_litiges WHERE cle='generate_invoice_url' AND coalesce(length(valeur),0)>0),
+    'supportStagingExact',coalesce((SELECT nullif(btrim(decrypted_secret),'')='https://mejpriaetwgtcstbgfid.supabase.co' FROM vault.decrypted_secrets WHERE name='supabase_url' LIMIT 1),false)
+  ) AS catalogue) c0;
+  IF catalogue IS DISTINCT FROM j->'catalogue' OR NOT (NOT EXISTS(SELECT 1 FROM net.http_request_queue)
+ AND NOT EXISTS(SELECT 1 FROM cron.job WHERE active)
+ AND NOT EXISTS(SELECT 1 FROM cron.job_run_details WHERE end_time IS NULL AND status IN('starting','running','connecting','sending'))
+ AND NOT EXISTS(SELECT 1 FROM public.escrow_release_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+ AND NOT EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+ AND NOT EXISTS(SELECT 1 FROM public.stripe_webhook_events WHERE traitement_commence_le IS NOT NULL AND traite_le IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(s,e,a)))
+    OR catalogue->'generationUrlAbsent' IS DISTINCT FROM 'true'::jsonb
+    OR catalogue->'supportStagingExact' IS DISTINCT FROM 'true'::jsonb
+  THEN RAISE EXCEPTION 'OPERATOR_CATALOGUE_OR_QUIESCENCE_REFUSED'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='private.stripe_connect_test_capacities'::regclass
+      AND relowner='postgres'::regrole AND relrowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='private.stripe_connect_test_capacities'::regclass)
+    OR EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='private.stripe_connect_test_capacities'::regclass AND NOT tgisinternal)
+    OR EXISTS(SELECT 1 FROM pg_proc WHERE oid IN(
+      'private.fn_connect_test_scope(uuid,boolean)'::regprocedure,
+      'private.fn_connect_test_cohorte(uuid,uuid)'::regprocedure)
+      AND (proowner<>'postgres'::regrole OR NOT prosecdef))
+  THEN RAISE EXCEPTION 'OPERATOR_CATALOGUE_REFUSED'; END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF has_table_privilege(role_name,'private.stripe_connect_test_capacities','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_function_privilege(role_name,'private.fn_connect_test_scope(uuid,boolean)','EXECUTE')
+      OR has_function_privilege(role_name,'private.fn_connect_test_cohorte(uuid,uuid)','EXECUTE')
+    THEN RAISE EXCEPTION 'OPERATOR_CAPACITY_ACL_REFUSED'; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM auth.users u WHERE u.id IN(s,e) AND u.deleted_at IS NULL AND u.email_confirmed_at IS NOT NULL
+    AND (u.banned_until IS NULL OR u.banned_until<=clock_timestamp())
+    AND u.raw_app_meta_data->'est_compte_test'='true'::jsonb
+    AND u.raw_app_meta_data->>'jolene_connect_fixture_owner'=j#>>'{actorProvenance,ownerMarker}'
+    AND u.email='connect-test-'||u.id::text||'@example.invalid'
+    AND ((u.id=s AND u.raw_app_meta_data->>'role'='SOIGNANT') OR (u.id=e AND u.raw_app_meta_data->>'role'='ADMIN_ETABLISSEMENT'
+      AND u.raw_app_meta_data->>'etablissement_id'=e::text)))<>2
+    OR NOT EXISTS(SELECT 1 FROM public.soignants WHERE id=s AND est_compte_test IS TRUE AND statut_compte::text='ACTIF'
+      AND supprime_le IS NULL AND type_exercice::text='LIBERAL' AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE'
+      AND stripe_account_id=new_capacity.destination_id AND mandat_facturation_signe IS TRUE AND mandat_facturation_version='1.4')
+    OR NOT EXISTS(SELECT 1 FROM public.etablissements WHERE id=e AND est_compte_test IS TRUE AND supprime_le IS NULL
+      AND source_acquisition='RECETTE_CONNECT_TEST_SYNTHETIQUE' AND stripe_customer_id=new_capacity.customer_id)
+    OR (SELECT count(*) FROM public.etablissements WHERE stripe_customer_id=new_capacity.customer_id)<>1
+    OR (SELECT count(*) FROM public.soignants WHERE stripe_account_id=new_capacity.destination_id)<>1
+    OR (SELECT count(*) FROM public.stripe_connect_onboarding WHERE soignant_id=s)<>1
+    OR NOT EXISTS(SELECT 1 FROM public.stripe_connect_onboarding WHERE soignant_id=s AND stripe_account_id=new_capacity.destination_id
+      AND statut='COMPLET' AND onboarding_complete AND charges_enabled AND payouts_enabled AND details_submitted)
+    OR NOT EXISTS(SELECT 1 FROM public.mandats_facturation_signatures WHERE id=(j#>>'{actorProvenance,mandatId}')::uuid
+      AND soignant_id=s AND version='1.4' AND revoked_at IS NULL)
+    OR (SELECT count(*) FROM public.preferences_notifications WHERE utilisateur_id IN(s,e)
+      AND NOT canal_email AND NOT canal_sms AND NOT canal_push AND NOT canal_in_app)<>2
+    OR NOT EXISTS(SELECT 1 FROM auth.users WHERE id=a AND raw_app_meta_data->>'role'='ADMIN_PLATEFORME'
+      AND raw_app_meta_data->'est_compte_test'='true'::jsonb AND raw_app_meta_data->'is_test_playwright'='true'::jsonb
+      AND raw_app_meta_data->>'jolene_connect_fixture_owner'=j#>>'{fixture,ownerMarker}'
+      AND email='connect-test-'||a::text||'@example.invalid')
+    OR NOT EXISTS(SELECT 1 FROM public.equipe_admin WHERE id=team AND user_id=a AND actif IS FALSE)
+    OR EXISTS(SELECT 1 FROM auth.sessions WHERE user_id=a)
+    OR NOT EXISTS(SELECT 1 FROM public.missions WHERE id=new_capacity.mission_id
+      AND intitule='RECETTE CONNECT TEST SYNTHETIQUE '||(j#>>'{fixture,runId}') AND etablissement_id=e AND soignant_assigne_id=s
+      AND statut_validation_tva='CONFIRMEE' AND nature_tva_declaree_par=a AND revue_tva_resolue_par=a AND nature_tva_confirmee_par=s)
+  THEN RAISE EXCEPTION 'OPERATOR_SEPARATE_PROVENANCES_REFUSED'; END IF;
+  IF EXISTS(SELECT 1 FROM public.missions WHERE (soignant_assigne_id=s OR etablissement_id=e) AND id NOT IN(hm,new_capacity.mission_id))
+    OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE (soignant_id=s OR etablissement_id=e) AND id NOT IN(hh,new_capacity.facture_honoraire_id))
+    OR EXISTS(SELECT 1 FROM public.factures WHERE etablissement_id=e AND id NOT IN(hf,new_capacity.facture_commission_id))
+  THEN RAISE EXCEPTION 'OPERATOR_UNRECOGNIZED_ACTOR_HISTORY'; END IF;
+  -- Absence d'adoption : la fixture produit des pièces, jamais un paiement.
+  IF EXISTS(SELECT 1 FROM public.stripe_transfers WHERE mission_id=new_capacity.mission_id
+      OR facture_honoraire_id=new_capacity.facture_honoraire_id OR facture_id=new_capacity.facture_commission_id)
+    OR EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key IN('FACTURE:'||new_capacity.facture_commission_id::text,'FACTURE:'||new_capacity.facture_honoraire_id::text,'MISSION:'||new_capacity.mission_id::text))
+    OR EXISTS(SELECT 1 FROM public.paiements_soignant WHERE mission_id=new_capacity.mission_id)
+    OR EXISTS(SELECT 1 FROM public.paiements_mission WHERE mission_id=new_capacity.mission_id)
+    OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=new_capacity.mission_id)
+    OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=new_capacity.mission_id)
+    OR NOT EXISTS(SELECT 1 FROM public.factures_honoraires h JOIN public.factures f ON f.id=new_capacity.facture_commission_id
+      JOIN public.missions m ON m.id=new_capacity.mission_id
+      WHERE h.id=new_capacity.facture_honoraire_id AND h.statut='EMISE' AND f.statut='EMISE'
+        AND h.stripe_payment_intent_id IS NULL AND f.stripe_payment_intent_id IS NULL
+        AND h.date_paiement IS NULL AND f.date_paiement IS NULL AND f.stripe_invoice_id IS NULL
+        AND f.stripe_hosted_url IS NULL AND f.chorus_pro_id IS NULL AND f.virement_confirme_le IS NULL
+        AND h.type_document='FACTURE' AND h.nature_correction='ORIGINALE' AND f.type_document='FACTURE'
+        AND h.pdf_s3_key IS NOT NULL AND h.facturx_xml_url IS NOT NULL
+        AND EXISTS(SELECT 1 FROM public.factures_honoraires_documents docs WHERE docs.facture_honoraire_id=h.id
+          AND docs.pdf_s3_key=h.pdf_s3_key AND docs.facturx_xml_url=h.facturx_xml_url
+          AND docs.pdf_sha256 ~ '^[a-f0-9]{64}$' AND docs.xml_sha256 ~ '^[a-f0-9]{64}$')
+        AND m.statut IN('EN_COURS','TERMINEE')
+        AND (m.statut='TERMINEE' OR (h.est_facture_finale_mission IS FALSE AND h.periode_fin<current_date)))
+  THEN RAISE EXCEPTION 'OPERATOR_HISTORY_OR_PAYABLE_REFUSED'; END IF;
+  INSERT INTO private.stripe_connect_test_capacities SELECT (new_capacity).*;
+  PERFORM private.fn_connect_test_scope(new_capacity.id,false);
+  UPDATE private.stripe_connect_test_capacities SET enabled=true WHERE id=new_capacity.id AND enabled IS FALSE;
+  GET DIAGNOSTICS n=ROW_COUNT;
+  IF n<>1 THEN RAISE EXCEPTION 'OPERATOR_ACTIVATION_REFUSED'; END IF;
+  PERFORM private.fn_connect_test_scope(new_capacity.id,true);
+  after_n:=-- Expression uniquement ; aliases PL/pgSQL j,s,e,a,team et hc/ho/hm/hh/hf/ht/ha/hteam.
+-- Valeurs sensibles Auth exclues : ni password/hash, ni recovery token, ni JWT.
+-- A/T neufs sont exclus ; toute autre équipe existante est conservée.
+jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+);
+  IF after_n IS DISTINCT FROM before_n OR (SELECT count(*) FROM private.stripe_connect_test_capacities)<>2
+    OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
+    OR (SELECT count(*) FROM private.stripe_connect_test_capacities WHERE enabled)<>1
+  THEN RAISE EXCEPTION 'OPERATOR_ALLOCATION_POSTCONDITION_REFUSED'; END IF;
+  PERFORM set_config('jolene.capacity_reuse_receipt',jsonb_build_object('capacityId',new_capacity.id,'newCapacityEnabled',true,
+    'historicalNPreserved',true,'capacityCount',2,'operationCount',1,'manifestSha256',manifest_sha,
+    'providerInvoked',false,'transactionCommitted',false)::text,true);
+END $reviewed_reuse_allocation$;$exact_allocation$;
+ w_readback_template constant text:=$exact_readback$DO $reviewed_reuse_readback$
+DECLARE
+  j constant jsonb := {{ALLOCATION_JSON_LITERAL}}::jsonb;
+  manifest_sha constant text := '{{SHA256_EXACT_MANIFEST_BYTES}}';
+  d constant text := '{{FINAL_D_SHA40}}';
+  s uuid:=(j#>>'{actorProvenance,soignantId}')::uuid;
+  e uuid:=(j#>>'{actorProvenance,etablissementId}')::uuid;
+  a uuid:=(j#>>'{fixture,adminId}')::uuid;
+  team uuid:=(j#>>'{fixture,adminTeamId}')::uuid;
+  hc uuid:=(j#>>'{historicalN,capacityId}')::uuid;
+  ho uuid:=(j#>>'{historicalN,operationId}')::uuid;
+  hm uuid:=(j#>>'{historicalN,missionId}')::uuid;
+  hh uuid:=(j#>>'{historicalN,honorairesId}')::uuid;
+  hf uuid:=(j#>>'{historicalN,commissionId}')::uuid;
+  ht uuid:=(j#>>'{historicalN,traceId}')::uuid;
+  ha uuid:=(j#>>'{historicalN,adminId}')::uuid;
+  hteam uuid:=(j#>>'{historicalN,adminTeamId}')::uuid;
+  cap_id uuid:=(j#>>'{capacity,id}')::uuid;
+  c private.stripe_connect_test_capacities;
+  new_operation private.stripe_connect_avant_transfert;
+  n_hash text;
+  capacity_matches boolean;
+  history_closed boolean;
+  closed_terminal boolean:=false;
+  known_sets boolean;
+  gate_closed boolean;
+  queues_quiet boolean;
+  capacity_closed boolean;
+BEGIN
+  IF current_user<>'postgres' OR session_user NOT IN('postgres','supabase_admin')
+    OR current_setting('server_version_num')::integer/10000<>17 OR auth.uid() IS NOT NULL
+    OR j->'schemaVersion' IS DISTINCT FROM '2'::jsonb OR j->'ready' IS DISTINCT FROM 'true'::jsonb
+    OR j->>'purpose' IS DISTINCT FROM 'CONNECT_STAGING_TEST_REUSE_CLOSED_N_V1'
+    OR d !~ '^[a-f0-9]{40}$' OR manifest_sha !~ '^[a-f0-9]{64}$'
+    OR cap_id IS NULL OR hc IS NULL OR cap_id=hc
+    OR j#>>'{capacity,server_sha}' IS DISTINCT FROM d OR j#>>'{capacity,ui_sha}' IS DISTINCT FROM d
+  THEN RAISE EXCEPTION 'OPERATOR_CONTEXT_REFUSED'; END IF;
+  n_hash:=encode(extensions.digest(convert_to((-- Expression uniquement ; aliases PL/pgSQL j,s,e,a,team et hc/ho/hm/hh/hf/ht/ha/hteam.
+-- Valeurs sensibles Auth exclues : ni password/hash, ni recovery token, ni JWT.
+-- A/T neufs sont exclus ; toute autre équipe existante est conservée.
+jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+))::text,'UTF8'),'sha256'),'hex');
+  history_closed:=(SELECT count(*)=1 AND bool_and(
+ h.enabled IS FALSE AND h.revoked_at IS NOT NULL AND h.revoked_at<=clock_timestamp()
+ AND h.protocol='CONNECT_STAGING_TEST_V1' AND h.project_ref='mejpriaetwgtcstbgfid'
+ AND h.platform_account_id='acct_1T9pt0EVhQ7cb53W' AND h.livemode IS FALSE
+ AND h.transfers_allowed IS FALSE AND h.max_checkouts=1 AND h.max_refunds=1
+ AND h.checkout_reserved_at IS NOT NULL AND h.refund_reserved_at IS NOT NULL AND h.claim_reserved_at IS NOT NULL
+ AND h.soignant_id=s AND h.etablissement_id=e AND h.mission_id=hm
+ AND h.facture_honoraire_id=hh AND h.facture_commission_id=hf
+ AND h.customer_id=j#>>'{actorProvenance,customerId}' AND h.destination_id=j#>>'{actorProvenance,destinationId}'
+ AND o.id=ho AND o.orientation='REFUND' AND o.refund_status='SUCCEEDED' AND o.livemode IS FALSE
+ AND o.refund_id=j#>>'{historicalN,refundId}' AND o.session_id=j#>>'{historicalN,sessionId}'
+ AND o.payment_intent_id=j#>>'{historicalN,paymentIntentId}' AND o.charge_id=j#>>'{historicalN,chargeId}'
+ AND o.litige_id=(j#>>'{historicalN,litigeId}')::uuid
+ AND o.succeeded_at IS NOT NULL AND o.review_code IS NULL AND o.owner_token IS NULL AND o.lease_until IS NULL
+ AND t.id=ht AND t.statut='REMBOURSE' AND t.stripe_transfer_id IS NULL
+ AND t.stripe_checkout_session_id=o.session_id AND t.stripe_payment_intent_id=o.payment_intent_id AND t.stripe_charge_id=o.charge_id
+ AND t.mission_id=hm AND t.facture_honoraire_id=hh AND t.facture_id=hf AND t.soignant_id=s AND t.etablissement_id=e
+ AND old_admin.user_id=ha AND old_admin.actif IS FALSE)
+ FROM private.stripe_connect_test_capacities h
+ JOIN private.stripe_connect_avant_transfert o ON o.id=h.operation_id
+ JOIN public.stripe_transfers t ON t.id=o.trace_id
+ JOIN public.equipe_admin old_admin ON old_admin.id=hteam WHERE h.id=hc);
+  SELECT * INTO c FROM private.stripe_connect_test_capacities WHERE id=cap_id;
+  SELECT * INTO new_operation FROM private.stripe_connect_avant_transfert WHERE id=c.operation_id;
+  capacity_matches:=c.id IS NOT NULL AND c.server_sha=d AND c.ui_sha=d AND c.source_manifest_sha256=manifest_sha
+    AND (to_jsonb(c)-ARRAY['source_manifest_sha256','enabled','installed_at','livemode','max_checkouts','max_refunds',
+      'transfers_allowed','operation_id','checkout_reserved_at','refund_reserved_at','claim_reserved_at','revoked_at'])
+      =(to_jsonb(jsonb_populate_record(NULL::private.stripe_connect_test_capacities,j->'capacity'))
+        -ARRAY['source_manifest_sha256','enabled','installed_at','livemode','max_checkouts','max_refunds',
+          'transfers_allowed','operation_id','checkout_reserved_at','refund_reserved_at','claim_reserved_at','revoked_at'])
+    AND c.livemode IS FALSE AND c.max_checkouts=1 AND c.max_refunds=1 AND c.transfers_allowed IS FALSE;
+  known_sets:=NOT EXISTS(SELECT 1 FROM private.stripe_connect_test_capacities WHERE id NOT IN(hc,cap_id))
+    AND NOT EXISTS(SELECT 1 FROM private.stripe_connect_avant_transfert x WHERE x.id<>ho AND (c.operation_id IS NULL OR x.id<>c.operation_id));
+  IF new_operation.id IS NOT NULL AND new_operation.id<>ho THEN
+    closed_terminal:=private.fn_connect_test_operation_connue(new_operation.id) AND new_operation.orientation='REFUND' AND new_operation.refund_status='SUCCEEDED'
+      AND new_operation.refund_id IS NOT NULL AND new_operation.succeeded_at IS NOT NULL AND new_operation.review_code IS NULL
+      AND new_operation.owner_token IS NULL AND new_operation.lease_until IS NULL AND new_operation.livemode IS FALSE
+      AND new_operation.mission_id=(j#>>'{capacity,mission_id}')::uuid
+      AND new_operation.facture_honoraire_id=(j#>>'{capacity,facture_honoraire_id}')::uuid
+      AND new_operation.facture_commission_id=(j#>>'{capacity,facture_commission_id}')::uuid
+      AND EXISTS(SELECT 1 FROM public.stripe_transfers t WHERE t.id=new_operation.trace_id AND t.statut='REMBOURSE'
+        AND t.stripe_transfer_id IS NULL AND t.stripe_checkout_session_id=new_operation.session_id
+        AND t.stripe_payment_intent_id=new_operation.payment_intent_id AND t.stripe_charge_id=new_operation.charge_id);
+  END IF;
+  SELECT count(*)=1 AND bool_and(protocol='CONNECT_PRETRANSFER_V1' AND enabled IS FALSE)
+    INTO gate_closed FROM private.stripe_connect_release_gate;
+  capacity_closed:=c.id IS NOT NULL AND c.enabled IS FALSE AND c.revoked_at IS NOT NULL AND c.revoked_at<=clock_timestamp();
+  queues_quiet:=NOT EXISTS(SELECT 1 FROM net.http_request_queue)
+ AND NOT EXISTS(SELECT 1 FROM cron.job WHERE active)
+ AND NOT EXISTS(SELECT 1 FROM cron.job_run_details WHERE end_time IS NULL AND status IN('starting','running','connecting','sending'))
+ AND NOT EXISTS(SELECT 1 FROM public.escrow_release_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+ AND NOT EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE statut IN('EN_ATTENTE','EN_COURS'))
+ AND NOT EXISTS(SELECT 1 FROM public.stripe_webhook_events WHERE traitement_commence_le IS NOT NULL AND traite_le IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(s,e,a));
+  PERFORM set_config('jolene.capacity_reuse_readback',jsonb_build_object(
+    'observedAt',clock_timestamp(),'readOnly',current_setting('transaction_read_only')='on',
+    'gateClosed',COALESCE(gate_closed,false),
+    'historicalNClosed',COALESCE(history_closed,false),'historicalNPinMatches',n_hash IS NOT DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}',
+    'historicalNObservedSha256',n_hash,'knownCapacityAndOperationSets',COALESCE(known_sets,false),
+    'capacityCount',(SELECT count(*) FROM private.stripe_connect_test_capacities),'operationCount',(SELECT count(*) FROM private.stripe_connect_avant_transfert),
+    'capacityMatchesManifest',COALESCE(capacity_matches,false),'capacity',to_jsonb(c),
+    'operation',CASE WHEN new_operation.id IS NULL THEN NULL ELSE to_jsonb(new_operation)-'attempt_key'-'owner_token' END,
+    'newRefundTerminalWithoutTransfer',COALESCE(closed_terminal,false),'sqlQueuesQuiescent',COALESCE(queues_quiet,false),
+    'newCapacityClosed',COALESCE(capacity_closed,false),
+    'sqlNormalClosureReady',COALESCE(gate_closed AND history_closed AND n_hash=j#>>'{historicalN,protectedSnapshotSha256}'
+      AND known_sets AND capacity_matches AND capacity_closed AND closed_terminal AND queues_quiet
+      AND (SELECT count(*) FROM private.stripe_connect_test_capacities)=2
+      AND (SELECT count(*) FROM private.stripe_connect_avant_transfert)=2,false),
+    'providerDrainProven',false)::text,true);
+END $reviewed_reuse_readback$;$exact_readback$;
+ w_revocation_template constant text:=$exact_revocation$DO $reviewed_reuse_revocation$
+DECLARE
+  j constant jsonb := {{ALLOCATION_JSON_LITERAL}}::jsonb;
+  manifest_sha constant text := '{{SHA256_EXACT_MANIFEST_BYTES}}';
+  d constant text := '{{FINAL_D_SHA40}}';
+  s uuid:=(j#>>'{actorProvenance,soignantId}')::uuid;
+  e uuid:=(j#>>'{actorProvenance,etablissementId}')::uuid;
+  a uuid:=(j#>>'{fixture,adminId}')::uuid;
+  team uuid:=(j#>>'{fixture,adminTeamId}')::uuid;
+  hc uuid:=(j#>>'{historicalN,capacityId}')::uuid;
+  ho uuid:=(j#>>'{historicalN,operationId}')::uuid;
+  hm uuid:=(j#>>'{historicalN,missionId}')::uuid;
+  hh uuid:=(j#>>'{historicalN,honorairesId}')::uuid;
+  hf uuid:=(j#>>'{historicalN,commissionId}')::uuid;
+  ht uuid:=(j#>>'{historicalN,traceId}')::uuid;
+  ha uuid:=(j#>>'{historicalN,adminId}')::uuid;
+  hteam uuid:=(j#>>'{historicalN,adminTeamId}')::uuid;
+  cap_id uuid:=(j#>>'{capacity,id}')::uuid;
+  before_n jsonb;
+  after_n jsonb;
+  before_cap private.stripe_connect_test_capacities;
+  after_cap private.stripe_connect_test_capacities;
+  n integer;
+BEGIN
+  IF current_user<>'postgres' OR session_user NOT IN('postgres','supabase_admin')
+    OR current_setting('server_version_num')::integer/10000<>17 OR auth.uid() IS NOT NULL
+    OR j->'schemaVersion' IS DISTINCT FROM '2'::jsonb OR j->'ready' IS DISTINCT FROM 'true'::jsonb
+    OR j->>'purpose' IS DISTINCT FROM 'CONNECT_STAGING_TEST_REUSE_CLOSED_N_V1'
+    OR d !~ '^[a-f0-9]{40}$' OR manifest_sha !~ '^[a-f0-9]{64}$'
+    OR cap_id IS NULL OR hc IS NULL OR cap_id=hc
+    OR j#>>'{capacity,server_sha}' IS DISTINCT FROM d OR j#>>'{capacity,ui_sha}' IS DISTINCT FROM d
+  THEN RAISE EXCEPTION 'OPERATOR_CONTEXT_REFUSED'; END IF;
+  SELECT * INTO STRICT before_cap FROM private.stripe_connect_test_capacities
+    WHERE id=cap_id AND id<>hc AND project_ref='mejpriaetwgtcstbgfid' AND protocol='CONNECT_STAGING_TEST_V1'
+      AND server_sha=d AND ui_sha=d AND source_manifest_sha256=manifest_sha
+      AND platform_account_id='acct_1T9pt0EVhQ7cb53W' AND livemode IS FALSE FOR UPDATE;
+  before_n:=-- Expression uniquement ; aliases PL/pgSQL j,s,e,a,team et hc/ho/hm/hh/hf/ht/ha/hteam.
+-- Valeurs sensibles Auth exclues : ni password/hash, ni recovery token, ni JWT.
+-- A/T neufs sont exclus ; toute autre équipe existante est conservée.
+jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+);
+  UPDATE private.stripe_connect_test_capacities SET enabled=false,revoked_at=COALESCE(revoked_at,clock_timestamp())
+    WHERE id=before_cap.id AND id<>hc;
+  GET DIAGNOSTICS n=ROW_COUNT;
+  IF n<>1 THEN RAISE EXCEPTION 'OPERATOR_REVOCATION_TARGET_REFUSED'; END IF;
+  SELECT * INTO STRICT after_cap FROM private.stripe_connect_test_capacities WHERE id=before_cap.id;
+  IF (to_jsonb(after_cap)-ARRAY['enabled','revoked_at']) IS DISTINCT FROM (to_jsonb(before_cap)-ARRAY['enabled','revoked_at'])
+    OR after_cap.enabled IS DISTINCT FROM FALSE OR after_cap.revoked_at IS NULL
+    OR (before_cap.revoked_at IS NOT NULL AND after_cap.revoked_at IS DISTINCT FROM before_cap.revoked_at)
+  THEN RAISE EXCEPTION 'OPERATOR_REVOCATION_POSTCONDITION_REFUSED'; END IF;
+  after_n:=-- Expression uniquement ; aliases PL/pgSQL j,s,e,a,team et hc/ho/hm/hh/hf/ht/ha/hteam.
+-- Valeurs sensibles Auth exclues : ni password/hash, ni recovery token, ni JWT.
+-- A/T neufs sont exclus ; toute autre équipe existante est conservée.
+jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+);
+  PERFORM set_config('jolene.capacity_reuse_revocation',jsonb_build_object('capacityId',after_cap.id,
+    'enabled',after_cap.enabled,'revokedAt',after_cap.revoked_at,'alreadyRevoked',before_cap.revoked_at IS NOT NULL,
+    'historicalNUnchangedDuringRead',after_n IS NOT DISTINCT FROM before_n,
+    'historicalNPinMatches',encode(extensions.digest(convert_to(after_n::text,'UTF8'),'sha256'),'hex') IS NOT DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}',
+    'providerDrainProven',false,'transactionCommitted',false)::text,true);
+END $reviewed_reuse_revocation$;$exact_revocation$;
+ w_manifest_sha text:=encode(extensions.digest(convert_to(j::text,'UTF8'),'sha256'),'hex');
+ w_input jsonb;
+ w_baseline jsonb;
+ w_acl text;
+ w_readback jsonb;
+ w_receipt jsonb;
+ w_revoked_at timestamptz;
+ w_expected text;
+ w_i integer;
+BEGIN
+ w_baseline:=jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+);
+ IF encode(extensions.digest(convert_to(w_baseline::text,'UTF8'),'sha256'),'hex') IS DISTINCT FROM j#>>'{historicalN,protectedSnapshotSha256}'
+ THEN RAISE EXCEPTION 'WITNESS_NEW_DOCUMENTS_CHANGED_N'; END IF;
+ SELECT relacl::text INTO STRICT w_acl FROM pg_class WHERE oid='private.stripe_connect_test_capacities'::regclass;
+ FOR w_i IN 0..5 LOOP
+  w_input:=j;
+  w_expected:=CASE WHEN w_i IN(1,2,3) THEN 'OPERATOR_EXACT_CLOSED_N_REQUIRED'
+   WHEN w_i=4 THEN 'OPERATOR_CAPACITY_ACL_REFUSED' WHEN w_i=5 THEN 'OPERATOR_IDENTITY_OR_WINDOW_REFUSED' END;
+  BEGIN
+   IF w_i=1 THEN UPDATE private.stripe_connect_test_capacities SET revoked_at=NULL WHERE id=hc;
+   ELSIF w_i=2 THEN
+    INSERT INTO private.stripe_connect_test_capacities(id,protocol,project_ref,run_id,server_sha,ui_sha,source_manifest_sha256,
+     expires_at,etablissement_id,soignant_id,mission_id,facture_honoraire_id,facture_commission_id,
+     platform_account_id,customer_id,destination_id,soignant_cents,commission_cents,total_cents)
+    VALUES(w_third,'CONNECT_STAGING_TEST_V1','mejpriaetwgtcstbgfid','f1-PG17SyntheticUnrecognized','01b135471e1e6ee7ee31439ffc248c8b8519260c','01b135471e1e6ee7ee31439ffc248c8b8519260c',
+     w_manifest_sha,(j#>>'{capacity,expires_at}')::timestamptz,e,s,w_m,w_h,w_c,'acct_1T9pt0EVhQ7cb53W',
+     j#>>'{actorProvenance,customerId}',j#>>'{actorProvenance,destinationId}',8000,1440,9440);
+   ELSIF w_i=3 THEN w_input:=jsonb_set(j,'{historicalN,refundId}','null'::jsonb);
+   ELSIF w_i=4 THEN GRANT SELECT ON private.stripe_connect_test_capacities TO authenticated;
+   ELSIF w_i=5 THEN w_input:=jsonb_set(jsonb_set(j,'{windowStartsAt}',to_jsonb((j->>'windowStartsAt')::timestamptz-interval '2 hours')),
+     '{capacity,expires_at}',to_jsonb((j#>>'{capacity,expires_at}')::timestamptz-interval '2 hours'));
+   END IF;
+   EXECUTE replace(replace(replace(w_allocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(w_input::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+   IF w_i<>0 THEN RAISE EXCEPTION 'WITNESS_CAPACITY_EXPECTED_REFUSAL_MISSING'; END IF;
+   w_receipt:=current_setting('jolene.capacity_reuse_receipt')::jsonb;
+   IF w_receipt->'newCapacityEnabled' IS DISTINCT FROM 'true'::jsonb
+    OR w_receipt->'historicalNPreserved' IS DISTINCT FROM 'true'::jsonb
+    OR w_receipt->>'manifestSha256' IS DISTINCT FROM w_manifest_sha
+   THEN RAISE EXCEPTION 'WITNESS_ALLOCATION_RECEIPT_REQUIRED'; END IF;
+   EXECUTE replace(replace(replace(w_readback_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(j::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+   w_readback:=current_setting('jolene.capacity_reuse_readback')::jsonb;
+   IF w_readback->'capacityCount' IS DISTINCT FROM '2'::jsonb OR w_readback->'operationCount' IS DISTINCT FROM '1'::jsonb
+    OR w_readback->'historicalNClosed' IS DISTINCT FROM 'true'::jsonb
+    OR w_readback->'historicalNPinMatches' IS DISTINCT FROM 'true'::jsonb
+    OR w_readback->'capacityMatchesManifest' IS DISTINCT FROM 'true'::jsonb
+    OR w_readback->'knownCapacityAndOperationSets' IS DISTINCT FROM 'true'::jsonb
+    OR w_readback->'sqlNormalClosureReady' IS DISTINCT FROM 'false'::jsonb
+   THEN RAISE EXCEPTION 'WITNESS_ALLOCATED_READBACK_REQUIRED'; END IF;
+   -- Terminal provider objects are DECLARED LOCAL FIXTURES, not checkout/refund execution.
+   INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token,stripe_checkout_session_id,stripe_payment_intent_id)
+   VALUES('FACTURE:'||w_c::text,'CONNECT_INVOICE','connect-invoice:'||w_h::text,'cs_test_PG17SyntheticReuse','pi_PG17SyntheticReuse');
+   INSERT INTO public.litiges(id,mission_id,soignant_id,etablissement_id,initie_par,motif,statut,gel_facture_scope,resolu_le,resolution)
+   VALUES(w_litige,w_m,s,e,'SYSTEME','PG17_SYNTHETIC_ONLY refund history','FERME','AUCUN',clock_timestamp(),
+    'PG17_SYNTHETIC_ONLY no provider observed');
+   INSERT INTO public.stripe_transfers(id,mission_id,facture_id,facture_honoraire_id,soignant_id,etablissement_id,
+    montant_total,montant_commission,montant_soignant,stripe_checkout_session_id,stripe_payment_intent_id,stripe_charge_id,statut)
+   VALUES(w_trace,w_m,w_c,w_h,s,e,94.4,14.4,80,'cs_test_PG17SyntheticReuse','pi_PG17SyntheticReuse','ch_PG17SyntheticReuse','REMBOURSE');
+   INSERT INTO private.stripe_connect_avant_transfert(id,attempt_key,mission_id,etablissement_id,soignant_id,
+    facture_honoraire_id,facture_commission_id,customer_id,destination_id,soignant_cents,commission_cents,total_cents,
+    session_id,trace_id,payment_intent_id,charge_id,livemode,orientation,litige_id,refund_id,refund_status,first_attempt_at,succeeded_at)
+   VALUES(w_op,'PG17_SYNTHETIC_ONLY_REUSE',w_m,e,s,w_h,w_c,j#>>'{actorProvenance,customerId}',j#>>'{actorProvenance,destinationId}',
+    8000,1440,9440,'cs_test_PG17SyntheticReuse',w_trace,'pi_PG17SyntheticReuse','ch_PG17SyntheticReuse',false,'REFUND',w_litige,
+    're_PG17SyntheticReuse','SUCCEEDED',clock_timestamp(),clock_timestamp());
+   UPDATE private.stripe_connect_test_capacities SET operation_id=w_op,checkout_reserved_at=clock_timestamp(),
+    refund_reserved_at=clock_timestamp(),claim_reserved_at=clock_timestamp() WHERE id=w_cap;
+   -- Emergency revocation must still close its exact target when N drifts. Roll this probe back.
+   BEGIN
+    UPDATE private.stripe_connect_test_capacities SET revoked_at=NULL WHERE id=hc;
+    EXECUTE replace(replace(replace(w_revocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(j::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+    w_receipt:=current_setting('jolene.capacity_reuse_revocation')::jsonb;
+    IF w_receipt->'historicalNPinMatches' IS DISTINCT FROM 'false'::jsonb
+     OR w_receipt->'historicalNUnchangedDuringRead' IS DISTINCT FROM 'true'::jsonb
+     OR w_receipt->'enabled' IS DISTINCT FROM 'false'::jsonb
+    THEN RAISE EXCEPTION 'WITNESS_DRIFT_REVOCATION_REQUIRED'; END IF;
+    RAISE EXCEPTION USING ERRCODE='ZX003',MESSAGE='WITNESS_DRIFT_PROBE_ROLLBACK';
+   EXCEPTION WHEN SQLSTATE 'ZX003' THEN NULL;
+   END;
+   IF NOT EXISTS(SELECT 1 FROM private.stripe_connect_test_capacities WHERE id=w_cap AND enabled AND revoked_at IS NULL)
+   THEN RAISE EXCEPTION 'WITNESS_DRIFT_PROBE_RESTORATION_REQUIRED'; END IF;
+   -- A malformed request aimed at N must never revoke/adopt N.
+   BEGIN
+    w_input:=jsonb_set(j,'{capacity,id}',to_jsonb(hc));
+    EXECUTE replace(replace(replace(w_revocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(w_input::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+    RAISE EXCEPTION 'WITNESS_REVOCATION_N_REFUSAL_MISSING';
+   EXCEPTION WHEN SQLSTATE 'P0001' THEN IF SQLERRM<>'OPERATOR_CONTEXT_REFUSED' THEN RAISE; END IF;
+   END;
+   EXECUTE replace(replace(replace(w_revocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(j::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+   w_receipt:=current_setting('jolene.capacity_reuse_revocation')::jsonb;
+   w_revoked_at:=(w_receipt->>'revokedAt')::timestamptz;
+   IF w_receipt->'alreadyRevoked' IS DISTINCT FROM 'false'::jsonb OR w_receipt->'historicalNPinMatches' IS DISTINCT FROM 'true'::jsonb
+    OR w_receipt->'historicalNUnchangedDuringRead' IS DISTINCT FROM 'true'::jsonb OR w_revoked_at IS NULL
+   THEN RAISE EXCEPTION 'WITNESS_FIRST_REVOCATION_REQUIRED'; END IF;
+   EXECUTE replace(replace(replace(w_revocation_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(j::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+   w_receipt:=current_setting('jolene.capacity_reuse_revocation')::jsonb;
+   IF w_receipt->'alreadyRevoked' IS DISTINCT FROM 'true'::jsonb
+    OR (w_receipt->>'revokedAt')::timestamptz IS DISTINCT FROM w_revoked_at
+   THEN RAISE EXCEPTION 'WITNESS_IDEMPOTENT_REVOCATION_REQUIRED'; END IF;
+   EXECUTE replace(replace(replace(w_readback_template,'{{ALLOCATION_JSON_LITERAL}}',quote_literal(j::text)),'{{SHA256_EXACT_MANIFEST_BYTES}}',w_manifest_sha),'{{FINAL_D_SHA40}}','01b135471e1e6ee7ee31439ffc248c8b8519260c');
+   w_readback:=current_setting('jolene.capacity_reuse_readback')::jsonb;
+   IF w_readback->'capacityCount' IS DISTINCT FROM '2'::jsonb OR w_readback->'operationCount' IS DISTINCT FROM '2'::jsonb
+    OR w_readback->'sqlNormalClosureReady' IS DISTINCT FROM 'true'::jsonb
+    OR w_readback->'providerDrainProven' IS DISTINCT FROM 'false'::jsonb
+    OR w_readback->'readOnly' IS DISTINCT FROM 'false'::jsonb
+   THEN RAISE EXCEPTION 'WITNESS_TWO_HISTORIES_CLOSED_READBACK_REQUIRED'; END IF;
+   RAISE EXCEPTION USING ERRCODE='ZX001',MESSAGE='WITNESS_CAPACITY_POSITIVE_ROLLBACK';
+  EXCEPTION
+   WHEN SQLSTATE 'ZX001' THEN IF w_i<>0 THEN RAISE; END IF;
+   WHEN SQLSTATE 'P0001' THEN IF w_i=0 OR SQLERRM IS DISTINCT FROM w_expected THEN RAISE; END IF;
+  END;
+  IF (jsonb_build_object(
+ 'authActors',(SELECT jsonb_agg(jsonb_build_object('id',u.id,'email',u.email,
+   'email_confirmed_at',u.email_confirmed_at,'deleted_at',u.deleted_at,'banned_until',u.banned_until,
+   'app_metadata',u.raw_app_meta_data) ORDER BY u.id) FROM auth.users u WHERE u.id IN(s,e,ha)),
+ -- Le trigger canonique de mission réécrit uniquement cette date technique ;
+ -- tous les autres champs, dont les compteurs, restent dans l'empreinte exacte.
+ 'soignant',(SELECT to_jsonb(x)-'modifie_le' FROM public.soignants x WHERE x.id=s),
+ 'conversion',(SELECT jsonb_agg(to_jsonb(x)-'modifie_le' ORDER BY x.id) FROM public.suivi_conversion_3200h x WHERE x.soignant_id=s),
+ 'etablissement',(SELECT to_jsonb(x) FROM public.etablissements x WHERE x.id=e),
+ 'memberships',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.membres_etablissement x WHERE x.etablissement_id=e OR x.user_id IN(s,e)),
+ 'preferences',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.utilisateur_id) FROM public.preferences_notifications x WHERE x.utilisateur_id IN(s,e)),
+ 'onboarding',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.soignant_id,x.stripe_account_id) FROM public.stripe_connect_onboarding x WHERE x.soignant_id=s),
+ 'mandats',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mandats_facturation_signatures x WHERE x.soignant_id=s),
+ 'adminRegistry',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.equipe_admin x WHERE x.id<>team AND x.user_id<>a),
+ 'capacity',(SELECT to_jsonb(x) FROM private.stripe_connect_test_capacities x WHERE x.id=hc),
+ 'operation',(SELECT to_jsonb(x) FROM private.stripe_connect_avant_transfert x WHERE x.id=ho),
+ 'mission',(SELECT to_jsonb(x) FROM public.missions x WHERE x.id=hm),
+ 'creneaux',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.mission_creneaux x WHERE x.mission_id=hm),
+ 'honoraires',(SELECT to_jsonb(x) FROM public.factures_honoraires x WHERE x.id=hh),
+ 'honorairesDocuments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.factures_honoraires_documents x WHERE x.facture_honoraire_id=hh),
+ 'commission',(SELECT to_jsonb(x) FROM public.factures x WHERE x.id=hf),
+ 'trace',(SELECT to_jsonb(x) FROM public.stripe_transfers x WHERE x.id=ht),
+ 'claims',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.resource_key) FROM public.stripe_payment_flow_claims x
+   WHERE x.resource_key IN('MISSION:'||hm::text,'FACTURE:'||hf::text,'FACTURE:'||hh::text)),
+ 'litiges',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.litiges x WHERE x.mission_id=hm),
+ 'paiementsSoignant',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_soignant x WHERE x.mission_id=hm),
+ 'paiementsMission',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_mission x WHERE x.mission_id=hm),
+ 'paiementsEscrow',(SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id) FROM public.paiements_escrow x WHERE x.mission_id=hm)
+)) IS DISTINCT FROM w_baseline
+   OR (SELECT count(*) FROM private.stripe_connect_test_capacities)<>1
+   OR (SELECT count(*) FROM private.stripe_connect_avant_transfert)<>1
+   OR EXISTS(SELECT 1 FROM public.stripe_transfers WHERE mission_id=w_m)
+   OR EXISTS(SELECT 1 FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:'||w_c::text)
+   OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=w_m)
+   OR EXISTS(SELECT 1 FROM public.factures_honoraires WHERE id=w_h AND stripe_payment_intent_id IS NOT NULL)
+   OR (SELECT relacl::text FROM pg_class WHERE oid='private.stripe_connect_test_capacities'::regclass) IS DISTINCT FROM w_acl
+  THEN RAISE EXCEPTION 'WITNESS_CAPACITY_CASE_RESTORATION_REQUIRED'; END IF;
+ END LOOP;
+END $capacity_witness$;
+SELECT jsonb_build_object('scope','PG17_SYNTHETIC_ONLY','allocationPositive',1,'allocationRefusals',5,
+ 'revocationTargetRefusal',1,'revocationIdempotent',true,'revocationWhileNDrifts',true,'readbackTwoHistories',true,
+ 'subtransactionsRestored',true,'documentFilesExist',false,'provider',false,'readOnlyEnvelopeExecuted',false) AS capacity_witness;
 ROLLBACK;

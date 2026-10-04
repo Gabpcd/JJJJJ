@@ -535,14 +535,14 @@ test('new fixture is read only from current checkout and pinned while migrations
  assert.throws(()=>buildReplay(paths,canonical,p=>p===paths[0]?Buffer.concat([load(p),Buffer.from('\n')]):load(p)),/CANONICAL_BYTES_CHANGED/);
 });
 test('refund fixture assertion diagnostics expose bounded codes only, preserving ERROR line',()=>{
- for(const code of ['REUSE_PROTECTED_ROWS_CHANGED','WITNESS_CANONICAL_COMMISSION_REFUSED']){
+ for(const code of ['REUSE_PROTECTED_ROWS_CHANGED','WITNESS_CANONICAL_COMMISSION_REFUSED','OPERATOR_EXACT_CLOSED_N_REQUIRED']){
   const raw='psql:<stdin>:7: WARNING:  25001: prior CANARY\npsql:<stdin>:951: ERROR:  P0001: '+code+': CANARY\nCONTEXT: CANARY';
   const d=projectSqlDiagnostic(raw);assert.deepEqual(d,{sqlstate:'P0001',line:951,assertion:code});
   const out=safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:d}));
   assert.deepEqual(out,{code:'QUALIFICATION_SQL_FAILED',sqlstate:'P0001',input_line:951,assertion:code});
   assert.ok(!JSON.stringify(out).includes('CANARY'));
  }
- for(const code of ['OTHER_CANARY','reuse_lowercase','WITNESS_'+ 'A'.repeat(81)]){
+ for(const code of ['OTHER_CANARY','reuse_lowercase','WITNESS_'+ 'A'.repeat(81),'OPERATOR_'+ 'A'.repeat(81),'OPERATOR_CODE;CANARY']){
   assert.equal(projectSqlDiagnostic('ERROR:  P0001: '+code).assertion,null);
   assert.equal(safeFailure(Object.assign(Error('QUALIFICATION_SQL_FAILED'),{diagnostic:{assertion:code}})).assertion,null);
  }
