@@ -98,6 +98,21 @@ async function connexion(role) {
   await expect(page.getByRole('navigation', { name: 'Navigation mobile', exact: true })).toBeVisible({ timeout: 25000 });
   await invitation();
 }
+async function reloadAndResume(role) {
+  await nav('Accueil');
+  const expectedPath = new URL(page.url()).pathname;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const navigation = page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+  await expect(navigation).toBeVisible({ timeout: 25000 });
+  await invitation();
+  await expect(navigation.getByRole('button', { name: role === 'etab' ? 'Publier' : 'Mes missions', exact: true })).toBeVisible();
+  if (role === 'etab') await expect(page.locator('main').getByRole('heading', { name: 'Préparez votre première mission', exact: true })).toBeVisible();
+  else await expect(page.locator('main').getByText('Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.', { exact: true })).toBeVisible();
+  assert.equal(new URL(page.url()).pathname, expectedPath, 'Authenticated home route must survive reload');
+  await expect(page.getByRole('button', { name: 'Se connecter', exact: true })).toHaveCount(0);
+  await capture(`${role}-reprise-apres-rechargement`);
+  metric('auth-session-reload', { role, path: expectedPath });
+}
 async function logout(role) {
   await nav(role === 'etab' ? 'Menu' : 'Profil');
   await page.locator('main').getByRole('button', { name: 'Se déconnecter', exact: true }).click();
@@ -150,6 +165,31 @@ try {
   requireAppWindow(nativeWindow);
   assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), 'android', 'Must exercise the native Capacitor bridge');
   await page.addLocatorHandler(page.getByRole('button', { name: 'Plus tard', exact: true }), async (button) => { await button.click(); });
+  // Native PluginHeaders are built from Java/Kotlin reflection, not the web fallback registry.
+  const expectedPlugins = ['App', 'CapacitorBarcodeScanner', 'Browser', 'Camera', 'Filesystem', 'Geolocation',
+    'Haptics', 'Keyboard', 'Network', 'Preferences', 'PushNotifications', 'Share', 'SplashScreen', 'StatusBar',
+    'AppUpdate', 'LiveUpdate', 'NativeBiometric', 'CapacitorCalendar'];
+  const nativePlugins = await page.evaluate(() => (window.Capacitor?.PluginHeaders ?? []).map(plugin => plugin.name));
+  for (const name of expectedPlugins) assert(nativePlugins.includes(name), `Native plugin missing: ${name}`);
+  const bridge = await page.evaluate(async () => {
+    const plugins = window.Capacitor.Plugins;
+    const key = 'recette-r8-' + crypto.randomUUID(), data = btoa('R8 synthetic bridge only');
+    let stored = false, fileCreated = false;
+    try {
+      const info = await plugins.App.getInfo();
+      await plugins.Preferences.set({ key, value: data }); stored = true;
+      const preference = await plugins.Preferences.get({ key });
+      await plugins.Filesystem.writeFile({ path: key + '.txt', directory: 'CACHE', data }); fileCreated = true;
+      const file = await plugins.Filesystem.readFile({ path: key + '.txt', directory: 'CACHE' });
+      return { fixtureApp: info.id === 'app.jolene.recette', preferenceRead: preference.value === data, fileRead: file.data === data };
+    } finally {
+      if (fileCreated) await plugins.Filesystem.deleteFile({ path: key + '.txt', directory: 'CACHE' });
+      if (stored) await plugins.Preferences.remove({ key });
+    }
+  });
+  assert.deepEqual(bridge, { fixtureApp: true, preferenceRead: true, fileRead: true });
+  metric('native-plugin-reflection', { registeredPlugins: expectedPlugins.length, ...bridge });
+
   for (const role of ['soignant', 'etab']) {
     await inscription(role);
     await fiveTabs(role, 'inscription');
@@ -187,10 +227,12 @@ try {
     }
     await logout(role);
     await connexion(role);
+    await reloadAndResume(role);
     await fiveTabs(role, 'connexion');
     await logout(role);
   }
   assert.equal(validations.filter((item) => item.kind === 'tab').length, 20);
+  assert.deepEqual(validations.filter((item) => item.kind === 'auth-session-reload').map((item) => item.role).sort(), ['etab', 'soignant']);
   const report = await (await fetch(`${api}/__recette/bilan`)).json();
   await save('api-report.json', JSON.stringify(report, null, 2));
   assert.deepEqual(report.unknown, [], 'No unimplemented API may pass silently');
@@ -210,7 +252,10 @@ try {
   }
   await save('summary.json', JSON.stringify({
     result: 'passed', device: device.model(), android: (await nativeShell('getprop ro.build.version.release')).trim(),
-    evidence: 'Actual Capacitor debug APK in Android emulator; fictional local API',
+    variant: process.env.NATIVE_RECETTE_VARIANT ?? 'debug',
+    evidence: process.env.NATIVE_RECETTE_VARIANT === 'optimized'
+      ? 'Actual R8 release-derived non-debuggable Capacitor APK; ephemeral debug signature; fictional local API'
+      : 'Actual Capacitor debug APK in Android emulator; fictional local API',
     excludes: ['real backend behavior', 'push/SMS delivery', 'store signing', 'physical-device performance'],
     validations, apiCalls: report.calls.length, errors,
   }, null, 2));
