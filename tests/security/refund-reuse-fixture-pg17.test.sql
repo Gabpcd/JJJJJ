@@ -1,5 +1,5 @@
 -- LOCAL PG17 ONLY; exact preparation DO sha256 b36863e4eaeffc147fba0efd5f13e23314060f74a0778344651561b7fb78b814
--- Reviewed synthetic seed sha256 125b9e525b018c445eda0977cc5026e560d89a206b64f2d048dd52e70be62ef5; no provider evidence is claimed.
+-- Reviewed synthetic seed sha256 fa2f3e7e633c0adb328d6b12a63ef06b3bd03f188c61c90056448ab3968100ba; no provider evidence is claimed.
 BEGIN;
 SET LOCAL row_security=off;
 SET LOCAL statement_timeout='90s';
@@ -965,6 +965,16 @@ BEGIN
   'acct_1T9pt0EVhQ7cb53W','cus_PG17SyntheticN','acct_PG17SyntheticN',8000,1440,9440,ho,
   transaction_timestamp()-interval '2 days',transaction_timestamp()-interval '2 days',transaction_timestamp()-interval '2 days',
   transaction_timestamp()-interval '1 day');
+ -- The schema-only restore has no liberal-profession reference rows, so the canonical
+ -- initial seed creates no conversion row. Assert that diagnosis before adding a
+ -- declared local historical row; keep the reference table and all triggers intact.
+ IF EXISTS(SELECT 1 FROM public.professions_liberal_eligible)
+  OR EXISTS(SELECT 1 FROM public.suivi_conversion_3200h WHERE soignant_id=s)
+ THEN RAISE EXCEPTION 'WITNESS_EXPECTED_EMPTY_CONVERSION_REFERENCE'; END IF;
+ INSERT INTO public.suivi_conversion_3200h(soignant_id,profession_cible_liberal,cree_le)
+ SELECT id,profession::text,transaction_timestamp()-interval '1 day' FROM public.soignants WHERE id=s;
+ -- Canonical code explicitly supports an already existing historical follow-up.
+ PERFORM private.fn_resynchroniser_compteurs_soignant(s);
  -- Artificially old technical timestamps prevent a same-transaction seed masking the canonical trigger effect.
  UPDATE public.soignants SET modifie_le=transaction_timestamp()-interval '1 day' WHERE id=s;
  UPDATE public.suivi_conversion_3200h SET modifie_le=transaction_timestamp()-interval '1 day' WHERE soignant_id=s;
@@ -1424,7 +1434,13 @@ BEGIN
 );
  SELECT modifie_le INTO STRICT profile_time FROM public.soignants WHERE id=s;
  SELECT jsonb_agg(jsonb_build_object('id',id,'time',modifie_le) ORDER BY id) INTO conversion_times FROM public.suivi_conversion_3200h WHERE soignant_id=s;
- IF profile_time>=transaction_timestamp() OR conversion_times IS NULL THEN RAISE EXCEPTION 'WITNESS_HISTORICAL_TIMESTAMPS_REQUIRED'; END IF;
+ IF profile_time IS NULL OR profile_time>=transaction_timestamp()
+ THEN RAISE EXCEPTION 'WITNESS_PROFILE_TIMESTAMP_NOT_HISTORICAL'; END IF;
+ IF conversion_times IS NULL OR jsonb_array_length(conversion_times)<>1
+ THEN RAISE EXCEPTION 'WITNESS_CONVERSION_ROW_REQUIRED'; END IF;
+ IF EXISTS(SELECT 1 FROM public.suivi_conversion_3200h WHERE soignant_id=s
+  AND (modifie_le IS NULL OR modifie_le>=transaction_timestamp()))
+ THEN RAISE EXCEPTION 'WITNESS_CONVERSION_TIMESTAMP_NOT_HISTORICAL'; END IF;
  SELECT raw_app_meta_data INTO STRICT admin_metadata FROM auth.users WHERE id=a;
  SELECT k.debut,k.fin INTO STRICT overlap_start,overlap_end
   FROM public.mission_creneaux k WHERE k.mission_id=hm AND k.type_creneau='PREVISIONNEL'
