@@ -43,7 +43,7 @@ test.describe('Inscription soignant', () => {
   });
   test('permet de vérifier son mot de passe sans le saisir deux fois', async ({ page }) => {
     await page.goto('/inscription/soignant');
-    await page.getByLabel('Mot de passe', { exact: true }).fill('Playwright!Test2026');
+    await page.getByLabel('Mot de passe', { exact: true }).fill('Visibilite-Synthetique!42');
     await page.getByRole('button', { name: 'Afficher le mot de passe' }).click();
     await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute('type', 'text');
     await page.getByRole('button', { name: 'Masquer le mot de passe' }).click();

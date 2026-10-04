@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   expect,
   test,
@@ -14,7 +15,8 @@ import path from 'node:path';
 import { runAxe } from '../helpers/axe';
 import { ROUTES_ETABLISSEMENT, ROUTES_SOIGNANT } from '../helpers/ios-series-c-routes';
 
-const PASSWORD = 'Playwright!Test2026';
+// Secret éphémère de ce processus de recette ; aucun identifiant public réutilisé.
+const PASSWORD = `Audit!9${randomBytes(24).toString('hex')}`;
 const VIEWPORTS = [
   { name: 'iPhone-SE', width: 360, height: 780 },
   { name: 'iPhone-mini', width: 375, height: 812 },
