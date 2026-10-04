@@ -70,4 +70,3 @@ export async function captureSource(runtime, privateDir, checkpointSql) {
   await runtime.privateWrite(join(privateDir, 'snapshot.private.json'), Buffer.from(JSON.stringify(snapshot)));
   return snapshot;
 }
-

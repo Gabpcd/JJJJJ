@@ -171,8 +171,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 18727,
-      "sha256": "abd516d4ea9beab98780e569b2a0a8758c7562d0ffd5ddfe1799fa78ab18bd69"
+      "bytes": 20358,
+      "sha256": "66d62db5497b5603186c7d21e88fcb2d9b92fcd83783cc5c3cffff07b79f411f"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
@@ -181,8 +181,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
-      "bytes": 4291,
-      "sha256": "cde1b6c7e302fafc7e4e8e92894a1786bc4ec99b86829b3b8e8e7d3b625fd28e"
+      "bytes": 4290,
+      "sha256": "8fcb74fb3091e08c5b275febc5f69e9e47de8738b27b6194b3ee3bd033f27769"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/source-fixture.mjs",
@@ -201,8 +201,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/current-product-witness.sql",
-      "bytes": 2359,
-      "sha256": "9d223c3ae45a6a1bcbd1ee46fc8a1e3f505f86fa82592caa7af53db182ec4fe4"
+      "bytes": 2364,
+      "sha256": "b080dfe6ef929676c08948bddc5563e0c55ed86e83bfe09df8314f89be236ae1"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/native-versions.sql",

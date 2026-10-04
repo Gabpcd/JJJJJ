@@ -28,5 +28,5 @@ SELECT jsonb_build_object(
    ARRAY['contrat_id','cree_le','hash_document','id','ip_signature','otp_valide_a','psc_session_active','rpps_verifie',
      'signataire_role','signataire_user_id','signe_a','statut_signature','traits_identite_verifies','user_agent']::text[]
    AND NOT bool_or(anonymous) FROM columns)
-   AND NOT has_column_privilege('authenticated','public.signatures_contrats','otp_hash','SELECT'));
+   AND NOT has_column_privilege('authenticated','public.signatures_contrats','otp_code_hash','SELECT'));
 ROLLBACK;

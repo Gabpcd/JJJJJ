@@ -259,3 +259,20 @@ test('closed non-SQL diagnostics distinguish Auth and Storage status without pri
   assert.equal(closedFailure(unknown,'capture').httpStatus,null);
   assert.equal(JSON.stringify(closedFailure(unknown,'capture')).includes(canary),false);
 });
+
+
+test('current-product certificate witness uses the real baseline columns and migration 219 revoked column', () => {
+  // Read the integral product sources, not a copied list in a synthetic catalogue response.
+  const baseline = readFileSync(new URL('../../../../supabase/migrations/00000000000000_baseline_prod.sql', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../../../../supabase/migrations/20261004124300_refuser_signature_otp_et_document_incoherents.sql', import.meta.url), 'utf8');
+  const witness = readFileSync(new URL('./sql/current-product-witness.sql', import.meta.url), 'utf8');
+  const table = baseline.match(/CREATE TABLE IF NOT EXISTS "public"\."signatures_contrats" \(([\s\S]*?)\n\);/);
+  assert.ok(table, 'canonical certificate table must be present');
+  const actualColumns = new Set([...table[1].matchAll(/^\s+"([a-z_]+)"\s/gm)].map(match => match[1]));
+  const revoked = [...migration.matchAll(/REVOKE SELECT \(([a-z_]+)\) ON TABLE public\.signatures_contrats FROM PUBLIC, anon, authenticated;/g)].map(match => match[1]);
+  assert.equal(revoked.length, 1, 'canonical private-column revoke must be unambiguous');
+  const checked = [...witness.matchAll(/NOT has_column_privilege\('authenticated','public\.signatures_contrats','([a-z_]+)','SELECT'\)/g)].map(match => match[1]);
+  assert.equal(checked.length, 1, 'witness must check the explicit private column');
+  for (const column of checked) assert.ok(actualColumns.has(column), 'witness refers to a nonexistent product column');
+  assert.deepEqual(checked, revoked, 'witness must check the column revoked by the real migration');
+});
