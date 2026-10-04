@@ -71,6 +71,7 @@ function toE164(raw: string): string | null {
 }
 
 Deno.serve(async (req) => {
+  let otpTransactionnel = false;
   if (req.method === "OPTIONS") {
     return preflightResponse(req);
   }
@@ -105,6 +106,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     const type = typeof body.type === 'string' ? body.type.trim().slice(0, 80) : 'CUSTOM';
+    otpTransactionnel = type === 'OTP_VERIFICATION_TELEPHONE' || type === 'OTP_SIGNATURE';
     const destinataireId = typeof body.destinataire_id === 'string' ? body.destinataire_id : null;
     const telephoneRaw = typeof body.telephone === 'string' ? body.telephone : '';
     const contenuRaw = typeof body.contenu === 'string'
@@ -463,7 +465,8 @@ Deno.serve(async (req) => {
       );
       if (finalizationError) {
         throw new Error(
-          `SMS_IDEMPOTENCY_FINALIZATION_FAILED:${finalizationError.message}`,
+          otpTransactionnel ? 'SMS_IDEMPOTENCY_FINALIZATION_FAILED'
+            : `SMS_IDEMPOTENCY_FINALIZATION_FAILED:${finalizationError.message}`,
         );
       }
     };
@@ -485,13 +488,13 @@ Deno.serve(async (req) => {
       });
       twilioData = await twilioRes.json();
     } catch (twilioError) {
-      const message = twilioError instanceof Error
-        ? twilioError.message
+      const message = otpTransactionnel ? 'Transport SMS OTP indéterminé'
+        : twilioError instanceof Error ? twilioError.message
         : 'réponse Twilio indéterminée';
       try {
         await finalizeIdempotency('INDETERMINE', null, message);
       } catch (finalizationError) {
-        console.error('[send-sms] finalisation indéterminée impossible', finalizationError);
+        console.error('[send-sms] finalisation indéterminée impossible', otpTransactionnel ? 'Diagnostic OTP masqué' : finalizationError);
       }
       return jsonResponse(req, {
         success: false,
@@ -501,7 +504,8 @@ Deno.serve(async (req) => {
     }
 
     if (!twilioRes.ok) {
-      const providerError = twilioData.message || JSON.stringify(twilioData);
+      const providerError = otpTransactionnel ? 'Erreur fournisseur SMS OTP'
+        : twilioData.message || JSON.stringify(twilioData);
       const ambiguousProviderFailure = twilioRes.status >= 500;
       try {
         await finalizeIdempotency(
@@ -510,14 +514,14 @@ Deno.serve(async (req) => {
           providerError,
         );
       } catch (finalizationError) {
-        console.error('[send-sms] finalisation échec impossible', finalizationError);
+        console.error('[send-sms] finalisation échec impossible', otpTransactionnel ? 'Diagnostic OTP masqué' : finalizationError);
         return jsonResponse(req, {
           success: false,
           pending: true,
           error: 'Échec Twilio non finalisé',
         }, 503);
       }
-      console.error("Twilio error:", twilioData);
+      console.error("Twilio error:", otpTransactionnel ? { status: twilioRes.status } : twilioData);
       if (ambiguousProviderFailure) {
         return jsonResponse(req, {
           success: false,
@@ -527,7 +531,7 @@ Deno.serve(async (req) => {
       }
       return jsonResponse(req, {
         success: false,
-        error: twilioData.message || "Erreur envoi SMS",
+        error: otpTransactionnel ? "Erreur envoi SMS" : twilioData.message || "Erreur envoi SMS",
       }, 502);
     }
 
@@ -542,7 +546,7 @@ Deno.serve(async (req) => {
           'Réponse Twilio 2xx sans SID',
         );
       } catch (finalizationError) {
-        console.error('[send-sms] finalisation sans SID impossible', finalizationError);
+        console.error('[send-sms] finalisation sans SID impossible', otpTransactionnel ? 'Diagnostic OTP masqué' : finalizationError);
       }
       return jsonResponse(req, {
         success: false,
@@ -556,7 +560,7 @@ Deno.serve(async (req) => {
     } catch (finalizationError) {
       // Twilio a accepté le SMS, mais la réservation reste EN_COURS. Les
       // tentatives suivantes renverront pending et ne rappelleront pas Twilio.
-      console.error('[send-sms] succès Twilio non finalisé', finalizationError);
+      console.error('[send-sms] succès Twilio non finalisé', otpTransactionnel ? 'Diagnostic OTP masqué' : finalizationError);
       return jsonResponse(req, {
         success: false,
         pending: true,
@@ -568,7 +572,7 @@ Deno.serve(async (req) => {
     // journaux applicatifs après son envoi ; Twilio reçoit le message réel,
     // tandis que la base ne conserve qu'une trace expurgée. Le registre privé
     // ci-dessus reste la source d'idempotence si cet audit échoue.
-    const contenuJournal = type === 'OTP_VERIFICATION_TELEPHONE'
+    const contenuJournal = otpTransactionnel
       ? `${prefix}[CODE OTP MASQUÉ]`
       : fullBody;
     const { error: auditError } = await supabaseAdmin.from("sms_envoyes")
@@ -586,7 +590,7 @@ Deno.serve(async (req) => {
         idempotency_key: idempotencyKey,
       } as any);
     if (auditError) {
-      console.error('[send-sms] audit sms_envoyes non écrit', auditError.message);
+      console.error('[send-sms] audit sms_envoyes non écrit', otpTransactionnel ? 'Diagnostic OTP masqué' : auditError.message);
     }
 
     return jsonResponse(req, {
@@ -595,7 +599,7 @@ Deno.serve(async (req) => {
       to,
     });
   } catch (err: unknown) {
-    console.error("send-sms error:", err);
+    console.error("send-sms error:", otpTransactionnel ? "Diagnostic OTP masqué" : err);
     return jsonResponse(req, { error: "Erreur interne" }, 500);
   }
 });

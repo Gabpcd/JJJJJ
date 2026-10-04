@@ -1,13 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { creerActionsNationales, stabiliserActionsNationales } from './helpers/recette-complete-actions-nationales';
-import { ids, now, preuveMission } from './helpers/recette-complete-mission';
+import { ids, now, preuveMission, type RoleRecette } from './helpers/recette-complete-mission';
 
-test('ACTIONS — OTP : refus bloquant, interruption et reprise du contrat sans signature parasite', async ({ context, page }, info) => {
+for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
+test(`ACTIONS — OTP — ${role} : refus bloquant, interruption et reprise du contrat sans signature parasite`, async ({ context, page }, info) => {
   const { state, installer, control } = creerActionsNationales();
   state.contratCree = true; state.mission.statut = 'ASSIGNEE'; state.mission.soignant_assigne_id = ids.soignant;
-  await installer(context, 'SOIGNANT'); await page.clock.setFixedTime(new Date(now));
+  await installer(context, role);
+  const prefixe = role === 'SOIGNANT' ? 'soignant' : 'etablissement';
+  await page.clock.setFixedTime(new Date(now));
   try {
-    await page.goto(`/soignant/missions/${ids.mission}`);
+    await page.goto(`/${prefixe}/missions/${ids.mission}`);
     await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
     await stabiliserActionsNationales(page);
     await page.goto(`/contrat/${ids.contrat}`);
@@ -21,7 +24,7 @@ test('ACTIONS — OTP : refus bloquant, interruption et reprise du contrat sans 
     // Le retour traverse ici deux documents (ouverts par goto). L'URL seule
     // peut changer avant le chargement des modules et le rendu de la mission.
     await Promise.all([
-      page.waitForURL(new RegExp(`/soignant/missions/${ids.mission}$`), { waitUntil: 'load' }),
+      page.waitForURL(new RegExp(`/${prefixe}/missions/${ids.mission}$`), { waitUntil: 'load' }),
       page.getByRole('button', { name: /Retour/ }).filter({ visible: true }).click(),
     ]);
     await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
@@ -41,6 +44,9 @@ test('ACTIONS — OTP : refus bloquant, interruption et reprise du contrat sans 
     await expect(page.getByRole('button', { name: 'Signer', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Renvoyer le code', exact: true })).toBeDisabled();
     expect(state.signatures).toHaveLength(0);
+    expect(state.calls.filter(c => c.name === 'fn_signer_contrat_otp').at(-1)?.body).toMatchObject({
+      p_contrat_id: ids.contrat, p_hash_document: state.contrat.hash_document, p_otp_code: '123456',
+    });
     await preuveMission(page, info, 'national-otp-document-refuse');
     await stabiliserActionsNationales(page);
     await page.reload(); await accord.check(); await sms.click(); await code.fill('123456');
@@ -48,11 +54,13 @@ test('ACTIONS — OTP : refus bloquant, interruption et reprise du contrat sans 
     await expect(page.getByText('✅ Vous avez déjà signé ce contrat', { exact: true })).toBeVisible();
     expect(state.signatures).toHaveLength(1);
     expect(state.calls.filter(c => c.name === 'fn_signer_contrat_otp')).toHaveLength(2);
-    expect(state.contrat.signature_etablissement).toBe(false);
+    expect(state.contrat[role === 'SOIGNANT' ? 'signature_soignant' : 'signature_etablissement']).toBe(true);
+    expect(state.contrat[role === 'SOIGNANT' ? 'signature_etablissement' : 'signature_soignant']).toBe(false);
     await preuveMission(page, info, 'national-otp-reprise-unique');
     expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
   } finally { await info.attach('journal-actions-simulees', { body: JSON.stringify(state, null, 2), contentType: 'application/json' }); }
 });
+}
 
 test('ACTIONS — pointage de nuit : réseau perdu, relecture lente, pause et code rejoué', async ({ context, page }, info) => {
   const { state, installer, control } = creerActionsNationales();
