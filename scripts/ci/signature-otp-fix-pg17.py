@@ -51,6 +51,16 @@ BEGIN
 END;
 $acl_original$;
 """
+    sender=json.loads((ROOT/'tests/fixtures/signature-otp-sender-catalogue-before.json').read_text())
+    sender_body=diagnostic.exact(r'AS \$function\$(.*?)\$function\$',sender['definition'])
+    assert hashlib.md5(sender_body.encode()).hexdigest()=='8b36efa62f1b2247dd6a82223da12a8f'
+    assert sender['owner']=='postgres' and sender['config']==['search_path=public, extensions']
+    assert sender['acl']=='{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}'
+    setup+=sender['definition']+';\nALTER FUNCTION public.fn_envoyer_otp_signature(uuid) OWNER TO postgres;\n'
+    setup+='REVOKE ALL ON FUNCTION public.fn_envoyer_otp_signature(uuid) FROM PUBLIC,anon; GRANT EXECUTE ON FUNCTION public.fn_envoyer_otp_signature(uuid) TO authenticated,service_role;\n'
+    setup+=diagnostic.exact(r'CREATE TABLE IF NOT EXISTS "public"\."signature_rate_limit_ip" \(.*?\n\);',snapshot)+'\n'
+    setup+=diagnostic.exact(r'ALTER TABLE ONLY "public"\."signature_rate_limit_ip"\n    ADD CONSTRAINT "signature_rate_limit_ip_pkey"[^;]+;',snapshot)+'\n'
+    setup+=diagnostic.definition(snapshot,'fn_check_rate_limit_ip_signature')+'\n'
     # Registre annexe exact de la migration ; ses autres lignes n'existent pas
     # dans ce banc reduit. Ce n'est pas une qualification de l'inventaire global.
     setup += """
@@ -65,13 +75,15 @@ INSERT INTO private.security_definer_inventory
 CREATE TEMP TABLE observations(case_name text PRIMARY KEY, passed boolean NOT NULL);
 CREATE FUNCTION pg_temp.signature_photo() RETURNS jsonb LANGUAGE sql AS $photo$
  SELECT jsonb_build_object('contrats',(SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM public.contrats_mission c),
-                          'signatures',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM public.signatures_contrats s));
+                          'signatures',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM public.signatures_contrats s),
+                          'rateLimit',(SELECT jsonb_agg(to_jsonb(l) ORDER BY ip_signature,fenetre_debut) FROM public.signature_rate_limit_ip l));
 $photo$;
 DO $witness$
 DECLARE who text; code text; h text; r jsonb; old jsonb; mutation text; label text; guc_label text; mutation_applied boolean;
         cid uuid := 'f1040000-0000-4000-8000-000000000003';
         sid uuid := 'f1040000-0000-4000-8000-000000000001';
         eid uuid := 'f1040000-0000-4000-8000-000000000002';
+        mid uuid:='f1040000-0000-4000-8000-000000000005'; actor_uid uuid; mutation_kind text; member_role text; sending jsonb;
         other_uid uuid; other_role text; first_role text; second_role text; denied boolean; n bigint; query_text text;
 BEGIN
  IF has_function_privilege('anon','public.fn_signer_contrat_otp(uuid,text,text,text)','EXECUTE')
@@ -315,6 +327,86 @@ BEGIN
  IF (r->>'success')::boolean IS NOT TRUE OR NOT EXISTS(SELECT 1 FROM public.signatures_contrats WHERE hash_document=h AND statut_signature='signe')
  THEN RAISE EXCEPTION 'AUTHENTICATED_LEADING_ZERO'; END IF;
  INSERT INTO observations VALUES('authenticated-leading-zero-otp',true);
+
+ -- Revalidation des droits au moment de demander puis de valider le code.
+ -- Aucun Vault/net n'est monte : les positifs d'emission doivent franchir les
+ -- gardes puis retourner TELEPHONE_MANQUANT sur ces profils sans telephone.
+ FOREACH who IN ARRAY ARRAY['soignant','etablissement'] LOOP
+  FOREACH mutation_kind IN ARRAY ARRAY['banned','auth-deleted','profile-deleted'] LOOP
+   PERFORM pg_temp.seed_signature(who);
+   actor_uid:=CASE who WHEN 'soignant' THEN sid ELSE eid END;
+   SELECT hash_document INTO h FROM public.contrats_mission;
+   IF mutation_kind='banned' THEN UPDATE auth.users SET banned_until=now()+interval '1 hour' WHERE id=actor_uid;
+   ELSIF mutation_kind='auth-deleted' THEN UPDATE auth.users SET deleted_at=now() WHERE id=actor_uid;
+   ELSIF who='soignant' THEN UPDATE public.soignants SET supprime_le=now() WHERE id=actor_uid;
+   ELSE UPDATE public.etablissements SET supprime_le=now() WHERE id=actor_uid; END IF;
+   IF public.fn_compte_auth_actif() IS NOT FALSE THEN RAISE EXCEPTION 'INACTIVE_ACTOR_FIXTURE_INVALID'; END IF;
+   PERFORM set_config('request.headers','{"x-forwarded-for":"192.0.2.33"}',true);
+   old:=pg_temp.signature_photo();
+   EXECUTE 'SET LOCAL ROLE authenticated';
+   sending:=public.fn_envoyer_otp_signature(cid);
+   r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
+   EXECUTE 'RESET ROLE';
+   IF sending->>'error_code' IS DISTINCT FROM 'NON_AUTORISE' OR r->>'error_code' IS DISTINCT FROM 'NON_AUTORISE'
+      OR pg_temp.signature_photo() IS DISTINCT FROM old
+   THEN RAISE EXCEPTION 'INACTIVE_ACTOR_NOT_REFUSED'; END IF;
+   UPDATE auth.users SET banned_until=NULL,deleted_at=NULL WHERE id=actor_uid;
+   UPDATE public.soignants SET supprime_le=NULL WHERE id=actor_uid;
+   UPDATE public.etablissements SET supprime_le=NULL WHERE id=actor_uid;
+   INSERT INTO observations VALUES('request-and-sign-denied-'||who||'-'||mutation_kind,true);
+  END LOOP;
+ END LOOP;
+ INSERT INTO auth.users(id,raw_app_meta_data,email_confirmed_at) VALUES(mid,'{"role":"ADMIN_ETABLISSEMENT"}',now());
+ FOREACH member_role IN ARRAY ARRAY['INACTIVE','LECTURE_SEULE','POINTAGE_ONLY','UNRELATED'] LOOP
+  PERFORM pg_temp.seed_signature('etablissement'); DELETE FROM public.membres_etablissement WHERE user_id=mid;
+  INSERT INTO public.membres_etablissement(etablissement_id,user_id,role,actif) VALUES(eid,mid,'RH',true);
+  PERFORM set_config('request.jwt.claim.sub',mid::text,true);
+  IF public.fn_a_permission_etablissement('contrats',eid) IS NOT TRUE THEN RAISE EXCEPTION 'MEMBER_BEFORE_INVALID'; END IF;
+  UPDATE public.signatures_contrats SET signataire_user_id=mid,
+    otp_code_hash=encode(extensions.digest('123456|'||cid::text||'|'||mid::text,'sha256'),'hex');
+  IF member_role='INACTIVE' THEN UPDATE public.membres_etablissement SET actif=false WHERE user_id=mid;
+  ELSIF member_role='UNRELATED' THEN DELETE FROM public.membres_etablissement WHERE user_id=mid;
+  ELSE UPDATE public.membres_etablissement SET role=member_role WHERE user_id=mid; END IF;
+  IF public.fn_compte_auth_actif() IS NOT TRUE OR public.fn_a_permission_etablissement('contrats',eid) IS NOT FALSE
+  THEN RAISE EXCEPTION 'MEMBER_AFTER_INVALID'; END IF;
+  SELECT hash_document INTO h FROM public.contrats_mission;
+  PERFORM set_config('request.headers','{"x-forwarded-for":"192.0.2.33"}',true);
+  old:=pg_temp.signature_photo();
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  sending:=public.fn_envoyer_otp_signature(cid);r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
+  EXECUTE 'RESET ROLE';
+  IF sending->>'error_code' IS DISTINCT FROM 'NON_AUTORISE' OR r->>'error_code' IS DISTINCT FROM 'NON_AUTORISE'
+     OR pg_temp.signature_photo() IS DISTINCT FROM old
+  THEN RAISE EXCEPTION 'MEMBER_NOT_REFUSED'; END IF;
+  INSERT INTO observations VALUES('request-and-sign-denied-member-'||member_role,true);
+ END LOOP;
+ FOREACH member_role IN ARRAY ARRAY['PROPRIETAIRE','ADMIN_GROUPE','RH','HISTORICAL_OWNER','SOIGNANT'] LOOP
+  PERFORM pg_temp.seed_signature(CASE member_role WHEN 'SOIGNANT' THEN 'soignant' ELSE 'etablissement' END);
+  DELETE FROM public.membres_etablissement WHERE user_id=mid;
+  IF member_role NOT IN ('HISTORICAL_OWNER','SOIGNANT') THEN
+   INSERT INTO public.membres_etablissement(etablissement_id,user_id,role,actif) VALUES(eid,mid,member_role,true);
+   PERFORM set_config('request.jwt.claim.sub',mid::text,true);
+   UPDATE public.signatures_contrats SET signataire_user_id=mid,
+      otp_code_hash=encode(extensions.digest('123456|'||cid::text||'|'||mid::text,'sha256'),'hex');
+  END IF;
+  SELECT hash_document INTO h FROM public.contrats_mission;
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN RAISE EXCEPTION 'POSITIVE_ACTOR_INVALID'; END IF;
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  sending:=public.fn_envoyer_otp_signature(cid);r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
+  EXECUTE 'RESET ROLE';
+  IF sending->>'error_code' IS DISTINCT FROM 'TELEPHONE_MANQUANT' OR (r->>'success')::boolean IS NOT TRUE
+     OR NOT EXISTS(SELECT 1 FROM public.signatures_contrats WHERE statut_signature='signe' AND hash_document=h)
+     OR NOT EXISTS(SELECT 1 FROM public.contrats_mission WHERE CASE member_role WHEN 'SOIGNANT' THEN signature_soignant ELSE signature_etablissement END)
+  THEN RAISE EXCEPTION 'AUTHORIZED_ACTOR_REGRESSION'; END IF;
+  INSERT INTO observations VALUES('authorized-request-guard-and-sign-'||member_role,true);
+ END LOOP;
+ IF has_function_privilege('anon','public.fn_envoyer_otp_signature(uuid)','EXECUTE')
+    OR NOT has_function_privilege('authenticated','public.fn_envoyer_otp_signature(uuid)','EXECUTE')
+    OR NOT has_function_privilege('service_role','public.fn_envoyer_otp_signature(uuid)','EXECUTE')
+    OR NOT EXISTS(SELECT 1 FROM private.security_definer_inventory i JOIN pg_proc p
+      ON p.oid='public.fn_envoyer_otp_signature(uuid)'::regprocedure
+      WHERE i.signature='fn_envoyer_otp_signature(uuid)' AND i.definition_md5=md5(p.prosrc))
+ THEN RAISE EXCEPTION 'SENDER_ACL_OR_INVENTORY_CHANGED'; END IF;
 END;
 $witness$;
 SELECT jsonb_build_object('schemaVersion',1,'phase','fixed-qualification','postgresMajor',17,'providerCalls',0,
@@ -342,15 +434,16 @@ def main():
     empty="SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace)=0 AND (SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','extensions','private'))=0 AND (SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role'))=0"
     assert run("SELECT current_setting('server_version_num')::int/10000")=='17'
     assert run(empty)=='t'
-    definitions=[p.name for p in sorted((ROOT/'supabase/migrations').glob('*.sql'))
-      if re.search(r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public|"public")\s*\.\s*"?fn_signer_contrat_otp"?\s*\(',p.read_text(),re.I)]
-    assert definitions and definitions[-1]==MIGRATION, 'NEW_SIGNATURE_DEFINITION_REQUIRES_QUALIFICATION'
+    for routine in ['fn_signer_contrat_otp','fn_envoyer_otp_signature']:
+        definitions=[p.name for p in sorted((ROOT/'supabase/migrations').glob('*.sql'))
+          if re.search(r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public|"public")\s*\.\s*"?'+routine+r'"?\s*\(',p.read_text(),re.I)]
+        assert definitions and definitions[-1]==MIGRATION, 'NEW_SIGNATURE_DEFINITION_REQUIRES_QUALIFICATION'
     sql=build_sql((ROOT/'supabase/schema/public.sql').read_text(),
       json.loads((ROOT/'tests/fixtures/signature-otp-catalogue-before.json').read_text()),
       json.loads((ROOT/'tests/fixtures/connect-pretransfer-auth-dependencies.json').read_text()),
       (ROOT/'supabase/migrations'/MIGRATION).read_text())
     report=json.loads(run(sql).splitlines()[-1]); assert run(empty)=='t'
-    assert report['casesPassed']==69 and all(report['cases'].values())
+    assert report['casesPassed']==84 and all(report['cases'].values())
     report['migrationSha256']=hashlib.sha256((ROOT/'supabase/migrations'/MIGRATION).read_bytes()).hexdigest()
     report['sourceBeforeBodySha256']=diagnostic.BEFORE_BODY
     report['scope']='PG17 synthetic canonical OTP, two contract triggers, certificate SELECT policies; no SMS/Storage/HTTP/full App RLS' 
