@@ -50,10 +50,112 @@ export function validateBrowserReceipt(value,side) {
   requireValue(expected.delete(pair)&&OUTCOMES.includes(item.outcome)&&Array.isArray(item.attempts)&&item.attempts.length===1,'B_REPORT');
   const result=item.attempts[0];requireValue(STATUSES.includes(result.status)&&RESULT_CODES.includes(result.code)&&result.retry===0,'B_REPORT');
   requireValue((item.outcome==='expected')===(result.status==='passed'),'B_REPORT');counts[item.outcome]++;
-  return {caseId:item.caseId,project:item.project,outcome:item.outcome,attempts:[{status:result.status,code:result.code,retry:0}]};
+  return {caseId:item.caseId,project:item.project,outcome:item.outcome,attempts:[{status:result.status,code:result.code,retry:0,
+   ...(Object.hasOwn(result,'diagnostic')?{diagnostic:validateBrowserDiagnostic(result.diagnostic,result.status)}:{})}]};
  });
  requireValue(expected.size===0&&OUTCOMES.every(key=>value.counts?.[key]===counts[key]),'B_REPORT');
  const passed=value.globalErrorCount===0&&counts.expected===tests.length&&OUTCOMES.slice(1).every(k=>counts[k]===0);
  requireValue(value.passed===passed,'B_REPORT');
  return {schemaVersion:1,productSha:PRODUCT_SHA,side,complete:true,passed,expectedCount:tests.length,counts,globalErrorCount:value.globalErrorCount,tests};
+}
+
+// Diagnostics are descriptive only. The case matrix and pass/fail gates above
+// remain authoritative; no free Playwright string is copied into this schema.
+export const UI_STAGES = Object.freeze(['BEFORE_EACH','AFTER_EACH','LOGIN_NAVIGATE','LOGIN_EMAIL','LOGIN_PASSWORD',
+ 'LOGIN_SUBMIT','LOGIN_AUTH_RESPONSE','LOGIN_ROUTE','LOGIN_DASHBOARD','LOGIN_IDENTITY','MISSION_NAVIGATE',
+ 'DOCUMENT_VISIBLE','DOCUMENT_ACCESS','PDF_DOWNLOAD','RELOAD','RELOADED_DOCUMENT_VISIBLE',
+ 'RELOADED_DOCUMENT_ACCESS','RELOADED_PDF_DOWNLOAD','DENIED_ROUTE','DOCUMENT_ABSENT',
+ 'ANONYMOUS_REDIRECT','ANONYMOUS_LOGIN_VISIBLE']);
+const DIAGNOSTIC_STAGES = new Set([...UI_STAGES,'FIXTURE_BROWSER','FIXTURE_CONTEXT','FIXTURE_PAGE','FIXTURE_OTHER','FIXTURE_TEARDOWN','BEFORE_HOOKS','AFTER_HOOKS','WORKER_CLEANUP','UNKNOWN']);
+const DIAGNOSTIC_SOURCES = new Set(['STEP','INCOMPLETE_STEP','FIXTURE_TIMEOUT','UNLOCATED','NO_FAILURE','NOT_EXECUTED']);
+const STATUS_CODES = Object.freeze({passed:'PASSED',failed:'TEST_FAILED',timedOut:'TIMEOUT',skipped:'SKIPPED',interrupted:'INTERRUPTED'});
+const durationOk = value => typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=7*24*3600_000;
+const plainObject = value => value!==null&&typeof value==='object'&&!Array.isArray(value);
+function fixtureTimeoutStage(attempt) {
+ // These exact messages are emitted by pinned Playwright 1.58.2 timeoutManager.
+ // A changed/unknown message remains unlocated. No substring or stack export.
+ const errors=[attempt.error,...(Array.isArray(attempt.errors)?attempt.errors.slice(0,10):[])];
+ for(const error of errors) {
+  if(!plainObject(error)||typeof error.message!=='string'||error.message.length>1024)continue;
+  const message=error.message.replace(/\u001b\[[0-9;]*m/g,'');
+  const match=/^Test timeout of 90000ms exceeded while setting up "(browser|context|page)"\.$/.exec(message)
+   ?? /^Fixture "(browser|context|page)" timeout of 90000ms exceeded during setup\.$/.exec(message);
+  if(match)return {browser:'FIXTURE_BROWSER',context:'FIXTURE_CONTEXT',page:'FIXTURE_PAGE'}[match[1]];
+ }
+ return null;
+}
+function diagnosticStage(step,parentStage) {
+ if(step.category==='fixture') {
+  const match=/^Fixture "(browser|context|page)"$/.exec(step.title);
+  if(['AFTER_HOOKS','AFTER_EACH','WORKER_CLEANUP','FIXTURE_TEARDOWN'].includes(parentStage))return 'FIXTURE_TEARDOWN';
+  return match?{browser:'FIXTURE_BROWSER',context:'FIXTURE_CONTEXT',page:'FIXTURE_PAGE'}[match[1]]:'FIXTURE_OTHER';
+ }
+ if(step.category==='hook')return {'Before Hooks':'BEFORE_HOOKS',beforeEach:'BEFORE_EACH',
+  'After Hooks':'AFTER_HOOKS',afterEach:'AFTER_EACH','Worker Cleanup':'WORKER_CLEANUP'}[step.title]??null;
+ if(step.category===undefined||step.category==='test.step')return UI_STAGES.includes(step.title)?step.title:'UNKNOWN';
+ return null;
+}
+export function projectBrowserDiagnostic(attempt) {
+ requireValue(plainObject(attempt)&&Object.hasOwn(STATUS_CODES,attempt.status)&&durationOk(attempt.duration),'B_REPORT');
+ const completedStages=[];let stage=null,stageSource='NO_FAILURE',count=0;
+ const visit=(steps,depth,parentStage=null)=>{
+  requireValue(Array.isArray(steps)&&depth<=16,'B_REPORT');
+  for(const step of steps) {
+   requireValue(plainObject(step)&&++count<=2048&&(step.duration===-1||durationOk(step.duration)),'B_REPORT');
+   const ownStage=diagnosticStage(step,parentStage),currentStage=ownStage??parentStage;
+   if(step.steps!==undefined)visit(step.steps,depth+1,currentStage);
+   if(stage!==null)continue; // Preserve the first action failure across afterEach/teardown.
+   if(step.error!==undefined&&step.error!==null) {stage=currentStage??'UNKNOWN';stageSource='STEP';}
+   else if(step.duration===-1) {stage=currentStage??'UNKNOWN';stageSource='INCOMPLETE_STEP';}
+   else if(ownStage!==null&&ownStage!=='UNKNOWN'&&completedStages.at(-1)!==ownStage)completedStages.push(ownStage);
+  }
+ };
+ if(attempt.steps!==undefined)visit(attempt.steps,0);
+ if(!['passed','skipped'].includes(attempt.status)&&stage===null) {
+  stage=fixtureTimeoutStage(attempt);
+  stageSource=stage===null?'UNLOCATED':'FIXTURE_TIMEOUT';
+  stage??='UNKNOWN';
+ }
+ if(attempt.status==='skipped'&&count===0)stageSource='NOT_EXECUTED';
+ return validateBrowserDiagnostic({schemaVersion:1,stage,stageSource,code:STATUS_CODES[attempt.status],
+  lastCompletedStage:completedStages.at(-1)??null,completedStages,durationMs:attempt.duration},attempt.status);
+}
+export function validateBrowserDiagnostic(value,status) {
+ requireValue(plainObject(value)&&value.schemaVersion===1&&Object.hasOwn(STATUS_CODES,status)
+  &&value.code===STATUS_CODES[status]&&DIAGNOSTIC_SOURCES.has(value.stageSource)
+  &&(value.stage===null||DIAGNOSTIC_STAGES.has(value.stage))
+  &&Array.isArray(value.completedStages)&&value.completedStages.length<=64
+  &&value.completedStages.every(stage=>DIAGNOSTIC_STAGES.has(stage)&&stage!=='UNKNOWN')&&durationOk(value.durationMs)
+  &&value.lastCompletedStage===(value.completedStages.at(-1)??null),'B_REPORT');
+ requireValue((['STEP','INCOMPLETE_STEP','FIXTURE_TIMEOUT','UNLOCATED'].includes(value.stageSource))===(value.stage!==null)
+  &&(value.stageSource!=='UNLOCATED'||value.stage==='UNKNOWN')
+  &&(value.stageSource!=='FIXTURE_TIMEOUT'||['FIXTURE_BROWSER','FIXTURE_CONTEXT','FIXTURE_PAGE'].includes(value.stage))
+  &&(value.stageSource!=='NOT_EXECUTED'||(status==='skipped'&&value.completedStages.length===0)),'B_REPORT');
+ return {schemaVersion:1,stage:value.stage,stageSource:value.stageSource,code:value.code,
+  lastCompletedStage:value.lastCompletedStage,completedStages:[...value.completedStages],durationMs:value.durationMs};
+}
+export function projectBrowserDiagnostics(raw,identified) {
+ const records=[];
+ const visit=(suites,depth)=>{
+  requireValue(Array.isArray(suites)&&depth<=30,'B_REPORT');
+  for(const suite of suites) {
+   requireValue(plainObject(suite)&&Array.isArray(suite.specs),'B_REPORT');
+   for(const spec of suite.specs) {
+    requireValue(plainObject(spec)&&Array.isArray(spec.tests),'B_REPORT');
+    for(const result of spec.tests) { requireValue(records.length<25,'B_REPORT');records.push({caseId:spec.title,result}); }
+   }
+   if(suite.suites!==undefined)visit(suite.suites,depth+1);
+  }
+ };
+ visit(raw?.suites,0);
+ requireValue(Array.isArray(identified)&&records.length===identified.length,'B_REPORT');
+ return records.map(({caseId,result},index)=>{
+  const test=identified[index];
+  requireValue(plainObject(result)&&plainObject(test)&&caseId===test.caseId&&result.projectName===test.project&&Array.isArray(result.results)
+   &&result.results.length===1&&result.results[0].retry===0&&test.attempts.length===1
+   &&result.results[0].status===test.attempts[0].status,'B_REPORT');
+  return Object.hasOwn(result.results[0],'closedDiagnostic')
+   ?validateBrowserDiagnostic(result.results[0].closedDiagnostic,result.results[0].status)
+   :projectBrowserDiagnostic(result.results[0]);
+ });
 }

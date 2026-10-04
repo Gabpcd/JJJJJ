@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { startPrivateServer } from './private-app.mjs';
 import { assertRestoreMatrix } from './matrix-contract.mjs';
-import { PRODUCT_SHA, requireValue } from './contract.mjs';
+import { PRODUCT_SHA, requireValue, projectBrowserDiagnostics, validateBrowserDiagnostic } from './contract.mjs';
 // Playwright matches grep against project + file + case, not the case alone.
 // A pure seam keeps the actual CLI selection covered before any browser starts.
 export function browserArguments(side) {
@@ -13,6 +13,9 @@ export function browserArguments(side) {
  const args=['/node_modules/@playwright/test/cli.js','test','--config=/restore-code/e2e/restore-app.config.ts','--global-timeout='+(side==='source'?'180000':'600000')];
  if(side==='source')args.push('--project=ordinateur','--grep= RESTORE_OWNER_[SE]$');
  return args;
+}
+export function browserAttempt(attempt,diagnostic) {
+ return {status:attempt.status,retry:attempt.retry,code:attempt.code,diagnostic:validateBrowserDiagnostic(diagnostic,attempt.status)};
 }
 async function main(side) {
  requireValue(['source','target'].includes(side)&&process.env.JOLENE_RESTORE_BROWSER_INPUT==='/restore-private/input.json','B_BROWSER');
@@ -38,13 +41,14 @@ async function main(side) {
   const {projectReport}=await import('/restore-projector.mjs');
   const projected=await projectReport(raw,{phase:'simulation-admin',cwd:'/restore-code'});
   const tests=assertRestoreMatrix(raw,projected.tests,side);
+  const diagnostics=projectBrowserDiagnostics(raw,tests);
   const expected=side==='source'?2:25;
   const pass=code===0&&projected.globalErrorCount===0&&projected.counts.expected===expected
    &&['unexpected','flaky','skipped'].every(key=>projected.counts[key]===0);
   writeFileSync('/restore-output/public-browser.json',JSON.stringify({schemaVersion:1,productSha:PRODUCT_SHA,side,
    complete:true,passed:pass,expectedCount:expected,counts:projected.counts,globalErrorCount:projected.globalErrorCount,
-   tests:tests.map(value=>({caseId:value.caseId,project:value.project,outcome:value.outcome,
-     attempts:value.attempts.map(attempt=>({status:attempt.status,retry:attempt.retry,code:attempt.code}))}))}),{mode:0o600,flag:'wx'});
+   tests:tests.map((value,index)=>({caseId:value.caseId,project:value.project,outcome:value.outcome,
+     attempts:value.attempts.map(attempt=>browserAttempt(attempt,diagnostics[index]))}))}),{mode:0o600,flag:'wx'});
   process.exitCode=pass?0:code||1;
  }finally{server.closeAllConnections();await new Promise(done=>server.close(done));}
 }

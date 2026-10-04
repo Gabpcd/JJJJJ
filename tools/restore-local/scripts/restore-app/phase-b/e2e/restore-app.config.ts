@@ -7,7 +7,7 @@ const fixture = readBrowserInput();
 export default defineConfig({
   testDir: '.', testMatch: 'restore-app.spec.ts', workers: 1, retries: 0,
   failOnFlakyTests: true, forbidOnly: true, timeout: 90_000, expect: { timeout: 12_000 },
-  outputDir: '/tmp/restore-results', reporter: [['json', { outputFile: '/restore-output/report.json' }]],
+  outputDir: '/tmp/restore-results', reporter: [['../closed-json-reporter.mjs', { outputFile: '/restore-output/report.json' }]],
   // No globalSetup, storageState injection, interception fixtures or media of Auth.
   use: { baseURL: fixture.appUrl, locale: 'fr-FR', timezoneId: 'Europe/Paris',
     serviceWorkers: 'allow', screenshot: 'off', trace: 'off', video: 'off', acceptDownloads: true },

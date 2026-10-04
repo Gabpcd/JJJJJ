@@ -13,37 +13,57 @@ const pdfButton = (page: Page) => page.getByRole('button', { name: `Télécharge
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 test.beforeEach(async ({ context, page }) => {
-  // Only a consent preference; no session, user, role or backend response injected.
-  await page.addInitScript(() => localStorage.setItem('cookie-consent', 'refused'));
-  let externalAttempts = 0, pageErrors = 0;
-  context.on('page', extra => extra.on('pageerror', () => pageErrors++));
-  page.on('pageerror', () => pageErrors++);
-  await context.route('**/*', async request => {
-    const url = new URL(request.request().url());
-    if (url.origin === fixture.appUrl || url.origin === fixture.apiUrl || ['blob:', 'data:'].includes(url.protocol)) return request.continue();
-    externalAttempts++; return request.abort('blockedbyclient');
+  await test.step('BEFORE_EACH', async () => {
+    // Only a consent preference; no session, user, role or backend response injected.
+    await page.addInitScript(() => localStorage.setItem('cookie-consent', 'refused'));
+    let externalAttempts = 0, pageErrors = 0;
+    context.on('page', extra => extra.on('pageerror', () => pageErrors++));
+    page.on('pageerror', () => pageErrors++);
+    await context.route('**/*', async request => {
+      const url = new URL(request.request().url());
+      if (url.origin === fixture.appUrl || url.origin === fixture.apiUrl || ['blob:', 'data:'].includes(url.protocol)) return request.continue();
+      externalAttempts++; return request.abort('blockedbyclient');
+    });
+    // Real sockets can only reach the internal Docker network. No fake Realtime.
+    // The absent Realtime service is a declared limitation, never a console-clean claim.
+    (page as any).__restoreFailures = () => ({ externalAttempts, pageErrors });
   });
-  // Real sockets can only reach the internal Docker network. No fake Realtime.
-  // The absent Realtime service is a declared limitation, never a console-clean claim.
-  (page as any).__restoreFailures = () => ({ externalAttempts, pageErrors });
 });
 test.afterEach(async ({ page }) => {
-  expect((page as any).__restoreFailures(), 'No external resource or unhandled App failure').toEqual({ externalAttempts: 0, pageErrors: 0 });
+  await test.step('AFTER_EACH', async () => {
+    expect((page as any).__restoreFailures(), 'No external resource or unhandled App failure').toEqual({ externalAttempts: 0, pageErrors: 0 });
+  });
 });
 
 async function login(page: Page, member: Member) {
-  await page.goto('/connexion');
-  await page.locator('input[type=email]').fill(member.email);
-  await page.locator('input[type=password]').first().fill(member.password);
+  await test.step('LOGIN_NAVIGATE', async () => {
+    await page.goto('/connexion');
+  });
+  await test.step('LOGIN_EMAIL', async () => {
+    await page.locator('input[type=email]').fill(member.email);
+  });
+  await test.step('LOGIN_PASSWORD', async () => {
+    await page.locator('input[type=password]').first().fill(member.password);
+  });
   const authenticated = page.waitForResponse(response => response.url().startsWith(fixture.apiUrl + '/auth/v1/token?grant_type=password')
     && response.request().method() === 'POST');
-  await page.getByTestId('login-submit').click();
-  expect((await authenticated).status()).toBe(200);
-  await expect(page).toHaveURL(new RegExp(`/${member.role === 'SOIGNANT' ? 'soignant' : 'etablissement'}/`));
+  await test.step('LOGIN_SUBMIT', async () => {
+    await page.getByTestId('login-submit').click();
+  });
+  await test.step('LOGIN_AUTH_RESPONSE', async () => {
+    expect((await authenticated).status()).toBe(200);
+  });
+  await test.step('LOGIN_ROUTE', async () => {
+    await expect(page).toHaveURL(new RegExp(`/${member.role === 'SOIGNANT' ? 'soignant' : 'etablissement'}/`));
+  });
   // Finish the real post-login navigation before opening a second document.
-  if (member.role === 'SOIGNANT') await expect(page.getByRole('heading', { level: 1, name: /^(Bonjour|Bonsoir),/ })).toBeVisible();
-  else await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
-  expect(await access(page, member.id, false)).toMatchObject({ userStatus: 200, sameUser: true });
+  await test.step('LOGIN_DASHBOARD', async () => {
+    if (member.role === 'SOIGNANT') await expect(page.getByRole('heading', { level: 1, name: /^(Bonjour|Bonsoir),/ })).toBeVisible();
+    else await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+  });
+  await test.step('LOGIN_IDENTITY', async () => {
+    expect(await access(page, member.id, false)).toMatchObject({ userStatus: 200, sameUser: true });
+  });
 }
 
 async function invoiceVisible(page: Page, member: Member) {
@@ -109,47 +129,87 @@ async function download(page: Page) {
 for (const [caseId, index] of [['RESTORE_OWNER_S', 0], ['RESTORE_OWNER_E', 1]] as const) test(caseId, async ({ page }) => {
   const member: Member = fixture.members[index];
   await login(page, member);
-  await page.goto(route(member.role));
-  await invoiceVisible(page, member);
-  expect(await access(page, member.id)).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: true,
-    signStatus: 200, signedPresent: true });
-  await download(page);
-  await page.reload();
-  await invoiceVisible(page, member);
-  expect(await access(page, member.id)).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: true,
-    signStatus: 200, signedPresent: true });
-  await download(page);
+  await test.step('MISSION_NAVIGATE', async () => {
+    await page.goto(route(member.role));
+  });
+  await test.step('DOCUMENT_VISIBLE', async () => {
+    await invoiceVisible(page, member);
+  });
+  await test.step('DOCUMENT_ACCESS', async () => {
+    expect(await access(page, member.id)).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: true,
+      signStatus: 200, signedPresent: true });
+  });
+  await test.step('PDF_DOWNLOAD', async () => {
+    await download(page);
+  });
+  await test.step('RELOAD', async () => {
+    await page.reload();
+  });
+  await test.step('RELOADED_DOCUMENT_VISIBLE', async () => {
+    await invoiceVisible(page, member);
+  });
+  await test.step('RELOADED_DOCUMENT_ACCESS', async () => {
+    expect(await access(page, member.id)).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: true,
+      signStatus: 200, signedPresent: true });
+  });
+  await test.step('RELOADED_PDF_DOWNLOAD', async () => {
+    await download(page);
+  });
 });
 
 for (const [caseId, index] of [['RESTORE_OTHER_S', 2], ['RESTORE_OTHER_E', 3]] as const) test(caseId, async ({ page }) => {
   const member: Member = fixture.members[index];
   await login(page, member);
-  await page.goto(route(member.role));
+  await test.step('MISSION_NAVIGATE', async () => {
+    await page.goto(route(member.role));
+  });
   // This fixture is EN_COURS and assigned: the canonical mission RLS also
   // denies both outsiders. Open mission discovery is outside this scenario.
   for (let pass = 0; pass < 2; pass++) {
     // Absence is asserted only after the real route has resolved, never during a spinner.
-    await expect(page.getByRole('heading', { level: 1, name: member.role === 'SOIGNANT' ? 'Mission introuvable' : 'Impossible de charger la mission', exact: true })).toBeVisible();
-    await expect(pdfButton(page)).toHaveCount(0);
-    const result = await access(page, member.id);
-    expect(result).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: false, emptyRows: true, signedPresent: false });
-    expect([400, 403, 404]).toContain(result.signStatus);
-    if (pass === 0) await page.reload();
+    await test.step('DENIED_ROUTE', async () => {
+      await expect(page.getByRole('heading', { level: 1, name: member.role === 'SOIGNANT' ? 'Mission introuvable' : 'Impossible de charger la mission', exact: true })).toBeVisible();
+    });
+    await test.step('DOCUMENT_ABSENT', async () => {
+      await expect(pdfButton(page)).toHaveCount(0);
+    });
+    await test.step('DOCUMENT_ACCESS', async () => {
+      const result = await access(page, member.id);
+      expect(result).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: false, emptyRows: true, signedPresent: false });
+      expect([400, 403, 404]).toContain(result.signStatus);
+    });
+    if (pass === 0) await test.step('RELOAD', async () => {
+      await page.reload();
+    });
   }
-  await expect(pdfButton(page)).toHaveCount(0);
+  await test.step('DOCUMENT_ABSENT', async () => {
+    await expect(pdfButton(page)).toHaveCount(0);
+  });
 });
 
 test('RESTORE_ANONYMOUS', async ({ page }) => {
-  await page.goto(route('SOIGNANT'));
+  await test.step('MISSION_NAVIGATE', async () => {
+    await page.goto(route('SOIGNANT'));
+  });
   for (let pass = 0; pass < 2; pass++) {
-    await expect(page).toHaveURL(/\/connexion/);
-    await expect(page.getByTestId('login-submit')).toBeVisible();
-    const result = await access(page, null);
-    expect(result.exactInvoice).toBe(false);
-    expect(result.signedPresent).toBe(false);
-    expect(result.rowStatus === 200 ? result.emptyRows : [401, 403].includes(result.rowStatus!)).toBe(true);
-    expect([400, 401, 403, 404]).toContain(result.signStatus);
-    await expect(pdfButton(page)).toHaveCount(0);
-    if (pass === 0) await page.reload();
+    await test.step('ANONYMOUS_REDIRECT', async () => {
+      await expect(page).toHaveURL(/\/connexion/);
+    });
+    await test.step('ANONYMOUS_LOGIN_VISIBLE', async () => {
+      await expect(page.getByTestId('login-submit')).toBeVisible();
+    });
+    await test.step('DOCUMENT_ACCESS', async () => {
+      const result = await access(page, null);
+      expect(result.exactInvoice).toBe(false);
+      expect(result.signedPresent).toBe(false);
+      expect(result.rowStatus === 200 ? result.emptyRows : [401, 403].includes(result.rowStatus!)).toBe(true);
+      expect([400, 401, 403, 404]).toContain(result.signStatus);
+    });
+    await test.step('DOCUMENT_ABSENT', async () => {
+      await expect(pdfButton(page)).toHaveCount(0);
+    });
+    if (pass === 0) await test.step('RELOAD', async () => {
+      await page.reload();
+    });
   }
 });
