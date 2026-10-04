@@ -26,6 +26,11 @@ function scoreBadge(score: number) {
 
 interface ListeCandidaturesProps {
   missionId: string;
+  /** Lectures bornées à la mission, pour les adhésions secondaires et groupes. */
+  chargerCandidaturesHabilitees?: () => Promise<any[]>;
+  chargerPlanningHabilite?: () => Promise<CreneauPointage[]>;
+  /** La vue bornée ne propose pas le profil complet hors de son périmètre. */
+  afficherDetailScore?: boolean;
   actualisation?: number;
   missionIntitule?: string;
   missionCreneaux?: CreneauPointage[];
@@ -134,6 +139,9 @@ function getCandidatMatchBadge(
 
 export function ListeCandidatures({
   missionId,
+  chargerCandidaturesHabilitees,
+  chargerPlanningHabilite,
+  afficherDetailScore = true,
   actualisation = 0,
   missionIntitule,
   missionCreneaux = [],
@@ -172,6 +180,10 @@ export function ListeCandidatures({
     setLoading(true);
     setErreurChargement(null);
     try {
+      if (chargerCandidaturesHabilitees) {
+        setCandidatures(await chargerCandidaturesHabilitees());
+        return;
+      }
       const { data, error } = await supabase
         .from('candidatures')
         .select('id, soignant_id, message, statut, cree_le')
@@ -198,6 +210,11 @@ export function ListeCandidatures({
   };
 
   const chargerPlanningExactServeur = async (): Promise<CreneauExact[]> => {
+    if (chargerPlanningHabilite) {
+      const verification = verifierPlanningExact(await chargerPlanningHabilite(), missionNbCreneaux);
+      if (verification.erreur) throw new Error(verification.erreur);
+      return verification.creneaux;
+    }
     const { data, error } = await supabase
       .from('mission_creneaux')
       .select('id, mission_id, debut, fin, est_pause, type_creneau')
@@ -434,7 +451,7 @@ export function ListeCandidatures({
                     {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees >= 3 ? (
                       <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)} inline-flex items-center gap-1`}>
                         ⭐ {c.soignant.score_fiabilite}/100
-                        <PopoverScoreSoignant soignantId={c.soignant.id} scoreFiabilite={c.soignant.score_fiabilite} />
+                        {afficherDetailScore && <PopoverScoreSoignant soignantId={c.soignant.id} scoreFiabilite={c.soignant.score_fiabilite} />}
                       </span>
                     ) : (
                       <span className="badge-base text-[10px] bg-muted text-muted-foreground">Pas encore d'évaluation</span>

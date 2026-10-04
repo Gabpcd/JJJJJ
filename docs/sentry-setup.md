@@ -1,65 +1,44 @@
 # Setup Sentry — Jolene
 
-Date dernière mise à jour : 2026-05-03
+Date dernière mise à jour : 2026-10-02
 
-Ce document explique comment activer, configurer et opérer Sentry pour le frontend Jolene (web + mobile Capacitor).
+Ce document décrit la configuration Sentry du frontend Jolene et la vérification des traces. Les constats ci-dessous concernent le web de production ; ils ne valident pas les applications mobiles Capacitor.
 
-## TL;DR — état du code
+## État vérifié et limite restante
 
-Le code est **prêt en production**. Il manque uniquement les variables d'environnement côté Vercel :
+Le projet existant est **`jolene-app`**, dans l'organisation **`jolene-z6`** : [console Sentry Jolene](https://jolene-z6.sentry.io/).
 
-| Variable | Type | Côté | Rôle |
+Le 1er octobre 2026, `SENTRY_ORG=jolene-z6` et `SENTRY_PROJECT=jolene-app` ont été enregistrés dans Vercel pour Production et Preview ; `SENTRY_UPLOAD_ENABLED=true` a été confirmé pour Production. Les uploads privés de cartes ont été confirmés pour les releases `f82f5d05` (1 029 fichiers) et `58fd2931` (1 025 fichiers). Les contrôles publics ont retrouvé l'identifiant de release et un debug ID dans le JavaScript ; les cartes interrogées publiquement renvoyaient HTTP 404.
+
+**La lisibilité d'une trace reste non prouvée.** L'unique événement de diagnostic autorisé a bien été reçu, mais concernait la release antérieure `083abf7a` et sa trace était minifiée. Aucun événement de la release `f82f5d05` n'était disponible lors du contrôle suivant. Le contrôle public du 2 octobre a retrouvé le marqueur de version `88ecd` et un debug ID ; il ne prouve ni l'upload privé de cette version ni la désobfuscation d'un événement. La session Sentry avait expiré : une nouvelle lecture authentifiée reste nécessaire.
+
+Un déploiement Vercel `READY`, un client Sentry configuré, une tentative d'envoi ou un upload réussi ne suffisent pas, seuls, à valider la lisibilité des traces. Aucun nouveau test d'envoi n'a été effectué pour cette mise à jour documentaire.
+
+## Configuration de référence
+
+Dashboard Vercel → Project `jolene` → Settings → Environment Variables. Ne pas recréer d'organisation ou de projet pour poursuivre cette vérification.
+
+| Variable | Valeur ou provenance | Environnement concerné | Rôle |
 |---|---|---|---|
-| `VITE_SENTRY_DSN` | publique | Vercel (Production + Preview) | Point d'envoi des events depuis le navigateur |
-| `SENTRY_AUTH_TOKEN` | secret | Vercel (Production uniquement) | Upload des sourcemaps au build |
-| `SENTRY_UPLOAD_ENABLED` | `"true"` | Vercel (Production uniquement) | **Active réellement l'upload sourcemaps**. À ne mettre qu'APRÈS création du projet Sentry, sinon le build affiche `error: Project not found` (non bloquant mais anxiogène). |
-| `SENTRY_ORG` | (optionnel, défaut `jolene`) | Vercel | Org Sentry |
-| `SENTRY_PROJECT` | (optionnel, défaut `jolene-frontend`) | Vercel | Projet Sentry |
+| `VITE_SENTRY_DSN` | DSN du projet existant, sans le recopier dans les preuves | Production ; autres environnements selon leur configuration | Point d'envoi des événements depuis le navigateur |
+| `SENTRY_AUTH_TOKEN` | Secret de compilation géré dans Vercel, jamais dans ce document ni dans le frontend | Production | Authentifie l'upload privé des cartes |
+| `SENTRY_UPLOAD_ENABLED` | `true` confirmé | Production | Active l'upload lorsque le secret de compilation est également présent |
+| `SENTRY_ORG` | `jolene-z6` confirmé | Production, Preview | Organisation destinataire |
+| `SENTRY_PROJECT` | `jolene-app` confirmé | Production, Preview | Projet destinataire |
 
-> **`VITE_SENTRY_DSN` n'est pas un secret.** Le DSN apparaît dans le bundle JS public — c'est le comportement normal Sentry. Le rate-limiting se fait côté Sentry par projet.
+`VITE_SENTRY_DSN` fait partie de la configuration publique du navigateur. `SENTRY_AUTH_TOKEN` doit rester côté compilation. La présence de l'organisation et du projet en Preview ne prouve pas un upload Preview ; les uploads confirmés ci-dessus concernent Production. Les simulations qui désactivent volontairement Sentry ne valident pas sa réception réelle.
 
-## Activation step-by-step
+Le code conserve des valeurs de repli historiques (`jolene` / `jolene-frontend`) : elles ne désignent pas la destination configurée. Vérifier les variables explicites de l'environnement concerné avant de conclure à une erreur de projet. Les preuves actuelles ne justifient pas de modifier les secrets ou de relancer un déploiement.
 
-### 1. Créer le projet Sentry
+## Vérifier les traces d'une version concordante
 
-1. https://sentry.io → crée une org `jolene` (ou rejoindre l'existante)
-2. Create Project → React → name `jolene-frontend`
-3. Récupérer le DSN (`https://abc123@o000000.ingest.sentry.io/000000`)
+1. Se reconnecter à la [console de l'organisation `jolene-z6`](https://jolene-z6.sentry.io/) et sélectionner le projet `jolene-app`.
+2. Relever la release du déploiement à vérifier. Le web de production utilise les huit premiers caractères du SHA Git Vercel ; le runtime et l'upload reçoivent le même identifiant défini dans `vite.config.ts`.
+3. Dans les [cartes du projet](https://jolene-z6.sentry.io/settings/projects/jolene-app/source-maps/), vérifier la réception des artefacts correspondant à cette version. Conserver la release, la référence du bundle et l'heure du constat, sans secrets. Un ancien bundle reçu ne prouve pas l'upload d'une version plus récente.
+4. Dans les événements existants, filtrer le projet, l'environnement `production`, une période appropriée et `release:<identifiant exact>`. Ouvrir un événement qui possède une stack trace. Vérifier sa release et, lorsqu'il est disponible, le debug ID du fichier avec celui de l'artefact correspondant ; le nombre de fichiers uploadés ne suffit pas à établir cette correspondance.
+5. Constater dans cet événement des fichiers source et des lignes lisibles, puis conserver sa référence, la release et le résultat. Si aucun événement correspondant n'existe, ou si la trace reste minifiée, garder le statut **« lisibilité non vérifiée »** et préciser le point manquant. Ne pas utiliser l'ancien événement `083abf7a` pour valider les cartes d'une autre release.
 
-### 2. Créer un Auth Token
-
-1. https://sentry.io → User Settings → Auth Tokens
-2. Create Token avec scopes : `project:releases`, `org:read`, `project:read`
-3. Copier le token (visible une seule fois)
-
-### 3. Configurer Vercel
-
-Dashboard Vercel → Project `jolene` → Settings → Environment Variables
-
-| Variable | Value | Environments |
-|---|---|---|
-| `VITE_SENTRY_DSN` | `https://abc...@oXX.ingest.sentry.io/XXX` | Production, Preview, Development |
-| `SENTRY_AUTH_TOKEN` | (token créé étape 2) | Production |
-| `SENTRY_UPLOAD_ENABLED` | `true` | Production |
-| `SENTRY_ORG` | `jolene` | Production |
-| `SENTRY_PROJECT` | `jolene-frontend` | Production |
-
-> **Important** : ne définir `SENTRY_UPLOAD_ENABLED=true` qu'après avoir créé le projet Sentry (étape 1). Sinon le build Vercel affiche un log rouge `error: Project not found` (non bloquant — le deploy passe en READY — mais visuellement perturbant).
-
-Redeploy le dernier commit `main` pour appliquer.
-
-### 4. Vérifier la chaîne
-
-1. Se connecter sur https://jolene.app/admin/status (compte `admin@jolene.app`)
-2. Section **Outils diagnostic** → cliquer **"Déclencher erreur test Sentry"**
-3. Vérifier dans Sentry dashboard que l'event apparaît avec :
-   - User context (email admin)
-   - Tag `environment: production`
-   - Tag `test: true`
-   - Stack trace **désobfusquée** (sourcemaps OK = lignes/fichiers TS lisibles)
-   - Release : SHA git court Vercel
-
-> Filtrer les events `test:true` du dashboard principal : `event.tags.test:true` dans la search bar Sentry → "Save as filter".
+La marche normale ci-dessus consulte les événements déjà présents et ne crée pas d'événement. Si un nouveau diagnostic est autorisé séparément, le bouton **« Tester Sentry »** de `/admin/status` affiche seulement une tentative d'envoi et sa référence éventuelle. Sa réception, sa version et la lisibilité de sa trace doivent ensuite être constatées dans Sentry. Le statut local **« Réception des événements non vérifiée »** décrit uniquement la configuration du client et reste indépendant du constat dans la console ; il ne signale pas à lui seul une panne.
 
 ## Configuration appliquée (référence)
 
@@ -105,10 +84,10 @@ Tous les `.then(undefined, (err) => handleErrorSilent(err, 'contexte'))` appara�
 
 ### `vite.config.ts` (sentryVitePlugin)
 
-- Conditionnel sur `SENTRY_AUTH_TOKEN` (skip en dev local)
-- `release: { name: APP_VERSION, create: true, finalize: true }` → crée la release dans Sentry et marque les sourcemaps
-- Sourcemaps uploadées depuis `./dist/**` à chaque build
-- `errorHandler` non-bloquant si l'org/project n'existe pas (le build ne casse pas)
+- Upload conditionnel sur `SENTRY_UPLOAD_ENABLED=true` **et** la présence de `SENTRY_AUTH_TOKEN` ; sans les deux, les cartes de production ne sont pas générées.
+- `release: { name: APP_VERSION, create: true, finalize: true }` utilise la même valeur que `Sentry.init({ release })` dans `src/main.tsx`.
+- Quand l'upload est actif, les cartes sont générées en mode `hidden`, envoyées depuis `./dist/**`, puis supprimées du dossier de livraison avec `filesToDeleteAfterUpload`.
+- `errorHandler` est non bloquant : le statut Vercel `READY` ne prouve pas un upload réussi. Vérifier le résultat de l'upload et les artefacts reçus dans Sentry pour la version concernée.
 
 ## Inviter Gabrielle (et autres collègues)
 
@@ -122,7 +101,7 @@ Tous les `.then(undefined, (err) => handleErrorSilent(err, 'contexte'))` appara�
 Settings → Alerts → Create Alert :
 
 ```
-Project: jolene-frontend
+Project: jolene-app
 When: An issue is seen
 If:
   - the issue's level is equal to error
@@ -156,9 +135,9 @@ Filtres de tri utiles :
 | `tag:test:true` | À exclure du dashboard principal |
 
 Pour chaque issue :
-1. **Stack trace** : doit être désobfusquée (lignes TS visibles)
+1. **Stack trace** : vérifier les fichiers source et lignes lisibles pour la release exacte ; une trace minifiée reste non validée.
 2. **Replay** (si erreur déclenchée pendant session) : voir le contexte UI sans contenu PII
-3. **User context** : `id` (Supabase user UUID) + email (peut être redacted selon scope)
+3. **User context** : utiliser seulement le contexte nécessaire au diagnostic ; la présence d'un email n'est pas un critère de validation des traces.
 4. **Breadcrumbs** : navigation, console, requêtes (URLs scrubbées des params sensibles)
 
 ## Quotas et plan
@@ -176,14 +155,12 @@ Optimisation : si le quota free est dépassé fréquemment, ajuster :
 | Symptôme | Cause probable | Fix |
 |---|---|---|
 | Aucun event en prod | DSN non configurée | Vérifier `VITE_SENTRY_DSN` côté Vercel |
-| Stack traces minifiées | `SENTRY_AUTH_TOKEN` manquant ou `SENTRY_UPLOAD_ENABLED` non setté | Vérifier upload sourcemaps dans logs Vercel build |
-| Build Vercel affiche `error: Project not found` (rouge) | `SENTRY_UPLOAD_ENABLED=true` mais projet Sentry pas créé | Créer le projet Sentry (étape 1) ou retirer `SENTRY_UPLOAD_ENABLED` temporairement |
+| Stack traces minifiées | Artefacts absents, mauvais projet ou événement d'une autre version | Vérifier la release de l'événement, son debug ID et les cartes reçues dans `jolene-z6` / `jolene-app` avant toute reconfiguration |
+| Upload affiche `error: Project not found` | Destination de compilation incorrecte ou accès insuffisant au projet existant | Vérifier `SENTRY_ORG=jolene-z6`, `SENTRY_PROJECT=jolene-app` et les droits de compilation, sans recopier le secret ni recréer le projet |
 | Release `unknown` | `__APP_VERSION__` non injectée | Vérifier `vite.config.ts` define + redeploy |
-| Tile "Sentry Dégradé" sur `/admin/healthcheck` | DSN non configurée | Voir étape 3 |
+| Diagnostic Sentry indique « Réception des événements non vérifiée » | Le statut local décrit la configuration, pas la réception | Suivre la vérification par release concordante dans Sentry ; ne pas traiter ce libellé seul comme une panne |
 | Trop de bruit ResizeObserver | `ignoreErrors` non appliqué | Vérifier déploiement code récent |
 
 ## Filtrer les events `test:true` du dashboard
 
-Sentry UI → Settings → Inbound Filters → Custom :
-- Add filter : `test:true` → drop event before storage
-  → ces tests ne consomment plus le quota
+Pour la consultation courante, exclure de l’affichage les événements dont le tag `test` vaut `true`. Pour retrouver un diagnostic déjà envoyé, filtrer sur ce tag et la release attendue. Ne pas confondre ce filtre d'affichage avec un filtre d'ingestion qui supprimerait l'événement avant sa réception et empêcherait sa vérification.

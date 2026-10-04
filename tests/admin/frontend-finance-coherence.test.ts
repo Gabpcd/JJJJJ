@@ -81,7 +81,8 @@ describe('cohérence financière des interfaces', () => {
     expect(facturation).toContain('`À régler avant le ${echeanceLisible}`');
     expect(facturation).toContain('`En retard depuis le ${echeanceLisible}`');
     expect(facturation).toContain('Virement déclaré · vérification en cours');
-    expect(facturation).toContain('canManagePayments && !virementDeclare');
+    expect(facturation).toContain('Consulter les modalités de règlement');
+    expect(facturation).toContain('navigate(`/etablissement/facturation/${f.facture_id}`)');
     expect(facturation).toContain('Période facturée :');
     expect(facturation).toContain('Le montant correspond à cette période, pas nécessairement à toute la mission.');
     expect(facturation).not.toContain('Factures impayées');

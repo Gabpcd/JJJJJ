@@ -236,6 +236,20 @@ jobs:
           failed_fns=""
           for dir in */; do
             fn="${dir%/}"
+            # Le callback doit accepter les deux formats avant que l'authorize
+            # puisse émettre un state signé. Une erreur ne doit pas ouvrir une
+            # fenêtre où les nouvelles connexions PSC deviennent illisibles.
+            if [ "$fn" = "psc-callback" ]; then continue; fi
+            if [ "$fn" = "psc-authorize" ]; then
+              echo "::group::Deploying psc-callback before psc-authorize"
+              if ! deploy_with_retry "psc-callback"; then
+                failed_fns="$failed_fns psc-callback psc-authorize"
+                echo "::error::psc-authorize conservé : callback compatible non confirmé"
+                echo "::endgroup::"
+                continue
+              fi
+              echo "::endgroup::"
+            fi
             if [ -f "$fn/index.ts" ]; then
               echo "::group::Deploying $fn"
               if ! deploy_with_retry "$fn"; then

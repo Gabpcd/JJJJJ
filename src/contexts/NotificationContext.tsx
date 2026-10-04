@@ -46,11 +46,11 @@ const ICONS: Record<TypeNotification, React.ReactNode> = {
   info: <Info className="h-5 w-5 text-info flex-shrink-0" aria-hidden="true" />,
 };
 
-const BG_CLASSES: Record<TypeNotification, string> = {
-  succes: 'bg-success/5 border-l-success',
-  erreur: 'bg-destructive/5 border-l-destructive',
-  avertissement: 'bg-warning/5 border-l-warning',
-  info: 'bg-info/5 border-l-info',
+const ACCENT_CLASSES: Record<TypeNotification, string> = {
+  succes: 'border-l-success',
+  erreur: 'border-l-destructive',
+  avertissement: 'border-l-warning',
+  info: 'border-l-info',
 };
 
 const LIBELLES_TYPE: Record<TypeNotification, string> = {
@@ -119,7 +119,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             key={n.id}
             role={n.type === 'erreur' ? 'alert' : 'status'}
             data-notification-type={n.type}
-            className={`pointer-events-auto animate-slide-in rounded-xl border-l-4 p-4 shadow-lg bg-card ${BG_CLASSES[n.type]} flex items-start gap-3`}
+            className={`pointer-events-auto animate-slide-in rounded-xl border-l-4 p-4 shadow-lg bg-card ${ACCENT_CLASSES[n.type]} flex items-start gap-3`}
           >
             {ICONS[n.type]}
             <div className="flex-1 min-w-0">
@@ -142,7 +142,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => retirer(n.id)}
               aria-label="Fermer la notification"
-              className="text-muted-foreground hover:text-foreground flex-shrink-0 min-h-[24px] min-w-[24px] flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="text-muted-foreground hover:text-foreground flex-shrink-0 h-11 w-11 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>

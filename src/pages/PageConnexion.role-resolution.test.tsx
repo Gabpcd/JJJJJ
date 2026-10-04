@@ -127,11 +127,11 @@ describe('PageConnexion — résolution sûre du rôle', () => {
     expect(mocks.connexion).not.toHaveBeenCalled();
   });
 
-  it.each(['SOIGNANT', 'ADMIN_GROUPE'])('ne fait pas passer %s dans la route établissement', async role => {
+  it.each(['SOIGNANT', 'ADMIN_GROUPE'])('conserve le retour mission de %s avant contrôle des droits ciblés', async role => {
     mocks.getSession.mockResolvedValue({ data: { session: { user: { app_metadata: { role } } } } });
     renderConnexion('/connexion?return=%2Fetablissement%2Fmissions%2F71000000-0000-4000-8000-000000000003');
     await soumettreConnexion();
-    expect(await screen.findByText(role === 'SOIGNANT' ? 'Tableau de bord soignant' : 'Tableau de bord groupe')).toBeInTheDocument();
+    expect(await screen.findByText('Fiche mission retrouvée')).toBeInTheDocument();
   });
 
   it.each(['https://evil.invalid/etablissement/missions/71000000-0000-4000-8000-000000000003', '//evil.invalid', '/etablissement/missions/../../admin', '/etablissement/missions/creer', '/etablissement/missions/71000000-0000-4000-8000-000000000003?return=https://evil.invalid'])('refuse le retour mission non canonique %s', async retour => {

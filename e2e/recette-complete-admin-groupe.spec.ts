@@ -99,6 +99,17 @@ async function fixtureGroupe(page: Page, invite = false) {
   await page.getByLabel('Mot de passe', { exact: true }).fill('Mot!Solide-Recette2026');
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
   await expect(page).toHaveURL(invite ? /\/etablissement\/tableau-de-bord$/ : /\/groupe\/tableau-de-bord$/);
+  if (invite) {
+    // L'URL peut précéder le montage du cadre invité. Comme l'entrée standard,
+    // attendre ses lectures avant que allerA remplace le document sous WebKit.
+    await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached();
+    await expect.poll(() => etat.appels.includes('POST fn_mes_permissions_etab')
+      && etat.appels.includes('POST fn_messages_non_lus')
+      && etatGroupe.idsLus.includes(`eq.${etabs[0].id}`), {
+      message: 'Cadre invité et établissement courant chargés avant navigation',
+    }).toBe(true);
+    await stabiliserLectures(page);
+  }
   return { etat, etatGroupe };
 }
 

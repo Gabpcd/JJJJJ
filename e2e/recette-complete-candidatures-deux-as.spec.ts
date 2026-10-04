@@ -102,16 +102,32 @@ test('candidature : panne persistante, réessai, planning périmé refusé puis 
 
 test('établissement tiers : aucune mission ni candidature visible, y compris après recharge', async ({ context, page }, info) => {
   const simulation = creerCandidaturesDeuxAs(), { state } = simulation;
+  // Deux dossiers existent : le refus ne doit pas réussir seulement parce que la liste est vide.
+  state.candidatures.push(...state.soignants.map((soignant, index) => ({
+    id: `dc300000-0000-4000-8000-00000000003${index + 1}`, mission_id: identifiants.mission,
+    soignant_id: soignant.id, message: `Dossier confidentiel AS ${index + 1}`, statut: 'EN_ATTENTE',
+    cree_le: maintenant, choix_contrat: 'SALARIE',
+  })));
   await simulation.installer(context, 'tiers'); await page.clock.setFixedTime(new Date(maintenant));
   try {
-    await page.goto(`/etablissement/missions/${identifiants.mission}`);
     for (const rechargement of [false, true]) {
+      const refus = page.waitForResponse(response => new URL(response.url()).pathname === '/rest/v1/rpc/fn_lire_candidatures_mission_habilitee');
       if (rechargement) await page.reload();
-      await expect(page.getByRole('heading', { name: 'Mission introuvable', exact: true })).toBeVisible();
+      else await page.goto(`/etablissement/missions/${identifiants.mission}`);
+      const reponse = await refus;
+      expect(reponse.request().method()).toBe('POST');
+      expect(reponse.request().postDataJSON()).toEqual({ p_mission_id: identifiants.mission });
+      expect(reponse.status()).toBe(403);
+      expect(await reponse.json()).toEqual({ code: '42501', message: 'Mission indisponible ou accès refusé' });
+      await expect(page.getByRole('heading', { name: 'Impossible de charger la mission', exact: true })).toBeVisible();
       await expect(page.getByText(state.mission.intitule, { exact: true })).toBeHidden();
+      for (const soignant of state.soignants) await expect(page.getByText(soignant.prenom, { exact: true })).toHaveCount(0);
+      for (const candidature of state.candidatures) await expect(page.getByText(candidature.message!, { exact: true })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Accepter cette candidature', exact: true })).toHaveCount(0);
     }
-    expect(state.calls.filter(c => c.name === 'fn_soignant_pour_etablissement')).toHaveLength(0);
+    expect(state.calls.filter(c => c.name === 'fn_lire_candidatures_mission_habilitee')).toHaveLength(2);
+    expect(state.calls.filter(c => ['candidatures', 'mission_creneaux', 'soignants', 'fn_soignant_pour_etablissement'].includes(c.name))).toEqual([]);
+    expect(state.candidatures).toHaveLength(2);
     await preuveMission(page, info, 'etablissement-tiers-refuse-apres-reload');
     simulation.verifierBornes();
   } finally { await info.attach('journal-simulation', { body: JSON.stringify(state, null, 2), contentType: 'application/json' }); }

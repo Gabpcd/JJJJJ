@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
@@ -22,7 +22,7 @@ import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { BADGES_STATUT, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
-import { formatEuroAdmin } from '@/lib/adminPresentation';
+import { formatDateAdmin, formatEuroAdmin } from '@/lib/adminPresentation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
@@ -40,6 +40,12 @@ export default function AdminDetailUtilisateur() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [idCharge, setIdCharge] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const [etatDocuments, setEtatDocuments] = useState<'chargement' | 'erreur' | 'ok'>('chargement');
+  const [requisDisponibles, setRequisDisponibles] = useState(false);
+  const [onglet, setOnglet] = useState('infos');
+  const generationChargement = useRef(0);
   const [modalSuspendre, setModalSuspendre] = useState(false);
   const [motifSuspension, setMotifSuspension] = useState(''); // Lot 21 : motif obligatoire (journalisé)
   const [modalSupprimer, setModalSupprimer] = useState(false);
@@ -53,7 +59,7 @@ export default function AdminDetailUtilisateur() {
   const [envoiRappel, setEnvoiRappel] = useState(false);
 
   usePageTitle(
-    soignant
+    idCharge !== id ? 'Détail utilisateur' : soignant
       ? `${soignant.prenom ?? ''} ${soignant.nom ?? ''}`.trim() || 'Détail utilisateur'
       : etablissement?.nom || 'Détail utilisateur',
   );
@@ -102,111 +108,149 @@ export default function AdminDetailUtilisateur() {
   };
 
   const charger = useCallback(async () => {
+    if (!id) return;
+    const generation = ++generationChargement.current;
+    const courant = () => generationChargement.current === generation;
     setLoading(true);
-
-    const { data: s } = await supabase
-      .from('soignants')
-      .select('*')
-      .eq('id', id!)
-      .maybeSingle();
-
-    if (s) {
-      setSoignant(s);
-      setType('soignant');
-
-      // RGPD — tracer la consultation d'un soignant par un admin (Art. 32 + droit d'accès)
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        supabase.rpc('fn_ecrire_audit_safe', {
-          p_acteur_id: currentUser.id,
-          p_type_acteur: 'ADMIN_PLATEFORME',
-          p_action: 'ADMIN_CONSULTATION_SOIGNANT',
-          p_type_ressource: 'soignant',
-          p_id_ressource: id!,
-          p_cle_s3: null,
-          p_details: { contexte: 'page_detail_utilisateur', profession: s.profession },
-          p_ip: null,
-          p_navigateur: navigator.userAgent,
-        }).then(() => {});
-      }
-
-      const [docRes, missRes, reqRes] = await Promise.all([
-        supabase.from('documents_soignants').select('*').eq('soignant_id', id!).is('supprime_le', null).order('televerse_le', { ascending: false }),
-        supabase.from('missions').select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, net_a_payer, etablissement_id, etablissements(nom)').eq('soignant_assigne_id', id!).order('debut_le', { ascending: false }).limit(100),
-        supabase.from('documents_requis_par_profession').select('type_document, est_critique').eq('profession', s.profession),
-      ]);
-      if (docRes.data) setDocuments(docRes.data);
-      if (missRes.data) setMissions(missRes.data);
-
-      // Determine missing/expired documents
-      if (reqRes.data && docRes.data) {
-        const existingTypes = new Set(docRes.data.filter(d => d.statut_verification !== 'REJETE').map(d => d.type_document));
-        const missing = reqRes.data.filter(r => !existingTypes.has(r.type_document)).map(r => TYPES_DOCUMENTS[r.type_document] || r.type_document);
-        setDocumentsMissing(missing);
-        
-        const now = new Date();
-        const expired = docRes.data.filter(d => d.valide_jusqua && new Date(d.valide_jusqua) < now).map(d => TYPES_DOCUMENTS[d.type_document] || d.type_document);
-        setDocumentsExpires(expired);
-      }
-
-      // Check last reminder sent
-      const { data: lastEmail } = await supabase
-        .from('emails_envoyes')
-        .select('cree_le')
-        .eq('destinataire_id', id!)
-        .eq('type', 'RAPPEL_DOCUMENTS')
-        .order('cree_le', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      setDernierRappel(lastEmail?.cree_le || null);
-    } else {
-      const { data: e } = await supabase
-        .from('etablissements')
+    setIdCharge(null);
+    setErreurChargement(false);
+    setType(null);
+    setSoignant(null);
+    setEtablissement(null);
+    setDocuments([]);
+    setMissions([]);
+    setEtatDocuments('chargement');
+    setRequisDisponibles(false);
+    setDocumentsMissing([]);
+    setDocumentsExpires([]);
+    setDernierRappel(null);
+    try {
+      const { data: s, error: erreurSoignant } = await supabase
+        .from('soignants')
         .select('*')
         .eq('id', id!)
         .maybeSingle();
 
-      if (e) {
-        setEtablissement(e);
-        setType('etablissement');
+      if (!courant()) return;
+      if (erreurSoignant) throw erreurSoignant;
 
-        // RGPD — tracer la consultation d'un établissement par un admin
+      if (s) {
+        setSoignant(s);
+        setType('soignant');
+
+        // RGPD — tracer la consultation d'un soignant par un admin (Art. 32 + droit d'accès)
         const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (!courant()) return;
         if (currentUser) {
           supabase.rpc('fn_ecrire_audit_safe', {
             p_acteur_id: currentUser.id,
             p_type_acteur: 'ADMIN_PLATEFORME',
-            p_action: 'ADMIN_CONSULTATION_ETABLISSEMENT',
-            p_type_ressource: 'etablissement',
+            p_action: 'ADMIN_CONSULTATION_SOIGNANT',
+            p_type_ressource: 'soignant',
             p_id_ressource: id!,
             p_cle_s3: null,
-            p_details: { contexte: 'page_detail_utilisateur', nom: e.nom },
+            p_details: { contexte: 'page_detail_utilisateur', profession: s.profession },
             p_ip: null,
             p_navigateur: navigator.userAgent,
           }).then(() => {});
         }
 
-        const { data: missData } = await supabase
-          .from('missions')
-          .select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, soignant_assigne_id, soignants(prenom, nom)')
-          .eq('etablissement_id', id!)
-          .order('debut_le', { ascending: false })
-          .limit(100);
-        if (missData) setMissions(missData);
+        const [docRes, missRes, reqRes] = await Promise.all([
+          supabase.from('documents_soignants').select('*').eq('soignant_id', id!).is('supprime_le', null).order('televerse_le', { ascending: false }),
+          supabase.from('missions').select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, net_a_payer, etablissement_id, etablissements(nom)').eq('soignant_assigne_id', id!).order('debut_le', { ascending: false }).limit(100),
+          supabase.from('documents_requis_par_profession').select('type_document, est_critique').eq('profession', s.profession),
+        ]);
+        if (!courant()) return;
+        const documentsLus = !docRes.error && Array.isArray(docRes.data);
+        const requisLus = !reqRes.error && Array.isArray(reqRes.data);
+        setEtatDocuments(documentsLus ? 'ok' : 'erreur');
+        setDocuments(documentsLus ? docRes.data! : []);
+        setRequisDisponibles(requisLus);
+        if (missRes.data) setMissions(missRes.data);
+
+        // Determine missing/expired documents
+        if (documentsLus && requisLus) {
+          const documentsActifs = docRes.data!.filter((d: DocumentVerification) => !d.revoque_le);
+          const existingTypes = new Set(documentsActifs.filter(d => d.statut_verification !== 'REJETE').map(d => d.type_document));
+          const missing = reqRes.data!.filter(r => !existingTypes.has(r.type_document)).map(r => TYPES_DOCUMENTS[r.type_document] || r.type_document);
+          setDocumentsMissing(missing);
+
+          const now = new Date();
+          const expired = documentsActifs.filter(d => d.valide_jusqua && new Date(d.valide_jusqua) < now).map(d => TYPES_DOCUMENTS[d.type_document] || d.type_document);
+          setDocumentsExpires(expired);
+        }
+
+        // Check last reminder sent
+        const { data: lastEmail } = await supabase
+          .from('emails_envoyes')
+          .select('cree_le')
+          .eq('destinataire_id', id!)
+          .eq('type', 'RAPPEL_DOCUMENTS')
+          .order('cree_le', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!courant()) return;
+        setDernierRappel(lastEmail?.cree_le || null);
+      } else {
+        const { data: e, error: erreurEtablissement } = await supabase
+          .from('etablissements')
+          .select('*')
+          .eq('id', id!)
+          .maybeSingle();
+
+        if (!courant()) return;
+        if (erreurEtablissement) throw erreurEtablissement;
+
+        if (e) {
+          setEtablissement(e);
+          setType('etablissement');
+
+          // RGPD — tracer la consultation d'un établissement par un admin
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (!courant()) return;
+          if (currentUser) {
+            supabase.rpc('fn_ecrire_audit_safe', {
+              p_acteur_id: currentUser.id,
+              p_type_acteur: 'ADMIN_PLATEFORME',
+              p_action: 'ADMIN_CONSULTATION_ETABLISSEMENT',
+              p_type_ressource: 'etablissement',
+              p_id_ressource: id!,
+              p_cle_s3: null,
+              p_details: { contexte: 'page_detail_utilisateur', nom: e.nom },
+              p_ip: null,
+              p_navigateur: navigator.userAgent,
+            }).then(() => {});
+          }
+
+          const { data: missData } = await supabase
+            .from('missions')
+            .select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, soignant_assigne_id, soignants(prenom, nom)')
+            .eq('etablissement_id', id!)
+            .order('debut_le', { ascending: false })
+            .limit(100);
+          if (!courant()) return;
+          if (missData) setMissions(missData);
+        }
+      }
+    } catch {
+      if (courant()) setErreurChargement(true);
+    } finally {
+      if (courant()) {
+        setIdCharge(id);
+        setLoading(false);
       }
     }
-
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    charger();
+    setOnglet('infos');
+    if (id) void charger();
+    return () => { generationChargement.current += 1; };
   }, [charger, id]);
 
   const envoyerRappelDocuments = async () => {
-    if (!soignant || !id) return;
+    if (!soignant || !id || idCharge !== id || etatDocuments !== 'ok' || !requisDisponibles) return;
     setEnvoiRappel(true);
 
     const allMissing = [...documentsMissing, ...documentsExpires];
@@ -343,7 +387,14 @@ export default function AdminDetailUtilisateur() {
     setRaisonForceRib('');
   };
 
-  if (loading) return <LayoutAdmin><ChargementAdmin titre="Détail utilisateur" /></LayoutAdmin>;
+  if (loading || idCharge !== id) return <LayoutAdmin><ChargementAdmin titre="Détail utilisateur" /></LayoutAdmin>;
+
+  if (erreurChargement) return <LayoutAdmin>
+    <div role="alert" className="space-y-3">
+      <p>Impossible de charger ce dossier pour le moment.</p>
+      <BoutonY2K variant="secondary" onClick={() => void charger()}>Réessayer le chargement</BoutonY2K>
+    </div>
+  </LayoutAdmin>;
 
   if (!soignant && !etablissement) {
     return (
@@ -362,7 +413,8 @@ export default function AdminDetailUtilisateur() {
   const entity = soignant || etablissement;
   const isSuspended = !!entity?.supprime_le;
   const nom = type === 'soignant' ? `${soignant.prenom} ${soignant.nom}` : etablissement.nom;
-  const hasDocIssues = type === 'soignant' && (documentsMissing.length > 0 || documentsExpires.length > 0);
+  const hasDocIssues = type === 'soignant' && etatDocuments === 'ok' && requisDisponibles
+    && (documentsMissing.length > 0 || documentsExpires.length > 0);
 
   return (
     <LayoutAdmin>
@@ -431,7 +483,7 @@ export default function AdminDetailUtilisateur() {
         </div>
       )}
 
-      <Tabs defaultValue="infos" className="space-y-4">
+      <Tabs value={onglet} onValueChange={setOnglet} className="space-y-4">
         <div className="overflow-x-auto pb-1">
           <TabsList className="h-auto min-w-max justify-start">
             <TabsTrigger value="infos">Vue d’ensemble</TabsTrigger>
@@ -456,9 +508,9 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={Shield} label="Profession" value={soignant.profession ? getLabelProfession(soignant.profession) : '—'} />
                   <InfoRow icon={FileText} label="RPPS" value={soignant.numero_rpps || '—'} />
                   <InfoRow icon={FileText} label="ADELI" value={soignant.numero_adeli || '—'} />
-                  <InfoRow icon={MapPin} label="Coordonnées GPS" value={soignant.adresse_lat ? `${soignant.adresse_lat}, ${soignant.adresse_lng}` : '—'} />
-                  <InfoRow icon={MapPin} label="Rayon déplacement" value={`${soignant.rayon_deplacement_km} km`} />
-                  <InfoRow icon={Clock} label="Inscrit le" value={new Date(soignant.cree_le).toLocaleDateString('fr-FR')} />
+                  <InfoRow icon={MapPin} label="Coordonnées GPS" value={soignant.adresse_lat != null && soignant.adresse_lng != null ? `${soignant.adresse_lat}, ${soignant.adresse_lng}` : '—'} />
+                  <InfoRow icon={MapPin} label="Rayon déplacement" value={soignant.rayon_deplacement_km != null ? `${soignant.rayon_deplacement_km} km` : '—'} />
+                  <InfoRow icon={Clock} label="Inscrit le" value={formatDateAdmin(soignant.cree_le)} />
                   <InfoRow icon={Clock} label="Dernière activité" value={soignant.derniere_activite_le ? new Date(soignant.derniere_activite_le).toLocaleDateString('fr-FR') : '—'} />
                 </div>
               ) : (
@@ -469,10 +521,10 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={FileText} label="FINESS" value={etablissement.finess || '—'} />
                   <InfoRow icon={Shield} label="Type" value={getLabelTypeEtablissement(etablissement.type)} />
                   <InfoRow icon={MapPin} label="Adresse" value={`${etablissement.adresse_rue}, ${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
-                  <InfoRow icon={Clock} label="Inscrit le" value={new Date(etablissement.cree_le).toLocaleDateString('fr-FR')} />
+                  <InfoRow icon={Clock} label="Inscrit le" value={formatDateAdmin(etablissement.cree_le)} />
                   <InfoRow icon={FileText} label="Formule" value={etablissement.formule_abonnement || '—'} />
-                  <InfoRow icon={FileText} label="Taux commission HT" value={`${etablissement.taux_commission_negocie}%`} />
-                  <InfoRow icon={FileText} label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
+                  <InfoRow icon={FileText} label="Taux commission HT" value={etablissement.taux_commission_negocie != null ? `${etablissement.taux_commission_negocie}%` : '—'} />
+                  <InfoRow icon={FileText} label="Délai paiement" value={etablissement.delai_paiement_jours != null ? `${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}` : '—'} />
                 </div>
               )}
             </CardY2KContent>
@@ -483,7 +535,7 @@ export default function AdminDetailUtilisateur() {
         {type === 'soignant' && (
           <TabsContent value="documents">
             <CardY2K noPadding>
-              <CardY2KHeader><CardY2KTitle className="text-lg">Documents ({documents.length})</CardY2KTitle></CardY2KHeader>
+              <CardY2KHeader><CardY2KTitle className="text-lg">{etatDocuments === 'ok' ? `Documents (${documents.length})` : 'Documents'}</CardY2KTitle></CardY2KHeader>
               <CardY2KContent>
                 {/* Upload admin : la preuve rejoint toujours la file de revue. */}
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
@@ -515,7 +567,9 @@ export default function AdminDetailUtilisateur() {
                     />
                   </label>
                 </div>
-                {documents.length === 0 ? (
+                {etatDocuments === 'erreur' ? (
+                  <DocumentsIndisponibles onReessayer={() => void charger()} />
+                ) : documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aucun document téléversé.</p>
                 ) : (
                   <>
@@ -534,7 +588,7 @@ export default function AdminDetailUtilisateur() {
                         </TableHeader>
                         <TableBody>
                           {documents.map((doc) => {
-                            const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
+                        const statutInfo = statutDocumentAffiche(doc);
                             return (
                               <TableRow key={doc.id}>
                                 <TableCell className="font-medium">{TYPES_DOCUMENTS[doc.type_document] || doc.type_document}</TableCell>
@@ -571,7 +625,7 @@ export default function AdminDetailUtilisateur() {
                     {/* Mobile : cards */}
                     <div className="md:hidden space-y-3">
                       {documents.map((doc) => {
-                        const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
+                        const statutInfo = statutDocumentAffiche(doc);
                         return (
                           <div key={doc.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
                             <div className="flex items-start justify-between gap-2">
@@ -601,6 +655,10 @@ export default function AdminDetailUtilisateur() {
                     </div>
                   </>
                 )}
+                {etatDocuments === 'ok' && !requisDisponibles && <div role="alert" className="mt-4 space-y-2 text-sm">
+                  <p>La liste des pièces requises est indisponible. Aucun rappel de documents manquants ne peut être proposé pour le moment.</p>
+                  <BoutonY2K variant="secondary" onClick={() => void charger()}>Réessayer les pièces requises</BoutonY2K>
+                </div>}
               </CardY2KContent>
             </CardY2K>
           </TabsContent>
@@ -719,7 +777,7 @@ export default function AdminDetailUtilisateur() {
                 <CardY2KHeader><CardY2KTitle className="text-sm">Vérifications</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent className="space-y-2">
                   <VerifRow label="Identité vérifiée" ok={soignant.identite_verifiee} />
-                  <VerifRow label="Diplôme vérifié" ok={soignant.diplome_verifie} />
+                  <ResumeDiplomes documents={documents} etat={etatDocuments} onReessayer={() => void charger()} onConsulter={() => setOnglet('documents')} />
                   <VerifRow label="RPPS vérifié" ok={soignant.rpps_verifie} />
                   <VerifRow label="Tous documents valides" ok={soignant.tous_documents_valides} />
                 </CardY2KContent>
@@ -766,10 +824,9 @@ export default function AdminDetailUtilisateur() {
                 <CardY2KHeader><CardY2KTitle className="text-sm">Vérifications & Conformité</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent className="space-y-2">
                   <VerifRow label="Identité vérifiée" ok={soignant.identite_verifiee} />
-                  <VerifRow label="Diplôme vérifié" ok={soignant.diplome_verifie} />
+                  <ResumeDiplomes documents={documents} etat={etatDocuments} onReessayer={() => void charger()} onConsulter={() => setOnglet('documents')} />
                   <VerifRow label="RPPS vérifié" ok={soignant.rpps_verifie} />
                   <VerifRow label="Tous documents valides" ok={soignant.tous_documents_valides} />
-                  <ProfileRow label="Statut vérification ARIA" value={soignant.statut_verification_aria ? (STATUTS_VERIFICATION[soignant.statut_verification_aria]?.label || soignant.statut_verification_aria) : '—'} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
@@ -796,7 +853,7 @@ export default function AdminDetailUtilisateur() {
                 <CardY2KContent className="space-y-2">
                   <ProfileRow label="Latitude" value={soignant.adresse_lat ?? '—'} />
                   <ProfileRow label="Longitude" value={soignant.adresse_lng ?? '—'} />
-                  <ProfileRow label="Inscrit le" value={new Date(soignant.cree_le).toLocaleDateString('fr-FR')} />
+                  <ProfileRow label="Inscrit le" value={formatDateAdmin(soignant.cree_le)} />
                   <ProfileRow label="Dernière modification" value={soignant.modifie_le ? new Date(soignant.modifie_le).toLocaleDateString('fr-FR') : '—'} />
                 </CardY2KContent>
               </CardY2K>
@@ -820,17 +877,17 @@ export default function AdminDetailUtilisateur() {
                   <ProfileRow label="Rue" value={etablissement.adresse_rue} />
                   <ProfileRow label="Ville" value={`${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
                   <ProfileRow label="Département" value={etablissement.adresse_departement || '—'} />
-                  <ProfileRow label="Coordonnées" value={etablissement.adresse_lat ? `${etablissement.adresse_lat}, ${etablissement.adresse_lng}` : '—'} />
+                  <ProfileRow label="Coordonnées" value={etablissement.adresse_lat != null && etablissement.adresse_lng != null ? `${etablissement.adresse_lat}, ${etablissement.adresse_lng}` : '—'} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
                 <CardY2KHeader><CardY2KTitle className="text-sm">Commercial</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent className="space-y-2">
                   <ProfileRow label="Formule" value={etablissement.formule_abonnement || '—'} />
-                  <ProfileRow label="Taux commission HT" value={`${etablissement.taux_commission_negocie}%`} />
+                  <ProfileRow label="Taux commission HT" value={etablissement.taux_commission_negocie != null ? `${etablissement.taux_commission_negocie}%` : '—'} />
                   <ProfileRow label="Mode facturation" value={etablissement.mode_facturation || '—'} />
                   <ProfileRow label="Mode paiement" value={etablissement.mode_paiement_commission || '—'} />
-                  <ProfileRow label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
+                  <ProfileRow label="Délai paiement" value={etablissement.delai_paiement_jours != null ? `${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}` : '—'} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
@@ -839,9 +896,9 @@ export default function AdminDetailUtilisateur() {
                   <ProfileRow label="Convention collective" value={etablissement.convention_collective || '—'} />
                   <VerifRow label="Chorus Pro actif" ok={etablissement.chorus_pro_actif} />
                   <VerifRow label="Rist plafond actif" ok={etablissement.rist_plafond_actif} />
-                  <ProfileRow label="Majoration nuit" value={`${etablissement.taux_majoration_nuit_pourcent}%`} />
-                  <ProfileRow label="Majoration dimanche" value={`${etablissement.taux_majoration_dimanche_pourcent}%`} />
-                  <ProfileRow label="Majoration férié" value={`${etablissement.taux_majoration_ferie_pourcent}%`} />
+                  <ProfileRow label="Majoration nuit" value={etablissement.taux_majoration_nuit_pourcent != null ? `${etablissement.taux_majoration_nuit_pourcent}%` : '—'} />
+                  <ProfileRow label="Majoration dimanche" value={etablissement.taux_majoration_dimanche_pourcent != null ? `${etablissement.taux_majoration_dimanche_pourcent}%` : '—'} />
+                  <ProfileRow label="Majoration férié" value={etablissement.taux_majoration_ferie_pourcent != null ? `${etablissement.taux_majoration_ferie_pourcent}%` : '—'} />
                 </CardY2KContent>
               </CardY2K>
             </div>
@@ -1045,6 +1102,58 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
       </div>
     </div>
   );
+}
+
+type DocumentVerification = {
+  type_document: string;
+  statut_verification: string | null;
+  supprime_le: string | null;
+  revoque_le?: string | null;
+};
+
+function statutDocumentAffiche(doc: DocumentVerification) {
+  if (doc.revoque_le) return { label: 'Révoqué', couleur: 'bg-amber-100 text-amber-700' };
+  return STATUTS_VERIFICATION[doc.statut_verification ?? '']
+    || { label: 'Statut non renseigné', couleur: 'bg-muted text-muted-foreground' };
+}
+
+function DocumentsIndisponibles({ onReessayer }: { onReessayer: () => void }) {
+  return <div role="alert" className="space-y-2 text-sm">
+    <p>Documents indisponibles. Leur état ne peut pas être confirmé pour le moment.</p>
+    <BoutonY2K variant="secondary" onClick={onReessayer}>Réessayer les documents</BoutonY2K>
+  </div>;
+}
+
+function ResumeDiplomes({ documents, etat, onReessayer, onConsulter }: {
+  documents: DocumentVerification[];
+  etat: 'chargement' | 'erreur' | 'ok';
+  onReessayer: () => void;
+  onConsulter: () => void;
+}) {
+  const diplomes = documents.filter(doc => doc.type_document === 'DIPLOME' && !doc.supprime_le);
+  const groupes = new Map<string, { nombre: number; libelle: string }>();
+  for (const doc of diplomes) {
+    const statut = doc.revoque_le ? 'REVOQUE' : (doc.statut_verification ?? 'INCONNU');
+    const libelles: Record<string, string> = {
+      VERIFIE: 'vérifiée', EN_ATTENTE: 'en attente', REJETE: 'rejetée', EXPIRE: 'expirée',
+      REVUE_MANUELLE_REQUISE: 'en cours de vérification', API_INDISPONIBLE: 'avec vérification indisponible', REVOQUE: 'révoquée',
+    };
+    const groupe = groupes.get(statut) ?? { nombre: 0, libelle: libelles[statut] ?? 'au statut non renseigné' };
+    groupe.nombre += 1;
+    groupes.set(statut, groupe);
+  }
+  return <div className="space-y-2 border-y border-border py-2 text-sm">
+    <p className="text-muted-foreground">Pièces de diplôme</p>
+    {etat === 'erreur' ? <DocumentsIndisponibles onReessayer={onReessayer} />
+      : etat === 'chargement' ? <p role="status">Chargement des documents…</p>
+      : diplomes.length === 0 ? <p>Aucun diplôme déposé.</p>
+      : <ul className="space-y-1">
+        {[...groupes.entries()].map(([statut, { nombre, libelle }]) => (
+          <li key={statut}>{nombre} {nombre > 1 ? 'pièces' : 'pièce'} {libelle}{nombre > 1 && ['VERIFIE', 'REJETE', 'EXPIRE', 'REVOQUE'].includes(statut) ? 's' : ''}</li>
+        ))}
+      </ul>}
+    <BoutonY2K size="sm" variant="secondary" onClick={onConsulter}>Consulter les documents</BoutonY2K>
+  </div>;
 }
 
 function VerifRow({ label, ok }: { label: string; ok: boolean }) {

@@ -1,11 +1,24 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Request} from '@playwright/test';
 import {simulerSoignant,entrer as entrerSoignant,aller,attendreAPI} from './helpers/recette-complete-soignant';
 import {simulerEtablissement,entrer as entrerEtablissement,allerA,stabiliserLectures} from './helpers/recette-complete-etablissement';
+
+type ChargementScript={url:string;statut:number;termine:boolean;debut:number;fin:number};
+type Avertissement={message:string;instant:number;retourAccueil:boolean};
+const cheminScriptLocal=/^\/assets\/[A-Za-z0-9_.-]+\.js$/;
+function prechargementWebKitConsomme(avertissement:Avertissement,origine:string,browserName:string,chargements:ChargementScript[]){
+  if(browserName!=='webkit'||!avertissement.retourAccueil)return false;
+  const correspondance=/^The resource (https?:\/\/\S+) was preloaded using link preload but not used within a few seconds from the window's load event\. Please make sure it wasn't preloaded for nothing\.$/.exec(avertissement.message);
+  if(!correspondance)return false;
+  let url:URL;
+  try{url=new URL(correspondance[1]);}catch{return false;}
+  return url.origin===origine&&cheminScriptLocal.test(url.pathname)&&!url.search&&!url.hash
+    &&chargements.some(c=>c.url===url.href&&c.statut===200&&c.termine&&c.debut<=avertissement.instant&&avertissement.instant<=c.fin);
+}
 
 // La conservation réelle des notes est prouvée par notation-anonymisation-compte.test.sql.
 // Ici seules les interfaces et leurs réponses Edge sont simulées, sans compte distant.
 for(const famille of ['soignant','etablissement'] as const) {
-  test(`${famille} : annuler, refuser puis supprimer et rester déconnecté après reload`,async({context,page},info)=>{
+  test(`${famille} : annuler, refuser puis supprimer et rester déconnecté après reload`,async({context,page,browserName},info)=>{
     const soignant=famille==='soignant';
     await context.addInitScript(()=>{
       if(!Reflect.deleteProperty(Object.getPrototypeOf(navigator),'serviceWorker') || 'serviceWorker' in navigator)
@@ -16,7 +29,22 @@ for(const famille of ['soignant','etablissement'] as const) {
     const e=soignant?undefined:(await simulerEtablissement(page)).etat;
     (s?.overrides??e!.overrides).set('fn_missions_publiques_recherche',[]);
     const erreurs:string[]=[];const avertissements:string[]=[];const externes:string[]=[];
-    page.on('console',m=>{if(m.type()==='error')erreurs.push(m.text());if(m.type()==='warning')avertissements.push(m.text());});
+    const observations:Avertissement[]=[];let retourAccueil=false;
+    const debutsScripts=new WeakMap<Request,number>();
+    const scriptsEnCours:Promise<ChargementScript>[]=[];
+    let scriptsCharges:ChargementScript[]=[];let prechargementsConsommes:string[]=[];
+    page.on('console',m=>{
+      if(m.type()==='error')erreurs.push(m.text());
+      if(m.type()==='warning'){avertissements.push(m.text());observations.push({message:m.text(),instant:performance.now(),retourAccueil});}
+    });
+    page.on('request',requete=>debutsScripts.set(requete,performance.now()));
+    page.on('response',reponse=>{
+      const url=new URL(reponse.url());
+      if(reponse.request().method()!=='GET'||!cheminScriptLocal.test(url.pathname)||url.search||url.hash)return;
+      const debut=debutsScripts.get(reponse.request());if(debut===undefined)return;
+      scriptsEnCours.push(reponse.finished().then(erreur=>({url:url.href,statut:reponse.status(),termine:erreur===null,debut,fin:performance.now()}),
+        ()=>({url:url.href,statut:reponse.status(),termine:false,debut,fin:performance.now()})));
+    });
     await page.route('**/*',route=>{
       const u=new URL(route.request().url());
       if(['127.0.0.1','localhost'].includes(u.hostname)||u.protocol==='blob:')return route.fallback();
@@ -39,6 +67,11 @@ for(const famille of ['soignant','etablissement'] as const) {
     const champ=page.getByPlaceholder(soignant?'Tape SUPPRIMER':'SUPPRIMER',{exact:true});
     const confirmation=()=>page.getByRole('button',{name:soignant?'Supprimer définitivement':'Confirmer la suppression',exact:true});
     const calme=()=>soignant?attendreAPI(page):stabiliserLectures(page);
+    const accueilMonte=async()=>{
+      await expect(page.getByTestId('header-cta-connexion')).toBeVisible();
+      await expect(page.getByTestId('hero-cta-soignant')).toBeVisible();
+      await expect(page.getByTestId('hero-cta-etab')).toBeVisible();
+    };
     try {
       await (soignant?entrerSoignant(page,'connexion'):entrerEtablissement(page,'connexion'));
       await (soignant?aller(page,'/soignant/mon-compte'):allerA(page,'/etablissement/mon-compte'));
@@ -63,9 +96,11 @@ for(const famille of ['soignant','etablissement'] as const) {
       await expect(page.getByRole('button',{name:'Annuler',exact:true})).toBeDisabled();
       await expect(champ).toBeDisabled();
       await expect.poll(()=>appels.length,{message:'Réessai reçu par le transport simulé'}).toBe(3);
-      expect(appels).toEqual([{},{},{}]);expect(terminer).toBeDefined();terminer!();
+      expect(appels).toEqual([{},{},{}]);expect(terminer).toBeDefined();retourAccueil=true;terminer!();
       await expect(page).toHaveURL(/\/$/);expect(terminee).toBe(true);
-      await calme();await page.reload();await expect(page).toHaveURL(/\/$/);
+      await accueilMonte();
+      await calme();retourAccueil=false;await page.reload();await expect(page).toHaveURL(/\/$/);
+      await accueilMonte();
       await (soignant?aller(page,'/soignant/mes-documents'):allerA(page,'/etablissement/mon-compte'));
       await expect(page).toHaveURL(/\/connexion/);
       await expect(page.getByRole('button',{name:'Se connecter',exact:true})).toBeVisible();
@@ -78,9 +113,15 @@ for(const famille of ['soignant','etablissement'] as const) {
       // les erreurs restent enregistrées ; aucune autre erreur n'est admise.
       expect(erreurs).toHaveLength(1);
       expect(erreurs[0]).toMatch(/^Failed to load resource: the server responded with a status of 503 \(/);
-      expect(avertissements).toEqual([]);
+      // WebKit peut annoncer un modulepreload inutilisé alors que son import
+      // est encore en vol. Le message brut reste tracé et exige ici une réponse
+      // locale 200 achevée, commencée avant l'alerte et finie après elle pendant
+      // le retour à l'accueil. Toute autre alerte ou erreur reste bloquante.
+      scriptsCharges=await Promise.all(scriptsEnCours);
+      prechargementsConsommes=observations.filter(observation=>prechargementWebKitConsomme(observation,new URL(page.url()).origin,browserName,scriptsCharges)).map(o=>o.message);
+      expect(avertissements).toEqual(prechargementsConsommes);
     } finally {
-      await info.attach('preuve-isolee',{body:JSON.stringify({famille,appels,terminee,externes,erreurs,avertissements,inconnues:s?.unknown??e?.inconnues,pageErrors:s?.errors??e?.erreurs}),contentType:'application/json'});
+      await info.attach('preuve-isolee',{body:JSON.stringify({famille,appels,terminee,externes,erreurs,avertissements,observations,prechargementsConsommes,scriptsCharges,inconnues:s?.unknown??e?.inconnues,pageErrors:s?.errors??e?.erreurs}),contentType:'application/json'});
     }
   });
 }

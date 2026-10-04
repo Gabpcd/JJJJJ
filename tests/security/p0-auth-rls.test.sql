@@ -245,6 +245,57 @@ BEGIN
 END;
 $catalogue$;
 
+-- Teste l'ACL d'insertion directe, pas la creation autorisee par RPC.
+-- Le temoin est inerte : aucun secret ni hash, aucune cle generee.
+DO $api_keys_insertion_directe$
+DECLARE
+  v_role text;
+  v_temoin uuid := 'ffffffff-1111-4000-8000-000000000004';
+  v_avant bigint;
+BEGIN
+  IF current_user <> 'postgres' THEN
+    RAISE EXCEPTION 'P0: le controle api_keys exige le role postgres';
+  END IF;
+  SELECT count(*) INTO v_avant FROM public.api_keys;
+  IF EXISTS (SELECT 1 FROM public.api_keys WHERE id = v_temoin) THEN
+    RAISE EXCEPTION 'P0: le temoin api_keys existe deja';
+  END IF;
+
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    -- Refuse aussi un GRANT par colonne, meme si une autre garde RLS ou
+    -- d'identite empechait ensuite l'insertion du temoin.
+    IF has_table_privilege(v_role, 'public.api_keys', 'INSERT')
+         IS DISTINCT FROM false
+       OR has_any_column_privilege(v_role, 'public.api_keys', 'INSERT')
+         IS DISTINCT FROM false THEN
+      RAISE EXCEPTION 'P0: % a un droit INSERT direct sur api_keys', v_role;
+    END IF;
+    EXECUTE format('SET LOCAL ROLE %I', v_role);
+    IF current_user <> v_role THEN
+      RAISE EXCEPTION 'P0: le role client api_keys n''est pas applique';
+    END IF;
+
+    BEGIN
+      INSERT INTO public.api_keys (id, cle_api, cle_secret, cle_secret_hash, nom, actif)
+      VALUES (v_temoin, 'p0-api-keys-inert', NULL, NULL, 'Temoin SQL inerte', false);
+      -- Une reussite inattendue annule ce bloc et fait echouer la suite.
+      RAISE EXCEPTION 'P0: % peut inserer directement dans api_keys', v_role;
+    EXCEPTION WHEN insufficient_privilege THEN
+      NULL; -- Seul SQLSTATE 42501 est le refus attendu.
+    END;
+
+    EXECUTE 'RESET ROLE';
+    IF current_user <> 'postgres' THEN
+      RAISE EXCEPTION 'P0: le role postgres n''est pas restaure';
+    END IF;
+    IF (SELECT count(*) FROM public.api_keys) IS DISTINCT FROM v_avant
+       OR EXISTS (SELECT 1 FROM public.api_keys WHERE id = v_temoin) THEN
+      RAISE EXCEPTION 'P0: l''insertion refusee a laisse une ligne api_keys';
+    END IF;
+  END LOOP;
+END;
+$api_keys_insertion_directe$;
+
 DO $admin_sans_mfa$
 DECLARE
   v_admin uuid := 'ffffffff-1111-4000-8000-000000000001';

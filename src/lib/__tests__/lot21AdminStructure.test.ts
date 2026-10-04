@@ -10,16 +10,35 @@ function fichiersRecursifs(dossier: string): string[] {
 }
 
 const racine = process.cwd();
-const adminTsx = [
+const fichiersAdmin = [
   ...fichiersRecursifs(resolve(racine, 'src/pages/admin')),
   ...fichiersRecursifs(resolve(racine, 'src/components/admin')),
-].filter((fichier) => fichier.endsWith('.tsx'));
+];
+
+function repererEmojiAdmin(fichiers: string[], lire: (fichier: string) => string): string[] {
+  const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  return fichiers
+    .filter((fichier) => fichier.endsWith('.tsx') && !/\.(?:test|spec)\.tsx$/.test(fichier))
+    .filter((fichier) => emoji.test(lire(fichier)));
+}
 
 describe('Lot 21 — mécanique admin', () => {
   it('n’utilise plus d’emoji comme icône dans les pages admin', () => {
-    const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
-    const fautifs = adminTsx.filter((fichier) => emoji.test(readFileSync(fichier, 'utf8')));
+    expect(fichiersAdmin).toContain(resolve(racine, 'src/pages/admin/AdminDetailUtilisateur.tsx'));
+    const fautifs = repererEmojiAdmin(fichiersAdmin, (fichier) => readFileSync(fichier, 'utf8'));
     expect(fautifs).toEqual([]);
+  });
+
+  it('détecte toujours les symboles produit et exclut seulement les fichiers de tests', () => {
+    const temoin = {
+      'src/pages/admin/Temoin.tsx': "const titre = 'Vérifié ✓';",
+      'src/components/admin/Temoin.tsx': "const titre = 'Vérifié ✓';",
+      'src/pages/admin/Temoin.test.tsx': "expect(texte).toBe('Vérifié ✓');",
+      'src/components/admin/Temoin.spec.tsx': "expect(texte).toBe('Vérifié ✓');",
+      'src/pages/admin/SansSymbole.tsx': "const titre = 'Vérifié';",
+    };
+    expect(repererEmojiAdmin(Object.keys(temoin), (fichier) => temoin[fichier as keyof typeof temoin]))
+      .toEqual(['src/pages/admin/Temoin.tsx', 'src/components/admin/Temoin.tsx']);
   });
 
   it('conserve les données de test visibles et les badge sans filtre', () => {
