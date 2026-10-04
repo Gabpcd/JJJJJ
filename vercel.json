@@ -104,7 +104,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "ci/restore-app-phase-a-20261004": false
+      "ci/restore-app-phase-a-20261004": false,
+      "ci/restore-app-phase-b-20261004": false
     }
   }
 }

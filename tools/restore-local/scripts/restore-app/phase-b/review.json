@@ -1,0 +1,20 @@
+{
+  "productSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
+  "approved": true,
+  "phaseAHarnessSha": "f8cb8b05a6ce1cb1d330e0d235b4b4142720aa9c",
+  "phaseARunId": "37231913015",
+  "nativeRestoreTocSha256": "5eb4ced588d820f0fc04a3a02ca182619fb0ccafdd3645a334cc8d7d3fff6a18",
+  "nativeRoleSettingsReviewed": true,
+  "native": {
+    "postgresVersionNum": 170006,
+    "auth": {
+      "count": 77,
+      "sha256": "0d23d9b6a347ce0a28ddc8c29a0cd21d97d24dcbdc00e2696c01389531e2188f"
+    },
+    "storage": {
+      "count": 70,
+      "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
+    }
+  },
+  "note": "Phase A references explicitly reviewed from run37231913015; role settings and exact Phase B assembly still require independent approval. Never fill from the current Phase B run."
+}

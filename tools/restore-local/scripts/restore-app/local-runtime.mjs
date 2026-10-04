@@ -1,6 +1,7 @@
 import { phaseFailure } from './failure.mjs';
 // Thin adapter over the unchanged qualified bootstrap, not a second bootstrap.
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,13 +50,14 @@ export function localRuntime(privateDir) {
   for (const side of SIDES) requireValue(plan.services[side + '-storage'].environment.TENANT_ID === run + '-restore', 'RESTORE_TENANT');
   requireValue(plan.services['source-storage'].environment.AUTH_JWT_SECRET !== plan.services['target-storage'].environment.AUTH_JWT_SECRET
     && plan.services['source-db'].environment.POSTGRES_PASSWORD !== plan.services['target-db'].environment.POSTGRES_PASSWORD, 'RESTORE_DISTINCT_SECRETS');
+  const commandNamespace = randomUUID();
   let commandNumber = 0;
   const call = (args, input) => {
     const result = spawnSync('docker', args, { input, encoding: null, maxBuffer: 64 * 1024 * 1024, timeout: 240_000,
       env: { PATH: process.env.PATH, HOME: process.env.HOME } });
     // A private diagnostic may contain SQL/fixture credentials. Never throw it or
     // send it to process stdout, GitHub outputs, attachments, or upload artifacts.
-    writeFileSync(join(privateDir, `command-${++commandNumber}.stderr.private`), result.stderr ?? Buffer.alloc(0), { mode: 0o600, flag: 'wx' });
+    writeFileSync(join(privateDir, `command-${commandNamespace}-${++commandNumber}.stderr.private`), result.stderr ?? Buffer.alloc(0), { mode: 0o600, flag: 'wx' });
     if (result.error || result.status !== 0 || result.signal !== null) {
       const error = new Error('RESTORE_LOCAL_COMMAND_FAILED');
       const diagnostic = projectSqlDiagnostic(result.stderr?.toString() ?? '');

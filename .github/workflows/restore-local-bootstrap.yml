@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   empty-local-stacks:
-    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request') && github.ref != 'refs/heads/ci/restore-app-phase-a-20261004' && github.head_ref != 'ci/restore-app-phase-a-20261004'
+    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request') && github.ref != 'refs/heads/ci/restore-app-phase-a-20261004' && github.head_ref != 'ci/restore-app-phase-a-20261004' && github.ref != 'refs/heads/ci/restore-app-phase-b-20261004' && github.head_ref != 'ci/restore-app-phase-b-20261004'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -114,6 +114,112 @@ jobs:
         with:
           name: restore-empty-infra-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PROOF_DIR }}/
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false
+
+  native-restore-app:
+    if: github.repository == 'Gabpcd/JJJJJ' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci/restore-app-phase-b-20261004'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      PRIVATE_DIR: /tmp/jolene-restore-phase-b-private-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_DIR: /tmp/jolene-restore-phase-b-proof-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact manually selected revision
+        timeout-minutes: 1
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pinned Node
+        timeout-minutes: 1
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Require reviewed A capture then exact source and pure contracts
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 700 "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs identity > "$PRIVATE_DIR/identity.log" 2>&1
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs units > "$PRIVATE_DIR/units.log" 2>&1
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs plan > "$PRIVATE_DIR/plan.log" 2>&1
+      - name: Exact public lock dependencies without lifecycle scripts or project keys
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          umask 077
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs dependencies > "$PRIVATE_DIR/dependencies.log" 2>&1
+      - name: Pinned images and empty contained native stacks
+        timeout-minutes: 13
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=15s 750s node tools/restore-local/scripts/restore-app/phase-b/main.mjs bootstrap > "$PRIVATE_DIR/bootstrap.log" 2>&1
+      - name: Build exact App with explicit source and target local URLs
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          umask 077
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs build > "$PRIVATE_DIR/build.log" 2>&1
+      - name: Same run capture source UI stop restore and target UI
+        timeout-minutes: 43
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=15s 2520s node tools/restore-local/scripts/restore-app/phase-b/main.mjs native > "$PRIVATE_DIR/native.log" 2>&1
+      - name: Closed container state before cleanup
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs diagnose > "$PRIVATE_DIR/diagnose.log" 2>&1
+      - name: Always clean exact owned resources twice
+        if: always()
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs cleanup > "$PRIVATE_DIR/cleanup.log" 2>&1
+      - name: Independently prove absence including browser
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-b/main.mjs absence > "$PRIVATE_DIR/absence.log" 2>&1
+      - name: Closed projections only no Auth report dump files or logs
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: restore-app-phase-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PROOF_DIR }}/identity.json
+            ${{ env.PROOF_DIR }}/units.json
+            ${{ env.PROOF_DIR }}/dependencies.json
+            ${{ env.PROOF_DIR }}/build.json
+            ${{ env.PROOF_DIR }}/bootstrap-proof.json
+            ${{ env.PROOF_DIR }}/phase-a-capture.json
+            ${{ env.PROOF_DIR }}/browser-source.json
+            ${{ env.PROOF_DIR }}/browser-target.json
+            ${{ env.PROOF_DIR }}/target-objects.json
+            ${{ env.PROOF_DIR }}/controlled-negative.json
+            ${{ env.PROOF_DIR }}/phase-b.json
+            ${{ env.PROOF_DIR }}/diagnostic.json
+            ${{ env.PROOF_DIR }}/cleanup.json
+            ${{ env.PROOF_DIR }}/cleanup-again.json
+            ${{ env.PROOF_DIR }}/absence.json
           retention-days: 7
           if-no-files-found: error
           include-hidden-files: false
