@@ -174,9 +174,10 @@ export default function PageConnexion() {
     // A retained native tap may already have opened its mission while role
     // lookup or biometrics was pending. Do not overwrite that newer action.
     if (!pageActive.current) return true;
-    // The restored identity must belong to the establishment interface. RLS
-    // and RouteProtegee keep checking access; this never selects a tenant.
-    navigate(sessionData.session && destination === '/etablissement/tableau-de-bord' && retourMission
+    // La route mission est commune aux membres habilités, y compris au rôle
+    // groupe. Sa garde et la RPC vérifient les droits courants sur la cible.
+    // Le retour reste une URL interne canonique, sans sélectionner un tenant.
+    navigate(sessionData.session && retourMission
       ? retourMission : destination);
     return true;
   };
@@ -315,6 +316,7 @@ export default function PageConnexion() {
 
           <div className="mb-4">
             <BoutonProSanteConnect
+              retourMission={retourMissionNotification(searchParams.get('return'))}
               intention="login"
               onSwitchToEmail={() => {
                 document.querySelector<HTMLInputElement>('input[type="email"]')?.focus();

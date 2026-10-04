@@ -12,6 +12,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { RouteAdminProtegee } from "@/components/RouteAdminProtegee";
 const AppShell = lazy(() => import("@/components/LayoutApp").then(module => ({ default: module.AppShell })));
+const MissionDepuisNotification = lazy(() => import("./pages/MissionDepuisNotification"));
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { captureAttribution } from "@/lib/attribution";
@@ -355,7 +356,6 @@ function AppRoutes() {
             <Route path="/etablissement/soignants/:id" element={<ProfilSoignantEtablissement />} />
             <Route path="/etablissement/missions" element={<ListeMissions />} />
             <Route path="/etablissement/missions/creer" element={<CreerMission />} />
-            <Route path="/etablissement/missions/:id" element={<DetailMission />} />
             <Route path="/etablissement/missions/:id/modifier" element={<ModifierMission />} />
             <Route path="/etablissement/presences" element={<PresencesEtablissement />} />
             <Route path="/etablissement/contrats" element={<ListeContrats role="ADMIN_ETABLISSEMENT" />} />
@@ -436,6 +436,8 @@ function AppRoutes() {
           {/* Contrat (accessible par soignant et établissement) */}
           <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
           <Route path="/contrat/:id/certificat" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT', 'ADMIN_PLATEFORME', 'ADMIN_GROUPE']}><CertificatSignaturePage /></RouteProtegee>} />
+
+          <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT', 'ADMIN_GROUPE', 'SOIGNANT', 'ADMIN_PLATEFORME']}><MissionDepuisNotification /></RouteProtegee>} />
 
           {/* Groupe */}
           <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />

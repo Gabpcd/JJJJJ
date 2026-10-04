@@ -37,10 +37,98 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 const MODE_LABELS: Record<string, string> = {
-  STRIPE: 'Carte bancaire',
+  STRIPE: 'Paiement en ligne',
   VIREMENT: 'Virement bancaire',
   SEPA: 'Prélèvement SEPA',
+  SEPA_DEBIT: 'Prélèvement SEPA',
+  CHORUS_PRO: 'Chorus Pro',
 };
+
+/** Le RPC historique ne retourne pas la liaison avec la pièce d'honoraires. */
+async function chargerContexteFactureCommission(client: typeof supabase, id: string, etablissementId: string) {
+  const { data: facture, error } = await client.from('factures')
+    .select('id, etablissement_id, mission_id, facture_honoraire_id, type_document, mode_paiement')
+    .eq('id', id).eq('etablissement_id', etablissementId).single();
+  if (error) throw error;
+  if (!facture || facture.id !== id || facture.etablissement_id !== etablissementId
+    || !Object.prototype.hasOwnProperty.call(facture, 'facture_honoraire_id')) {
+    throw new Error('Contexte de la facture indisponible');
+  }
+
+  if (!facture.facture_honoraire_id) {
+    // Une ancienne commission libérale sans lien ne doit pas ouvrir un second paiement.
+    if (facture.mission_id) {
+      const { data: mission, error: missionError } = await client.from('missions')
+        .select('id, type_contrat_applique').eq('id', facture.mission_id)
+        .eq('etablissement_id', etablissementId).single();
+      if (missionError) throw missionError;
+      if (!mission || mission.type_contrat_applique !== 'SALARIE') {
+        throw new Error('Facture d’honoraires liée indisponible');
+      }
+    }
+    return { facture, honoraires: null };
+  }
+
+  const { data: honoraires, error: honorairesError } = await client.from('factures_honoraires')
+    .select('id, etablissement_id, mission_id, numero_facture, periode_debut, periode_fin, quantite_heures_snapshot, taux_horaire_snapshot, montant_ht, description_prestation_snapshot')
+    .eq('id', facture.facture_honoraire_id).eq('etablissement_id', etablissementId).single();
+  if (honorairesError) throw honorairesError;
+  if (!honoraires || honoraires.id !== facture.facture_honoraire_id
+    || honoraires.etablissement_id !== etablissementId || !honoraires.mission_id
+    || honoraires.mission_id !== facture.mission_id
+    || !honoraires.periode_debut || !honoraires.periode_fin
+    || !Number.isFinite(Date.parse(honoraires.periode_debut))
+    || !Number.isFinite(Date.parse(honoraires.periode_fin))) {
+    throw new Error('Facture d’honoraires liée indisponible');
+  }
+  return { facture, honoraires };
+}
+
+type HonorairesCommission = Awaited<ReturnType<typeof chargerContexteFactureCommission>>['honoraires'];
+
+const valeurFigee = (valeur: unknown): number | null => (
+  valeur != null && Number.isFinite(Number(valeur)) && Number(valeur) >= 0 ? Number(valeur) : null
+);
+
+function lignesDocumentFactureCommission(missions: any[], facture: any, honoraires: HonorairesCommission) {
+  if (!honoraires) return normaliserLignesFactureCommission(missions, facture);
+  const mission = missions.find((ligne) => ligne.id === honoraires.mission_id);
+  return [{
+    id: honoraires.mission_id,
+    intitule: honoraires.description_prestation_snapshot || mission?.intitule || 'Prestation facturée',
+    soignant_nom: mission?.soignant_nom,
+    profession: mission?.profession,
+    service: mission?.service,
+    debut_le: honoraires.periode_debut,
+    fin_le: honoraires.periode_fin,
+    duree_heures: valeurFigee(honoraires.quantite_heures_snapshot),
+    taux_horaire_snapshot: valeurFigee(honoraires.taux_horaire_snapshot),
+    montant_honoraires_ht: Number(honoraires.montant_ht),
+    numero_honoraires: honoraires.numero_facture,
+    piece_honoraires: true,
+    montant_commission_ht: Number(facture.montant_ht),
+    montant_commission_tva: Number(facture.montant_tva),
+    montant_commission_ttc: Number(facture.montant_ttc),
+    ecart_avec_mission_courante: false,
+  }];
+}
+
+function presentationPaiementCommission(facture: any, etab: any, canManagePayments: boolean) {
+  const lieeHonoraires = Boolean(facture.facture_honoraire_id);
+  const estSepaAutomatique = !lieeHonoraires && etab?.mode_paiement_commission === 'SEPA_DEBIT';
+  const aRegler = facture.statut === 'EMISE' || facture.statut === 'EN_RETARD';
+  const canPay = canManagePayments && aRegler && ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
+    && !lieeHonoraires && !facture.est_secteur_public && !estSepaAutomatique;
+  return {
+    lieeHonoraires,
+    estSepaAutomatique,
+    canPay,
+    canPayCard: canPay && facture.type_document === 'FACTURE',
+    modeLibelle: lieeHonoraires && facture.mode_paiement === 'STRIPE'
+      ? 'Paiement avec les honoraires'
+      : MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement,
+  };
+}
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 
@@ -159,33 +247,36 @@ function MissionDetail({ mission }: { mission: any }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
+        className="w-full flex flex-col items-stretch gap-3 p-3 hover:bg-muted/30 transition-colors text-left sm:flex-row sm:items-start sm:justify-between"
         aria-expanded={open}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2 gap-y-1">
             {open ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+              <ChevronDown className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <ChevronRight className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
             )}
-            <span className="font-semibold text-foreground text-sm">{mission.intitule}</span>
+            <span className="min-w-0 break-words font-semibold text-foreground text-sm">{mission.intitule}</span>
             {mission.soignant_nom && (
-              <span className="text-xs text-muted-foreground">· {mission.soignant_nom}</span>
+              <span className="col-start-2 min-w-0 break-words text-xs text-muted-foreground">· {mission.soignant_nom}</span>
             )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1 ml-6">
             {mission.profession && <span>{mission.profession}</span>}
             {mission.service && <span>· {mission.service}</span>}
             <span>
-              {mission.debut_le ? format(new Date(mission.debut_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+              {mission.piece_honoraires && 'Période facturée : '}
+              {mission.debut_le ? format(new Date(mission.piece_honoraires ? `${mission.debut_le}T00:00:00` : mission.debut_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
               {' → '}
-              {mission.fin_le ? format(new Date(mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+              {mission.fin_le ? format(new Date(mission.piece_honoraires ? `${mission.fin_le}T00:00:00` : mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
             </span>
-            <span>{Number(mission.duree_heures ?? 0)} h retenues</span>
+            <span>{mission.duree_heures == null && mission.piece_honoraires
+              ? 'Heures facturées non disponibles'
+              : `${Number(mission.duree_heures ?? 0)} h ${mission.piece_honoraires ? 'facturées' : 'retenues'}`}</span>
           </div>
         </div>
-        <div className="text-right shrink-0 ml-3">
+        <div className="self-end shrink-0 text-right sm:self-start">
           <p className="text-sm font-bold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</p>
           <p className="text-[10px] text-muted-foreground">commission HT</p>
         </div>
@@ -193,13 +284,24 @@ function MissionDetail({ mission }: { mission: any }) {
 
       {open && (
         <div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
-          {mission.ecart_avec_mission_courante && (
+          {mission.ecart_avec_mission_courante && !mission.piece_honoraires && (
             <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
               Cette ligne reprend les montants figés sur la facture. La mission a été recalculée après son émission ; les anciennes valeurs de simulation ne sont pas utilisées ici.
             </div>
           )}
           {/* Décomposition financière */}
-          {!mission.ecart_avec_mission_courante && <div>
+          {mission.piece_honoraires && (
+            <div>
+              <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">Honoraires facturés</h4>
+              <p className="mb-2 text-xs text-muted-foreground">{mission.numero_honoraires}</p>
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div><dt className="text-muted-foreground">Heures facturées</dt><dd className="font-medium">{mission.duree_heures == null ? 'Non disponibles sur la facture' : `${mission.duree_heures} h`}</dd></div>
+                <div><dt className="text-muted-foreground">Taux horaire facturé</dt><dd className="font-medium">{mission.taux_horaire_snapshot == null ? 'Non disponible sur la facture' : `${formatEur(mission.taux_horaire_snapshot)}/h`}</dd></div>
+                <div><dt className="text-muted-foreground">Honoraires HT</dt><dd className="font-medium">{formatEur(mission.montant_honoraires_ht)}</dd></div>
+              </dl>
+            </div>
+          )}
+          {!mission.piece_honoraires && !mission.ecart_avec_mission_courante && <div>
             <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
               💶 Décomposition financière
             </h4>
@@ -261,10 +363,10 @@ function MissionDetail({ mission }: { mission: any }) {
               🏷️ Commission Jolene
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
-              <div className="flex justify-between">
+              {!mission.piece_honoraires && <div className="flex justify-between">
                 <span className="text-muted-foreground">Taux HT</span>
                 <span className="font-medium">{Number(mission.taux_commission ?? 15)}%</span>
-              </div>
+              </div>}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Com. HT</span>
                 <span className="font-semibold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</span>
@@ -281,12 +383,12 @@ function MissionDetail({ mission }: { mission: any }) {
           </div>
 
           {/* Pointages détaillés */}
-          <div>
+          {!mission.piece_honoraires && <div>
             <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
               ⏱️ Pointages détaillés
             </h4>
             <PresencesJour presences={presences} segments={mission.segments_effectifs} />
-          </div>
+          </div>}
         </div>
       )}
     </div>
@@ -320,33 +422,38 @@ export default function DetailFacture() {
   const [loading, setLoading] = useState(true);
   const [facture, setFacture] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  const [honoraires, setHonoraires] = useState<HonorairesCommission>(null);
   const [etab, setEtab] = useState<any>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const requeteCourante = useRef(0);
   const missionsFacturees = useMemo(
-    () => facture ? normaliserLignesFactureCommission(missions, facture) : [],
-    [facture, missions],
+    () => facture ? lignesDocumentFactureCommission(missions, facture, honoraires) : [],
+    [facture, missions, honoraires],
   );
 
   const charger = useCallback(async () => {
-    if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
-    if (!user || !id || !etablissementId || !canReadFinance) {
-      setLoading(false);
-      return;
-    }
     const numeroRequete = ++requeteCourante.current;
     setLoading(true);
     setErreurChargement(null);
     setFacture(null);
     setMissions([]);
+    setHonoraires(null);
     setEtab(null);
+    setShowCheckout(false);
+
+    if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
+    if (!user || !id || !etablissementId || !canReadFinance || permissionsError) {
+      setLoading(false);
+      return;
+    }
 
     try {
-      const [resDetail, resE] = await Promise.all([
+      const [resDetail, resE, contexte] = await Promise.all([
         supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
         supabase.rpc('fn_mon_etablissement_complet' as any),
+        chargerContexteFactureCommission(supabase, id, etablissementId),
       ]);
       if (numeroRequete !== requeteCourante.current) return;
       if (resDetail.error) throw resDetail.error;
@@ -359,14 +466,14 @@ export default function DetailFacture() {
         try { detail = JSON.parse(detail); } catch { throw new Error('Réponse facture invalide'); }
       }
       if (Array.isArray(detail) && detail.length === 1) detail = detail[0];
-      if (!detail?.facture || !Array.isArray(detail?.missions) || !resE.data) {
+      if (!detail?.facture || detail.facture.id !== id || !Array.isArray(detail?.missions) || !resE.data) {
         logger.warn('[DetailFacture] réponse incomplète', detail ? Object.keys(detail) : 'null');
         throw new Error('Réponse facture incomplète');
       }
 
       const missionIds = detail.missions.map((mission: any) => mission.id).filter(Boolean);
       let segmentsParMission: Record<string, any[]> = {};
-      if (missionIds.length > 0) {
+      if (missionIds.length > 0 && !contexte.honoraires) {
         const { data: segments, error: segmentsError } = await supabase
           .from('mission_creneaux')
           .select('id, mission_id, debut, fin, type_creneau, est_pause')
@@ -385,7 +492,9 @@ export default function DetailFacture() {
         }
       }
 
-      setFacture(detail.facture);
+      if (numeroRequete !== requeteCourante.current) return;
+      setFacture({ ...detail.facture, ...contexte.facture });
+      setHonoraires(contexte.honoraires);
       setMissions(detail.missions.map((mission: any) => ({
         ...mission,
         segments_effectifs: segmentsParMission[mission.id] ?? [],
@@ -396,6 +505,7 @@ export default function DetailFacture() {
       capturerErreurSentry(error, 'DetailFacture', 'charger');
       setFacture(null);
       setMissions([]);
+      setHonoraires(null);
       setEtab(null);
       setErreurChargement('Impossible de charger cette facture en toute sécurité.');
     } finally {
@@ -406,6 +516,7 @@ export default function DetailFacture() {
     etablissementId,
     id,
     permissionsLoading,
+    permissionsError,
     scopeError,
     scopeLoading,
     scopeResolved,
@@ -434,7 +545,6 @@ export default function DetailFacture() {
     scopeLoading
     || (!scopeResolved && !scopeError)
     || (permissionCheckEnabled && permissionsLoading)
-    || loading
   ) {
     return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
   }
@@ -470,6 +580,9 @@ export default function DetailFacture() {
       </LayoutApp>
     );
   }
+  if (loading) {
+    return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  }
   if (erreurChargement) {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -490,11 +603,8 @@ export default function DetailFacture() {
     </LayoutApp>
   );
 
-  const estSepaAutomatique = etab?.mode_paiement_commission === 'SEPA_DEBIT';
-  const canPay = canManagePayments
-    && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
-    && !facture.est_secteur_public
-    && !estSepaAutomatique;
+  const { lieeHonoraires, estSepaAutomatique, canPay, canPayCard, modeLibelle } =
+    presentationPaiementCommission(facture, etab, canManagePayments);
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
@@ -510,7 +620,7 @@ export default function DetailFacture() {
           <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-1.5">
             <Printer className="h-4 w-4" /> Imprimer
           </button>
-          {canPay && (
+          {canPayCard && (
             <button onClick={() => setShowCheckout(true)} className="btn-primary text-sm flex items-center gap-1.5">
               <CreditCard className="h-4 w-4" /> Payer
             </button>
@@ -535,7 +645,7 @@ export default function DetailFacture() {
             )}
             {facture.mode_paiement && (
               <p className="text-xs text-muted-foreground mt-1">
-                Mode : {MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement}
+                Mode : {modeLibelle}
               </p>
             )}
           </div>
@@ -583,7 +693,9 @@ export default function DetailFacture() {
               Les montants de commission affichés ci-dessous sont ceux du document émis. Toute correction ultérieure doit apparaître sur un avoir ou une facture complémentaire distincte.
             </div>
             <p className="text-xs text-muted-foreground mb-3">
-              Cliquez sur une mission pour voir le détail complet (heures, majorations nuit/dimanche/férié, IFM, ICP, commission, pointages).
+              {lieeHonoraires
+                ? 'Ouvrez la prestation pour consulter les heures et le taux figurant sur la facture d’honoraires liée.'
+                : 'Cliquez sur une mission pour voir le détail complet (heures, majorations nuit/dimanche/férié, IFM, ICP, commission, pointages).'}
             </p>
             {missionsFacturees.map((m: any) => (
               <MissionDetail key={m.id} mission={m} />
@@ -608,7 +720,7 @@ export default function DetailFacture() {
           {facture.mode_paiement && (
             <div className="flex justify-between text-xs pt-1">
               <span className="text-muted-foreground">Mode de paiement</span>
-              <span className="text-foreground">{MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement}</span>
+              <span className="text-foreground">{modeLibelle}</span>
             </div>
           )}
         </div>
@@ -623,9 +735,20 @@ export default function DetailFacture() {
           </div>
         )}
 
+        {lieeHonoraires && honoraires && (
+          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+            <p>Cette commission est liée à la facture d’honoraires {honoraires.numero_facture}. Le paiement en ligne des honoraires inclut cette commission.</p>
+            <button type="button" className="mt-3 min-h-[44px] btn-secondary text-sm no-print" onClick={() => navigate(
+              facture.statut === 'PAYEE'
+                ? '/etablissement/facturation?tab=historique'
+                : `/etablissement/facturation?tab=missions-a-payer&mission=${encodeURIComponent(honoraires.mission_id!)}&facture_honoraire=${encodeURIComponent(honoraires.id)}`,
+            )}>{facture.statut === 'PAYEE' ? 'Consulter l’historique des paiements' : 'Consulter le règlement des honoraires'}</button>
+          </div>
+        )}
+
         {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground no-print">
-            Prélèvement SEPA automatique programmé : aucune carte ni déclaration de virement n’est nécessaire.
+            Votre établissement utilise le prélèvement SEPA pour les commissions. Consultez le suivi des prélèvements dans la facturation.
           </div>
         )}
 
@@ -637,11 +760,11 @@ export default function DetailFacture() {
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
           <p>{ENTREPRISE.nom} — Plateforme de mise en relation soignants-établissements</p>
-          <p>Facture détaillée — Commission sur missions terminées</p>
+          <p>Facture détaillée — Commission sur prestations facturées</p>
         </div>
       </div>
 
-      {canManagePayments && showCheckout && facture && !estSepaAutomatique && !facture.est_secteur_public && (
+      {canPayCard && showCheckout && facture && (
         <StripeEmbeddedCheckout
           factureId={facture.id}
           open={showCheckout}

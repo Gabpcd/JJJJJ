@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { Capacitor } from '@capacitor/core';
 import { estSessionRecurrente } from '@/lib/session-count';
+import type { UserRole } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -15,10 +16,39 @@ import {
 
 const STORAGE_KEY = 'push_permission_asked';
 
-export function DemandePermissionPush() {
+const TEXTES = {
+  soignant: {
+    titre: 'Recevoir les alertes missions ?',
+    description: 'Jolene vous envoie des notifications pour les nouvelles missions, les rappels de pointage et les mises à jour de vos contrats.',
+    avantages: [
+      'Nouvelles missions correspondant à votre profil',
+      'Rappels de pointage avant vos missions',
+      'Mises à jour de contrats et paiements',
+    ],
+  },
+  etablissement: {
+    titre: 'Recevoir les notifications de votre établissement ?',
+    description: 'Suivez les candidatures et les mises à jour de vos missions.',
+    avantages: [
+      'Nouvelles candidatures',
+      'Mises à jour de vos missions',
+      'Suivi des contrats et paiements',
+    ],
+  },
+  administration: {
+    titre: 'Recevoir les notifications Jolene ?',
+    description: 'Restez informé des événements concernant votre activité.',
+    avantages: [],
+  },
+};
+
+export function DemandePermissionPush({ role }: { role: UserRole }) {
   const [visible, setVisible] = useState(false);
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const textes = role === 'SOIGNANT'
+    ? TEXTES.soignant
+    : role === 'ADMIN_ETABLISSEMENT' ? TEXTES.etablissement : TEXTES.administration;
 
   useEffect(() => {
     if (!user) return;
@@ -105,19 +135,16 @@ export function DemandePermissionPush() {
             <Bell className="h-6 w-6 text-primary" />
           </div>
           <DialogTitle className="text-center text-lg">
-            Recevoir les alertes missions ?
+            {textes.titre}
           </DialogTitle>
           <DialogDescription className="text-center text-sm text-muted-foreground leading-relaxed">
-            Jolene vous envoie des notifications pour les nouvelles missions,
-            les rappels de pointage et les mises à jour de vos contrats.
+            {textes.description}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 pt-2">
           <div className="bg-muted/50 border border-border rounded-xl p-3 text-xs text-muted-foreground space-y-1">
-            <p>✅ Nouvelles missions correspondant à votre profil</p>
-            <p>✅ Rappels de pointage avant vos missions</p>
-            <p>✅ Mises à jour de contrats et paiements</p>
+            {textes.avantages.map((avantage) => <p key={avantage}>✅ {avantage}</p>)}
             <p className="text-muted-foreground/70 italic mt-2">
               Vous pouvez désactiver les notifications à tout moment depuis les réglages de votre téléphone.
             </p>

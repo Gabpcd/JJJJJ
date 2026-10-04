@@ -138,6 +138,7 @@ export function createHeader(doc: jsPDF, opts: {
 export function createInfoBlock(doc: jsPDF, opts: {
   x: number;
   y: number;
+  width?: number;
   label: string;
   name: string;
   lines?: (string | null | undefined)[];
@@ -150,15 +151,21 @@ export function createInfoBlock(doc: jsPDF, opts: {
   doc.setTextColor(...JOLENE_COLORS.text);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text(sanitizeForPdf(opts.name), opts.x, opts.y + 5);
+  const largeur = opts.width ?? PAGE.width - PAGE.margin - opts.x;
+  let y = opts.y + 5;
+  for (const ligne of doc.splitTextToSize(sanitizeForPdf(opts.name), largeur) as string[]) {
+    doc.text(ligne, opts.x, y);
+    y += 5;
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  let y = opts.y + 10;
   for (const line of opts.lines || []) {
     if (!line) continue;
-    doc.text(sanitizeForPdf(line), opts.x, y);
-    y += 4;
+    for (const ligne of doc.splitTextToSize(sanitizeForPdf(line), largeur) as string[]) {
+      doc.text(ligne, opts.x, y);
+      y += 4;
+    }
   }
   return y;
 }

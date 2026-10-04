@@ -1,3 +1,4 @@
+import { retourMissionNotification } from '@/lib/navigationNotification';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,11 +14,15 @@ export default function PscCallback() {
   usePageTitle('Pro Santé Connect');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const retourMission = retourMissionNotification(searchParams.get('return'));
+  const retourConnexion = retourMission ? `/connexion?return=${encodeURIComponent(retourMission)}` : '/connexion';
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const [retryLoading, setRetryLoading] = useState(false);
 
   useEffect(() => {
+    let actif = true;
+    let minuterie: ReturnType<typeof setTimeout> | undefined;
     const finaliser = async () => {
       const result = searchParams.get('status');
       const tokenHash = searchParams.get('token_hash');
@@ -52,6 +57,7 @@ export default function PscCallback() {
         type: 'magiclink',
       });
 
+      if (!actif) return;
       if (error) {
         setStatus('error');
         setMessage(error.message || 'Impossible de créer la session');
@@ -64,13 +70,14 @@ export default function PscCallback() {
         : 'Connexion réussie via Pro Santé Connect');
 
       // Vérifier le rôle et rediriger
-      setTimeout(async () => {
+      minuterie = setTimeout(async () => {
         const { data: roleData } = await supabase.rpc('fn_get_my_role' as any);
+        if (!actif) return;
         const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
         if (role === 'SOIGNANT') {
           // Nouveau soignant via PSC : page de complétion (téléphone, contrat, mdp optionnel, CGU)
           // Soignant existant : tableau de bord
-          navigate(isNewUser ? '/inscription/soignant/completion' : '/soignant/tableau-de-bord');
+          navigate(isNewUser ? '/inscription/soignant/completion' : retourMission ?? '/soignant/tableau-de-bord');
         } else {
           navigate('/');
         }
@@ -78,22 +85,23 @@ export default function PscCallback() {
     };
 
     finaliser();
-  }, [searchParams, navigate]);
+    return () => { actif = false; if (minuterie !== undefined) clearTimeout(minuterie); };
+  }, [searchParams, navigate, retourMission]);
 
   // Relance le flow PSC complet (équivalent du bouton "S'identifier avec Pro Santé Connect")
   const relancerPsc = async () => {
     setRetryLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('psc-authorize', {
-        body: { intention: 'login' },
+        body: { intention: 'login', ...(retourMission ? { return_to: retourMission } : {}) },
       });
       if (!error && data?.authorization_url) {
         if (await ouvrirUrlPsc(data.authorization_url)) return;
       }
       // Fallback : retour à la page de connexion
-      navigate('/connexion');
+      navigate(retourConnexion);
     } catch {
-      navigate('/connexion');
+      navigate(retourConnexion);
     } finally {
       setRetryLoading(false);
     }
@@ -124,7 +132,7 @@ export default function PscCallback() {
             <div>
               <p className="text-lg font-semibold text-foreground">Connexion réussie</p>
               <p className="text-sm text-muted-foreground mt-1">{message}</p>
-              <p className="text-xs text-muted-foreground mt-3">Redirection vers ton tableau de bord…</p>
+              <p className="text-xs text-muted-foreground mt-3">Ouverture de ton espace…</p>
             </div>
           </>
         )}

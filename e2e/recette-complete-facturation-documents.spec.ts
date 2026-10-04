@@ -228,7 +228,25 @@ test('Documents F1 établissement : commission réelle de période téléchargé
     expect(route.request().method()).toBe('GET');
     return route.fulfill({ json: [{ ...banc.mission, etablissement_id: idsEtab.etab, taux_commission_fige: 15 }], headers: { 'access-control-allow-origin': '*' } });
   });
-  etat.overrides.set('soignants', [banc.soignant]); etat.overrides.set('mission_creneaux', []);
+  etat.overrides.set('soignants', [banc.soignant]);
+  let lecturesPlanningCommission = 0;
+  await page.route('**/rest/v1/mission_creneaux?*', async route => {
+    const req = route.request(), url = new URL(req.url());
+    expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+    expect(req.method()).toBe('GET');
+    expect(url.searchParams.get('mission_id')).toBe(`in.(${ids.mission})`);
+    expect(url.searchParams.get('est_pause')).toBe('eq.false');
+    expect(req.headers().prefer).toContain('count=exact');
+    expect(url.searchParams.get('offset')).toBe('0');
+    expect(url.searchParams.get('limit')).toBe('500');
+    lecturesPlanningCommission += 1;
+    // Même une liste vide doit attester son total PostgREST ; sans cet en-tête,
+    // le générateur refuse à juste titre un planning impossible à vérifier.
+    return route.fulfill({ json: [], headers: {
+      'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range',
+      'content-range': '*/0',
+    } });
+  });
   await entrerEtablissement(page, 'connexion'); await allerA(page, '/etablissement/facturation?tab=commissions');
   await expect(page.getByText(commission.numero_facture, { exact: true })).toBeVisible(); await aria(page, info, 'avant-commission');
   for (const reload of [false, true]) {
@@ -242,6 +260,7 @@ test('Documents F1 établissement : commission réelle de période téléchargé
   }
   await aria(page, info, 'apres-commission-et-recharge');
   await page.screenshot({ path: info.outputPath('etablissement-commission.png'), fullPage: false, scale: 'css' });
+  expect(lecturesPlanningCommission).toBe(2);
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
   reseau.verifier();
 });

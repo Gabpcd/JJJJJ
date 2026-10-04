@@ -1,5 +1,6 @@
 // Pro Santé Connect — étape 2 : échange le code, vérifie le JWT, crée ou lie le soignant,
 // et redirige vers le frontend avec un token de session magique.
+import { verifierEtatPsc } from "../_shared/psc-return.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5.9.6";
 import {
@@ -84,7 +85,7 @@ function profileIsCompatible(
 
 Deno.serve(async (req) => {
   const appUrl = Deno.env.get("PSC_FRONTEND_URL") || "https://jolene.app";
-  const callbackPage = `${appUrl}/auth/psc/callback`;
+  let callbackPage = `${appUrl}/auth/psc/callback`;
 
   try {
     const url = new URL(req.url);
@@ -92,6 +93,12 @@ Deno.serve(async (req) => {
     const state = url.searchParams.get("state");
     const error = url.searchParams.get("error");
     const errorDescription = url.searchParams.get("error_description");
+    const navigation = await verifierEtatPsc(state, Deno.env.get("PSC_CLIENT_SECRET"));
+    if (navigation?.retour) {
+      const cible = new URL(callbackPage);
+      cible.searchParams.set("return", navigation.retour);
+      callbackPage = cible.toString();
+    }
 
     if (error) {
       return redirectToFrontend(callbackPage, {
@@ -102,7 +109,7 @@ Deno.serve(async (req) => {
 
     if (
       !code || code.length > 4096 ||
-      !state || !/^[A-Za-z0-9_-]{43}$/.test(state)
+      !navigation
     ) {
       return redirectToFrontend(callbackPage, {
         status: "error",
@@ -139,7 +146,7 @@ Deno.serve(async (req) => {
     const { data: session, error: sessionErr } = await supabaseAdmin
       .from("psc_auth_sessions")
       .delete()
-      .eq("state", state)
+      .eq("state", navigation.state)
       .select("nonce, code_verifier, intention, expire_le")
       .maybeSingle();
 
