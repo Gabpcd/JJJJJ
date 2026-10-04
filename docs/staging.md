@@ -63,7 +63,7 @@ lecture par le workflow staging pour dumper le schéma :
 | `STAGING_SUPABASE_URL` | `https://mejpriaetwgtcstbgfid.supabase.co` | Dashboard staging → Project Settings → API |
 | `STAGING_SUPABASE_ANON_KEY` | `eyJhbG...` | Dashboard staging → Project Settings → API → anon public |
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | `eyJhbG...` | Dashboard staging → Project Settings → API → service_role (secret) |
-| `LOAD_TEST_PASSWORD` | `Playwright!Test2026` | Mot de passe hardcodé dans la migration de seed (NE PAS changer) |
+| `PLAYWRIGHT_TEST_PASSWORD` → `LOAD_TEST_PASSWORD` | Secret privé existant, jamais copié dans le dépôt | Le workflow load-tests injecte ce secret GitHub dans `LOAD_TEST_PASSWORD`. Toute rotation staging exige une synchronisation dédiée des fixtures ; le présent correctif ne le modifie pas. |
 
 ### 2. Lancer le bootstrap staging
 
@@ -176,3 +176,5 @@ désactiver/ré-écrire vers no-op pour ne pas polluer les mesures de tests.
 | Scenario D fail "playwright-etab non seedé" | Step "Re-execute playwright seed migration" a planté | Re-run deploy-staging — vérifier que la migration 20260503050000 finit OK |
 | Scénario F suspendu | Lot facturable et transports non isolés | Conserver le refus ; préparer un banc dédié, sans seed/reset/cron global |
 | `duplicate key violates unique constraint` au step apply schema | Staging déjà bootstrap — re-run sans `reset_first` | Lancer avec `reset_first=true` pour partir propre |
+
+Le secret `PLAYWRIGHT_FIXTURE_PASSWORD` des deux comptes fixes de recette PROD est distinct de ce secret staging. Une valeur historique dans une migration ou un exemple public ne doit jamais servir de nouveau mot de passe.

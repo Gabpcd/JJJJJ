@@ -1,3 +1,4 @@
+import { requireFixturePassword } from '../scripts/lib/playwright-fixtures.mjs';
 /**
  * Global setup Playwright — pré-nettoyage de l'état de test.
  *
@@ -53,6 +54,8 @@ const ENFANTS_MISSION = [
 ];
 
 export default async function globalSetup() {
+  // Avant toute réactivation ou synchronisation de compte.
+  requireFixturePassword(process.env.PLAYWRIGHT_TEST_PASSWORD);
   const url = process.env.SUPABASE_URL || process.env.E2E_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {

@@ -11,6 +11,19 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      rotate_fixture_credentials:
+        description: Rotation manuelle des deux fixtures techniques uniquement
+        type: boolean
+        default: false
+      expected_sha:
+        description: SHA complet du code relu, identique à la branche sélectionnée
+        type: string
+        default: ''
+      confirmation:
+        description: Saisir ROTATE_ONLY_PLAYWRIGHT_FIXTURES pour la rotation
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -19,24 +32,52 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-  # Valeurs PUBLIQUES hardcodées (présentes dans le bundle client / le code du
-  # repo) : on ne dépend plus de secrets GitHub potentiellement désynchronisés.
-  # Diagnostic 11/06 : le secret PLAYWRIGHT_TEST_PASSWORD ne correspondait pas
-  # au mot de passe réel des comptes test (vérifié bcrypt en DB) → 119 fails.
-  # La clé service_role n'est PLUS lue depuis le secret GitHub (qui contenait
-  # en réalité la clé anon → 79 fails) : elle est résolue à chaque run via
-  # l'API Management Supabase avec SUPABASE_ACCESS_TOKEN (le même token que
-  # deploy-supabase, prouvé fonctionnel). Cf. step « Résoudre la clé ».
+  # URL et clés client publiques ; les identifiants des fixtures restent privés.
+  # La clé service_role est résolue via SUPABASE_ACCESS_TOKEN.
   E2E_SUPABASE_URL: 'https://flripxtsyegjshnhzjkz.supabase.co'
   E2E_PUBLISHABLE_KEY: 'sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C'
   # Clé anon legacy (publique, présente dans tout bundle client historique) :
   # verify-rpps compare le Bearer à SUPABASE_ANON_KEY pour exempter de captcha.
   E2E_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY'
-  E2E_TEST_PASSWORD: 'Playwright!Test2026'
   SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz'
 
 jobs:
+  rotate-fixture-credentials:
+    name: Rotation manuelle des deux fixtures techniques
+    env:
+      E2E_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_FIXTURE_PASSWORD }}
+    if: github.event_name == 'workflow_dispatch' && inputs.rotate_fixture_credentials
+    concurrency:
+      group: jolene-playwright-shared-database
+      queue: max
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: node scripts/ci/check-playwright-fixture-secret.mjs
+      - run: npm ci --ignore-scripts
+      - name: Contrôler, tourner et révoquer les deux fixtures
+        run: node scripts/ci/rotate-playwright-fixtures.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FIXTURE_ROTATION_CONFIRMATION: ${{ inputs.confirmation }}
+          FIXTURE_EXPECTED_SHA: ${{ inputs.expected_sha }}
+      - name: Reçu fermé de maintenance
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: fixture-rotation-public
+          path: fixture-rotation-public.json
+          if-no-files-found: warn
+          retention-days: 7
+
   simulation-interfaces:
+    if: ${{ !inputs.rotate_fixture_credentials }}
     name: Simulation interfaces (${{ matrix.project }}, lot ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     container:
@@ -91,6 +132,7 @@ jobs:
       queue: max
       cancel-in-progress: false
     env:
+      E2E_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_FIXTURE_PASSWORD }}
       # La PR précède nécessairement le déploiement de ses migrations. Ces
       # replis sont limités à ce job PR et hérités par ses trois invocations
       # Playwright (smoke iPad, suite Chromium et diagnostic a11y).
@@ -114,6 +156,8 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Vérifier le secret privé des fixtures
+        run: node scripts/ci/check-playwright-fixture-secret.mjs
       - name: Résoudre la clé service_role (Management API — autonome)
         # Le secret GitHub SUPABASE_SERVICE_ROLE_KEY contenait la clé anon
         # (79 tests backend en échec, « permission denied for table … »).
@@ -159,7 +203,7 @@ jobs:
             exit 1
           fi
           echo "service_role OK (admin GoTrue 200)"
-          # 2) Login compte test (publishable key + mot de passe fixe)
+          # 2) Login compte test (publishable key + secret privé dédié)
           auth_response=$(mktemp)
           trap 'rm -f "$auth_response"' EXIT
           code=000
@@ -270,7 +314,9 @@ jobs:
   # push main — matrix complète (cross-browser + mobile)
   e2e-main:
     name: Playwright E2E (${{ matrix.project }})
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    env:
+      E2E_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_FIXTURE_PASSWORD }}
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.rotate_fixture_credentials)
     concurrency:
       group: jolene-playwright-shared-database
       queue: max
@@ -314,6 +360,8 @@ jobs:
         run: node scripts/ci/wait-for-supabase-deploy.mjs
       - name: Install dependencies
         run: npm ci
+      - name: Vérifier le secret privé des fixtures
+        run: node scripts/ci/check-playwright-fixture-secret.mjs
       - name: Résoudre la clé service_role (Management API — autonome)
         # Même mécanique que le job PR : la vraie clé service_role est
         # récupérée via l'API Management (le secret GitHub homonyme est faux).
