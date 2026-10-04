@@ -19,6 +19,7 @@
 .vscode/*
 /.env.local
 /playwright-report
+/playwright-public
 /test-results
 /artifacts/
 dist

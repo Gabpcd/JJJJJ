@@ -65,11 +65,14 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ''
           VITE_ENV: test
       - name: Parcours de comptes jetables via les services existants du staging
-        run: npx playwright test --config=e2e/playwright.staging-comptes.config.ts
-      - name: Preuves sans sessions ni mots de passe
+        run: node scripts/ci/run-playwright-public.mjs --phase staging-comptes -- test --config=e2e/playwright.staging-comptes.config.ts
+        env:
+          # Ce job teste la tête de PR, pas le commit de fusion virtuel.
+          JOLENE_E2E_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Résumé public sans sessions ni contenu de page
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
           name: staging-comptes-${{ github.run_id }}
-          path: test-results/staging-comptes/
+          path: playwright-public/*.json
           retention-days: 7

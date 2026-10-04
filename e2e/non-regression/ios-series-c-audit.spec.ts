@@ -8,7 +8,7 @@ import { PREFIX_MISSION_MATCHING, seedMissionMatching } from '../helpers/seed-ma
 
 // Garder la trace du premier échec, même lorsqu’un retry réussit : il faut
 // pouvoir diagnostiquer un écran vide intermittent après authentification.
-test.use({ trace: 'retain-on-failure' });
+test.use({ trace: process.env.CI || process.env.JOLENE_PRIVATE_E2E === '1' ? 'off' : 'retain-on-failure' });
 
 type RoleAudit = 'soignant' | 'etab';
 

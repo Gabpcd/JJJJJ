@@ -215,6 +215,7 @@ for (const navigation of ['onglet', 'document'] as const) {
     let bandeauTermine = false;
     let lecturesStats = 0;
     let lecturesBandeau = 0;
+    let profilAvantDepart: { statut: number; termine: boolean } | null = null;
     const retenue = new Promise<void>(resolve => { liberer = resolve; });
     await page.route('**/rest/v1/etablissements?**', async route => {
       const requete = route.request();
@@ -244,6 +245,14 @@ for (const navigation of ['onglet', 'document'] as const) {
       } finally { terminee = true; }
     });
     try {
+      // Le document doit quitter les deux lectures retenues, pas une lecture
+      // encore en cours du cadre. Préenregistrer avant le montage du dashboard.
+      const reponseProfil = navigation === 'document' ? page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return response.request().method() === 'GET' && url.pathname === '/rest/v1/etablissements'
+          && url.searchParams.get('select') === 'nom,logo_url'
+          && url.searchParams.get('id') === `eq.${ids.etab}`;
+      }) : null;
       await connecter(page);
       await expect.poll(() => Boolean(requeteRetenue)).toBe(true);
       await expect.poll(() => Boolean(requeteBandeauRetenue)).toBe(true);
@@ -253,6 +262,15 @@ for (const navigation of ['onglet', 'document'] as const) {
         const barre = await sidebar.isVisible() ? sidebar : page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
         await barre.getByRole('button', { name: 'Missions', exact: true }).click();
       } else {
+        const profil = await reponseProfil!;
+        expect(profil.status()).toBe(200);
+        expect(await profil.finished()).toBeNull();
+        profilAvantDepart = { statut: profil.status(), termine: true };
+        expect(requeteRetenue!.failure()).toBeNull();
+        expect(requeteBandeauRetenue!.failure()).toBeNull();
+        expect({ terminee, bandeauTermine, lecturesStats, lecturesBandeau }).toEqual({
+          terminee: false, bandeauTermine: false, lecturesStats: 1, lecturesBandeau: 1,
+        });
         // Reproduire aussi le remplacement complet qui a annulé la RPC en CI.
         await page.goto('/etablissement/missions');
       }
@@ -294,7 +312,7 @@ for (const navigation of ['onglet', 'document'] as const) {
       expect(banc.refus).toEqual([]);
     } finally {
       liberer(); banc.libererLectures();
-      await info.attach('lecture-abandonnee', { body: JSON.stringify({ navigation, lecturesStats, lecturesBandeau, annulation: requeteRetenue?.failure(), annulationBandeau: requeteBandeauRetenue?.failure(), console: banc.consoleMessages, erreurs: banc.etat.erreurs }, null, 2), contentType: 'application/json' });
+      await info.attach('lecture-abandonnee', { body: JSON.stringify({ navigation, profilAvantDepart, lecturesStats, lecturesBandeau, annulation: requeteRetenue?.failure(), annulationBandeau: requeteBandeauRetenue?.failure(), console: banc.consoleMessages, erreurs: banc.etat.erreurs }, null, 2), contentType: 'application/json' });
     }
   });
 }

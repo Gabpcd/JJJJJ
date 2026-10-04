@@ -52,13 +52,14 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(helper).toContain('suspensions_auth_admin');
     expect(setup).toContain('reactiverSoignantPlaywright(admin)');
     expect(teardown).toContain('reactiverSoignantPlaywright(admin)');
-    expect(workflow).toContain('auth/v1/logout');
+    const deconnexionsSonde = workflow.match(/auth\/v1\/logout[^"\s]*/g);
+    expect(deconnexionsSonde).toEqual(['auth/v1/logout?scope=local']);
     expect(workflow).toContain('access_token');
     expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
     expect(workflow).toContain('steps.playwright-tests.outcome');
     expect(workflow).toContain('for tentative in 1 2 3');
     expect(workflow).toContain(
-      'playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad',
+      'run-playwright-public.mjs --phase app-review -- test e2e/release-review-smoke.spec.ts --project=tablet-ipad',
     );
     expect(workflow).toContain("--grep-invert='release review — reprise de session iPad'");
   });

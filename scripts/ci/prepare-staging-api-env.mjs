@@ -1,5 +1,8 @@
 import { appendFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
+export async function main() {
 // Une seule destination autorisée : aucune charge ni fixture sur production.
 const ref = process.env.STAGING_SUPABASE_PROJECT_REF;
 if (ref !== 'mejpriaetwgtcstbgfid') throw new Error('Staging Jolene attendu ; aucun repli production.');
@@ -24,3 +27,13 @@ for (const [name, value] of Object.entries(vars)) {
   appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
 }
 console.log('Accès staging résolus ; production exclue.');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch(() => {
+    // Parsing, transport and filesystem errors can contain response excerpts.
+    // Do not print their message, cause or stack in public Actions logs.
+    console.error('STAGING_API_ENV_FAILED');
+    process.exitCode = 1;
+  });
+}

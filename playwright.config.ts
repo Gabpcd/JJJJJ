@@ -16,6 +16,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 const IS_CI = !!process.env.CI;
+const PRIVATE_DIAGNOSTICS = IS_CI || process.env.JOLENE_PRIVATE_E2E === '1';
 const LOCAL_CHROMIUM_EXECUTABLE = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
@@ -62,11 +63,12 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    // Les sessions et réponses du backend réel ne doivent pas entrer dans des artefacts publics.
+    trace: PRIVATE_DIAGNOSTICS ? 'off' : 'on-first-retry',
+    screenshot: PRIVATE_DIAGNOSTICS ? 'off' : 'only-on-failure',
     // L'exécution locale peut réutiliser Chrome système sans installer le
-    // bundle Playwright/ffmpeg. La CI conserve les vidéos d'échec.
-    video: LOCAL_CHROMIUM_EXECUTABLE ? 'off' : 'retain-on-failure',
+    // bundle Playwright/ffmpeg. Les médias de la CI réelle restent désactivés.
+    video: PRIVATE_DIAGNOSTICS || LOCAL_CHROMIUM_EXECUTABLE ? 'off' : 'retain-on-failure',
     actionTimeout: 10_000,
     navigationTimeout: 15_000,
     locale: 'fr-FR',

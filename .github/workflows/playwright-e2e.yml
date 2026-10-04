@@ -180,7 +180,7 @@ jobs:
           access_token=$(node -e 'const fs=require("fs");try{const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(d.access_token||"")}catch{}' "$auth_response")
           if [ -n "$access_token" ]; then
             curl -s -o /dev/null -X POST \
-              "$E2E_SUPABASE_URL/auth/v1/logout" \
+              "$E2E_SUPABASE_URL/auth/v1/logout?scope=local" \
               -H "apikey: $E2E_PUBLISHABLE_KEY" \
               -H "Authorization: Bearer $access_token" || true
           fi
@@ -206,7 +206,7 @@ jobs:
         # Ce smoke doit passer AVANT la longue suite Chromium : après plusieurs
         # centaines de scénarios Auth, une indisponibilité temporaire de GoTrue
         # ne doit pas être confondue avec une régression du correctif iPad.
-        run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
+        run: node scripts/ci/run-playwright-public.mjs --phase app-review -- test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
@@ -220,7 +220,7 @@ jobs:
         # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
         # Déjà exécuté ci-dessus avec le moteur/viewport réellement utilisés
         # sur iPad ; ne pas le rejouer en fin de suite sous Chromium.
-        run: npx playwright test --project=chromium --grep-invert='release review — reprise de session iPad'
+        run: node scripts/ci/run-playwright-public.mjs --phase chromium -- test --project=chromium --grep-invert='release review — reprise de session iPad'
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
@@ -234,11 +234,11 @@ jobs:
         # deux inscriptions réelles jusqu'aux Edge Functions. Ils ont révélé
         # les régressions que la suite Chromium desktop ne pouvait pas voir.
         run: |
-          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 npx playwright test \
+          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 node scripts/ci/run-playwright-public.mjs --phase series-c-ios -- test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
             e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=ios-webkit-audit
-          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
+          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 node scripts/ci/run-playwright-public.mjs --phase series-c-android -- test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
             e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=android-pixel-audit
@@ -249,9 +249,9 @@ jobs:
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
-      - name: Détail a11y si échec (rapport court en fin de log)
+      - name: Diagnostic a11y si échec (résumé sans données de page)
         if: failure() && steps.playwright-tests.outcome == 'failure'
-        run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
+        run: node scripts/ci/run-playwright-public.mjs --phase a11y -- test e2e/a11y.spec.ts --project=chromium --retries=0 || true
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
@@ -259,12 +259,12 @@ jobs:
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
-      - name: Upload report
+      - name: Résumé public sans sessions ni contenu de page
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report-chromium
-          path: playwright-report/
+          name: playwright-summary-chromium
+          path: playwright-public/*.json
           retention-days: 7
 
   # push main — matrix complète (cross-browser + mobile)
@@ -350,7 +350,7 @@ jobs:
           npx vite preview --port 8080 --host 0.0.0.0 &
           npx wait-on http://localhost:8080 -t 30000 || true
       - name: Vérifier App Review sur un vrai iPad WebKit (prioritaire)
-        run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
+        run: node scripts/ci/run-playwright-public.mjs --phase app-review -- test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
@@ -362,7 +362,7 @@ jobs:
         # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
         # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
         # Le contrôle iPad ci-dessus est volontairement isolé et prioritaire.
-        run: npx playwright test --project=${{ matrix.project }} --grep-invert='release review — reprise de session iPad'
+        run: node scripts/ci/run-playwright-public.mjs --phase chromium -- test --project=${{ matrix.project }} --grep-invert='release review — reprise de session iPad'
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
@@ -372,11 +372,11 @@ jobs:
           CI: 'true'
       - name: Gate mobile Série C (iPhone WebKit + Pixel Android)
         run: |
-          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 npx playwright test \
+          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 node scripts/ci/run-playwright-public.mjs --phase series-c-ios -- test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
             e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=ios-webkit-audit
-          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
+          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 node scripts/ci/run-playwright-public.mjs --phase series-c-android -- test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
             e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=android-pixel-audit
@@ -387,17 +387,10 @@ jobs:
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
-      - name: Upload report
+      - name: Résumé public sans sessions ni contenu de page
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report-${{ matrix.project }}
-          path: playwright-report/
-          retention-days: 7
-      - name: Upload traces on failure
-        if: failure()
-        uses: actions/upload-artifact@v5
-        with:
-          name: playwright-traces-${{ matrix.project }}
-          path: test-results/
+          name: playwright-summary-${{ matrix.project }}
+          path: playwright-public/*.json
           retention-days: 7

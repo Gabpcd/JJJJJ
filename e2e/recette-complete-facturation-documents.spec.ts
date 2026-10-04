@@ -463,8 +463,37 @@ for (const remplacement of [false, true]) for (const surface of ['a-payer', 'det
     }, { message: 'Erreur entière visible après animation, y compris sur téléphone' }).toBe(true);
     expect(pannes).toBe(0); expect(telechargements).toEqual([]);
     await page.screenshot({ path: info.outputPath(`${surface}-refus.png`), animations: 'disabled', scale: 'css' });
+    const lecturesPointage = () => state.calls.filter(call => call.name === 'fn_etat_pointage_mission'
+      && call.method === 'POST' && call.body?.p_mission_id === idsMission.mission).length;
+    const reprisePointage: { avant: number; apresRecharge: number; apresPolling: number }[] = [];
     for (const recharge of [false, true]) {
-      if (recharge) { await stabiliserActionsNationales(page); await page.reload(); }
+      if (recharge) {
+        // setFixedTime already installs Playwright's clock controller. Pause at
+        // that same date: no time jump and no new polling during the API drain.
+        const dateFigee = Date.parse('2026-09-30T10:00:00Z');
+        expect(await page.evaluate(() => Date.now())).toBe(dateFigee);
+        await page.clock.pauseAt(dateFigee);
+        let avant = 0;
+        try {
+          await stabiliserActionsNationales(page);
+          avant = lecturesPointage();
+          await page.reload();
+          // Replaying pauseAt in a new document clears fixed-time mode.
+          await page.clock.setFixedTime(dateFigee);
+        } finally {
+          await page.clock.resume();
+        }
+        expect(await page.evaluate(() => Date.now())).toBe(dateFigee);
+        if (surface === 'detail-etablissement') {
+          await expect.poll(lecturesPointage, { message: 'Pointage relu après recharge' }).toBeGreaterThan(avant);
+          const apresRecharge = lecturesPointage();
+          // This screen mounts the 5 s polling even between the two shifts.
+          // Keep every console/pageerror assertion below.
+          await expect.poll(lecturesPointage, { timeout: 15_000,
+            message: 'Le polling pointage reprend après clock.resume' }).toBeGreaterThan(apresRecharge);
+          reprisePointage.push({ avant, apresRecharge, apresPolling: lecturesPointage() });
+        }
+      }
       for (const f of documents) {
         await expect(bouton(f)).toBeVisible();
         const bytes = await telecharger(page, bouton(f), f.numero_facture, tactile);
@@ -514,7 +543,7 @@ for (const remplacement of [false, true]) for (const surface of ['a-payer', 'det
     await aria(page, info, `${surface}-apres-recharge`);
     await info.attach('acces-documents-io-fictives', { body: JSON.stringify({ mission: state.mission, creneaux: state.creneaux,
       factures: rows, lectures, stockage: reseau.lectures, telechargements, octetsVerifies,
-      simulationsSansEffet, interdits }, null, 2), contentType: 'application/json' });
+      simulationsSansEffet, interdits, reprisePointage }, null, 2), contentType: 'application/json' });
     expect(interdits).toEqual([]); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]); expect(state.errors).toEqual([]);
     expect(state.signatures).toEqual([]); expect(state.emails).toEqual([]); expect(state.sms).toEqual([]); expect(state.notes).toEqual([]);
     reseau.verifier();
