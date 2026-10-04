@@ -23,6 +23,7 @@ import { HandCoins } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import { FileDeTravail } from '@/components/admin/FileDeTravail';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -69,6 +70,7 @@ export type AvoirEnrichi = {
   soignant_id: string | null;
   etablissement_id: string | null;
   litige_id: string | null;
+  facture_precedente_id?: string | null;
   soignant_nom?: string | null;
   etablissement_nom?: string | null;
 };
@@ -146,7 +148,7 @@ export function AvoirsList({ onChanged }: Props) {
     const { data, error } = await supabase
       .from('factures_honoraires')
       .select(
-        'id, numero_facture, type_document, statut, mode_remboursement, montant_ht, montant_tva, montant_ttc, date_emission, date_remboursement, reference_remboursement, soignant_id, etablissement_id, litige_id',
+        'id, numero_facture, type_document, statut, mode_remboursement, montant_ht, montant_tva, montant_ttc, date_emission, date_remboursement, reference_remboursement, soignant_id, etablissement_id, litige_id, facture_precedente_id',
       )
       .eq('type_document', 'AVOIR')
       .order('date_emission', { ascending: false })
@@ -183,7 +185,7 @@ export function AvoirsList({ onChanged }: Props) {
       const enrichError = resSg.error ?? resEt.error;
       logger.error('enrichir avoirs error', enrichError);
       setAvoirs([]);
-      setLoadError(enrichError?.message || 'Impossible de charger les bénéficiaires des avoirs.');
+      setLoadError(enrichError?.message || 'Impossible de charger les parties associées aux avoirs.');
       setLoading(false);
       return;
     }
@@ -415,6 +417,46 @@ export function AvoirsList({ onChanged }: Props) {
             </DialogDescription>
           </DialogHeader>
 
+          <div className="space-y-3 rounded-lg border p-3 text-sm">
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-muted-foreground">Soignant associé à l’avoir</dt>
+                <dd className="break-words font-medium">{avoirCible?.soignant_nom ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Établissement associé à l’avoir</dt>
+                <dd className="break-words font-medium">{avoirCible?.etablissement_nom ?? '—'}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              Ces parties comptables ne désignent pas à elles seules le bénéficiaire bancaire.
+              Vérifiez les pièces et les coordonnées du virement.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <BoutonY2K
+                size="sm"
+                variant="secondary"
+                onClick={() => avoirCible && void telechargerFactureHonorairesPDF(avoirCible.id)}
+              >
+                Consulter l’avoir
+              </BoutonY2K>
+              {avoirCible?.facture_precedente_id && (
+                <BoutonY2K
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void telechargerFactureHonorairesPDF(avoirCible.facture_precedente_id!)}
+                >
+                  Consulter la facture d’origine
+                </BoutonY2K>
+              )}
+            </div>
+            {!avoirCible?.facture_precedente_id && (
+              <p className="text-xs text-muted-foreground">
+                Facture d’origine non reliée à cet avoir. Consultez les pièces disponibles pour la vérification externe.
+              </p>
+            )}
+          </div>
+
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
             <div className="flex justify-between gap-4"><span>Montant HT</span><span>{formatMontant(montantsCible?.ht)}</span></div>
             <div className="mt-1 flex justify-between gap-4"><span>TVA</span><span>{formatMontant(montantsCible?.tva)}</span></div>
@@ -449,11 +491,16 @@ export function AvoirsList({ onChanged }: Props) {
               onCheckedChange={(checked) => setConfirmationMontant(checked === true)}
             />
             <Label htmlFor="confirmation-montant-remboursement" className="cursor-pointer text-sm leading-snug">
-              Je confirme avoir effectué le virement de{' '}
-              <strong>{formatMontant(montantsCible?.montantRemboursement)} TTC</strong>
-              {' '}au bénéficiaire indiqué.
+              Je confirme avoir vérifié les pièces, le bénéficiaire bancaire et la preuve du virement effectué,
+              pour un montant de{' '}
+              <strong>{formatMontant(montantsCible?.montantRemboursement)} TTC</strong>.
             </Label>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Cette confirmation enregistre votre déclaration après vérification externe.
+            Jolene ne vérifie pas automatiquement le virement.
+          </p>
 
           <DialogFooter>
             <BoutonY2K variant="ghost" onClick={() => setDialogOpen(false)}>
