@@ -49,6 +49,7 @@
     "tools/restore-local/scripts/restore-app/sql/source-mission.sql",
     "tools/restore-local/scripts/restore-app/toc-pg17-descriptors.json",
     "tools/restore-local/scripts/restore/bootstrap.mjs",
+    "tools/restore-local/scripts/restore/bootstrap.test.mjs",
     "tools/restore-local/scripts/restore/qualify-import.mjs",
     "tools/restore-local/scripts/restore/qualify-import.test.mjs",
     "vercel.json"
@@ -264,8 +265,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/e2e/restore-app.spec.ts",
-      "bytes": 11147,
-      "sha256": "9c0fabfce76000e98f6f2b93ba2342e9c608715ef6b84c7fdcb2a2948a4daea4"
+      "bytes": 12124,
+      "sha256": "1cb4c333e6b9b485d32cfda57a5121e5bddb079a4c76ae0495eb550a820eb5e5"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/identity.mjs",
@@ -329,8 +330,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/pins.json",
-      "bytes": 58924,
-      "sha256": "07565facaa438375c2f0f212d3caf0dada5ff26bec763f34b1dcffa5007647e8"
+      "bytes": 58986,
+      "sha256": "612136300e87cccd88b522ab76aef06fb707db4eb2c4a77c70aa95e28cf3b161"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
@@ -384,13 +385,13 @@
     },
     {
       "path": "tools/restore-local/scripts/restore/bootstrap.mjs",
-      "bytes": 43577,
-      "sha256": "4268a9f48fa5aabbc00368f9dffbc7050986438654935c416f58d2fed89b0f8d"
+      "bytes": 44116,
+      "sha256": "61654647da888ecd318f11bb2c9d97bc74dbfb8d5d276be4fb642bf9402ce6cb"
     },
     {
       "path": "tools/restore-local/scripts/restore/bootstrap.test.mjs",
-      "bytes": 16423,
-      "sha256": "4ecd0474f60b24c523037cecbede25b8c6215984fa245e7ada3465667715210a"
+      "bytes": 17645,
+      "sha256": "92be807ac4de97381d1ccae632c79bbd7ea379ec5acf0242e3bc5e57b70e3cad"
     },
     {
       "path": "tools/restore-local/scripts/restore/catalogue-required.sql",

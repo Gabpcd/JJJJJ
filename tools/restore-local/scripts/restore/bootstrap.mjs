@@ -55,7 +55,16 @@ export function gateway(run,side,anon,service){
    plugins:[{name:'cors'},{name:'key-auth',config:{hide_credentials:false}},
     {name:'request-transformer',config:{add:{headers:["Authorization: $((headers.authorization ~= nil and headers.authorization) or headers.apikey)"]}}},
     {name:'acl',config:{hide_groups_header:true,allow:['anon','admin']}}]
-  }))};
+  })).concat([{
+   // Signed downloads carry their short-lived Storage token in the query, not
+   // an apikey header. Storage still verifies token scope, expiry and object.
+   // Keep every other route behind the existing gateway authentication.
+   name:'storage-signed-download-v1',
+   url:'http://'+name(run,side,'storage')+':5000/object/sign/jolene-documents/',
+   routes:[{name:'storage-signed-download-v1',strip_path:true,methods:['GET','HEAD'],
+    paths:['/storage/v1/object/sign/jolene-documents/']}],
+   plugins:[{name:'cors'}],
+  }])};
 }
 export function makePlan(run,dir,lock,secrets,{qualification=false}={}){
  if(typeof qualification!=='boolean')fail('QUALIFICATION_MODE_INVALID');

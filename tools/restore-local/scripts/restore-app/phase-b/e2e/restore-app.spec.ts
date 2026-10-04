@@ -111,6 +111,25 @@ async function access(page: Page, userId: string | null, checkDocument = true) {
     objectKey: fixture.pdfKey, check: checkDocument });
 }
 
+async function unsignedDownloadDenied(page: Page) {
+  const results = await page.evaluate(async ({ apiUrl, pdfKey }) => {
+    const rows: { method: string; kind: string; status: number }[] = [];
+    for (const method of ['GET', 'HEAD']) {
+      for (const kind of ['missing', 'invalid']) {
+        const suffix = kind === 'missing' ? '' : '?token=restore-invalid-signature-canary';
+        const response = await fetch(apiUrl + '/storage/v1/object/sign/jolene-documents/' + pdfKey + suffix, {
+          method, credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(5_000),
+        });
+        rows.push({ method, kind, status: response.status });
+        await response.body?.cancel();
+      }
+    }
+    return rows;
+  }, { apiUrl: fixture.apiUrl, pdfKey: fixture.pdfKey });
+  expect(results).toHaveLength(4);
+  for (const row of results) expect([400, 401, 403, 404], row.method + ':' + row.kind).toContain(row.status);
+}
+
 async function download(page: Page) {
   const pending = page.waitForEvent('download');
   await pdfButton(page).click();
@@ -138,6 +157,7 @@ for (const [caseId, index] of [['RESTORE_OWNER_S', 0], ['RESTORE_OWNER_E', 1]] a
   await test.step('DOCUMENT_ACCESS', async () => {
     expect(await access(page, member.id)).toMatchObject({ userStatus: 200, sameUser: true, rowStatus: 200, exactInvoice: true,
       signStatus: 200, signedPresent: true });
+    await unsignedDownloadDenied(page);
   });
   await test.step('PDF_DOWNLOAD', async () => {
     await download(page);

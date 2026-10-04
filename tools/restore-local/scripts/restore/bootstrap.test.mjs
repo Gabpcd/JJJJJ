@@ -58,9 +58,26 @@ for(const [label,mutate]of [
  ['proxy',p=>p.services['source-rest'].environment.HTTPS_PROXY='http://proxy:8080']])
  test('plan refuses '+label,()=>{const p=plan();mutate(p);assert.throws(()=>validatePlan(p,run));});
 test('gateway routes have only local Auth REST Storage, no cross-stack aliases or provider',()=>{
- for(const side of ['source','target']){const g=gateway(run,side,'anon-canary','service-canary');assert.equal(g.services.length,3);
+ for(const side of ['source','target']){const g=gateway(run,side,'anon-canary','service-canary');assert.equal(g.services.length,4);
   for(const s of g.services)assert.ok(s.url.startsWith('http://'+run+'-'+side+'-'));
   assert.ok(!JSON.stringify(g).includes('https://'));assert.ok(!JSON.stringify(g).includes('functions/v1'));}
+});
+test('signed Storage gateway route admits only document GET and HEAD while all original routes stay protected',()=>{
+ for(const side of ['source','target']){
+  const g=gateway(run,side,'anon-canary','service-canary');
+  const signed=g.services.find(s=>s.name==='storage-signed-download-v1');
+  assert.equal(signed.url,'http://'+run+'-'+side+'-storage:5000/object/sign/jolene-documents/');
+  assert.deepEqual(signed.routes,[{name:'storage-signed-download-v1',strip_path:true,methods:['GET','HEAD'],paths:['/storage/v1/object/sign/jolene-documents/']}]);
+  assert.deepEqual(signed.plugins,[{name:'cors'}]);
+  for(const role of ['auth','rest','storage']){
+   const s=g.services.find(value=>value.name===role+'-v1');
+   assert.equal(s.url,'http://'+run+'-'+side+'-'+role+':'+({auth:9999,rest:3000,storage:5000}[role])+'/');
+   assert.deepEqual(s.routes,[{name:role+'-v1',strip_path:true,paths:['/'+role+'/v1/']}]);
+   assert.deepEqual(s.plugins.map(p=>p.name),['cors','key-auth','request-transformer','acl']);
+   assert.deepEqual(s.plugins.find(p=>p.name==='key-auth').config,{hide_credentials:false});
+   assert.deepEqual(s.plugins.find(p=>p.name==='acl').config,{hide_groups_header:true,allow:['anon','admin']});
+  }
+ }
 });
 test('inspection accepts a unit fixture (not a Docker runtime proof)',()=>{
  const p=plan(),i=inspection(p);assert.equal(validateInspection(p,i.network,i.containers,i.volumes),true);
