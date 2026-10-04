@@ -68,7 +68,7 @@ CREATE FUNCTION pg_temp.signature_photo() RETURNS jsonb LANGUAGE sql AS $photo$
                           'signatures',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM public.signatures_contrats s));
 $photo$;
 DO $witness$
-DECLARE who text; code text; h text; r jsonb; old jsonb; mutation text; label text; guc_label text;
+DECLARE who text; code text; h text; r jsonb; old jsonb; mutation text; label text; guc_label text; mutation_applied boolean;
         cid uuid := 'f1040000-0000-4000-8000-000000000003';
         sid uuid := 'f1040000-0000-4000-8000-000000000001';
         eid uuid := 'f1040000-0000-4000-8000-000000000002';
@@ -217,8 +217,14 @@ BEGIN
  ) v(label,mutation) LOOP
   PERFORM pg_temp.seed_signature('etablissement');
   SELECT hash_document INTO h FROM public.contrats_mission;
-  -- Fixture initiale : aucune signature acquise n'est alteree pour fabriquer le cas.
+  -- Construction privilegiee de la fixture AVANT appel utilisateur. Les
+  -- triggers restent actifs ; aucun document deja signe n'est modifie.
+  PERFORM set_config('request.jwt.claim.sub','',true);
   EXECUTE 'UPDATE public.contrats_mission SET '||mutation;
+  EXECUTE 'SELECT ('||replace(mutation,'=',' IS NOT DISTINCT FROM ')||') FROM public.contrats_mission'
+    INTO mutation_applied;
+  IF mutation_applied IS NOT TRUE THEN RAISE EXCEPTION 'INVALID_DOCUMENT_FIXTURE_NOT_CREATED'; END IF;
+  PERFORM set_config('request.jwt.claim.sub',eid::text,true);
   old:=pg_temp.signature_photo();
   r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
   IF r->>'error_code' IS DISTINCT FROM 'HASH_DOCUMENT_CHANGE' OR pg_temp.signature_photo() IS DISTINCT FROM old

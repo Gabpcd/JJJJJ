@@ -38,6 +38,8 @@ jobs:
         run: python3 scripts/ci/signature-otp-diagnostic-pg17.py > signature-otp-public.json
       - name: Qualification du correctif et rollback intégral
         run: python3 scripts/ci/signature-otp-fix-pg17.py > signature-otp-fixed-public.json
+      - name: Observer autorisation après émission OTP sans fournisseur
+        run: python3 scripts/ci/signature-otp-actor-diagnostic-pg17.py > signature-otp-actor-public.json
       - name: Reçu fermé uniquement
         if: always()
         uses: actions/upload-artifact@v5
@@ -46,5 +48,6 @@ jobs:
           path: |
             signature-otp-public.json
             signature-otp-fixed-public.json
+            signature-otp-actor-public.json
           retention-days: 7
           if-no-files-found: error
