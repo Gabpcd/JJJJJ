@@ -1,11 +1,7 @@
-name: Restore local bootstrap (empty infrastructure only)
+name: Restore local bootstrap (temporary PG17 refund fixture qualification)
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/restore-local-bootstrap.yml'
-      - 'tools/restore-local/**'
 
 permissions:
   contents: read
@@ -16,9 +12,9 @@ concurrency:
 
 jobs:
   empty-local-stacks:
-    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
+    if: github.repository == 'Gabpcd/JJJJJ' && github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/ci/qualification-pg17-')
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -34,6 +30,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Node (no npm install)
         timeout-minutes: 1
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
@@ -45,9 +42,9 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$PROOF_DIR"
-          node scripts/restore/ci-guard.mjs identity > "$PROOF_DIR/identity.json"
-          node --test scripts/restore/bootstrap.test.mjs scripts/restore/ci-guard.test.mjs scripts/restore/extensions.test.mjs scripts/export/export-schema.test.mjs > "$PROOF_DIR/unit-tests.tap"
-          node scripts/restore/bootstrap.mjs plan "$PRIVATE_DIR" "$DRILL_RUN" > "$PROOF_DIR/plan.json"
+          node scripts/restore/qualify-import.mjs identity > "$PROOF_DIR/identity.json"
+          node --test scripts/restore/bootstrap.test.mjs scripts/restore/ci-guard.test.mjs scripts/restore/extensions.test.mjs scripts/export/export-schema.test.mjs scripts/restore/qualify-import.test.mjs > "$PROOF_DIR/unit-tests.tap"
+          node scripts/restore/bootstrap.mjs plan-qualification "$PRIVATE_DIR" "$DRILL_RUN" > "$PROOF_DIR/plan.json"
       - name: Preload five public digest-pinned images (before isolation)
         timeout-minutes: 5
         run: |
@@ -79,6 +76,11 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/restore/extensions.mjs compare "$PROOF_DIR/extensions.json" "$DRILL_RUN" > "$PROOF_DIR/extension-compatibility.json" 2>&1
+      - name: Integral byte-identical replay and pinned synthetic refund fixture
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=15s 1140s node scripts/restore/qualify-import.mjs run "$PRIVATE_DIR" "$PROOF_DIR" > "$PROOF_DIR/import-result.json" 2>&1
       - name: Filtered container states before cleanup
         if: always()
         timeout-minutes: 1
@@ -112,7 +114,7 @@ jobs:
         timeout-minutes: 1
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: restore-empty-infra-${{ github.run_id }}-${{ github.run_attempt }}
+          name: restore-import-qualification-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PROOF_DIR }}/
           retention-days: 7
           if-no-files-found: error

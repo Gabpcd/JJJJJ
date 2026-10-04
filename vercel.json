@@ -47,5 +47,10 @@
         { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "ci/qualification-pg17-refund-20261004": false
+    }
+  }
 }
