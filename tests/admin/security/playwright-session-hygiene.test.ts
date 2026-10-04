@@ -58,7 +58,7 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(workflow).toContain('steps.playwright-tests.outcome');
     expect(workflow).toContain('for tentative in 1 2 3');
     expect(workflow).toContain(
-      'playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad',
+      'run-playwright-public.mjs --phase app-review -- test e2e/release-review-smoke.spec.ts --project=tablet-ipad',
     );
     expect(workflow).toContain("--grep-invert='release review — reprise de session iPad'");
   });

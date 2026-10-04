@@ -36,7 +36,7 @@ import { adminClient, userClient } from '../helpers/db';
 // Conserver aussi le premier essai en échec : une trace du seul retry réussi
 // ne permet pas de diagnostiquer un refus de chargement des données critiques.
 // L'option trace configure le worker et doit rester au niveau du fichier.
-test.use({ trace: 'retain-on-failure' });
+test.use({ trace: process.env.CI || process.env.JOLENE_PRIVATE_E2E === '1' ? 'off' : 'retain-on-failure' });
 
 test.describe('Flow notation bidirectionnelle', () => {
   // Ce parcours exécute le cycle métier complet en base (candidature,
