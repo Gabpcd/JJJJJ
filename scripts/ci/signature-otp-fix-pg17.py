@@ -61,6 +61,21 @@ $acl_original$;
     setup+=diagnostic.exact(r'CREATE TABLE IF NOT EXISTS "public"\."signature_rate_limit_ip" \(.*?\n\);',snapshot)+'\n'
     setup+=diagnostic.exact(r'ALTER TABLE ONLY "public"\."signature_rate_limit_ip"\n    ADD CONSTRAINT "signature_rate_limit_ip_pkey"[^;]+;',snapshot)+'\n'
     setup+=diagnostic.definition(snapshot,'fn_check_rate_limit_ip_signature')+'\n'
+    setup+=diagnostic.exact(r'ALTER TABLE ONLY "public"\."signatures_contrats"\n    ADD CONSTRAINT "signatures_contrats_contrat_id_signataire_role_key"[^;]+;',snapshot)+'\n'
+    # Doubles SQL locaux uniquement. Pas d'extension pg_net, de socket ou de
+    # fournisseur ; cette fonction stocke la demande synthetique pour inspection.
+    setup+="""
+CREATE SCHEMA vault; CREATE SCHEMA net;
+CREATE TABLE vault.decrypted_secrets(name text PRIMARY KEY,decrypted_secret text);
+CREATE TABLE net.fixture_requests(url text,headers jsonb,body jsonb);
+CREATE FUNCTION net.http_post(url text,headers jsonb,body jsonb) RETURNS bigint
+ LANGUAGE plpgsql AS $fake_http$
+BEGIN
+ INSERT INTO net.fixture_requests VALUES($1,$2,$3);
+ RETURN 1;
+END;
+$fake_http$;
+"""
     # Registre annexe exact de la migration ; ses autres lignes n'existent pas
     # dans ce banc reduit. Ce n'est pas une qualification de l'inventaire global.
     setup += """
@@ -79,7 +94,7 @@ CREATE FUNCTION pg_temp.signature_photo() RETURNS jsonb LANGUAGE sql AS $photo$
                           'rateLimit',(SELECT jsonb_agg(to_jsonb(l) ORDER BY ip_signature,fenetre_debut) FROM public.signature_rate_limit_ip l));
 $photo$;
 DO $witness$
-DECLARE who text; code text; h text; r jsonb; old jsonb; mutation text; label text; guc_label text; mutation_applied boolean;
+DECLARE who text; code text; h text; r jsonb; old jsonb; mutation text; label text; guc_label text; mutation_applied boolean; config_case text; request_body jsonb; code_from_body text; phone_expected text;
         cid uuid := 'f1040000-0000-4000-8000-000000000003';
         sid uuid := 'f1040000-0000-4000-8000-000000000001';
         eid uuid := 'f1040000-0000-4000-8000-000000000002';
@@ -407,6 +422,85 @@ BEGIN
       ON p.oid='public.fn_envoyer_otp_signature(uuid)'::regprocedure
       WHERE i.signature='fn_envoyer_otp_signature(uuid)' AND i.definition_md5=md5(p.prosrc))
  THEN RAISE EXCEPTION 'SENDER_ACL_OR_INVENTORY_CHANGED'; END IF;
+
+ -- Emission complete avec le corps source exact et des doubles SQL de
+ -- Vault/net uniquement ; aucun endpoint/reseau/reception SMS n'existe ici.
+ UPDATE public.soignants SET telephone='+33600000001' WHERE id=sid;
+ UPDATE public.etablissements SET telephone_contact='+33600000002' WHERE id=eid;
+ FOREACH member_role IN ARRAY ARRAY['PROPRIETAIRE','ADMIN_GROUPE','RH','HISTORICAL_OWNER','SOIGNANT'] LOOP
+  PERFORM pg_temp.seed_signature(CASE member_role WHEN 'SOIGNANT' THEN 'soignant' ELSE 'etablissement' END);
+  DELETE FROM public.membres_etablissement WHERE user_id=mid;
+  IF member_role NOT IN ('HISTORICAL_OWNER','SOIGNANT') THEN
+   INSERT INTO public.membres_etablissement(etablissement_id,user_id,role,actif) VALUES(eid,mid,member_role,true);
+   PERFORM set_config('request.jwt.claim.sub',mid::text,true);
+  END IF;
+  DELETE FROM net.fixture_requests; DELETE FROM vault.decrypted_secrets;
+  INSERT INTO vault.decrypted_secrets VALUES('supabase_url','https://'||repeat('a',20)||'.supabase.co'),
+    ('service_role_key','synthetic-ci-only-not-a-token');
+  phone_expected:=CASE member_role WHEN 'SOIGNANT' THEN '+33600000001' ELSE '+33600000002' END;
+  EXECUTE 'SET LOCAL ROLE authenticated'; sending:=public.fn_envoyer_otp_signature(cid); EXECUTE 'RESET ROLE';
+  SELECT body INTO request_body FROM net.fixture_requests;
+  code_from_body:=substring(request_body->>'contenu' from ' ([0-9]{6}) ');
+  IF (sending->>'success')::boolean IS NOT TRUE OR (SELECT count(*) FROM net.fixture_requests)<>1
+     OR sending->>'telephone_masked' IS DISTINCT FROM ('+'||repeat('*',9)||right(phone_expected,2))
+     OR NOT EXISTS(SELECT 1 FROM net.fixture_requests
+       WHERE url='https://'||repeat('a',20)||'.supabase.co/functions/v1/send-sms'
+         AND headers=jsonb_build_object('Content-Type','application/json','Authorization','Bearer synthetic-ci-only-not-a-token'))
+     OR request_body->>'telephone' IS DISTINCT FROM phone_expected
+     OR request_body->>'destinataire_id' IS DISTINCT FROM auth.uid()::text
+     OR request_body->>'type' IS DISTINCT FROM 'OTP_SIGNATURE'
+     OR request_body->'data'->>'contrat_id' IS DISTINCT FROM cid::text
+     OR code_from_body IS NULL OR length(code_from_body)<>6
+     OR NOT EXISTS(SELECT 1 FROM public.signatures_contrats WHERE statut_signature='otp_envoye'
+        AND signataire_user_id=auth.uid() AND sms_envoyes_count=1 AND otp_tentatives=0
+        AND otp_code_hash=encode(extensions.digest(code_from_body||'|'||cid::text||'|'||auth.uid()::text,'sha256'),'hex'))
+  THEN RAISE EXCEPTION 'SYNTHETIC_TRANSPORT_POSITIVE'; END IF;
+  SELECT hash_document INTO h FROM public.contrats_mission;
+  EXECUTE 'SET LOCAL ROLE authenticated';r:=public.fn_signer_contrat_otp(cid,code_from_body,h,NULL);EXECUTE 'RESET ROLE';
+  IF (r->>'success')::boolean IS NOT TRUE OR NOT EXISTS(SELECT 1 FROM public.signatures_contrats WHERE statut_signature='signe')
+  THEN RAISE EXCEPTION 'GENERATED_OTP_NOT_VERIFIED'; END IF;
+  INSERT INTO observations VALUES('synthetic-request-and-sign-'||member_role,true);
+ END LOOP;
+ FOREACH config_case IN ARRAY ARRAY['url-null','url-empty','foreign-domain','foreign-suffix','http','key-null','key-empty'] LOOP
+  PERFORM pg_temp.seed_signature('etablissement'); DELETE FROM net.fixture_requests; DELETE FROM vault.decrypted_secrets;
+  INSERT INTO vault.decrypted_secrets VALUES('supabase_url','https://'||repeat('a',20)||'.supabase.co'),
+    ('service_role_key','synthetic-ci-only-not-a-token');
+  IF config_case='url-null' THEN DELETE FROM vault.decrypted_secrets WHERE name='supabase_url';
+  ELSIF config_case='url-empty' THEN UPDATE vault.decrypted_secrets SET decrypted_secret='' WHERE name='supabase_url';
+  ELSIF config_case='foreign-domain' THEN UPDATE vault.decrypted_secrets SET decrypted_secret='https://example.invalid' WHERE name='supabase_url';
+  ELSIF config_case='foreign-suffix' THEN UPDATE vault.decrypted_secrets SET decrypted_secret='https://'||repeat('a',20)||'.supabase.co.example.invalid' WHERE name='supabase_url';
+  ELSIF config_case='http' THEN UPDATE vault.decrypted_secrets SET decrypted_secret='http://'||repeat('a',20)||'.supabase.co' WHERE name='supabase_url';
+  ELSIF config_case='key-null' THEN DELETE FROM vault.decrypted_secrets WHERE name='service_role_key';
+  ELSE UPDATE vault.decrypted_secrets SET decrypted_secret=' ' WHERE name='service_role_key'; END IF;
+  old:=pg_temp.signature_photo();
+  EXECUTE 'SET LOCAL ROLE authenticated';sending:=public.fn_envoyer_otp_signature(cid);EXECUTE 'RESET ROLE';
+  IF sending->>'error_code' IS DISTINCT FROM 'CONFIGURATION_SMS_INDISPONIBLE'
+     OR EXISTS(SELECT 1 FROM net.fixture_requests) OR pg_temp.signature_photo() IS DISTINCT FROM old
+  THEN RAISE EXCEPTION 'INVALID_CONFIG_NOT_REFUSED'; END IF;
+  INSERT INTO observations VALUES('synthetic-request-refuses-'||config_case,true);
+ END LOOP;
+ PERFORM pg_temp.seed_signature('etablissement'); DELETE FROM net.fixture_requests; DELETE FROM vault.decrypted_secrets;
+ INSERT INTO vault.decrypted_secrets VALUES('supabase_url','https://'||repeat('a',20)||'.supabase.co'),
+   ('service_role_key','synthetic-ci-only-not-a-token');
+ FOR i IN 1..3 LOOP
+  EXECUTE 'SET LOCAL ROLE authenticated';sending:=public.fn_envoyer_otp_signature(cid);EXECUTE 'RESET ROLE';
+  IF (sending->>'success')::boolean IS NOT TRUE OR (sending->>'sms_envoyes')::int<>i
+  THEN RAISE EXCEPTION 'SMS_LIMIT_POSITIVE_CHANGED'; END IF;
+ END LOOP;
+ old:=pg_temp.signature_photo();
+ EXECUTE 'SET LOCAL ROLE authenticated';sending:=public.fn_envoyer_otp_signature(cid);EXECUTE 'RESET ROLE';
+ IF sending->>'error_code' IS DISTINCT FROM 'TROP_DE_SMS' OR (SELECT count(*) FROM net.fixture_requests)<>3
+    OR pg_temp.signature_photo() IS DISTINCT FROM old THEN RAISE EXCEPTION 'SMS_LIMIT_NOT_PRESERVED'; END IF;
+ INSERT INTO observations VALUES('synthetic-request-keeps-three-sms-limit',true);
+ PERFORM pg_temp.seed_signature('etablissement'); DELETE FROM net.fixture_requests; DELETE FROM public.signature_rate_limit_ip;
+ INSERT INTO public.signature_rate_limit_ip(ip_signature,fenetre_debut,nb_envois,derniere_action)
+ VALUES('192.0.2.33',now(),5,now());
+ PERFORM set_config('request.headers','{"x-forwarded-for":"192.0.2.33"}',true);
+ old:=pg_temp.signature_photo();
+ EXECUTE 'SET LOCAL ROLE authenticated';sending:=public.fn_envoyer_otp_signature(cid);EXECUTE 'RESET ROLE';
+ IF sending->>'error_code' IS DISTINCT FROM 'TROP_DE_SMS_IP' OR EXISTS(SELECT 1 FROM net.fixture_requests)
+    OR pg_temp.signature_photo() IS DISTINCT FROM old THEN RAISE EXCEPTION 'IP_LIMIT_NOT_PRESERVED'; END IF;
+ INSERT INTO observations VALUES('synthetic-request-keeps-ip-limit',true);
 END;
 $witness$;
 SELECT jsonb_build_object('schemaVersion',1,'phase','fixed-qualification','postgresMajor',17,'providerCalls',0,
@@ -431,7 +525,7 @@ def main():
             code=literal.group(1) if literal and literal.group(1) in codes else 'SIGNATURE_FIX_SQL_FAILED'
             raise WitnessFailure(code,state.group(1) if state else None)
         return result.stdout.strip()
-    empty="SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace)=0 AND (SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','extensions','private'))=0 AND (SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role'))=0"
+    empty="SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace)=0 AND (SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','extensions','private','vault','net'))=0 AND (SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role'))=0"
     assert run("SELECT current_setting('server_version_num')::int/10000")=='17'
     assert run(empty)=='t'
     for routine in ['fn_signer_contrat_otp','fn_envoyer_otp_signature']:
@@ -443,11 +537,12 @@ def main():
       json.loads((ROOT/'tests/fixtures/connect-pretransfer-auth-dependencies.json').read_text()),
       (ROOT/'supabase/migrations'/MIGRATION).read_text())
     report=json.loads(run(sql).splitlines()[-1]); assert run(empty)=='t'
-    assert report['casesPassed']==84 and all(report['cases'].values())
+    assert report['casesPassed']==98 and all(report['cases'].values())
     report['migrationSha256']=hashlib.sha256((ROOT/'supabase/migrations'/MIGRATION).read_bytes()).hexdigest()
     report['sourceBeforeBodySha256']=diagnostic.BEFORE_BODY
-    report['scope']='PG17 synthetic canonical OTP, two contract triggers, certificate SELECT policies; no SMS/Storage/HTTP/full App RLS' 
+    report['scope']='PG17 synthetic OTP, contract guards, certificate policies and SQL-only Vault/HTTP doubles; no provider/network/SMS/Storage/full App RLS' 
     report['rollbackVerified']=True
+    report['syntheticTransportPositiveCases']=5
     print(json.dumps(report,ensure_ascii=False))
 
 
