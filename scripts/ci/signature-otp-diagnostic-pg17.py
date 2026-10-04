@@ -41,8 +41,8 @@ def definition(snapshot, name):
 
 def build_sql(snapshot, before, auth, *, require_original_snapshot=True):
     before_body = exact(r'AS \$function\$(.*?)\$function\$', before['definition'])
-    source_body = exact(r'AS \$\$(.*?)\$\$;', definition(snapshot, 'fn_signer_contrat_otp'))
     if require_original_snapshot:
+        source_body = exact(r'AS \$\$(.*?)\$\$;', definition(snapshot, 'fn_signer_contrat_otp'))
         assert before_body == source_body
     assert hashlib.sha256(before_body.encode()).hexdigest() == BEFORE_BODY
     assert before['acl'] == '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}'

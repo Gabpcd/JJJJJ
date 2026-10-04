@@ -32394,14 +32394,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
   END IF;
 
-  v_ip := NULLIF(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', '')::inet;
-  v_rate_check := public.fn_check_rate_limit_ip_signature(v_ip);
-  IF NOT (v_rate_check->>'allowed')::boolean THEN
-    RETURN jsonb_build_object(
-      'success', false, 'error_code', 'TROP_DE_SMS_IP',
-      'error', 'Trop de demandes de signature depuis votre IP. Réessayez dans 1h.',
-      'envois_courant', v_rate_check->>'envois_courant', 'max', v_rate_check->>'max'
-    );
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
   END IF;
 
   SELECT cm.id, cm.soignant_id, cm.etablissement_id, cm.contenu_html,
@@ -32423,13 +32417,23 @@ BEGIN
   IF v_contrat.soignant_id = v_uid THEN
     v_role := 'soignant';
     SELECT telephone INTO v_telephone FROM public.soignants WHERE id = v_uid;
-  ELSIF v_contrat.etablissement_id = v_uid
-     OR public.mon_etablissement_id() = v_contrat.etablissement_id THEN
+  ELSIF public.fn_role_etablissement_courant(v_contrat.etablissement_id) IS NOT NULL
+     AND public.fn_a_permission_etablissement('contrats', v_contrat.etablissement_id) IS TRUE THEN
     v_role := 'etablissement';
     SELECT telephone_contact INTO v_telephone
       FROM public.etablissements WHERE id = v_contrat.etablissement_id;
   ELSE
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
+  END IF;
+
+  v_ip := NULLIF(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', '')::inet;
+  v_rate_check := public.fn_check_rate_limit_ip_signature(v_ip);
+  IF NOT (v_rate_check->>'allowed')::boolean THEN
+    RETURN jsonb_build_object(
+      'success', false, 'error_code', 'TROP_DE_SMS_IP',
+      'error', 'Trop de demandes de signature depuis votre IP. Réessayez dans 1h.',
+      'envois_courant', v_rate_check->>'envois_courant', 'max', v_rate_check->>'max'
+    );
   END IF;
 
   IF v_telephone IS NULL OR v_telephone = '' THEN
@@ -55401,12 +55405,13 @@ ALTER FUNCTION "public"."fn_signer_contrat_etablissement"("p_contrat_id" "uuid",
 CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_otp"("p_contrat_id" "uuid", "p_otp_code" "text", "p_hash_document" "text" DEFAULT NULL::"text", "p_signature_image" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
-    AS $$
+    AS $_$
 DECLARE
   v_uid uuid := auth.uid();
   v_sig record;
   v_contrat record;
   v_expected_hash text;
+  v_document_hash text;
   v_role text;
   v_ip inet;
   v_ua text;
@@ -55416,7 +55421,12 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
   END IF;
 
-  SELECT cm.signature_soignant, cm.signature_etablissement, cm.statut
+  IF public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
+  END IF;
+
+  SELECT cm.signature_soignant, cm.signature_etablissement, cm.statut, cm.soignant_id, cm.etablissement_id,
+         cm.contenu_html, cm.hash_document, cm.storage_path, cm.contenu_html_rendu_le
     INTO v_contrat
     FROM public.contrats_mission cm
    WHERE cm.id = p_contrat_id
@@ -55439,6 +55449,14 @@ BEGIN
   IF v_sig.statut_signature = 'signe' THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'DEJA_SIGNE', 'error', 'Vous avez déjà signé ce contrat.', 'signe_a', v_sig.signe_a);
   END IF;
+  IF (CASE v_sig.signataire_role
+      WHEN 'soignant' THEN v_contrat.soignant_id = v_uid
+      WHEN 'etablissement' THEN
+        public.fn_role_etablissement_courant(v_contrat.etablissement_id) IS NOT NULL
+        AND public.fn_a_permission_etablissement('contrats', v_contrat.etablissement_id) IS TRUE
+      ELSE false END) IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
+  END IF;
   IF v_sig.otp_tentatives >= 5 THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'TROP_DE_TENTATIVES', 'error', 'Trop de tentatives. Renvoyez un nouveau code SMS.');
   END IF;
@@ -55447,10 +55465,32 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error_code', 'OTP_EXPIRE', 'error', 'Code expiré. Renvoyez un nouveau code SMS.');
   END IF;
 
-  v_expected_hash := encode(digest(p_otp_code || '|' || p_contrat_id::text || '|' || v_uid::text, 'sha256'), 'hex');
-  IF v_expected_hash != v_sig.otp_code_hash THEN
-    UPDATE public.signatures_contrats SET otp_tentatives = otp_tentatives + 1, modifie_le = now() WHERE id = v_sig.id;
-    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_INCORRECT', 'error', 'Code incorrect.', 'tentatives_restantes', 5 - (v_sig.otp_tentatives + 1));
+  -- Une entree NULL ne doit jamais franchir la comparaison ternaire SQL.
+  v_expected_hash := CASE WHEN (length(p_otp_code) = 6 AND p_otp_code ~ '^[0-9]{6}$') IS TRUE THEN
+    encode(extensions.digest(p_otp_code || '|' || p_contrat_id::text || '|' || v_uid::text, 'sha256'), 'hex') END;
+  IF v_expected_hash IS NULL OR v_expected_hash IS DISTINCT FROM v_sig.otp_code_hash THEN
+    UPDATE public.signatures_contrats SET otp_tentatives = COALESCE(otp_tentatives, 0) + 1, modifie_le = now() WHERE id = v_sig.id;
+    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_INCORRECT', 'error', 'Code incorrect.', 'tentatives_restantes', 5 - (COALESCE(v_sig.otp_tentatives, 0) + 1));
+  END IF;
+
+  -- Memes octets UTF-8 que le HTML original fige par l'Edge, sans rendu,
+  -- normalisation ni reecriture du document ou d'une signature historique.
+  v_document_hash := encode(extensions.digest(convert_to(v_contrat.contenu_html, 'UTF8'), 'sha256'), 'hex');
+  IF (
+    v_contrat.contenu_html IS NOT NULL AND btrim(v_contrat.contenu_html) <> ''
+    AND v_contrat.contenu_html !~ '\{\{[[:space:]]*[^}]+[[:space:]]*\}\}'
+    AND v_contrat.hash_document ~ '^[0-9a-f]{64}$'
+    AND v_contrat.hash_document = v_document_hash
+    AND p_hash_document = v_document_hash
+    AND NULLIF(btrim(v_contrat.storage_path), '') IS NOT NULL
+    AND v_contrat.contenu_html_rendu_le IS NOT NULL
+  ) IS NOT TRUE OR EXISTS (
+    SELECT 1 FROM public.signatures_contrats sc
+    WHERE sc.contrat_id = p_contrat_id AND sc.statut_signature = 'signe'
+      AND sc.hash_document IS DISTINCT FROM v_document_hash
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'HASH_DOCUMENT_CHANGE',
+      'error', 'Le document a change ou sa preuve est indisponible. Rechargez la page avant de signer.');
   END IF;
 
   v_role := v_sig.signataire_role;
@@ -55459,7 +55499,7 @@ BEGIN
 
   UPDATE public.signatures_contrats
      SET statut_signature = 'signe', otp_valide_a = now(), signe_a = now(),
-         ip_signature = v_ip, user_agent = v_ua, hash_document = p_hash_document,
+         ip_signature = v_ip, user_agent = v_ua, hash_document = v_document_hash,
          signature_image_base64 = p_signature_image, modifie_le = now(),
          audit_trail = COALESCE(audit_trail, '{}'::jsonb)
            || jsonb_build_object('signe_le', now()::text, 'tentatives', v_sig.otp_tentatives + 1)
@@ -55495,7 +55535,7 @@ BEGIN
 
   RETURN jsonb_build_object('success', true, 'role', v_role, 'contrat_complet', v_contrat_complet);
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_signer_contrat_otp"("p_contrat_id" "uuid", "p_otp_code" "text", "p_hash_document" "text", "p_signature_image" "text") OWNER TO "postgres";
@@ -85164,8 +85204,63 @@ GRANT ALL ON TABLE "public"."signature_rate_limit_ip" TO "service_role";
 
 
 
-GRANT SELECT ON TABLE "public"."signatures_contrats" TO "authenticated";
 GRANT ALL ON TABLE "public"."signatures_contrats" TO "service_role";
+
+
+
+GRANT SELECT("id") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("contrat_id") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("signataire_user_id") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("signataire_role") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("signe_a") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("ip_signature") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("user_agent") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("hash_document") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("otp_valide_a") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("psc_session_active") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("rpps_verifie") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("traits_identite_verifies") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("statut_signature") ON TABLE "public"."signatures_contrats" TO "authenticated";
+
+
+
+GRANT SELECT("cree_le") ON TABLE "public"."signatures_contrats" TO "authenticated";
 
 
 
