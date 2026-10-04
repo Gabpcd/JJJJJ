@@ -886,6 +886,8 @@ jobs:
       PGPASSWORD: fixture-ci-ephemere
     steps:
       - uses: actions/checkout@v5
+      - name: Lecteur ACL des deux formats du dump (sans PostgreSQL)
+        run: python3 -m unittest discover -s tests/python -p 'test_paiements_concurrence_acl.py' -v
       - name: Deux écrivains, observateur et reprises exactes
         run: python3 scripts/ci/paiements-concurrence-pg17.py
       - name: Catalogue F1 — cast du type interne et états des triggers
