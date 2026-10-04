@@ -50,7 +50,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { lirePaiementsActifs } from '@/lib/lire-paiements-actifs';
 import { relancerLectureReseau } from '@/lib/relancerLectureReseau';
-import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
+import { estFactureRelancable, jourCivilParis } from '@/lib/adminInvoiceAccounting';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
@@ -83,6 +83,31 @@ const formaterHeuresFacturees = (valeur: unknown): string | null => {
   if (!Number.isFinite(heures) || heures <= 0) return null;
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(heures);
 };
+
+// Une fin de période n'est pas une échéance. Compter les jours civils à Paris
+// depuis la date portée par cette pièce, sans décalage dû au fuseau du téléphone
+// ou aux journées de 23/25 heures. Une date absente/invalide ne prouve aucun retard.
+const joursRetardFacture = (dateEcheance: unknown, maintenant: Date = new Date()): number | null => {
+  if (typeof dateEcheance !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateEcheance)) return null;
+  const date = new Date(`${dateEcheance}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== dateEcheance) return null;
+  const aujourdHui = jourCivilParis(maintenant);
+  if (!aujourdHui) return null;
+  return Math.max(0, Math.round((new Date(`${aujourdHui}T00:00:00Z`).getTime() - date.getTime()) / 86_400_000));
+};
+
+function EcheanceFactureBadge({ dateEcheance }: { dateEcheance: unknown }) {
+  const jours = joursRetardFacture(dateEcheance);
+  if (jours === null) return <span className="text-xs text-muted-foreground">Échéance indisponible</span>;
+  if (jours === 0) {
+    return <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-border" icone={<Clock className="h-3 w-3" />}>
+      Échéance : {formatDateMetier(dateEcheance)}
+    </BadgeY2K>;
+  }
+  return <BadgeY2K variant={jours <= 14 ? 'warning' : 'error'} icone={<AlertCircle className="h-3 w-3" />}>
+    En retard de {jours} j
+  </BadgeY2K>;
+}
 
 type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
 
@@ -362,7 +387,7 @@ function FacturationEtablissementContent() {
           .order('capture_le', { ascending: false })
           .limit(20)),
         lire(() => supabase.from('factures_honoraires')
-          .select('id, numero_facture, nature_correction, type_document, facture_precedente_id, quantite_heures_snapshot')
+          .select('id, numero_facture, nature_correction, type_document, facture_precedente_id, quantite_heures_snapshot, date_echeance')
           .eq('etablissement_id', etablissementId)
           .eq('type_document', 'FACTURE')
           .in('statut', ['EMISE', 'EN_RETARD', 'VIREMENT_DECLARE'])),
@@ -1096,7 +1121,7 @@ function FacturationEtablissementContent() {
                                 contrat de la MISSION (chip « Contrat … » ci-dessous, seul
                                 à faire foi via type_contrat_applique). On n'affiche JAMAIS
                                 le régime du profil sur une ligne de facturation. */}
-                            {aRapprocher ? <BadgeY2K variant="warning">À rapprocher</BadgeY2K> : <RetardBadge jours={m.jours_depuis_fin} />}
+                            {aRapprocher ? <BadgeY2K variant="warning">À rapprocher</BadgeY2K> : isLiberal ? <EcheanceFactureBadge dateEcheance={factureHonoraires?.date_echeance} /> : <RetardBadge jours={m.jours_depuis_fin} />}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             {m.soignant_profession}

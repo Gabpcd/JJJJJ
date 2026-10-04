@@ -382,6 +382,8 @@ test('honoraires documentaires — établissement 70,80 et 94,40 à régler, est
       await expect(evaluation).toBeVisible();
       await activer(evaluation.locator('..').getByRole('button', { name: 'Fermer', exact: true }), info);
       await expect(evaluation).toHaveCount(0);
+      await expect(detail.getByText(/^Commission prévisionnelle : 28,80\s*€ TTC — Consultez vos factures pour les montants et échéances\.$/)).toBeVisible();
+      await expect(detail.getByText(/Facturée en fin de mois/)).toHaveCount(0);
       const titre = detail.getByText('Commission Jolene prévisionnelle', { exact: true });
       await expect(titre).toBeVisible();
       const bloc = titre.locator('../..');
@@ -404,6 +406,47 @@ test('honoraires documentaires — établissement 70,80 et 94,40 à régler, est
     await info.attach('detail-mission-simule', { body: JSON.stringify({ mission: state.mission, appels: state.calls,
       inertes: transport.inertes, interdits: transport.interdits, erreurs: transport.erreurs }), contentType: 'application/json' });
   } finally { await contexte.close(); }
+});
+
+test('honoraires documentaires — cohorte O, échéance de novembre sans retard en octobre', async ({ page }, info) => {
+  const { etat } = await simulerEtablissement(page);
+  const piece = { ...documents()[2], id: numero(31), numero_facture: 'SIM-O-SEMAINE-38',
+    etablissement_id: etabIds.etab, soignant_id: etabIds.soignant,
+    periode_debut: '2026-09-14', periode_fin: '2026-09-20', numero_semaine_iso: 38, annee_iso: 2026,
+    date_emission: '2026-10-04', cree_le: '2026-10-04T09:00:00Z', date_echeance: '2026-11-03' };
+  const obligation = { mission_id: ids.mission, facture_honoraires_id: piece.id, payment_key: piece.id,
+    intitule: 'Mission fictive O — semaine 38', soignant_id: etabIds.soignant, soignant_nom: 'Camille Recette',
+    soignant_profession: 'IDE', soignant_stripe_connect: true, type_contrat_applique: 'LIBERAL', type_contrat_recherche: 'LIBERAL',
+    heures: 159, net_a_payer: 80, montant_commission_ht: 12, montant_commission_ttc: 14.4,
+    periode_debut: piece.periode_debut, periode_fin: piece.periode_fin, est_facture_finale_mission: false, jours_depuis_fin: 14 };
+  const commission = { id: numero(32), facture_id: numero(32), facture_honoraire_id: piece.id,
+    numero_facture: 'SIM-O-COMMISSION', etablissement_id: etabIds.etab, statut: 'EMISE', type_document: 'FACTURE',
+    montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 1,
+    periode_debut: piece.periode_debut, periode_fin: piece.periode_fin, date_emission: piece.date_emission,
+    date_echeance: piece.date_echeance, est_secteur_public: false, chorus_pro_statut: 'NON_APPLICABLE' };
+  etat.overrides.set('fn_mon_etablissement_complet', { ...etablissement, type: 'CLINIQUE_PRIVEE', est_compte_test: true,
+    statut_verification: 'EN_ATTENTE', est_verifie: false, peut_publier_missions: false });
+  etat.overrides.set('fn_obligations_financieres', { total_du: 94.4, total_soignants_du: 80, total_commissions_du: 14.4,
+    nb_missions_non_payees: 1, missions_non_payees: [obligation], factures_impayees: [commission],
+    paiements_soignants_en_attente: [], paiements_soignants_confirmes: [] });
+  etat.overrides.set('fn_mes_factures', [commission]);etat.overrides.set('factures_honoraires', [piece]);
+  const reseau = await fermerReseau(page, { id: etabIds.user, email: 'recette-etablissement@example.invalid' });
+  await page.clock.setFixedTime(new Date('2026-10-04T12:00:00Z'));
+  observations.set(info, { simulation: true, cloud: false, obligation, piece, commission, lectures: etat.appels,
+    inertes: reseau.inertes, interdits: reseau.interdits, erreurs: reseau.erreurs });
+  await entrerEtablissement(page, 'connexion');await allerA(page, '/etablissement/facturation?tab=payer');
+  for (const reload of [false, true]) {
+    if (reload) { await stabiliserLectures(page);await page.reload(); }
+    const card = page.locator('.card-base').filter({ has: page.getByRole('button', { name: obligation.intitule, exact: true }) });
+    await expect(card.getByText('Échéance : 3 novembre 2026', { exact: true })).toBeVisible();
+    await expect(card).not.toContainText(/retard|159.*pointées/);
+    await expect(card).toContainText('4 h facturées');await expect(card).toContainText('dont 14,40 € commission Jolene');
+    await expect(card.getByText(euro('94.40'), { exact: true })).toBeVisible();
+    await expect(card.getByText(piece.numero_facture, { exact: true })).toBeVisible();
+    await preuve(page, info, card, `echeance-o-${reload ? 'recharge' : 'initial'}`);
+  }
+  await stabiliserLectures(page);
+  expect(etat.inconnues).toEqual([]);expect(etat.erreurs).toEqual([]);expect(etat.ecritures).toEqual([]);expect(etat.operations).toEqual([]);reseau.verifier();
 });
 
 // Le moteur peut faire défiler le padding et l'interligne sans masquer le
