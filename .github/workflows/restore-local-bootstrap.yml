@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   empty-local-stacks:
-    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
+    if: github.repository == 'Gabpcd/JJJJJ' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request') && github.ref != 'refs/heads/ci/restore-app-phase-a-20261004' && github.head_ref != 'ci/restore-app-phase-a-20261004'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -114,6 +114,93 @@ jobs:
         with:
           name: restore-empty-infra-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PROOF_DIR }}/
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false
+
+  native-capture:
+    if: github.repository == 'Gabpcd/JJJJJ' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci/restore-app-phase-a-20261004'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      PRIVATE_DIR: /tmp/jolene-restore-phase-a-private-${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_DIR: /tmp/jolene-restore-phase-a-proof-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact manually selected revision
+        timeout-minutes: 1
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Node without npm or SDK install
+        timeout-minutes: 1
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24.14.0'
+      - name: Exact source and pure refusal contracts
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 700 "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-a.mjs identity > "$PRIVATE_DIR/identity.log" 2>&1
+          node tools/restore-local/scripts/restore-app/phase-a.mjs units > "$PRIVATE_DIR/units.log" 2>&1
+          node tools/restore-local/scripts/restore-app/phase-a.mjs plan > "$PRIVATE_DIR/plan.log" 2>&1
+      - name: Reuse qualified ten-service containment and five pinned images
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=15s 570s node tools/restore-local/scripts/restore-app/phase-a.mjs bootstrap > "$PRIVATE_DIR/bootstrap.log" 2>&1
+      - name: Exact import then synthetic Auth Storage snapshot and native TOC
+        timeout-minutes: 23
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=15s 1320s node tools/restore-local/scripts/restore-app/phase-a.mjs native > "$PRIVATE_DIR/native.log" 2>&1
+      - name: Closed container state before cleanup
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-a.mjs diagnose > "$PRIVATE_DIR/diagnose.log" 2>&1
+      - name: Always clean exact owned resources twice
+        if: always()
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-a.mjs cleanup > "$PRIVATE_DIR/cleanup.log" 2>&1
+      - name: Independent exact absence
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$PRIVATE_DIR" "$PROOF_DIR"
+          node tools/restore-local/scripts/restore-app/phase-a.mjs absence > "$PRIVATE_DIR/absence.log" 2>&1
+      - name: Only closed projections - no dump Auth values files raw TOC or logs
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: restore-app-phase-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PROOF_DIR }}/identity.json
+            ${{ env.PROOF_DIR }}/units.json
+            ${{ env.PROOF_DIR }}/bootstrap-proof.json
+            ${{ env.PROOF_DIR }}/phase-a.json
+            ${{ env.PROOF_DIR }}/diagnostic.json
+            ${{ env.PROOF_DIR }}/cleanup.json
+            ${{ env.PROOF_DIR }}/cleanup-again.json
+            ${{ env.PROOF_DIR }}/absence.json
           retention-days: 7
           if-no-files-found: error
           include-hidden-files: false

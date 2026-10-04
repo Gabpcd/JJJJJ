@@ -1,0 +1,1424 @@
+{
+  "productSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
+  "qualifiedHarnessSha": "4a14fc96bdf9f640e8877eaa53802b22ff295459",
+  "v2ManifestSha256": "6ee835f7ff3fe75b2974e8940e6d41ed1623a75de66569a40e24920a4599c6ca",
+  "schemaVersion": 2,
+  "phase": "A_CAPTURE_ONLY",
+  "readyForRestore": false,
+  "allowedChangedPaths": [
+    ".github/workflows/restore-local-bootstrap.yml",
+    "tests/security/refund-reuse-fixture-pg17.test.sql",
+    "tools/restore-local/QUALIFICATION-PG17.md",
+    "tools/restore-local/scripts/restore-app/failure.mjs",
+    "tools/restore-local/scripts/restore-app/identity.mjs",
+    "tools/restore-local/scripts/restore-app/local-runtime.mjs",
+    "tools/restore-local/scripts/restore-app/phase-a-core.mjs",
+    "tools/restore-local/scripts/restore-app/phase-a.mjs",
+    "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
+    "tools/restore-local/scripts/restore-app/pins.json",
+    "tools/restore-local/scripts/restore-app/projection.mjs",
+    "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
+    "tools/restore-local/scripts/restore-app/source-fixture.mjs",
+    "tools/restore-local/scripts/restore-app/sql/catalogue.sql",
+    "tools/restore-local/scripts/restore-app/sql/checkpoint.sql",
+    "tools/restore-local/scripts/restore-app/sql/current-product-witness.sql",
+    "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
+    "tools/restore-local/scripts/restore-app/sql/source-documents.sql",
+    "tools/restore-local/scripts/restore-app/sql/source-mission.sql",
+    "tools/restore-local/scripts/restore/bootstrap.mjs",
+    "tools/restore-local/scripts/restore/qualify-import.mjs",
+    "tools/restore-local/scripts/restore/qualify-import.test.mjs",
+    "vercel.json"
+  ],
+  "nodeTests": [
+    "tools/restore-local/scripts/restore/bootstrap.test.mjs",
+    "tools/restore-local/scripts/restore/ci-guard.test.mjs",
+    "tools/restore-local/scripts/restore/extensions.test.mjs",
+    "tools/restore-local/scripts/export/export-schema.test.mjs",
+    "tools/restore-local/scripts/restore/qualify-import.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-a.test.mjs"
+  ],
+  "pinnedFiles": [
+    {
+      "path": ".github/workflows/restore-local-bootstrap.yml",
+      "bytes": 9196,
+      "sha256": "3b07c8bf6456880f8d4737d40c00ea03dbd56921aaed652bed570a067a18742c"
+    },
+    {
+      "path": "scripts/ci/connect-test-fixture-sql.mjs",
+      "bytes": 11091,
+      "sha256": "6873caa7db2b72322d70ce45c60cfede794f0db6aca1aad7e2bd72e6a9f40741"
+    },
+    {
+      "path": "tests/security/refund-reuse-fixture-pg17.test.sql",
+      "bytes": 213152,
+      "sha256": "21f190c8c57c33df1a56fd87a9691c435b5a98ebd906bb73690b340aeeb42f36"
+    },
+    {
+      "path": "tools/restore-local/EXPORT-DDL.md",
+      "bytes": 16138,
+      "sha256": "d3f8c3e2c09444cdc20457537c8db777bbe44fd078fbfc8b4e6a0787151c6216"
+    },
+    {
+      "path": "tools/restore-local/QUALIFICATION-PG17.md",
+      "bytes": 6822,
+      "sha256": "9638295d594ff7d27a6b44f01057c850a72ba9ff057bf432695f749595d663bf"
+    },
+    {
+      "path": "tools/restore-local/README.md",
+      "bytes": 24463,
+      "sha256": "f5ce9682a7587b7acfa88e14e12895042a913d37a1e6435581f51c58f9b2c572"
+    },
+    {
+      "path": "tools/restore-local/image-config-metadata.json",
+      "bytes": 1237,
+      "sha256": "a171160846fedb80a6bc898b81194ce3b5e51fbe1e7cd85ca7989617cf3aca3c"
+    },
+    {
+      "path": "tools/restore-local/images.lock.json",
+      "bytes": 2443,
+      "sha256": "48dfacd2fd45436f94af13aa6ba2abf414f68bc088aa26f8d09d40bd18b80a22"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/audit-ddl.py",
+      "bytes": 3075,
+      "sha256": "8cf02bb5445c3ea0ae8af9f0fa60e032c49fc18a0a6ada1eb70ef9edcf0ac55d"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/audit-ddl.test.py",
+      "bytes": 2455,
+      "sha256": "0741ece4df3151d457341ef1b730f3f303e0e7f2b741897e332f86c9e525cf3d"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/catalogue-export.sql",
+      "bytes": 4848,
+      "sha256": "9266efd56aa21d9fa55fa02a9080ac094c7e66676d98388c6cc6169829ce99f1"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/ci-export.mjs",
+      "bytes": 8476,
+      "sha256": "a7e102aa4e9f7fe2dbdd6778eb24a13f1cb835be0704a19e36d5149ab4fc782b"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/ci-export.test.mjs",
+      "bytes": 8738,
+      "sha256": "623fa724ac5465fdb085a663a38d2a1f7fa33960c649e3b8a05bcc89c3e191f2"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/docker-tool.mjs",
+      "bytes": 3135,
+      "sha256": "7c35fa419072d6bd7476a5e5810a08c420fac46c61a9e9db4cc3cbe3289b9ac0"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/export-schema.mjs",
+      "bytes": 9061,
+      "sha256": "f1ff133beee19645132af8f7d63fcd6965a4c43f18ea5e32459909dd9d84fb36"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/export-schema.test.mjs",
+      "bytes": 6468,
+      "sha256": "ce7002cea663de093f28d2830a9923bd23680a9025394c4c0ff723781c9e9ce2"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/open-quarantine.mjs",
+      "bytes": 3429,
+      "sha256": "6a1dc347a86fc849b2d8548584228edac4fd9640d7c91471aa85f8440fec6b89"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/pgjwt-preflight-v2.sql",
+      "bytes": 3686,
+      "sha256": "4b628772fd0d2f137419509dde9602deb4d2a5036fd62952cb3ab7af9ac5b88c"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/pgjwt-preflight.sql",
+      "bytes": 3040,
+      "sha256": "4c7c041e210575249dcc4655fb1969e729b59f6de03b0b5f3e830de3f771d3e9"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/pglast-requirements.txt",
+      "bytes": 174,
+      "sha256": "226ab0c8242b07b23abb60669606985e4c9f42d5587593af25e44435e47e8219"
+    },
+    {
+      "path": "tools/restore-local/scripts/export/scope.json",
+      "bytes": 2784,
+      "sha256": "a5f099d76d0112918bf56e393cc7e136834894fd648c2f72a9e3bf8b4fbdf522"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/failure.mjs",
+      "bytes": 2729,
+      "sha256": "4546be3d607eb380358c5449c1c65ac3da13b86f389cdd1d1677cc9f2bd2ccb4"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/identity.mjs",
+      "bytes": 5276,
+      "sha256": "12e33a36ca5dd28a65595acd908c08cfe1432217bef7f66c6937174400457ce4"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/local-runtime.mjs",
+      "bytes": 14661,
+      "sha256": "680e602e1058aa3ecca21a534cbdb4e75ac204f57e523301151d5f878b6171b5"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-a-core.mjs",
+      "bytes": 5923,
+      "sha256": "2184d5e1b74f3a7eeda780f1797fcf3a397cd67b2b37c553bf15752d66a258ff"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-a.mjs",
+      "bytes": 7712,
+      "sha256": "daaba6c0dfc15f70ca2bbc0aac6654e348b4d1196a086a283e99f80766c1053e"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
+      "bytes": 18727,
+      "sha256": "abd516d4ea9beab98780e569b2a0a8758c7562d0ffd5ddfe1799fa78ab18bd69"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/projection.mjs",
+      "bytes": 5303,
+      "sha256": "4b45101d9a1040de0c917acd32809e71749b0fda65049416db635b82fbffb4a0"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/snapshot-restore.mjs",
+      "bytes": 4291,
+      "sha256": "cde1b6c7e302fafc7e4e8e92894a1786bc4ec99b86829b3b8e8e7d3b625fd28e"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/source-fixture.mjs",
+      "bytes": 6303,
+      "sha256": "4709701b8ae7928b5594e9b48893856f12efbdd507a472ab20e6a1b5ae7e80eb"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/catalogue.sql",
+      "bytes": 3281,
+      "sha256": "54c196769645d61bfae2e446c40f742c33fb49618ad96c775a191eab078819f8"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/checkpoint.sql",
+      "bytes": 3170,
+      "sha256": "f4b655b8820b866de539ddb240f176b58b1c82a37e1c0cbdaa5f15010224e019"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/current-product-witness.sql",
+      "bytes": 2359,
+      "sha256": "9d223c3ae45a6a1bcbd1ee46fc8a1e3f505f86fa82592caa7af53db182ec4fe4"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
+      "bytes": 653,
+      "sha256": "acf7f81a694c0b6c679afdbd24ff04a1a5fb98b7a8de0e51afa50f4b36471883"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/source-documents.sql",
+      "bytes": 4138,
+      "sha256": "2c98b59457c6d105748fdc599b93290f4f2666bbeca68fc1e2538be40c36ab54"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/sql/source-mission.sql",
+      "bytes": 10794,
+      "sha256": "5338f5a1000910b8d68d0f921b4fb8916c7915596cd3df4545b28fb79417accd"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/bootstrap.mjs",
+      "bytes": 43577,
+      "sha256": "4268a9f48fa5aabbc00368f9dffbc7050986438654935c416f58d2fed89b0f8d"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/bootstrap.test.mjs",
+      "bytes": 16423,
+      "sha256": "4ecd0474f60b24c523037cecbede25b8c6215984fa245e7ada3465667715210a"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/catalogue-required.sql",
+      "bytes": 4710,
+      "sha256": "106536bbc12a827802ead667dd60ee0ea2668f61496ff5c150ac9bef5d581949"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/ci-guard.mjs",
+      "bytes": 1657,
+      "sha256": "af9c2e230a557492113851a76b9916b338a5b78616227affe127762a46e8ff24"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/ci-guard.test.mjs",
+      "bytes": 1764,
+      "sha256": "dd43f8a71d59e7810cd8925d701b882dc7bb2e58d51d74130d39757df21636b9"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/extensions.mjs",
+      "bytes": 5122,
+      "sha256": "f2d2b0cb18f28f57c214de09b076078eaf00a15fe42cef325f126d80d86c1099"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/extensions.test.mjs",
+      "bytes": 7185,
+      "sha256": "a0d64fa4fe082dc729aec1f3d65b39acfc642c781d1f9feeab744f1259c4f01e"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/init-extensions.sql",
+      "bytes": 537,
+      "sha256": "e2e648c78b9239cc7bd65e278c4c6cb070428039b9b1c9ac983ec5147ef0fce5"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/preflight-empty.sql",
+      "bytes": 1188,
+      "sha256": "85ed31a102c12662e16630213330eb056a69f56a8f18ac6bca59891c81a5bcff"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/preflight-extensions.sql",
+      "bytes": 1195,
+      "sha256": "84de03021c89395372d8df0420ddc6e443d702eee63283e4dc21c7ea072cde6b"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/qualify-import.mjs",
+      "bytes": 37706,
+      "sha256": "e96b6e9c28d686b19b0b737a394ff1e9c651a5e627f3dcd25aac21293552a273"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/qualify-import.test.mjs",
+      "bytes": 62503,
+      "sha256": "2b0c1f6cdd766212fa8b81d378695f843c46c2f89e8442127e3f3a03185c917f"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/schema-audit.py",
+      "bytes": 2572,
+      "sha256": "f4bf1a0dd4cc63584676d5e7f73e34b9dc7a34d79b1f4fa49c2db93b58ad3502"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore/schema-audit.test.py",
+      "bytes": 1653,
+      "sha256": "2671154d250d0e749a8f0ddb50734bbf3ff5997b9d0ef0d4c71727c0a083bf39"
+    },
+    {
+      "path": "tools/restore-local/sources/LICENSE",
+      "bytes": 11338,
+      "sha256": "c29468abcd629e248c2f76848155c386b733872bcabcc4cf65ef1e7c61431042"
+    },
+    {
+      "path": "tools/restore-local/sources/official-sources.json",
+      "bytes": 3178,
+      "sha256": "3596732725cc04885fa20b076ccf6277845a09223183cb7096fcf8ac6a2d1ba2"
+    },
+    {
+      "path": "tools/restore-local/sources/volumes/db/jwt.sql",
+      "bytes": 98,
+      "sha256": "c1d3f5c01e44646c2e533c5a1c111821cc49cb5a4c2534e08cddad61d8fb0339"
+    },
+    {
+      "path": "tools/restore-local/sources/volumes/db/roles.sql",
+      "bytes": 379,
+      "sha256": "3ad717b225daa38aa982da26750f35641eb404e1eb5e69a763c22236ab96c1b2"
+    },
+    {
+      "path": "tools/restore-local/sources/volumes/db/webhooks.sql",
+      "bytes": 9070,
+      "sha256": "05a61316b899374253891cbba66ce073d9273f33983c3f47961eda3aa26c2823"
+    },
+    {
+      "path": "vercel.json",
+      "bytes": 4705,
+      "sha256": "b15e394c1ff63ec77240f0e11fee99f59b4084ee079d688d5f167496a7400377"
+    }
+  ],
+  "migrations": [
+    {
+      "path": "supabase/migrations/00000000000000_baseline_prod.sql",
+      "bytes": 2069860,
+      "sha256": "7e1d29da41eac2e4a8aacab268765632ffd94c13a295d16c93e9e14390fd0ccd"
+    },
+    {
+      "path": "supabase/migrations/20260704180000_relancer_validation_presence.sql",
+      "bytes": 4318,
+      "sha256": "0b3d164aaa08147dc595b90142402bae4fd8c3205eea1f7e44e427c28a80bc54"
+    },
+    {
+      "path": "supabase/migrations/20260705210000_fix_audit_safe_et_refunds_queue_escrow.sql",
+      "bytes": 3981,
+      "sha256": "810d063cbc83893a7059ea9c409a95e43ed9c581913a71f4a8548a8c2c943797"
+    },
+    {
+      "path": "supabase/migrations/20260709130000_fix_escrow_enqueue_on_debite.sql",
+      "bytes": 2248,
+      "sha256": "a71b26c9f0630f1e87f324f3dacf062de1d0b2087d40e65bad551e664afdc618"
+    },
+    {
+      "path": "supabase/migrations/20260709150000_flip_feature_paiement_rapide_actif.sql",
+      "bytes": 1889,
+      "sha256": "b3ae1b178f8e78a4dd85b314cd0e59f278b2d50d81999941409267a2a2c84778"
+    },
+    {
+      "path": "supabase/migrations/20260709160000_fn_revenus_escrow_soignant.sql",
+      "bytes": 7352,
+      "sha256": "6b279ebc20d78d707c273b5935b6465e113a822f21e09e77757ea3b2a7dfee56"
+    },
+    {
+      "path": "supabase/migrations/20260709170000_verrou_escrow_rembours_partiel_pre_release.sql",
+      "bytes": 4981,
+      "sha256": "bbf9126812c50aced039a2c42b808fe444e1c0945501a415666b991d14589069"
+    },
+    {
+      "path": "supabase/migrations/20260709180000_verrou_documents_sante.sql",
+      "bytes": 1929,
+      "sha256": "ba086f0f83158c7c689ac31c456d2d3cfcc8b8fc56b5d0bb4aa1819cf1c3635e"
+    },
+    {
+      "path": "supabase/migrations/20260709190000_tripwires_premier_euro_reel.sql",
+      "bytes": 5486,
+      "sha256": "a2d07feff8749da045e2a41c1cdb3cd228780b360216faba5c275886952725fe"
+    },
+    {
+      "path": "supabase/migrations/20260709200000_recapture_cron_autovalidation_72h.sql",
+      "bytes": 1465,
+      "sha256": "2e80700bf5007c3eed44c594d81ed14d479a0914ae38ebe546d16263fc5136f6"
+    },
+    {
+      "path": "supabase/migrations/20260709210000_presences_audit_sql_notif_validation.sql",
+      "bytes": 11289,
+      "sha256": "70c13fdf25d611c6675f3e7515868dde31e62f4ace3b75303cb95c3a12adf539"
+    },
+    {
+      "path": "supabase/migrations/20260709220000_lot14_verrou_d4_gel_j15_defaut_secteur.sql",
+      "bytes": 5130,
+      "sha256": "979ef49226a50d3ef62fb5de6c1ef35d27c635f857b35241ac9b85a4d1b88dd4"
+    },
+    {
+      "path": "supabase/migrations/20260709230000_lot15_d8_double_aveugle_score_etab.sql",
+      "bytes": 16779,
+      "sha256": "4a957663cd35ef74e72c09f7fcf9a5264e9fc79c6078397ce16a5dfb1ed4ad6a"
+    },
+    {
+      "path": "supabase/migrations/20260709240000_lot16_gates_d9_risque_paires.sql",
+      "bytes": 8318,
+      "sha256": "3365548255ad39ead39e323e6e85a199ae616a553afa7b6fd3d8bbd936c37e14"
+    },
+    {
+      "path": "supabase/migrations/20260709250000_lot17_params_matching_vagues_service.sql",
+      "bytes": 40011,
+      "sha256": "5deac6dfa27cf529e9ca9125ec834f3aa49c757f625a65a247b7ac755e616006"
+    },
+    {
+      "path": "supabase/migrations/20260709260000_lot17_f5_disponibilites_matching_inverse.sql",
+      "bytes": 11410,
+      "sha256": "2ff55d0637a5dfb3e3aed2bc506a39718cab342245ed7e941b8c7c12030038d7"
+    },
+    {
+      "path": "supabase/migrations/20260710090000_attestation_empechement_imperieux.sql",
+      "bytes": 9030,
+      "sha256": "0947aa60058487624cd2c80e79a12e97da45ccf0b3728a22ecb5f20c6b5bc9e2"
+    },
+    {
+      "path": "supabase/migrations/20260710120000_grants_rpcs_lot17_empechement.sql",
+      "bytes": 1083,
+      "sha256": "45d2e65e8df0b005d0bba443cbc9ed6289a1fae70acdaac1c44aa9b32b671f61"
+    },
+    {
+      "path": "supabase/migrations/20260710130000_fix_fn_test_update_mission_bypass_triggers.sql",
+      "bytes": 7511,
+      "sha256": "3498bc8f27635b174f4caf8f6e47946b1f7ea6d08440fd2534d3b56485434c08"
+    },
+    {
+      "path": "supabase/migrations/20260710140000_fix_autovalidation_72h_trigger_revert.sql",
+      "bytes": 2865,
+      "sha256": "f1784ead79246d0d34ec10f3819f1830595e007615ef7d4c9ea02f11e8b6d400"
+    },
+    {
+      "path": "supabase/migrations/20260710150000_grants_rpcs_preexistantes_mortes.sql",
+      "bytes": 1528,
+      "sha256": "22b25fde15655d53388ccb761173daf3c492bc956e319b1998214013f975f7cf"
+    },
+    {
+      "path": "supabase/migrations/20260711190000_fix_double_aveugle_score_fiabilite.sql",
+      "bytes": 21992,
+      "sha256": "90529d1ff37d726d90b9ef851af9c748595f60e5674168c5b69351b589ef693e"
+    },
+    {
+      "path": "supabase/migrations/20260711191000_fix_lot16_message_gate_paiement_neutre.sql",
+      "bytes": 1651,
+      "sha256": "09c93215eda93c9d05d63ec4565bdcc55c0e0636073aec957361c5cd5e369b26"
+    },
+    {
+      "path": "supabase/migrations/20260711192000_fix_finding2_score_etab_gate_evals.sql",
+      "bytes": 2191,
+      "sha256": "ecaf4fe81a109affa7bdaa8a2853762bf50baa4b882464b7ab8d9cc890239f06"
+    },
+    {
+      "path": "supabase/migrations/20260711193000_blocage_utilisateur_messagerie.sql",
+      "bytes": 4946,
+      "sha256": "a0e1255acf8b99b8f7aa80dad723c7f46985c126100a29e724d541d2c2da6940"
+    },
+    {
+      "path": "supabase/migrations/20260711194000_lot19_cycle_vie_alertes.sql",
+      "bytes": 8178,
+      "sha256": "69d3feaebb38941bce3d6cb110589534e24db5073be4f5c949e3b3859b453e9c"
+    },
+    {
+      "path": "supabase/migrations/20260711195000_lot19_tripwires_canal_alerte.sql",
+      "bytes": 2178,
+      "sha256": "76b49295748676668d613bd92c825a0405ae9ec965169c51592baa320bc67e0c"
+    },
+    {
+      "path": "supabase/migrations/20260711196000_lot19_fix_audit_rls_strict_shape.sql",
+      "bytes": 2552,
+      "sha256": "de007389c4e71f1b7f162b5a8f2a2d790fe4b23d309ad74cae55eeb94fdea292"
+    },
+    {
+      "path": "supabase/migrations/20260712120000_lot19_cockpit_metriques_argent_source_unique.sql",
+      "bytes": 17065,
+      "sha256": "3bb96f82dc805daa3f6c141c488525d0eb779a6fac718f93853654f224694a04"
+    },
+    {
+      "path": "supabase/migrations/20260712135427_corriger_contenu_aide_prelaunch.sql",
+      "bytes": 4927,
+      "sha256": "30d7c40302f3934865ed51ba3558c46ab7e4ef6664f62a49f08b431c7fdf329b"
+    },
+    {
+      "path": "supabase/migrations/20260712140000_lot21_suspendre_motif_obligatoire.sql",
+      "bytes": 4185,
+      "sha256": "ad318a2bed7025c4f1b5abdea6cba82ce8bff8656e3032961f2b4d1f09b5ab96"
+    },
+    {
+      "path": "supabase/migrations/20260712160000_matrice_modes_exercice.sql",
+      "bytes": 7720,
+      "sha256": "1e932e8bc0cbcb8f94ea42e4e382ae041dcd28d8602234e4543c6f28600ca0c2"
+    },
+    {
+      "path": "supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql",
+      "bytes": 9548,
+      "sha256": "e7b9d1063c0868a6d26266379103968bc737a579ab97bd875112b856d10a717a"
+    },
+    {
+      "path": "supabase/migrations/20260712162000_lot21_mecanique_admin.sql",
+      "bytes": 1987,
+      "sha256": "d36bcda16d4d5b8d7c5deb1a21440d9594514c973437bf2bc18a2ccdbabd9527"
+    },
+    {
+      "path": "supabase/migrations/20260712163000_lot21_finaliser_cascade_profession_mission.sql",
+      "bytes": 178079,
+      "sha256": "6fff3b7ef626a6e93cdbfc898a70748a8f8ac213f86be7bc080526cb655a3aaa"
+    },
+    {
+      "path": "supabase/migrations/20260712230000_p0_securite_auth_rls.sql",
+      "bytes": 86535,
+      "sha256": "2b64c199c0f8479d5238178431548b744439d3d7aac8476bffeb77ff2e453daf"
+    },
+    {
+      "path": "supabase/migrations/20260713164254_corriger_plafond_hebdomadaire_multi_semaines.sql",
+      "bytes": 18486,
+      "sha256": "ecf7f825f3250aed94c1e1b2c34b2582e7d6039dac385da1dd031708d31d80d1"
+    },
+    {
+      "path": "supabase/migrations/20260713164844_corriger_sources_modes_exercice_et_specialites_infirmieres.sql",
+      "bytes": 6164,
+      "sha256": "9222e8e27d9dab5ab1704d8fe63d5cf608a707afd770a3ed3febfefbdbfa59c2"
+    },
+    {
+      "path": "supabase/migrations/20260713165631_resoudre_interlocuteurs_messagerie.sql",
+      "bytes": 3957,
+      "sha256": "46aa0b6c786557ba896e9605b321f76e7cdff187b31f1eddb49e5c2a0a5679ae"
+    },
+    {
+      "path": "supabase/migrations/20260713165730_corriger_resolution_role_admin_avant_mfa.sql",
+      "bytes": 2650,
+      "sha256": "d9130c361f1c8c51c728e72820e9b55b0ce76b9b77ce37e924805ae4714e1cb5"
+    },
+    {
+      "path": "supabase/migrations/20260713171136_supprimer_vues_partagees_inutilisees.sql",
+      "bytes": 863,
+      "sha256": "443d5916bea5b8bbd8810974d051a577dd601148335ad5f849e10810a568f6a9"
+    },
+    {
+      "path": "supabase/migrations/20260713221941_verrou_release_escrow_debite.sql",
+      "bytes": 1473,
+      "sha256": "7c57b3a16341e8165f925d1813c8eb8739be0e19d1fa2542d3aff1910c78de6e"
+    },
+    {
+      "path": "supabase/migrations/20260713222000_durcir_verifications_preproduction.sql",
+      "bytes": 94398,
+      "sha256": "d6c68ecb736feefac0f04e21a64d7e47d2e5071c8dd8f0533be50631fcc954d4"
+    },
+    {
+      "path": "supabase/migrations/20260713222631_versionner_sessions_checkout_connect.sql",
+      "bytes": 510,
+      "sha256": "48c885708defe8795b22f4165b7fd25d613cadd0831143948632cd1b0a8c9984"
+    },
+    {
+      "path": "supabase/migrations/20260713223000_durcir_identite_soignant_documents.sql",
+      "bytes": 51915,
+      "sha256": "39d28a86d66fa56b464d495c4b8d03aa3238a3a7fce0a35bd0847e51612b6314"
+    },
+    {
+      "path": "supabase/migrations/20260713224000_revalider_preuves_historiques_reelles.sql",
+      "bytes": 10935,
+      "sha256": "225626f029e71f93b618beb8678cf71968c32c546da295edb2b56dcac141105d"
+    },
+    {
+      "path": "supabase/migrations/20260713225000_durcir_atomicite_verifications_etablissement.sql",
+      "bytes": 16209,
+      "sha256": "a9f9e1300480ece932aedb43d2cd1cfada65755144a25784ded4f035154a2aee"
+    },
+    {
+      "path": "supabase/migrations/20260713226000_durcir_atomicite_verifications_soignants.sql",
+      "bytes": 11927,
+      "sha256": "459bbb3e577a2decbad8421ea5d96f9c3e484a0efd176de3c3b4e30753bcbe63"
+    },
+    {
+      "path": "supabase/migrations/20260713227000_securiser_webhooks_stripe_connect.sql",
+      "bytes": 9205,
+      "sha256": "3f5491f52d01430ad7e84d5ef34aa71262ffa494ce5b1ce70a4caf1a9233441d"
+    },
+    {
+      "path": "supabase/migrations/20260713228000_durcir_atomicite_siret_soignant.sql",
+      "bytes": 3325,
+      "sha256": "4a357af651336a8a062062a6c9c2a6019338d689bf87a863c3ee2db3d1d14329"
+    },
+    {
+      "path": "supabase/migrations/20260713229000_atomic_reservation_paiement_mission.sql",
+      "bytes": 5904,
+      "sha256": "36a05105c5fbd4dae54e6ba82f3fad449c2f4c828e8997dfe2b1a83aba1fabef"
+    },
+    {
+      "path": "supabase/migrations/20260714000001_corriger_trigger_justificatifs_polymorphe.sql",
+      "bytes": 1162,
+      "sha256": "05dc52934a760d79adcefdf53cca4275191f2bd8e28c1b3168553d61ca7d9d19"
+    },
+    {
+      "path": "supabase/migrations/20260714000629_unifier_calcul_financier_mission.sql",
+      "bytes": 4018,
+      "sha256": "2ee32efc663a67372528b37aa1d63b478c602e166c04898a6294354239fa9036"
+    },
+    {
+      "path": "supabase/migrations/20260714001526_exposer_contrat_service_etablissement_complet.sql",
+      "bytes": 3228,
+      "sha256": "f15deb5b000a6da9e6fd8eec7fbc93072f74079cc3308bc10cf7c13ddef65171"
+    },
+    {
+      "path": "supabase/migrations/20260714003439_corriger_fonctions_runtime_lint.sql",
+      "bytes": 106566,
+      "sha256": "58c6a3b1459b688a453c43890cf0f0ec5b8e2455fd3a2d27f748213658e3cd45"
+    },
+    {
+      "path": "supabase/migrations/20260714004020_verrouiller_acces_admin_lancement.sql",
+      "bytes": 9067,
+      "sha256": "9ec846365a803247c5fde3106e328ff7aac06c411fd859500409d234a25149f4"
+    },
+    {
+      "path": "supabase/migrations/20260714005000_durcir_advisors_prelaunch.sql",
+      "bytes": 3996,
+      "sha256": "7baa138fe87ba559219e2333d669e26939eec305b85939a74469770a3fff1d03"
+    },
+    {
+      "path": "supabase/migrations/20260714005200_declarer_buckets_prives_runtime.sql",
+      "bytes": 1932,
+      "sha256": "ca06e445d71907d69be98e8f5a8df0eb33c6784c38c49a9e0578326de9489c0c"
+    },
+    {
+      "path": "supabase/migrations/20260714005500_recalculer_finances_missions_legacy_ciblees.sql",
+      "bytes": 3759,
+      "sha256": "898173b76c42f7d92f6934f852b64f5dfe977a90dd2985c46795d7d39756601d"
+    },
+    {
+      "path": "supabase/migrations/20260714011105_corriger_lint_residuel_prelaunch.sql",
+      "bytes": 21450,
+      "sha256": "3783cc6aef9565bc764db6df4de27453473f2ff008092d7f3ada6207bf62fd26"
+    },
+    {
+      "path": "supabase/migrations/20260714012500_securiser_liaison_customer_stripe.sql",
+      "bytes": 1008,
+      "sha256": "ea33c391715f0e8c2f667081922fc6dc74266e5b1181b349bcd702b5aebbd0fd"
+    },
+    {
+      "path": "supabase/migrations/20260714014000_verrouiller_flux_paiement_stripe_mission.sql",
+      "bytes": 18207,
+      "sha256": "30ba9b9b6f31eb7ea3564a242e8518e1fe40ce44d2b0074cbf921bfbc701b759"
+    },
+    {
+      "path": "supabase/migrations/20260714014100_desactiver_reservation_carte_prelaunch.sql",
+      "bytes": 871,
+      "sha256": "9277afa6da541728880bc469f23e8491ea9660c0f228c68d24f1f7c4451c2526"
+    },
+    {
+      "path": "supabase/migrations/20260714032324_securiser_finalisation_remboursements_stripe.sql",
+      "bytes": 40961,
+      "sha256": "4ad962090cb79793334c92ec0687c2cb78e4965d07a7ca177641f050db94c773"
+    },
+    {
+      "path": "supabase/migrations/20260714034156_rapprocher_paiement_connect_atomique.sql",
+      "bytes": 10291,
+      "sha256": "73b811bb31ebcbaccebd4dff69584cd7426478d3cd4406d11fc868bec8edc0fe"
+    },
+    {
+      "path": "supabase/migrations/20260714035033_securiser_modification_mode_paiement_etablissement.sql",
+      "bytes": 7724,
+      "sha256": "86108b6e290588eaf986877fa56cbe549d313d3ecada5c4da0750b8e5d497651"
+    },
+    {
+      "path": "supabase/migrations/20260714053000_corriger_url_source_primaire_lettre_d21_031940.sql",
+      "bytes": 828,
+      "sha256": "90997a9307c61224994b42bd56b00dfb97044bcc8eea0ca52d5808b9a7cf5a05"
+    },
+    {
+      "path": "supabase/migrations/20260714054000_cas_echec_debit_escrow.sql",
+      "bytes": 1741,
+      "sha256": "9aae583160a2956cd9e664e52b94eb16a9d19690c11372f270280ff267a3e324"
+    },
+    {
+      "path": "supabase/migrations/20260714055000_recuperer_payout_escrow_ambigu.sql",
+      "bytes": 1599,
+      "sha256": "a4a9339eaa48006d224d0ab501148924a069db1d9d41f30152e378be54b2d2ca"
+    },
+    {
+      "path": "supabase/migrations/20260714056000_tracer_reversal_partiel_transfer.sql",
+      "bytes": 1250,
+      "sha256": "202d5336f27efae05fb4bce539e46e3296bbe0f975d952aaf814782cd58715eb"
+    },
+    {
+      "path": "supabase/migrations/20260714060000_securiser_remplacement_documents_rib_et_validation_etablissements.sql",
+      "bytes": 34955,
+      "sha256": "713390f5ae6fe4d9e6c6aa73fc6d7c43f25378f1e2157d4d5a13248f9bbb7fa3"
+    },
+    {
+      "path": "supabase/migrations/20260714061000_durcir_webhook_swan_fail_closed.sql",
+      "bytes": 6389,
+      "sha256": "8eb45e538ab7232fa8d34c9b90ac7f9578a42fe3547c8c451dfc029fb3337526"
+    },
+    {
+      "path": "supabase/migrations/20260714062000_securiser_moderation_documents_soignants.sql",
+      "bytes": 34814,
+      "sha256": "ed53dc26b5bbf732c39a61f195f9987b311983377fe0c577c9c2cf697022126e"
+    },
+    {
+      "path": "supabase/migrations/20260714063000_securiser_revue_etablissements.sql",
+      "bytes": 31903,
+      "sha256": "a3c2d37d2888057e752f2908db50f0a032030037cf392a8e6d14618cd254674f"
+    },
+    {
+      "path": "supabase/migrations/20260714064000_securiser_otp_telephone.sql",
+      "bytes": 18328,
+      "sha256": "dee9721d9dc51e84b32d360e6b05311a16f7d677256a9e8787d21f781c5671f2"
+    },
+    {
+      "path": "supabase/migrations/20260714065000_securiser_documents_rib_et_demarrage_missions.sql",
+      "bytes": 57764,
+      "sha256": "b6b3237b546a7f5d733de612121de2edc0524059c11e38f6e28a75af7e01dccf"
+    },
+    {
+      "path": "supabase/migrations/20260714066000_helpers_revue_et_revocation.sql",
+      "bytes": 18942,
+      "sha256": "8ff7e2a83bf8a1c9fc74d35c3ef4bfe21c93c89b04778aa96bc5c3abe33570cb"
+    },
+    {
+      "path": "supabase/migrations/20260714068000_securiser_suspension_comptes_auth.sql",
+      "bytes": 27394,
+      "sha256": "702d4582b19640e52d6219c10ff09fe458bf27691862637663f94084a24a5bc8"
+    },
+    {
+      "path": "supabase/migrations/20260714069000_securiser_heures_externes_p0.sql",
+      "bytes": 30276,
+      "sha256": "4a79253e1b35933e5c25cbcf0e67dea799299315628eef18dd4da91d91bdc07f"
+    },
+    {
+      "path": "supabase/migrations/20260714070000_corriger_moyenne_44h_12_semaines.sql",
+      "bytes": 33092,
+      "sha256": "4515efc5496ce862ac28b90e8d3fef8a09fc75e18209969f76c26a90e4ed5519"
+    },
+    {
+      "path": "supabase/migrations/20260714072000_securiser_file_revue_manuelle_admin.sql",
+      "bytes": 56699,
+      "sha256": "c02c7a8b30903114bea55c44f09fe433fe5862e191602f45487e6d0d86fc9716"
+    },
+    {
+      "path": "supabase/migrations/20260714073000_ne_pas_notifier_contrats_comptes_test.sql",
+      "bytes": 13375,
+      "sha256": "7da646c0697b002140235adc069fb93654f050e75c6369a2495f7001d79c98c3"
+    },
+    {
+      "path": "supabase/migrations/20260714083447_corriger_resolution_interlocuteur_etablissement.sql",
+      "bytes": 5656,
+      "sha256": "5b0e22490e16423ce6c877b820e1cfd8fe36b0b478f296771ab0acc78e70f5db"
+    },
+    {
+      "path": "supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql",
+      "bytes": 5515,
+      "sha256": "ec3919b1e1742ee31c431cc883325af783c1c8ecd8202c674aca9dae58a1c335"
+    },
+    {
+      "path": "supabase/migrations/20260714090000_borner_creation_conversations.sql",
+      "bytes": 74710,
+      "sha256": "98787ae54152ea7a17296ca8026cf9ce51accfe569217ac60d3989552d8a65d4"
+    },
+    {
+      "path": "supabase/migrations/20260714091500_aligner_garde_financiere_missions.sql",
+      "bytes": 13463,
+      "sha256": "dc41c0d27c7095039322d743c059136c9ded2be94f4760d531becbea33b79354"
+    },
+    {
+      "path": "supabase/migrations/20260714093000_durcir_presence_messagerie.sql",
+      "bytes": 8564,
+      "sha256": "aa7efcc7eb5d5b55027f005620aab7296b598471480d5e478b78517315370d5c"
+    },
+    {
+      "path": "supabase/migrations/20260714094000_transactionnaliser_notification_candidature.sql",
+      "bytes": 8959,
+      "sha256": "d9c33addb11a394ab239a91e4441c5ecfec0323ff13a2fdb2c28b23d0515e82f"
+    },
+    {
+      "path": "supabase/migrations/20260714095000_fermer_canal_mission_legacy.sql",
+      "bytes": 1349,
+      "sha256": "caaac9fb9b560b2a7b4a71da09a8cb34838950e7f717e720af9a89456f84ca4d"
+    },
+    {
+      "path": "supabase/migrations/20260714096000_securiser_messages_contact_litige.sql",
+      "bytes": 18706,
+      "sha256": "149a4a09e76062b360499481291e1b487cb312d6df2c54161045d4ecdeea671c"
+    },
+    {
+      "path": "supabase/migrations/20260714097000_borner_flood_messages.sql",
+      "bytes": 4430,
+      "sha256": "29894b1cc2155928de87490508897acabdb930b9b1a6ffc98868f048e8c11171"
+    },
+    {
+      "path": "supabase/migrations/20260714098000_forcer_salariat_missions_non_autorisees.sql",
+      "bytes": 1355,
+      "sha256": "1567f27b28ed301c7da88bc98e9b251d0924ef703b3276f884b66aa562f31b0a"
+    },
+    {
+      "path": "supabase/migrations/20260714122337_corriger_compteurs_heures_canoniques.sql",
+      "bytes": 33272,
+      "sha256": "77afba1257f28f209ff46e926d7ca434d73101e8795dc538922b092bcc4a79d6"
+    },
+    {
+      "path": "supabase/migrations/20260714125948_supprimer_mfa_admin.sql",
+      "bytes": 3401,
+      "sha256": "3afeb3f90a3506b1d6741203ca2f488b3028cc7d684efb96d9c9c6907e6073c9"
+    },
+    {
+      "path": "supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql",
+      "bytes": 1698,
+      "sha256": "39af0ceb6fc8fa91a39c3789343b30cae71d80529853221ab9c93b4175c6ae21"
+    },
+    {
+      "path": "supabase/migrations/20260714135000_appliquer_penalite_empechement.sql",
+      "bytes": 120376,
+      "sha256": "c73f6bb92514bc2b2af73317b2ccf5266ec8b69a2b0b3982dd7cc298b784118b"
+    },
+    {
+      "path": "supabase/migrations/20260714154654_autoriser_admin_gabrielle_sans_mfa.sql",
+      "bytes": 3520,
+      "sha256": "2f0ff40b538b488687ea00f9e457e4f972e1ad7d4603a98bf16fd18b2e888582"
+    },
+    {
+      "path": "supabase/migrations/20260714154908_appliquer_penalite_empechement.sql",
+      "bytes": 5856,
+      "sha256": "58aa55668bb0c466ad9e847e42278807c7410f197df0e815d9aa57b3f301b9ff"
+    },
+    {
+      "path": "supabase/migrations/20260714162000_restaurer_empechement_canonique.sql",
+      "bytes": 21660,
+      "sha256": "fe4813abea9eda8a5fd019cddfe28687a5ba657b8f6494ce1879d6c1223f18ba"
+    },
+    {
+      "path": "supabase/migrations/20260714162838_aligner_compteur_etablissements_file_admin.sql",
+      "bytes": 4898,
+      "sha256": "4a9289cdcc7e495af16311541f36526c63cd48aa4cb4bf098aabbd15d8b8dd06"
+    },
+    {
+      "path": "supabase/migrations/20260718122441_fiabiliser_pointage_facturation_hebdo_chorus.sql",
+      "bytes": 31187,
+      "sha256": "659c1dca34f02b31eb0aa1eccaaa590489e97824c48f7f56f7c55cac937322df"
+    },
+    {
+      "path": "supabase/migrations/20260718124959_declarer_paiement_facture_hebdomadaire.sql",
+      "bytes": 8622,
+      "sha256": "fd375f689c758debe28d9462569ce7a985e201956688d9e1de4bb524faf35f57"
+    },
+    {
+      "path": "supabase/migrations/20260718130658_autoriser_montant_facture_periode.sql",
+      "bytes": 3566,
+      "sha256": "4e3dcb3f082e66d6ba98642a3eaaf8362c7ec20cc188a265ea6ffed4caf6cf97"
+    },
+    {
+      "path": "supabase/migrations/20260718130836_autoriser_facturx_xml_storage.sql",
+      "bytes": 817,
+      "sha256": "496f68fb44fed11dd5e94534be9212af82c4c78d97bd12b9764d735ed9fe6eff"
+    },
+    {
+      "path": "supabase/migrations/20260718131005_corriger_trigger_defacto_facture_emise.sql",
+      "bytes": 1996,
+      "sha256": "3aef35ff850304b1a419d0abf95bae651117dfc4d43aeb183bed3d722a8e5fb9"
+    },
+    {
+      "path": "supabase/migrations/20260719165647_cockpit_lancement_et_crm_automatise.sql",
+      "bytes": 37213,
+      "sha256": "31ba89efb048f581a379dd9a72797b2458e7d874eeafcd99483971f128e41a36"
+    },
+    {
+      "path": "supabase/migrations/20260720112022_sourcing_officiel_et_priorisation.sql",
+      "bytes": 30876,
+      "sha256": "98f29680f76c108179b847eca7b5fbc5920982471171a5e015b4f2508eba1d44"
+    },
+    {
+      "path": "supabase/migrations/20260720124548_sourcing_rpps_insert_idempotent.sql",
+      "bytes": 2404,
+      "sha256": "b43d6d357cb0ba23783728e7f3aa3cf196e89ba46afeb32fee0a9e723154fd26"
+    },
+    {
+      "path": "supabase/migrations/20260720150152_moteur_acquisition_radar.sql",
+      "bytes": 47957,
+      "sha256": "0dd469b5fc0cbdd35d4c95288d6c483655782a9caa6aa2ea4b5ec8b1044eb35b"
+    },
+    {
+      "path": "supabase/migrations/20260720153644_acquisition_actions_strategies.sql",
+      "bytes": 13719,
+      "sha256": "5d5ee5250027f43f55e217a6a3aea8af11c588ccd10d3cfdb2e947b8c3910aa9"
+    },
+    {
+      "path": "supabase/migrations/20260720155145_acquisition_crm_silencieux.sql",
+      "bytes": 2774,
+      "sha256": "30e42a2ba3d752555fb80d7783841486baf3898ffbfdc086db8f7957be3b001e"
+    },
+    {
+      "path": "supabase/migrations/20260720155955_acquisition_metrics_precision.sql",
+      "bytes": 25355,
+      "sha256": "fdfea644b3727c3d44e93b30e9c6a421a21a173e10628979d320b12876fd2ad3"
+    },
+    {
+      "path": "supabase/migrations/20260720171500_enrichissement_annuaire_borne.sql",
+      "bytes": 2198,
+      "sha256": "b99c6d0025748e84b0223258c842076338fa9c320dd006ecb65863701622c60b"
+    },
+    {
+      "path": "supabase/migrations/20260720172000_postgrest_cache_timeout.sql",
+      "bytes": 652,
+      "sha256": "d04d6881e243835dad3e4baa1741cddba5a3453f416b697852f2bb04e49e1959"
+    },
+    {
+      "path": "supabase/migrations/20260720172500_hygiene_sessions_playwright.sql",
+      "bytes": 3879,
+      "sha256": "726091dc1eef05f7a73373764b19926ce51eea3368f06994a5735640f078ee25"
+    },
+    {
+      "path": "supabase/migrations/20260720173000_accelerer_hygiene_sessions_playwright.sql",
+      "bytes": 2855,
+      "sha256": "e609812f014787b29cfb8df0d1928a785516ff8163f199c55f973c1ce1cd6dd2"
+    },
+    {
+      "path": "supabase/migrations/20260720180838_hygiene_sessions_playwright.sql",
+      "bytes": 287,
+      "sha256": "82149d6d13563d1cacdb0202a81eaf712e7a14f0d9a66c709e2c128ff84d138d"
+    },
+    {
+      "path": "supabase/migrations/20260720182100_accelerer_hygiene_sessions_playwright.sql",
+      "bytes": 304,
+      "sha256": "bc2032b8035a19740ebe521d9cc0528f929c835379ee6594e55b8965498ecc33"
+    },
+    {
+      "path": "supabase/migrations/20260721012109_dimensionner_hygiene_sessions_playwright.sql",
+      "bytes": 309,
+      "sha256": "c685e8caf1d4b9806166fa9816ee5b8101793a7d6aeba3f439c24d923e4a0a8a"
+    },
+    {
+      "path": "supabase/migrations/20260721101228_fix_admin_acquisition_realtime.sql",
+      "bytes": 32432,
+      "sha256": "e11e00f96e3137d279c58058c038e2fd70e3e10dad16f03adda8e97df2470836"
+    },
+    {
+      "path": "supabase/migrations/20260721101450_fix_acquisition_radar_realtime.sql",
+      "bytes": 19489,
+      "sha256": "3b93c3b1b7b916e75eb59eed7e6395935d07b731bff8a7ca1dc13c371bc0cab1"
+    },
+    {
+      "path": "supabase/migrations/20260721101451_fix_sourcing_runtime_watchdogs.sql",
+      "bytes": 16498,
+      "sha256": "5f2458369a635b7f7fb832d35260bcd563350341091c3fe1f3f6950370c40a70"
+    },
+    {
+      "path": "supabase/migrations/20260721114949_exclude_test_missions_from_sourcing_scores.sql",
+      "bytes": 19832,
+      "sha256": "1435f04cdc15c016fda277145b644264789036b1f1a7b3f00d07e4f087cbf20c"
+    },
+    {
+      "path": "supabase/migrations/20260721141157_acquisition_externe_operationnelle.sql",
+      "bytes": 26205,
+      "sha256": "f66b7281b368ef34fa6ba6354433544e09391fb81dcc802ed7cfa4bc7ee9c92b"
+    },
+    {
+      "path": "supabase/migrations/20260721152400_autoriser_import_bmo_service_role.sql",
+      "bytes": 2926,
+      "sha256": "ef18becdc0e9382ae3b9c1df995c4d46cbdf45da358cd4ffa39d660cb691deb9"
+    },
+    {
+      "path": "supabase/migrations/20260722134000_sales_outreach_stop_guard.sql",
+      "bytes": 7191,
+      "sha256": "c3c1f07c32eb73e5e5d0ede86baee39d1251839ea2defca8b26237fcb89e7f5a"
+    },
+    {
+      "path": "supabase/migrations/20260722163518_completer_type_compte_admin_gabrielle.sql",
+      "bytes": 777,
+      "sha256": "ec0985c35dfbce95ff963fd6465f4f448e832b168b9238057c606ff6347a21e6"
+    },
+    {
+      "path": "supabase/migrations/20260727092300_suspendre_crons_satures_prelaunch.sql",
+      "bytes": 1176,
+      "sha256": "8a1c71d2351f86aae408be0f0ec6890c1575be54f0f2349e11ee72e8d4d06a56"
+    },
+    {
+      "path": "supabase/migrations/20260727093329_suspendre_crons_service_auth_prelaunch.sql",
+      "bytes": 911,
+      "sha256": "6a6e9c0d4f751bf8a566f3b4251577cb53865a3831c0d82b0c1225d9e0b4c30b"
+    },
+    {
+      "path": "supabase/migrations/20260727094657_reinitialiser_connexions_api_auth.sql",
+      "bytes": 611,
+      "sha256": "5cf33db4576d5dc0ae362b7a86f1b373c8bcfa06339f53878234b00d8c2e22b8"
+    },
+    {
+      "path": "supabase/migrations/20260729121419_requalifier_donnees_prelaunch_et_supprimer_mfa_admin.sql",
+      "bytes": 121133,
+      "sha256": "012ff05b6aeecfc08f24eea50ae3d844560fe33e274f7ba5060a5e1f8528285e"
+    },
+    {
+      "path": "supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql",
+      "bytes": 98742,
+      "sha256": "c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf"
+    },
+    {
+      "path": "supabase/migrations/20260729121443_figer_inventaire_security_definer.sql",
+      "bytes": 84261,
+      "sha256": "160626d9fab04c230e517f8774101a7644a52b014d6bf5c1e8f10f66e1c6aa6f"
+    },
+    {
+      "path": "supabase/migrations/20260729134515_remplacer_contact_dpo_par_support.sql",
+      "bytes": 378,
+      "sha256": "121d2a7e36d89457c38f0a8eb0465e92dc96d52b3a817df788d70f03f6a75bf1"
+    },
+    {
+      "path": "supabase/migrations/20260729143000_reinstaller_dependances_auth_storage_apres_bootstrap.sql",
+      "bytes": 11337,
+      "sha256": "900594fc78afe50f0e7e8de157901900b29ddfbb1d0bb2f00c088b0621a21a63"
+    },
+    {
+      "path": "supabase/migrations/20260729182500_corriger_domaine_lien_antifraude.sql",
+      "bytes": 800,
+      "sha256": "f9e0c41836be7b670dcaa7eda0ef65ab9d8b00616a2851479cb8764f8aa89eec"
+    },
+    {
+      "path": "supabase/migrations/20260801090000_elargir_duree_mission.sql",
+      "bytes": 2899,
+      "sha256": "2c580851818b67489f7dbdfb44fb82673e74cd77d15ae478d4a12a4cf3f6736e"
+    },
+    {
+      "path": "supabase/migrations/20260801091225_aligner_planning_exact_candidature_creation_edition.sql",
+      "bytes": 71277,
+      "sha256": "7d38806c04eccfc5d1de1791c7d90e7635cadd961f046477908e71b03af93b6d"
+    },
+    {
+      "path": "supabase/migrations/20260801114528_api_v1_planning_exact.sql",
+      "bytes": 11189,
+      "sha256": "274e0e8eca2075103814ae5142ee5b73bc4e2da4996cdb225f5472110f100016"
+    },
+    {
+      "path": "supabase/migrations/20260801130000_securiser_validation_presences_planning_exact.sql",
+      "bytes": 3562,
+      "sha256": "2a78839d9c353c8a3d1ce36a7163955543d90095a43cfd5921e1ac0b4105ab41"
+    },
+    {
+      "path": "supabase/migrations/20260801145340_securiser_purge_missions_test_gelees.sql",
+      "bytes": 12613,
+      "sha256": "8b6188c8b35cb7ec335fe57ccd59f2076e41c2c45d9b929fb75f9316c6e7955b"
+    },
+    {
+      "path": "supabase/migrations/20260801153000_securiser_rbac_sync_planning_remplacement.sql",
+      "bytes": 12287,
+      "sha256": "f64af6a0fb6ef1a562c7be6d8846ae9a6f3553ce1623fe40c8883ddb2df0ad85"
+    },
+    {
+      "path": "supabase/migrations/20260801180304_securiser_finances_etablissement.sql",
+      "bytes": 34632,
+      "sha256": "45d4fb250c79da2e945360f7eae38b38f7bf52f2cccef6615b79cbcdb62993f8"
+    },
+    {
+      "path": "supabase/migrations/20260801205804_reparer_missions_test_et_stats_rh_planning_exact.sql",
+      "bytes": 28217,
+      "sha256": "5a7671636983fc988b4ebc4530b268cc26e7457373c34f298f5d6c71e2a0b1fb"
+    },
+    {
+      "path": "supabase/migrations/20260801212950_dedupliquer_revenus_connect_soignant.sql",
+      "bytes": 4109,
+      "sha256": "e5603fe1ba6c12430fedf1482544c99be7af88cb1ea6b7a293c82683868682a1"
+    },
+    {
+      "path": "supabase/migrations/20260801222000_reparer_lecture_presence_messagerie.sql",
+      "bytes": 4081,
+      "sha256": "a7a4c8f212da4e89aef25e0429964fda85a24539e5379da5262a1c62b7863ae9"
+    },
+    {
+      "path": "supabase/migrations/20260801230000_accelerer_admin_health_check.sql",
+      "bytes": 10313,
+      "sha256": "37fa1dee379d4dff61a9cb6d5d94afb76871af9f57151031c2952f8037f51f2c"
+    },
+    {
+      "path": "supabase/migrations/20260801230100_exclure_donnees_test_export_fec.sql",
+      "bytes": 6327,
+      "sha256": "fd3f0332cf2376a3071c73e7376852f35b0bd743c1ffce9a344497b910c3649e"
+    },
+    {
+      "path": "supabase/migrations/20260802055000_aligner_dispense_diplome_rpps.sql",
+      "bytes": 7949,
+      "sha256": "790cf8fd6fa4e2916cbe60d13ffbf2b739396bae0540a59f500198f9393d3184"
+    },
+    {
+      "path": "supabase/migrations/20260803145106_reparer_profil_revue_et_reclamations.sql",
+      "bytes": 2545,
+      "sha256": "0e756a200baa0574fa414d5ef84f20111b3e0bf1e8c5439be095067369dd186c"
+    },
+    {
+      "path": "supabase/migrations/20260803150157_reconcilier_migration_profil_deja_appliquee.sql",
+      "bytes": 680,
+      "sha256": "e1e238b82ac0a68e4750b3ee00d94323e7a4614663977a8552301b8300594301"
+    },
+    {
+      "path": "supabase/migrations/20260803153500_reaffirmer_regle_rpps_diplome.sql",
+      "bytes": 4730,
+      "sha256": "4fb24b5e010476097e17f9e5c14ca60fbdf0a16f8aae7c2db32e2a211f6dff15"
+    },
+    {
+      "path": "supabase/migrations/20260803190000_corriger_coherence_metier_finances_litiges.sql",
+      "bytes": 21493,
+      "sha256": "303a9125a63d47dd4a4cb4d31790bed9bc46215dc7a92336d9845b4ea008b46f"
+    },
+    {
+      "path": "supabase/migrations/20260804094450_corriger_verrou_proposition_litige.sql",
+      "bytes": 1518,
+      "sha256": "18a631eb74f9c047e1c39936c123c4eed0ae6aee06a4fdb119b006237d724905"
+    },
+    {
+      "path": "supabase/migrations/20260804154807_autoriser_liberal_notifier_litiges_et_envoyer_invitations.sql",
+      "bytes": 25133,
+      "sha256": "363a75b00663ed73fe5d6ce394c32399592375b415e04397f1f05ab8aab26e05"
+    },
+    {
+      "path": "supabase/migrations/20260806124053_reconcilier_regles_liberal_staging.sql",
+      "bytes": 12262,
+      "sha256": "ec099cf69b61b06b6d0ab0cb4d4aca68e12fbbb6d728be4c82e42efdcd326819"
+    },
+    {
+      "path": "supabase/migrations/20260808150856_aligner_mandat_facturation_tva_et_periodes.sql",
+      "bytes": 165728,
+      "sha256": "9aa8f417caece8047f3699e73028b461f5e62778968ab9746bcf150f99f66b62"
+    },
+    {
+      "path": "supabase/migrations/20260810120000_reconcilier_garde_retrocession_staging.sql",
+      "bytes": 2335,
+      "sha256": "ae7a74bf42e54eb49becd3761d8ab6030b6947225e1b0fb8f25a596c63935944"
+    },
+    {
+      "path": "supabase/migrations/20260810121500_reconcilier_contrainte_retrocession_staging.sql",
+      "bytes": 430,
+      "sha256": "6ce15aaee0db0a34868384e211bd8a5172f66f210b3f92fa575737b4e1baeea0"
+    },
+    {
+      "path": "supabase/migrations/20260810143000_aligner_signature_annulation_et_scolarite.sql",
+      "bytes": 40570,
+      "sha256": "7c3893fc38a597de1978a25d0f93aef050f9ae49a3a09cce37ed67c975c744b6"
+    },
+    {
+      "path": "supabase/migrations/20260810161022_corriger_classement_et_inventaire_security_definer.sql",
+      "bytes": 7420,
+      "sha256": "9fcfcde33de508ced4d6c742e4a0bb23e79a0bddff67b8ddb6ab66c7883ecbad"
+    },
+    {
+      "path": "supabase/migrations/20260810170533_annuler_classement_et_inventaire_security_definer.sql",
+      "bytes": 339,
+      "sha256": "c13536d28104294043f4b25a76e9fd3b477b9d4712a4dd2a332216154479e6a8"
+    },
+    {
+      "path": "supabase/migrations/20260810172100_fiabiliser_reponse_proposition.sql",
+      "bytes": 259,
+      "sha256": "4f153cee7df5113dbbc5cf5642db6c35662d5c554303da823d40e2c199f70ca0"
+    },
+    {
+      "path": "supabase/migrations/20260810173118_fiabiliser_contexte_reponse_proposition.sql",
+      "bytes": 259,
+      "sha256": "4f153cee7df5113dbbc5cf5642db6c35662d5c554303da823d40e2c199f70ca0"
+    },
+    {
+      "path": "supabase/migrations/20260810173851_securiser_transition_candidature_transactionnelle.sql",
+      "bytes": 15141,
+      "sha256": "e26efec63870018b8303969e0287c4df0fb4b0a5245c3e085188666881630c5c"
+    },
+    {
+      "path": "supabase/migrations/20260810182456_borner_purge_missions_e2e.sql",
+      "bytes": 1403,
+      "sha256": "1b3931bd4e3231e131c9c24cf9bf4e5c4879bdb18e765b3664cbb5c865e4b1bd"
+    },
+    {
+      "path": "supabase/migrations/20260810190000_retablir_securite_classement_staging.sql",
+      "bytes": 7376,
+      "sha256": "2dd4d8fddcfa884dffd51a4e23bdcc9f1c182e79930f1a72492829a9fa907529"
+    },
+    {
+      "path": "supabase/migrations/20260903191000_corriger_rendu_contrats_timezone_signature.sql",
+      "bytes": 1217,
+      "sha256": "5c2e522e2feef2096c3eddd913baab4e69c417fc3820f8fd0b1d6d5d536ec6b9"
+    },
+    {
+      "path": "supabase/migrations/20260903194000_preserver_heures_reelles_pointage.sql",
+      "bytes": 16853,
+      "sha256": "34b79fcf35dcbbf6dac2ff2aac8bbb88b685da425bae1f6e709881be06bc3f7f"
+    },
+    {
+      "path": "supabase/migrations/20260903201000_securiser_cloture_anticipee_admin.sql",
+      "bytes": 5909,
+      "sha256": "990aecc5f2d7778cef2e5c7d75e87ac6de894ddcfc44da8f360a4b913f55bc4a"
+    },
+    {
+      "path": "supabase/migrations/20260903203000_resoudre_litiges_paie_salariee.sql",
+      "bytes": 30653,
+      "sha256": "26a4cc9150a3b9351ff1b091cf70affd75f0163d957e9c7b6c922a167fc3ece6"
+    },
+    {
+      "path": "supabase/migrations/20260903204500_notification_acceptation_vers_contrat.sql",
+      "bytes": 4418,
+      "sha256": "4933211e0490e0745f368ef5340be9035c7f74a2be8a37f0695caa1b946eb31b"
+    },
+    {
+      "path": "supabase/migrations/20260903205000_reparer_liens_notifications_contrat.sql",
+      "bytes": 736,
+      "sha256": "94811df564c0090defb46ce1ec168bf36a4c2cd11b3997d407e28d40a22cb9d3"
+    },
+    {
+      "path": "supabase/migrations/20260903210500_aligner_contrat_duree_quotidienne.sql",
+      "bytes": 2086,
+      "sha256": "31036661b3c9120f48dd816386313d2f2aba300e57e78666499ae30bf5c5be21"
+    },
+    {
+      "path": "supabase/migrations/20260903212000_reparer_creation_litige_admin.sql",
+      "bytes": 3452,
+      "sha256": "4bfa33f0b75cd0f05fb46a6c65b4f8f5fc814cdfb887a43a5ea81a9f7a5bccb6"
+    },
+    {
+      "path": "supabase/migrations/20260918140945_inscription_progressive.sql",
+      "bytes": 10052,
+      "sha256": "d8f4945ad9a183a47f7960ee1ddb7bb87c4f1b21a9e3927b112e1388dda4221c"
+    },
+    {
+      "path": "supabase/migrations/20260922125642_exploration_compte_sans_profil.sql",
+      "bytes": 8178,
+      "sha256": "95d9d3718e9f2643a29156e45835e1c6f5f785ff1752313f485b972b787cc661"
+    },
+    {
+      "path": "supabase/migrations/20260925093121_alertes_recherches_etablissement_exactes.sql",
+      "bytes": 39174,
+      "sha256": "cb1324fd78b75519b0731cd22fc28f4990468147bfe3220fdf08636bdbccff0d"
+    },
+    {
+      "path": "supabase/migrations/20260925095522_suppression_compte_isolation_psc.sql",
+      "bytes": 6329,
+      "sha256": "dcf3f2674010de70e63164f1eef7ebd0d24c7c8bb37dc233787d321b5a203876"
+    },
+    {
+      "path": "supabase/migrations/20260925111647_debit_cron_alertes_borne.sql",
+      "bytes": 8196,
+      "sha256": "aac4a73694e9502c9e36b5b154c8bf6247d4d0b575ba5367b578b70b8d7c7818"
+    },
+    {
+      "path": "supabase/migrations/20260925121402_decouverte_api_alertes_recherches.sql",
+      "bytes": 736,
+      "sha256": "64028243eda00dafc9c243673bc8f7e92353e3201e9b6a2e87a4e156e4cd36f5"
+    },
+    {
+      "path": "supabase/migrations/20260925142540_suppression_soignant_contexte_interne.sql",
+      "bytes": 9130,
+      "sha256": "308c646bebc47edc5950dcf6d51df54711b9c62e86bd22c0227d3d2541517744"
+    },
+    {
+      "path": "supabase/migrations/20260925143000_file_rappels_quotidiens.sql",
+      "bytes": 10776,
+      "sha256": "f7c58b28821d61400a02a6d6e205a8273f947013c5942218dbf1371eff5cba5a"
+    },
+    {
+      "path": "supabase/migrations/20260925143334_activation_future_inscriptions_publiques.sql",
+      "bytes": 5124,
+      "sha256": "5ba716b700d3921e29e6ec20eb631ffe2d93d772056f1374343d211638ce972a"
+    },
+    {
+      "path": "supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql",
+      "bytes": 22282,
+      "sha256": "79092e618e38b38c9dd0edf9c8671abe7cb1e55954e80a1e0bcf97da22e86df2"
+    },
+    {
+      "path": "supabase/migrations/20260925153200_recherche_missions_comptage_unique.sql",
+      "bytes": 2635,
+      "sha256": "2c46029b304285b97faa6333704404673a9962b4449cde81e0c5ce4cd1be67d2"
+    },
+    {
+      "path": "supabase/migrations/20260927152738_router_otp_signature_par_projet.sql",
+      "bytes": 7997,
+      "sha256": "051ef73a9fee8da55f5eb64293744bec413e148ed44b904035bd3332f8ab1b2e"
+    },
+    {
+      "path": "supabase/migrations/20260927185500_aligner_aide_inscription_progressive.sql",
+      "bytes": 8117,
+      "sha256": "5f10ca1c4f26123137ebe2e9ceb36ef77379a2194de944a5df3ad81cbc2e44f8"
+    },
+    {
+      "path": "supabase/migrations/20260928120000_persister_attribution_parrainage_soignant.sql",
+      "bytes": 13028,
+      "sha256": "60454ceeec4e469f84c133f6494a500ddfed4e904a4df775626bc0c32e96d3e2"
+    },
+    {
+      "path": "supabase/migrations/20260929073212_corriger_role_jwt_webhooks_stripe.sql",
+      "bytes": 4143,
+      "sha256": "de99c27877376909de80785954c7c1cd68dbc5eb13ac4a273632a3c6bb2b3955"
+    },
+    {
+      "path": "supabase/migrations/20260929123309_corriger_role_jwt_audit_financier.sql",
+      "bytes": 7276,
+      "sha256": "7f77b3558e6fcbe41ca8ead4c894a4c0cf680d30f4edc017d29e25dc15b23f3b"
+    },
+    {
+      "path": "supabase/migrations/20260929125500_accepter_identifiants_remboursement_sepa.sql",
+      "bytes": 10106,
+      "sha256": "bd7483599c6d06b019d54cd6137c7d539cfdb07341d0bb7532c83803bd888595"
+    },
+    {
+      "path": "supabase/migrations/20260929142000_suivi_escrow_mission_lecture_bornee.sql",
+      "bytes": 2285,
+      "sha256": "18e135982d18ef344852335a235f7cc2352d405d88fb1d6f01b1def13bddc4cb"
+    },
+    {
+      "path": "supabase/migrations/20260929163917_copies_bulletins_officiels.sql",
+      "bytes": 25599,
+      "sha256": "b335dd04639c678d70f6df917129d164ec5f95d7933a0ad44e58e6d152b2bbdb"
+    },
+    {
+      "path": "supabase/migrations/20260930070247_exporter_etablissement_sans_troncature.sql",
+      "bytes": 2766,
+      "sha256": "bf92db79c98fac3b3f3d4be50b26c2959bdb6165d044271d64666faa84024689"
+    },
+    {
+      "path": "supabase/migrations/20260930073442_monitoring_chorus_plage_nocturne.sql",
+      "bytes": 9179,
+      "sha256": "d1e349837bc572c86fa1a6e8acd52fd23945c6888b74bd1ca52ce4ea58556c24"
+    },
+    {
+      "path": "supabase/migrations/20260930082312_corriger_auto_resolution_de_son_propre_cron.sql",
+      "bytes": 3236,
+      "sha256": "27403a453e8d60c7d07ecaf32609dc2b1eaf10a001908eade42f9c7d890e6b3d"
+    },
+    {
+      "path": "supabase/migrations/20260930083609_verrouiller_acces_contrat_storage_final.sql",
+      "bytes": 2095,
+      "sha256": "dd6f3fa64df78ac82cca196b591eeb51fad8fb21f989fc0d5166fdf71721fa9f"
+    },
+    {
+      "path": "supabase/migrations/20260930085055_verrouiller_cloture_mission_tenant.sql",
+      "bytes": 7784,
+      "sha256": "b7f3bde88780d6b545d098cbdd78c49b9cffe16c54eced2405dc179e358417b7"
+    },
+    {
+      "path": "supabase/migrations/20260930090822_inventorier_corps_security_definer_expliques.sql",
+      "bytes": 9052,
+      "sha256": "59688d6543dc42e6c58b7ab9fc23262efe429fcb9078ee985ad8dbc52450e924"
+    },
+    {
+      "path": "supabase/migrations/20260930091209_garder_resolveur_litige_avant_lecture.sql",
+      "bytes": 9125,
+      "sha256": "bd5f4a66873e85329e310e7d861ecac4bee8cb73a7ef1cadd826fe98d57d2f1c"
+    },
+    {
+      "path": "supabase/migrations/20260930145000_retablir_apercu_marche_anonyme.sql",
+      "bytes": 948,
+      "sha256": "3bd9055055705e2017eb0814019e9c02804a180465941544ae1d6b3c1e538c72"
+    },
+    {
+      "path": "supabase/migrations/20260930145136_securiser_auteur_notation_mission.sql",
+      "bytes": 10072,
+      "sha256": "23f7ee94d48fa6c2f7ba48344c341a0db4411d467ec2861c4a0fa2a470abdbe3"
+    },
+    {
+      "path": "supabase/migrations/20260930145933_aligner_liste_notations_etablissement_canonique.sql",
+      "bytes": 3751,
+      "sha256": "a2bb5aa57bbbb3701b172b815651cfbcbd48f21f5b8716dd403ccabd237d9167"
+    },
+    {
+      "path": "supabase/migrations/20260930155902_borner_controle_numerotation_factures.sql",
+      "bytes": 2366,
+      "sha256": "e35e621c7a62f79ddb227277422bdab1da594ea27f579df25a8c88bbcc5004db"
+    },
+    {
+      "path": "supabase/migrations/20260930161816_permettre_anonymisation_auteur_notation.sql",
+      "bytes": 11186,
+      "sha256": "093b5d4ca968d780f4e52abc8b15ace614a6538ea8fb81630b2d922a9eaf101d"
+    },
+    {
+      "path": "supabase/migrations/20261001090103_corriger_double_delta_commission_remplacement.sql",
+      "bytes": 8990,
+      "sha256": "4fe4192db31e0b8bfc7cb348d6ab108780de8b7ba45509e493dfc34ac2b44d31"
+    },
+    {
+      "path": "supabase/migrations/20261001102511_aligner_commissions_pieces_et_estimation.sql",
+      "bytes": 13552,
+      "sha256": "40cd6f243da94033735a756d088df217d94d36b34e2033c13129a9ee3b71d16f"
+    },
+    {
+      "path": "supabase/migrations/20261001122318_lier_paiements_liberaux_aux_factures.sql",
+      "bytes": 50389,
+      "sha256": "1e709051486585894ea7792b0b74814b1e9579abbae2dd5e24b05f2d40a65355"
+    },
+    {
+      "path": "supabase/migrations/20261001131013_conserver_historique_financier_suppression_soignant.sql",
+      "bytes": 13692,
+      "sha256": "2e09053021822fcae792479f71d51c459032e219dffd2beedef5d1e5b0205b77"
+    },
+    {
+      "path": "supabase/migrations/20261001140900_corriger_diagnostic_financier_documentaire.sql",
+      "bytes": 7203,
+      "sha256": "476f9a9fcbcb88239253ebb3bd24cae36dbe307f7440613b7aa45d8b23c977bb"
+    },
+    {
+      "path": "supabase/migrations/20261001142707_relayer_nouvelles_candidatures_push.sql",
+      "bytes": 48334,
+      "sha256": "4322e88eb4fec16b6f1d75379289567527aa7d01c7444f9c139fe16992529a80"
+    },
+    {
+      "path": "supabase/migrations/20261001144604_reserver_numeros_honoraires_atomiquement.sql",
+      "bytes": 19831,
+      "sha256": "9c3dc7dee3cc9934497b48a21b3a847651751edd68013718b4a52a852d7ed0bb"
+    },
+    {
+      "path": "supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql",
+      "bytes": 29196,
+      "sha256": "f52cd71aa41dbd3ef59d533e167990a59fd9eae20ce4a24c86460e2c06477ce5"
+    },
+    {
+      "path": "supabase/migrations/20261001191956_corriger_notification_remboursement_manuel.sql",
+      "bytes": 5493,
+      "sha256": "b0c595f3582cbede2825da44c1d5475c4960d53d8f3bcf8b50c0221daf8e37e2"
+    },
+    {
+      "path": "supabase/migrations/20261001194201_crons_etats_transitoires.sql",
+      "bytes": 8231,
+      "sha256": "a62e53867289cdff70a5cac0610aeb87b160b14a275a8ecd8479695d980f87d6"
+    },
+    {
+      "path": "supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql",
+      "bytes": 84977,
+      "sha256": "44738cc509c424afa368ec255c49a75b4b2d4c5f3b9542b463093262ab06da2c"
+    },
+    {
+      "path": "supabase/migrations/20261002064017_lire_candidatures_mission_habilitee.sql",
+      "bytes": 4971,
+      "sha256": "83787f58e2aa56cf4659f25de9ae2ceba477e4f2ef7af2cbebf34c7075cd6615"
+    },
+    {
+      "path": "supabase/migrations/20261004124300_refuser_signature_otp_et_document_incoherents.sql",
+      "bytes": 19024,
+      "sha256": "31c1e33750e493188609729d71b2b1b38c4c53fb04e22efef92f7920611db843"
+    }
+  ],
+  "productTree": "e1a55a786dfe18ec3f75f795244f5ea5b8c02726",
+  "migrationCount": 219,
+  "priorQualifiedProductSha": "01b135471e1e6ee7ee31439ffc248c8b8519260c",
+  "productImportQualified": false
+}
