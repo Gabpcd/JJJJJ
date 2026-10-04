@@ -2,6 +2,11 @@ name: Mobile store status (read only)
 
 on:
   workflow_dispatch:
+    inputs:
+      apple_canonical_reference:
+        description: 'Read canonical Apple review references (encrypted, reviewed recipient required)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +20,7 @@ env:
 
 jobs:
   status:
+    if: ${{ !inputs.apple_canonical_reference || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,14 +34,34 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
       - name: Verify report filtering without credentials or network
-        run: bundle exec ruby scripts/mobile/store-status.test.rb
+        run: |
+          bundle exec ruby scripts/mobile/store-status.test.rb
+          bundle exec ruby scripts/mobile/apple-review-reference.test.rb
+          bundle exec ruby scripts/mobile/apple-review-reference.cms.test.rb
       - name: Read App Store Connect and Google Play production status
+        if: ${{ !inputs.apple_canonical_reference }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
           GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64 }}
         run: bundle exec ruby scripts/mobile/store-status.rb "$RUNNER_TEMP/mobile-store-status"
+      - name: Read canonical Apple references into an encrypted envelope
+        if: ${{ inputs.apple_canonical_reference }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: bundle exec ruby scripts/mobile/apple-review-reference.rb "$RUNNER_TEMP/apple-canonical-reference"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.apple_canonical_reference }}
+        with:
+          name: apple-canonical-reference-encrypted
+          path: |
+            ${{ runner.temp }}/apple-canonical-reference/apple-review-public.json
+            ${{ runner.temp }}/apple-canonical-reference/apple-review-reference.cms
+          if-no-files-found: error
+          retention-days: 1
       - name: Attach sanitized summary
         if: always()
         run: |
