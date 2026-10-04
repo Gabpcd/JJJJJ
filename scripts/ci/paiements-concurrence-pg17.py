@@ -13,6 +13,7 @@ import re
 import selectors
 import subprocess
 import time
+from paiements_concurrence_acl import extract_claim_acl
 
 ROOT = Path(__file__).resolve().parents[2]
 if os.environ.get('JOLENE_PG_CONCURRENCY') != 'CI_EPHEMERE' or os.environ.get('PGHOST') != '127.0.0.1' or os.environ.get('PGDATABASE') != 'paiements_concurrence':
@@ -33,8 +34,7 @@ snapshot = (ROOT/'supabase/schema/public.sql').read_text()
 garde = migration[migration.index('CREATE OR REPLACE FUNCTION private.fn_garder_paiement_liberal_facture()'):migration.index('CREATE OR REPLACE FUNCTION public.fn_declarer_paiement_soignant_v2(')]
 old_claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim"[^;]+;', snapshot, re.S)[0]
 claim = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"\(.*?\nALTER FUNCTION "public"\."fn_stripe_payment_flow_claim_connect_v1"[^;]+;', snapshot, re.S)[0]
-claim_acl = re.findall(r'(?:REVOKE|GRANT) [^\n]* ON FUNCTION public\.fn_stripe_payment_flow_claim_connect_v1\(text,text,uuid,uuid\)[^\n]*;', snapshot)
-assert len(claim_acl) == 2
+claim_acl = extract_claim_acl(snapshot)
 release_migration = (ROOT/'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql').read_text()
 gate = re.search(r"CREATE TABLE private\.stripe_connect_release_gate \(.*?INSERT INTO private\.stripe_connect_release_gate\(protocol,enabled\) VALUES\('CONNECT_PRETRANSFER_V1',false\);", release_migration, re.S)[0]
 confirm = re.search(r'CREATE OR REPLACE FUNCTION "public"\."fn_confirmer_paiement_soignant"\(.*?\nALTER FUNCTION "public"\."fn_confirmer_paiement_soignant"[^;]+;', snapshot, re.S)[0]
@@ -81,6 +81,14 @@ INSERT INTO public.paiements_soignant(mission_id,soignant_id,etablissement_id,mo
 INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token,stripe_checkout_session_id,stripe_payment_intent_id)
   VALUES('MISSION:{ML}','CONNECT_MISSION','connect:{ML}','cs_F153ancien','pi_F153ancien');""")
 sql(garde + '\n' + gate + '\n' + old_claim + '\n' + claim + '\n' + '\n'.join(claim_acl) + '\n' + confirm + '\n' + legacy)
+# Les deux formats du dump doivent produire les mêmes droits effectifs dans PG17.
+claim_privileges = json.loads(sql("""SELECT jsonb_build_object(
+  'anon',has_function_privilege('anon','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE'),
+  'authenticated',has_function_privilege('authenticated','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE'),
+  'service_role',has_function_privilege('service_role','public.fn_stripe_payment_flow_claim_connect_v1(text,text,uuid,uuid)','EXECUTE'));
+"""))
+assert claim_privileges == {'anon': False, 'authenticated': False, 'service_role': True}, claim_privileges
+print('CLAIM_ACL_SERVICE_ROLE_SEUL',flush=True)
 # Livraison fermée et ancienne signature refusée, sans changer les lignes
 # historiques. L'ouverture ci-dessous ne concerne que cette base loopback CI.
 def claim_refused(statement, code):
