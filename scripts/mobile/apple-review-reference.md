@@ -45,6 +45,23 @@ Le CLI neutralise stdout/stderr des bibliothèques ; une erreur fatale n’émet
 qu’un diagnostic constant. Les appels OpenSSL reçoivent un environnement fermé,
 sans variable ASC, et leur stdout/stderr ne sont jamais publiés.
 
+En cas de refus, le champ optionnel `diagnostic` contient exactement trois valeurs
+issues de listes fermées : `endpoint`, `check`, `observed`. Elles identifient l’une
+des cinq lectures, le contrôle déjà existant et un type/constat (`null`, `missing`,
+`extra_keys`, `missing_keys`, `mismatch`, etc.). Aucun nom de champ inattendu, ID,
+valeur d’attribut, URL ou message fournisseur n’y figure. La liste est vérifiée à
+la création de l’erreur puis de nouveau avant écriture du reçu. Une coordonnée
+inconnue supprime le diagnostic entier ; elle ne modifie jamais le refus.
+`response_invalid` reste le motif des réponses de structure invalide ; les autres
+motifs et les conditions d’acceptation restent inchangés. Une erreur JSON garde
+notamment `read_failed`, avec le seul constat fermé `json/malformed`.
+
+Le premier run réel `37234417053` a seulement produit `response_invalid`, sans
+enveloppe CMS. Ce reçu ne permet pas de connaître sa cause. Ces diagnostics doivent
+être relus après une nouvelle exécution autorisée du lecteur ; aucune hypothèse
+sur le contenu Apple ne justifie d’assouplir les gardes de champs, de pagination
+ou de périmètre.
+
 Le JSON privé sélectionné (références exactes et notes pour revue) reste en mémoire
 jusqu’au chiffrement. Les notes sont traitées comme potentiellement sensibles,
 même si les attributs mot de passe/contact ne sont jamais demandés.

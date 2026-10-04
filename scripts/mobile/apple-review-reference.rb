@@ -14,29 +14,80 @@ module AppleReviewReference
              pagination_limit duplicate_resource resource_limit inventory_changed budget_exceeded
              notes_review_required attachments_review_required opaque_account_reference
              required_account_missing reference_limit auth_unavailable output_failed source_refused].freeze
+  # Closed coordinates only: no provider key, value, ID, URL or error text.
+  ENDPOINTS = %w[apps versions review_detail beta_detail attachments].freeze
+  CHECKS = %w[body json root data links meta paging total resource_type id attributes
+              platform version_string demo_account_required demo_account_name notes file_size
+              app_count bundle_id versions_empty next_url pagination_query pagination_cursor
+              endpoint pagination_total pagination_duplicate pagination_loop pagination_limit
+              resource_limit inventory budget transport http].freeze
+  OBSERVATIONS = %w[missing null hash array string integer number boolean other malformed oversized
+                    mismatch missing_keys extra_keys missing_and_extra_keys negative changed
+                    invalid_format loop limit exception refused].freeze
+  RESOURCE_ENDPOINTS = { 'apps' => 'apps', 'appStoreVersions' => 'versions',
+    'appStoreReviewDetails' => 'review_detail', 'betaAppReviewDetails' => 'beta_detail',
+    'appStoreReviewAttachments' => 'attachments' }.freeze
+  def self.closed_diagnostic(value)
+    return nil unless value.is_a?(Hash) && value.keys.sort == %w[check endpoint observed] &&
+      ENDPOINTS.include?(value['endpoint']) && CHECKS.include?(value['check']) && OBSERVATIONS.include?(value['observed'])
+    value.dup.freeze
+  end
+  def self.endpoint(path)
+    return 'apps' if path == '/v1/apps'
+    return 'versions' if path.match?(%r{\A/v1/apps/[A-Za-z0-9-]{1,100}/appStoreVersions\z})
+    return 'review_detail' if path.match?(%r{\A/v1/appStoreVersions/[A-Za-z0-9-]{1,100}/appStoreReviewDetail\z})
+    return 'beta_detail' if path.match?(%r{\A/v1/apps/[A-Za-z0-9-]{1,100}/betaAppReviewDetail\z})
+    return 'attachments' if path.match?(%r{\A/v1/appStoreReviewDetails/[A-Za-z0-9-]{1,100}/appStoreReviewAttachments\z})
+    nil
+  end
+  def self.observed(value, present: true)
+    return 'missing' unless present
+    case value
+    when nil then 'null'
+    when Hash then 'hash'
+    when Array then 'array'
+    when String then 'string'
+    when Integer then 'integer'
+    when Numeric then 'number'
+    when true, false then 'boolean'
+    else 'other'
+    end
+  end
   class Failure < StandardError
-    attr_reader :code
-    def initialize(code)
+    attr_reader :code, :diagnostic
+    def initialize(code, diagnostic = nil)
       @code = CODES.include?(code) ? code : 'read_failed'
+      @diagnostic = AppleReviewReference.closed_diagnostic(diagnostic)
       super(@code)
     end
   end
-  def self.fail!(code); raise Failure, code; end
-  def self.id(value)
-    fail!('response_invalid') unless value.is_a?(String) && value.match?(/\A[A-Za-z0-9-]{1,100}\z/)
+  def self.fail!(code, endpoint: nil, check: nil, observed: nil)
+    raise Failure.new(code, { 'endpoint' => endpoint, 'check' => check, 'observed' => observed })
+  end
+  def self.invalid!(endpoint, check, observed)
+    fail!('response_invalid', endpoint: endpoint, check: check, observed: observed)
+  end
+  def self.field_type(object, key)
+    observed(object[key], present: object.key?(key))
+  end
+  def self.id(value, endpoint: nil, present: true)
+    unless value.is_a?(String) && value.match?(/\A[A-Za-z0-9-]{1,100}\z/)
+      invalid!(endpoint, 'id', value.is_a?(String) ? 'invalid_format' : observed(value, present: present))
+    end
     value
   end
-  def self.query(value)
+  def self.query(value, endpoint: nil)
     pairs = URI.decode_www_form(value.to_s)
-    fail!('pagination_refused') unless pairs.map(&:first).uniq.length == pairs.length
+    fail!('pagination_refused', endpoint: endpoint, check: 'pagination_query', observed: 'mismatch') unless pairs.map(&:first).uniq.length == pairs.length
     pairs.to_h
   rescue ArgumentError
-    fail!('pagination_refused')
+    fail!('pagination_refused', endpoint: endpoint, check: 'pagination_query', observed: 'malformed')
   end
   def self.url(path, params)
     "https://#{HOST}#{path}?#{URI.encode_www_form(params)}"
   end
   def self.checked_url(value, path, params, cursor: false)
+    endpoint = self.endpoint(path)
     spec = case path
     when '/v1/apps'
       { 'filter[bundleId]' => 'app.jolene', 'fields[apps]' => 'bundleId', 'limit' => '2' }
@@ -49,17 +100,17 @@ module AppleReviewReference
     when %r{\A/v1/appStoreReviewDetails/[A-Za-z0-9-]{1,100}/appStoreReviewAttachments\z}
       { 'fields[appStoreReviewAttachments]' => 'fileSize', 'limit' => '200' }
     end
-    fail!('endpoint_refused') unless spec && params == spec
+    fail!('endpoint_refused', endpoint: endpoint, check: 'endpoint', observed: 'mismatch') unless spec && params == spec
     u = URI(value)
-    fail!('endpoint_refused') unless u.scheme == 'https' && u.host == HOST && u.port == 443 &&
+    fail!('endpoint_refused', endpoint: endpoint, check: 'endpoint', observed: 'mismatch') unless u.scheme == 'https' && u.host == HOST && u.port == 443 &&
       !u.userinfo && !u.fragment && u.path == path
-    q = query(u.query)
+    q = query(u.query, endpoint: endpoint)
     token = q.delete('cursor') if cursor
-    fail!('pagination_refused') unless q == params
-    fail!('pagination_refused') if token && (!token.match?(/\A[\x21-\x7e]{1,2048}\z/))
+    fail!('pagination_refused', endpoint: endpoint, check: 'pagination_query', observed: 'mismatch') unless q == params
+    fail!('pagination_refused', endpoint: endpoint, check: 'pagination_cursor', observed: 'invalid_format') if token && (!token.match?(/\A[\x21-\x7e]{1,2048}\z/))
     url(path, token ? params.merge('cursor' => token) : params)
   rescue URI::InvalidURIError, TypeError
-    fail!('endpoint_refused')
+    fail!('endpoint_refused', endpoint: endpoint, check: 'endpoint', observed: 'malformed')
   end
 
   class Reader
@@ -68,8 +119,9 @@ module AppleReviewReference
       @started = @clock.call
     end
     def get(url, path, params, cursor: false)
+      endpoint = AppleReviewReference.endpoint(path)
       canonical = AppleReviewReference.checked_url(url, path, params, cursor: cursor)
-      AppleReviewReference.fail!('budget_exceeded') if (@requests += 1) > 250 || @clock.call - @started > 300
+      AppleReviewReference.fail!('budget_exceeded', endpoint: endpoint, check: 'budget', observed: 'limit') if (@requests += 1) > 250 || @clock.call - @started > 300
       uri = URI(canonical)
       request = Net::HTTP::Get.new(uri)
       request['Authorization'] = "Bearer #{@token}"
@@ -85,75 +137,92 @@ module AppleReviewReference
         http.start do |connection|
           connection.request(request) do |response|
             code = response.code
-            AppleReviewReference.fail!('http_refused') unless code == '200'
+            AppleReviewReference.fail!('http_refused', endpoint: endpoint, check: 'http', observed: 'refused') unless code == '200'
             response.read_body do |chunk|
               body << chunk
-              AppleReviewReference.fail!('response_invalid') if body.bytesize > 1_000_000
+              AppleReviewReference.invalid!(endpoint, 'body', 'oversized') if body.bytesize > 1_000_000
             end
           end
         end
       end
-      AppleReviewReference.fail!('http_refused') unless code == '200'
-      AppleReviewReference.fail!('response_invalid') unless body.is_a?(String) && body.bytesize <= 1_000_000
+      AppleReviewReference.fail!('http_refused', endpoint: endpoint, check: 'http', observed: 'refused') unless code == '200'
+      AppleReviewReference.invalid!(endpoint, 'body', AppleReviewReference.observed(body)) unless body.is_a?(String)
+      AppleReviewReference.invalid!(endpoint, 'body', 'oversized') unless body.bytesize <= 1_000_000
       parsed = JSON.parse(body)
-      AppleReviewReference.fail!('response_invalid') unless parsed.is_a?(Hash)
+      AppleReviewReference.invalid!(endpoint, 'root', AppleReviewReference.observed(parsed)) unless parsed.is_a?(Hash)
       parsed
     rescue Failure
       raise
+    rescue JSON::ParserError
+      AppleReviewReference.fail!('read_failed', endpoint: endpoint, check: 'json', observed: 'malformed')
     rescue StandardError
-      AppleReviewReference.fail!('read_failed')
+      AppleReviewReference.fail!('read_failed', endpoint: endpoint, check: 'transport', observed: 'exception')
     end
   end
 
   def self.rows(reader, path, params, type)
+    endpoint = RESOURCE_ENDPOINTS[type]
     next_url = url(path, params); seen_pages = {}; seen_ids = {}; result = []; total = nil
     20.times do
       next_url = checked_url(next_url, path, params, cursor: true)
-      fail!('pagination_loop') if seen_pages[next_url]
+      fail!('pagination_loop', endpoint: endpoint, check: 'pagination_loop', observed: 'loop') if seen_pages[next_url]
       seen_pages[next_url] = true
       response = reader.get(next_url, path, params, cursor: true)
       page = response['data']; links = response['links']
-      fail!('response_invalid') unless page.is_a?(Array) && links.is_a?(Hash)
+      invalid!(endpoint, 'data', field_type(response, 'data')) unless page.is_a?(Array)
+      invalid!(endpoint, 'links', field_type(response, 'links')) unless links.is_a?(Hash)
       if response.key?('meta')
         meta = response['meta']
-        fail!('response_invalid') unless meta.is_a?(Hash)
+        invalid!(endpoint, 'meta', observed(meta)) unless meta.is_a?(Hash)
         if meta.key?('paging')
           paging = meta['paging']
-          fail!('response_invalid') unless paging.is_a?(Hash)
+          invalid!(endpoint, 'paging', observed(paging)) unless paging.is_a?(Hash)
           if paging.key?('total')
             declared = paging['total']
-            fail!('response_invalid') unless declared.is_a?(Integer) && declared >= 0 && (total.nil? || total == declared)
+            invalid!(endpoint, 'total', observed(declared)) unless declared.is_a?(Integer)
+            invalid!(endpoint, 'total', 'negative') unless declared >= 0
+            invalid!(endpoint, 'total', 'changed') unless total.nil? || total == declared
             total = declared
           end
         end
       end
       page.each do |row|
-        fail!('response_invalid') unless row.is_a?(Hash) && row['type'] == type
-        identifier = id(row['id'])
-        fail!('duplicate_resource') if seen_ids[identifier]
+        invalid!(endpoint, 'data', observed(row)) unless row.is_a?(Hash)
+        invalid!(endpoint, 'resource_type', row['type'].is_a?(String) ? 'mismatch' : field_type(row, 'type')) unless row['type'] == type
+        identifier = id(row['id'], endpoint: endpoint, present: row.key?('id'))
+        fail!('duplicate_resource', endpoint: endpoint, check: 'pagination_duplicate', observed: 'mismatch') if seen_ids[identifier]
         seen_ids[identifier] = true; result << row
-        fail!('resource_limit') if result.length > 2000
+        fail!('resource_limit', endpoint: endpoint, check: 'resource_limit', observed: 'limit') if result.length > 2000
       end
       next_url = links['next']
       if next_url.nil?
-        fail!('response_invalid') if total && total != result.length
+        invalid!(endpoint, 'pagination_total', 'mismatch') if total && total != result.length
         return result
       end
-      fail!('pagination_refused') unless next_url.is_a?(String)
+      fail!('pagination_refused', endpoint: endpoint, check: 'next_url', observed: observed(next_url)) unless next_url.is_a?(String)
     end
-    fail!('pagination_limit')
+    fail!('pagination_limit', endpoint: endpoint, check: 'pagination_limit', observed: 'limit')
   end
   def self.attributes(row, keys)
     attrs = row['attributes']
     # A provider ignoring sparse fields must not cause password/contact export.
-    fail!('response_invalid') unless attrs.is_a?(Hash) && attrs.keys.sort == keys.sort
+    endpoint = RESOURCE_ENDPOINTS[row['type']]
+    invalid!(endpoint, 'attributes', field_type(row, 'attributes')) unless attrs.is_a?(Hash)
+    unless attrs.keys.sort == keys.sort
+      missing = !(keys - attrs.keys).empty?; extra = !(attrs.keys - keys).empty?
+      invalid!(endpoint, 'attributes', missing && extra ? 'missing_and_extra_keys' : (missing ? 'missing_keys' : 'extra_keys'))
+    end
     attrs
   end
   def self.versions(reader, app)
     rows(reader, "/v1/apps/#{app}/appStoreVersions",
       { 'fields[appStoreVersions]' => 'platform,versionString', 'limit' => '200' }, 'appStoreVersions').map do |row|
       a = attributes(row, %w[platform versionString])
-      fail!('response_invalid') unless a.values.all? { |v| v.is_a?(String) && v.bytesize.between?(1,128) }
+      { 'platform' => 'platform', 'versionString' => 'version_string' }.each do |key, check|
+        value = a[key]
+        invalid!('versions', check, observed(value)) unless value.is_a?(String)
+        invalid!('versions', check, 'invalid_format') unless value.bytesize.between?(1,128)
+      end
       { 'id' => row['id'], 'platform' => a['platform'], 'version' => a['versionString'] }
     end.sort_by { |row| row['id'] }
   end
@@ -165,16 +234,23 @@ module AppleReviewReference
   end
   def self.detail(reader, path, type, scope)
     params = { "fields[#{type}]" => FIELDS }
-    data = reader.get(url(path, params), path, params)['data']
-    fail!('response_invalid') unless data.is_a?(Hash) && data['type'] == type
-    identifier = id(data['id']); a = attributes(data, FIELDS.split(','))
-    fail!('response_invalid') unless [true, false].include?(a['demoAccountRequired']) &&
-      [a['demoAccountName'], a['notes']].all? { |v| v.nil? || (v.is_a?(String) && v.bytesize <= 20_000) }
+    endpoint = RESOURCE_ENDPOINTS[type]
+    response = reader.get(url(path, params), path, params); data = response['data']
+    invalid!(endpoint, 'data', field_type(response, 'data')) unless data.is_a?(Hash)
+    invalid!(endpoint, 'resource_type', data['type'].is_a?(String) ? 'mismatch' : field_type(data, 'type')) unless data['type'] == type
+    identifier = id(data['id'], endpoint: endpoint, present: data.key?('id')); a = attributes(data, FIELDS.split(','))
+    invalid!(endpoint, 'demo_account_required', observed(a['demoAccountRequired'])) unless [true, false].include?(a['demoAccountRequired'])
+    { 'demoAccountName' => 'demo_account_name', 'notes' => 'notes' }.each do |key, check|
+      value = a[key]; next if value.nil?
+      invalid!(endpoint, check, observed(value)) unless value.is_a?(String)
+      invalid!(endpoint, check, 'oversized') unless value.bytesize <= 20_000
+    end
     attachments = if type == 'appStoreReviewDetails'
       rows(reader, "/v1/appStoreReviewDetails/#{identifier}/appStoreReviewAttachments",
         { 'fields[appStoreReviewAttachments]' => 'fileSize', 'limit' => '200' }, 'appStoreReviewAttachments').map do |row|
         size = attributes(row, ['fileSize'])['fileSize']
-        fail!('response_invalid') unless size.is_a?(Integer) && size >= 0
+        invalid!('attachments', 'file_size', observed(size)) unless size.is_a?(Integer)
+        invalid!('attachments', 'file_size', 'negative') unless size >= 0
         { 'id' => row['id'], 'bytes' => size }
       end
     else
@@ -185,15 +261,17 @@ module AppleReviewReference
   end
   def self.collect(reader, checked_at: Time.now.utc.iso8601)
     apps = rows(reader, '/v1/apps', { 'filter[bundleId]' => 'app.jolene', 'fields[apps]' => 'bundleId', 'limit' => '2' }, 'apps')
-    fail!('response_invalid') unless apps.length == 1 && attributes(apps.first, ['bundleId'])['bundleId'] == 'app.jolene'
-    app = id(apps.first['id']); listing = versions(reader, app)
-    fail!('response_invalid') if listing.empty?
+    invalid!('apps', 'app_count', 'mismatch') unless apps.length == 1
+    bundle = attributes(apps.first, ['bundleId'])['bundleId']
+    invalid!('apps', 'bundle_id', bundle.is_a?(String) ? 'mismatch' : observed(bundle)) unless bundle == 'app.jolene'
+    app = id(apps.first['id'], endpoint: 'apps', present: apps.first.key?('id')); listing = versions(reader, app)
+    invalid!('versions', 'versions_empty', 'mismatch') if listing.empty?
     details = listing.map do |v|
       detail(reader, "/v1/appStoreVersions/#{v['id']}/appStoreReviewDetail", 'appStoreReviewDetails', v)
     end
     details << detail(reader, "/v1/apps/#{app}/betaAppReviewDetail", 'betaAppReviewDetails', { 'testFlight' => true })
     # Catch version additions/removals during this bounded, non-transactional read.
-    fail!('inventory_changed') unless versions(reader, app) == listing
+    fail!('inventory_changed', endpoint: 'versions', check: 'inventory', observed: 'changed') unless versions(reader, app) == listing
     refs = []; reasons = []
     details.each do |d|
       name = d['demoAccountName']; ref = reference(name)
@@ -313,6 +391,8 @@ module AppleReviewReference
     rescue Failure => error
       public_report = { 'schema' => 1, 'status' => 'unavailable', 'appleComplete' => false,
         'confinementReady' => false, 'reasons' => [error.code] }
+      diagnostic = closed_diagnostic(error.diagnostic)
+      public_report['diagnostic'] = diagnostic if diagnostic
     rescue StandardError
       public_report = { 'schema' => 1, 'status' => 'unavailable', 'appleComplete' => false,
         'confinementReady' => false, 'reasons' => ['read_failed'] }

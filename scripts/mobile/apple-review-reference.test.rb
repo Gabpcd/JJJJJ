@@ -51,6 +51,21 @@ module AppleReviewReferenceTest
   def self.attrs(fixture, suffix = 'v-ios')
     fixture.fetch("/v1/appStoreVersions/#{suffix}/appStoreReviewDetail").fetch('data').fetch('attributes')
   end
+  def self.diagnostic_refusal(fixture, endpoint, check, observed, code = 'response_invalid')
+    collect(fixture)
+    raise 'Expected closed diagnostic refusal'
+  rescue A::Failure => error
+    assert(error.code == code && error.message == code)
+    assert(error.diagnostic == { 'endpoint' => endpoint, 'check' => check, 'observed' => observed })
+  end
+  def self.diagnostic_fixture
+    f = fixture
+    f['/v1/appStoreReviewDetails/d-ios/appStoreReviewAttachments']['data'] = [resource('appStoreReviewAttachments', 'file-1', { 'fileSize' => 2 })]
+    f
+  end
+  def self.diagnostic_resource(f, path)
+    data = f.fetch(path).fetch('data'); data.is_a?(Array) ? data.first : data
+  end
   def self.run
     cases = {
       'all versions and separate TestFlight references; no platform/state filter' => lambda {
@@ -203,6 +218,156 @@ module AppleReviewReferenceTest
           assert(Dir.children(failed) == ['apple-review-public.json'] && !File.read(File.join(failed,'apple-review-public.json')).include?(canary))
         end
       }
+    }
+    endpoints = {
+      'apps' => '/v1/apps',
+      'versions' => '/v1/apps/1234567890/appStoreVersions',
+      'review_detail' => '/v1/appStoreVersions/v-ios/appStoreReviewDetail',
+      'beta_detail' => '/v1/apps/1234567890/betaAppReviewDetail',
+      'attachments' => '/v1/appStoreReviewDetails/d-ios/appStoreReviewAttachments'
+    }
+    endpoints.each do |endpoint, path|
+      { 'missing_keys' => ->(a) { a.delete(a.keys.first) },
+        'extra_keys' => ->(a) { a[SecureRandom.hex(16)] = SecureRandom.hex(24) },
+        'missing_and_extra_keys' => ->(a) { a.delete(a.keys.first); a[SecureRandom.hex(16)] = SecureRandom.hex(24) }
+      }.each do |observation, change|
+        cases["diagnostic #{endpoint} attributes #{observation}"] = lambda {
+          f = diagnostic_fixture; change.call(diagnostic_resource(f, path)['attributes'])
+          diagnostic_refusal(f, endpoint, 'attributes', observation)
+        }
+      end
+      { 'null' => nil, 'array' => [], 'string' => 'synthetic', 'boolean' => false, 'integer' => 1 }.each do |observation, value|
+        cases["diagnostic #{endpoint} attributes #{observation}"] = lambda {
+          f = diagnostic_fixture; diagnostic_resource(f, path)['attributes'] = value
+          diagnostic_refusal(f, endpoint, 'attributes', observation)
+        }
+      end
+      cases["diagnostic #{endpoint} attributes absent"] = lambda {
+        f = diagnostic_fixture; diagnostic_resource(f, path).delete('attributes')
+        diagnostic_refusal(f, endpoint, 'attributes', 'missing')
+      }
+      { 'null' => nil, 'integer' => 1, 'invalid_format' => 'not/an/id' }.each do |observation, value|
+        cases["diagnostic #{endpoint} id #{observation}"] = lambda {
+          f = diagnostic_fixture; diagnostic_resource(f, path)['id'] = value
+          diagnostic_refusal(f, endpoint, 'id', observation)
+        }
+      end
+      cases["diagnostic #{endpoint} id absent"] = lambda {
+        f = diagnostic_fixture; diagnostic_resource(f, path).delete('id')
+        diagnostic_refusal(f, endpoint, 'id', 'missing')
+      }
+      { 'null' => nil, 'mismatch' => 'unexpected-resource' }.each do |observation, value|
+        cases["diagnostic #{endpoint} resource type #{observation}"] = lambda {
+          f = diagnostic_fixture; diagnostic_resource(f, path)['type'] = value
+          diagnostic_refusal(f, endpoint, 'resource_type', observation)
+        }
+      end
+      cases["diagnostic #{endpoint} data absent"] = lambda {
+        f = diagnostic_fixture; f[path].delete('data'); diagnostic_refusal(f, endpoint, 'data', 'missing')
+      }
+      cases["diagnostic #{endpoint} data nil"] = lambda {
+        f = diagnostic_fixture; f[path]['data'] = nil; diagnostic_refusal(f, endpoint, 'data', 'null')
+      }
+      cases["diagnostic #{endpoint} root wrong type"] = lambda {
+        f = diagnostic_fixture; f[path] = []; diagnostic_refusal(f, endpoint, 'root', 'array')
+      }
+    end
+    %w[apps versions attachments].each do |endpoint|
+      path = endpoints.fetch(endpoint)
+      %w[meta paging total].each do |check|
+        { 'null' => nil, 'boolean' => false, 'string' => 'synthetic' }.each do |observation, value|
+          cases["diagnostic #{endpoint} pagination #{check} #{observation}"] = lambda {
+            f = diagnostic_fixture
+            f[path]['meta'] = check == 'meta' ? value : { 'paging' => check == 'paging' ? value : { 'total' => value } }
+            diagnostic_refusal(f, endpoint, check, observation)
+          }
+        end
+      end
+      cases["diagnostic #{endpoint} negative total"] = lambda {
+        f = diagnostic_fixture; f[path]['meta'] = { 'paging' => { 'total' => -1 } }
+        diagnostic_refusal(f, endpoint, 'total', 'negative')
+      }
+      cases["diagnostic #{endpoint} wrong total"] = lambda {
+        f = diagnostic_fixture; f[path]['meta'] = { 'paging' => { 'total' => 20 } }
+        diagnostic_refusal(f, endpoint, 'pagination_total', 'mismatch')
+      }
+      cases["diagnostic #{endpoint} next type"] = lambda {
+        f = diagnostic_fixture; f[path]['links']['next'] = false
+        diagnostic_refusal(f, endpoint, 'next_url', 'boolean', 'pagination_refused')
+      }
+      cases["diagnostic #{endpoint} missing links"] = lambda {
+        f = diagnostic_fixture; f[path].delete('links'); diagnostic_refusal(f, endpoint, 'links', 'missing')
+      }
+    end
+    { 'review_detail' => endpoints['review_detail'], 'beta_detail' => endpoints['beta_detail'] }.each do |endpoint, path|
+      { 'demoAccountRequired' => ['demo_account_required', nil, 'null'],
+        'demoAccountName' => ['demo_account_name', false, 'boolean'],
+        'notes' => ['notes', [], 'array'] }.each do |field, (check, value, observation)|
+        cases["diagnostic #{endpoint} field #{check}"] = lambda {
+          f = diagnostic_fixture; diagnostic_resource(f, path)['attributes'][field] = value
+          diagnostic_refusal(f, endpoint, check, observation)
+        }
+      end
+    end
+    cases['diagnostic bundle mismatch separate from nil and wrong cardinality'] = lambda {
+      f = diagnostic_fixture; f[endpoints['apps']]['data'].first['attributes']['bundleId'] = 'another.synthetic.app'
+      diagnostic_refusal(f, 'apps', 'bundle_id', 'mismatch')
+      f = diagnostic_fixture; f[endpoints['apps']]['data'].first['attributes']['bundleId'] = nil
+      diagnostic_refusal(f, 'apps', 'bundle_id', 'null')
+      f = diagnostic_fixture; f[endpoints['apps']]['data'] = []
+      diagnostic_refusal(f, 'apps', 'app_count', 'mismatch')
+    }
+    cases['diagnostic HTTP body JSON and transport keep original reason classifications'] = lambda {
+      [ ['{', 'read_failed', 'json', 'malformed'], ['x' * 1_000_001, 'response_invalid', 'body', 'oversized'],
+        [nil, 'response_invalid', 'body', 'null'] ].each do |body, reason, check, observation|
+        f = fixture; f[endpoints['apps']] = Response.new('200', body)
+        diagnostic_refusal(f, 'apps', check, observation, reason)
+      end
+      f = fixture; f[endpoints['apps']] = ->(_, _) { raise SecureRandom.hex(16) }
+      diagnostic_refusal(f, 'apps', 'transport', 'exception', 'read_failed')
+      f = fixture; f[endpoints['apps']] = Response.new('403', SecureRandom.hex(16))
+      diagnostic_refusal(f, 'apps', 'http', 'refused', 'http_refused')
+    }
+    cases['diagnostic actual unavailable receipt is closed at every endpoint and never encrypted'] = lambda {
+      endpoints.each do |endpoint, path|
+        canary = SecureRandom.hex(24); f = diagnostic_fixture
+        diagnostic_resource(f, path)['attributes'][canary] = canary
+        fake = Object.new; fake.define_singleton_method(:encrypt) { |_| raise 'Encryption must not run on refused response' }
+        captured_out = StringIO.new; captured_err = StringIO.new; previous_out = $stdout; previous_err = $stderr
+        Dir.mktmpdir do |parent|
+          output = File.join(parent, 'output'); $stdout = captured_out; $stderr = captured_err
+          begin
+            status = A.run(output, config: {}, token_factory: -> { canary }, transport: transport(f), envelope_factory: ->(_, _) { fake }, source_factory: -> { 'a' * 40 })
+          ensure
+            $stdout = previous_out; $stderr = previous_err
+          end
+          assert(status == 1 && Dir.children(output) == ['apple-review-public.json'])
+          bytes = File.read(File.join(output, 'apple-review-public.json')); report = JSON.parse(bytes)
+          assert(report == { 'schema' => 1, 'status' => 'unavailable', 'appleComplete' => false,
+            'confinementReady' => false, 'reasons' => ['response_invalid'],
+            'diagnostic' => { 'endpoint' => endpoint, 'check' => 'attributes', 'observed' => 'extra_keys' } })
+          assert(captured_out.string.empty? && captured_err.string.empty?)
+          assert(!bytes.include?(canary) && !bytes.include?('owner-a') && !bytes.include?('1234567890') && !bytes.include?('file-1'))
+        end
+      end
+    }
+    cases['diagnostic allowlists reject every free coordinate and additional property at both boundaries'] = lambda {
+      valid = { 'endpoint' => 'apps', 'check' => 'id', 'observed' => 'null' }
+      assert(A.closed_diagnostic(valid) == valid)
+      invalid = valid.keys.map { |key| valid.merge(key => SecureRandom.hex(16)) } + [valid.merge('extra' => 'value'), {}, nil, []]
+      invalid.each do |value|
+        assert(A.closed_diagnostic(value).nil? && A::Failure.new('response_invalid', value).diagnostic.nil?)
+      end
+      Dir.mktmpdir do |parent|
+        # Even an internal error with a tampered diagnostic is revalidated before publication.
+        fake = Object.new; fake.define_singleton_method(:encrypt) { |_| raise 'Must not run' }
+        error = A::Failure.new('response_invalid', valid)
+        error.instance_variable_set(:@diagnostic, valid.merge('observed' => SecureRandom.hex(16)))
+        output = File.join(parent, 'output')
+        assert(A.run(output, config: {}, envelope_factory: ->(_, _) { fake }, source_factory: -> { raise error }) == 1)
+        report = JSON.parse(File.read(File.join(output, 'apple-review-public.json')))
+        assert(report['reasons'] == ['response_invalid'] && !report.key?('diagnostic'))
+      end
     }
     cases.each_with_index { |(_, test), index| test.call; puts "PASS apple canonical fixture #{index + 1}" }
     puts "#{cases.length} pure Apple reference checks passed; no provider or real encryption executed."
