@@ -39,10 +39,11 @@ def definition(snapshot, name):
     return exact(r'CREATE OR REPLACE FUNCTION "public"\."'+name+r'"\(.*?\nALTER FUNCTION "public"\."'+name+r'"[^;]+;', snapshot)
 
 
-def build_sql(snapshot, before, auth):
+def build_sql(snapshot, before, auth, *, require_original_snapshot=True):
     before_body = exact(r'AS \$function\$(.*?)\$function\$', before['definition'])
     source_body = exact(r'AS \$\$(.*?)\$\$;', definition(snapshot, 'fn_signer_contrat_otp'))
-    assert before_body == source_body
+    if require_original_snapshot:
+        assert before_body == source_body
     assert hashlib.sha256(before_body.encode()).hexdigest() == BEFORE_BODY
     assert before['acl'] == '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}'
     assert before['owner'] == 'postgres'

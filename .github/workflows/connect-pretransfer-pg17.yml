@@ -1,4 +1,4 @@
-name: Signature OTP — diagnostic PostgreSQL isolé
+name: Signature OTP — qualification PostgreSQL isolée
 on:
   workflow_dispatch:
 permissions:
@@ -36,11 +36,15 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Diagnostic de la source exacte et rollback intégral
         run: python3 scripts/ci/signature-otp-diagnostic-pg17.py > signature-otp-public.json
+      - name: Qualification du correctif et rollback intégral
+        run: python3 scripts/ci/signature-otp-fix-pg17.py > signature-otp-fixed-public.json
       - name: Reçu fermé uniquement
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: signature-otp-diagnostic-public
-          path: signature-otp-public.json
+          path: |
+            signature-otp-public.json
+            signature-otp-fixed-public.json
           retention-days: 7
           if-no-files-found: error
