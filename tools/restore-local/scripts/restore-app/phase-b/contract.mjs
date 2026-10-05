@@ -13,8 +13,7 @@ export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CAL
 export const STAGES = new Set([...A_STAGES,'dependencies','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function requireValue(ok, code = 'B_CONTEXT') { if (!ok) { const error = new Error(CODES.has(code) ? code : 'B_FAILED'); error.code = error.message; throw error; } }
-export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_DATABASE_RECREATE','TARGET_PUBLIC_SCHEMA_DROP',
- 'TARGET_ARCHIVE_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN']);
+export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_DATABASE_RECREATE','TARGET_ARCHIVE_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN']);
 const RESTORE_SIGNALS = new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE']);
 const RESTORE_SYSTEM_ERRORS = new Set(['ETIMEDOUT','ENOENT','EACCES','EPERM','ENOMEM','ENOBUFS','E2BIG','EAGAIN','ENOEXEC']);
 export const PG_RESTORE_CATEGORIES = Object.freeze(['UNKNOWN','SQL_OTHER','OBJECT_EXISTS','OBJECT_MISSING',

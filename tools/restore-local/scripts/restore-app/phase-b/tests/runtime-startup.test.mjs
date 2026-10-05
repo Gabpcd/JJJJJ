@@ -81,6 +81,7 @@ test('actual native startup waits for DB healthy and complete plan before any AP
 });
 for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attributes first failing native call '+failedOperation,async t=>{
  const {directory,plan}=fixture(t),operations=[],canary='PRIVATE_SQL_AUTH_DUMP_PATH_CANARY';
+ let pristineSchemas=null;
  const snapshotDir=join(directory,'snapshot');mkdirSync(snapshotDir,{mode:0o700});mkdirSync(join(snapshotDir,'files'),{mode:0o700});
  const dump=Buffer.from('PGDMPsynthetic-private-test');writeFileSync(join(snapshotDir,'database.dump'),dump,{mode:0o600});
  writeFileSync(join(snapshotDir,'files','synthetic-file'),'synthetic',{mode:0o600});
@@ -103,10 +104,20 @@ for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attrib
    if(args[3]==='pg_restore'){
     assert.deepEqual(args.slice(4),['--exit-on-error','--single-transaction','--no-password','-U','supabase_admin','-h','/var/run/postgresql','-d','jolene_candidatures_pg17_test']);
     assert.deepEqual(options.input,dump);operation='TARGET_ARCHIVE_RESTORE';
+    // Model PG17 initdb + dumpNamespace: public already exists, auth/storage do
+    // not. The public TOC definition carries ownership, not CREATE SCHEMA.
+    assert.deepEqual([...pristineSchemas.keys()],['pg_catalog','information_schema','public']);
+    assert.deepEqual(pristineSchemas.get('public'),{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']});
+    pristineSchemas.set('public',{owner:'postgres',acl:['postgres:UC','anon:U','authenticated:U','service_role:U']});
+    for(const schema of ['auth','storage']){assert.equal(pristineSchemas.has(schema),false);pristineSchemas.set(schema,{owner:'native-owner',acl:[]});}
+    assert.equal(pristineSchemas.get('public').acl.includes('PUBLIC:U'),false);
    }else{
     assert.equal(args[3],'psql');const sql=options.input.toString();
-    if(sql.startsWith('DROP DATABASE '))operation='TARGET_DATABASE_RECREATE';
-    else if(sql==='DROP SCHEMA public;')operation='TARGET_PUBLIC_SCHEMA_DROP';
+    if(sql.startsWith('DROP DATABASE ')){
+     assert.equal(sql,'DROP DATABASE jolene_candidatures_pg17_test;\nCREATE DATABASE jolene_candidatures_pg17_test OWNER postgres TEMPLATE template0;');
+     assert.equal(args[args.indexOf('-d')+1],'postgres');operation='TARGET_DATABASE_RECREATE';
+     pristineSchemas=new Map([['pg_catalog',{}],['information_schema',{}],['public',{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']}]]);
+    }
     else if(sql.startsWith('ALTER ROLE authenticator'))operation='TARGET_ROLE_SETTINGS';
     else {assert.ok(sql.includes('BEGIN READ ONLY;'));return output('');}
    }

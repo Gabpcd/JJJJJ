@@ -133,7 +133,8 @@ export function nativeRuntime(privateDir) {
     recreateOwnedEmptyTargetDatabase:async database=>{
       requireValue(database===DB,'B_RESTORE');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
       await targetSql(`DROP DATABASE ${DB};\nCREATE DATABASE ${DB} OWNER postgres TEMPLATE template0;`,'postgres','TARGET_DATABASE_RECREATE');
-      await targetSql('DROP SCHEMA public;',DB,'TARGET_PUBLIC_SCHEMA_DROP');
+      // PG17 pg_dump does not recreate public: its SCHEMA TOC entry replays
+      // ownership/ACLs onto the initdb schema inherited from template0. Keep it.
     },
     databaseTool:async(side,tool,args,bytes)=>{
       if(side==='source')return base.databaseTool(side,tool,args,bytes);
