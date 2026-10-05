@@ -61,6 +61,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci
+      - name: Installer le pilote Android de Playwright
+        timeout-minutes: 3
+        run: node node_modules/playwright/cli.js install android
       - name: Vérifier les tests structurels Python Android
         shell: bash
         run: |
