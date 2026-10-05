@@ -5,6 +5,7 @@ import { currentImeShown } from './ime-state.mjs';
 import { attachNativeWebView } from './webview-attachment.mjs';
 import { requireAppWindow } from './emulator-preflight.mjs';
 import { captureIme } from './capture-ime.mjs';
+import { captureAccessibility } from './capture-accessibility.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -21,7 +22,21 @@ let originalAppPid;
 const nativeShell = async (command) => (await device.shell(command)).toString();
 const save = (name, value) => writeFile(`${output}/${name}`, value);
 const metric = (kind, data) => validations.push({ kind, ...data });
+let navigationFailed = false;
+let accessibilityDriverAttempted = false;
 async function capture(name) {
+  // A DOM assertion can finish before Android has painted the new WebView
+  // frame. Keep the native screenshot (including IME) and await two frame callbacks.
+  if (page) await page.evaluate(() => new Promise((resolve, reject) => {
+    let first = 0, second = 0;
+    const timeout = setTimeout(() => {
+      cancelAnimationFrame(first); cancelAnimationFrame(second);
+      reject(new Error('ANDROID_CAPTURE_PAINT_TIMEOUT'));
+    }, 2000);
+    first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => { clearTimeout(timeout); resolve(); });
+    });
+  }));
   await device.screenshot({ path: `${output}/${name}.png` });
   if (page) {
     const collection = [];
@@ -98,6 +113,25 @@ async function connexion(role) {
   await expect(page.getByRole('navigation', { name: 'Navigation mobile', exact: true })).toBeVisible({ timeout: 25000 });
   await invitation();
 }
+async function reloadAndResume(role) {
+  await nav('Accueil');
+  const expectedPath = new URL(page.url()).pathname;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const navigation = page.getByRole('navigation', { name: 'Navigation mobile', exact: true });
+  await expect(navigation).toBeVisible({ timeout: 25000 });
+  await invitation();
+  await expect(navigation.getByRole('button', { name: role === 'etab' ? 'Publier' : 'Mes missions', exact: true })).toBeVisible();
+  if (role === 'etab') await expect(page.locator('main').getByRole('heading', { name: 'Préparez votre première mission', exact: true })).toBeVisible();
+  else await expect(page.locator('main').getByText('Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.', { exact: true })).toBeVisible();
+  assert.equal(new URL(page.url()).pathname, expectedPath, 'Authenticated home route must survive reload');
+  await expect(page.getByRole('button', { name: 'Se connecter', exact: true })).toHaveCount(0);
+  // A DOM-visible heading did not guarantee that Android had presented the
+  // reloaded page (run 37296899799 captured the old loading skeleton). Require
+  // its content through Android's accessibility surface as well as the DOM.
+  await device.wait({ pkg, text: role === 'etab' ? 'Préparer une mission' : /^(Bonjour|Bonsoir), bienvenue$/ }, { timeout: 10000 });
+  await capture(`${role}-reprise-apres-rechargement`);
+  metric('auth-session-reload', { role, path: expectedPath });
+}
 async function logout(role) {
   await nav(role === 'etab' ? 'Menu' : 'Profil');
   await page.locator('main').getByRole('button', { name: 'Se déconnecter', exact: true }).click();
@@ -148,8 +182,67 @@ try {
   const nativeWindow = await nativeShell('dumpsys window');
   await save('android-window-before-interaction.txt', nativeWindow);
   requireAppWindow(nativeWindow);
+
+  // The first native selector also installs and starts Playwright's driver.
+  // Pay that bounded setup cost once before authentication, not on reload.
+  const accessibilityStarted = performance.now();
+  let accessibilityDeadline;
+  try {
+    await Promise.race([
+      (async () => {
+        accessibilityDriverAttempted = true;
+        await device.wait({ pkg }, { timeout: 60000 });
+        assert.equal((await nativeShell(`pidof ${pkg}`)).trim(), originalAppPid, 'Accessibility driver setup must preserve the original app process');
+        requireAppWindow(await nativeShell('dumpsys window'));
+      })(),
+      new Promise((_, reject) => {
+        accessibilityDeadline = setTimeout(() => reject(new Error('ANDROID_ACCESSIBILITY_DRIVER_TIMEOUT')), 60000);
+      }),
+    ]);
+  } finally { clearTimeout(accessibilityDeadline); }
+  const accessibilityElapsed = Math.ceil(performance.now() - accessibilityStarted);
+  assert(accessibilityElapsed <= 60000, 'Accessibility driver setup exceeded its fixed deadline');
+  metric('native-accessibility-driver-ready', {
+    sameProcess: true, appWindow: true, elapsedMs: accessibilityElapsed,
+  });
   assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), 'android', 'Must exercise the native Capacitor bridge');
   await page.addLocatorHandler(page.getByRole('button', { name: 'Plus tard', exact: true }), async (button) => { await button.click(); });
+  // Native PluginHeaders are built from Java/Kotlin reflection, not the web fallback registry.
+  const expectedPlugins = ['App', 'CapacitorBarcodeScanner', 'Browser', 'Camera', 'Filesystem', 'Geolocation',
+    'Haptics', 'Keyboard', 'Network', 'Preferences', 'PushNotifications', 'Share', 'SplashScreen', 'StatusBar',
+    'AppUpdate', 'LiveUpdate', 'NativeBiometric', 'CapacitorCalendar'];
+  const nativePlugins = await page.evaluate(() => (window.Capacitor?.PluginHeaders ?? []).map(plugin => plugin.name));
+  for (const name of expectedPlugins) assert(nativePlugins.includes(name), `Native plugin missing: ${name}`);
+  const bridge = await page.evaluate(async () => {
+    const plugins = window.Capacitor.Plugins;
+    const key = 'recette-r8-' + crypto.randomUUID(), data = btoa('R8 synthetic bridge only');
+    let stored = false, fileCreated = false;
+    try {
+      const info = await plugins.App.getInfo();
+      await plugins.Preferences.set({ key, value: data }); stored = true;
+      const preference = await plugins.Preferences.get({ key });
+      await plugins.Filesystem.writeFile({ path: key + '.txt', directory: 'CACHE', data }); fileCreated = true;
+      const file = await plugins.Filesystem.readFile({ path: key + '.txt', directory: 'CACHE' });
+      return { fixtureApp: info.id === 'app.jolene.recette', preferenceRead: preference.value === data, fileRead: file.data === data };
+    } finally {
+      if (fileCreated) await plugins.Filesystem.deleteFile({ path: key + '.txt', directory: 'CACHE' });
+      if (stored) await plugins.Preferences.remove({ key });
+    }
+  });
+  assert.deepEqual(bridge, { fixtureApp: true, preferenceRead: true, fileRead: true });
+  metric('native-plugin-reflection', { registeredPlugins: expectedPlugins.length, ...bridge });
+
+  // Exercise the permission metadata on the actual optimized bridge before
+  // authentication. This is read-only: no dialog, registration or push token.
+  let permissionDeadline;
+  const permissions = await Promise.race([
+    page.evaluate(() => window.Capacitor.Plugins.PushNotifications.checkPermissions()),
+    new Promise((_, reject) => { permissionDeadline = setTimeout(() => reject(new Error('ANDROID_NATIVE_PERMISSION_TIMEOUT')), 10000); }),
+  ]).finally(() => clearTimeout(permissionDeadline));
+  assert.equal(permissions.receive, 'prompt', 'A fresh fixture must report the unrequested native notification permission');
+  assert.equal((await nativeShell(`pidof ${pkg}`)).trim(), originalAppPid, 'Permission inspection must preserve the original application process');
+  metric('native-push-permission-read', { receive: permissions.receive, sameProcess: true, requested: false });
+
   for (const role of ['soignant', 'etab']) {
     await inscription(role);
     await fiveTabs(role, 'inscription');
@@ -187,10 +280,12 @@ try {
     }
     await logout(role);
     await connexion(role);
+    await reloadAndResume(role);
     await fiveTabs(role, 'connexion');
     await logout(role);
   }
   assert.equal(validations.filter((item) => item.kind === 'tab').length, 20);
+  assert.deepEqual(validations.filter((item) => item.kind === 'auth-session-reload').map((item) => item.role).sort(), ['etab', 'soignant']);
   const report = await (await fetch(`${api}/__recette/bilan`)).json();
   await save('api-report.json', JSON.stringify(report, null, 2));
   assert.deepEqual(report.unknown, [], 'No unimplemented API may pass silently');
@@ -210,14 +305,36 @@ try {
   }
   await save('summary.json', JSON.stringify({
     result: 'passed', device: device.model(), android: (await nativeShell('getprop ro.build.version.release')).trim(),
-    evidence: 'Actual Capacitor debug APK in Android emulator; fictional local API',
+    variant: process.env.NATIVE_RECETTE_VARIANT ?? 'debug',
+    evidence: process.env.NATIVE_RECETTE_VARIANT === 'optimized'
+      ? 'Actual R8 release-derived non-debuggable Capacitor APK; ephemeral debug signature; fictional local API'
+      : 'Actual Capacitor debug APK in Android emulator; fictional local API',
     excludes: ['real backend behavior', 'push/SMS delivery', 'store signing', 'physical-device performance'],
     validations, apiCalls: report.calls.length, errors,
   }, null, 2));
 } catch (error) {
-  await capture('failure').catch(() => {});
-  await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
-  throw error;
+  // Record the original cause before any potentially blocked native capture.
+  navigationFailed = true;
+  try {
+    await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
+    await capture('failure').catch(() => {});
+    // Preserve the original failure; this terminal diagnostic never retries the UI.
+    const accessibility = await captureAccessibility(device.serial(), {
+      expectedPid: originalAppPid, closeClient: () => device.close(),
+    });
+    await save('failure-accessibility.json', JSON.stringify(accessibility, null, 2));
+  } finally {
+    throw error;
+  }
 } finally {
-  await device.close();
+  try {
+    const { finalizeAndroidDriver } = await import('./close-android-driver.mjs');
+    await finalizeAndroidDriver(device.serial(), {
+      expectedPid: originalAppPid, driverAttempted: accessibilityDriverAttempted,
+      closeClient: () => device.close(),
+    }, receipt => save('driver-cleanup.json', JSON.stringify(receipt, null, 2)));
+  } catch (cleanupError) {
+    // UI success cannot hide failed cleanup; UI failure keeps its original cause.
+    if (!navigationFailed) throw cleanupError;
+  }
 }

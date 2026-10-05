@@ -24,12 +24,21 @@ concurrency:
 
 jobs:
   native-android:
-    name: Android WebView — inscription, connexion et navigation
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: debug
+            label: Android WebView — inscription, connexion et navigation
+          - variant: optimized
+            label: Android WebView R8 — inscription, connexion et navigation
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       CI: 'true'
       NATIVE_RECETTE: '1'
+      NATIVE_RECETTE_VARIANT: ${{ matrix.variant }}
       VITE_NATIVE_BUILD: 'true'
       VITE_SUPABASE_URL: http://127.0.0.1:8904
       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_native_fixture
@@ -52,18 +61,62 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci
-      - name: Préparer le vrai bundle dans un APK debug isolé
+      - name: Installer le pilote Android de Playwright
+        timeout-minutes: 3
+        run: node node_modules/playwright/cli.js install android
+      - name: Vérifier les tests structurels Python Android
         shell: bash
         run: |
           set -euo pipefail
           export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           python3 -m unittest discover -s tests/native/android -p 'test_*.py'
+      - name: Vérifier les tests structurels Node Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           node --test tests/native/android/*.test.mjs
+      - name: Construire le bundle web de recette Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           npm run build
+      - name: Préparer la variante Android de recette isolée
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           node scripts/native/prepare-android-recette.mjs
+      - name: Synchroniser Capacitor pour la recette Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           npx cap sync android
-          cd android
-          ./gradlew --no-daemon assembleDebug
+      - name: Assembler l’APK Android de recette
+        id: compiler_assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
+          python3 scripts/native/android_compiler_diagnostic.py
+      - name: Conserver le diagnostic fermé de compilation
+        if: ${{ !cancelled() && steps.compiler_assembly.outputs.diagnostic_ready == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-compiler-diagnostic-${{ matrix.variant }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: test-results/android-compiler-diagnostic/diagnostic.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Contrôler le DEX et le mapping de la recette R8
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
+          if [ "$NATIVE_RECETTE_VARIANT" = optimized ]; then
+            python3 scripts/native/check_android_r8.py
+          fi
       - name: Activer KVM sur le runner éphémère
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -87,6 +140,6 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: android-native-${{ github.event.pull_request.head.sha || github.sha }}
+          name: android-native-${{ matrix.variant }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: test-results/android-native/
           retention-days: 7

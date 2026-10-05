@@ -8,6 +8,9 @@ import { pathToFileURL } from 'node:url';
 export const fixturePackage = 'app.jolene.recette';
 export const launcherPackage = 'com.google.android.apps.nexuslauncher';
 const launcherComponent = `${launcherPackage}/.NexusLauncherActivity`;
+// Start without -W: readiness is established below by ten seconds of observed
+// native focus. A synchronous activity wait can outlast the adb command budget
+// before the bounded readiness loop gets a chance to observe the launcher.
 
 export function inspectAndroidWindows(dump) {
   const focus = [...dump.matchAll(/^\s*mCurrentFocus=(.+)$/gm)].map((match) => match[1].trim());
@@ -61,7 +64,7 @@ export async function preflightEmulator({ shell, record, now = Date.now, pause =
           // Only the observed Pixel Launcher, once. No ANR setting is changed.
           await shell(`am force-stop ${launcherPackage}`);
           recoveredAt = now();
-          await shell(`am start -W -n ${launcherComponent}`);
+          await shell(`am start -n ${launcherComponent}`);
           requestedHome = true;
           await record({ phase: 'launcher-restarted-once', elapsedMs: now() - start });
         }
@@ -79,7 +82,7 @@ export async function preflightEmulator({ shell, record, now = Date.now, pause =
         } else {
           stableSince = null;
           if (!requestedHome) {
-            await shell(`am start -W -n ${launcherComponent}`);
+            await shell(`am start -n ${launcherComponent}`);
             requestedHome = true;
           }
         }

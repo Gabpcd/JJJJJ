@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 // This script never modifies application sources or the release signing setup.
 assert.equal(process.env.CI, 'true', 'Use an isolated CI checkout for the native fixture');
 assert.equal(process.env.NATIVE_RECETTE, '1', 'Explicit native simulation opt-in required');
+const variant = process.env.NATIVE_RECETTE_VARIANT ?? 'debug';
+assert(['debug', 'optimized'].includes(variant), 'Unknown native fixture variant');
 const root = process.cwd();
 const read = (path) => readFile(resolve(root, path), 'utf8');
 const write = (path, value) => writeFile(resolve(root, path), value);
@@ -17,9 +19,35 @@ assert.equal(process.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'sb_publishable_native_f
 assert.equal(process.env.VITE_SENTRY_DSN, '');
 const originalGradle = await read('android/app/build.gradle');
 assert.equal(originalGradle.split('applicationId "app.jolene"').length, 2);
-await write('android/app/build.gradle', originalGradle.replace('applicationId "app.jolene"', 'applicationId "app.jolene.recette"'));
+let fixtureGradle = originalGradle.replace('applicationId "app.jolene"', 'applicationId "app.jolene.recette"');
+if (variant === 'optimized') {
+  assert.match(originalGradle, /minifyEnabled true/);
+  assert(originalGradle.includes("getDefaultProguardFile('proguard-android-optimize.txt')"));
+  // This type exists only in the disposable fixture checkout. It inherits the
+  // exact release optimizer configuration, without a release key or production ID.
+  fixtureGradle += `
+android {
+    buildTypes {
+        recetteOptimized {
+            initWith release
+            signingConfig signingConfigs.debug
+            debuggable false
+            matchingFallbacks = ['release']
+        }
+    }
+    sourceSets {
+        recetteOptimized {
+            manifest.srcFile 'src/debug/AndroidManifest.xml'
+            res.srcDirs = ['src/debug/res']
+        }
+    }
+}
+`;
+}
+await write('android/app/build.gradle', fixtureGradle);
 
-// Dedicated debug manifest. Release manifest and MainActivity remain unchanged.
+// Dedicated fixture manifest/resources, reused by the optimized fixture type.
+// The main/release manifest and MainActivity remain unchanged.
 await mkdir(resolve(root, 'android/app/src/debug/res/xml'), { recursive: true });
 await mkdir(resolve(root, 'android/app/src/debug/res/values'), { recursive: true });
 await write('android/app/src/debug/AndroidManifest.xml', `<?xml version="1.0" encoding="utf-8"?>
@@ -42,7 +70,7 @@ await write('android/app/src/debug/res/values/recette_firebase.xml', `<?xml vers
 await write('android/app/src/debug/res/xml/recette_network_security.xml', `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
   <base-config cleartextTrafficPermitted="false" />
-  <domain-config cleartextTrafficPermitted="true"><domain>127.0.0.1</domain><domain>localhost</domain></domain-config>
+  <domain-config cleartextTrafficPermitted="true"><domain includeSubdomains="false">127.0.0.1</domain><domain includeSubdomains="false">localhost</domain></domain-config>
 </network-security-config>\n`);
 // Keep the real Capacitor plugins and local bundled assets. A cleartext local
 // WebView origin is solely for the adb-reversed in-memory API (never release).
@@ -87,5 +115,7 @@ await mkdir(resolve(root, 'test-results/android-native'), { recursive: true });
 await write('test-results/android-native/build.json', JSON.stringify({
   sha: process.env.GIT_COMMIT_SHA, nativePackage: 'app.jolene.recette',
   api: 'http://127.0.0.1:8904', otaProbeReplacements: updateReplacements,
-  type: 'Capacitor debug APK with local fictional API; not a store build',
+  variant, optimized: variant === 'optimized',
+  type: variant === 'optimized' ? 'Capacitor R8 release-derived non-debuggable APK, ephemeral debug signature, fictional local API'
+    : 'Capacitor debug APK with local fictional API; not a store build',
 }, null, 2));
