@@ -7,6 +7,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { ACCOUNT, PROJECT, EDGES, SQL_FUNCTIONS, QUERIES, collectPreflight, sourceFromGit } from '../../scripts/recette-fournisseurs/collect-preflight.mjs';
 
+import { summarizePreflight } from '../../scripts/recette-fournisseurs/summarize-preflight.mjs';
+
 const secret = 'sk_test_NEVEREXPOSETHIS';
 const source = { repository: 'Gabpcd/JJJJJ', sha: 'a'.repeat(40), migrations: ['20260927152738'],
   sourceFiles: EDGES.map(name => ({ path: `supabase/functions/${name}/index.ts`, sha256: 'b'.repeat(64) })) };
@@ -218,4 +220,37 @@ test('CLI invoked through a symlinked directory still records NON_PRET and exits
     assert.equal(report.readyForTransports, false);
     assert.deepEqual(report.issues, ['COLLECTION_SOURCE_OR_RUNTIME_INVALID']);
   } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
+
+test('platform webhook name is observed separately without reading its value or digest', async () => {
+  for (const present of [true,false]) {
+    const rows = [{name:'STRIPE_WEBHOOK_SECRET',value:secret},{name:'STRIPE_CONNECT_WEBHOOK_SECRET',digest:secret}];
+    if (present) rows.push({name:'STRIPE_PLATFORM_WEBHOOK_SECRET',get value(){assert.fail('must not read value');},get digest(){assert.fail('must not read digest');}});
+    const report=await collect(fixture({secrets:rows}));
+    assert.equal(report.checks.edgeSecretNames.present.STRIPE_PLATFORM_WEBHOOK_SECRET,present);
+    assert.equal(report.checks.edgeSecretNames.present.STRIPE_WEBHOOK_SECRET,true);
+    assert.equal(report.checks.edgeSecretNames.present.STRIPE_CONNECT_WEBHOOK_SECRET,true);
+    assert.equal(report.checks.edgeSecretNames.valuesVerified,false);
+    assert(summarizePreflight(report).includes(present ? '**présent**' : '**absent**'));
+    assert(!JSON.stringify(report).includes(secret));
+  }
+});
+
+test('successful metadata collection may expose blockers and still never qualifies transports', async () => {
+  const report=await collect(fixture({migrations:[{version:'20260925000000'}],crons:[{total:9,active:1}],
+    account:{id:ACCOUNT,charges_enabled:false,payouts_enabled:false,capabilities:{card_payments:'inactive',transfers:'inactive'},requirements:{past_due:[],disabled_reason:null}}}));
+  const summary=summarizePreflight(report);
+  assert.match(summary,/Collecte : complète \(9\/9/);
+  assert.match(summary,/Migrations différentes/); assert.match(summary,/Crons actifs présents/); assert.match(summary,/Compte Stripe TEST restreint/);
+  assert.match(summary,/Qualification : NON PRÊT/); assert.match(summary,/code de sortie 2/);
+  assert.equal(report.readyForTransports,false);assert.equal(report.integratedFlowReady,false);
+  for (const forbidden of [secret,ACCOUNT,PROJECT,source.sha,'c'.repeat(32)]) assert(!summary.includes(forbidden));
+});
+
+test('unavailable names remain unknown, never absence or complete collection', async () => {
+  const summary=summarizePreflight(await collect(fixture({secrets:new Error(secret)})));
+  assert.match(summary,/incomplète ou non confirmée \(8\/9/);
+  assert.match(summary,/signature plateforme : \*\*non observé\*\*/);
+  assert(!summary.includes(secret));
 });
