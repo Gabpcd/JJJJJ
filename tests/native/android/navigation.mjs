@@ -22,6 +22,8 @@ let originalAppPid;
 const nativeShell = async (command) => (await device.shell(command)).toString();
 const save = (name, value) => writeFile(`${output}/${name}`, value);
 const metric = (kind, data) => validations.push({ kind, ...data });
+let navigationFailed = false;
+let accessibilityDriverAttempted = false;
 async function capture(name) {
   // A DOM assertion can finish before Android has painted the new WebView
   // frame. Keep the native screenshot (including IME) and await two frame callbacks.
@@ -188,6 +190,7 @@ try {
   try {
     await Promise.race([
       (async () => {
+        accessibilityDriverAttempted = true;
         await device.wait({ pkg }, { timeout: 60000 });
         assert.equal((await nativeShell(`pidof ${pkg}`)).trim(), originalAppPid, 'Accessibility driver setup must preserve the original app process');
         requireAppWindow(await nativeShell('dumpsys window'));
@@ -311,10 +314,11 @@ try {
   }, null, 2));
 } catch (error) {
   // Record the original cause before any potentially blocked native capture.
-  await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
-  await capture('failure').catch(() => {});
-  // Preserve the original failure; this terminal diagnostic never retries the UI.
+  navigationFailed = true;
   try {
+    await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
+    await capture('failure').catch(() => {});
+    // Preserve the original failure; this terminal diagnostic never retries the UI.
     const accessibility = await captureAccessibility(device.serial(), {
       expectedPid: originalAppPid, closeClient: () => device.close(),
     });
@@ -323,5 +327,14 @@ try {
     throw error;
   }
 } finally {
-  await device.close();
+  try {
+    const { finalizeAndroidDriver } = await import('./close-android-driver.mjs');
+    await finalizeAndroidDriver(device.serial(), {
+      expectedPid: originalAppPid, driverAttempted: accessibilityDriverAttempted,
+      closeClient: () => device.close(),
+    }, receipt => save('driver-cleanup.json', JSON.stringify(receipt, null, 2)));
+  } catch (cleanupError) {
+    // UI success cannot hide failed cleanup; UI failure keeps its original cause.
+    if (!navigationFailed) throw cleanupError;
+  }
 }
