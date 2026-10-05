@@ -61,16 +61,41 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci
-      - name: Préparer le vrai bundle dans un APK de recette isolé
+      - name: Vérifier les tests structurels Python Android
         shell: bash
         run: |
           set -euo pipefail
           export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           python3 -m unittest discover -s tests/native/android -p 'test_*.py'
+      - name: Vérifier les tests structurels Node Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           node --test tests/native/android/*.test.mjs
+      - name: Construire le bundle web de recette Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           npm run build
+      - name: Préparer la variante Android de recette isolée
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           node scripts/native/prepare-android-recette.mjs
+      - name: Synchroniser Capacitor pour la recette Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           npx cap sync android
+      - name: Assembler l’APK Android de recette
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           cd android
           case "$NATIVE_RECETTE_VARIANT" in
             debug) ./gradlew --no-daemon assembleDebug ;;
@@ -78,6 +103,11 @@ jobs:
             *) exit 1 ;;
           esac
           cd ..
+      - name: Contrôler le DEX et le mapping de la recette R8
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           if [ "$NATIVE_RECETTE_VARIANT" = optimized ]; then
             python3 scripts/native/check_android_r8.py
           fi

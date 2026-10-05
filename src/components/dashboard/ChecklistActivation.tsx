@@ -252,7 +252,7 @@ export function ChecklistActivation({ state, className }: ChecklistActivationPro
     >
       <AnneauProgression valeur={nbFaites} max={etapes.length} />
       <span className="flex-1 min-w-0">
-        <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary-dark">
           {restantes === 1 ? 'Dernière étape' : `Active ton compte · ${nbFaites}/${etapes.length}`}
         </span>
         <span className="block text-sm font-bold text-foreground truncate">{prochaineEtape.label}</span>
