@@ -5,6 +5,7 @@ import { currentImeShown } from './ime-state.mjs';
 import { attachNativeWebView } from './webview-attachment.mjs';
 import { requireAppWindow } from './emulator-preflight.mjs';
 import { captureIme } from './capture-ime.mjs';
+import { captureAccessibility } from './capture-accessibility.mjs';
 
 const output = 'test-results/android-native';
 const pkg = 'app.jolene.recette';
@@ -289,7 +290,15 @@ try {
 } catch (error) {
   await capture('failure').catch(() => {});
   await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
-  throw error;
+  // Preserve the original failure; this terminal diagnostic never retries the UI.
+  try {
+    const accessibility = await captureAccessibility(device.serial(), {
+      expectedPid: originalAppPid, closeClient: () => device.close(),
+    });
+    await save('failure-accessibility.json', JSON.stringify(accessibility, null, 2));
+  } finally {
+    throw error;
+  }
 } finally {
   await device.close();
 }
