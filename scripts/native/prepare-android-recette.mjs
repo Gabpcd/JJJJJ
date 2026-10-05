@@ -70,7 +70,7 @@ await write('android/app/src/debug/res/values/recette_firebase.xml', `<?xml vers
 await write('android/app/src/debug/res/xml/recette_network_security.xml', `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
   <base-config cleartextTrafficPermitted="false" />
-  <domain-config cleartextTrafficPermitted="true"><domain>127.0.0.1</domain><domain>localhost</domain></domain-config>
+  <domain-config cleartextTrafficPermitted="true"><domain includeSubdomains="false">127.0.0.1</domain><domain includeSubdomains="false">localhost</domain></domain-config>
 </network-security-config>\n`);
 // Keep the real Capacitor plugins and local bundled assets. A cleartext local
 // WebView origin is solely for the adb-reversed in-memory API (never release).
