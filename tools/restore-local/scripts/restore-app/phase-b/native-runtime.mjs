@@ -138,7 +138,7 @@ export function nativeRuntime(privateDir) {
   };
   const runtime={...base,
     catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
-      nativeGraphql:assertGraphqlWitness(await base.sqlJson(side,GRAPHQL_WITNESS_SQL))}),
+      nativeGraphql:assertGraphqlWitness(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')}),
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
       await base.copyFilesOut('target',path);assertEmptyFileTree(path);

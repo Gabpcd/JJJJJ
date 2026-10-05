@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B14 exact candidate 8b253926fe33b5755b17f132115b7c3e9f1ced819750c463ebf98ca281acca8d independently reviewed 2026-10-05. Native GraphQL repair approved for one bounded isolated synthetic CI run; runtime restoration remains unverified."
+  "note": "B15 exact diagnostic candidate 6833f95285d6f961d2a3f8d2abd42fcced972ab2913c687e8ab8bec6b01082a7 independently reviewed 2026-10-05. Approved for one bounded isolated synthetic CI run. B14 failure preserved; runtime restoration remains unverified."
 }

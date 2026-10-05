@@ -53,10 +53,42 @@ export function projectRestoreCall(value) {
   systemError,timedOut:systemError==='ETIMEDOUT',
   ...(['TARGET_ARCHIVE_RESTORE','TARGET_ARCHIVE_TOC_READ','TARGET_ARCHIVE_SQL_EXPORT'].includes(value?.operation)&&value?.pgRestore?{pgRestore:projectPgRestoreDiagnostic(value.pgRestore)}:{})};
 }
+// GraphQL refusal diagnostics contain constants only; all catalogue/TOC values stay private.
+export const GRAPHQL_WITNESS_FLAGS = Object.freeze([
+ 'context','nativeExtensionExact','wrapperSignatureExact','wrapperBodyExact','wrapperMembershipExact',
+ 'wrapperOwnerExact','hookSignatureExact','hookBodyExact','hookOwnerExact','hookNotExtensionMember',
+ 'triggerExact','schemaOwnersExact','defaultFunctionAclExact','noGlobalFunctionDefaultAcl',
+]);
+export const GRAPHQL_COMPONENTS = Object.freeze(['wrapper','hook','extension','trigger','initial_privileges',
+ 'default_acl','schema_extensions','schema_graphql_public','schema_graphql']);
+export const GRAPHQL_COMPONENT_LABELS = Object.freeze({wrapper:'WRAPPER_DEFINITION_AND_ACL',hook:'HOOK_DEFINITION_AND_ACL',
+ extension:'EXTENSION_METADATA',trigger:'TRIGGER_METADATA',initial_privileges:'INITIAL_PRIVILEGES',
+ default_acl:'DEFAULT_PRIVILEGES',schema_extensions:'HOOK_SCHEMA_RIGHTS',schema_graphql_public:'WRAPPER_SCHEMA_RIGHTS',
+ schema_graphql:'EXTENSION_SCHEMA_RIGHTS'});
+export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
+ 'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);
+export const GRAPHQL_DIAGNOSTIC_REASONS = Object.freeze([
+ 'WITNESS_SHAPE','WITNESS_FLAGS','WITNESS_INITIAL_PRIVILEGES','WITNESS_FINGERPRINT','WITNESS_COMPONENTS',
+ 'PARITY_INITIAL_PRIVILEGES','PARITY_FINGERPRINT','REVIEW','ARCHIVE_BUFFER','ARCHIVE_MAGIC','ARCHIVE_HASH',
+ 'TOC_BUFFER','TOC_UTF8','TOC_CONTROL','TOC_FORMAT','TOC_DUPLICATE_ID','TOC_SCOPE','TOC_COUNT','TOC_REVIEW_HASH',
+ 'REQUIRED_EXTENSION_SCHEMA','REQUIRED_WRAPPER_SCHEMA','REQUIRED_HOOK','REQUIRED_DEFAULT_ACL','REQUIRED_TRIGGER',
+ 'HOOK_COUNT','TRIGGER_COUNT','DEFAULT_ACL_COUNT','WRAPPER_DEFINITION','EXTENSION_COUNT','WRAPPER_ACL',
+ 'PARTITION_EXHAUSTIVE','EXPORT_CALLBACK','EXPORT_PARTITION','EXPORT_ARCHIVE_MUTATED','EXPORT_LIST_MUTATED',
+ 'EXPORT_SQL_BUFFER','EXPORT_SQL_NUL','EXPORT_TOTAL_BOUND',
+]);
+export function projectGraphqlDiagnostic(value) {
+ const reason=GRAPHQL_DIAGNOSTIC_REASONS.includes(value?.reason)?value.reason:'UNKNOWN';
+ return {schemaVersion:1,context:GRAPHQL_DIAGNOSTIC_CONTEXTS.includes(value?.context)?value.context:'UNKNOWN',reason,
+  failedFlags:reason==='WITNESS_FLAGS'&&Array.isArray(value?.failedFlags)
+   ?GRAPHQL_WITNESS_FLAGS.filter(flag=>value.failedFlags.includes(flag)):[],
+  mismatchedComponents:reason==='PARITY_FINGERPRINT'&&Array.isArray(value?.mismatchedComponents)
+   ?Object.values(GRAPHQL_COMPONENT_LABELS).filter(component=>value.mismatchedComponents.includes(component)):[]};
+}
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,
  sqlLine:Number.isSafeInteger(error?.diagnostic?.line)&&error.diagnostic.line>0&&error.diagnostic.line<1_000_000?error.diagnostic.line:null,
  ...(stage==='restore'&&error?.code==='B_CALL'&&error?.restoreCall?{restoreCall:projectRestoreCall(error.restoreCall)}:{}),
+ ...(error?.code==='B_GRAPHQL_RESTORE_REFUSED'?{graphql:projectGraphqlDiagnostic(error?.graphql)}:{}),
  restored:false,appVerified:false,readyForNationalLaunch:false }; }
 export function assertReview(review) {
  requireValue(review?.productSha===PRODUCT_SHA && review?.approved===true && /^[a-f0-9]{40}$/.test(review.phaseAHarnessSha??'')

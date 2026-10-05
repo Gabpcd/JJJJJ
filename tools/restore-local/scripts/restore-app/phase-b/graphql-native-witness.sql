@@ -31,7 +31,7 @@ WITH wrapper AS (
  UNION ALL SELECT 'schemas',jsonb_build_array(n.nspname,pg_get_userbyid(n.nspowner),n.nspacl) FROM pg_namespace n WHERE n.nspname IN('graphql','graphql_public','extensions')
 )
 SELECT jsonb_build_object(
- 'schemaVersion',1,
+ 'schemaVersion',2,
  'context',current_database()='jolene_candidatures_pg17_test' AND inet_server_addr() IS NULL
    AND session_user='postgres' AND current_user=session_user
    AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
@@ -70,6 +70,12 @@ SELECT jsonb_build_object(
  'noGlobalFunctionDefaultAcl',NOT EXISTS(SELECT 1 FROM pg_default_acl d WHERE d.defaclnamespace=0 AND d.defaclobjtype='f'
    AND pg_get_userbyid(d.defaclrole)='supabase_admin'),
  'initialPrivilegesCount',(SELECT count(*) FROM initial_privileges),
- 'fingerprint',encode(sha256(convert_to((SELECT jsonb_agg(jsonb_build_array(kind,fact) ORDER BY kind,fact::text)::text FROM facts),'UTF8')),'hex')
+ 'fingerprint',encode(sha256(convert_to((SELECT jsonb_agg(jsonb_build_array(kind,fact) ORDER BY kind,fact::text)::text FROM facts),'UTF8')),'hex'),
+ -- Private diagnostic hashes only. Existing aggregate equality remains mandatory.
+ 'components',(SELECT jsonb_object_agg(k,encode(sha256(convert_to(
+   COALESCE((SELECT jsonb_agg(f.fact ORDER BY f.fact::text)::text FROM facts f
+     WHERE CASE WHEN f.kind='schemas' THEN 'schema_'||(f.fact->>0) ELSE f.kind END=k),'[]'),'UTF8')),'hex'))
+   FROM unnest(ARRAY['wrapper','hook','extension','trigger','initial_privileges','default_acl',
+     'schema_extensions','schema_graphql_public','schema_graphql']) k)
 );
 ROLLBACK;
