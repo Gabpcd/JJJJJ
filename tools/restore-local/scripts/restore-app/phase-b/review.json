@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B22 WITH CHECK isolated witness reviewed by root and independent reviewer. Manifest eaafbfbe36ea02414fe36811875e642449d46e108c96eea4c7595c7a517f542e; review SHA2569b864f9803ec76a8e4f1e3f7a1d8ddbeefd78a3d201f97e9c0e64e8feb9288a6. Change a to NOT a preserves exact dependencies; primary predicate, metadata and bindings must stay identical. Comparator/capture unchanged. 449 pure tests and8independent adversaries. Failure37312596633 retained. One isolated run, product7dfdeb42 unchanged; target UI/restoration remain unqualified until actual pass. No provider or mobile delivery."
+  "note": "Root activation after exact B23 candidate manifest 5ed3bd10c8fa12b0e18c82ae76da2a898270e04843f0af66ef4b4ef14fa85f75, independent diagnostic review f4e902376e60bf7ee6882e8dd05b1948a7260baa51517d5deaa58addcd727f2b, B review of synthetic witnesses and root review: 467 pure tests passed, 111 pins verified. One isolated diagnostic run justified by real ANCHOR refusal 37314495896. Existing validator, capture, v1 and v2 gates unchanged. Product remains 7dfdeb42; target restore/UI unqualified until actual success. No provider or mobile delivery."
 }

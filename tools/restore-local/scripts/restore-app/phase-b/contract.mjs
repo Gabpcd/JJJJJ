@@ -1,3 +1,4 @@
+import { projectCatalogueAnchors } from './catalogue-anchor-diagnostic.mjs';
 import { projectCatalogueFactsDiagnostic } from './catalogue-facts-diagnostic.mjs';
 import { projectCatalogueSemanticsDiagnostic } from './catalogue-semantics-diagnostic.mjs';
 import { projectCatalogueParityV2 } from './catalogue-parity-v2.mjs';
@@ -87,7 +88,7 @@ export const RESTORE_NATIVE_GRAPHQL_FIELDS=Object.freeze(['schemaVersion',...GRA
  'initialPrivilegesCount','fingerprint','components','wrapperSchemaInitialPrivileges']);
 const restorePlain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const restoreKeys=(v,keys)=>restorePlain(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
-export function catalogueRestoreDiagnostic(source,target,facts,semantics,comparison) {
+export function catalogueRestoreDiagnostic(source,target,facts,semantics,comparison,anchors) {
  if(!restorePlain(source)||!restorePlain(target))return {status:'INVALID_SHAPE'};
  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  const sections=RESTORE_CATALOGUE_FIELDS.filter(k=>!equal(source[k],target[k]));
@@ -98,15 +99,16 @@ export function catalogueRestoreDiagnostic(source,target,facts,semantics,compari
  return {status:'COMPLETE',sections,...(sections.includes('nativeGraphql')?{nativeGraphqlFields}:{}),
   ...(facts===undefined?{}:{facts:projectCatalogueFactsDiagnostic(facts)}),
   ...(semantics===undefined?{}:{semantics:projectCatalogueSemanticsDiagnostic(semantics)}),
-  ...(comparison===undefined?{}:{comparison:projectCatalogueParityV2(comparison)})};
+  ...(comparison===undefined?{}:{comparison:projectCatalogueParityV2(comparison)}),
+  ...(anchors===undefined?{}:{anchors:projectCatalogueAnchors(anchors)})};
 }
 export function projectRestoreInvariant(value) {
  const reason=RESTORE_INVARIANT_REASONS.includes(value?.reason)?value.reason:'UNKNOWN';
  const result={schemaVersion:1,reason};
  if(reason!=='CATALOGUE_PARITY')return result;
  const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql'),hasFacts=restorePlain(c)&&Object.hasOwn(c,'facts'),hasSemantics=restorePlain(c)&&Object.hasOwn(c,'semantics');
- const hasComparison=restorePlain(c)&&Object.hasOwn(c,'comparison');
- const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[]),...(hasFacts?['facts']:[]),...(hasSemantics?['semantics']:[]),...(hasComparison?['comparison']:[])];
+ const hasComparison=restorePlain(c)&&Object.hasOwn(c,'comparison'),hasAnchors=restorePlain(c)&&Object.hasOwn(c,'anchors');
+ const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[]),...(hasFacts?['facts']:[]),...(hasSemantics?['semantics']:[]),...(hasComparison?['comparison']:[]),...(hasAnchors?['anchors']:[])];
  if(!restoreKeys(c,keys)||c.status!=='COMPLETE'||!Array.isArray(c.sections)
   ||c.sections.length>RESTORE_CATALOGUE_SECTIONS.length||new Set(c.sections).size!==c.sections.length
   ||!c.sections.every(k=>RESTORE_CATALOGUE_SECTIONS.includes(k))
@@ -117,7 +119,8 @@ export function projectRestoreInvariant(value) {
   ...(hasNative?{nativeGraphqlFields:Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,c.nativeGraphqlFields[k]]))}:{}),
   ...(hasFacts?{facts:projectCatalogueFactsDiagnostic(c.facts)}:{}),
   ...(hasSemantics?{semantics:projectCatalogueSemanticsDiagnostic(c.semantics)}:{}),
-  ...(hasComparison?{comparison:projectCatalogueParityV2(c.comparison)}:{})}};
+  ...(hasComparison?{comparison:projectCatalogueParityV2(c.comparison)}:{}),
+  ...(hasAnchors?{anchors:projectCatalogueAnchors(c.anchors)}:{})}};
 }
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);

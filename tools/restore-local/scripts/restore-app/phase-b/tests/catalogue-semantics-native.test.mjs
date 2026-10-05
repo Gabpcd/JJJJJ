@@ -4,10 +4,25 @@ import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
-import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
-import { relation,expression,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
+import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,B23_ANCHOR_CASES,validateB23AnchorWitnesses,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
+import { relation,expression,capture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
+function anchorFixture(){
+ return Object.keys(B23_ANCHOR_CASES).map(name=>{
+  const left=capture(),right=capture(),l=expression(),r=structuredClone(l);
+  left.expressions=[l];right.expressions=[r];
+  if(name.endsWith('_CONTEXT')){
+   left.context.search_path='b21_expr,pg_catalog';l.bindings.complete=r.bindings.complete=false;
+   if(name==='TYPE_CONTEXT'){l.bindings.columns[0][1]='synthetic_domain';r.bindings.columns[0][1]='b21_expr.synthetic_domain';}
+   else {l.bindings.factKeys=[['function','b21_expr.fn(synthetic_domain)']];r.bindings.factKeys=[['function','b21_expr.fn(b21_expr.synthetic_domain)']];}
+  }else if(name==='TYPE_CHANGE'){l.bindings.columns[0][1]='b21_expr.first';r.bindings.columns[0][1]='b21_expr.second';}
+  else if(name==='TYPEMOD_CHANGE'){l.bindings.columns[0][1]='character varying(8)';r.bindings.columns[0][1]='character varying(9)';}
+  else if(name==='COLLATION_CHANGE'){l.bindings.columns[0][2]=['pg_catalog','C'];r.bindings.columns[0][2]=['pg_catalog','POSIX'];}
+  else if(name==='SIGNATURE_CHANGE'){l.bindings.factKeys=[['function','b21_expr.fn(integer)']];r.bindings.factKeys=[['function','b21_expr.fn(bigint)']];}
+  return {name,left,right};
+ });
+}
 function fixture(){
  const acl={schemaVersion:1,status:'SYNTHETIC_WITNESSES_PASSED',nullDefault:true,nullEmptyDistinct:true,ownerImplicitGrantOption:true,sequenceTypeDistinct:true,orderOnly:true,
   grantorPreserved:true,realRevokeRejected:true,grantOptionPreserved:true,ownerPreserved:true,inheritOptionPreserved:true,creationDefaultsOnly:true,cases:[]};
@@ -23,7 +38,7 @@ function fixture(){
   acl.cases.push({name:n,left:a,right:b});
  }
  const expr={schemaVersion:1,status:'SYNTHETIC_WITNESSES_PASSED',checkNativeRoundtrip:true,timezoneCanChangeDeparse:true,fixedContextReproduces:true,regclassNativeRebind:true,
-  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,cases:[],v2Cases:[]};
+  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,cases:[],v2Cases:[],anchorCases:anchorFixture()};
  for(const [n,expected] of Object.entries(B21_EXPRESSION_CASES)){
   const a=expression(['REGCLASS_REBIND','PREDICATE_CHANGE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
   if(expected==='persistentDifferenceCount'){b.definition+=' changed';b.prettyDefinition+=' changed';}
@@ -48,7 +63,7 @@ function container(){return {Name:'/'+name,Config:{Labels:{[B21_LABEL]:run},Imag
   Tmpfs:{'/tmp':'rw,noexec,nosuid,size=256m,mode=1777','/var/run/postgresql':'rw,noexec,nosuid,size=16m,mode=1777'}},
  NetworkSettings:{Ports:{'5432/tcp':null},Networks:{none:{}}},Mounts:[],State:{Status:'created',OOMKilled:false}};}
 test('native private rows traverse the actual semantic comparators and a closed receipt',()=>{
- const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,12);
+ const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,12);assert.equal(receipt.anchorContextCases,7);
  assert.ok(!JSON.stringify(receipt).includes(PRIVATE_CANARY));assert.deepEqual(projectB21NativeWitnessReceipt(receipt),receipt);
  assert.throws(()=>projectB21NativeWitnessReceipt({...receipt,sql:PRIVATE_CANARY}),/B_SEMANTICS_WITNESS/);
  for(const edit of [v=>v[0].cases.find(r=>r.name==='REAL_REVOKE').right=structuredClone(v[0].cases.find(r=>r.name==='REAL_REVOKE').left),
@@ -58,6 +73,25 @@ test('native private rows traverse the actual semantic comparators and a closed 
   v=>v[1].v2Cases.find(r=>r.name==='USER_DOMAIN').right.bindings.complete=true,
   v=>v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').right.prettyDefinition=v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').left.prettyDefinition]){
   const v=fixture();edit(v);assert.throws(()=>validateB21NativeWitnesses(...v),e=>{assert.ok(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));return e.code==='B_SEMANTICS_WITNESS';});
+ }
+});
+test('anchor witness uses the unchanged probe validator and proves exact refusal without raw output',()=>{
+ assert.deepEqual(validateB23AnchorWitnesses(anchorFixture()),{anchorContextCases:7,anchorContextSameValidator:true});
+ for(const edit of [v=>v.pop(),v=>v.push(v[0]),v=>v[0].raw=PRIVATE_CANARY,
+  v=>v[0].right=structuredClone(v[0].left),
+  v=>v[0].left.expressions[0].localOid++,
+  v=>v[0].left.expressions[0].metadata.convalidated=false,
+  v=>v[0].left.expressions[0].dependencies=[],
+  v=>v[0].left.expressions[0].bindings.complete=true,
+  v=>v[0].left.context.search_path='foreign',
+  v=>v.find(r=>r.name==='FUNCTION_CONTEXT').right.expressions[0].bindings.columns[0][1]='changed',
+  v=>v.find(r=>r.name==='TYPE_CONTEXT').right.expressions[0].bindings.factKeys=[],
+  v=>v.find(r=>r.name==='FIXED_STABLE').right.expressions[0].definition+='changed',
+  v=>v.find(r=>r.name==='TYPEMOD_CHANGE').right.expressions[0].bindings=structuredClone(v.find(r=>r.name==='TYPEMOD_CHANGE').left.expressions[0].bindings),
+  v=>v.find(r=>r.name==='COLLATION_CHANGE').right.expressions[0].bindings=structuredClone(v.find(r=>r.name==='COLLATION_CHANGE').left.expressions[0].bindings),
+  v=>v.find(r=>r.name==='SIGNATURE_CHANGE').right.expressions[0].bindings=structuredClone(v.find(r=>r.name==='SIGNATURE_CHANGE').left.expressions[0].bindings)]){
+  const values=anchorFixture();edit(values);
+  assert.throws(()=>validateB23AnchorWitnesses(values),e=>{assert.ok(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));return e.code==='B_SEMANTICS_WITNESS';});
  }
 });
 test('WITH CHECK negative isolates the secondary predicate and refuses unrelated drift',()=>{

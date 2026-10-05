@@ -231,10 +231,86 @@ BEGIN
  ALTER POLICY probe_policy ON b21_expr.v2_subject USING (NOT a);
  INSERT INTO b22_cases VALUES('NULL_PREDICATE',l,b21_expr.fact('policy','b21_expr.v2_subject','probe_policy'));
 END $b22_policies$;
+
+-- B23 diagnoses the current/fixed anchor itself, without accepting any new
+-- equality. These native captures retain all projected fields and local OIDs.
+CREATE TEMP TABLE b23_anchor_cases(name text PRIMARY KEY,left_capture jsonb,right_capture jsonb);
+CREATE FUNCTION b21_expr.anchor_capture(r regclass) RETURNS jsonb LANGUAGE sql VOLATILE AS $capture$
+ SELECT jsonb_set(v,'{expressions}',(SELECT jsonb_agg(e) FROM jsonb_array_elements(v->'expressions') q(e)
+  WHERE e->>'kind'='constraint' AND e->'identity'=jsonb_build_array('b21_expr',c.relname,'anchor_check')))
+ FROM (SELECT b21_expr.capture() v) payload JOIN pg_class c ON c.oid=r
+$capture$;
+CREATE DOMAIN b21_expr.anchor_domain AS integer;
+CREATE DOMAIN b21_expr.anchor_domain_other AS integer;
+CREATE DOMAIN b21_expr.anchor_arg AS integer;
+-- Volatile PL/pgSQL prevents a constant argument from being folded/inlined;
+-- this case must retain the function dependency it is intended to examine.
+CREATE FUNCTION b21_expr.anchor_fn(b21_expr.anchor_arg) RETURNS boolean LANGUAGE plpgsql VOLATILE AS 'BEGIN RETURN $1 IS NOT NULL; END';
+CREATE FUNCTION b21_expr.anchor_fn(integer) RETURNS boolean LANGUAGE plpgsql VOLATILE AS 'BEGIN RETURN $1 IS NOT NULL; END';
+CREATE TABLE b21_expr.anchor_type(d b21_expr.anchor_domain,CONSTRAINT anchor_check CHECK(d IS NOT NULL));
+CREATE TABLE b21_expr.anchor_function(a boolean,CONSTRAINT anchor_check CHECK(a OR b21_expr.anchor_fn(1::b21_expr.anchor_arg)));
+CREATE TABLE b21_expr.anchor_typmod(t varchar(8),CONSTRAINT anchor_check CHECK(t IS NOT NULL));
+CREATE TABLE b21_expr.anchor_collation(t text COLLATE "C",CONSTRAINT anchor_check CHECK(t IS NOT NULL));
+DO $b23_anchor$
+DECLARE l jsonb; r jsonb; le jsonb; re jsonb; item record;
+BEGIN
+ FOR item IN SELECT * FROM (VALUES ('TYPE_CONTEXT','b21_expr.anchor_type'::regclass),
+  ('FUNCTION_CONTEXT','b21_expr.anchor_function'::regclass)) q(name,rel) LOOP
+  PERFORM set_config('search_path','b21_expr,pg_catalog',true);
+  l:=b21_expr.anchor_capture(item.rel);
+  PERFORM set_config('search_path','pg_catalog',true);
+  r:=b21_expr.anchor_capture(item.rel);
+  le:=l->'expressions'->0; re:=r->'expressions'->0;
+  IF le IS NULL OR re IS NULL OR l->'relations' IS DISTINCT FROM r->'relations'
+   OR (le-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'])
+     IS DISTINCT FROM (re-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'])
+   OR le->'bindings'->>'complete'<>'false' OR re->'bindings'->>'complete'<>'false'
+   OR (item.name='TYPE_CONTEXT' AND (le->'bindings'->'columns'=re->'bindings'->'columns'
+     OR le->'bindings'->'factKeys' IS DISTINCT FROM re->'bindings'->'factKeys'))
+   OR (item.name='FUNCTION_CONTEXT' AND (le->'bindings'->'factKeys'=re->'bindings'->'factKeys'
+     OR le->'bindings'->'columns' IS DISTINCT FROM re->'bindings'->'columns'))
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_CONTEXT'; END IF;
+  INSERT INTO b23_anchor_cases VALUES(item.name,l,r);
+ END LOOP;
+ l:=b21_expr.anchor_capture('b21_expr.anchor_type');
+ r:=b21_expr.anchor_capture('b21_expr.anchor_type');
+ IF l IS DISTINCT FROM r THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_FIXED'; END IF;
+ INSERT INTO b23_anchor_cases VALUES('FIXED_STABLE',l,r);
+
+ l:=b21_expr.anchor_capture('b21_expr.anchor_type');
+ ALTER TABLE b21_expr.anchor_type ALTER d TYPE b21_expr.anchor_domain_other USING d::integer::b21_expr.anchor_domain_other;
+ r:=b21_expr.anchor_capture('b21_expr.anchor_type');
+ IF l->'expressions'->0->'bindings'->'columns'=r->'expressions'->0->'bindings'->'columns'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_TYPE'; END IF;
+ INSERT INTO b23_anchor_cases VALUES('TYPE_CHANGE',l,r);
+
+ l:=b21_expr.anchor_capture('b21_expr.anchor_typmod');
+ ALTER TABLE b21_expr.anchor_typmod ALTER t TYPE varchar(9);
+ r:=b21_expr.anchor_capture('b21_expr.anchor_typmod');
+ IF l->'expressions'->0->'bindings'->'columns'=r->'expressions'->0->'bindings'->'columns'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_TYPEMOD'; END IF;
+ INSERT INTO b23_anchor_cases VALUES('TYPEMOD_CHANGE',l,r);
+
+ l:=b21_expr.anchor_capture('b21_expr.anchor_collation');
+ ALTER TABLE b21_expr.anchor_collation ALTER t TYPE text COLLATE "POSIX";
+ r:=b21_expr.anchor_capture('b21_expr.anchor_collation');
+ IF l->'expressions'->0->'bindings'->'columns'=r->'expressions'->0->'bindings'->'columns'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_COLLATION'; END IF;
+ INSERT INTO b23_anchor_cases VALUES('COLLATION_CHANGE',l,r);
+
+ l:=b21_expr.anchor_capture('b21_expr.anchor_function');
+ ALTER TABLE b21_expr.anchor_function DROP CONSTRAINT anchor_check;
+ ALTER TABLE b21_expr.anchor_function ADD CONSTRAINT anchor_check CHECK(a OR b21_expr.anchor_fn(1::integer));
+ r:=b21_expr.anchor_capture('b21_expr.anchor_function');
+ IF l->'expressions'->0->'bindings'->'factKeys'=r->'expressions'->0->'bindings'->'factKeys'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_SIGNATURE'; END IF;
+ INSERT INTO b23_anchor_cases VALUES('SIGNATURE_CHANGE',l,r);
+END $b23_anchor$;
 SELECT jsonb_build_object('schemaVersion',1,'status','SYNTHETIC_WITNESSES_PASSED',
  'checkNativeRoundtrip',true,'timezoneCanChangeDeparse',true,'fixedContextReproduces',true,
  'regclassNativeRebind',true,'sameDependenciesDoNotErasePredicateChange',true,
  'notValidPreserved',true,'deferrabilityPreserved',true,'literalChangeRejected',true,
  'cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b21_cases),
- 'v2Cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b22_cases));
+ 'v2Cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b22_cases),
+ 'anchorCases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_capture,'right',right_capture) ORDER BY name) FROM b23_anchor_cases));
 ROLLBACK;

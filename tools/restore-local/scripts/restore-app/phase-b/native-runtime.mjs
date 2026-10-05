@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
 import { catalogueDiagnosticSql, catalogueFactsDiagnostic, CATALOGUE_PRIVATE_KEY } from './catalogue-facts-diagnostic.mjs';
 import { buildB21ProbeSql, decodeB21Probe } from './catalogue-semantics-probe.mjs';
+import { catalogueAnchorDiagnostic } from './catalogue-anchor-diagnostic.mjs';
 import { catalogueSemanticsDiagnostic, validateB21Probe } from './catalogue-semantics-diagnostic.mjs';
 import { catalogueParityV2 } from './catalogue-parity-v2.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
@@ -124,6 +125,7 @@ export function nativeRuntime(privateDir) {
   // Run-local memory only: never enumerable on a catalogue or serialized snapshot.
   const catalogueFacts = new WeakMap();
   const catalogueProbes = new WeakMap();
+  const catalogueAnchors = new WeakMap();
   let sourceCaptured=false,sourceDumpStarted=false,sourceStopped=false;
   let preparedToken=null,targetRecreated=false;
   const callId=randomUUID();let command = 0, check = 0;
@@ -156,7 +158,7 @@ export function nativeRuntime(privateDir) {
       await base.verifyState(state);
       if(side==='source')sourceCaptured=true;
       const {[CATALOGUE_PRIVATE_KEY]:facts,...original}=await base.sqlJson(side,CATALOGUE_DIAGNOSTIC_SQL);
-      let probe;
+      let probe,anchor;
       try {
         // stdout/stderr stay memory-only, including on SQL/decoding failure.
         // A new session is intentional; its original catalogue result anchors
@@ -166,12 +168,12 @@ export function nativeRuntime(privateDir) {
           '-U','postgres','-h','/var/run/postgresql','-d',DB,'-f','-'],{input:Buffer.from(B21_PROBE_SQL),encoding:null,maxBuffer:40*1024*1024,
           timeout:150_000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
         if(result.error||result.status!==0||result.signal!==null)probe={schemaVersion:1,status:'CAPTURE_FAILED'};
-        else {probe=decodeB21Probe(result.stdout);const status=validateB21Probe(probe,original);if(status!=='COMPLETE')probe={schemaVersion:1,status};}
+        else {probe=decodeB21Probe(result.stdout);anchor=catalogueAnchorDiagnostic(probe,original);const status=validateB21Probe(probe,original);if(status!=='COMPLETE')probe={schemaVersion:1,status};}
       }catch{probe={schemaVersion:1,status:'CAPTURE_FAILED'};}
       await base.verifyState(state);
       const catalogue={...original,databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
         nativeGraphql:(side==='source'?assertGraphqlNativeBaseline:assertGraphqlWitness)(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')};
-      catalogueFacts.set(catalogue,facts);catalogueProbes.set(catalogue,probe);return catalogue;
+      catalogueFacts.set(catalogue,facts);catalogueProbes.set(catalogue,probe);catalogueAnchors.set(catalogue,anchor??catalogueAnchorDiagnostic(probe,original));return catalogue;
     },
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
@@ -242,7 +244,8 @@ export function nativeRuntime(privateDir) {
         ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target),
           catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target)),
           catalogueSemanticsDiagnostic(snapshot.catalogue,target,catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),
-            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target)),catalogueComparison));
+            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target)),catalogueComparison,
+          {source:catalogueAnchors.get(snapshot.catalogue),target:catalogueAnchors.get(target)}));
       return {...parity,catalogueComparison};
     },
     startSourceForUi:async()=>{

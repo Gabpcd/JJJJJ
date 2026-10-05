@@ -15,7 +15,7 @@ import { b21Fixture,v2Fixture,PRIVATE_CANARY } from './catalogue-semantics-fixtu
 
 // Every child process is replaced before nativeRuntime construction. No Docker,
 // database, browser, network or native process is run by these tests.
-function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,v2=false,probeAnchorDrift=false,probeFailure=false}={}) {
+function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,v2=false,probeAnchorDrift=false,probeFailure=false,probeBindingDrift=false}={}) {
  const parent=realpathSync(mkdtempSync(join(tmpdir(),'catalogue-b20-pure-')));t.after(()=>rmSync(parent,{recursive:true,force:true}));
  const directory=join(parent,'stack'),run='jolene-restore-drill-987654-1';preparePlan(directory,run);
  const plan=JSON.parse(readFileSync(join(directory,'compose.private.json'),'utf8')),events=[],graphql=graphqlInput();
@@ -54,6 +54,7 @@ function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,
    if(probeFailure)return{...output(''),status:1,stderr:Buffer.from(PRIVATE_CANARY+'_stderr')};
    const p=structuredClone(side==='source'?b21f.sourceProbe:b21f.targetProbe);
    if(probeAnchorDrift)p.anchor.catalogue_sha256='c'.repeat(64);
+   if(probeBindingDrift&&side==='source')p.fixed.expressions[0].bindings.columns[0][1]=PRIVATE_CANARY+'_qualified_type';
    return output([p.anchor,p.current,p.fixed].map(JSON.stringify).join('\n'));
   }
   if(sql.includes(CATALOGUE_PRIVATE_KEY)){
@@ -141,4 +142,21 @@ test('actual runtime v2 accepts only anchored private object parity and preserve
  assert(!JSON.stringify(result).includes(PRIVATE_CANARY));assert(!JSON.stringify(snapshot).includes(PRIVATE_CANARY));
  assert.deepEqual(h.events,['source-catalogue','source-b21-probe','dump','source-off','target-catalogue','target-b21-probe']);
  const reloaded=JSON.parse(JSON.stringify(snapshot));await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(reloaded));
+});
+
+test('B23 source anchor detail survives private-row disposal before stop without weakening refusal',async t=>{
+ const h=harness(t,{b21:true,v2:true,probeBindingDrift:true}),snapshot=await h.capture();await h.runtime.stopSource();
+ await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),error=>{
+  const v=closedFailure(error,'restore'),c=v.restoreInvariant.catalogue;
+  assert.equal(v.code,'B_RESTORE');assert.equal(c.comparison.reason,'ANCHOR');assert.equal(c.comparison.v2Equal,false);
+  assert.equal(c.comparison.aclNormalizedCount,0);assert.equal(c.comparison.expressionNormalizedCount,0);
+  assert.equal(c.semantics.status,'INCOMPLETE');assert.equal(c.anchors.source.reason,'CURRENT_FIXED');
+  assert.equal(c.anchors.source.counters.bindingColumnsDifferentCount,1);assert.equal(c.anchors.source.counters.bindingFactKeysDifferentCount,0);
+  assert.deepEqual(c.anchors.target,{schemaVersion:1,status:'COMPLETE',reason:'COMPLETE'});
+  assert(!JSON.stringify(v).includes(PRIVATE_CANARY));assert.equal(v.appVerified,false);return true;
+ });
+ assert.deepEqual(h.events,['source-catalogue','source-b21-probe','dump','source-off','target-catalogue','target-b21-probe']);
+ assert(!JSON.stringify(snapshot).includes('anchors'));assert(!JSON.stringify(snapshot).includes(PRIVATE_CANARY));
+ for(const file of readdirSync(h.directory,{recursive:true,withFileTypes:true}).filter(d=>d.isFile()))
+  assert(!readFileSync(join(file.parentPath??file.path,file.name)).includes(Buffer.from(PRIVATE_CANARY)));
 });
