@@ -1,4 +1,5 @@
 name: Mobile store status (read only)
+run-name: ${{ inputs.apple_canonical_reference && 'Inventaire des références Apple (lecture seule)' || 'Statut de publication des stores (lecture seule)' }}
 
 on:
   workflow_dispatch:
@@ -38,6 +39,7 @@ jobs:
           bundle exec ruby scripts/mobile/store-status.test.rb
           bundle exec ruby scripts/mobile/apple-review-reference.test.rb
           bundle exec ruby scripts/mobile/apple-review-reference.cms.test.rb
+          bundle exec ruby scripts/mobile/apple-review-summary.test.rb
       - name: Read App Store Connect and Google Play production status
         if: ${{ !inputs.apple_canonical_reference }}
         env:
@@ -65,7 +67,9 @@ jobs:
       - name: Attach sanitized summary
         if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/mobile-store-status/store-status.md" ]; then
+          if [ "${{ inputs.apple_canonical_reference }}" = "true" ]; then
+            bundle exec ruby scripts/mobile/apple-review-summary.rb "$RUNNER_TEMP/apple-canonical-reference/apple-review-public.json" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f "$RUNNER_TEMP/mobile-store-status/store-status.md" ]; then
             cat "$RUNNER_TEMP/mobile-store-status/store-status.md" >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4
