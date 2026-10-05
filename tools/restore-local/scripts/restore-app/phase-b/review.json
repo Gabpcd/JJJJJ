@@ -5,6 +5,7 @@
   "phaseARunId": "37231913015",
   "nativeRestoreTocSha256": "5eb4ced588d820f0fc04a3a02ca182619fb0ccafdd3645a334cc8d7d3fff6a18",
   "nativeRoleSettingsReviewed": true,
+  "nativeGraphqlRepairReviewed": true,
   "native": {
     "postgresVersionNum": 170006,
     "auth": {
@@ -16,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "Phase A references explicitly reviewed from run37231913015; role settings and exact Phase B assembly still require independent approval. Never fill from the current Phase B run."
+  "note": "B14 exact candidate 8b253926fe33b5755b17f132115b7c3e9f1ced819750c463ebf98ca281acca8d independently reviewed 2026-10-05. Native GraphQL repair approved for one bounded isolated synthetic CI run; runtime restoration remains unverified."
 }

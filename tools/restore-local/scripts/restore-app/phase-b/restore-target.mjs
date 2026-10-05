@@ -15,16 +15,16 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
   const dump = readFileSync(join(privateDir, 'database.dump'));
   requireValue(digest(dump) === snapshot.archiveSha256
     && JSON.stringify(fileTree(join(privateDir, 'files'))) === JSON.stringify(snapshot.files), 'B_SNAPSHOT');
+  const prepared = await runtime.prepareTargetArchiveRestore({archive:dump,archiveSha256:snapshot.archiveSha256,
+    toc:readFileSync(join(privateDir,'archive-toc.private.txt')),witness:snapshot.catalogue.nativeGraphql,review:reviewed});
   // This ONLY replaces the named disposable database inside the independently
   // inspected target container. No DROP SCHEMA inside a populated target and no
   // --clean collisions with pre-existing native Auth/Storage schemas.
   await runtime.recreateOwnedEmptyTargetDatabase(DB);
-  await runtime.databaseTool('target', 'pg_restore', [
-    '--exit-on-error', '--single-transaction', '--no-password', '-U', 'supabase_admin',
-    '-h', '/var/run/postgresql', '-d', DB,
-  ], dump);
-  // Archive order is pre-data / data / post-data, retaining native/product triggers,
-  // policies, owners and ACLs. No --disable-triggers, no re-seed or substitutions.
+  await runtime.executePreparedTargetRestore(prepared);
+  // Native GraphQL prerequisites then the complete complementary archive export
+  // are executed in ONE psql transaction. Every TOC entry, owner, ACL and data
+  // item remains present exactly once; SQL bytes are not rewritten.
   await runtime.applyReviewedRoleSettings();
   await runtime.assertTargetFilesEmpty(); // Recheck after restore, immediately before copy.
   await runtime.copyFilesIn('target', join(privateDir, 'files'));
@@ -36,5 +36,6 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
   await runtime.assertApiHealthy('target');
   requireValue(JSON.stringify(await runtime.sqlJson('target', checkpointSql)) === JSON.stringify(snapshot.before),
     'B_RESTORE');
-  return { restored: true, sourceOff: true, rowDigestsEqual: true, targetSeeded: false, providerContacted: false };
+  return { restored: true, sourceOff: true, rowDigestsEqual: true, targetSeeded: false, providerContacted: false,
+    nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true };
 }

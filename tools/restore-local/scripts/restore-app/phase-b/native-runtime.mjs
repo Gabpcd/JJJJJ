@@ -6,6 +6,7 @@ import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
+import { assertGraphqlWitness, assertGraphqlRestored, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
 
 // PG17 pg_backup_db.c emits the first error and then "Command was:" even
 // without --verbose. TOC INFO lines are suppressed, so do not depend on them.
@@ -83,7 +84,7 @@ FROM pg_db_role_setting s LEFT JOIN pg_database d ON d.oid=s.setdatabase
 LEFT JOIN pg_roles r ON r.oid=s.setrole;
 ROLLBACK;`;
 export const ROLE_SETTINGS_SQL = "ALTER ROLE authenticator SET pgrst.db_pre_request='public.fn_pre_request_compte_actif';\nALTER ROLE authenticator SET statement_timeout='120s';";
-const RESTORE_ARGS = ['--exit-on-error','--single-transaction','--no-password','-U','supabase_admin','-h','/var/run/postgresql','-d',DB];
+const GRAPHQL_WITNESS_SQL = readFileSync(new URL('./graphql-native-witness.sql',import.meta.url),'utf8');
 
 // A negative proof is accepted only for the exact expected missing PDF while
 // its companion XML and the post-backup exclusion remain intact.
@@ -113,6 +114,8 @@ export async function proveControlledMissingPdf(runtime,fixture) {
 
 export function nativeRuntime(privateDir) {
   const base = localRuntime(privateDir), run = base.run;
+  const preparedRestores = new WeakMap();
+  let preparedToken=null,targetRecreated=false;
   const callId=randomUUID();let command = 0, check = 0;
   const call = (args, input, restoreOperation = null) => {
     const result = spawnSync('docker', args, { input, encoding:null, maxBuffer:64*1024*1024, timeout:240_000,
@@ -122,7 +125,7 @@ export function nativeRuntime(privateDir) {
       const error=Object.assign(Error('B_CALL'),{code:'B_CALL',diagnostic:projectSqlDiagnostic(result.stderr?.toString()??'')});
       if(restoreOperation!==null)error.restoreCall=projectRestoreCall({operation:restoreOperation,exitCode:result.status,
         signal:result.signal,systemError:result.error?.code??null,
-        ...(restoreOperation==='TARGET_ARCHIVE_RESTORE'?{pgRestore:classifyPgRestoreStderr(result.stderr)}:{})});
+        ...(['TARGET_ARCHIVE_RESTORE','TARGET_ARCHIVE_TOC_READ','TARGET_ARCHIVE_SQL_EXPORT'].includes(restoreOperation)?{pgRestore:classifyPgRestoreStderr(result.stderr)}:{})});
       throw error;
     }
     return result.stdout;
@@ -134,22 +137,57 @@ export function nativeRuntime(privateDir) {
       '-U','supabase_admin','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),restoreOperation);
   };
   const runtime={...base,
-    catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL)}),
+    catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
+      nativeGraphql:assertGraphqlWitness(await base.sqlJson(side,GRAPHQL_WITNESS_SQL))}),
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
       await base.copyFilesOut('target',path);assertEmptyFileTree(path);
     },
     recreateOwnedEmptyTargetDatabase:async database=>{
-      requireValue(database===DB,'B_RESTORE');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
+      requireValue(database===DB&&preparedToken&&preparedRestores.has(preparedToken)&&!targetRecreated,'B_RESTORE');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
       await targetSql(`DROP DATABASE ${DB};\nCREATE DATABASE ${DB} OWNER postgres TEMPLATE template0;`,'postgres','TARGET_DATABASE_RECREATE');
+      targetRecreated=true;
       // PG17 pg_dump does not recreate public: its SCHEMA TOC entry replays
       // ownership/ACLs onto the initdb schema inherited from template0. Keep it.
     },
-    databaseTool:async(side,tool,args,bytes)=>{
-      if(side==='source')return base.databaseTool(side,tool,args,bytes);
-      requireValue(side==='target'&&tool==='pg_restore'&&JSON.stringify(args)===JSON.stringify(RESTORE_ARGS)
-        &&Buffer.isBuffer(bytes)&&bytes.subarray(0,5).toString()==='PGDMP'&&bytes.length<64*1024*1024,'B_RESTORE');
-      await targetState();return call(['exec','-i',`${run}-target-db`,tool,...args],bytes,'TARGET_ARCHIVE_RESTORE');
+    // Complete SQL preparation precedes DROP. Both exports use the very same
+    // archive; only the exact native prerequisite partition runs first.
+    prepareTargetArchiveRestore:async input=>{
+      requireValue(!preparedToken&&!targetRecreated,'B_RESTORE');
+      await targetState();await base.assertTargetNativeEmpty();
+      partitionGraphqlRestore(input); // Validate bytes/review before any native tool.
+      await targetState();
+      const actualToc=call(['exec','-i',`${run}-target-db`,'pg_restore','--list'],input.archive,'TARGET_ARCHIVE_TOC_READ');
+      // The reviewed normalized hash excludes run-local OIDs/IDs. Bind the list
+      // IDs to these actual archive bytes too, not merely to normalized tags.
+      requireValue(actualToc.equals(input.toc),'B_SNAPSHOT');
+      const prepared=await prepareGraphqlRestore({...input,toc:actualToc},async({partition,archive,list,args})=>{
+        const listPath='/tmp/jolene-graphql-'+partition+'.list';
+        requireValue(['prerequisites','remainder'].includes(partition),'B_RESTORE');
+        await targetState();
+        // Fixed script; noclobber refuses existing paths, including symlinks.
+        call(['exec','-i',`${run}-target-db`,'sh','-c','umask 077; set -C; cat > '+listPath],list,'TARGET_TOC_WRITE');
+        await targetState();
+        requireValue(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'B_RESTORE');
+        await targetState();
+        const sql=call(['exec','-i',`${run}-target-db`,'pg_restore',...args],archive,'TARGET_ARCHIVE_SQL_EXPORT');
+        await targetState();
+        requireValue(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'B_RESTORE');
+        await targetState();
+        call(['exec',`${run}-target-db`,'rm','--',listPath],undefined,'TARGET_TOC_REMOVE');
+        return sql;
+      });
+      const token=Object.freeze({nativeGraphqlPrerequisiteVerified:true});
+      preparedRestores.set(token,{...prepared,sqlSha256:digest(prepared.sql)});
+      // SQL never leaves this private runtime and is never a public receipt.
+      writeFileSync(join(privateDir,'graphql-restore.sql.private'),prepared.sql,{mode:0o600,flag:'wx'});
+      preparedToken=token;
+      return token;
+    },
+    executePreparedTargetRestore:async token=>{
+      const prepared=preparedRestores.get(token);requireValue(token===preparedToken&&targetRecreated&&prepared&&digest(prepared.sql)===prepared.sqlSha256,'B_RESTORE');
+      await targetState();preparedRestores.delete(token); // Single use, also on failure.
+      call(['exec','-i',`${run}-target-db`,'psql',...prepared.transactionArgs],prepared.sql,'TARGET_SQL_RESTORE');
     },
     applyReviewedRoleSettings:async()=>targetSql(ROLE_SETTINGS_SQL,DB,'TARGET_ROLE_SETTINGS'),
     copyFilesIn:async(side,source)=>{
@@ -161,7 +199,9 @@ export function nativeRuntime(privateDir) {
       requireValue(JSON.stringify(fileTree(after))===JSON.stringify(expected),'B_FILES');
     },
     assertSourceOffAndTargetCatalogExact:async snapshot=>{
-      await targetState();requireValue(JSON.stringify(await runtime.catalogue('target'))===JSON.stringify(snapshot.catalogue),'B_RESTORE');
+      await targetState();const target=await runtime.catalogue('target');
+      assertGraphqlRestored(snapshot.catalogue.nativeGraphql,target.nativeGraphql);
+      requireValue(JSON.stringify(target)===JSON.stringify(snapshot.catalogue),'B_RESTORE');
     },
     startSourceForUi:async()=>{
       await base.verifyState({source:'off',target:'db-only',browser:'absent'});

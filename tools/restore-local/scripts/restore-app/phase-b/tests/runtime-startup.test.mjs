@@ -10,7 +10,9 @@ import {preparePlan,localRuntime} from '../../local-runtime.mjs';
 import {nativeRuntime} from '../native-runtime.mjs';
 import {restoreTarget} from '../restore-target.mjs';
 import {fileTree,digest} from '../../snapshot-restore.mjs';
-import {closedFailure,RESTORE_CALL_OPERATIONS} from '../contract.mjs';
+import {closedFailure} from '../contract.mjs';
+import {graphqlExportArgs,graphqlTransactionArgs} from '../graphql-restore-plan.mjs';
+import {input as graphqlInput} from './graphql-test-fixture.mjs';
 const run='jolene-restore-drill-987654-1';
 function fixture(t){
  const parent=realpathSync(mkdtempSync(join(tmpdir(),'restore-b-startup-')));t.after(()=>rmSync(parent,{recursive:true,force:true}));
@@ -79,11 +81,13 @@ test('actual native startup waits for DB healthy and complete plan before any AP
  for(let i=0;i<h.events.length;i++)if(h.events[i].startsWith('db-health:'))assert.equal(h.events[i-1],'full-plan');
  assert.equal(h.events.filter(v=>v==='start-api').length,4);
 });
-for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attributes first failing native call '+failedOperation,async t=>{
+const exportSequence=['TARGET_TOC_WRITE','TARGET_TOC_READBACK','TARGET_ARCHIVE_SQL_EXPORT','TARGET_TOC_READBACK','TARGET_TOC_REMOVE'];
+const restoreSequence=['TARGET_ARCHIVE_TOC_READ',...exportSequence,...exportSequence,'TARGET_DATABASE_RECREATE','TARGET_SQL_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN'];
+for(const failedOperation of [...new Set(restoreSequence),'TOC_BINDING'])test('actual restore attributes first failing native call '+failedOperation,async t=>{
  const {directory,plan}=fixture(t),operations=[],canary='PRIVATE_SQL_AUTH_DUMP_PATH_CANARY';
- let pristineSchemas=null;
+ let pristineSchemas=null;const lists=new Map(),graphql=graphqlInput();let exports=0;
  const snapshotDir=join(directory,'snapshot');mkdirSync(snapshotDir,{mode:0o700});mkdirSync(join(snapshotDir,'files'),{mode:0o700});
- const dump=Buffer.from('PGDMPsynthetic-private-test');writeFileSync(join(snapshotDir,'database.dump'),dump,{mode:0o600});
+ const dump=graphql.archive;writeFileSync(join(snapshotDir,'database.dump'),dump,{mode:0o600});writeFileSync(join(snapshotDir,'archive-toc.private.txt'),failedOperation==='TOC_BINDING'?Buffer.from(graphql.toc.toString().replace('1; 0 1000 ','77777; 0 1000 ')):graphql.toc,{mode:0o600});
  writeFileSync(join(snapshotDir,'files','synthetic-file'),'synthetic',{mode:0o600});
  const containers=Object.values(plan.services).map((s,i)=>({Id:'native'+i,Name:'/'+s.container_name,
   Config:{Labels:s.labels,Image:s.image,Env:Object.entries(s.environment).map(([k,v])=>k+'='+v),Cmd:s.command},
@@ -100,25 +104,39 @@ for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attrib
   if(args[0]==='volume')return output(volumes);
   if(args[0]==='inspect')return output(containers);
   if(args[0]==='exec'){
-   assert.equal(args[2],run+'-target-db');
-   if(args[3]==='pg_restore'){
-    assert.deepEqual(args.slice(4),['--exit-on-error','--single-transaction','--no-password','-U','supabase_admin','-h','/var/run/postgresql','-d','jolene_candidatures_pg17_test']);
-    assert.deepEqual(options.input,dump);operation='TARGET_ARCHIVE_RESTORE';
-    // Model PG17 initdb + dumpNamespace: public already exists, auth/storage do
-    // not. The public TOC definition carries ownership, not CREATE SCHEMA.
-    assert.deepEqual([...pristineSchemas.keys()],['pg_catalog','information_schema','public']);
-    assert.deepEqual(pristineSchemas.get('public'),{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']});
-    pristineSchemas.set('public',{owner:'postgres',acl:['postgres:UC','anon:U','authenticated:U','service_role:U']});
-    for(const schema of ['auth','storage']){assert.equal(pristineSchemas.has(schema),false);pristineSchemas.set(schema,{owner:'native-owner',acl:[]});}
-    assert.equal(pristineSchemas.get('public').acl.includes('PUBLIC:U'),false);
+   const targetIndex=args[1]==='-i'?2:1,commandIndex=targetIndex+1;
+   assert.equal(args[targetIndex],run+'-target-db');const tool=args[commandIndex];
+   if(tool==='sh'){
+    operation='TARGET_TOC_WRITE';const script=args.at(-1);assert.match(script,/^umask 077; set -C; cat > \/tmp\/jolene-graphql-(prerequisites|remainder)\.list$/);
+    const path=script.split(' > ')[1];assert.equal(lists.has(path),false);lists.set(path,options.input);
+   }else if(tool==='cat'){
+    operation='TARGET_TOC_READBACK';assert.ok(lists.has(args.at(-1)));
+    operations.push(operation);return output(lists.get(args.at(-1)).toString(),operation===failedOperation?1:0,canary);
+   }else if(tool==='rm'){
+    operation='TARGET_TOC_REMOVE';assert.ok(lists.has(args.at(-1)));lists.delete(args.at(-1));
+   }else if(tool==='pg_restore'){
+    if(args.at(-1)==='--list'){operation='TARGET_ARCHIVE_TOC_READ';assert.deepEqual(options.input,dump);assert.equal(pristineSchemas,null);operations.push(operation);return output(graphql.toc.toString(),operation===failedOperation?1:0,'pg_restore: error: input file does not appear to be a valid archive');}
+    operation='TARGET_ARCHIVE_SQL_EXPORT';const partition=exports++===0?'prerequisites':'remainder';
+    assert.deepEqual(args.slice(commandIndex+1),graphqlExportArgs(partition));assert.deepEqual(options.input,dump);
+    assert.equal(pristineSchemas,null,'SQL_EXPORT_MUST_PRECEDE_DATABASE_DROP');
+    const list=lists.get('/tmp/jolene-graphql-'+partition+'.list').toString();
+    assert.equal(list.includes('EVENT TRIGGER - issue_pg_graphql_access'),partition==='prerequisites');
+    assert.equal(list.includes('EXTENSION - pg_graphql '),partition==='remainder');
+    operations.push(operation);return output('-- synthetic-'+partition+'\nSELECT 1;\n',operation===failedOperation?1:0,
+     'pg_restore: error: could not execute query: ERROR:  must be owner of schema public\nCommand was: ALTER SCHEMA public OWNER TO '+canary+';\n');
    }else{
-    assert.equal(args[3],'psql');const sql=options.input.toString();
+    assert.equal(tool,'psql');const sql=options.input.toString();
     if(sql.startsWith('DROP DATABASE ')){
+     assert.equal(exports,2);assert.equal(lists.size,0);
      assert.equal(sql,'DROP DATABASE jolene_candidatures_pg17_test;\nCREATE DATABASE jolene_candidatures_pg17_test OWNER postgres TEMPLATE template0;');
      assert.equal(args[args.indexOf('-d')+1],'postgres');operation='TARGET_DATABASE_RECREATE';
      pristineSchemas=new Map([['pg_catalog',{}],['information_schema',{}],['public',{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']}]]);
-    }
-    else if(sql.startsWith('ALTER ROLE authenticator'))operation='TARGET_ROLE_SETTINGS';
+    }else if(args.includes('--single-transaction')){
+     operation='TARGET_SQL_RESTORE';assert.deepEqual(args.slice(commandIndex+1),graphqlTransactionArgs());
+     assert.equal(sql,'-- synthetic-prerequisites\nSELECT 1;\n\n-- synthetic-remainder\nSELECT 1;\n\n');
+     assert.deepEqual([...pristineSchemas.keys()],['pg_catalog','information_schema','public']);
+     assert.deepEqual(pristineSchemas.get('public'),{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']});
+    }else if(sql.startsWith('ALTER ROLE authenticator'))operation='TARGET_ROLE_SETTINGS';
     else {assert.ok(sql.includes('BEGIN READ ONLY;'));return output('');}
    }
   }else if(args[0]==='cp'){
@@ -126,19 +144,19 @@ for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attrib
    assert.equal(args[2],join(snapshotDir,'files')+'/.');assert.equal(args[3],run+'-target-storage:/var/lib/storage/');
    operation='TARGET_FILES_COPY_IN';
   }else assert.fail('UNEXPECTED_RESTORE_STUB_CALL');
-  operations.push(operation);const stderr=operation==='TARGET_ARCHIVE_RESTORE'?'pg_restore: error: could not execute query: ERROR:  must be owner of schema public\nCommand was: ALTER SCHEMA public OWNER TO '+canary+';\n':canary;
-  return output('',operation===failedOperation?1:0,stderr);
+  operations.push(operation);return output('',operation===failedOperation?1:0,canary);
  });
- const snapshot={run,archiveSha256:digest(dump),tocSha256:'b'.repeat(64),files:fileTree(join(snapshotDir,'files')),before:{},catalogue:{}};
- const reviewed={nativeRestoreTocSha256:snapshot.tocSha256,nativeRoleSettingsReviewed:true};
+ const snapshot={run,archiveSha256:digest(dump),tocSha256:graphql.review.nativeRestoreTocSha256,files:fileTree(join(snapshotDir,'files')),before:{},catalogue:{nativeGraphql:graphql.witness}};
+ const reviewed={...graphql.review,nativeRoleSettingsReviewed:true};
  await assert.rejects(()=>restoreTarget(nativeRuntime(directory),snapshotDir,snapshot,reviewed,'unused'),error=>{
-  const publicResult=closedFailure(error,'restore');assert.equal(publicResult.code,'B_CALL');
+  const publicResult=closedFailure(error,'restore');if(failedOperation==='TOC_BINDING'){assert.equal(publicResult.code,'B_SNAPSHOT');return true;}assert.equal(publicResult.code,'B_CALL');
   assert.equal(publicResult.restoreCall.operation,failedOperation);assert.equal(publicResult.restoreCall.exitCode,1);
-  if(failedOperation==='TARGET_ARCHIVE_RESTORE')assert.deepEqual(publicResult.restoreCall.pgRestore,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category:'OWNER_REQUIRED',command:'ALTER',schema:'public',extension:null,missingObjectType:null,missingRole:null});
+  if(failedOperation==='TARGET_ARCHIVE_SQL_EXPORT')assert.deepEqual(publicResult.restoreCall.pgRestore,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category:'OWNER_REQUIRED',command:'ALTER',schema:'public',extension:null,missingObjectType:null,missingRole:null});
+  else if(failedOperation==='TARGET_ARCHIVE_TOC_READ')assert.equal(publicResult.restoreCall.pgRestore.category,'ARCHIVE_FORMAT');
   else assert.equal(publicResult.restoreCall.pgRestore,undefined);
   assert.ok(!JSON.stringify(publicResult).includes(canary));return true;
  });
- assert.deepEqual(operations,RESTORE_CALL_OPERATIONS.slice(0,RESTORE_CALL_OPERATIONS.indexOf(failedOperation)+1));
+ assert.deepEqual(operations,failedOperation==='TOC_BINDING'?['TARGET_ARCHIVE_TOC_READ']:restoreSequence.slice(0,restoreSequence.indexOf(failedOperation)+1));
 });
 for(const [name,options,code]of [
  ['exited DB',{exited:true},'RESTORE_SERVICE_STATE'],

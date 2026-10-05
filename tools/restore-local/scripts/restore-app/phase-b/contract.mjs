@@ -9,11 +9,12 @@ export const PRODUCT_SHA = '7dfdeb42f724a1d80f78318ecf468d248b321a68';
 export const IMAGE = 'mcr.microsoft.com/playwright@sha256:65cefd09a5e943921ecd3a6e5414c603db2eb161e9eb48f2e2ccc63486dc7dc0';
 export const LABEL = 'org.jolene.restore-drill';
 export const DB = 'jolene_candidatures_pg17_test';
-export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CALL','B_BUILD','B_DISK','B_DATABASE_READINESS','B_DATABASE_READINESS_TIMEOUT','B_BROWSER','B_REPORT','B_RESTORE','B_SNAPSHOT','B_FILES','B_SENTINEL','B_CLEANUP','B_FAILED']);
+export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CALL','B_BUILD','B_DISK','B_DATABASE_READINESS','B_DATABASE_READINESS_TIMEOUT','B_BROWSER','B_REPORT','B_RESTORE','B_GRAPHQL_RESTORE_REFUSED','B_SNAPSHOT','B_FILES','B_SENTINEL','B_CLEANUP','B_FAILED']);
 export const STAGES = new Set([...A_STAGES,'dependencies','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function requireValue(ok, code = 'B_CONTEXT') { if (!ok) { const error = new Error(CODES.has(code) ? code : 'B_FAILED'); error.code = error.message; throw error; } }
-export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_DATABASE_RECREATE','TARGET_ARCHIVE_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN']);
+export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_ARCHIVE_TOC_READ','TARGET_TOC_WRITE','TARGET_TOC_READBACK','TARGET_ARCHIVE_SQL_EXPORT','TARGET_TOC_REMOVE',
+ 'TARGET_DATABASE_RECREATE','TARGET_SQL_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN','TARGET_ARCHIVE_RESTORE']);
 const RESTORE_SIGNALS = new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE']);
 const RESTORE_SYSTEM_ERRORS = new Set(['ETIMEDOUT','ENOENT','EACCES','EPERM','ENOMEM','ENOBUFS','E2BIG','EAGAIN','ENOEXEC']);
 export const PG_RESTORE_CATEGORIES = Object.freeze(['UNKNOWN','SQL_OTHER','OBJECT_EXISTS','OBJECT_MISSING',
@@ -26,7 +27,7 @@ export const PG_RESTORE_COMMANDS = Object.freeze(['UNKNOWN','SET','SELECT','BEGI
  'ALTER','GRANT','REVOKE','COMMENT','SECURITY_LABEL','DO']);
 export const PG_RESTORE_SCHEMAS = Object.freeze(['auth','storage','public','extensions','pg_catalog','cron',
  'graphql','graphql_public','pgbouncer','private','supabase_functions','vault','realtime','net']);
-export const PG_RESTORE_EXTENSIONS = Object.freeze(['pg_cron','pg_net','pg_stat_statements','pg_trgm',
+export const PG_RESTORE_EXTENSIONS = Object.freeze(['pg_cron','pg_graphql','pg_net','pg_stat_statements','pg_trgm',
  'pgcrypto','pgjwt','plpgsql','supabase_vault','uuid-ossp']);
 export const PG_RESTORE_MISSING_OBJECTS = Object.freeze(['SCHEMA','RELATION','TYPE','FUNCTION','ROLE','EXTENSION','OPERATOR','COLLATION']);
 // Fixed roles referenced by the reviewed bootstrap/product; unknown names stay private.
@@ -50,7 +51,7 @@ export function projectRestoreCall(value) {
   exitCode:Number.isInteger(value?.exitCode)&&value.exitCode>=0&&value.exitCode<=255?value.exitCode:null,
   signal:value?.signal===null?null:RESTORE_SIGNALS.has(value?.signal)?value.signal:'OTHER',
   systemError,timedOut:systemError==='ETIMEDOUT',
-  ...(value?.operation==='TARGET_ARCHIVE_RESTORE'&&value?.pgRestore?{pgRestore:projectPgRestoreDiagnostic(value.pgRestore)}:{})};
+  ...(['TARGET_ARCHIVE_RESTORE','TARGET_ARCHIVE_TOC_READ','TARGET_ARCHIVE_SQL_EXPORT'].includes(value?.operation)&&value?.pgRestore?{pgRestore:projectPgRestoreDiagnostic(value.pgRestore)}:{})};
 }
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,
@@ -60,7 +61,7 @@ export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',
 export function assertReview(review) {
  requireValue(review?.productSha===PRODUCT_SHA && review?.approved===true && /^[a-f0-9]{40}$/.test(review.phaseAHarnessSha??'')
   && /^[1-9][0-9]{5,14}$/.test(review.phaseARunId??'') && /^[a-f0-9]{64}$/.test(review.nativeRestoreTocSha256??'')
-  && review.nativeRoleSettingsReviewed===true && Number.isSafeInteger(review.native?.postgresVersionNum)
+  && review.nativeRoleSettingsReviewed===true && review.nativeGraphqlRepairReviewed===true && Number.isSafeInteger(review.native?.postgresVersionNum)
   && review.native.postgresVersionNum>=170000 && review.native.postgresVersionNum<180000
   && ['auth','storage'].every(key=>Number.isSafeInteger(review.native[key]?.count)&&review.native[key].count>0&&/^[a-f0-9]{64}$/.test(review.native[key].sha256)), 'B_REVIEW');
  return review;

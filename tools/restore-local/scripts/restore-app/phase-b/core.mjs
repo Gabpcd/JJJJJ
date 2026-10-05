@@ -54,7 +54,8 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
  enter('restore');
  const checkpoint=dependencies.checkpointSql??readFileSync(new URL('../sql/checkpoint.sql',import.meta.url),'utf8');
  const restored=await(dependencies.restoreTarget??restoreTarget)(runtime,join(paths.stack,'snapshot'),snapshot,review,checkpoint);
- requireValue(restored.restored===true&&restored.sourceOff===true&&restored.targetSeeded===false,'B_RESTORE');
+ requireValue(restored.restored===true&&restored.sourceOff===true&&restored.targetSeeded===false
+  &&restored.nativeGraphqlPrerequisiteVerified===true&&restored.nativeGraphqlRestoredExact===true,'B_RESTORE');
  enter('files_target');await runtime.assertRestoredObjects(fixture);
  const target=await runUi('target');
  enter('files_target');const objects=await runtime.assertRestoredObjects(fixture);
@@ -69,6 +70,7 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
  const result={result:'ISOLATED_SYNTHETIC_APP_RESTORATION_PASSED',stage:'complete',productSha:PRODUCT_SHA,
   sourceCases:source.expectedCount,targetCases:target.expectedCount,restored:true,appVerified:true,sourceOff:true,controlledNegativePassed:true,targetIntentionallyChangedAfterPositiveProof:true,targetFinalObjectsIntact:false,
   sameRunSnapshot:true,sameDumpAndObjectBytes:true,restoredObjects:objects.verified,postBackupSentinelAbsent:objects.sentinelAbsent,
-  targetSeeded:false,providerContacted:false,liveSessionsRestored:false,physicalDeviceVerified:false,readyForNationalLaunch:false};
+  targetSeeded:false,providerContacted:false,liveSessionsRestored:false,physicalDeviceVerified:false,readyForNationalLaunch:false,
+  nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true};
  save('phase-b.json',result);return result;
 }
