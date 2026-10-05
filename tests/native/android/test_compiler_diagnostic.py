@@ -69,6 +69,7 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_fixed_category_signals_only(self):
         fixtures = {
+            'android_lint_fatal': b'Lint found fatal errors while assembling a release target.',
             'r8_missing_classes': b'ERROR: Missing classes detected while running R8. private details',
             'r8_compilation': b'R8: Compilation failed to complete',
             'resource_linker': b'Android resource linking failed',
@@ -80,7 +81,8 @@ class DiagnosticTests(unittest.TestCase):
             'gradle_daemon': b'Gradle build daemon disappeared unexpectedly (secret)',
             'disk_space': b'java.io.IOException: No space left on device',
         }
-        self.assertEqual(set(fixtures), set(diagnostic.SIGNALS))
+        self.assertEqual(set(fixtures), {key for key in diagnostic.SIGNALS
+                                        if not key.startswith(('lint_issue_', 'lint_file_'))})
         for category, content in fixtures.items():
             result, _ = self.result(content)
             self.assertEqual(result['failureCategories'], [category])
@@ -88,6 +90,68 @@ class DiagnosticTests(unittest.TestCase):
     def test_multiple_signals_are_observations_not_a_chosen_cause(self):
         result, _ = self.result(b'Manifest merger failed\nAndroid resource linking failed\n')
         self.assertEqual(result['failureCategories'], ['manifest', 'resource_linker'])
+
+    def test_lint_vital_tasks_are_fixed_and_only_optimized(self):
+        for name in ['lintVitalAnalyzeRecetteOptimized', 'lintVitalReportRecetteOptimized',
+                     'lintVitalRecetteOptimized']:
+            raw = ('> Task :app:' + name + ' FAILED\n').encode()
+            optimized, _ = self.result(raw)
+            self.assertEqual(optimized['failedTasks'], [':app:' + name])
+            debug, _ = self.result(raw, variant='debug')
+            self.assertEqual(debug['failedTasks'], [])
+            self.assertTrue(debug['unrecognizedFailedTask'])
+            changed, _ = self.result(raw.replace(b' FAILED', b'Canary FAILED'))
+            self.assertEqual(changed['failedTasks'], [])
+
+    def test_each_public_lint_issue_is_a_constant_without_prose_or_path(self):
+        for issue in diagnostic.LINT_ISSUES:
+            raw = ('/private/fakeCredentialCanary/unknown.xml:42: Error: '
+                   'SYNTHETIC_PRIVATE_VALUE [' + issue + ']\n').encode()
+            result, _ = self.result(raw)
+            self.assertEqual(result['failureCategories'], ['lint_issue_' + issue])
+            encoded = diagnostic.encode_closed(result)
+            for secret in [b'fakeCredentialCanary', b'SYNTHETIC_PRIVATE_VALUE', b'unknown.xml']:
+                self.assertNotIn(secret, encoded)
+
+    def test_known_file_labels_accept_only_exact_fixed_source_paths(self):
+        for label, paths in diagnostic.LINT_FILES.items():
+            for path in (*paths, '/home/runner/work/JJJJJ/JJJJJ/' + paths[0]):
+                raw = (path + ':5: Error: private text [Instantiatable]\n').encode()
+                result, _ = self.result(raw)
+                self.assertEqual(result['failureCategories'],
+                                 ['lint_file_' + label, 'lint_issue_Instantiatable'])
+                self.assertNotIn(b'/home/runner/work', diagnostic.encode_closed(result))
+
+    def test_plugin_or_ambiguous_suffix_is_never_labelled_as_app_source(self):
+        for path in ['src/main/AndroidManifest.xml',
+                     '/private/plugin/src/main/AndroidManifest.xml',
+                     '/home/runner/work/JJJJJ/JJJJJ/node_modules/plugin/src/main/AndroidManifest.xml',
+                     '/private/android/app/src/main/AndroidManifest.xml',
+                     '/home/runner/work/JJJJJ/JJJJJ/android/app/src/main/AndroidManifest.xmlCanary']:
+            result, _ = self.result((path + ':5: Error: private [Instantiatable]\n').encode())
+            self.assertEqual(result['failureCategories'], ['lint_issue_Instantiatable'])
+
+    def test_unknown_lint_ids_and_source_paths_never_become_output(self):
+        raw = b'/private/fakeCredentialCanary.xml:9: Error: secret [FakeCredentialCanary]\n'
+        result, _ = self.result(raw)
+        self.assertEqual(result['failureCategories'], ['unclassified_failure'])
+        encoded = diagnostic.encode_closed(result)
+        self.assertNotIn(b'FakeCredentialCanary', encoded)
+        self.assertNotIn(b'fakeCredentialCanary', encoded)
+
+    def test_lint_signatures_require_complete_lines_and_exact_generic_message(self):
+        for raw in [b'Lint found fatal errors while assembling a release target. private',
+                    b'/private/a.xml:1: Error: private [Instantiatable] trailing',
+                    b'private [Instantiatable]',
+                    b'/private/a.xml:1: Error: private [InstantiatableCanary]']:
+            result, _ = self.result(raw)
+            self.assertEqual(result['failureCategories'], ['unclassified_failure'])
+
+    def test_expanded_closed_document_stays_bounded_with_all_labels(self):
+        for variant in diagnostic.COMMANDS:
+            value = diagnostic.closed_document(variant, True, 255, 'complete',
+                                               diagnostic.CATEGORIES, diagnostic.TASKS[variant], True)
+            self.assertLessEqual(len(diagnostic.encode_closed(value)), 8192)
 
     def test_unknown_output_does_not_claim_a_cause(self):
         result, _ = self.result(b'Unrecognized failure\n')

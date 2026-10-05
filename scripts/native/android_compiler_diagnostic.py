@@ -43,8 +43,12 @@ TASKS = {
     for variant, suffix in (('debug', 'Debug'), ('optimized', 'RecetteOptimized'))
 }
 TASKS['optimized'] |= frozenset({':app:minifyRecetteOptimizedWithR8',
-                               ':app:shrinkRecetteOptimizedRes'})
+                               ':app:shrinkRecetteOptimizedRes',
+                               ':app:lintVitalAnalyzeRecetteOptimized',
+                               ':app:lintVitalReportRecetteOptimized',
+                               ':app:lintVitalRecetteOptimized'})
 SIGNALS = {
+    'android_lint_fatal': r'^(?:> )?Lint found fatal errors while assembling a release target\.$',
     'r8_missing_classes': r'^(?:ERROR: )?Missing classes detected while running R8(?:\.|$)',
     'r8_compilation': r'^(?:> )?R8: Compilation failed(?:\b)',
     'resource_linker': r'^(?:> )?Android resource linking failed$',
@@ -56,6 +60,44 @@ SIGNALS = {
     'gradle_daemon': r'^(?:> )?Gradle build daemon disappeared unexpectedly(?:\b)',
     'disk_space': r'^(?:> )?(?:java\.io\.IOException: )?No space left on device$',
 }
+# Public issue IDs verified against Google's lint-checks 31.13.0 sources.
+# These are observation labels only, never proof that an issue caused failure.
+# Unknown IDs and source paths never become output strings.
+LINT_ISSUES = frozenset({
+    'AaptCrash', 'BlockedPrivateApi', 'DuplicateActivity', 'DuplicatePlatformClasses',
+    'ExpiredTargetSdkVersion', 'ExtraTranslation', 'GradleCompatible', 'Instantiatable',
+    'LibraryCustomView', 'MissingDefaultResource', 'MockLocation', 'MultipleUsesSdk',
+    'NamespaceTypo', 'ResAuto', 'ResourceCycle', 'TestAppLink', 'UniquePermission',
+    'UnspecifiedImmutableFlag', 'ValidActionsXml', 'ValidRestrictions',
+    'WearableBindListener', 'WrongFolder', 'WrongManifestParent',
+})
+LINT_FILES = {
+    'app_main_manifest': ('android/app/src/main/AndroidManifest.xml', 'app/src/main/AndroidManifest.xml'),
+    'app_recette_manifest': ('android/app/src/debug/AndroidManifest.xml', 'app/src/debug/AndroidManifest.xml'),
+    'app_main_activity': ('android/app/src/main/java/app/jolene/android/MainActivity.java', 'app/src/main/java/app/jolene/android/MainActivity.java'),
+    'app_strings': ('android/app/src/main/res/values/strings.xml', 'app/src/main/res/values/strings.xml'),
+    'app_colors': ('android/app/src/main/res/values/colors.xml', 'app/src/main/res/values/colors.xml'),
+    'app_styles': ('android/app/src/main/res/values/styles.xml', 'app/src/main/res/values/styles.xml'),
+    'app_data_extraction_rules': ('android/app/src/main/res/xml/data_extraction_rules.xml', 'app/src/main/res/xml/data_extraction_rules.xml'),
+    'app_backup_rules': ('android/app/src/main/res/xml/backup_rules.xml', 'app/src/main/res/xml/backup_rules.xml'),
+    'app_file_paths': ('android/app/src/main/res/xml/file_paths.xml', 'app/src/main/res/xml/file_paths.xml'),
+    'app_recette_network_security': ('android/app/src/debug/res/xml/recette_network_security.xml', 'app/src/debug/res/xml/recette_network_security.xml'),
+    'app_recette_firebase': ('android/app/src/debug/res/values/recette_firebase.xml', 'app/src/debug/res/values/recette_firebase.xml'),
+}
+# Accept only complete conventional lint location lines. Raw paths, line numbers
+# and diagnostic prose are consumed privately and never added to the JSON.
+LINT_PREFIX = r'^(?:> )?[^:\r\n]+:[1-9][0-9]*(?::[1-9][0-9]*)?: (?:Error|Fatal): [^\r\n]+ \['
+for issue in LINT_ISSUES:
+    SIGNALS['lint_issue_' + issue] = LINT_PREFIX + re.escape(issue) + r'\]$'
+for label, paths in LINT_FILES.items():
+    # GitHub's exact public workspace path, plus unambiguous repository/cwd paths.
+    # A plugin's src/main/... suffix must never be labelled as an app source.
+    admitted = (*paths, '/home/runner/work/JJJJJ/JJJJJ/' + paths[0])
+    known_paths = '|'.join(re.escape(path) for path in admitted)
+    SIGNALS['lint_file_' + label] = (
+        r'^(?:> )?(?:' + known_paths + r'):'
+        r'[1-9][0-9]*(?::[1-9][0-9]*)?: (?:Error|Fatal): [^\r\n]+ '
+        r'\[[A-Za-z][A-Za-z0-9_]{0,79}\]$')
 CATEGORIES = frozenset(SIGNALS) | {'unclassified_failure'}
 STATUSES = frozenset({'complete', 'output_limit_refused', 'text_format_refused',
                       'collection_failed', 'launch_failed', 'context_refused'})
