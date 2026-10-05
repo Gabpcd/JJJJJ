@@ -17,7 +17,7 @@ import { main as bootstrap } from '../../restore/bootstrap.mjs';
 import { compareInventories } from '../../restore/extensions.mjs';
 import { requireExistingRefusal } from '../../restore/ci-guard.mjs';
 const PUBLIC=new Set(['identity.json','units.json','dependencies.json','build.json','bootstrap-proof.json','phase-a-capture.json',
- 'browser-source.json','browser-target.json','target-objects.json','controlled-negative.json','phase-b.json','diagnostic.json','cleanup.json','cleanup-again.json','absence.json']);
+ 'browser-source.json','browser-target.json','target-objects.json','graphql-comparison.json','controlled-negative.json','phase-b.json','diagnostic.json','cleanup.json','cleanup-again.json','absence.json']);
 let stage='identity',paths,evidence;
 function directory(path){if(!existsSync(path))mkdirSync(path,{mode:0o700});requireValue(lstatSync(path).isDirectory()&&!lstatSync(path).isSymbolicLink()
  &&realpathSync(path)===path&&(lstatSync(path).mode&0o077)===0,'B_CONTEXT');}

@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B15 exact diagnostic candidate 6833f95285d6f961d2a3f8d2abd42fcced972ab2913c687e8ab8bec6b01082a7 independently reviewed 2026-10-05. Approved for one bounded isolated synthetic CI run. B14 failure preserved; runtime restoration remains unverified."
+  "note": "B16 exact candidate 346ca77459de8f98f3a37705dae10d0d4e2ed118e9091ed1ddd3c019dd0d01d5 independently reviewed 2026-10-05. Approved for one bounded isolated synthetic CI run. B15 failure preserved; runtime restoration remains unverified."
 }

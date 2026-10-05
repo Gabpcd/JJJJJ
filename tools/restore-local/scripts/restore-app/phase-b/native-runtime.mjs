@@ -6,7 +6,7 @@ import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
-import { assertGraphqlWitness, assertGraphqlRestored, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
+import { assertGraphqlWitness, assertGraphqlRestored, graphqlComparableWitness, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
 
 // PG17 pg_backup_db.c emits the first error and then "Command was:" even
 // without --verbose. TOC INFO lines are suppressed, so do not depend on them.
@@ -200,8 +200,12 @@ export function nativeRuntime(privateDir) {
     },
     assertSourceOffAndTargetCatalogExact:async snapshot=>{
       await targetState();const target=await runtime.catalogue('target');
-      assertGraphqlRestored(snapshot.catalogue.nativeGraphql,target.nativeGraphql);
-      requireValue(JSON.stringify(target)===JSON.stringify(snapshot.catalogue),'B_RESTORE');
+      const parity=assertGraphqlRestored(snapshot.catalogue.nativeGraphql,target.nativeGraphql);
+      // The new raw ACL hash is a diagnostic, not an additional rights field.
+      // Canonical ACL tuples, owner and every other catalogue field still compare exactly.
+      const comparable=value=>({...value,nativeGraphql:graphqlComparableWitness(value.nativeGraphql)});
+      requireValue(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'B_RESTORE');
+      return parity;
     },
     startSourceForUi:async()=>{
       await base.verifyState({source:'off',target:'db-only',browser:'absent'});

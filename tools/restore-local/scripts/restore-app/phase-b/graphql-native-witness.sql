@@ -21,6 +21,15 @@ WITH wrapper AS (
 ), initial_privileges AS (
  SELECT i.* FROM pg_init_privs i JOIN wrapper p ON p.oid=i.objoid
  WHERE i.classoid='pg_proc'::regclass AND i.objsubid=0
+), wrapper_schema AS (
+ SELECT n.* FROM pg_namespace n WHERE n.nspname='graphql_public'
+), wrapper_schema_acl AS (
+ -- aclexplode preserves every grantor, grantee, privilege and grant option.
+ -- PUBLIC is tagged separately from a named role, even a role named PUBLIC.
+ SELECT jsonb_build_array(CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE 'ROLE' END,
+   CASE WHEN x.grantee=0 THEN NULL ELSE pg_get_userbyid(x.grantee) END,
+   pg_get_userbyid(x.grantor),x.privilege_type,x.is_grantable) AS grant_tuple
+ FROM wrapper_schema n CROSS JOIN LATERAL aclexplode(n.nspacl) x
 ), facts AS (
  SELECT 'wrapper' AS kind,jsonb_build_array(pg_get_functiondef(p.oid),pg_get_userbyid(p.proowner),p.proacl) AS fact FROM wrapper p
  UNION ALL SELECT 'hook',jsonb_build_array(pg_get_functiondef(p.oid),pg_get_userbyid(p.proowner),p.proacl) FROM hook p
@@ -28,10 +37,14 @@ WITH wrapper AS (
  UNION ALL SELECT 'trigger',jsonb_build_array(e.evtevent,e.evtenabled,e.evttags,pg_get_userbyid(e.evtowner)) FROM trigger e
  UNION ALL SELECT 'initial_privileges',jsonb_build_array(i.privtype,i.initprivs) FROM initial_privileges i
  UNION ALL SELECT 'default_acl',jsonb_build_array(pg_get_userbyid(d.defaclrole),d.defaclacl) FROM defaults d
- UNION ALL SELECT 'schemas',jsonb_build_array(n.nspname,pg_get_userbyid(n.nspowner),n.nspacl) FROM pg_namespace n WHERE n.nspname IN('graphql','graphql_public','extensions')
+ UNION ALL SELECT 'schemas',jsonb_build_array(n.nspname,pg_get_userbyid(n.nspowner),
+   CASE WHEN n.nspname='graphql_public' THEN jsonb_build_object('isNull',n.nspacl IS NULL,
+     'grants',COALESCE((SELECT jsonb_agg(grant_tuple ORDER BY grant_tuple::text COLLATE "C") FROM wrapper_schema_acl),'[]'::jsonb))
+   ELSE to_jsonb(n.nspacl) END)
+ FROM pg_namespace n WHERE n.nspname IN('graphql','graphql_public','extensions')
 )
 SELECT jsonb_build_object(
- 'schemaVersion',2,
+ 'schemaVersion',3,
  'context',current_database()='jolene_candidatures_pg17_test' AND inet_server_addr() IS NULL
    AND session_user='postgres' AND current_user=session_user
    AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
@@ -70,8 +83,11 @@ SELECT jsonb_build_object(
  'noGlobalFunctionDefaultAcl',NOT EXISTS(SELECT 1 FROM pg_default_acl d WHERE d.defaclnamespace=0 AND d.defaclobjtype='f'
    AND pg_get_userbyid(d.defaclrole)='supabase_admin'),
  'initialPrivilegesCount',(SELECT count(*) FROM initial_privileges),
+ -- Diagnostic only; never substitutes for the complete semantic fingerprint.
+ 'wrapperSchemaRawFingerprint',(SELECT encode(sha256(convert_to(jsonb_build_array(
+   n.nspname,pg_get_userbyid(n.nspowner),n.nspacl)::text,'UTF8')),'hex') FROM wrapper_schema n),
  'fingerprint',encode(sha256(convert_to((SELECT jsonb_agg(jsonb_build_array(kind,fact) ORDER BY kind,fact::text)::text FROM facts),'UTF8')),'hex'),
- -- Private diagnostic hashes only. Existing aggregate equality remains mandatory.
+ -- Private component hashes. Both aggregate and component equality remain mandatory.
  'components',(SELECT jsonb_object_agg(k,encode(sha256(convert_to(
    COALESCE((SELECT jsonb_agg(f.fact ORDER BY f.fact::text)::text FROM facts f
      WHERE CASE WHEN f.kind='schemas' THEN 'schema_'||(f.fact->>0) ELSE f.kind END=k),'[]'),'UTF8')),'hex'))

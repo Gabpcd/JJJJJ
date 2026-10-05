@@ -28,24 +28,38 @@ export const GRAPHQL_PREREQUISITES = Object.freeze([
   'EVENT TRIGGER - issue_pg_graphql_access supabase_admin',
 ]);
 export function assertGraphqlWitness(value, context = 'SOURCE_SNAPSHOT') {
-  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components'];
+  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components', 'wrapperSchemaRawFingerprint'];
   requireValue(plain(value) && Object.keys(value).length === keys.length
-    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 2, 'WITNESS_SHAPE', context);
+    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 3, 'WITNESS_SHAPE', context);
   const failedFlags = WITNESS_FLAGS.filter(key => value[key] !== true);
   requireValue(failedFlags.length === 0, 'WITNESS_FLAGS', context, { failedFlags });
   requireValue([0, 1].includes(value.initialPrivilegesCount), 'WITNESS_INITIAL_PRIVILEGES', context);
   requireValue(sha(value.fingerprint), 'WITNESS_FINGERPRINT', context);
   requireValue(plain(value.components) && Object.keys(value.components).length === GRAPHQL_COMPONENTS.length
     && GRAPHQL_COMPONENTS.every(key => Object.hasOwn(value.components, key) && sha(value.components[key])), 'WITNESS_COMPONENTS', context);
+  requireValue(sha(value.wrapperSchemaRawFingerprint), 'WITNESS_RAW_SCHEMA_FINGERPRINT', context);
   return value;
+}
+// Only the extra raw-order diagnostic is excluded; every semantic witness field remains.
+export function graphqlComparableWitness(value) {
+  assertGraphqlWitness(value);
+  const { wrapperSchemaRawFingerprint, ...comparable } = value;
+  return comparable;
 }
 export function assertGraphqlRestored(source, target) {
   assertGraphqlWitness(source, 'SOURCE_SNAPSHOT'); assertGraphqlWitness(target, 'TARGET_RESTORED');
   requireValue(source.initialPrivilegesCount === target.initialPrivilegesCount, 'PARITY_INITIAL_PRIVILEGES', 'TARGET_COMPARE');
   const mismatchedComponents = GRAPHQL_COMPONENTS.filter(key => source.components[key] !== target.components[key]).map(key => GRAPHQL_COMPONENT_LABELS[key]);
+  const wrapperSchemaComparison = {
+    rawEqual: source.wrapperSchemaRawFingerprint === target.wrapperSchemaRawFingerprint,
+    semanticEqual: source.components.schema_graphql_public === target.components.schema_graphql_public,
+  };
   requireValue(source.fingerprint === target.fingerprint && mismatchedComponents.length === 0,
-    'PARITY_FINGERPRINT', 'TARGET_COMPARE', { mismatchedComponents });
-  return { nativeGraphqlPrerequisiteVerified: true, nativeGraphqlRestoredExact: true };
+    'PARITY_FINGERPRINT', 'TARGET_COMPARE', { mismatchedComponents, wrapperSchemaComparison });
+  return { nativeGraphqlPrerequisiteVerified: true, nativeGraphqlRestoredExact: true,
+    nativeGraphqlWrapperSchemaRawEqual: wrapperSchemaComparison.rawEqual,
+    nativeGraphqlWrapperSchemaSemanticEqual: wrapperSchemaComparison.semanticEqual };
+
 }
 
 function entriesOf(toc, context) {

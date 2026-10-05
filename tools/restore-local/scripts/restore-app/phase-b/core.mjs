@@ -55,7 +55,10 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
  const checkpoint=dependencies.checkpointSql??readFileSync(new URL('../sql/checkpoint.sql',import.meta.url),'utf8');
  const restored=await(dependencies.restoreTarget??restoreTarget)(runtime,join(paths.stack,'snapshot'),snapshot,review,checkpoint);
  requireValue(restored.restored===true&&restored.sourceOff===true&&restored.targetSeeded===false
-  &&restored.nativeGraphqlPrerequisiteVerified===true&&restored.nativeGraphqlRestoredExact===true,'B_RESTORE');
+  &&restored.nativeGraphqlPrerequisiteVerified===true&&restored.nativeGraphqlRestoredExact===true
+  &&restored.nativeGraphqlWrapperSchemaSemanticEqual===true&&typeof restored.nativeGraphqlWrapperSchemaRawEqual==='boolean','B_RESTORE');
+ save('graphql-comparison.json',{schemaVersion:1,result:'GRAPHQL_WRAPPER_SCHEMA_COMPARISON_PASSED',
+  rawEqual:restored.nativeGraphqlWrapperSchemaRawEqual,semanticEqual:true});
  enter('files_target');await runtime.assertRestoredObjects(fixture);
  const target=await runUi('target');
  enter('files_target');const objects=await runtime.assertRestoredObjects(fixture);
@@ -71,6 +74,7 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
   sourceCases:source.expectedCount,targetCases:target.expectedCount,restored:true,appVerified:true,sourceOff:true,controlledNegativePassed:true,targetIntentionallyChangedAfterPositiveProof:true,targetFinalObjectsIntact:false,
   sameRunSnapshot:true,sameDumpAndObjectBytes:true,restoredObjects:objects.verified,postBackupSentinelAbsent:objects.sentinelAbsent,
   targetSeeded:false,providerContacted:false,liveSessionsRestored:false,physicalDeviceVerified:false,readyForNationalLaunch:false,
-  nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true};
+  nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,
+  nativeGraphqlWrapperSchemaRawEqual:restored.nativeGraphqlWrapperSchemaRawEqual,nativeGraphqlWrapperSchemaSemanticEqual:true};
  save('phase-b.json',result);return result;
 }

@@ -68,7 +68,7 @@ export const GRAPHQL_COMPONENT_LABELS = Object.freeze({wrapper:'WRAPPER_DEFINITI
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);
 export const GRAPHQL_DIAGNOSTIC_REASONS = Object.freeze([
- 'WITNESS_SHAPE','WITNESS_FLAGS','WITNESS_INITIAL_PRIVILEGES','WITNESS_FINGERPRINT','WITNESS_COMPONENTS',
+ 'WITNESS_SHAPE','WITNESS_FLAGS','WITNESS_INITIAL_PRIVILEGES','WITNESS_FINGERPRINT','WITNESS_COMPONENTS','WITNESS_RAW_SCHEMA_FINGERPRINT',
  'PARITY_INITIAL_PRIVILEGES','PARITY_FINGERPRINT','REVIEW','ARCHIVE_BUFFER','ARCHIVE_MAGIC','ARCHIVE_HASH',
  'TOC_BUFFER','TOC_UTF8','TOC_CONTROL','TOC_FORMAT','TOC_DUPLICATE_ID','TOC_SCOPE','TOC_COUNT','TOC_REVIEW_HASH',
  'REQUIRED_EXTENSION_SCHEMA','REQUIRED_WRAPPER_SCHEMA','REQUIRED_HOOK','REQUIRED_DEFAULT_ACL','REQUIRED_TRIGGER',
@@ -82,7 +82,10 @@ export function projectGraphqlDiagnostic(value) {
   failedFlags:reason==='WITNESS_FLAGS'&&Array.isArray(value?.failedFlags)
    ?GRAPHQL_WITNESS_FLAGS.filter(flag=>value.failedFlags.includes(flag)):[],
   mismatchedComponents:reason==='PARITY_FINGERPRINT'&&Array.isArray(value?.mismatchedComponents)
-   ?Object.values(GRAPHQL_COMPONENT_LABELS).filter(component=>value.mismatchedComponents.includes(component)):[]};
+   ?Object.values(GRAPHQL_COMPONENT_LABELS).filter(component=>value.mismatchedComponents.includes(component)):[],
+  ...(reason==='PARITY_FINGERPRINT'&&typeof value?.wrapperSchemaComparison?.rawEqual==='boolean'
+    &&typeof value?.wrapperSchemaComparison?.semanticEqual==='boolean'
+   ?{wrapperSchemaComparison:{rawEqual:value.wrapperSchemaComparison.rawEqual,semanticEqual:value.wrapperSchemaComparison.semanticEqual}}:{})};
 }
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,

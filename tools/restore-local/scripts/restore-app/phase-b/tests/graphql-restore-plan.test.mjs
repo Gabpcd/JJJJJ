@@ -52,10 +52,10 @@ test('duplicate TOC IDs, invalid control bytes and forbidden database objects re
 test('every exact native source property must be true, without extra data or unbounded fingerprints',()=>{
  const source=witness();assertGraphqlWitness(source);
  for(const key of Object.keys(source).filter(k=>source[k]===true))for(const value of [false,null,1,'true'])refuse(()=>assertGraphqlWitness({...source,[key]:value}));
- for(const patch of [{initialPrivilegesCount:2},{schemaVersion:3},{fingerprint:'not-a-hash'},{raw:'PRIVATE_CANARY'}])refuse(()=>assertGraphqlWitness({...source,...patch}));
+ for(const patch of [{initialPrivilegesCount:2},{schemaVersion:4},{fingerprint:'not-a-hash'},{raw:'PRIVATE_CANARY'}])refuse(()=>assertGraphqlWitness({...source,...patch}));
 });
 test('target parity covers native definitions, ACLs, owner and initial privileges via fingerprint',()=>{
- assert.deepEqual(assertGraphqlRestored(witness(),witness()),{nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true});
+ assert.deepEqual(assertGraphqlRestored(witness(),witness()),{nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,nativeGraphqlWrapperSchemaRawEqual:true,nativeGraphqlWrapperSchemaSemanticEqual:true});
  for(const change of [{fingerprint:'b'.repeat(64)},{initialPrivilegesCount:0},{wrapperMembershipExact:false},{triggerExact:false}])refuse(()=>assertGraphqlRestored(witness(),{...witness(),...change}));
 });
 test('both official exports are concatenated byte for byte and supplied to one psql transaction',async()=>{

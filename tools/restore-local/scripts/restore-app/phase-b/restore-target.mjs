@@ -30,12 +30,15 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
   await runtime.copyFilesIn('target', join(privateDir, 'files'));
   const restored = await runtime.sqlJson('target', checkpointSql);
   requireValue(JSON.stringify(restored) === JSON.stringify(snapshot.before), 'B_RESTORE');
-  await runtime.assertSourceOffAndTargetCatalogExact(snapshot);
+  const graphql=await runtime.assertSourceOffAndTargetCatalogExact(snapshot);
+  requireValue(graphql?.nativeGraphqlPrerequisiteVerified===true&&graphql.nativeGraphqlRestoredExact===true
+    &&graphql.nativeGraphqlWrapperSchemaSemanticEqual===true&&typeof graphql.nativeGraphqlWrapperSchemaRawEqual==='boolean','B_RESTORE');
   // Explicit restart, not implicit assumption after the import qualifier's stop.
   await runtime.startApis('target');
   await runtime.assertApiHealthy('target');
   requireValue(JSON.stringify(await runtime.sqlJson('target', checkpointSql)) === JSON.stringify(snapshot.before),
     'B_RESTORE');
   return { restored: true, sourceOff: true, rowDigestsEqual: true, targetSeeded: false, providerContacted: false,
-    nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true };
+    nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,
+    nativeGraphqlWrapperSchemaRawEqual:graphql.nativeGraphqlWrapperSchemaRawEqual,nativeGraphqlWrapperSchemaSemanticEqual:true };
 }

@@ -214,6 +214,7 @@ jobs:
             ${{ env.PROOF_DIR }}/browser-source.json
             ${{ env.PROOF_DIR }}/browser-target.json
             ${{ env.PROOF_DIR }}/target-objects.json
+            ${{ env.PROOF_DIR }}/graphql-comparison.json
             ${{ env.PROOF_DIR }}/controlled-negative.json
             ${{ env.PROOF_DIR }}/phase-b.json
             ${{ env.PROOF_DIR }}/diagnostic.json
