@@ -6,6 +6,7 @@ import { localRuntime } from '../local-runtime.mjs';
 import { catalogueDiagnosticSql, catalogueFactsDiagnostic, CATALOGUE_PRIVATE_KEY } from './catalogue-facts-diagnostic.mjs';
 import { buildB21ProbeSql, decodeB21Probe } from './catalogue-semantics-probe.mjs';
 import { catalogueSemanticsDiagnostic, validateB21Probe } from './catalogue-semantics-diagnostic.mjs';
+import { catalogueParityV2 } from './catalogue-parity-v2.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, requireRestoreInvariant, catalogueRestoreDiagnostic, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
@@ -234,15 +235,15 @@ export function nativeRuntime(privateDir) {
     assertSourceOffAndTargetCatalogExact:async snapshot=>{
       await targetState();const target=await runtime.catalogue('target');
       const parity=assertGraphqlRestored(snapshot.catalogue.nativeGraphql,target.nativeGraphql);
-      // The new raw ACL hash is a diagnostic, not an additional rights field.
-      // Canonical ACL tuples, owner and every other catalogue field still compare exactly.
       const comparable=value=>({...value,nativeGraphql:graphqlComparableWitness(value.nativeGraphql)});
-      requireRestoreInvariant(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'CATALOGUE_PARITY',
+      const catalogueComparison=catalogueParityV2(comparable(snapshot.catalogue),comparable(target),
+        catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target));
+      requireRestoreInvariant(catalogueComparison.v2Equal,'CATALOGUE_PARITY',
         ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target),
           catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target)),
           catalogueSemanticsDiagnostic(snapshot.catalogue,target,catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),
-            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target))));
-      return parity;
+            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target)),catalogueComparison));
+      return {...parity,catalogueComparison};
     },
     startSourceForUi:async()=>{
       await base.verifyState({source:'off',target:'db-only',browser:'absent'});

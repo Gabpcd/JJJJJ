@@ -1,7 +1,8 @@
 import { catalogueFactsDiagnostic, CATALOGUE_FACT_BOUND, CATALOGUE_FACT_BYTES } from './catalogue-facts-diagnostic.mjs';
 import { CONTEXT_KEYS } from './catalogue-semantics-probe.mjs';
 
-// Advisory only. This module cannot change the original catalogue predicate.
+// B21 public summaries remain advisory. V2 also reuses the strict private
+// validators and row comparators below; no public counter decides parity.
 export const B21_PUBLIC_BYTES=16384;
 export const B21_STATUSES=Object.freeze(['NOT_CAPTURED','INVALID_SHAPE','BOUND_EXCEEDED','ANCHOR_MISMATCH','INCOMPLETE','CONTEXT_MISMATCH','CAPTURE_FAILED']);
 export const B21_RELKINDS=Object.freeze(['r','p','v','m','f','S','i','I','c','t','UNKNOWN']);
@@ -54,17 +55,20 @@ function metadata(kind,v) {
   &&keys(v.operators,operators)&&operators.every(k=>v.operators[k]===null||array(v.operators[k],address))
   &&address(v.referencedRelation)&&address(v.parentConstraint);
 }
-const expressionKeys=['kind','identity','localOid','metadata','definition','prettyDefinition','secondaryDefinition','dependencies'];
+const expressionKeys=['kind','identity','localOid','metadata','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition','bindings','dependencies'];
 export function validB21Expression(v) {
  return keys(v,expressionKeys)&&['policy','constraint'].includes(v.kind)&&identity(v.identity,3)
   &&Number.isSafeInteger(v.localOid)&&v.localOid>0&&v.localOid<=4294967295&&metadata(v.kind,v.metadata)
-  &&['definition','prettyDefinition','secondaryDefinition'].every(k=>nullable(v[k]))&&array(v.dependencies,dependency);
+  &&['definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'].every(k=>nullable(v[k]))&&array(v.dependencies,dependency)
+  &&keys(v.bindings,['complete','factKeys','columns'])&&typeof v.bindings.complete==='boolean'
+  &&array(v.bindings.factKeys,k=>identity(k,2)&&['relation','column','function'].includes(k[0]))
+  &&array(v.bindings.columns,c=>Array.isArray(c)&&c.length===3&&text(c[0])&&text(c[1])&&(c[2]===null||identity(c[2],2)));
 }
 export function validateB21Capture(v) {
  try {
   if(keys(v,['schemaVersion','status'])&&v.schemaVersion===1&&v.status==='BOUND_EXCEEDED')return 'BOUND_EXCEEDED';
-  if(!keys(v,['schemaVersion','status','context','resolvedSchemas','currentUser','sessionUser','expressions','relations'])
-   ||v.schemaVersion!==1||v.status!=='COMPLETE'||!keys(v.context,CONTEXT_KEYS)||!CONTEXT_KEYS.every(k=>str(v.context[k]))
+  if(!keys(v,['schemaVersion','status','postgresVersionNum','context','resolvedSchemas','currentUser','sessionUser','expressions','relations'])
+   ||v.schemaVersion!==1||v.status!=='COMPLETE'||v.postgresVersionNum!==170006||!keys(v.context,CONTEXT_KEYS)||!CONTEXT_KEYS.every(k=>str(v.context[k]))
    ||!array(v.resolvedSchemas,text)||v.currentUser!=='postgres'||v.sessionUser!=='postgres'
    ||!array(v.expressions,validB21Expression)||!array(v.relations,validB21Relation))return 'INVALID_SHAPE';
   if(v.expressions.length+v.relations.length>CATALOGUE_FACT_BOUND||Buffer.byteLength(JSON.stringify(v))>CATALOGUE_FACT_BYTES)return 'BOUND_EXCEEDED';
@@ -87,7 +91,7 @@ export function validateB21Probe(v,original) {
   if(!equal(v.current.relations,v.fixed.relations)||v.current.expressions.length!==v.fixed.expressions.length)return 'INCOMPLETE';
   const fixed=new Map(v.fixed.expressions.map(x=>[canonical([x.kind,x.identity]),x]));
   for(const row of v.current.expressions){const other=fixed.get(canonical([row.kind,row.identity]));
-   if(!other||row.localOid!==other.localOid||!equal(row.metadata,other.metadata)||!equal(row.dependencies,other.dependencies))return 'INCOMPLETE';}
+   if(!other||row.localOid!==other.localOid||!equal(row.metadata,other.metadata)||!equal(row.dependencies,other.dependencies)||!equal(row.bindings,other.bindings))return 'INCOMPLETE';}
   return 'COMPLETE';
  }catch{return 'INVALID_SHAPE';}
 }

@@ -156,9 +156,79 @@ BEGIN
   RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B21_LITERAL_CHANGE_REJECTED'; END IF;
 END $literal$;
 INSERT INTO b21_cases VALUES ('LITERAL_CHANGE',b21_expr.fact('constraint','b21_expr.subject','positive'),b21_expr.fact('constraint','b21_expr.copy_subject','positive'));
+
+-- V2 cases use the SAME object before/after native DDL. Their resolved binding
+-- identities are therefore comparable without rewriting OIDs or dependencies.
+CREATE TEMP TABLE b22_cases(name text PRIMARY KEY,left_fact jsonb,right_fact jsonb);
+CREATE TABLE b21_expr.v2_subject(a boolean,b boolean,c boolean,x integer,y integer,z integer,label text);
+CREATE COLLATION b21_expr.user_collation (provider=libc,locale='C');
+CREATE DOMAIN b21_expr.user_domain AS integer;
+ALTER TABLE b21_expr.v2_subject ADD COLUMN custom b21_expr.user_domain;
+ALTER TABLE b21_expr.v2_subject ADD COLUMN custom_array b21_expr.user_domain[];
+CREATE FUNCTION b21_expr.user_compare(integer,integer) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT $1 > $2';
+CREATE OPERATOR b21_expr.## (LEFTARG=integer,RIGHTARG=integer,FUNCTION=b21_expr.user_compare);
+DO $b22_checks$
+DECLARE r record; l jsonb; v jsonb; ddl text;
+BEGIN
+ FOR r IN SELECT * FROM (VALUES
+  ('CHECK_PRETTY_ROUNDTRIP','a AND (b AND c)',NULL::text,true,false),
+  ('BOOLEAN_PRECEDENCE','(a OR b) AND c','a OR (b AND c)',false,false),
+  ('RIGHT_SUBTRACTION','(x-y)-z>0','x-(y-z)>0',false,false),
+  ('CAST_CHANGE','(x::bigint/y)>0','(x::numeric/y)>0',false,false),
+  ('LITERAL_SAME_BINDINGS','x>0','x>1',false,false),
+  ('USER_COLLATION','label COLLATE b21_expr.user_collation <> '''' AND (a AND b)',NULL,true,true),
+  ('USER_DOMAIN','custom>0 AND (a AND b)',NULL,true,true),
+  ('USER_ARRAY','custom_array IS NOT NULL AND (a AND b)',NULL,true,true),
+  ('USER_OPERATOR','x OPERATOR(b21_expr.##) y AND (a AND b)',NULL,true,true)
+ ) t(name,original,changed,pretty_equal,uncovered) LOOP
+  EXECUTE format('ALTER TABLE b21_expr.v2_subject ADD CONSTRAINT probe_check CHECK (%s)',r.original);
+  l:=b21_expr.fact('constraint','b21_expr.v2_subject','probe_check');
+  ddl:=CASE WHEN r.changed IS NULL THEN l->>'prettyDefinition' ELSE format('CHECK (%s)',r.changed) END;
+  ALTER TABLE b21_expr.v2_subject DROP CONSTRAINT probe_check;
+  EXECUTE format('ALTER TABLE b21_expr.v2_subject ADD CONSTRAINT probe_check %s',ddl);
+  v:=b21_expr.fact('constraint','b21_expr.v2_subject','probe_check');
+  IF (l->>'prettyDefinition'=v->>'prettyDefinition') IS DISTINCT FROM r.pretty_equal
+   OR (r.pretty_equal AND (l->>'definition'=v->>'definition'
+     OR l->>'secondaryPrettyDefinition' IS DISTINCT FROM v->>'secondaryPrettyDefinition'))
+   OR (r.uncovered AND (l->'bindings'->>'complete'<>'false' OR v->'bindings'->>'complete'<>'false'))
+   OR (NOT r.uncovered AND (l->'bindings'->>'complete'<>'true' OR v->'bindings'->>'complete'<>'true'))
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_CHECK_CASE'; END IF;
+  INSERT INTO b22_cases VALUES(r.name,l,v);
+  ALTER TABLE b21_expr.v2_subject DROP CONSTRAINT probe_check;
+ END LOOP;
+ -- Concrete counterexamples, including SQL's three-valued boolean semantics.
+ IF ((true OR false) AND false) IS NOT FALSE OR (true OR (false AND false)) IS NOT TRUE
+  OR ((3-2)-2>0) IS NOT FALSE OR (3-(2-2)>0) IS NOT TRUE
+  OR (1::bigint/2>0) IS NOT FALSE OR (1::numeric/2>0) IS NOT TRUE
+  OR (NULL::boolean IS NOT TRUE) IS NOT TRUE OR (NOT NULL::boolean) IS NOT NULL
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_COUNTEREXAMPLE'; END IF;
+END $b22_checks$;
+CREATE POLICY probe_policy ON b21_expr.v2_subject USING (a OR (b OR c)) WITH CHECK(a);
+DO $b22_policies$
+DECLARE l jsonb; v jsonb;
+BEGIN
+ l:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ EXECUTE format('ALTER POLICY probe_policy ON b21_expr.v2_subject USING (%s)',l->>'prettyDefinition');
+ v:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ IF l->>'definition'=v->>'definition' OR l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_POLICY_ROUNDTRIP'; END IF;
+ INSERT INTO b22_cases VALUES('POLICY_PRETTY_ROUNDTRIP',l,v);
+ l:=v;
+ ALTER POLICY probe_policy ON b21_expr.v2_subject WITH CHECK(b);
+ v:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ IF l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition' OR l->'dependencies' IS DISTINCT FROM v->'dependencies'
+  OR l->>'secondaryDefinition'=v->>'secondaryDefinition'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_WITH_CHECK'; END IF;
+ INSERT INTO b22_cases VALUES('WITH_CHECK',l,v);
+ ALTER POLICY probe_policy ON b21_expr.v2_subject USING (a IS NOT TRUE);
+ l:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ ALTER POLICY probe_policy ON b21_expr.v2_subject USING (NOT a);
+ INSERT INTO b22_cases VALUES('NULL_PREDICATE',l,b21_expr.fact('policy','b21_expr.v2_subject','probe_policy'));
+END $b22_policies$;
 SELECT jsonb_build_object('schemaVersion',1,'status','SYNTHETIC_WITNESSES_PASSED',
  'checkNativeRoundtrip',true,'timezoneCanChangeDeparse',true,'fixedContextReproduces',true,
  'regclassNativeRebind',true,'sameDependenciesDoNotErasePredicateChange',true,
  'notValidPreserved',true,'deferrabilityPreserved',true,'literalChangeRejected',true,
- 'cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b21_cases));
+ 'cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b21_cases),
+ 'v2Cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b22_cases));
 ROLLBACK;

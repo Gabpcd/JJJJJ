@@ -16,7 +16,8 @@ const query=`WITH expression_objects AS (
     FROM unnest(p.polroles) x ORDER BY (x<>0),pg_get_userbyid(x))) metadata,
   pg_get_expr(p.polqual,p.polrelid,false) definition,
   pg_get_expr(p.polqual,p.polrelid,true) pretty_definition,
-  pg_get_expr(p.polwithcheck,p.polrelid,false) secondary_definition
+  pg_get_expr(p.polwithcheck,p.polrelid,false) secondary_definition,
+  pg_get_expr(p.polwithcheck,p.polrelid,true) secondary_pretty_definition
  FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN('public','private','auth','storage')
  UNION ALL
@@ -48,15 +49,66 @@ const query=`WITH expression_objects AS (
    'parentConstraint',CASE WHEN k.conparentid=0 THEN NULL ELSE
     (SELECT jsonb_build_array(a.type,a.object_names,a.object_args)
      FROM pg_identify_object_as_address('pg_catalog.pg_constraint'::regclass,k.conparentid,0) a) END),
-  pg_get_constraintdef(k.oid,false),pg_get_constraintdef(k.oid,true),pg_get_expr(k.conbin,k.conrelid,false)
+  pg_get_constraintdef(k.oid,false),pg_get_constraintdef(k.oid,true),pg_get_expr(k.conbin,k.conrelid,false),pg_get_expr(k.conbin,k.conrelid,true)
  FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN('public','private','auth','storage')
+), builtin_types AS (
+ SELECT oid FROM pg_type WHERE oid<16384 AND typnamespace='pg_catalog'::regnamespace
+), builtin_collations AS (
+ SELECT oid FROM pg_collation WHERE oid<16384 AND collnamespace='pg_catalog'::regnamespace
+), covered_columns AS (
+ SELECT a.attrelid,a.attnum,n.nspname||'.'||c.relname||'.'||a.attname fact_name,
+  jsonb_build_array(n.nspname||'.'||c.relname||'.'||a.attname,format_type(a.atttypid,a.atttypmod),
+   CASE WHEN a.attcollation=0 THEN NULL ELSE (SELECT jsonb_build_array(z.nspname,l.collname)
+    FROM pg_collation l JOIN pg_namespace z ON z.oid=l.collnamespace WHERE l.oid=a.attcollation) END) binding_type,
+  a.atttypid IN(SELECT oid FROM builtin_types)
+   AND (a.attcollation=0 OR a.attcollation IN(SELECT oid FROM builtin_collations)) types_covered
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname IN('public','private','auth','storage') AND c.relkind IN('r','p') AND a.attnum>0 AND NOT a.attisdropped
+), covered_functions AS (
+ SELECT p.oid,n.nspname||'.'||p.proname||'('||pg_get_function_identity_arguments(p.oid)||')' fact_name,
+  NOT EXISTS(SELECT 1 FROM unnest(coalesce(p.proallargtypes,p.proargtypes::oid[])||p.prorettype) t
+   WHERE t NOT IN(SELECT oid FROM builtin_types)) types_covered
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname IN('public','private','auth','storage') AND p.prokind IN('f','p')
+), binding_rows AS (
+ SELECT o.kind,o.oid,
+  CASE WHEN d.refclassid='pg_class'::regclass THEN d.refobjid ELSE NULL END relation_id,
+  d.refobjsubid attribute_number,(d.refobjsubid=0 AND d.deptype<>'a') whole_row,
+  CASE WHEN d.refclassid='pg_class'::regclass AND d.refobjsubid=0 AND c.relkind IN('r','p') AND n.nspname IN('public','private','auth','storage')
+    THEN jsonb_build_array('relation',n.nspname||'.'||c.relname)
+   WHEN d.refclassid='pg_class'::regclass AND a.attnum IS NOT NULL THEN jsonb_build_array('column',a.fact_name)
+   WHEN d.refclassid='pg_proc'::regclass AND p.oid IS NOT NULL THEN jsonb_build_array('function',p.fact_name)
+   ELSE NULL END fact_key,
+  CASE WHEN d.refclassid='pg_class'::regclass AND d.refobjsubid=0 AND c.relkind IN('r','p') AND n.nspname IN('public','private','auth','storage')
+    THEN d.deptype='a' OR NOT EXISTS(SELECT 1 FROM covered_columns z WHERE z.attrelid=c.oid AND NOT z.types_covered)
+   WHEN d.refclassid='pg_class'::regclass AND a.attnum IS NOT NULL THEN a.types_covered
+   WHEN d.refclassid='pg_proc'::regclass AND p.oid IS NOT NULL THEN p.types_covered
+   -- Only the pinned server's builtin definitions are outside the v1 fact set.
+   WHEN d.refobjsubid=0 AND d.refobjid<16384 THEN CASE
+    WHEN d.refclassid='pg_proc'::regclass THEN EXISTS(SELECT 1 FROM pg_proc z WHERE z.oid=d.refobjid AND z.pronamespace='pg_catalog'::regnamespace)
+    WHEN d.refclassid='pg_operator'::regclass THEN EXISTS(SELECT 1 FROM pg_operator z WHERE z.oid=d.refobjid AND z.oprnamespace='pg_catalog'::regnamespace)
+    WHEN d.refclassid='pg_type'::regclass THEN d.refobjid IN(SELECT oid FROM builtin_types)
+    WHEN d.refclassid='pg_collation'::regclass THEN d.refobjid IN(SELECT oid FROM builtin_collations)
+    ELSE false END
+   ELSE false END covered
+ FROM expression_objects o JOIN pg_depend d ON d.classid=o.classid AND d.objid=o.oid AND d.objsubid=0
+ LEFT JOIN pg_class c ON d.refclassid='pg_class'::regclass AND c.oid=d.refobjid
+ LEFT JOIN pg_namespace n ON n.oid=c.relnamespace
+ LEFT JOIN covered_columns a ON d.refclassid='pg_class'::regclass AND a.attrelid=d.refobjid AND a.attnum=d.refobjsubid
+ LEFT JOIN covered_functions p ON d.refclassid='pg_proc'::regclass AND p.oid=d.refobjid
 ), expressions AS (
  -- PG17 jsonb emits oid as a string; bigint preserves the full unsigned OID
  -- range as a JSON number, matching the strict private-row validator.
  SELECT jsonb_build_object('kind',o.kind,'identity',o.identity,'localOid',o.oid::bigint,
   'metadata',o.metadata,'definition',o.definition,'prettyDefinition',o.pretty_definition,
-  'secondaryDefinition',o.secondary_definition,
+  'secondaryDefinition',o.secondary_definition,'secondaryPrettyDefinition',o.secondary_pretty_definition,
+  'bindings',(SELECT jsonb_build_object('complete',coalesce(bool_and(b.covered),true),
+   'factKeys',coalesce(jsonb_agg(DISTINCT b.fact_key ORDER BY b.fact_key) FILTER(WHERE b.fact_key IS NOT NULL),'[]'::jsonb),
+   'columns',(SELECT coalesce(jsonb_agg(DISTINCT a.binding_type ORDER BY a.binding_type),'[]'::jsonb)
+    FROM binding_rows z JOIN covered_columns a ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
+    WHERE z.kind=o.kind AND z.oid=o.oid))
+   FROM binding_rows b WHERE b.kind=o.kind AND b.oid=o.oid),
   'dependencies',(SELECT coalesce(jsonb_agg(z.v ORDER BY z.v::text),'[]'::jsonb) FROM (
    SELECT jsonb_build_array(d.deptype,a.type,a.object_names,a.object_args) v
    FROM pg_depend d CROSS JOIN LATERAL pg_identify_object_as_address(d.refclassid,d.refobjid,d.refobjsubid) a
@@ -86,7 +138,7 @@ const query=`WITH expression_objects AS (
  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN('public','private','auth','storage')
 ), payload AS (
- SELECT jsonb_build_object('schemaVersion',1,'status','COMPLETE',
+ SELECT jsonb_build_object('schemaVersion',1,'status','COMPLETE','postgresVersionNum',current_setting('server_version_num')::integer,
   'context',(SELECT jsonb_object_agg(k,current_setting(k)) FROM unnest(ARRAY[
    'search_path','TimeZone','DateStyle','IntervalStyle','extra_float_digits','quote_all_identifiers',
    'standard_conforming_strings','bytea_output','lc_monetary','server_encoding','client_encoding']) k),

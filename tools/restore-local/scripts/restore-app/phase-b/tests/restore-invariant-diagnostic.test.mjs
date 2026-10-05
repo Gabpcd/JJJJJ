@@ -88,7 +88,7 @@ function harness(t,reason){
  const dir=mkdtempSync(join(tmpdir(),'jolene-b19-pure-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  mkdirSync(join(dir,'files'));const archive=Buffer.from('PGDMPsynthetic');writeFileSync(join(dir,'database.dump'),archive);writeFileSync(join(dir,'archive-toc.private.txt'),'synthetic');
  const events=[],snapshot={run:'synthetic',tocSha256:'a'.repeat(64),archiveSha256:digest(archive),files:[],before:{same:true},catalogue:catalogue()};let checkpoints=0;
- const flags={nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,nativeGraphqlWrapperSchemaSemanticEqual:true,nativeGraphqlWrapperSchemaRawEqual:false};
+ const flags={nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,nativeGraphqlWrapperSchemaSemanticEqual:true,nativeGraphqlWrapperSchemaRawEqual:false,catalogueComparison:{schemaVersion:2,status:'EQUAL',reason:'NORMALIZED',v1Equal:false,v2Equal:true,aclNormalizedCount:1,expressionNormalizedCount:0}};
  const runtime={run:'synthetic',verifyState:async()=>{},assertTargetNativeEmpty:async()=>{},assertTargetFilesEmpty:async()=>{},
   prepareTargetArchiveRestore:async()=>{events.push('prepare');if(reason==='TOC_READBACK_BEFORE_EXPORT')requireRestoreInvariant(false,reason);return {};},
   recreateOwnedEmptyTargetDatabase:async()=>events.push('recreate'),executePreparedTargetRestore:async()=>events.push('execute'),applyReviewedRoleSettings:async()=>events.push('roles'),copyFilesIn:async()=>events.push('copy'),

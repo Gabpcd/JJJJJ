@@ -4,7 +4,7 @@ import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
-import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES } from '../catalogue-semantics-witness.mjs';
+import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES } from '../catalogue-semantics-witness.mjs';
 import { relation,expression,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
@@ -23,7 +23,7 @@ function fixture(){
   acl.cases.push({name:n,left:a,right:b});
  }
  const expr={schemaVersion:1,status:'SYNTHETIC_WITNESSES_PASSED',checkNativeRoundtrip:true,timezoneCanChangeDeparse:true,fixedContextReproduces:true,regclassNativeRebind:true,
-  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,cases:[]};
+  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,cases:[],v2Cases:[]};
  for(const [n,expected] of Object.entries(B21_EXPRESSION_CASES)){
   const a=expression(['REGCLASS_REBIND','PREDICATE_CHANGE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
   if(expected==='persistentDifferenceCount'){b.definition+=' changed';b.prettyDefinition+=' changed';}
@@ -32,6 +32,15 @@ function fixture(){
   if(n==='DEFERRABILITY_CHANGE')a.metadata.condeferrable=true;
   expr.cases.push({name:n,left:a,right:b});
  }
+ for(const [n,expected] of Object.entries(B22_EXPRESSION_CASES)){
+  const a=expression(['POLICY_PRETTY_ROUNDTRIP','WITH_CHECK','NULL_PREDICATE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
+  a.secondaryDefinition=b.secondaryDefinition=a.secondaryPrettyDefinition=b.secondaryPrettyDefinition=PRIVATE_CANARY;
+  b.definition+=' grouped';
+  if(n.startsWith('USER_'))a.bindings.complete=b.bindings.complete=false;
+  else if(n==='WITH_CHECK')b.secondaryDefinition+=' changed';
+  else if(!expected)b.prettyDefinition+=' changed';
+  expr.v2Cases.push({name:n,left:a,right:b});
+ }
  return [acl,expr];
 }
 function container(){return {Name:'/'+name,Config:{Labels:{[B21_LABEL]:run},Image:B21_IMAGE,User:'postgres',Entrypoint:['sh'],Cmd:['-ceu',B21_START_SCRIPT]},
@@ -39,13 +48,15 @@ function container(){return {Name:'/'+name,Config:{Labels:{[B21_LABEL]:run},Imag
   Tmpfs:{'/tmp':'rw,noexec,nosuid,size=256m,mode=1777','/var/run/postgresql':'rw,noexec,nosuid,size=16m,mode=1777'}},
  NetworkSettings:{Ports:{'5432/tcp':null},Networks:{none:{}}},Mounts:[],State:{Status:'created',OOMKilled:false}};}
 test('native private rows traverse the actual semantic comparators and a closed receipt',()=>{
- const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);
+ const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,12);
  assert.ok(!JSON.stringify(receipt).includes(PRIVATE_CANARY));assert.deepEqual(projectB21NativeWitnessReceipt(receipt),receipt);
  assert.throws(()=>projectB21NativeWitnessReceipt({...receipt,sql:PRIVATE_CANARY}),/B_SEMANTICS_WITNESS/);
  for(const edit of [v=>v[0].cases.find(r=>r.name==='REAL_REVOKE').right=structuredClone(v[0].cases.find(r=>r.name==='REAL_REVOKE').left),
   v=>v[1].cases.find(r=>r.name==='PREDICATE_CHANGE').right=structuredClone(v[1].cases.find(r=>r.name==='PREDICATE_CHANGE').left),
   v=>v[1].cases.find(r=>r.name==='VALIDATION_CHANGE').left.metadata.convalidated=true,
-  v=>v[0].cases[0].sql=PRIVATE_CANARY,v=>v[0].cases.pop(),v=>v[1].cases[0].name=PRIVATE_CANARY]){
+  v=>v[0].cases[0].sql=PRIVATE_CANARY,v=>v[0].cases.pop(),v=>v[1].cases[0].name=PRIVATE_CANARY,
+  v=>v[1].v2Cases.find(r=>r.name==='USER_DOMAIN').right.bindings.complete=true,
+  v=>v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').right.prettyDefinition=v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').left.prettyDefinition]){
   const v=fixture();edit(v);assert.throws(()=>validateB21NativeWitnesses(...v),e=>{assert.ok(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));return e.code==='B_SEMANTICS_WITNESS';});
  }
 });

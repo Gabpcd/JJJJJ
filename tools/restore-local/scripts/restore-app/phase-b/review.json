@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B21 OID JSON transport fix approved for one isolated CI diagnostic after independent review 76bbe1058e748518d255aea3a5178600220bd33be2191f0ed2e3a7cd383454ca of candidate manifest 4398e10809119bd24094c73bd616ea15a86dc1af4349e0639afd16dc914a7128, and root exact-delta review. 429 author pure tests and 17 root/independent targeted tests pass. SQL projection casts oid to bigint; integer validator, catalogue/GraphQL equality gates and isolation remain unchanged. Native witnesses and restored target frontend remain unverified. No production, account, provider or mobile operation."
+  "note": "B22 reviewed for one isolated CI qualification only. Candidate manifest caa8a05515e5ef1516538659663da89d6f91cad8b3693b7e17470223e4b70a4b; independent review SHA256 0ace6a1798419c7b16ace25081cd2ff9297d89b97cef4d8aa54863c44408add3. Root verified the comparator, SQL witnesses, runtime guards, 20 files, 109 pins, 219 canonical migrations and 445 pure tests. PostgreSQL17.6 native witnesses and target UI remain unqualified until successful execution. Product stays 7dfdeb42f724a1d80f78318ecf468d248b321a68; no production/provider operation or mobile delivery."
 }

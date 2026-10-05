@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 
-// Advisory only. No names, values, SQL, hashes or ACL identities cross this module's
-// public projection. The original catalogue comparison remains the only gate.
+// The public projection is advisory and contains no names, values, SQL, hashes
+// or ACL identities. V2 reuses only the strict private capture validator;
+// diagnostic counters never decide catalogue parity.
 export const CATALOGUE_FACT_BOUND = 100000;
 export const CATALOGUE_FACT_BYTES = 16 * 1024 * 1024;
 export const CATALOGUE_DIAGNOSTIC_BYTES = 16384;
@@ -84,7 +85,7 @@ function validSemantic(row) {
   && ((t[0] === 'PUBLIC' && t[1] === null) || (t[0] === 'ROLE' && string(t[1]) && t[1].length>0))
   && string(t[2]) && t[2].length>0 && privileges.includes(t[3]) && typeof t[4] === 'boolean');
 }
-function captureStatus(value) {
+export function captureStatus(value) {
  if (value === undefined) return 'NOT_CAPTURED';
  if (keys(value,['schemaVersion','status']) && value.schemaVersion === 1 && value.status === 'BOUND_EXCEEDED') return 'BOUND_EXCEEDED';
  if (!keys(value,['schemaVersion','status','facts']) || value.schemaVersion !== 1 || value.status !== 'COMPLETE' || !Array.isArray(value.facts)) return 'INVALID_SHAPE';

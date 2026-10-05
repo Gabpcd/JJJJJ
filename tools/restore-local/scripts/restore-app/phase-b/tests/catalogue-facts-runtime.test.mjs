@@ -11,15 +11,15 @@ import { nativeRuntime, SETTINGS_SQL } from '../native-runtime.mjs';
 import { CATALOGUE_PRIVATE_KEY } from '../catalogue-facts-diagnostic.mjs';
 import { closedFailure } from '../contract.mjs';
 import { input as graphqlInput } from './graphql-test-fixture.mjs';
-import { b21Fixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
+import { b21Fixture,v2Fixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 
 // Every child process is replaced before nativeRuntime construction. No Docker,
 // database, browser, network or native process is run by these tests.
-function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,probeAnchorDrift=false,probeFailure=false}={}) {
+function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,v2=false,probeAnchorDrift=false,probeFailure=false}={}) {
  const parent=realpathSync(mkdtempSync(join(tmpdir(),'catalogue-b20-pure-')));t.after(()=>rmSync(parent,{recursive:true,force:true}));
  const directory=join(parent,'stack'),run='jolene-restore-drill-987654-1';preparePlan(directory,run);
  const plan=JSON.parse(readFileSync(join(directory,'compose.private.json'),'utf8')),events=[],graphql=graphqlInput();
- const canary='PRIVATE_B20_RAW_DEFINITION_AND_ACL_IDENTITY',b21f=b21Fixture();let sourceOff=false;
+ const canary='PRIVATE_B20_RAW_DEFINITION_AND_ACL_IDENTITY',b21f=v2?v2Fixture():b21Fixture();let sourceOff=false;
  const containers=Object.values(plan.services).map((s,i)=>({Id:'synthetic'+i,Name:'/'+s.container_name,
   Config:{Labels:s.labels,Image:s.image,Env:Object.entries(s.environment).map(([k,v])=>k+'='+v),Cmd:s.command},
   NetworkSettings:{Networks:{[run+'-network']:{}}},HostConfig:{PortBindings:{},CapAdd:null,NetworkMode:run+'-network',LogConfig:{Type:'none'}},
@@ -132,4 +132,13 @@ test('B21 failed native capture discards stdout/stderr and cannot replace the or
   const v=closedFailure(e,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.semantics.status,'CAPTURE_FAILED');return true;
  });
  for(const file of readdirSync(h.directory,{recursive:true,withFileTypes:true}).filter(d=>d.isFile()))assert.ok(!readFileSync(join(file.parentPath??file.path,file.name)).includes(Buffer.from(PRIVATE_CANARY)));
+});
+test('actual runtime v2 accepts only anchored private object parity and preserves the raw v1 mismatch',async t=>{
+ const h=harness(t,{b21:true,v2:true}),snapshot=await h.capture();await h.runtime.stopSource();
+ const result=await h.runtime.assertSourceOffAndTargetCatalogExact(snapshot);
+ assert.equal(result.catalogueComparison.v1Equal,false);assert.equal(result.catalogueComparison.v2Equal,true);
+ assert.equal(result.catalogueComparison.aclNormalizedCount,2);assert.equal(result.catalogueComparison.expressionNormalizedCount,2);
+ assert(!JSON.stringify(result).includes(PRIVATE_CANARY));assert(!JSON.stringify(snapshot).includes(PRIVATE_CANARY));
+ assert.deepEqual(h.events,['source-catalogue','source-b21-probe','dump','source-off','target-catalogue','target-b21-probe']);
+ const reloaded=JSON.parse(JSON.stringify(snapshot));await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(reloaded));
 });

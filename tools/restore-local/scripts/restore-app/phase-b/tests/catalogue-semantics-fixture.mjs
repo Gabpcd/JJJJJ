@@ -9,14 +9,14 @@ export function expression(kind='constraint',name='constraint') {
  confupdtype:'',confdeltype:'',confmatchtype:'',conkey:['id'],confkey:null,confdelsetcols:null,
  operators:{conpfeqop:null,conppeqop:null,conffeqop:null,conexclop:null},referencedRelation:null,parentConstraint:null};
  return {kind,identity:['public','subject',name],localOid:123,metadata,definition:PRIVATE_CANARY,prettyDefinition:PRIVATE_CANARY,
- secondaryDefinition:null,dependencies:[['a','table column',['public','subject','id'],[]]]};
+ secondaryDefinition:null,secondaryPrettyDefinition:null,bindings:{complete:true,factKeys:[['column','public.subject.id']],columns:[['public.subject.id','integer',null]]},dependencies:[['a','table column',['public','subject','id'],[]]]};
 }
-export function capture(){return {schemaVersion:1,status:'COMPLETE',context:Object.fromEntries(CONTEXT_KEYS.map(k=>[k,({search_path:'pg_catalog',TimeZone:'UTC',DateStyle:'ISO, YMD',
+export function capture(){return {schemaVersion:1,status:'COMPLETE',postgresVersionNum:170006,context:Object.fromEntries(CONTEXT_KEYS.map(k=>[k,({search_path:'pg_catalog',TimeZone:'UTC',DateStyle:'ISO, YMD',
  IntervalStyle:'postgres',extra_float_digits:'3',quote_all_identifiers:'off',standard_conforming_strings:'on',bytea_output:'hex',lc_monetary:'C',server_encoding:'UTF8',client_encoding:'UTF8'})[k]])),
  resolvedSchemas:['pg_catalog'],currentUser:'postgres',sessionUser:'postgres',relations:[],expressions:[]};}
 const policyValue=e=>({schemaname:e.identity[0],tablename:e.identity[1],policyname:e.identity[2],permissive:'PERMISSIVE',roles:['public'],cmd:'ALL',qual:e.definition,with_check:e.secondaryDefinition});
 export function b21Fixture() {
- const source={catalogue_sha256:'a'.repeat(64),database:[],roles:[],memberships:[]},target={...source,catalogue_sha256:'b'.repeat(64)};
+ const source={catalogue_sha256:'a'.repeat(64),database:[],roles:[],memberships:[]},target={...structuredClone(source),catalogue_sha256:'b'.repeat(64)};
  const sourceFacts={schemaVersion:1,status:'COMPLETE',facts:[]},targetFacts=structuredClone(sourceFacts);
  const a=capture(),b=capture();
  for(let i=0;i<16;i++){
@@ -35,3 +35,34 @@ export function b21Fixture() {
  return {source,target,sourceFacts,targetFacts,sourceProbe,targetProbe};
 }
 export const diagnosticArgs=v=>[v.source,v.target,v.sourceFacts,v.targetFacts,v.sourceProbe,v.targetProbe];
+
+export function v2Fixture(){
+ const source={catalogue_sha256:'a'.repeat(64),database:[],roles:[],memberships:[]},target={...structuredClone(source),catalogue_sha256:'b'.repeat(64)};
+ const sourceFacts={schemaVersion:1,status:'COMPLETE',facts:[]},targetFacts=structuredClone(sourceFacts),a=capture(),b=capture();
+ const r=relation('subject');r.rawState='PRESENT';const s={...structuredClone(r),rawState:'NULL'};
+ a.relations.push(r);b.relations.push(s);
+ sourceFacts.facts.push(['relation','public.subject',['r',false,false,'owner',['owner=arwdDxtm/owner']],defaultTuples()]);
+ targetFacts.facts.push(['relation','public.subject',['r',false,false,'owner',null],null]);
+ for(const facts of [sourceFacts,targetFacts]){
+  for(const name of ['a','b','c'])facts.facts.push(['column','public.subject.'+name,['boolean',false,'','',null,null],null]);
+  facts.facts.push(['function','public.helper()',[PRIVATE_CANARY,'owner',['owner=X/owner','reader=X/owner']],
+   [['ROLE','owner','owner','EXECUTE',false],['ROLE','reader','owner','EXECUTE',false]]]);
+ }
+ targetFacts.facts.at(-1)[2][2].reverse();targetFacts.facts.at(-1)[3].reverse();
+ for(const kind of ['policy','constraint']){
+  const x=expression(kind,kind),y=structuredClone(x);
+  x.metadata=kind==='constraint'?{...x.metadata,conkey:['a','b','c']}:x.metadata;y.metadata=structuredClone(x.metadata);
+  x.bindings=y.bindings={complete:true,factKeys:[['relation','public.subject'],['column','public.subject.a'],['function','public.helper()']],columns:[['public.subject.a','boolean',null]]};
+  x.dependencies=y.dependencies=[['a','table',['public','subject'],[]],['n','table column',['public','subject','a'],[]],['n','function',['public','helper'],[]]];
+  x.definition=kind==='policy'?'(a AND (b AND c))':'CHECK ((a AND (b AND c)))';
+  y.definition=kind==='policy'?'(a AND b AND c)':'CHECK ((a AND b AND c))';
+  x.prettyDefinition=y.prettyDefinition=kind==='policy'?'a AND b AND c':'CHECK (a AND b AND c)';
+  x.secondaryDefinition=kind==='policy'?'a':'(a AND (b AND c))';y.secondaryDefinition=kind==='policy'?'a':'(a AND b AND c)';
+  x.secondaryPrettyDefinition=y.secondaryPrettyDefinition=kind==='policy'?'a':'a AND b AND c';y.localOid++;
+  a.expressions.push(structuredClone(x));b.expressions.push(structuredClone(y));
+  sourceFacts.facts.push([kind,x.identity.join('.'),kind==='policy'?policyValue(x):x.definition,null]);
+  targetFacts.facts.push([kind,y.identity.join('.'),kind==='policy'?policyValue(y):y.definition,null]);
+ }
+ return {source,target,sourceFacts,targetFacts,sourceProbe:{anchor:structuredClone(source),current:a,fixed:structuredClone(a)},
+  targetProbe:{anchor:structuredClone(target),current:b,fixed:structuredClone(b)}};
+}

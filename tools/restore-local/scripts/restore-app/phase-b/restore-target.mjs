@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { digest, fileTree } from '../snapshot-restore.mjs';
 import { requireValue, requireRestoreInvariant } from './contract.mjs';
+import { projectCatalogueParityV2 } from './catalogue-parity-v2.mjs';
 const DB = 'jolene_candidatures_pg17_test';
 
 export async function restoreTarget(runtime, privateDir, snapshot, reviewed, checkpointSql) {
@@ -33,6 +34,8 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
   const graphql=await runtime.assertSourceOffAndTargetCatalogExact(snapshot);
   requireRestoreInvariant(graphql?.nativeGraphqlPrerequisiteVerified===true&&graphql.nativeGraphqlRestoredExact===true
     &&graphql.nativeGraphqlWrapperSchemaSemanticEqual===true&&typeof graphql.nativeGraphqlWrapperSchemaRawEqual==='boolean','GRAPHQL_RESULT');
+  const catalogueComparison=projectCatalogueParityV2(graphql.catalogueComparison);
+  requireRestoreInvariant(catalogueComparison.v2Equal,'CATALOGUE_V2_RESULT');
   // Explicit restart, not implicit assumption after the import qualifier's stop.
   await runtime.startApis('target');
   await runtime.assertApiHealthy('target');
@@ -40,5 +43,6 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
     'CHECKPOINT_AFTER_API');
   return { restored: true, sourceOff: true, rowDigestsEqual: true, targetSeeded: false, providerContacted: false,
     nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,
-    nativeGraphqlWrapperSchemaRawEqual:graphql.nativeGraphqlWrapperSchemaRawEqual,nativeGraphqlWrapperSchemaSemanticEqual:true };
+    nativeGraphqlWrapperSchemaRawEqual:graphql.nativeGraphqlWrapperSchemaRawEqual,nativeGraphqlWrapperSchemaSemanticEqual:true,
+    catalogueComparison };
 }
