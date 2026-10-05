@@ -8,7 +8,7 @@ import { restoreTarget } from './restore-target.mjs';
 import { writeBrowserInput } from './browser-input.mjs';
 import { browserDriver } from './browser-driver.mjs';
 import { verifyBuild } from './build-app.mjs';
-import { PRODUCT_SHA, assertReview, assertNativeReview, requireValue, validateBrowserReceipt } from './contract.mjs';
+import { PRODUCT_SHA, assertReview, assertNativeReview, requireValue, requireRestoreInvariant, validateBrowserReceipt } from './contract.mjs';
 
 // qualify() saves its progress repeatedly, including before it rethrows an
 // import failure. Replace only this private progress report atomically; command
@@ -54,9 +54,9 @@ export async function runPhaseB(evidence,paths,review,save,dependencies={}) {
  enter('restore');
  const checkpoint=dependencies.checkpointSql??readFileSync(new URL('../sql/checkpoint.sql',import.meta.url),'utf8');
  const restored=await(dependencies.restoreTarget??restoreTarget)(runtime,join(paths.stack,'snapshot'),snapshot,review,checkpoint);
- requireValue(restored.restored===true&&restored.sourceOff===true&&restored.targetSeeded===false
+ requireRestoreInvariant(restored.restored===true&&restored.sourceOff===true&&restored.targetSeeded===false
   &&restored.nativeGraphqlPrerequisiteVerified===true&&restored.nativeGraphqlRestoredExact===true
-  &&restored.nativeGraphqlWrapperSchemaSemanticEqual===true&&typeof restored.nativeGraphqlWrapperSchemaRawEqual==='boolean','B_RESTORE');
+  &&restored.nativeGraphqlWrapperSchemaSemanticEqual===true&&typeof restored.nativeGraphqlWrapperSchemaRawEqual==='boolean','RESTORE_RESULT');
  save('graphql-comparison.json',{schemaVersion:1,result:'GRAPHQL_WRAPPER_SCHEMA_COMPARISON_PASSED',
   rawEqual:restored.nativeGraphqlWrapperSchemaRawEqual,semanticEqual:true});
  enter('files_target');await runtime.assertRestoredObjects(fixture);

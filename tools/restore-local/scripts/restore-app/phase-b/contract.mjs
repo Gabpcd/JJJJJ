@@ -14,6 +14,14 @@ export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CAL
 export const STAGES = new Set([...A_STAGES,'dependencies','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function requireValue(ok, code = 'B_CONTEXT') { if (!ok) { const error = new Error(CODES.has(code) ? code : 'B_FAILED'); error.code = error.message; throw error; } }
+// Keep the existing refusal and boolean intact; diagnostics never decide a pass.
+export function requireRestoreInvariant(ok, reason, diagnostic) {
+ if(ok)return;
+ try { requireValue(false,'B_RESTORE'); } catch(error) {
+  let catalogue;try { catalogue=diagnostic?.(); } catch { catalogue={status:'INVALID_SHAPE'}; }
+  error.restoreInvariant=projectRestoreInvariant({reason,catalogue});throw error;
+ }
+}
 export const RESTORE_CALL_OPERATIONS = Object.freeze(['TARGET_ARCHIVE_TOC_READ','TARGET_TOC_WRITE','TARGET_TOC_READBACK','TARGET_ARCHIVE_SQL_EXPORT','TARGET_TOC_REMOVE',
  'TARGET_DATABASE_RECREATE','TARGET_SQL_RESTORE','TARGET_ROLE_SETTINGS','TARGET_FILES_COPY_IN','TARGET_ARCHIVE_RESTORE']);
 const RESTORE_SIGNALS = new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS','SIGPIPE']);
@@ -66,6 +74,40 @@ export const GRAPHQL_COMPONENT_LABELS = Object.freeze({wrapper:'WRAPPER_DEFINITI
  extension:'EXTENSION_METADATA',trigger:'TRIGGER_METADATA',initial_privileges:'INITIAL_PRIVILEGES',
  default_acl:'DEFAULT_PRIVILEGES',schema_extensions:'HOOK_SCHEMA_RIGHTS',schema_graphql_public:'WRAPPER_SCHEMA_RIGHTS',
  schema_graphql:'EXTENSION_SCHEMA_RIGHTS'});
+export const RESTORE_INVARIANT_REASONS=Object.freeze(['PREPARE_SINGLE_USE','EXPORT_PARTITION',
+ 'TOC_READBACK_BEFORE_EXPORT','TOC_READBACK_AFTER_EXPORT','DATABASE_RECREATE_TOKEN','RESTORE_PREPARED_TOKEN',
+ 'CHECKPOINT_BEFORE_API','CATALOGUE_PARITY','GRAPHQL_RESULT','CHECKPOINT_AFTER_API','RESTORE_RESULT']);
+export const RESTORE_CATALOGUE_FIELDS=Object.freeze(['catalogue_sha256','database','roles','memberships','databaseRoleSettings','nativeGraphql']);
+export const RESTORE_CATALOGUE_SECTIONS=Object.freeze([...RESTORE_CATALOGUE_FIELDS,'OTHER_FIELDS','FIELD_ORDER']);
+export const RESTORE_NATIVE_GRAPHQL_FIELDS=Object.freeze(['schemaVersion',...GRAPHQL_WITNESS_FLAGS,
+ 'initialPrivilegesCount','fingerprint','components','wrapperSchemaInitialPrivileges']);
+const restorePlain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const restoreKeys=(v,keys)=>restorePlain(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
+export function catalogueRestoreDiagnostic(source,target) {
+ if(!restorePlain(source)||!restorePlain(target))return {status:'INVALID_SHAPE'};
+ const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+ const sections=RESTORE_CATALOGUE_FIELDS.filter(k=>!equal(source[k],target[k]));
+ const other=v=>Object.entries(v).filter(([k])=>!RESTORE_CATALOGUE_FIELDS.includes(k));
+ if(!equal(other(source),other(target)))sections.push('OTHER_FIELDS');
+ if(!equal(Object.keys(source),Object.keys(target)))sections.push('FIELD_ORDER');
+ const nativeGraphqlFields=Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,equal(source.nativeGraphql?.[k],target.nativeGraphql?.[k])]));
+ return {status:'COMPLETE',sections,...(sections.includes('nativeGraphql')?{nativeGraphqlFields}:{})};
+}
+export function projectRestoreInvariant(value) {
+ const reason=RESTORE_INVARIANT_REASONS.includes(value?.reason)?value.reason:'UNKNOWN';
+ const result={schemaVersion:1,reason};
+ if(reason!=='CATALOGUE_PARITY')return result;
+ const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql');
+ const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[])];
+ if(!restoreKeys(c,keys)||c.status!=='COMPLETE'||!Array.isArray(c.sections)
+  ||c.sections.length>RESTORE_CATALOGUE_SECTIONS.length||new Set(c.sections).size!==c.sections.length
+  ||!c.sections.every(k=>RESTORE_CATALOGUE_SECTIONS.includes(k))
+  ||(hasNative&&(!restoreKeys(c.nativeGraphqlFields,RESTORE_NATIVE_GRAPHQL_FIELDS)
+    ||!RESTORE_NATIVE_GRAPHQL_FIELDS.every(k=>typeof c.nativeGraphqlFields[k]==='boolean'))))
+  return {...result,catalogue:{status:'INVALID_SHAPE'}};
+ return {...result,catalogue:{status:'COMPLETE',sections:RESTORE_CATALOGUE_SECTIONS.filter(k=>c.sections.includes(k)),
+  ...(hasNative?{nativeGraphqlFields:Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,c.nativeGraphqlFields[k]]))}:{})}};
+}
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);
 export const GRAPHQL_DIAGNOSTIC_REASONS = Object.freeze([
@@ -94,6 +136,7 @@ export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,
  sqlLine:Number.isSafeInteger(error?.diagnostic?.line)&&error.diagnostic.line>0&&error.diagnostic.line<1_000_000?error.diagnostic.line:null,
  ...(stage==='restore'&&error?.code==='B_CALL'&&error?.restoreCall?{restoreCall:projectRestoreCall(error.restoreCall)}:{}),
+ ...(stage==='restore'&&error?.code==='B_RESTORE'&&error?.restoreInvariant?{restoreInvariant:projectRestoreInvariant(error.restoreInvariant)}:{}),
  ...(error?.code==='B_GRAPHQL_RESTORE_REFUSED'?{graphql:projectGraphqlDiagnostic(error?.graphql)}:{}),
  restored:false,appVerified:false,readyForNationalLaunch:false }; }
 export function assertReview(review) {

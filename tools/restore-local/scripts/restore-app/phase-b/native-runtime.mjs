@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
-import { DB, digest, requireValue, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
+import { DB, digest, requireValue, requireRestoreInvariant, catalogueRestoreDiagnostic, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
 import { assertGraphqlWitness,assertGraphqlNativeBaseline, assertGraphqlRestored, graphqlComparableWitness, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
 
 // PG17 pg_backup_db.c emits the first error and then "Command was:" even
@@ -144,7 +144,7 @@ export function nativeRuntime(privateDir) {
       await base.copyFilesOut('target',path);assertEmptyFileTree(path);
     },
     recreateOwnedEmptyTargetDatabase:async database=>{
-      requireValue(database===DB&&preparedToken&&preparedRestores.has(preparedToken)&&!targetRecreated,'B_RESTORE');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
+      requireRestoreInvariant(database===DB&&preparedToken&&preparedRestores.has(preparedToken)&&!targetRecreated,'DATABASE_RECREATE_TOKEN');await targetState();await base.assertTargetNativeEmpty();await runtime.assertTargetFilesEmpty();
       await targetSql(`DROP DATABASE ${DB};\nCREATE DATABASE ${DB} OWNER postgres TEMPLATE template0;`,'postgres','TARGET_DATABASE_RECREATE');
       targetRecreated=true;
       // PG17 pg_dump does not recreate public: its SCHEMA TOC entry replays
@@ -153,7 +153,7 @@ export function nativeRuntime(privateDir) {
     // Complete SQL preparation precedes DROP. Both exports use the very same
     // archive; only the exact native prerequisite partition runs first.
     prepareTargetArchiveRestore:async input=>{
-      requireValue(!preparedToken&&!targetRecreated,'B_RESTORE');
+      requireRestoreInvariant(!preparedToken&&!targetRecreated,'PREPARE_SINGLE_USE');
       await targetState();await base.assertTargetNativeEmpty();
       partitionGraphqlRestore(input); // Validate bytes/review before any native tool.
       await targetState();
@@ -163,16 +163,16 @@ export function nativeRuntime(privateDir) {
       requireValue(actualToc.equals(input.toc),'B_SNAPSHOT');
       const prepared=await prepareGraphqlRestore({...input,toc:actualToc},async({partition,archive,list,args})=>{
         const listPath='/tmp/jolene-graphql-'+partition+'.list';
-        requireValue(['prerequisites','remainder'].includes(partition),'B_RESTORE');
+        requireRestoreInvariant(['prerequisites','remainder'].includes(partition),'EXPORT_PARTITION');
         await targetState();
         // Fixed script; noclobber refuses existing paths, including symlinks.
         call(['exec','-i',`${run}-target-db`,'sh','-c','umask 077; set -C; cat > '+listPath],list,'TARGET_TOC_WRITE');
         await targetState();
-        requireValue(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'B_RESTORE');
+        requireRestoreInvariant(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'TOC_READBACK_BEFORE_EXPORT');
         await targetState();
         const sql=call(['exec','-i',`${run}-target-db`,'pg_restore',...args],archive,'TARGET_ARCHIVE_SQL_EXPORT');
         await targetState();
-        requireValue(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'B_RESTORE');
+        requireRestoreInvariant(call(['exec',`${run}-target-db`,'cat',listPath],undefined,'TARGET_TOC_READBACK').equals(list),'TOC_READBACK_AFTER_EXPORT');
         await targetState();
         call(['exec',`${run}-target-db`,'rm','--',listPath],undefined,'TARGET_TOC_REMOVE');
         return sql;
@@ -185,7 +185,7 @@ export function nativeRuntime(privateDir) {
       return token;
     },
     executePreparedTargetRestore:async token=>{
-      const prepared=preparedRestores.get(token);requireValue(token===preparedToken&&targetRecreated&&prepared&&digest(prepared.sql)===prepared.sqlSha256,'B_RESTORE');
+      const prepared=preparedRestores.get(token);requireRestoreInvariant(token===preparedToken&&targetRecreated&&prepared&&digest(prepared.sql)===prepared.sqlSha256,'RESTORE_PREPARED_TOKEN');
       await targetState();preparedRestores.delete(token); // Single use, also on failure.
       call(['exec','-i',`${run}-target-db`,'psql',...prepared.transactionArgs],prepared.sql,'TARGET_SQL_RESTORE');
     },
@@ -204,7 +204,8 @@ export function nativeRuntime(privateDir) {
       // The new raw ACL hash is a diagnostic, not an additional rights field.
       // Canonical ACL tuples, owner and every other catalogue field still compare exactly.
       const comparable=value=>({...value,nativeGraphql:graphqlComparableWitness(value.nativeGraphql)});
-      requireValue(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'B_RESTORE');
+      requireRestoreInvariant(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'CATALOGUE_PARITY',
+        ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target)));
       return parity;
     },
     startSourceForUi:async()=>{
