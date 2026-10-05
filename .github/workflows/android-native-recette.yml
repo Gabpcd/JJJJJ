@@ -92,17 +92,20 @@ jobs:
           export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
           npx cap sync android
       - name: Assembler l’APK Android de recette
+        id: compiler_assembly
         shell: bash
         run: |
           set -euo pipefail
           export GIT_COMMIT_SHA="$(git rev-parse HEAD)"
-          cd android
-          case "$NATIVE_RECETTE_VARIANT" in
-            debug) ./gradlew --no-daemon assembleDebug ;;
-            optimized) ./gradlew --no-daemon assembleRecetteOptimized ;;
-            *) exit 1 ;;
-          esac
-          cd ..
+          python3 scripts/native/android_compiler_diagnostic.py
+      - name: Conserver le diagnostic fermé de compilation
+        if: ${{ !cancelled() && steps.compiler_assembly.outputs.diagnostic_ready == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-compiler-diagnostic-${{ matrix.variant }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: test-results/android-compiler-diagnostic/diagnostic.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Contrôler le DEX et le mapping de la recette R8
         shell: bash
         run: |
