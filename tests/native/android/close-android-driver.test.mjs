@@ -52,10 +52,17 @@ test('client rejection never becomes success but owned driver cleanup continues'
   assert(f.calls.some(x => x.phase === 'stop')); assert(!JSON.stringify(receipt).includes(canary));
 });
 
-test('hung close consumes only its fixed total budget; no later ADB after exhaustion', async () => {
+test('hung close consumes only its fixed total budget; no later ADB after exhaustion', async (t) => {
   const f = setup();
-  const receipt = await closeAndroidDriver(serial, { ...f.options, now: () => performance.now(),
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let clock = 0;
+  const pending = closeAndroidDriver(serial, { ...f.options, now: () => clock,
     budgetMs: 10, closeClient: () => new Promise(() => {}) });
+  // Advance the deadline and timer together. Real timers can fire after a
+  // rounded delay but before the overall deadline, leaving cleanup time.
+  clock = 10;
+  t.mock.timers.tick(10);
+  const receipt = await pending;
   assert.equal(receipt.status, 'FAILED'); assert.equal(receipt.code, 'TIMEOUT');
   assert.equal(f.calls.length, 0);
 });
