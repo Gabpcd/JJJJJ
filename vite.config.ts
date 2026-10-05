@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    {
+      name: 'native-dynamic-import-cache-version',
+      // resolveDependencies est appliqué après le calcul des noms Vite.
+      // Invalider aussi les chunks autonomes déjà en cache immutable.
+      augmentChunkHash: () => 'jolene-native-dynamic-import-v1',
+    },
     pdfjsLocalAssets(),
     {
       name: 'native-system-fonts',
@@ -83,6 +89,12 @@ export default defineConfig(({ mode }) => ({
   },
   worker: { rolldownOptions: { transform: { target: ['es2020', 'safari15'] }, output: { keepNames: true } } },
   build: {
+    modulePreload: {
+      // WebKit conserve certains échecs modulepreload après un reload
+      // (bugs.webkit.org/270357). L'import natif charge les JS différés ;
+      // garder les preloads HTML et les CSS que Vite réajoute séparément.
+      resolveDependencies: (_filename, deps, { hostType }) => hostType === 'js' ? [] : deps,
+    },
     // Match the native iOS 15 minimum, including the PDF preview worker.
     // Vite's default Safari 16.4 target leaves static class blocks untransformed.
     target: ['es2020', 'safari15'],

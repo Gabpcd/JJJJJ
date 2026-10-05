@@ -1,4 +1,5 @@
 import { expect, type BrowserContext } from '@playwright/test';
+import { chargerHtmlLocal } from './recette-complete-mission';
 
 /** Simulation frontend seulement : aucune identité Auth, RPC ou qualification réelle. */
 export const maintenant = '2026-09-30T08:00:00.000Z';
@@ -81,7 +82,8 @@ export function creerCandidaturesDeuxAs() {
         if (['user', 'token', 'logout'].includes(name)) return json(name === 'user' ? user : name === 'logout' ? {} : session);
       } else if (!/^\/(rest|functions|storage)\/v1\//.test(url.pathname)) {
         if (req.isNavigationRequest() && req.resourceType() === 'document') {
-          const response = await route.fetch();
+          // Une seule reprise TCP du GET HTML local ; les erreurs restent bloquantes.
+          const response = await chargerHtmlLocal(route);
           // Hints réseau et police distante exclus uniquement du banc de recette local.
           return route.fulfill({ response, body: (await response.text())
             .replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi, '')

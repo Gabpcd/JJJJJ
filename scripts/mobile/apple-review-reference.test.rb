@@ -300,8 +300,38 @@ module AppleReviewReferenceTest
       }
     end
     { 'review_detail' => endpoints['review_detail'], 'beta_detail' => endpoints['beta_detail'] }.each do |endpoint, path|
-      { 'demoAccountRequired' => ['demo_account_required', nil, 'null'],
-        'demoAccountName' => ['demo_account_name', false, 'boolean'],
+      cases["nullable #{endpoint} requirement preserves all stored references and blocks completeness"] = lambda {
+        f = fixture; diagnostic_resource(f, path)['attributes']['demoAccountRequired'] = nil
+        calls = []; private_data, report = collect(f, calls)
+        assert(private_data['references'] == %w[owner-a@example.invalid owner-b@example.invalid])
+        assert(private_data['details'].find { |d| d['id'] == f[path]['data']['id'] }['demoAccountRequired'].nil?)
+        assert(private_data['reasons'] == ['account_requirement_unknown'] && !private_data['appleComplete'] && !private_data['confinementReady'])
+        assert(report['status'] == 'review_required' && report['references'] == 2 && report['reasons'] == ['account_requirement_unknown'])
+        assert(!report['appleComplete'] && !report['confinementReady'] && !report['googleChecked'])
+        assert(calls.count { |u, _| u.path == endpoints['versions'] } == 2 && calls.all? { |_, r| r.method == 'GET' })
+      }
+      cases["nullable #{endpoint} requirement stays unknown without a usable account"] = lambda {
+        [nil, '', 'opaque account'].each do |name|
+          f = fixture; a = diagnostic_resource(f, path)['attributes']
+          a['demoAccountRequired'] = nil; a['demoAccountName'] = name
+          private_data, report = collect(f)
+          expected = ['account_requirement_unknown']
+          expected << 'opaque_account_reference' if name == 'opaque account'
+          assert(private_data['reasons'] == expected && report['reasons'] == expected)
+          assert(!private_data['appleComplete'] && !report['appleComplete'] && !report['confinementReady'])
+        end
+      }
+      { 'string' => 'false', 'integer' => 0, 'number' => 0.0, 'array' => [], 'hash' => {} }.each do |observation, value|
+        cases["diagnostic #{endpoint} requirement rejects #{observation}"] = lambda {
+          f = fixture; diagnostic_resource(f, path)['attributes']['demoAccountRequired'] = value
+          diagnostic_refusal(f, endpoint, 'demo_account_required', observation)
+        }
+      end
+      cases["diagnostic #{endpoint} missing requirement remains refused"] = lambda {
+        f = fixture; diagnostic_resource(f, path)['attributes'].delete('demoAccountRequired')
+        diagnostic_refusal(f, endpoint, 'attributes', 'missing_keys')
+      }
+      { 'demoAccountName' => ['demo_account_name', false, 'boolean'],
         'notes' => ['notes', [], 'array'] }.each do |field, (check, value, observation)|
         cases["diagnostic #{endpoint} field #{check}"] = lambda {
           f = diagnostic_fixture; diagnostic_resource(f, path)['attributes'][field] = value
@@ -309,6 +339,37 @@ module AppleReviewReferenceTest
         }
       end
     end
+    cases['nullable requirements retain private references through the envelope boundary with a closed receipt'] = lambda {
+      f = fixture; canary = SecureRandom.hex(24); private_name = "#{canary}@example.invalid"
+      paths = [endpoints['review_detail'], endpoints['beta_detail']]
+      paths.each { |path| diagnostic_resource(f, path)['attributes']['demoAccountRequired'] = nil }
+      attrs(f)['demoAccountName'] = private_name; attrs(f)['notes'] = canary
+      encrypted = 'synthetic-envelope-bytes'; captured_private = nil; fake = Object.new
+      fake.define_singleton_method(:encrypt) { |value| captured_private = value; encrypted }
+      Dir.mktmpdir do |parent|
+        output = File.join(parent, 'output'); captured_out = StringIO.new; captured_err = StringIO.new
+        previous_out = $stdout; previous_err = $stderr; $stdout = captured_out; $stderr = captured_err
+        begin
+          status = A.run(output, config: {}, token_factory: -> { canary }, transport: transport(f),
+            envelope_factory: ->(_, _) { fake }, source_factory: -> { 'a' * 40 })
+        ensure
+          $stdout = previous_out; $stderr = previous_err
+        end
+        assert(status == 1 && captured_out.string.empty? && captured_err.string.empty?)
+        assert(captured_private['references'] == [private_name, 'owner-b@example.invalid'].sort)
+        assert(captured_private['details'].count { |d| d['demoAccountRequired'].nil? } == 2 && captured_private['details'].first['notes'] == canary)
+        assert(captured_private['reasons'] == %w[account_requirement_unknown notes_review_required])
+        assert(!captured_private['appleComplete'] && !captured_private['confinementReady'])
+        assert(Dir.children(output).sort == %w[apple-review-public.json apple-review-reference.cms])
+        assert(File.binread(File.join(output, 'apple-review-reference.cms')) == encrypted)
+        bytes = File.read(File.join(output, 'apple-review-public.json')); report = JSON.parse(bytes)
+        assert(report['status'] == 'review_required' && report['reasons'] == %w[account_requirement_unknown notes_review_required])
+        assert(!report['appleComplete'] && !report['confinementReady'] && !report['googleChecked'] && !report.key?('diagnostic'))
+        assert(report['ciphertextSha256'] == Digest::SHA256.hexdigest(encrypted) && report['references'] == 2)
+        assert([canary, 'owner-b', '1234567890', 'd-ios', 'd-beta'].none? { |value| bytes.include?(value) })
+        assert((File.stat(output).mode & 0o777) == 0o700 && Dir.children(output).all? { |name| (File.stat(File.join(output, name)).mode & 0o777) == 0o600 })
+      end
+    }
     cases['diagnostic bundle mismatch separate from nil and wrong cardinality'] = lambda {
       f = diagnostic_fixture; f[endpoints['apps']]['data'].first['attributes']['bundleId'] = 'another.synthetic.app'
       diagnostic_refusal(f, 'apps', 'bundle_id', 'mismatch')
