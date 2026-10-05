@@ -3,11 +3,57 @@ import assert from 'node:assert/strict';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
 import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,B23_ANCHOR_CASES,validateB23AnchorWitnesses,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
 import { relation,expression,capture,b24ColumnFixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
+const contextCommon=['LEFT_MISSING','RIGHT_MISSING','RELATIONS','EXPRESSION','LEFT_COMPLETE','RIGHT_COMPLETE','UNCLASSIFIED'];
+const contextPairs={TYPE_CONTEXT:[...contextCommon,'BINDINGS','UNCOVERED_COUNT'],
+ MIXED_CONTEXT:[...contextCommon,'BINDINGS','UNCOVERED_COUNT','COVERED_COUNT','TOTAL_COUNT'],
+ WHOLE_ROW_CONTEXT:[...contextCommon,'BINDINGS','UNCOVERED_COUNT','COVERED_COUNT','TOTAL_COUNT'],
+ FUNCTION_CONTEXT:[...contextCommon,'FUNCTION_FACT_KEYS','FUNCTION_COLUMNS','FUNCTION_UNCOVERED_COUNT']};
+test('B24 context diagnosis projects all 41 closed case/invariant pairs through the real failure contract',()=>{
+ let count=0;
+ for(const [caseName,invariants] of Object.entries(contextPairs))for(const invariant of invariants){
+  const assertion='B24_COLUMN_CONTEXT_'+caseName+'_'+invariant;
+  const e=b21SqlFailure({stderr:Buffer.from('psql:<stdin>:720: ERROR:  55000: '+assertion+'\nCONTEXT: '+PRIVATE_CANARY)},'EXPRESSION');
+  const out=closedFailure(e,'semantics_witnesses');
+  assert.equal(out.semanticsWitness.sql.assertion,assertion);assert.equal(out.semanticsWitness.sql.line,720);
+  assert.equal(out.semanticsWitness.reason,'SQL');assert.equal(out.restored,false);assert.equal(out.appVerified,false);
+  assert(!JSON.stringify(out).includes(PRIVATE_CANARY));count++;
+ }
+ assert.equal(count,41);
+});
+test('B24 context diagnosis rejects private suffixes, wrong pairings and arbitrary values without coercion',()=>{
+ const known='B24_COLUMN_CONTEXT_WHOLE_ROW_CONTEXT_LEFT_COMPLETE';
+ for(const assertion of [known+' '+PRIVATE_CANARY,known+'\n'+PRIVATE_CANARY,known.toLowerCase(),
+  'B24_COLUMN_CONTEXT_TYPE_CONTEXT_TOTAL_COUNT','B24_COLUMN_CONTEXT_FUNCTION_CONTEXT_BINDINGS',
+  'B24_COLUMN_CONTEXT_'+PRIVATE_CANARY+'_LEFT_COMPLETE',PRIVATE_CANARY,[known],{toString(){throw Error(PRIVATE_CANARY);}},null,7]){
+  const out=projectB21SqlFailure({phase:'EXPRESSION',outcome:'EXIT',sqlstate:'55000',line:720,assertion,raw:PRIVATE_CANARY});
+  assert.equal(out.assertion,null);assert(!JSON.stringify(out).includes(PRIVATE_CANARY));
+ }
+ for(const sqlstate of ['42P01',55000,['55000'],{toString(){throw Error(PRIVATE_CANARY);}},null])
+  assert.equal(projectB21SqlFailure({phase:'EXPRESSION',outcome:'EXIT',sqlstate,line:720,assertion:known}).assertion,null);
+});
+test('a later B24 context marker cannot replace the first SQL error or an invalid bounded transport',()=>{
+ const known='B24_COLUMN_CONTEXT_WHOLE_ROW_CONTEXT_LEFT_COMPLETE';
+ for(const first of ['ERROR: '+PRIVATE_CANARY,'ERROR:  42P01: '+PRIVATE_CANARY,'FATAL:  55000: '+PRIVATE_CANARY]){
+  const e=b21SqlFailure({stderr:Buffer.from(first+'\npsql:<stdin>:720: ERROR:  55000: '+known)},'EXPRESSION');
+  assert.equal(e.b21Sql.assertion,null);assert(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));
+ }
+ for(const stderr of [Buffer.concat([Buffer.from('ERROR:  55000: '+known+'\n'),Buffer.from([0xff])]),
+  Buffer.from('ERROR:  55000: '+known+'\n'+'x'.repeat(65536))])
+  assert.equal(b21SqlFailure({stderr},'EXPRESSION').b21Sql.assertion,null);
+});
+test('B24 SQL only decorates the original failing assertion and preserves every predicate and later witness byte',()=>{
+ const sql=readFileSync(new URL('../catalogue-semantics-expression-witness.sql',import.meta.url),'utf8');
+ const diagnostic=/THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT_'\|\|item\.name\|\|'_'\|\|CASE\n[\s\S]*?ELSE 'UNCLASSIFIED' END; END IF;/g;
+ assert.equal([...sql.matchAll(diagnostic)].length,1);
+ const original=sql.replace(diagnostic,"THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT'; END IF;");
+ assert.equal(createHash('sha256').update(original).digest('hex'),'f952aeb09eecac54068860ee1b87630936614ce90ae903b5ce5dcfcb2bd8af83');
+});
 function anchorFixture(){
  return Object.keys(B23_ANCHOR_CASES).map(name=>{
   const left=capture(),right=capture(),l=expression(),r=structuredClone(l);

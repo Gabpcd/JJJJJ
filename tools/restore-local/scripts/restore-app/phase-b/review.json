@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B24 root review and independent review 9818b2e87c37327b9c4dcefd8040b81685301d83139a1d2f6bc76d5250aaf57c approved candidate manifest 365fcf4aeed47cd83133a890f329f1fff1619916c7a31503042ca68d84cbfba7. Root 476 pure tests PASS; independent 60 targeted tests plus 70 adversarial cases PASS. Approval authorizes one isolated native witness and source-to-target restore/UI experiment only. The 17 actual column-context differences are not yet proven resolved. Strict full anchor equality, outside-coverage refusal, v1 SQL and business comparator are preserved. Product 7dfdeb42 remains pinned. No provider, technical account, production, mobile delivery or launch approval."
+  "note": "Root and independent review 2ce0f444f2ee36234a9c2394ce937d7f8aac222b0b7f3633847b1fd73c0a9caf approve exact diagnostic manifest 89219df847d28f21b89e89fd56dc566477df2238307ddb4effb45a4dffd27670 for one isolated native run. Root480 pure tests PASS; reviewer28 targeted PASS. Only fixed witness case/invariant failure markers added; all original refusal predicates, SQL/probe/validation/business equality preserved. Product7dfdeb42 still pinned; restoration and target frontend unqualified. No providers, technical accounts, production or mobile delivery."
 }

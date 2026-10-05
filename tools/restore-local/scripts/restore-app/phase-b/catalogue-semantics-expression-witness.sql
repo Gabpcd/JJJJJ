@@ -365,7 +365,22 @@ BEGIN
    OR (item.name='FUNCTION_CONTEXT' AND (le->'bindings'->'factKeys' IS NOT DISTINCT FROM re->'bindings'->'factKeys'
      OR le->'bindings'->'columns' IS DISTINCT FROM re->'bindings'->'columns'
      OR jsonb_array_length(le->'bindings'->'uncoveredColumns')<>0))
-  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT'; END IF;
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT_'||item.name||'_'||CASE
+    WHEN le IS NULL THEN 'LEFT_MISSING'
+    WHEN re IS NULL THEN 'RIGHT_MISSING'
+    WHEN l->'relations' IS DISTINCT FROM r->'relations' THEN 'RELATIONS'
+    WHEN (le-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'])
+      IS DISTINCT FROM (re-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition']) THEN 'EXPRESSION'
+    WHEN (le->'bindings'->>'complete') IS DISTINCT FROM 'false' THEN 'LEFT_COMPLETE'
+    WHEN (re->'bindings'->>'complete') IS DISTINCT FROM 'false' THEN 'RIGHT_COMPLETE'
+    WHEN item.name<>'FUNCTION_CONTEXT' AND le->'bindings' IS DISTINCT FROM re->'bindings' THEN 'BINDINGS'
+    WHEN item.name<>'FUNCTION_CONTEXT' AND jsonb_array_length(le->'bindings'->'uncoveredColumns')<>1 THEN 'UNCOVERED_COUNT'
+    WHEN item.name IN('MIXED_CONTEXT','WHOLE_ROW_CONTEXT') AND jsonb_array_length(le->'bindings'->'columns')<>1 THEN 'COVERED_COUNT'
+    WHEN item.name IN('MIXED_CONTEXT','WHOLE_ROW_CONTEXT') AND (le->'bindings'->>'columnCount')::integer<>2 THEN 'TOTAL_COUNT'
+    WHEN item.name='FUNCTION_CONTEXT' AND le->'bindings'->'factKeys' IS NOT DISTINCT FROM re->'bindings'->'factKeys' THEN 'FUNCTION_FACT_KEYS'
+    WHEN item.name='FUNCTION_CONTEXT' AND le->'bindings'->'columns' IS DISTINCT FROM re->'bindings'->'columns' THEN 'FUNCTION_COLUMNS'
+    WHEN item.name='FUNCTION_CONTEXT' AND jsonb_array_length(le->'bindings'->'uncoveredColumns')<>0 THEN 'FUNCTION_UNCOVERED_COUNT'
+    ELSE 'UNCLASSIFIED' END; END IF;
   INSERT INTO b24_column_cases VALUES(item.name,l,r);
  END LOOP;
  l:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
