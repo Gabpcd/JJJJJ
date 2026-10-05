@@ -25,16 +25,23 @@ export const PG_RESTORE_COMMANDS = Object.freeze(['UNKNOWN','SET','SELECT','BEGI
  'CREATE_INDEX','CREATE_VIEW','CREATE_TRIGGER','CREATE_EVENT_TRIGGER','CREATE_POLICY','CREATE_PUBLICATION',
  'ALTER','GRANT','REVOKE','COMMENT','SECURITY_LABEL','DO']);
 export const PG_RESTORE_SCHEMAS = Object.freeze(['auth','storage','public','extensions','pg_catalog','cron',
- 'graphql','graphql_public','pgbouncer','private','supabase_functions','vault','realtime']);
+ 'graphql','graphql_public','pgbouncer','private','supabase_functions','vault','realtime','net']);
 export const PG_RESTORE_EXTENSIONS = Object.freeze(['pg_cron','pg_net','pg_stat_statements','pg_trgm',
  'pgcrypto','pgjwt','plpgsql','supabase_vault','uuid-ossp']);
+export const PG_RESTORE_MISSING_OBJECTS = Object.freeze(['SCHEMA','RELATION','TYPE','FUNCTION','ROLE','EXTENSION','OPERATOR','COLLATION']);
+// Fixed roles referenced by the reviewed bootstrap/product; unknown names stay private.
+export const PG_RESTORE_ROLES = Object.freeze(['postgres','supabase_admin','anon','authenticated','service_role',
+ 'authenticator','pgbouncer','supabase_auth_admin','supabase_functions_admin','supabase_storage_admin']);
 export function projectPgRestoreDiagnostic(value) {
+ const missing=value?.parser==='FIRST_ERROR'&&value?.category==='OBJECT_MISSING';
+ const missingObjectType=missing&&PG_RESTORE_MISSING_OBJECTS.includes(value?.missingObjectType)?value.missingObjectType:null;
  return {schemaVersion:1,parser:['FIRST_ERROR','NO_PRIMARY_ERROR','EMPTY','INVALID_INPUT'].includes(value?.parser)?value.parser:'INVALID_INPUT',
   inputTruncated:value?.inputTruncated===true,
   category:PG_RESTORE_CATEGORIES.includes(value?.category)?value.category:'UNKNOWN',
   command:PG_RESTORE_COMMANDS.includes(value?.command)?value.command:'UNKNOWN',
   schema:PG_RESTORE_SCHEMAS.includes(value?.schema)?value.schema:null,
-  extension:PG_RESTORE_EXTENSIONS.includes(value?.extension)?value.extension:null};
+  extension:PG_RESTORE_EXTENSIONS.includes(value?.extension)?value.extension:null,
+  missingObjectType,missingRole:missingObjectType==='ROLE'&&PG_RESTORE_ROLES.includes(value?.missingRole)?value.missingRole:null};
 }
 // Diagnostic only: no arguments, SQL, paths, stderr, stdout or dump bytes.
 export function projectRestoreCall(value) {

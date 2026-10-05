@@ -250,8 +250,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
-      "bytes": 15402,
-      "sha256": "e0bf0ae611c1d12221bf1668b968535323ede4fa62593232477ac461c53435d7"
+      "bytes": 16195,
+      "sha256": "908425364ffdeef2f65465b922d57060d6db04ad7500be0c0951f9b64617cae4"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -285,8 +285,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/native-runtime.mjs",
-      "bytes": 18771,
-      "sha256": "e12d4c3beebe551813f73855da2d3cdc1779b959caf2a9b7d125129330f2411a"
+      "bytes": 19647,
+      "sha256": "3c6f1e681d41cd600dd661872cb825e7dbd37fc97427622a25fdc39c43c4d9f8"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/private-app.mjs",
@@ -310,8 +310,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
-      "bytes": 37884,
-      "sha256": "0870be3b88be59ca38c3df2a4150b629b71a1fc6bf710a43f10523130af1bb79"
+      "bytes": 42256,
+      "sha256": "55184bcc5ffd3d49e62b1d2e210f8745d88e2a88d24894b922c981ad00488c1d"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/matrix-contract.test.mjs",
@@ -325,8 +325,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/runtime-startup.test.mjs",
-      "bytes": 12523,
-      "sha256": "f614dd734dedc29f3b2522ced571f7ee0b4bc8b732370649ed851e803c8b070e"
+      "bytes": 12563,
+      "sha256": "3de018a764d54a982017060e7c7ee068e3f5479f50694442a0e56eede5a46aa4"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/pins.json",

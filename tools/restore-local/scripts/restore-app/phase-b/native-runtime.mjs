@@ -45,6 +45,12 @@ export function classifyPgRestoreStderr(value) {
     ['ARCHIVE_READ',/^(?:could not read from input file|could not read from input stream|could not uncompress data|unexpected end of file|could not find block ID|could not seek)/],
   ];
   result.category=rules.find(([,pattern])=>pattern.test(message))?.[0]??(sql?'SQL_OTHER':'UNKNOWN');
+  // Only the first primary message supplies missing-object hints. Never infer a
+  // role from GRANT recipients, DETAIL/HINT, TOC entries or a later error.
+  if(result.category==='OBJECT_MISSING'){
+    result.missingObjectType=message.match(/^(schema|relation|type|function|role|extension|operator|collation) /)?.[1].toUpperCase();
+    result.missingRole=message.match(/^role (?:"([a-z_][a-z_0-9]*)"|([a-z_][a-z_0-9]*)) does not exist$/)?.slice(1).find(Boolean);
+  }
   // Hints are projected through finite enums a second time at publication.
   // Never publish the rest of this line, even when it contains a known prefix.
   const commandLines=section.filter(line=>line.startsWith('Command was: '));
@@ -58,7 +64,10 @@ export function classifyPgRestoreStderr(value) {
     ??message.match(new RegExp('^(?:schema |permission denied for schema |must be owner of schema )'+identifier+'(?:[ ;]|$)'));
   const extension=command.match(new RegExp('^CREATE EXTENSION (?:IF NOT EXISTS )?'+identifier+'(?:[ ;]|$)'))
     ??message.match(new RegExp('^(?:extension |required extension |must be owner of extension )'+identifier+'(?:[ ;]|$)'));
-  result.schema=schema?.[1]??schema?.[2];result.extension=extension?.[1]??extension?.[2];
+  // A qualified missing relation/function can name its schema, but never publish
+  // the free object name or signature. The existing finite projector runs next.
+  const missingSchema=result.category==='OBJECT_MISSING'?message.match(/^(?:relation|function) (?:"([a-z_][a-z_0-9]*)\.[^"\r\n]+"|"?([a-z_][a-z_0-9]*)"?\.(?:"[^"\r\n]+"|[a-z_][a-z_0-9]*))(?=\s|\()/):null;
+  result.schema=schema?.[1]??schema?.[2]??missingSchema?.[1]??missingSchema?.[2];result.extension=extension?.[1]??extension?.[2];
   return projectPgRestoreDiagnostic(result);
 }
 

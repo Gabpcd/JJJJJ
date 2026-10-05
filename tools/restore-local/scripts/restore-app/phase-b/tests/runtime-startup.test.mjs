@@ -134,7 +134,7 @@ for(const failedOperation of RESTORE_CALL_OPERATIONS)test('actual restore attrib
  await assert.rejects(()=>restoreTarget(nativeRuntime(directory),snapshotDir,snapshot,reviewed,'unused'),error=>{
   const publicResult=closedFailure(error,'restore');assert.equal(publicResult.code,'B_CALL');
   assert.equal(publicResult.restoreCall.operation,failedOperation);assert.equal(publicResult.restoreCall.exitCode,1);
-  if(failedOperation==='TARGET_ARCHIVE_RESTORE')assert.deepEqual(publicResult.restoreCall.pgRestore,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category:'OWNER_REQUIRED',command:'ALTER',schema:'public',extension:null});
+  if(failedOperation==='TARGET_ARCHIVE_RESTORE')assert.deepEqual(publicResult.restoreCall.pgRestore,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category:'OWNER_REQUIRED',command:'ALTER',schema:'public',extension:null,missingObjectType:null,missingRole:null});
   else assert.equal(publicResult.restoreCall.pgRestore,undefined);
   assert.ok(!JSON.stringify(publicResult).includes(canary));return true;
  });

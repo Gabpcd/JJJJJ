@@ -228,7 +228,8 @@ test('pg_restore classifies the first error without verbose TOC or leaking query
  ];
  for(const [message,command,category,expectedCommand,schema,extension]of cases){
   const result=classifyPgRestoreStderr(Buffer.from(fixture(message,command)));
-  assert.deepEqual(result,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category,command:expectedCommand,schema,extension});
+  assert.deepEqual(result,{schemaVersion:1,parser:'FIRST_ERROR',inputTruncated:false,category,command:expectedCommand,schema,extension,
+   missingObjectType:category==='OBJECT_MISSING'?'SCHEMA':null,missingRole:null});
   assert.ok(!JSON.stringify(result).includes(canary));
   assert.deepEqual(projectPgRestoreDiagnostic({...result,sql:canary,message:canary,raw:canary}),result);
  }
@@ -266,7 +267,66 @@ test('pg_restore unknown malformed oversized and injected diagnostics remain clo
  const late='x'.repeat(64*1024)+'\npg_restore: error: unsupported version';
  assert.equal(classifyPgRestoreStderr(late).parser,'NO_PRIMARY_ERROR');
  assert.deepEqual(projectPgRestoreDiagnostic({parser:canary,inputTruncated:canary,category:canary,command:canary,schema:canary,extension:canary,raw:canary}),
-  {schemaVersion:1,parser:'INVALID_INPUT',inputTruncated:false,category:'UNKNOWN',command:'UNKNOWN',schema:null,extension:null});
+  {schemaVersion:1,parser:'INVALID_INPUT',inputTruncated:false,category:'UNKNOWN',command:'UNKNOWN',schema:null,extension:null,missingObjectType:null,missingRole:null});
+});
+
+test('pg_restore missing-object hints distinguish GRANT failures without exporting identifiers',async()=>{
+ const canary='PRIVATE_ROLE_RELATION_FUNCTION_IDENTIFIER_CANARY';
+ const fixture=message=>'pg_restore: error: could not execute query: ERROR:  '+message+'\nCommand was: GRANT ALL ON TABLE public.'+canary+' TO anon;\n';
+ for(const type of ['schema','relation','type','function','role','extension','operator','collation']){
+  const suffix=type==='function'?'(uuid)':'';
+  const result=classifyPgRestoreStderr(fixture(type+' "'+canary+'"'+suffix+' does not exist'));
+  assert.equal(result.category,'OBJECT_MISSING');assert.equal(result.command,'GRANT');
+  assert.equal(result.missingObjectType,type.toUpperCase());assert.equal(result.missingRole,null);
+  assert.ok(!JSON.stringify(result).includes(canary));
+ }
+ for(const role of ['postgres','supabase_admin','anon','authenticated','service_role','authenticator','pgbouncer',
+  'supabase_auth_admin','supabase_functions_admin','supabase_storage_admin']){
+  for(const name of [role,'"'+role+'"']){
+   const result=classifyPgRestoreStderr(fixture('role '+name+' does not exist'));
+   assert.equal(result.missingObjectType,'ROLE');assert.equal(result.missingRole,role);
+   assert.deepEqual(projectPgRestoreDiagnostic({...result,raw:canary,sql:canary,role:canary}),result);
+  }
+ }
+ for(const name of ['"anon_'+canary+'"','"anon""'+canary+'"','"'+canary+'"']){
+  const result=classifyPgRestoreStderr(fixture('role '+name+' does not exist'));
+  assert.equal(result.missingRole,null);assert.ok(!JSON.stringify(result).includes(canary));
+ }
+ for(const [message,schema]of [
+  ['relation "net.'+canary+'" does not exist','net'],
+  ['schema "net" does not exist','net'],
+  ['function net.synthetic(text, uuid) does not exist','net'],
+  ['function "auth"."synthetic"(uuid) does not exist','auth'],
+  ['relation "private.synthetic" does not exist','private'],
+  ['relation "'+canary+'.synthetic" does not exist',null],
+  ['function '+canary+'.synthetic(uuid) does not exist',null],
+  ['relation "net_'+canary+'.synthetic" does not exist',null],
+  ['relation "'+canary+'" does not exist',null],
+ ]){
+  const result=classifyPgRestoreStderr(fixture(message));assert.equal(result.schema,schema);
+  assert.ok(!JSON.stringify(result).includes(canary));assert.ok(!JSON.stringify(result).includes('synthetic'));
+  assert.ok(!JSON.stringify(result).includes('uuid'));
+ }
+ const first=fixture('relation "'+canary+'" does not exist');
+ const later=fixture('role "anon" does not exist');
+ assert.deepEqual(classifyPgRestoreStderr(first+later),classifyPgRestoreStderr(first));
+ const injected=first+'DETAIL: role "anon" does not exist\nHINT: relation "net.synthetic" does not exist\n';
+ assert.equal(classifyPgRestoreStderr(injected).missingObjectType,'RELATION');
+ assert.equal(classifyPgRestoreStderr(injected).missingRole,null);assert.equal(classifyPgRestoreStderr(injected).schema,null);
+ const valid={parser:'FIRST_ERROR',category:'OBJECT_MISSING',missingObjectType:'ROLE',missingRole:'anon'};
+ for(const change of [{parser:'EMPTY'},{category:'PERMISSION_DENIED'},{missingObjectType:canary},{missingObjectType:'RELATION'},{missingRole:canary}]){
+  const result=projectPgRestoreDiagnostic({...valid,...change,raw:canary,schema:canary});
+  assert.equal(result.missingRole,null);assert.equal(result.schema,null);assert.ok(!JSON.stringify(result).includes(canary));
+ }
+ const bounded=classifyPgRestoreStderr(first+'x'.repeat(64*1024)+later);
+ assert.equal(bounded.inputTruncated,true);assert.equal(bounded.missingObjectType,'RELATION');assert.equal(bounded.missingRole,null);
+ const {runtimeFailure}=await import('../main.mjs');
+ for(const message of ['role "anon" does not exist','relation "net.'+canary+'" does not exist']){
+  const diagnostic=classifyPgRestoreStderr(fixture(message));
+  const result=runtimeFailure({code:'B_CALL',restoreCall:{operation:'TARGET_ARCHIVE_RESTORE',exitCode:1,signal:null,systemError:null,pgRestore:{...diagnostic,raw:canary}}},'restore');
+  assert.deepEqual(result.restoreCall.pgRestore,diagnostic);assert.equal(result.restored,false);assert.equal(result.appVerified,false);
+  assert.equal(result.readyForNationalLaunch,false);assert.ok(!JSON.stringify(result).includes(canary));
+ }
 });
 
 test('pg_restore diagnostic is gated to archive restore and reprojected by the actual public bridge',async()=>{
