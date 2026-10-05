@@ -20,6 +20,12 @@
     "tools/restore-local/scripts/restore-app/phase-b/browser-input.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/build-app.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/catalogue-facts-diagnostic.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-acl-witness.sql",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-diagnostic.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-expression-witness.sql",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-native.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-probe.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-witness.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/closed-json-reporter.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -40,6 +46,9 @@
     "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-diagnostic.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-fixture.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-native.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-native-baseline.test.mjs",
@@ -88,13 +97,15 @@
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-native-baseline.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/restore-invariant-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-diagnostic.test.mjs",
-    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs"
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-diagnostic.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-native.test.mjs"
   ],
   "pinnedFiles": [
     {
       "path": ".github/workflows/restore-local-bootstrap.yml",
-      "bytes": 14223,
-      "sha256": "903e0870ea2b47e21c03fc33978bbeac3a0774f135882555c64234a76ddfeb16"
+      "bytes": 14281,
+      "sha256": "d461b578dab33778e6f8d7ff5c8c872822045deb90f5035b8a4884c834df4288"
     },
     {
       "path": "index.html",
@@ -272,14 +283,44 @@
       "sha256": "0d2e1b5a5ba3881e2ab7a6fae953c5c17a72855a608b2fa8748b05c18ae54734"
     },
     {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-acl-witness.sql",
+      "bytes": 9692,
+      "sha256": "0b6e6c041490b7a9c1bdbc88f6e20c550487558c0fcd82490bd809c8849e22e7"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-diagnostic.mjs",
+      "bytes": 18453,
+      "sha256": "94b14027a7d70a4a9d2bc6d87dd9a8b386db909fd0e5dd5a8ab4bfb5463fdd1a"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-expression-witness.sql",
+      "bytes": 9498,
+      "sha256": "dd8032c9b805cda9752e21b0f43d1a62820d5fec14c6e1c101bd58dd09e795d5"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-native.mjs",
+      "bytes": 8004,
+      "sha256": "6ffd6925798f38b4d188aa49d416bb92bbf51af92e113de548e3933303a56e3c"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-probe.mjs",
+      "bytes": 9447,
+      "sha256": "f973dda51cec209f25604fc4577929cc26c989a38d627b22da720146b4d6aadb"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-witness.mjs",
+      "bytes": 5797,
+      "sha256": "38da9f730cc3def6620c5f846232b26b0c62fe8b4a0888bb576f107671a2f2e9"
+    },
+    {
       "path": "tools/restore-local/scripts/restore-app/phase-b/closed-json-reporter.mjs",
       "bytes": 701,
       "sha256": "b5dbd4ddf63814a8d4221b140f0747ad3b5ab77c3cafc4d28fa69f24751d2234"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
-      "bytes": 23677,
-      "sha256": "444969889b400cbec07eeb56fefa59970e6afc88675517327737a8821027d874"
+      "bytes": 24287,
+      "sha256": "1e0a84983db3bd3944bcb5923786a31546822ffa255451529b0a72753986f76b"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -298,8 +339,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/graphql-native-baseline.mjs",
-      "sha256": "4f0148450e030bc1301288e8aede2e131438456f2f2e2f39079da6f95f33cd13",
-      "bytes": 4712
+      "bytes": 4712,
+      "sha256": "4f0148450e030bc1301288e8aede2e131438456f2f2e2f39079da6f95f33cd13"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/graphql-native-witness.sql",
@@ -323,8 +364,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/main.mjs",
-      "bytes": 7468,
-      "sha256": "f18ca32febbdfd8e3c33865931d087917d8996d844f3da56fb3aa0aa97f4ba4b"
+      "bytes": 7846,
+      "sha256": "808c18b627063c58e85b1733f4597b372447b4134ae779bfe802e126563202a9"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/matrix-contract.mjs",
@@ -333,8 +374,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/native-runtime.mjs",
-      "bytes": 23890,
-      "sha256": "b6b4cbd29830635ac0cac4accafbb76de73ea52436b20e67506d52aedd30bdd8"
+      "bytes": 26071,
+      "sha256": "fa2c5ee84af314cc5c5e41f99f15882a8731f6f48ffdeed1ba86963430ecc84b"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/private-app.mjs",
@@ -348,8 +389,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1091,
-      "sha256": "661f1326cbc7b3c7d702707f6c05c1503f2f22c0182fd7e42fcfacb207a45f7f"
+      "bytes": 1251,
+      "sha256": "52c370204bea59db98022a82c7d9ebae227c1c7497d2a2939fef68ea26c6e7b1"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -363,13 +404,28 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs",
-      "bytes": 8413,
-      "sha256": "93d74d67c9211da18676945611196e51f70d4a051354ed13c3fe1c770b7ad686"
+      "bytes": 11395,
+      "sha256": "ffabd97f39aa6b6cc509c6e977047965ef239ff5f02de9280408f1b5596917b1"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-diagnostic.test.mjs",
+      "bytes": 6214,
+      "sha256": "3313f084e699200c7855f7505aa1097e523927019051a3b021946411e834d9c4"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-fixture.mjs",
+      "bytes": 3502,
+      "sha256": "eab871b1ae9df25f003a4891c0abfd6e5f30eb04094c47d9b07ff58b23060749"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-native.test.mjs",
+      "bytes": 10242,
+      "sha256": "0ca92ca7de73689c165b7ff44c4dd0eafdc280c8208dfd3931e99b14040aa817"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
-      "bytes": 44069,
-      "sha256": "0c15837274046999769331a35a1f6b753db09376b3a0729d0dfc8fb77fff1cff"
+      "bytes": 44125,
+      "sha256": "f33ff3b91696106df5f8acf0a3352d2a3f6f5ac8e01d3dc2cd0c04c86b5ac3d5"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-diagnostic.test.mjs",
@@ -378,8 +434,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-native-baseline.test.mjs",
-      "sha256": "dccf2207741d9aeb1ca5f83fb46d0aaf92da86133c31007586bdc70b4f567ca8",
-      "bytes": 7647
+      "bytes": 7647,
+      "sha256": "dccf2207741d9aeb1ca5f83fb46d0aaf92da86133c31007586bdc70b4f567ca8"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-restore-plan.test.mjs",
@@ -423,8 +479,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/vendor/20220317095840_pg_graphql.sql",
-      "sha256": "31f5b997cba8d74936203a78613b5bda9b51e339c6c14f80c203440f82e95cf9",
-      "bytes": 5613
+      "bytes": 5613,
+      "sha256": "31f5b997cba8d74936203a78613b5bda9b51e339c6c14f80c203440f82e95cf9"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/pins.json",

@@ -10,6 +10,7 @@ import { FAILURE_CODES } from '../failure.mjs';
 import { parseTap } from '../phase-a.mjs';
 import { preparePlan } from '../local-runtime.mjs';
 import { nativeRuntime } from './native-runtime.mjs';
+import { runB21NativeWitnesses,cleanupB21NativeWitnesses,assertB21NativeWitnessAbsent } from './catalogue-semantics-native.mjs';
 import { browserDriver } from './browser-driver.mjs';
 import { buildApps, prepareDependencies, checkFreeSpace } from './build-app.mjs';
 import { runPhaseB } from './core.mjs';
@@ -17,7 +18,7 @@ import { main as bootstrap } from '../../restore/bootstrap.mjs';
 import { compareInventories } from '../../restore/extensions.mjs';
 import { requireExistingRefusal } from '../../restore/ci-guard.mjs';
 const PUBLIC=new Set(['identity.json','units.json','dependencies.json','build.json','bootstrap-proof.json','phase-a-capture.json',
- 'browser-source.json','browser-target.json','target-objects.json','graphql-comparison.json','controlled-negative.json','phase-b.json','diagnostic.json','cleanup.json','cleanup-again.json','absence.json']);
+ 'browser-source.json','browser-target.json','target-objects.json','graphql-comparison.json','semantics-witnesses.json','controlled-negative.json','phase-b.json','diagnostic.json','cleanup.json','cleanup-again.json','absence.json']);
 let stage='identity',paths,evidence;
 function directory(path){if(!existsSync(path))mkdirSync(path,{mode:0o700});requireValue(lstatSync(path).isDirectory()&&!lstatSync(path).isSymbolicLink()
  &&realpathSync(path)===path&&(lstatSync(path).mode&0o077)===0,'B_CONTEXT');}
@@ -56,7 +57,10 @@ export async function main(args,env=process.env){
  if(command==='bootstrap'){
   const passed=[];for(const operation of ['preload','preflight','up','inspect']){
    stage=operation;bootstrap([operation,paths.stack]);passed.push(operation);
-   if(operation==='preload'){localProcess('docker',['pull','--platform','linux/amd64',IMAGE],'browser-image');checkFreeSpace(paths.private,5);}
+   if(operation==='preload'){
+    stage='semantics_witnesses';save('semantics-witnesses.json',await runB21NativeWitnesses(evidence.run));
+    stage=operation;localProcess('docker',['pull','--platform','linux/amd64',IMAGE],'browser-image');checkFreeSpace(paths.private,5);
+   }
    save('bootstrap-proof.json',{result:'NATIVE_BOOTSTRAP_IN_PROGRESS',passed,appVerified:false});
   }
   requireValue(requireExistingRefusal(paths.stack).result==='EXISTING_START_REFUSED','B_CONTEXT');stage='extensions';
@@ -74,6 +78,7 @@ export async function main(args,env=process.env){
  }
  if(command==='cleanup'){
   stage='cleanup';const planned=existsSync(join(paths.stack,'manifest.json'));
+  cleanupB21NativeWitnesses(evidence.run);
   if(planned)browserDriver(paths.stack,ROOT,nativeRuntime(paths.stack)).cleanup();
   const first=planned?bootstrap(['down',paths.stack]):bootstrap(['absent',evidence.run]);save('cleanup.json',first);
   const second=planned?bootstrap(['down',paths.stack]):bootstrap(['absent',evidence.run]);save('cleanup-again.json',second);return second;
@@ -81,7 +86,7 @@ export async function main(args,env=process.env){
  stage='absence';
  const result=bootstrap(['absent',evidence.run]);
  const names=localProcess('docker',['ps','-a','--filter','label=org.jolene.restore-browser='+evidence.run,'--format','{{.Names}}'],'browser-absence');
- requireValue(names.toString().trim()==='','B_CLEANUP');const final={...result,browserAbsent:true};save('absence.json',final);return final;
+ requireValue(names.toString().trim()==='','B_CLEANUP');const final={...result,browserAbsent:true,...assertB21NativeWitnessAbsent(evidence.run)};save('absence.json',final);return final;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  main(process.argv.slice(2)).then(result=>process.stdout.write(JSON.stringify({result:result.result??'PHASE_B_STEP_PASSED'})+'\n')).catch(error=>{

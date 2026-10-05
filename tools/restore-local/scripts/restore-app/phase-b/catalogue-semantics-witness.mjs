@@ -1,0 +1,62 @@
+import { b21WitnessCaptureSql } from './catalogue-semantics-probe.mjs';
+import { compareB21Relation,compareB21Expression,validB21Relation,validB21Expression } from './catalogue-semantics-diagnostic.mjs';
+
+export const B21_WITNESS_REASONS=Object.freeze(['CONTEXT','EXISTING_RESOURCE','STARTUP','ISOLATION','SQL','PRIVATE_SHAPE','ACL_COMPARISON','EXPRESSION_COMPARISON','ROLLBACK','CLEANUP','UNKNOWN']);
+const aclFlags=['nullDefault','nullEmptyDistinct','ownerImplicitGrantOption','sequenceTypeDistinct','orderOnly','grantorPreserved','realRevokeRejected',
+ 'grantOptionPreserved','ownerPreserved','inheritOptionPreserved','creationDefaultsOnly'];
+const expressionFlags=['checkNativeRoundtrip','timezoneCanChangeDeparse','fixedContextReproduces','regclassNativeRebind','sameDependenciesDoNotErasePredicateChange',
+ 'notValidPreserved','deferrabilityPreserved','literalChangeRejected'];
+export const B21_ACL_CASES=Object.freeze({NULL_DEFAULT:'equalCount',NULL_EMPTY:'differentCount',SEQUENCE_DEFAULT:'equalCount',SEQUENCE_TABLE:'inconsistentCount',
+ ORDER:'equalCount',GRANTOR:'differentCount',REAL_REVOKE:'differentCount',GRANT_OPTION:'differentCount',OWNER:'ownerDifferentCount'});
+export const B21_EXPRESSION_CASES=Object.freeze({CHECK_ROUNDTRIP:'strictFixedEqualCount',TIMEZONE_VARIATION:'persistentDifferenceCount',FIXED_CONTEXT:'strictFixedEqualCount',
+ REGCLASS_REBIND:'strictFixedEqualCount',PREDICATE_CHANGE:'persistentDifferenceCount',VALIDATION_CHANGE:'persistentDifferenceCount',
+ DEFERRABILITY_CHANGE:'persistentDifferenceCount',LITERAL_CHANGE:'persistentDifferenceCount'});
+const keys=(v,expected)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===expected.length&&expected.every(k=>Object.hasOwn(v,k));
+export function b21WitnessFailure(reason){return Object.assign(Error('B_SEMANTICS_WITNESS'),{code:'B_SEMANTICS_WITNESS',b21WitnessReason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN'});}
+export function projectB21WitnessFailure(reason){return {schemaVersion:1,reason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN'};}
+export function buildB21NativeWitnessSql(kind,original){
+ if(!['acl','expression'].includes(kind)||typeof original!=='string'||original.split('-- B21_CAPTURE_FUNCTION\n').length!==2)throw b21WitnessFailure('CONTEXT');
+ return original.replace('-- B21_CAPTURE_FUNCTION\n',b21WitnessCaptureSql(kind==='acl'?'b21_fixture':'b21_expr'));
+}
+export function decodeB21Witness(bytes){
+ try{if(!Buffer.isBuffer(bytes)||bytes.length>8*1024*1024||!bytes.equals(Buffer.from(bytes.toString('utf8'))))throw Error();
+  return JSON.parse(bytes.toString('utf8'));
+ }catch{throw b21WitnessFailure('PRIVATE_SHAPE');}
+}
+function cases(value,flags,names,validator){
+ if(!keys(value,['schemaVersion','status',...flags,'cases'])||value.schemaVersion!==1||value.status!=='SYNTHETIC_WITNESSES_PASSED'
+  ||!flags.every(k=>value[k]===true)||!Array.isArray(value.cases)||value.cases.length!==names.length)throw b21WitnessFailure('PRIVATE_SHAPE');
+ const rows=new Map();for(const row of value.cases){
+  if(!keys(row,['name','left','right'])||!names.includes(row.name)||rows.has(row.name)||!validator(row.left)||!validator(row.right))throw b21WitnessFailure('PRIVATE_SHAPE');
+  rows.set(row.name,row);
+ }return rows;
+}
+// Uses precisely the relation/expression comparators used on real probe rows.
+// SQL booleans alone cannot satisfy this adapter; every negative uses native rows.
+export function validateB21NativeWitnesses(acl,expressions){
+ const a=cases(acl,aclFlags,Object.keys(B21_ACL_CASES),validB21Relation);
+ for(const [name,expected] of Object.entries(B21_ACL_CASES)){
+  const row=a.get(name);if(compareB21Relation(row.left,row.right)!==expected)throw b21WitnessFailure('ACL_COMPARISON');
+ }
+ const n=a.get('NULL_DEFAULT'),e=a.get('NULL_EMPTY'),s=a.get('SEQUENCE_DEFAULT');
+ if(n.left.rawState!=='NULL'||n.right.rawState!=='PRESENT'||e.left.rawState!=='NULL'||e.right.rawState!=='EMPTY'
+  ||s.left.relkind!=='S'||s.right.relkind!=='S')throw b21WitnessFailure('ACL_COMPARISON');
+ const x=cases(expressions,expressionFlags,Object.keys(B21_EXPRESSION_CASES),validB21Expression);
+ for(const [name,expected] of Object.entries(B21_EXPRESSION_CASES)){
+  const row=x.get(name),d=compareB21Expression(row.left,row.right);if(d?.definition!==expected)throw b21WitnessFailure('EXPRESSION_COMPARISON');
+  if(['REGCLASS_REBIND','PREDICATE_CHANGE','TIMEZONE_VARIATION','FIXED_CONTEXT'].includes(name)&&d.dependencies!=='dependenciesEqualCount')throw b21WitnessFailure('EXPRESSION_COMPARISON');
+ }
+ const reg=x.get('REGCLASS_REBIND'),v=x.get('VALIDATION_CHANGE'),d=x.get('DEFERRABILITY_CHANGE');
+ if(reg.left.localOid===reg.right.localOid||v.left.metadata.convalidated!==false||v.right.metadata.convalidated!==true
+  ||d.left.metadata.condeferrable!==true||d.right.metadata.condeferrable!==false)throw b21WitnessFailure('EXPRESSION_COMPARISON');
+ return projectB21NativeWitnessReceipt({schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,
+  aclCases:9,expressionCases:8,realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,
+  sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false});
+}
+// Final publication is reconstructed, including for tests feeding forged receipts.
+export function projectB21NativeWitnessReceipt(v){
+ const expected={schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,aclCases:9,expressionCases:8,
+  realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false};
+ if(!keys(v,Object.keys(expected))||!Object.keys(expected).every(k=>v[k]===expected[k]))throw b21WitnessFailure('PRIVATE_SHAPE');
+ return expected;
+}

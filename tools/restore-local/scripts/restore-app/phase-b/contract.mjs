@@ -1,4 +1,6 @@
 import { projectCatalogueFactsDiagnostic } from './catalogue-facts-diagnostic.mjs';
+import { projectCatalogueSemanticsDiagnostic } from './catalogue-semantics-diagnostic.mjs';
+import { projectB21WitnessFailure } from './catalogue-semantics-witness.mjs';
 import { projectGraphqlSchemaDelta } from './graphql-schema-diagnostic.mjs';
 import { createHash } from 'node:crypto';
 // Kept self-contained because only phase-b is mounted into the browser.
@@ -11,8 +13,8 @@ export const PRODUCT_SHA = '7dfdeb42f724a1d80f78318ecf468d248b321a68';
 export const IMAGE = 'mcr.microsoft.com/playwright@sha256:65cefd09a5e943921ecd3a6e5414c603db2eb161e9eb48f2e2ccc63486dc7dc0';
 export const LABEL = 'org.jolene.restore-drill';
 export const DB = 'jolene_candidatures_pg17_test';
-export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CALL','B_BUILD','B_DISK','B_DATABASE_READINESS','B_DATABASE_READINESS_TIMEOUT','B_BROWSER','B_REPORT','B_RESTORE','B_GRAPHQL_RESTORE_REFUSED','B_SNAPSHOT','B_FILES','B_SENTINEL','B_CLEANUP','B_FAILED']);
-export const STAGES = new Set([...A_STAGES,'dependencies','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
+export const CODES = new Set(['B_IDENTITY','B_REVIEW','B_PIN','B_CONTEXT','B_CALL','B_BUILD','B_DISK','B_DATABASE_READINESS','B_DATABASE_READINESS_TIMEOUT','B_BROWSER','B_REPORT','B_RESTORE','B_GRAPHQL_RESTORE_REFUSED','B_SEMANTICS_WITNESS','B_SNAPSHOT','B_FILES','B_SENTINEL','B_CLEANUP','B_FAILED']);
+export const STAGES = new Set([...A_STAGES,'dependencies','semantics_witnesses','build','browser_source','sentinel','restore','browser_target','files_target','controlled_negative','complete']);
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export function requireValue(ok, code = 'B_CONTEXT') { if (!ok) { const error = new Error(CODES.has(code) ? code : 'B_FAILED'); error.code = error.message; throw error; } }
 // Keep the existing refusal and boolean intact; diagnostics never decide a pass.
@@ -84,7 +86,7 @@ export const RESTORE_NATIVE_GRAPHQL_FIELDS=Object.freeze(['schemaVersion',...GRA
  'initialPrivilegesCount','fingerprint','components','wrapperSchemaInitialPrivileges']);
 const restorePlain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const restoreKeys=(v,keys)=>restorePlain(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
-export function catalogueRestoreDiagnostic(source,target,facts) {
+export function catalogueRestoreDiagnostic(source,target,facts,semantics) {
  if(!restorePlain(source)||!restorePlain(target))return {status:'INVALID_SHAPE'};
  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  const sections=RESTORE_CATALOGUE_FIELDS.filter(k=>!equal(source[k],target[k]));
@@ -93,14 +95,15 @@ export function catalogueRestoreDiagnostic(source,target,facts) {
  if(!equal(Object.keys(source),Object.keys(target)))sections.push('FIELD_ORDER');
  const nativeGraphqlFields=Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,equal(source.nativeGraphql?.[k],target.nativeGraphql?.[k])]));
  return {status:'COMPLETE',sections,...(sections.includes('nativeGraphql')?{nativeGraphqlFields}:{}),
-  ...(facts===undefined?{}:{facts:projectCatalogueFactsDiagnostic(facts)})};
+  ...(facts===undefined?{}:{facts:projectCatalogueFactsDiagnostic(facts)}),
+  ...(semantics===undefined?{}:{semantics:projectCatalogueSemanticsDiagnostic(semantics)})};
 }
 export function projectRestoreInvariant(value) {
  const reason=RESTORE_INVARIANT_REASONS.includes(value?.reason)?value.reason:'UNKNOWN';
  const result={schemaVersion:1,reason};
  if(reason!=='CATALOGUE_PARITY')return result;
- const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql'),hasFacts=restorePlain(c)&&Object.hasOwn(c,'facts');
- const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[]),...(hasFacts?['facts']:[])];
+ const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql'),hasFacts=restorePlain(c)&&Object.hasOwn(c,'facts'),hasSemantics=restorePlain(c)&&Object.hasOwn(c,'semantics');
+ const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[]),...(hasFacts?['facts']:[]),...(hasSemantics?['semantics']:[])];
  if(!restoreKeys(c,keys)||c.status!=='COMPLETE'||!Array.isArray(c.sections)
   ||c.sections.length>RESTORE_CATALOGUE_SECTIONS.length||new Set(c.sections).size!==c.sections.length
   ||!c.sections.every(k=>RESTORE_CATALOGUE_SECTIONS.includes(k))
@@ -109,7 +112,8 @@ export function projectRestoreInvariant(value) {
   return {...result,catalogue:{status:'INVALID_SHAPE'}};
  return {...result,catalogue:{status:'COMPLETE',sections:RESTORE_CATALOGUE_SECTIONS.filter(k=>c.sections.includes(k)),
   ...(hasNative?{nativeGraphqlFields:Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,c.nativeGraphqlFields[k]]))}:{}),
-  ...(hasFacts?{facts:projectCatalogueFactsDiagnostic(c.facts)}:{})}};
+  ...(hasFacts?{facts:projectCatalogueFactsDiagnostic(c.facts)}:{}),
+  ...(hasSemantics?{semantics:projectCatalogueSemanticsDiagnostic(c.semantics)}:{})}};
 }
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);
@@ -141,6 +145,7 @@ export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',
  ...(stage==='restore'&&error?.code==='B_CALL'&&error?.restoreCall?{restoreCall:projectRestoreCall(error.restoreCall)}:{}),
  ...(stage==='restore'&&error?.code==='B_RESTORE'&&error?.restoreInvariant?{restoreInvariant:projectRestoreInvariant(error.restoreInvariant)}:{}),
  ...(error?.code==='B_GRAPHQL_RESTORE_REFUSED'?{graphql:projectGraphqlDiagnostic(error?.graphql)}:{}),
+ ...(error?.code==='B_SEMANTICS_WITNESS'?{semanticsWitness:projectB21WitnessFailure(error?.b21WitnessReason)}:{}),
  restored:false,appVerified:false,readyForNationalLaunch:false }; }
 export function assertReview(review) {
  requireValue(review?.productSha===PRODUCT_SHA && review?.approved===true && /^[a-f0-9]{40}$/.test(review.phaseAHarnessSha??'')

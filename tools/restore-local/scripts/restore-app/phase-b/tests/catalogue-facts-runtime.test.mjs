@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { preparePlan } from '../../local-runtime.mjs';
@@ -11,14 +11,15 @@ import { nativeRuntime, SETTINGS_SQL } from '../native-runtime.mjs';
 import { CATALOGUE_PRIVATE_KEY } from '../catalogue-facts-diagnostic.mjs';
 import { closedFailure } from '../contract.mjs';
 import { input as graphqlInput } from './graphql-test-fixture.mjs';
+import { b21Fixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 
 // Every child process is replaced before nativeRuntime construction. No Docker,
 // database, browser, network or native process is run by these tests.
-function harness(t,{targetHash='b',targetState='off',targetFacts=true}={}) {
+function harness(t,{targetHash='b',targetState='off',targetFacts=true,b21=false,probeAnchorDrift=false,probeFailure=false}={}) {
  const parent=realpathSync(mkdtempSync(join(tmpdir(),'catalogue-b20-pure-')));t.after(()=>rmSync(parent,{recursive:true,force:true}));
  const directory=join(parent,'stack'),run='jolene-restore-drill-987654-1';preparePlan(directory,run);
  const plan=JSON.parse(readFileSync(join(directory,'compose.private.json'),'utf8')),events=[],graphql=graphqlInput();
- const canary='PRIVATE_B20_RAW_DEFINITION_AND_ACL_IDENTITY';let sourceOff=false;
+ const canary='PRIVATE_B20_RAW_DEFINITION_AND_ACL_IDENTITY',b21f=b21Fixture();let sourceOff=false;
  const containers=Object.values(plan.services).map((s,i)=>({Id:'synthetic'+i,Name:'/'+s.container_name,
   Config:{Labels:s.labels,Image:s.image,Env:Object.entries(s.environment).map(([k,v])=>k+'='+v),Cmd:s.command},
   NetworkSettings:{Networks:{[run+'-network']:{}}},HostConfig:{PortBindings:{},CapAdd:null,NetworkMode:run+'-network',LogConfig:{Type:'none'}},
@@ -48,8 +49,16 @@ function harness(t,{targetHash='b',targetState='off',targetFacts=true}={}) {
   if(args[3]==='pg_restore'){assert.deepEqual(args.slice(4),['--list']);return output(graphql.toc.toString());}
   assert.equal(args[3],'psql');const sql=options.input.toString();
   assert.equal(args[args.indexOf('-U')+1],'postgres');assert.equal(args[args.indexOf('-h')+1],'/var/run/postgresql');
+  if(sql.includes('WITH expression_objects AS')){
+   if(!b21)throw Error('SYNTHETIC_NO_B21_CAPTURE');events.push(side+'-b21-probe');
+   if(probeFailure)return{...output(''),status:1,stderr:Buffer.from(PRIVATE_CANARY+'_stderr')};
+   const p=structuredClone(side==='source'?b21f.sourceProbe:b21f.targetProbe);
+   if(probeAnchorDrift)p.anchor.catalogue_sha256='c'.repeat(64);
+   return output([p.anchor,p.current,p.fixed].map(JSON.stringify).join('\n'));
+  }
   if(sql.includes(CATALOGUE_PRIVATE_KEY)){
    events.push(side+'-catalogue');if(side==='target')assert.equal(sourceOff,true);
+   if(b21)return output({...b21f[side],[CATALOGUE_PRIVATE_KEY]:b21f[side+'Facts']});
    const facts={schemaVersion:1,status:'COMPLETE',facts:[['function',canary,[canary,'postgres',side==='source'?['a=r/b','c=r/b']:['c=r/b','a=r/b']],
     [['ROLE','a','b','SELECT',false],['ROLE','c','b','SELECT',false]]]]};
    return output({catalogue_sha256:(side==='source'?'a':targetHash).repeat(64),database:[],roles:[],memberships:[],
@@ -97,4 +106,30 @@ test('source-off guard rejects before reading target catalogue when source is ru
  const h=harness(t,{targetState:'running'}),snapshot=await h.capture();await h.runtime.stopSource();
  await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),error=>error.message==='RESTORE_SERVICE_STATE'||error.publicCode==='RESTORE_SERVICE_STATE');
  assert.ok(!h.events.includes('target-catalogue'));
+});
+test('B21 actual runtime anchors private source/target probes and publishes only closed counters',async t=>{
+ const h=harness(t,{b21:true}),snapshot=await h.capture();await h.runtime.stopSource();
+ await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),error=>{
+  const v=closedFailure(error,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.semantics.status,'COMPLETE');
+  assert.equal(v.restoreInvariant.catalogue.semantics.acl.equalCount,16);assert.ok(!JSON.stringify(v).includes(PRIVATE_CANARY));return true;
+ });
+ assert.deepEqual(h.events,['source-catalogue','source-b21-probe','dump','source-off','target-catalogue','target-b21-probe']);
+ assert.ok(!JSON.stringify(snapshot).includes(PRIVATE_CANARY));
+ for(const file of readdirSync(h.directory,{recursive:true,withFileTypes:true}).filter(d=>d.isFile())){
+  assert.ok(!readFileSync(join(file.parentPath??file.path,file.name)).includes(Buffer.from(PRIVATE_CANARY)));
+ }
+ const n=h.events.length;await assert.rejects(()=>h.runtime.catalogue('source'),e=>e.code==='B_CONTEXT');assert.equal(h.events.length,n);
+});
+test('B21 anchor drift is a closed diagnostic while the original mismatch still refuses',async t=>{
+ const h=harness(t,{b21:true,probeAnchorDrift:true}),snapshot=await h.capture();await h.runtime.stopSource();
+ await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),e=>{
+  const v=closedFailure(e,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.semantics.status,'ANCHOR_MISMATCH');return true;
+ });
+});
+test('B21 failed native capture discards stdout/stderr and cannot replace the original refusal',async t=>{
+ const h=harness(t,{b21:true,probeFailure:true}),snapshot=await h.capture();await h.runtime.stopSource();
+ await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),e=>{
+  const v=closedFailure(e,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.semantics.status,'CAPTURE_FAILED');return true;
+ });
+ for(const file of readdirSync(h.directory,{recursive:true,withFileTypes:true}).filter(d=>d.isFile()))assert.ok(!readFileSync(join(file.parentPath??file.path,file.name)).includes(Buffer.from(PRIVATE_CANARY)));
 });

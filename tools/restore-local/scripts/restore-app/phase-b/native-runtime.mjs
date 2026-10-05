@@ -4,6 +4,8 @@ import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
 import { catalogueDiagnosticSql, catalogueFactsDiagnostic, CATALOGUE_PRIVATE_KEY } from './catalogue-facts-diagnostic.mjs';
+import { buildB21ProbeSql, decodeB21Probe } from './catalogue-semantics-probe.mjs';
+import { catalogueSemanticsDiagnostic, validateB21Probe } from './catalogue-semantics-diagnostic.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, requireRestoreInvariant, catalogueRestoreDiagnostic, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
@@ -86,6 +88,7 @@ LEFT JOIN pg_roles r ON r.oid=s.setrole;
 ROLLBACK;`;
 export const ROLE_SETTINGS_SQL = "ALTER ROLE authenticator SET pgrst.db_pre_request='public.fn_pre_request_compte_actif';\nALTER ROLE authenticator SET statement_timeout='120s';";
 const CATALOGUE_DIAGNOSTIC_SQL = catalogueDiagnosticSql(readFileSync(new URL('../sql/catalogue.sql',import.meta.url),'utf8'));
+const B21_PROBE_SQL = buildB21ProbeSql(readFileSync(new URL('../sql/catalogue.sql',import.meta.url),'utf8'));
 const GRAPHQL_WITNESS_SQL = readFileSync(new URL('./graphql-native-witness.sql',import.meta.url),'utf8');
 
 // A negative proof is accepted only for the exact expected missing PDF while
@@ -119,6 +122,8 @@ export function nativeRuntime(privateDir) {
   const preparedRestores = new WeakMap();
   // Run-local memory only: never enumerable on a catalogue or serialized snapshot.
   const catalogueFacts = new WeakMap();
+  const catalogueProbes = new WeakMap();
+  let sourceCaptured=false,sourceDumpStarted=false,sourceStopped=false;
   let preparedToken=null,targetRecreated=false;
   const callId=randomUUID();let command = 0, check = 0;
   const call = (args, input, restoreOperation = null) => {
@@ -141,11 +146,31 @@ export function nativeRuntime(privateDir) {
       '-U','supabase_admin','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),restoreOperation);
   };
   const runtime={...base,
+    databaseTool:async(...args)=>{sourceDumpStarted=true;return base.databaseTool(...args);},
+    stopSource:async()=>{sourceStopped=true;return base.stopSource();},
     catalogue:async side=>{
+      requireValue(['source','target'].includes(side),'B_CONTEXT');
+      if(side==='source')requireValue(!sourceCaptured&&!sourceDumpStarted&&!sourceStopped,'B_CONTEXT');
+      const state={source:side==='source'?'db-only':'off',target:'db-only',browser:'absent'};
+      await base.verifyState(state);
+      if(side==='source')sourceCaptured=true;
       const {[CATALOGUE_PRIVATE_KEY]:facts,...original}=await base.sqlJson(side,CATALOGUE_DIAGNOSTIC_SQL);
+      let probe;
+      try {
+        // stdout/stderr stay memory-only, including on SQL/decoding failure.
+        // A new session is intentional; its original catalogue result anchors
+        // both repeatable-read views to the preceding B20 capture.
+        await base.verifyState(state);
+        const result=spawnSync('docker',['exec','-i',`${run}-${side}-db`,'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1',
+          '-U','postgres','-h','/var/run/postgresql','-d',DB,'-f','-'],{input:Buffer.from(B21_PROBE_SQL),encoding:null,maxBuffer:40*1024*1024,
+          timeout:150_000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
+        if(result.error||result.status!==0||result.signal!==null)probe={schemaVersion:1,status:'CAPTURE_FAILED'};
+        else {probe=decodeB21Probe(result.stdout);const status=validateB21Probe(probe,original);if(status!=='COMPLETE')probe={schemaVersion:1,status};}
+      }catch{probe={schemaVersion:1,status:'CAPTURE_FAILED'};}
+      await base.verifyState(state);
       const catalogue={...original,databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
         nativeGraphql:(side==='source'?assertGraphqlNativeBaseline:assertGraphqlWitness)(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')};
-      catalogueFacts.set(catalogue,facts);return catalogue;
+      catalogueFacts.set(catalogue,facts);catalogueProbes.set(catalogue,probe);return catalogue;
     },
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
@@ -214,7 +239,9 @@ export function nativeRuntime(privateDir) {
       const comparable=value=>({...value,nativeGraphql:graphqlComparableWitness(value.nativeGraphql)});
       requireRestoreInvariant(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'CATALOGUE_PARITY',
         ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target),
-          catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target))));
+          catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target)),
+          catalogueSemanticsDiagnostic(snapshot.catalogue,target,catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),
+            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target))));
       return parity;
     },
     startSourceForUi:async()=>{
