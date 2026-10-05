@@ -36,17 +36,20 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      - name: Start preview server
-        run: |
-          npx vite preview --port 4173 --host 0.0.0.0 &
-          npx wait-on http://127.0.0.1:4173 -t 30000 || true
-      - name: Run visual tests with --update-snapshots
-        run: npx playwright test e2e/visual --project=chromium --update-snapshots
+      - name: Run anonymous visual tests with --update-snapshots
+        run: node node_modules/playwright/cli.js test --config=playwright.visual.config.ts --project=chromium --update-snapshots
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
-          PLAYWRIGHT_INCLUDE_VISUAL: 'true'
           CI: 'true'
+      - name: Conserver les captures publiques pour revue
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: visual-public-pages-${{ github.run_id }}
+          path: e2e/visual.spec.ts-snapshots/*.png
+          if-no-files-found: error
+          retention-days: 7
       - name: Create PR with updated baselines
+        if: github.ref == 'refs/heads/main'
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: 'chore(e2e): update Playwright visual baselines'
