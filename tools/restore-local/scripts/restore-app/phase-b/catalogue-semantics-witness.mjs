@@ -83,6 +83,11 @@ export function validateB21NativeWitnesses(acl,expressions){
   const row=v2.get(name);
   if(catalogueV2ExpressionEqual(row.left,row.right)!==expected)throw b21WitnessFailure('EXPRESSION_COMPARISON');
   if(expected&&(row.left.definition===row.right.definition||row.left.prettyDefinition!==row.right.prettyDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
+  // This negative must isolate WITH CHECK, not fail for unrelated drift.
+  if(name==='WITH_CHECK'&&(!['identity','metadata','dependencies','bindings','definition','prettyDefinition']
+   .every(k=>JSON.stringify(row.left[k])===JSON.stringify(row.right[k]))
+   ||!row.left.bindings.complete||typeof row.left.secondaryDefinition!=='string'||typeof row.right.secondaryDefinition!=='string'
+   ||row.left.secondaryDefinition===row.right.secondaryDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
   if(name.startsWith('USER_')&&(row.left.bindings.complete||row.right.bindings.complete||row.left.prettyDefinition!==row.right.prettyDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
  }
  return projectB21NativeWitnessReceipt({schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,

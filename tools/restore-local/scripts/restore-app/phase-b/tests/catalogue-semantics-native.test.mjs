@@ -35,7 +35,7 @@ function fixture(){
  for(const [n,expected] of Object.entries(B22_EXPRESSION_CASES)){
   const a=expression(['POLICY_PRETTY_ROUNDTRIP','WITH_CHECK','NULL_PREDICATE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
   a.secondaryDefinition=b.secondaryDefinition=a.secondaryPrettyDefinition=b.secondaryPrettyDefinition=PRIVATE_CANARY;
-  b.definition+=' grouped';
+  if(n!=='WITH_CHECK')b.definition+=' grouped';
   if(n.startsWith('USER_'))a.bindings.complete=b.bindings.complete=false;
   else if(n==='WITH_CHECK')b.secondaryDefinition+=' changed';
   else if(!expected)b.prettyDefinition+=' changed';
@@ -58,6 +58,17 @@ test('native private rows traverse the actual semantic comparators and a closed 
   v=>v[1].v2Cases.find(r=>r.name==='USER_DOMAIN').right.bindings.complete=true,
   v=>v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').right.prettyDefinition=v[1].v2Cases.find(r=>r.name==='BOOLEAN_PRECEDENCE').left.prettyDefinition]){
   const v=fixture();edit(v);assert.throws(()=>validateB21NativeWitnesses(...v),e=>{assert.ok(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));return e.code==='B_SEMANTICS_WITNESS';});
+ }
+});
+test('WITH CHECK negative isolates the secondary predicate and refuses unrelated drift',()=>{
+ for(const edit of [r=>r.right.secondaryDefinition=r.left.secondaryDefinition,
+  r=>r.right.definition+=' different',r=>r.right.prettyDefinition+=' different',
+  r=>r.right.metadata.permissive=!r.right.metadata.permissive,
+  r=>r.right.dependencies.push(structuredClone(r.left.dependencies[0])),
+  r=>r.right.bindings.complete=false,r=>r.right.identity[2]+=' different',
+  r=>r.left.secondaryDefinition=null]){
+  const values=fixture();edit(values[1].v2Cases.find(r=>r.name==='WITH_CHECK'));
+  assert.throws(()=>validateB21NativeWitnesses(...values),e=>e.code==='B_SEMANTICS_WITNESS');
  }
 });
 test('native expression JSON with an uncast oid string fails the existing strict row gate',()=>{

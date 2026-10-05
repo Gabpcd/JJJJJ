@@ -214,10 +214,16 @@ BEGIN
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_POLICY_ROUNDTRIP'; END IF;
  INSERT INTO b22_cases VALUES('POLICY_PRETTY_ROUNDTRIP',l,v);
  l:=v;
- ALTER POLICY probe_policy ON b21_expr.v2_subject WITH CHECK(b);
+ -- Keep the same column dependency: USING and WITH CHECK record dependencies
+ -- separately, so switching a to b changes the dependency multiplicities.
+ ALTER POLICY probe_policy ON b21_expr.v2_subject WITH CHECK(NOT a);
  v:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
- IF l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition' OR l->'dependencies' IS DISTINCT FROM v->'dependencies'
+ IF l->>'definition' IS DISTINCT FROM v->>'definition'
+  OR l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition' OR l->'dependencies' IS DISTINCT FROM v->'dependencies'
+  OR l->'metadata' IS DISTINCT FROM v->'metadata' OR l->'bindings' IS DISTINCT FROM v->'bindings'
+  OR l->>'secondaryDefinition' IS NULL OR v->>'secondaryDefinition' IS NULL
   OR l->>'secondaryDefinition'=v->>'secondaryDefinition'
+  OR true IS NOT TRUE OR (NOT true) IS NOT FALSE
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_WITH_CHECK'; END IF;
  INSERT INTO b22_cases VALUES('WITH_CHECK',l,v);
  ALTER POLICY probe_policy ON b21_expr.v2_subject USING (a IS NOT TRUE);

@@ -302,8 +302,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-expression-witness.sql",
-      "bytes": 14942,
-      "sha256": "4b8d9571d24356db757379490b2e67c92976eae781bfc4e842955d77e1aa4ccb"
+      "bytes": 15378,
+      "sha256": "53f37dee30c24ce0dec2e06b4828fb41dac2e61ffec7ada0a789482cd7bca7ec"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-native.mjs",
@@ -317,8 +317,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-witness.mjs",
-      "bytes": 9552,
-      "sha256": "b9ae967078eb48d53f80bb5ed47217d1de28792c5a3e8d8b73eb56d2fc6f2bf4"
+      "bytes": 10056,
+      "sha256": "d09ef3970e650aee95f844bc9ada3d05e80affb1c1c711314c89bdf4a6b21d99"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/closed-json-reporter.mjs",
@@ -397,8 +397,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1168,
-      "sha256": "61f02350254f6fa72be90cc5358f1d2c8cc7613f84a54a1e60a6de0c2bc1535a"
+      "bytes": 1247,
+      "sha256": "2b604edcbf3faa7b9ba2f29da89e408b3f4a66f9434e2992a79b53a051ab124a"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -432,8 +432,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-native.test.mjs",
-      "bytes": 15003,
-      "sha256": "6dc3c425e68b9b8718f30ccc8fe64d3b1df2597d714d142e460cb14e30a8ad13"
+      "bytes": 15710,
+      "sha256": "c196078c46f510180dae6d4398cd7410ffd0678f707f7ecacd9d1d2c40386767"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",

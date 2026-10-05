@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B22 closed SQL diagnostics reviewed by root and independent reviewer. Manifest cf4dd4b46d9effe862621acad750b4ab7f884b592829a49b13ef6f2035f712e7; review SHA25670faed1a29d4f52b53f1a922f6e34239ebd3213bef56cb5084ebbfa47ec83c7a. Strict string SQLSTATE and closed assertion/phase/outcome only; unchanged predicates/comparator; 448 pure tests and 12 independent adversaries. One isolated diagnostic run; product7dfdeb42 unchanged, no provider or mobile delivery, no restoration/target UI qualification yet."
+  "note": "B22 WITH CHECK isolated witness reviewed by root and independent reviewer. Manifest eaafbfbe36ea02414fe36811875e642449d46e108c96eea4c7595c7a517f542e; review SHA2569b864f9803ec76a8e4f1e3f7a1d8ddbeefd78a3d201f97e9c0e64e8feb9288a6. Change a to NOT a preserves exact dependencies; primary predicate, metadata and bindings must stay identical. Comparator/capture unchanged. 449 pure tests and8independent adversaries. Failure37312596633 retained. One isolated run, product7dfdeb42 unchanged; target UI/restoration remain unqualified until actual pass. No provider or mobile delivery."
 }
