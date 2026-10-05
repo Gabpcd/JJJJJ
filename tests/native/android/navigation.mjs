@@ -122,6 +122,10 @@ async function reloadAndResume(role) {
   else await expect(page.locator('main').getByText('Explorez les missions librement. Votre profil sera demandé lorsque vous souhaiterez candidater.', { exact: true })).toBeVisible();
   assert.equal(new URL(page.url()).pathname, expectedPath, 'Authenticated home route must survive reload');
   await expect(page.getByRole('button', { name: 'Se connecter', exact: true })).toHaveCount(0);
+  // A DOM-visible heading did not guarantee that Android had presented the
+  // reloaded page (run 37296899799 captured the old loading skeleton). Require
+  // its content through Android's accessibility surface as well as the DOM.
+  await device.wait({ pkg, text: role === 'etab' ? 'Préparer une mission' : /^(Bonjour|Bonsoir), bienvenue$/ }, { timeout: 10000 });
   await capture(`${role}-reprise-apres-rechargement`);
   metric('auth-session-reload', { role, path: expectedPath });
 }
@@ -201,6 +205,17 @@ try {
   });
   assert.deepEqual(bridge, { fixtureApp: true, preferenceRead: true, fileRead: true });
   metric('native-plugin-reflection', { registeredPlugins: expectedPlugins.length, ...bridge });
+
+  // Exercise the permission metadata on the actual optimized bridge before
+  // authentication. This is read-only: no dialog, registration or push token.
+  let permissionDeadline;
+  const permissions = await Promise.race([
+    page.evaluate(() => window.Capacitor.Plugins.PushNotifications.checkPermissions()),
+    new Promise((_, reject) => { permissionDeadline = setTimeout(() => reject(new Error('ANDROID_NATIVE_PERMISSION_TIMEOUT')), 10000); }),
+  ]).finally(() => clearTimeout(permissionDeadline));
+  assert.equal(permissions.receive, 'prompt', 'A fresh fixture must report the unrequested native notification permission');
+  assert.equal((await nativeShell(`pidof ${pkg}`)).trim(), originalAppPid, 'Permission inspection must preserve the original application process');
+  metric('native-push-permission-read', { receive: permissions.receive, sameProcess: true, requested: false });
 
   for (const role of ['soignant', 'etab']) {
     await inscription(role);
