@@ -1,3 +1,4 @@
+import { projectGraphqlSchemaDelta } from './graphql-schema-diagnostic.mjs';
 import { createHash } from 'node:crypto';
 // Kept self-contained because only phase-b is mounted into the browser.
 const A_STAGES = ['identity','units','plan','preload','preflight','up','inspect','extensions','import',
@@ -68,7 +69,7 @@ export const GRAPHQL_COMPONENT_LABELS = Object.freeze({wrapper:'WRAPPER_DEFINITI
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);
 export const GRAPHQL_DIAGNOSTIC_REASONS = Object.freeze([
- 'WITNESS_SHAPE','WITNESS_FLAGS','WITNESS_INITIAL_PRIVILEGES','WITNESS_FINGERPRINT','WITNESS_COMPONENTS','WITNESS_RAW_SCHEMA_FINGERPRINT',
+ 'WITNESS_SHAPE','WITNESS_FLAGS','WITNESS_INITIAL_PRIVILEGES','WITNESS_FINGERPRINT','WITNESS_COMPONENTS','WITNESS_RAW_SCHEMA_FINGERPRINT','WITNESS_SCHEMA_DETAILS',
  'PARITY_INITIAL_PRIVILEGES','PARITY_FINGERPRINT','REVIEW','ARCHIVE_BUFFER','ARCHIVE_MAGIC','ARCHIVE_HASH',
  'TOC_BUFFER','TOC_UTF8','TOC_CONTROL','TOC_FORMAT','TOC_DUPLICATE_ID','TOC_SCOPE','TOC_COUNT','TOC_REVIEW_HASH',
  'REQUIRED_EXTENSION_SCHEMA','REQUIRED_WRAPPER_SCHEMA','REQUIRED_HOOK','REQUIRED_DEFAULT_ACL','REQUIRED_TRIGGER',
@@ -85,7 +86,9 @@ export function projectGraphqlDiagnostic(value) {
    ?Object.values(GRAPHQL_COMPONENT_LABELS).filter(component=>value.mismatchedComponents.includes(component)):[],
   ...(reason==='PARITY_FINGERPRINT'&&typeof value?.wrapperSchemaComparison?.rawEqual==='boolean'
     &&typeof value?.wrapperSchemaComparison?.semanticEqual==='boolean'
-   ?{wrapperSchemaComparison:{rawEqual:value.wrapperSchemaComparison.rawEqual,semanticEqual:value.wrapperSchemaComparison.semanticEqual}}:{})};
+   ?{wrapperSchemaComparison:{rawEqual:value.wrapperSchemaComparison.rawEqual,semanticEqual:value.wrapperSchemaComparison.semanticEqual}}:{}),
+  ...(reason==='PARITY_FINGERPRINT'&&value?.context==='TARGET_COMPARE'&&Object.hasOwn(value,'wrapperSchemaDelta')
+   ?{wrapperSchemaDelta:projectGraphqlSchemaDelta(value.wrapperSchemaDelta,PG_RESTORE_ROLES)}:{})};
 }
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
  code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,

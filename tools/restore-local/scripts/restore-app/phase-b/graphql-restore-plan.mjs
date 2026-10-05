@@ -2,7 +2,9 @@
 // The private native candidate remains blocked until an independent review approves
 // the new source witness, complete partition, and one-transaction psql path.
 import { createHash } from 'node:crypto';
-import { GRAPHQL_WITNESS_FLAGS as WITNESS_FLAGS, GRAPHQL_COMPONENTS, GRAPHQL_COMPONENT_LABELS, projectGraphqlDiagnostic } from './contract.mjs';
+import { GRAPHQL_WITNESS_FLAGS as WITNESS_FLAGS, GRAPHQL_COMPONENTS, GRAPHQL_COMPONENT_LABELS, PG_RESTORE_ROLES, projectGraphqlDiagnostic } from './contract.mjs';
+
+import { validGraphqlSchemaDetails, freezeGraphqlSchemaDetails, graphqlSchemaDelta } from './graphql-schema-diagnostic.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const fail = (reason, context, details = {}) => { throw Object.assign(Error('B_GRAPHQL_RESTORE_REFUSED'),
@@ -28,9 +30,9 @@ export const GRAPHQL_PREREQUISITES = Object.freeze([
   'EVENT TRIGGER - issue_pg_graphql_access supabase_admin',
 ]);
 export function assertGraphqlWitness(value, context = 'SOURCE_SNAPSHOT') {
-  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components', 'wrapperSchemaRawFingerprint'];
+  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components', 'wrapperSchemaRawFingerprint', 'wrapperSchemaDetails'];
   requireValue(plain(value) && Object.keys(value).length === keys.length
-    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 3, 'WITNESS_SHAPE', context);
+    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 4, 'WITNESS_SHAPE', context);
   const failedFlags = WITNESS_FLAGS.filter(key => value[key] !== true);
   requireValue(failedFlags.length === 0, 'WITNESS_FLAGS', context, { failedFlags });
   requireValue([0, 1].includes(value.initialPrivilegesCount), 'WITNESS_INITIAL_PRIVILEGES', context);
@@ -38,12 +40,14 @@ export function assertGraphqlWitness(value, context = 'SOURCE_SNAPSHOT') {
   requireValue(plain(value.components) && Object.keys(value.components).length === GRAPHQL_COMPONENTS.length
     && GRAPHQL_COMPONENTS.every(key => Object.hasOwn(value.components, key) && sha(value.components[key])), 'WITNESS_COMPONENTS', context);
   requireValue(sha(value.wrapperSchemaRawFingerprint), 'WITNESS_RAW_SCHEMA_FINGERPRINT', context);
+  requireValue(validGraphqlSchemaDetails(value.wrapperSchemaDetails), 'WITNESS_SCHEMA_DETAILS', context);
   return value;
 }
-// Only the extra raw-order diagnostic is excluded; every semantic witness field remains.
+// Only redundant private diagnostics are excluded; the complete B16 semantic
+// fingerprint and all nine semantic component hashes remain authoritative.
 export function graphqlComparableWitness(value) {
   assertGraphqlWitness(value);
-  const { wrapperSchemaRawFingerprint, ...comparable } = value;
+  const { wrapperSchemaRawFingerprint, wrapperSchemaDetails, ...comparable } = value;
   return comparable;
 }
 export function assertGraphqlRestored(source, target) {
@@ -55,7 +59,8 @@ export function assertGraphqlRestored(source, target) {
     semanticEqual: source.components.schema_graphql_public === target.components.schema_graphql_public,
   };
   requireValue(source.fingerprint === target.fingerprint && mismatchedComponents.length === 0,
-    'PARITY_FINGERPRINT', 'TARGET_COMPARE', { mismatchedComponents, wrapperSchemaComparison });
+    'PARITY_FINGERPRINT', 'TARGET_COMPARE', { mismatchedComponents, wrapperSchemaComparison,
+      wrapperSchemaDelta: graphqlSchemaDelta(source.wrapperSchemaDetails, target.wrapperSchemaDetails, PG_RESTORE_ROLES) });
   return { nativeGraphqlPrerequisiteVerified: true, nativeGraphqlRestoredExact: true,
     nativeGraphqlWrapperSchemaRawEqual: wrapperSchemaComparison.rawEqual,
     nativeGraphqlWrapperSchemaSemanticEqual: wrapperSchemaComparison.semanticEqual };
@@ -111,7 +116,8 @@ export function partitionGraphqlRestore({ archive, archiveSha256, toc, witness, 
   requireValue(joined.length === all.length && new Set(joined.map(entry => entry.id)).size === all.length
     && JSON.stringify(joined.map(entry => entry.line).sort()) === JSON.stringify(all.map(entry => entry.line).sort()), 'PARTITION_EXHAUSTIVE', context);
   const list = rows => Buffer.from(rows.map(entry => entry.line).join('\n') + '\n');
-  return Object.freeze({ archive, sourceWitness: Object.freeze({ ...witness, components: Object.freeze({ ...witness.components }) }), prerequisites: list(prerequisites), remainder: list(remainder),
+  return Object.freeze({ archive, sourceWitness: Object.freeze({ ...witness, components: Object.freeze({ ...witness.components }),
+    wrapperSchemaDetails: freezeGraphqlSchemaDetails(witness.wrapperSchemaDetails) }), prerequisites: list(prerequisites), remainder: list(remainder),
     proof: Object.freeze({ schemaVersion: 1, exactArchiveReused: true, allEntriesPreservedExactlyOnce: true,
       prerequisites: prerequisites.length, entries: all.length, nativeGraphqlPrerequisiteVerified: true,
       restored: false, appVerified: false }) });

@@ -20,6 +20,7 @@ const grants=()=>[
 const canonical=(rows,owner='supabase_admin')=>['graphql_public',owner,{isNull:rows===null,
  grants:[...(rows??[])].map(row=>[...row]).sort((a,b)=>Buffer.compare(Buffer.from(JSON.stringify(a)),Buffer.from(JSON.stringify(b))))}];
 const observed=(rows,owner='supabase_admin')=>{const value=witness(),semantic=canonical(rows,owner);
+ value.wrapperSchemaDetails={owner,isNull:rows===null,grants:structuredClone(rows??[])};
  value.wrapperSchemaRawFingerprint=hash(['graphql_public',owner,rows]);
  value.components.schema_graphql_public=hash(semantic);value.fingerprint=hash(value.components);return value;};
 const refusal=(source,target)=>{let caught;try{assertGraphqlRestored(source,target);}catch(error){caught=error;}
@@ -59,7 +60,7 @@ test('raw schema hash is diagnostic only and all other comparable witness fields
  const source=witness(),target=witness();target.wrapperSchemaRawFingerprint='f'.repeat(64);
  assert.equal(assertGraphqlRestored(source,target).nativeGraphqlWrapperSchemaRawEqual,false);
  const comparable=graphqlComparableWitness(source);assert.ok(!Object.hasOwn(comparable,'wrapperSchemaRawFingerprint'));
- assert.deepEqual(Object.keys(comparable).sort(),Object.keys(source).filter(k=>k!=='wrapperSchemaRawFingerprint').sort());
+ assert.deepEqual(Object.keys(comparable).sort(),Object.keys(source).filter(k=>!['wrapperSchemaRawFingerprint','wrapperSchemaDetails'].includes(k)).sort());
  assert.equal(source.wrapperSchemaRawFingerprint,'d'.repeat(64));
  for(const key of Object.keys(source.components).filter(k=>k!=='schema_graphql_public')){
   const target=witness();target.components[key]='b'.repeat(64);refusal(source,target);

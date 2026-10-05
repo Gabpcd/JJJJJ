@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B16 exact candidate 346ca77459de8f98f3a37705dae10d0d4e2ed118e9091ed1ddd3c019dd0d01d5 independently reviewed 2026-10-05. Approved for one bounded isolated synthetic CI run. B15 failure preserved; runtime restoration remains unverified."
+  "note": "B17 closed ACL diagnostic independently reviewed on 2026-10-05 (review sha256 250391b06c663a982f85963fdaecae1f1884f81962b39e07f38ccb64c4d39e34). One isolated synthetic CI execution admissible; B16 failure preserved; no ACL or parity relaxation. National readiness remains false."
 }

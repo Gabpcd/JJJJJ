@@ -1,5 +1,5 @@
 -- PREPARATION ONLY. Read before the source dump and after the target restore.
--- Keep the entire result private; publish only a verified boolean after checking.
+-- Keep the entire result private; public diagnostics use closed enums and counts only.
 -- Exact public-source bodies: supabase/postgres a431c10, migration 20231017062225.
 BEGIN READ ONLY;
 SET LOCAL search_path=pg_catalog;
@@ -44,7 +44,7 @@ WITH wrapper AS (
  FROM pg_namespace n WHERE n.nspname IN('graphql','graphql_public','extensions')
 )
 SELECT jsonb_build_object(
- 'schemaVersion',3,
+ 'schemaVersion',4,
  'context',current_database()='jolene_candidatures_pg17_test' AND inet_server_addr() IS NULL
    AND session_user='postgres' AND current_user=session_user
    AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
@@ -83,7 +83,9 @@ SELECT jsonb_build_object(
  'noGlobalFunctionDefaultAcl',NOT EXISTS(SELECT 1 FROM pg_default_acl d WHERE d.defaclnamespace=0 AND d.defaclobjtype='f'
    AND pg_get_userbyid(d.defaclrole)='supabase_admin'),
  'initialPrivilegesCount',(SELECT count(*) FROM initial_privileges),
- -- Diagnostic only; never substitutes for the complete semantic fingerprint.
+ -- Diagnostic snapshots only; the complete canonical fact above is unchanged.
+ 'wrapperSchemaDetails',(SELECT jsonb_build_object('owner',pg_get_userbyid(n.nspowner),'isNull',n.nspacl IS NULL,
+   'grants',COALESCE((SELECT jsonb_agg(grant_tuple ORDER BY grant_tuple::text COLLATE "C") FROM wrapper_schema_acl),'[]'::jsonb)) FROM wrapper_schema n),
  'wrapperSchemaRawFingerprint',(SELECT encode(sha256(convert_to(jsonb_build_array(
    n.nspname,pg_get_userbyid(n.nspowner),n.nspacl)::text,'UTF8')),'hex') FROM wrapper_schema n),
  'fingerprint',encode(sha256(convert_to((SELECT jsonb_agg(jsonb_build_array(kind,fact) ORDER BY kind,fact::text)::text FROM facts),'UTF8')),'hex'),

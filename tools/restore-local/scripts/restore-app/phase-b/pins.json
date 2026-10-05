@@ -26,6 +26,7 @@
     "tools/restore-local/scripts/restore-app/phase-b/e2e/restore-app.spec.ts",
     "tools/restore-local/scripts/restore-app/phase-b/graphql-native-witness.sql",
     "tools/restore-local/scripts/restore-app/phase-b/graphql-restore-plan.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/graphql-schema-diagnostic.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/identity.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/main.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/matrix-contract.mjs",
@@ -38,6 +39,7 @@
     "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-restore-plan.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-rights.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-test-fixture.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/matrix-contract.test.mjs",
@@ -74,7 +76,8 @@
     "tools/restore-local/scripts/restore-app/phase-b/tests/runtime-startup.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-restore-plan.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-diagnostic.test.mjs",
-    "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-rights.test.mjs"
+    "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-rights.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-diagnostic.test.mjs"
   ],
   "pinnedFiles": [
     {
@@ -259,8 +262,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
-      "bytes": 19571,
-      "sha256": "5a8ea85b1c09ce004e726752465f32b62119f96a1aff0124c33beccc2bed1c36"
+      "bytes": 19886,
+      "sha256": "085e57d1724bc8514aaaf2652f81e5286a354955848a4c92c3b32480b456f82e"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -279,13 +282,18 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/graphql-native-witness.sql",
-      "bytes": 7616,
-      "sha256": "679f8ef51c55972f1d05ba75b0fb521df0e4036f68f3d68356e9b446985db730"
+      "bytes": 7890,
+      "sha256": "d7488eba9d21ec27c5f588644889ef8c82e36ac0e997d202528d4d98cbdba2e7"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/graphql-restore-plan.mjs",
-      "bytes": 11287,
-      "sha256": "668796d68d8ce2304b9076633ef73cf7707c8102ab83a7a5d66d605588308293"
+      "bytes": 11853,
+      "sha256": "cf308ec729d3f3a30689fbc400e6b3cb8432465017635f5054829257081dbbd1"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/graphql-schema-diagnostic.mjs",
+      "bytes": 6822,
+      "sha256": "b03afef6f086c3d7bb09e2d0d2f8e62130532e8217e9708f1a4e6e366e054784"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/identity.mjs",
@@ -319,8 +327,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 903,
-      "sha256": "a4d9d96f0790c6a8ffae7c53483679a2e5295f5ca2b65d0e8467bd1f56c11497"
+      "bytes": 947,
+      "sha256": "fc8033ac7203517b12a9ac16214892f9b7852e9d4c262991562b2a0e124ea6e4"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -340,17 +348,22 @@
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-restore-plan.test.mjs",
       "bytes": 9252,
-      "sha256": "c8b3c2d8d5646dc269906e09cd660fe9214acaeba5cac27a955c3a0daaa2c61f"
+      "sha256": "f32f4c56cf1f07165e42deef1378363a97a583fa45bddfb0eb443b302c977394"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-diagnostic.test.mjs",
+      "bytes": 10553,
+      "sha256": "30a55567dc050a2ff55a27fc4d5caca97efa97be0c3f63fe6d912c935848375e"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-rights.test.mjs",
-      "bytes": 7081,
-      "sha256": "248341999dfdb397b8d9044b33dc43f97c368333991d34e1242f8cf3a466ad15"
+      "bytes": 7204,
+      "sha256": "47d17f7ab1e29f2d7613740028113db442f605c53e8b2b47c8d2498a7592aa0f"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-test-fixture.mjs",
-      "bytes": 2185,
-      "sha256": "c999a358bae3bdf22c182ed0a8602d90911f167a1b928186216e8e68bcc25679"
+      "bytes": 2254,
+      "sha256": "d0f0a6c3dfb95c705793ab18c6b0006ed975279de52ca46195d064406979458a"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/matrix-contract.test.mjs",
