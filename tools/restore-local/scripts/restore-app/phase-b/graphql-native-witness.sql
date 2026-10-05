@@ -44,7 +44,7 @@ WITH wrapper AS (
  FROM pg_namespace n WHERE n.nspname IN('graphql','graphql_public','extensions')
 )
 SELECT jsonb_build_object(
- 'schemaVersion',4,
+ 'schemaVersion',5,
  'context',current_database()='jolene_candidatures_pg17_test' AND inet_server_addr() IS NULL
    AND session_user='postgres' AND current_user=session_user
    AND current_setting('server_version_num')::integer BETWEEN 170000 AND 179999
@@ -86,6 +86,20 @@ SELECT jsonb_build_object(
  -- Diagnostic snapshots only; the complete canonical fact above is unchanged.
  'wrapperSchemaDetails',(SELECT jsonb_build_object('owner',pg_get_userbyid(n.nspowner),'isNull',n.nspacl IS NULL,
    'grants',COALESCE((SELECT jsonb_agg(grant_tuple ORDER BY grant_tuple::text COLLATE "C") FROM wrapper_schema_acl),'[]'::jsonb)) FROM wrapper_schema n),
+ -- Separate private pg_init_privs evidence for the non-member wrapper schema.
+ -- Its complete tuples are checked before any target mutation; nine existing
+ -- fingerprint components and their fact bytes remain unchanged.
+ 'wrapperSchemaInitialPrivileges',(SELECT COALESCE(jsonb_agg(jsonb_build_object(
+   'privtype',i.privtype,'isNull',i.initprivs IS NULL,'grants',COALESCE((SELECT jsonb_agg(
+     jsonb_build_array(CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE 'ROLE' END,
+       CASE WHEN x.grantee=0 THEN NULL ELSE pg_get_userbyid(x.grantee) END,
+       pg_get_userbyid(x.grantor),x.privilege_type,x.is_grantable)
+     ORDER BY jsonb_build_array(CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE 'ROLE' END,
+       CASE WHEN x.grantee=0 THEN NULL ELSE pg_get_userbyid(x.grantee) END,
+       pg_get_userbyid(x.grantor),x.privilege_type,x.is_grantable)::text COLLATE "C")
+     FROM aclexplode(i.initprivs) x),'[]'::jsonb)) ORDER BY i.privtype),'[]'::jsonb)
+   FROM pg_init_privs i JOIN wrapper_schema n ON n.oid=i.objoid
+   WHERE i.classoid='pg_namespace'::regclass AND i.objsubid=0),
  'wrapperSchemaRawFingerprint',(SELECT encode(sha256(convert_to(jsonb_build_array(
    n.nspname,pg_get_userbyid(n.nspowner),n.nspacl)::text,'UTF8')),'hex') FROM wrapper_schema n),
  'fingerprint',encode(sha256(convert_to((SELECT jsonb_agg(jsonb_build_array(kind,fact) ORDER BY kind,fact::text)::text FROM facts),'UTF8')),'hex'),

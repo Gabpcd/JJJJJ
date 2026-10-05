@@ -3,10 +3,18 @@ import {createHash} from 'node:crypto';
 import {normalizedGraphqlTocHash} from '../graphql-restore-plan.mjs';
 import {GRAPHQL_COMPONENTS} from '../contract.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
-export const witness=()=>({schemaVersion:4,context:true,nativeExtensionExact:true,wrapperSignatureExact:true,
+export const nativeSchemaGrants=()=>[
+ ['ROLE','supabase_admin','supabase_admin','CREATE',false],
+ ['ROLE','supabase_admin','supabase_admin','USAGE',false],
+ ['ROLE','postgres','supabase_admin','USAGE',true],
+ ['ROLE','anon','supabase_admin','USAGE',false],
+ ['ROLE','authenticated','supabase_admin','USAGE',false],
+ ['ROLE','service_role','supabase_admin','USAGE',false],
+];
+export const witness=()=>({schemaVersion:5,context:true,nativeExtensionExact:true,wrapperSignatureExact:true,
  wrapperBodyExact:true,wrapperMembershipExact:true,wrapperOwnerExact:true,hookSignatureExact:true,
  hookBodyExact:true,hookOwnerExact:true,hookNotExtensionMember:true,triggerExact:true,schemaOwnersExact:true,
- defaultFunctionAclExact:true,noGlobalFunctionDefaultAcl:true,initialPrivilegesCount:1,fingerprint:'a'.repeat(64),wrapperSchemaRawFingerprint:'d'.repeat(64),wrapperSchemaDetails:{owner:'supabase_admin',isNull:false,grants:[]},components:Object.fromEntries(GRAPHQL_COMPONENTS.map(key=>[key,'a'.repeat(64)]))});
+ defaultFunctionAclExact:true,noGlobalFunctionDefaultAcl:true,initialPrivilegesCount:1,fingerprint:'a'.repeat(64),wrapperSchemaRawFingerprint:'d'.repeat(64),wrapperSchemaDetails:{owner:'supabase_admin',isNull:false,grants:nativeSchemaGrants()},wrapperSchemaInitialPrivileges:[{privtype:'e',isNull:false,grants:nativeSchemaGrants()}],components:Object.fromEntries(GRAPHQL_COMPONENTS.map(key=>[key,'a'.repeat(64)]))});
 export const descriptions=()=>[
  'SCHEMA - extensions postgres','SCHEMA - graphql_public supabase_admin',
  'EXTENSION - pg_graphql ',

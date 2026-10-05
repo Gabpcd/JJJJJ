@@ -6,6 +6,7 @@ import {GRAPHQL_SOURCE,GRAPHQL_PREREQUISITES,assertGraphqlWitness,assertGraphqlR
   normalizedGraphqlTocHash,partitionGraphqlRestore,graphqlExportArgs,graphqlTransactionArgs,
   prepareGraphqlRestore} from '../graphql-restore-plan.mjs';
 const hash=v=>createHash('sha256').update(v).digest('hex');
+import {GRAPHQL_NATIVE_BASELINE_SQL} from '../graphql-native-baseline.mjs';
 import {witness,descriptions,tocOf,input} from './graphql-test-fixture.mjs';
 const lines=buffer=>buffer.toString().split('\n').filter(v=>v&&!v.startsWith(';'));
 const refuse=fn=>assert.throws(fn,e=>e.code==='B_GRAPHQL_RESTORE_REFUSED'&&e.message==='B_GRAPHQL_RESTORE_REFUSED');
@@ -52,17 +53,17 @@ test('duplicate TOC IDs, invalid control bytes and forbidden database objects re
 test('every exact native source property must be true, without extra data or unbounded fingerprints',()=>{
  const source=witness();assertGraphqlWitness(source);
  for(const key of Object.keys(source).filter(k=>source[k]===true))for(const value of [false,null,1,'true'])refuse(()=>assertGraphqlWitness({...source,[key]:value}));
- for(const patch of [{initialPrivilegesCount:2},{schemaVersion:5},{fingerprint:'not-a-hash'},{raw:'PRIVATE_CANARY'}])refuse(()=>assertGraphqlWitness({...source,...patch}));
+ for(const patch of [{initialPrivilegesCount:2},{schemaVersion:6},{fingerprint:'not-a-hash'},{raw:'PRIVATE_CANARY'}])refuse(()=>assertGraphqlWitness({...source,...patch}));
 });
 test('target parity covers native definitions, ACLs, owner and initial privileges via fingerprint',()=>{
  assert.deepEqual(assertGraphqlRestored(witness(),witness()),{nativeGraphqlPrerequisiteVerified:true,nativeGraphqlRestoredExact:true,nativeGraphqlWrapperSchemaRawEqual:true,nativeGraphqlWrapperSchemaSemanticEqual:true});
  for(const change of [{fingerprint:'b'.repeat(64)},{initialPrivilegesCount:0},{wrapperMembershipExact:false},{triggerExact:false}])refuse(()=>assertGraphqlRestored(witness(),{...witness(),...change}));
 });
-test('both official exports are concatenated byte for byte and supplied to one psql transaction',async()=>{
+test('both official exports stay byte-exact around the native prerequisite in one psql transaction',async()=>{
  const x=input(),calls=[],fragments=[Buffer.from('-- prerequisite\nALTER SCHEMA extensions OWNER TO postgres;\n'),Buffer.from('-- remainder\nCOPY synthetic FROM stdin;\n1\n\\.\nGRANT SELECT ON synthetic TO anon;\n')];
  const result=await prepareGraphqlRestore(x,async request=>{calls.push(request);return fragments[calls.length-1];});
  assert.deepEqual(calls.map(c=>c.partition),['prerequisites','remainder']);assert.ok(calls.every(c=>c.archive===x.archive));
- assert.deepEqual(result.sql,Buffer.concat([fragments[0],Buffer.from('\n'),fragments[1],Buffer.from('\n')]));
+ assert.deepEqual(result.sql,Buffer.concat([fragments[0],Buffer.from('\n'),Buffer.from(GRAPHQL_NATIVE_BASELINE_SQL),fragments[1],Buffer.from('\n')]));
  assert.deepEqual(result.transactionArgs,graphqlTransactionArgs());assert.equal(result.transactionArgs.filter(v=>v==='--single-transaction').length,1);
  assert.ok(result.transactionArgs.includes('ON_ERROR_STOP=1'));assert.equal(result.transactionArgs.at(-1),'-');
  for(const request of calls){assert.deepEqual(request.args,graphqlExportArgs(request.partition));assert.ok(!request.args.includes('--single-transaction'));assert.ok(!request.args.some(v=>v.startsWith('--no-owner')||v.startsWith('--no-acl')||v==='--clean'||v==='--dbname'||v==='-d'));}

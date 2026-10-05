@@ -6,7 +6,7 @@ import { localRuntime } from '../local-runtime.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
-import { assertGraphqlWitness, assertGraphqlRestored, graphqlComparableWitness, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
+import { assertGraphqlWitness,assertGraphqlNativeBaseline, assertGraphqlRestored, graphqlComparableWitness, partitionGraphqlRestore, prepareGraphqlRestore } from './graphql-restore-plan.mjs';
 
 // PG17 pg_backup_db.c emits the first error and then "Command was:" even
 // without --verbose. TOC INFO lines are suppressed, so do not depend on them.
@@ -138,7 +138,7 @@ export function nativeRuntime(privateDir) {
   };
   const runtime={...base,
     catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
-      nativeGraphql:assertGraphqlWitness(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')}),
+      nativeGraphql:(side==='source'?assertGraphqlNativeBaseline:assertGraphqlWitness)(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')}),
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
       await base.copyFilesOut('target',path);assertEmptyFileTree(path);

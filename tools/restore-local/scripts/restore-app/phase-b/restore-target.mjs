@@ -22,9 +22,9 @@ export async function restoreTarget(runtime, privateDir, snapshot, reviewed, che
   // --clean collisions with pre-existing native Auth/Storage schemas.
   await runtime.recreateOwnedEmptyTargetDatabase(DB);
   await runtime.executePreparedTargetRestore(prepared);
-  // Native GraphQL prerequisites then the complete complementary archive export
-  // are executed in ONE psql transaction. Every TOC entry, owner, ACL and data
-  // item remains present exactly once; SQL bytes are not rewritten.
+  // Native GraphQL archive prerequisites, the guarded vendor schema baseline,
+  // then the complete complementary archive export execute in ONE transaction.
+  // Every TOC entry remains present exactly once; both exports stay byte-exact.
   await runtime.applyReviewedRoleSettings();
   await runtime.assertTargetFilesEmpty(); // Recheck after restore, immediately before copy.
   await runtime.copyFilesIn('target', join(privateDir, 'files'));

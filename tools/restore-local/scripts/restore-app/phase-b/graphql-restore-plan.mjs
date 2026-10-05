@@ -1,6 +1,7 @@
 // PREPARATION ONLY. This module has no CLI or database/process/network API.
 // The private native candidate remains blocked until an independent review approves
 // the new source witness, complete partition, and one-transaction psql path.
+import { GRAPHQL_NATIVE_BASELINE_SQL, validGraphqlSchemaInitialPrivileges, freezeGraphqlSchemaInitialPrivileges, nativeGraphqlSchemaBaselineExact } from './graphql-native-baseline.mjs';
 import { createHash } from 'node:crypto';
 import { GRAPHQL_WITNESS_FLAGS as WITNESS_FLAGS, GRAPHQL_COMPONENTS, GRAPHQL_COMPONENT_LABELS, PG_RESTORE_ROLES, projectGraphqlDiagnostic } from './contract.mjs';
 
@@ -30,9 +31,9 @@ export const GRAPHQL_PREREQUISITES = Object.freeze([
   'EVENT TRIGGER - issue_pg_graphql_access supabase_admin',
 ]);
 export function assertGraphqlWitness(value, context = 'SOURCE_SNAPSHOT') {
-  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components', 'wrapperSchemaRawFingerprint', 'wrapperSchemaDetails'];
+  const keys = ['schemaVersion', ...WITNESS_FLAGS, 'initialPrivilegesCount', 'fingerprint', 'components', 'wrapperSchemaRawFingerprint', 'wrapperSchemaDetails', 'wrapperSchemaInitialPrivileges'];
   requireValue(plain(value) && Object.keys(value).length === keys.length
-    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 4, 'WITNESS_SHAPE', context);
+    && keys.every(key => Object.hasOwn(value, key)) && value.schemaVersion === 5, 'WITNESS_SHAPE', context);
   const failedFlags = WITNESS_FLAGS.filter(key => value[key] !== true);
   requireValue(failedFlags.length === 0, 'WITNESS_FLAGS', context, { failedFlags });
   requireValue([0, 1].includes(value.initialPrivilegesCount), 'WITNESS_INITIAL_PRIVILEGES', context);
@@ -41,6 +42,12 @@ export function assertGraphqlWitness(value, context = 'SOURCE_SNAPSHOT') {
     && GRAPHQL_COMPONENTS.every(key => Object.hasOwn(value.components, key) && sha(value.components[key])), 'WITNESS_COMPONENTS', context);
   requireValue(sha(value.wrapperSchemaRawFingerprint), 'WITNESS_RAW_SCHEMA_FINGERPRINT', context);
   requireValue(validGraphqlSchemaDetails(value.wrapperSchemaDetails), 'WITNESS_SCHEMA_DETAILS', context);
+  requireValue(validGraphqlSchemaInitialPrivileges(value.wrapperSchemaInitialPrivileges), 'WITNESS_SCHEMA_INITIAL_PRIVILEGES', context);
+  return value;
+}
+export function assertGraphqlNativeBaseline(value, context = 'SOURCE_SNAPSHOT') {
+  assertGraphqlWitness(value, context);
+  requireValue(nativeGraphqlSchemaBaselineExact(value), 'WITNESS_NATIVE_SCHEMA_BASELINE', context);
   return value;
 }
 // Only redundant private diagnostics are excluded; the complete B16 semantic
@@ -91,7 +98,7 @@ export function partitionGraphqlRestore({ archive, archiveSha256, toc, witness, 
   const context = 'PARTITION';
   // Approval is a pinned review field, never inferred from the current run.
   requireValue(review?.nativeGraphqlRepairReviewed === true && sha(review.nativeRestoreTocSha256), 'REVIEW', context);
-  assertGraphqlWitness(witness, 'SOURCE_SNAPSHOT');
+  assertGraphqlNativeBaseline(witness, 'SOURCE_SNAPSHOT');
   requireValue(Buffer.isBuffer(archive) && archive.length > 5 && archive.length < 64 * 1024 * 1024, 'ARCHIVE_BUFFER', context);
   requireValue(archive.subarray(0, 5).toString() === 'PGDMP', 'ARCHIVE_MAGIC', context);
   requireValue(sha(archiveSha256) && hash(archive) === archiveSha256, 'ARCHIVE_HASH', context);
@@ -117,7 +124,8 @@ export function partitionGraphqlRestore({ archive, archiveSha256, toc, witness, 
     && JSON.stringify(joined.map(entry => entry.line).sort()) === JSON.stringify(all.map(entry => entry.line).sort()), 'PARTITION_EXHAUSTIVE', context);
   const list = rows => Buffer.from(rows.map(entry => entry.line).join('\n') + '\n');
   return Object.freeze({ archive, sourceWitness: Object.freeze({ ...witness, components: Object.freeze({ ...witness.components }),
-    wrapperSchemaDetails: freezeGraphqlSchemaDetails(witness.wrapperSchemaDetails) }), prerequisites: list(prerequisites), remainder: list(remainder),
+    wrapperSchemaDetails: freezeGraphqlSchemaDetails(witness.wrapperSchemaDetails),
+    wrapperSchemaInitialPrivileges: freezeGraphqlSchemaInitialPrivileges(witness.wrapperSchemaInitialPrivileges) }), prerequisites: list(prerequisites), remainder: list(remainder),
     proof: Object.freeze({ schemaVersion: 1, exactArchiveReused: true, allEntriesPreservedExactlyOnce: true,
       prerequisites: prerequisites.length, entries: all.length, nativeGraphqlPrerequisiteVerified: true,
       restored: false, appVerified: false }) });
@@ -152,9 +160,10 @@ export async function prepareGraphqlRestore(input, exportSql) {
     requireValue(!sql.includes(Buffer.from('\0')), 'EXPORT_SQL_NUL', context);
     parts.push(sql);
   }
-  requireValue(parts[0].length + parts[1].length < 64 * 1024 * 1024, 'EXPORT_TOTAL_BOUND', 'EXPORT_ASSEMBLY');
-  // No SQL rewriting, sanitizing, owner substitution, or ACL filtering. The
-  // official exporter emits both fragments; psql -1 must execute this once.
-  return { sql: Buffer.concat([parts[0], Buffer.from('\n'), parts[1], Buffer.from('\n')]),
+  requireValue(parts[0].length + Buffer.byteLength(GRAPHQL_NATIVE_BASELINE_SQL) + parts[1].length < 64 * 1024 * 1024, 'EXPORT_TOTAL_BOUND', 'EXPORT_ASSEMBLY');
+  // Both archive fragments stay byte-exact. Between them, replay the fixed
+  // vendor prerequisite only after source baseline verification, before the
+  // extension records its native initial privileges. One transaction throughout.
+  return { sql: Buffer.concat([parts[0], Buffer.from('\n'), Buffer.from(GRAPHQL_NATIVE_BASELINE_SQL), parts[1], Buffer.from('\n')]),
     sourceWitness: plan.sourceWitness, proof: plan.proof, transactionArgs: graphqlTransactionArgs() };
 }

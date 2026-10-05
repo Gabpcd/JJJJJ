@@ -1,3 +1,4 @@
+import {GRAPHQL_NATIVE_BASELINE_SQL} from '../graphql-native-baseline.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import cp from 'node:child_process';
@@ -133,7 +134,7 @@ for(const failedOperation of [...new Set(restoreSequence),'TOC_BINDING'])test('a
      pristineSchemas=new Map([['pg_catalog',{}],['information_schema',{}],['public',{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']}]]);
     }else if(args.includes('--single-transaction')){
      operation='TARGET_SQL_RESTORE';assert.deepEqual(args.slice(commandIndex+1),graphqlTransactionArgs());
-     assert.equal(sql,'-- synthetic-prerequisites\nSELECT 1;\n\n-- synthetic-remainder\nSELECT 1;\n\n');
+     assert.equal(sql,'-- synthetic-prerequisites\nSELECT 1;\n\n'+GRAPHQL_NATIVE_BASELINE_SQL+'-- synthetic-remainder\nSELECT 1;\n\n');
      assert.deepEqual([...pristineSchemas.keys()],['pg_catalog','information_schema','public']);
      assert.deepEqual(pristineSchemas.get('public'),{owner:'pg_database_owner',acl:['owner:UC','PUBLIC:U']});
     }else if(sql.startsWith('ALTER ROLE authenticator'))operation='TARGET_ROLE_SETTINGS';

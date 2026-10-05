@@ -106,15 +106,15 @@ test('maximum-size private delta remains complete and public counters are bounde
  assert.equal(d.tuples.delta.length, 2); assert.deepEqual(project(d), d); assert.ok(!JSON.stringify(d).includes('private_'));
 });
 test('diagnostic details are deep copied and frozen before exporter access', () => {
- const v = input(); v.witness.wrapperSchemaDetails = details(); const plan = partitionGraphqlRestore(v);
+ const v = input(); const plan = partitionGraphqlRestore(v);
  v.witness.wrapperSchemaDetails.owner = canary; v.witness.wrapperSchemaDetails.grants[0][1] = canary;
- assert.equal(plan.sourceWitness.wrapperSchemaDetails.owner, 'supabase_admin'); assert.equal(plan.sourceWitness.wrapperSchemaDetails.grants[0][1], 'postgres');
+ assert.equal(plan.sourceWitness.wrapperSchemaDetails.owner, 'supabase_admin'); assert.equal(plan.sourceWitness.wrapperSchemaDetails.grants[0][1], 'supabase_admin');
  assert.ok(Object.isFrozen(plan.sourceWitness.wrapperSchemaDetails)); assert.ok(Object.isFrozen(plan.sourceWitness.wrapperSchemaDetails.grants));
  assert.ok(Object.isFrozen(plan.sourceWitness.wrapperSchemaDetails.grants[0])); assert.ok(!JSON.stringify(plan.proof).includes('wrapperSchemaDetails'));
 });
 test('SQL details reuse the same private tuple CTE without changing the canonical facts or emitting SQL', () => {
  const sql = readFileSync(new URL('../graphql-native-witness.sql', import.meta.url), 'utf8');
- assert.match(sql, /'schemaVersion',4/); assert.match(sql, /'wrapperSchemaDetails',\(SELECT jsonb_build_object\('owner',pg_get_userbyid\(n.nspowner\),'isNull',n.nspacl IS NULL/);
+ assert.match(sql, /'schemaVersion',5/); assert.match(sql, /'wrapperSchemaDetails',\(SELECT jsonb_build_object\('owner',pg_get_userbyid\(n.nspowner\),'isNull',n.nspacl IS NULL/);
  assert.match(sql, /'grants',COALESCE\(\(SELECT jsonb_agg\(grant_tuple ORDER BY grant_tuple::text COLLATE "C"\) FROM wrapper_schema_acl\),'\[\]'::jsonb\)\) FROM wrapper_schema n\)/);
  assert.ok(!/\b(?:GRANT|REVOKE|UPDATE|DELETE|INSERT|ALTER)\b/.test(sql));
 });

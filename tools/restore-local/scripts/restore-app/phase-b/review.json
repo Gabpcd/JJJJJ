@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B17 closed ACL diagnostic independently reviewed on 2026-10-05 (review sha256 250391b06c663a982f85963fdaecae1f1884f81962b39e07f38ccb64c4d39e34). One isolated synthetic CI execution admissible; B16 failure preserved; no ACL or parity relaxation. National readiness remains false."
+  "note": "B18 private conditional preparation: replay the exact pinned vendor schema prerequisite only after source pg_init_privs and current ACL witnesses match the complete expected native baseline. Fresh independent review required. B17 failure preserved; no parity relaxation; no native execution or national readiness asserted."
 }
