@@ -36,8 +36,10 @@ export function catalogueAnchorDiagnostic(probe,original) {
    let changed=false;
    for(const [field,name] of [['localOid','localOidDifferentCount'],['metadata','metadataDifferentCount'],['dependencies','dependenciesDifferentCount'],['bindings','bindingsDifferentCount']])
     if(!equal(row[field],other[field])){counters[name]++;changed=true;}
-   for(const [field,name] of [['complete','bindingCompleteDifferentCount'],['factKeys','bindingFactKeysDifferentCount'],['columns','bindingColumnsDifferentCount']])
+   for(const [field,name] of [['complete','bindingCompleteDifferentCount'],['factKeys','bindingFactKeysDifferentCount']])
     if(!equal(row.bindings[field],other.bindings[field]))counters[name]++;
+   if(!equal([row.bindings.columns,row.bindings.uncoveredColumns,row.bindings.columnCount],
+    [other.bindings.columns,other.bindings.uncoveredColumns,other.bindings.columnCount]))counters.bindingColumnsDifferentCount++;
    if(changed)counters.changedExpressionCount++;
   }
   return projectCatalogueAnchorDiagnostic({schemaVersion:1,status,reason:'CURRENT_FIXED',

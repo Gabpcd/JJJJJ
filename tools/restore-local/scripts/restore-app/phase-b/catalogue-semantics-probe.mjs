@@ -6,7 +6,22 @@ export const CONTEXT_KEYS=Object.freeze(['search_path','TimeZone','DateStyle','I
  'extra_float_digits','quote_all_identifiers','standard_conforming_strings','bytea_output',
  'lc_monetary','server_encoding','client_encoding']);
 
-const query=`WITH expression_objects AS (
+const legacyColumns=`'columns',(SELECT coalesce(jsonb_agg(DISTINCT a.binding_type ORDER BY a.binding_type),'[]'::jsonb)
+    FROM binding_rows z JOIN covered_columns a ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
+    WHERE z.kind=o.kind AND z.oid=o.oid),
+   'columnCount',(SELECT count(DISTINCT a.column_identity)
+    FROM binding_rows z JOIN covered_columns a ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
+    WHERE z.kind=o.kind AND z.oid=o.oid),
+   'uncoveredColumns','[]'::jsonb`;
+const stableColumns=legacyColumns.replace("ORDER BY a.binding_type),'[]'::jsonb)","ORDER BY a.binding_type) FILTER(WHERE a.types_covered),'[]'::jsonb)")
+ .replace("'uncoveredColumns','[]'::jsonb",`'uncoveredColumns',(SELECT coalesce(jsonb_agg(DISTINCT a.structural_type ORDER BY a.structural_type)
+    FILTER(WHERE NOT a.types_covered),'[]'::jsonb)
+    FROM binding_rows z JOIN covered_columns a ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
+    WHERE z.kind=o.kind AND z.oid=o.oid)`);
+
+// Only the dedicated synthetic legacy witness uses the former column renderer.
+// It transports that renderer in the current strict envelope for regression.
+const legacyQuery=`WITH expression_objects AS (
  SELECT 'policy'::text kind,jsonb_build_array(n.nspname,c.relname,p.polname) identity,
   'pg_catalog.pg_policy'::regclass classid,p.oid,
   jsonb_build_object('cmd',p.polcmd,'permissive',p.polpermissive,
@@ -58,6 +73,11 @@ const query=`WITH expression_objects AS (
  SELECT oid FROM pg_collation WHERE oid<16384 AND collnamespace='pg_catalog'::regnamespace
 ), covered_columns AS (
  SELECT a.attrelid,a.attnum,n.nspname||'.'||c.relname||'.'||a.attname fact_name,
+  jsonb_build_array(n.nspname,c.relname,a.attname) column_identity,
+  jsonb_build_array(jsonb_build_array(n.nspname,c.relname,a.attname),
+   (SELECT jsonb_build_array(tn.nspname,t.typname) FROM pg_type t JOIN pg_namespace tn ON tn.oid=t.typnamespace WHERE t.oid=a.atttypid),
+   a.atttypmod,CASE WHEN a.attcollation=0 THEN NULL ELSE (SELECT jsonb_build_array(z.nspname,l.collname)
+    FROM pg_collation l JOIN pg_namespace z ON z.oid=l.collnamespace WHERE l.oid=a.attcollation) END) structural_type,
   jsonb_build_array(n.nspname||'.'||c.relname||'.'||a.attname,format_type(a.atttypid,a.atttypmod),
    CASE WHEN a.attcollation=0 THEN NULL ELSE (SELECT jsonb_build_array(z.nspname,l.collname)
     FROM pg_collation l JOIN pg_namespace z ON z.oid=l.collnamespace WHERE l.oid=a.attcollation) END) binding_type,
@@ -103,11 +123,12 @@ const query=`WITH expression_objects AS (
  SELECT jsonb_build_object('kind',o.kind,'identity',o.identity,'localOid',o.oid::bigint,
   'metadata',o.metadata,'definition',o.definition,'prettyDefinition',o.pretty_definition,
   'secondaryDefinition',o.secondary_definition,'secondaryPrettyDefinition',o.secondary_pretty_definition,
-  'bindings',(SELECT jsonb_build_object('complete',coalesce(bool_and(b.covered),true),
+  'bindings',(SELECT jsonb_build_object('schemaVersion',2,'complete',coalesce(bool_and(b.covered),true)
+   AND NOT EXISTS(SELECT 1 FROM binding_rows z JOIN covered_columns a
+    ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
+    WHERE z.kind=o.kind AND z.oid=o.oid AND NOT a.types_covered),
    'factKeys',coalesce(jsonb_agg(DISTINCT b.fact_key ORDER BY b.fact_key) FILTER(WHERE b.fact_key IS NOT NULL),'[]'::jsonb),
-   'columns',(SELECT coalesce(jsonb_agg(DISTINCT a.binding_type ORDER BY a.binding_type),'[]'::jsonb)
-    FROM binding_rows z JOIN covered_columns a ON a.attrelid=z.relation_id AND (a.attnum=z.attribute_number OR z.whole_row)
-    WHERE z.kind=o.kind AND z.oid=o.oid))
+   ${legacyColumns})
    FROM binding_rows b WHERE b.kind=o.kind AND b.oid=o.oid),
   'dependencies',(SELECT coalesce(jsonb_agg(z.v ORDER BY z.v::text),'[]'::jsonb) FROM (
    SELECT jsonb_build_array(d.deptype,a.type,a.object_names,a.object_args) v
@@ -150,6 +171,7 @@ SELECT CASE WHEN octet_length(v::text)>16777216 OR
  jsonb_array_length(v->'expressions')+jsonb_array_length(v->'relations')>100000
  THEN jsonb_build_object('schemaVersion',1,'status','BOUND_EXCEEDED') ELSE v END FROM payload;
 `;
+const query=legacyQuery.replace(legacyColumns,stableColumns);
 
 // The witnesses use the identical native projection, in their dedicated cluster.
 // This is a fixed synthetic scope, never an environment or CLI override.
@@ -157,6 +179,11 @@ export function b21WitnessCaptureSql(schema) {
  if(!['b21_fixture','b21_expr'].includes(schema)) throw Error('B21_WITNESS_SCOPE');
  const scoped=query.replaceAll("n.nspname IN('public','private','auth','storage')",`n.nspname='${schema}'`);
  return `CREATE FUNCTION ${schema}.capture() RETURNS jsonb LANGUAGE sql VOLATILE AS $b21_capture$\n${scoped}$b21_capture$;\n`;
+}
+
+export function b23LegacyWitnessCaptureSql() {
+ const scoped=legacyQuery.replaceAll("n.nspname IN('public','private','auth','storage')","n.nspname='b21_expr'");
+ return `CREATE FUNCTION b21_expr.capture_legacy() RETURNS jsonb LANGUAGE sql VOLATILE AS $b23_legacy$\n${scoped}$b23_legacy$;\n`;
 }
 
 export function buildB21ProbeSql(original) {

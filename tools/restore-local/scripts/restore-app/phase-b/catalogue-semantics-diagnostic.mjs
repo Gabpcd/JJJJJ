@@ -56,13 +56,24 @@ function metadata(kind,v) {
   &&address(v.referencedRelation)&&address(v.parentConstraint);
 }
 const expressionKeys=['kind','identity','localOid','metadata','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition','bindings','dependencies'];
+function bindings(v) {
+ if(!keys(v,['schemaVersion','complete','factKeys','columns','columnCount','uncoveredColumns'])||v.schemaVersion!==2
+  ||typeof v.complete!=='boolean'||!count(v.columnCount)
+  ||!array(v.factKeys,k=>identity(k,2)&&['relation','column','function'].includes(k[0]))
+  ||!array(v.columns,c=>Array.isArray(c)&&c.length===3&&text(c[0])&&text(c[1])&&(c[2]===null||identity(c[2],2)))
+  ||!array(v.uncoveredColumns,c=>Array.isArray(c)&&c.length===4&&identity(c[0],3)&&identity(c[1],2)
+   &&Number.isSafeInteger(c[2])&&c[2]>=-2147483648&&c[2]<=2147483647&&(c[3]===null||identity(c[3],2)))
+  ||v.columnCount!==v.columns.length+v.uncoveredColumns.length||(v.uncoveredColumns.length>0&&v.complete))return false;
+ const names=[...v.columns.map(c=>c[0]),...v.uncoveredColumns.map(c=>c[0].join('.'))];
+ // Count is captured independently before partition; no omitted, repeated or
+ // overlapping column is admissible. Noncovered entries never gain coverage.
+ return new Set(names).size===names.length&&new Set(v.factKeys.map(canonical)).size===v.factKeys.length;
+}
 export function validB21Expression(v) {
  return keys(v,expressionKeys)&&['policy','constraint'].includes(v.kind)&&identity(v.identity,3)
   &&Number.isSafeInteger(v.localOid)&&v.localOid>0&&v.localOid<=4294967295&&metadata(v.kind,v.metadata)
   &&['definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'].every(k=>nullable(v[k]))&&array(v.dependencies,dependency)
-  &&keys(v.bindings,['complete','factKeys','columns'])&&typeof v.bindings.complete==='boolean'
-  &&array(v.bindings.factKeys,k=>identity(k,2)&&['relation','column','function'].includes(k[0]))
-  &&array(v.bindings.columns,c=>Array.isArray(c)&&c.length===3&&text(c[0])&&text(c[1])&&(c[2]===null||identity(c[2],2)));
+  &&bindings(v.bindings);
 }
 export function validateB21Capture(v) {
  try {

@@ -238,7 +238,7 @@ CREATE TEMP TABLE b23_anchor_cases(name text PRIMARY KEY,left_capture jsonb,righ
 CREATE FUNCTION b21_expr.anchor_capture(r regclass) RETURNS jsonb LANGUAGE sql VOLATILE AS $capture$
  SELECT jsonb_set(v,'{expressions}',(SELECT jsonb_agg(e) FROM jsonb_array_elements(v->'expressions') q(e)
   WHERE e->>'kind'='constraint' AND e->'identity'=jsonb_build_array('b21_expr',c.relname,'anchor_check')))
- FROM (SELECT b21_expr.capture() v) payload JOIN pg_class c ON c.oid=r
+ FROM (SELECT b21_expr.capture_legacy() v) payload JOIN pg_class c ON c.oid=r
 $capture$;
 CREATE DOMAIN b21_expr.anchor_domain AS integer;
 CREATE DOMAIN b21_expr.anchor_domain_other AS integer;
@@ -306,11 +306,109 @@ BEGIN
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B23_ANCHOR_SIGNATURE'; END IF;
  INSERT INTO b23_anchor_cases VALUES('SIGNATURE_CHANGE',l,r);
 END $b23_anchor$;
+-- B24 uses the actual new capture beside the preserved legacy reproduction.
+CREATE TEMP TABLE b24_column_cases(name text PRIMARY KEY,left_capture jsonb,right_capture jsonb);
+CREATE FUNCTION b21_expr.column_capture(r regclass,k text,n text) RETURNS jsonb LANGUAGE sql VOLATILE AS $capture$
+ SELECT jsonb_set(v,'{expressions}',(SELECT jsonb_agg(e) FROM jsonb_array_elements(v->'expressions') q(e)
+  WHERE e->>'kind'=k AND e->'identity'=jsonb_build_array('b21_expr',c.relname,n)))
+ FROM (SELECT b21_expr.capture() v) payload JOIN pg_class c ON c.oid=r
+$capture$;
+CREATE FUNCTION b21_expr.column_capture_legacy(r regclass,k text,n text) RETURNS jsonb LANGUAGE sql VOLATILE AS $capture$
+ SELECT jsonb_set(v,'{expressions}',(SELECT jsonb_agg(e) FROM jsonb_array_elements(v->'expressions') q(e)
+  WHERE e->>'kind'=k AND e->'identity'=jsonb_build_array('b21_expr',c.relname,n)))
+ FROM (SELECT b21_expr.capture_legacy() v) payload JOIN pg_class c ON c.oid=r
+$capture$;
+CREATE COLLATION b21_expr.anchor_c (provider=libc,locale='C');
+CREATE COLLATION b21_expr.anchor_c_other (provider=libc,locale='C');
+CREATE TABLE b21_expr.anchor_uncovered_mod(t varchar(8) COLLATE b21_expr.anchor_c,CONSTRAINT anchor_check CHECK(t IS NOT NULL));
+CREATE TABLE b21_expr.anchor_mixed(a boolean,d b21_expr.anchor_domain,CONSTRAINT anchor_check CHECK(a OR d IS NOT NULL));
+CREATE TABLE b21_expr.anchor_whole(a boolean,d b21_expr.anchor_domain);
+CREATE POLICY anchor_policy ON b21_expr.anchor_whole USING(row_to_json(anchor_whole) IS NOT NULL);
+DO $b24_columns$
+DECLARE l jsonb; r jsonb; le jsonb; re jsonb; ll jsonb; rr jsonb; covered_legacy jsonb; item record; pair record;
+BEGIN
+ FOR item IN SELECT * FROM (VALUES
+  ('TYPE_CONTEXT','b21_expr.anchor_type'::regclass,'constraint','anchor_check'),
+  ('MIXED_CONTEXT','b21_expr.anchor_mixed'::regclass,'constraint','anchor_check'),
+  ('WHOLE_ROW_CONTEXT','b21_expr.anchor_whole'::regclass,'policy','anchor_policy'),
+  ('FUNCTION_CONTEXT','b21_expr.anchor_function'::regclass,'constraint','anchor_check')) q(name,rel,kind,label) LOOP
+  -- Restore the user-domain function signature changed by the legacy negative.
+  IF item.name='FUNCTION_CONTEXT' THEN
+   ALTER TABLE b21_expr.anchor_function DROP CONSTRAINT anchor_check;
+   ALTER TABLE b21_expr.anchor_function ADD CONSTRAINT anchor_check CHECK(a OR b21_expr.anchor_fn(1::b21_expr.anchor_arg));
+  END IF;
+  PERFORM set_config('search_path','b21_expr,pg_catalog',true);
+  l:=b21_expr.column_capture(item.rel,item.kind,item.label);
+  ll:=b21_expr.column_capture_legacy(item.rel,item.kind,item.label);
+  PERFORM set_config('search_path','pg_catalog',true);
+  r:=b21_expr.column_capture(item.rel,item.kind,item.label);
+  rr:=b21_expr.column_capture_legacy(item.rel,item.kind,item.label);
+  FOR pair IN SELECT * FROM (VALUES (l,ll),(r,rr)) q(current_capture,legacy_capture) LOOP
+   le:=pair.current_capture->'expressions'->0->'bindings';re:=pair.legacy_capture->'expressions'->0->'bindings';
+   SELECT coalesce(jsonb_agg(v ORDER BY v),'[]'::jsonb) INTO covered_legacy
+    FROM jsonb_array_elements(re->'columns') old(v)
+    WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(le->'uncoveredColumns') unseen(u)
+     WHERE v->>0=(u->0->>0)||'.'||(u->0->>1)||'.'||(u->0->>2));
+   IF le->'factKeys' IS DISTINCT FROM re->'factKeys' OR le->'columns' IS DISTINCT FROM covered_legacy
+    OR le->'columnCount' IS DISTINCT FROM re->'columnCount' OR le->'complete' IS DISTINCT FROM re->'complete'
+   THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_LEGACY_LINK'; END IF;
+  END LOOP;
+  le:=l->'expressions'->0; re:=r->'expressions'->0;
+  IF le IS NULL OR re IS NULL OR l->'relations' IS DISTINCT FROM r->'relations'
+   OR (le-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'])
+     IS DISTINCT FROM (re-ARRAY['bindings','definition','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition'])
+   OR (le->'bindings'->>'complete') IS DISTINCT FROM 'false' OR (re->'bindings'->>'complete') IS DISTINCT FROM 'false'
+   OR (item.name<>'FUNCTION_CONTEXT' AND (le->'bindings' IS DISTINCT FROM re->'bindings'
+     OR jsonb_array_length(le->'bindings'->'uncoveredColumns')<>1))
+   OR (item.name IN('MIXED_CONTEXT','WHOLE_ROW_CONTEXT') AND (jsonb_array_length(le->'bindings'->'columns')<>1
+     OR (le->'bindings'->>'columnCount')::integer<>2))
+   OR (item.name='FUNCTION_CONTEXT' AND (le->'bindings'->'factKeys' IS NOT DISTINCT FROM re->'bindings'->'factKeys'
+     OR le->'bindings'->'columns' IS DISTINCT FROM re->'bindings'->'columns'
+     OR jsonb_array_length(le->'bindings'->'uncoveredColumns')<>0))
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT'; END IF;
+  INSERT INTO b24_column_cases VALUES(item.name,l,r);
+ END LOOP;
+ l:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ r:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ IF l IS DISTINCT FROM r THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_FIXED'; END IF;
+ INSERT INTO b24_column_cases VALUES('FIXED_STABLE',l,r);
+
+ l:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ ALTER TABLE b21_expr.anchor_type ALTER d TYPE b21_expr.anchor_domain USING d::integer::b21_expr.anchor_domain;
+ r:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ IF l->'expressions'->0->'bindings'->'uncoveredColumns'->0->1 IS NOT DISTINCT FROM r->'expressions'->0->'bindings'->'uncoveredColumns'->0->1
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_TYPE'; END IF;
+ INSERT INTO b24_column_cases VALUES('TYPE_CHANGE',l,r);
+
+ l:=b21_expr.column_capture('b21_expr.anchor_uncovered_mod','constraint','anchor_check');
+ ALTER TABLE b21_expr.anchor_uncovered_mod ALTER t TYPE varchar(9) COLLATE b21_expr.anchor_c;
+ r:=b21_expr.column_capture('b21_expr.anchor_uncovered_mod','constraint','anchor_check');
+ IF l->'expressions'->0->'bindings'->'uncoveredColumns'->0->2 IS NOT DISTINCT FROM r->'expressions'->0->'bindings'->'uncoveredColumns'->0->2
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_TYPEMOD'; END IF;
+ INSERT INTO b24_column_cases VALUES('TYPEMOD_CHANGE',l,r);
+
+ l:=b21_expr.column_capture('b21_expr.anchor_uncovered_mod','constraint','anchor_check');
+ ALTER TABLE b21_expr.anchor_uncovered_mod ALTER t TYPE varchar(9) COLLATE b21_expr.anchor_c_other;
+ r:=b21_expr.column_capture('b21_expr.anchor_uncovered_mod','constraint','anchor_check');
+ IF l->'expressions'->0->'bindings'->'uncoveredColumns'->0->3 IS NOT DISTINCT FROM r->'expressions'->0->'bindings'->'uncoveredColumns'->0->3
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_COLLATION'; END IF;
+ INSERT INTO b24_column_cases VALUES('COLLATION_CHANGE',l,r);
+
+ l:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ ALTER TABLE b21_expr.anchor_type DROP CONSTRAINT anchor_check;
+ ALTER TABLE b21_expr.anchor_type ADD CONSTRAINT anchor_check CHECK(d IS NULL);
+ r:=b21_expr.column_capture('b21_expr.anchor_type','constraint','anchor_check');
+ IF l->'expressions'->0->'definition' IS NOT DISTINCT FROM r->'expressions'->0->'definition'
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_PREDICATE'; END IF;
+ INSERT INTO b24_column_cases VALUES('PREDICATE_CHANGE',l,r);
+END $b24_columns$;
 SELECT jsonb_build_object('schemaVersion',1,'status','SYNTHETIC_WITNESSES_PASSED',
  'checkNativeRoundtrip',true,'timezoneCanChangeDeparse',true,'fixedContextReproduces',true,
  'regclassNativeRebind',true,'sameDependenciesDoNotErasePredicateChange',true,
  'notValidPreserved',true,'deferrabilityPreserved',true,'literalChangeRejected',true,
+ 'columnBindingsLegacyExact',true,
  'cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b21_cases),
  'v2Cases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_fact,'right',right_fact) ORDER BY name) FROM b22_cases),
- 'anchorCases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_capture,'right',right_capture) ORDER BY name) FROM b23_anchor_cases));
+ 'anchorCases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_capture,'right',right_capture) ORDER BY name) FROM b23_anchor_cases),
+ 'columnCases',(SELECT jsonb_agg(jsonb_build_object('name',name,'left',left_capture,'right',right_capture) ORDER BY name) FROM b24_column_cases));
 ROLLBACK;

@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
 import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,B23_ANCHOR_CASES,validateB23AnchorWitnesses,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
-import { relation,expression,capture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
+import { relation,expression,capture,b24ColumnFixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
 function anchorFixture(){
@@ -38,7 +38,8 @@ function fixture(){
   acl.cases.push({name:n,left:a,right:b});
  }
  const expr={schemaVersion:1,status:'SYNTHETIC_WITNESSES_PASSED',checkNativeRoundtrip:true,timezoneCanChangeDeparse:true,fixedContextReproduces:true,regclassNativeRebind:true,
-  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,cases:[],v2Cases:[],anchorCases:anchorFixture()};
+  sameDependenciesDoNotErasePredicateChange:true,notValidPreserved:true,deferrabilityPreserved:true,literalChangeRejected:true,columnBindingsLegacyExact:true,
+  cases:[],v2Cases:[],anchorCases:anchorFixture(),columnCases:b24ColumnFixture()};
  for(const [n,expected] of Object.entries(B21_EXPRESSION_CASES)){
   const a=expression(['REGCLASS_REBIND','PREDICATE_CHANGE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
   if(expected==='persistentDifferenceCount'){b.definition+=' changed';b.prettyDefinition+=' changed';}
