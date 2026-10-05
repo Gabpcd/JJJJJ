@@ -36,8 +36,7 @@ for attempt in {1..40}; do
   sleep 0.25
 done
 curl --fail --silent http://127.0.0.1:8904/__recette/bilan >/dev/null
-adb root
-adb wait-for-device
+node tests/native/android/adb-readiness.mjs
 adb reverse tcp:8904 tcp:8904
 node tests/native/android/emulator-preflight.mjs
 # Prove the installed binary identity and non-debuggable optimization variant.
