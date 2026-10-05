@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B19 private closed-diagnostic preparation only. Existing restore predicates and SQL are unchanged. The first B_RESTORE invariant is annotated; catalogue failures expose only fixed sections and boolean GraphQL field comparisons. Fresh independent review required before a single isolated synthetic diagnostic run. B18 failure preserved; no restored target, target UI or national readiness asserted."
+  "note": "B20 V2 closed catalogue diagnostic independently reviewed on 2026-10-05. Approved only for one isolated synthetic diagnostic run. Original catalogue hash and acceptance predicate, restore SQL, rights and GraphQL comparisons are unchanged. Private facts stay memory-only; published facts are fixed aggregate counters. This does not qualify restoration, restored target UI, product main, physical devices or national launch."
 }

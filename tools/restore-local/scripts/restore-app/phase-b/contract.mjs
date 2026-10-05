@@ -1,3 +1,4 @@
+import { projectCatalogueFactsDiagnostic } from './catalogue-facts-diagnostic.mjs';
 import { projectGraphqlSchemaDelta } from './graphql-schema-diagnostic.mjs';
 import { createHash } from 'node:crypto';
 // Kept self-contained because only phase-b is mounted into the browser.
@@ -83,7 +84,7 @@ export const RESTORE_NATIVE_GRAPHQL_FIELDS=Object.freeze(['schemaVersion',...GRA
  'initialPrivilegesCount','fingerprint','components','wrapperSchemaInitialPrivileges']);
 const restorePlain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const restoreKeys=(v,keys)=>restorePlain(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
-export function catalogueRestoreDiagnostic(source,target) {
+export function catalogueRestoreDiagnostic(source,target,facts) {
  if(!restorePlain(source)||!restorePlain(target))return {status:'INVALID_SHAPE'};
  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  const sections=RESTORE_CATALOGUE_FIELDS.filter(k=>!equal(source[k],target[k]));
@@ -91,14 +92,15 @@ export function catalogueRestoreDiagnostic(source,target) {
  if(!equal(other(source),other(target)))sections.push('OTHER_FIELDS');
  if(!equal(Object.keys(source),Object.keys(target)))sections.push('FIELD_ORDER');
  const nativeGraphqlFields=Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,equal(source.nativeGraphql?.[k],target.nativeGraphql?.[k])]));
- return {status:'COMPLETE',sections,...(sections.includes('nativeGraphql')?{nativeGraphqlFields}:{})};
+ return {status:'COMPLETE',sections,...(sections.includes('nativeGraphql')?{nativeGraphqlFields}:{}),
+  ...(facts===undefined?{}:{facts:projectCatalogueFactsDiagnostic(facts)})};
 }
 export function projectRestoreInvariant(value) {
  const reason=RESTORE_INVARIANT_REASONS.includes(value?.reason)?value.reason:'UNKNOWN';
  const result={schemaVersion:1,reason};
  if(reason!=='CATALOGUE_PARITY')return result;
- const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql');
- const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[])];
+ const c=value?.catalogue,hasNative=Array.isArray(c?.sections)&&c.sections.includes('nativeGraphql'),hasFacts=restorePlain(c)&&Object.hasOwn(c,'facts');
+ const keys=['status','sections',...(hasNative?['nativeGraphqlFields']:[]),...(hasFacts?['facts']:[])];
  if(!restoreKeys(c,keys)||c.status!=='COMPLETE'||!Array.isArray(c.sections)
   ||c.sections.length>RESTORE_CATALOGUE_SECTIONS.length||new Set(c.sections).size!==c.sections.length
   ||!c.sections.every(k=>RESTORE_CATALOGUE_SECTIONS.includes(k))
@@ -106,7 +108,8 @@ export function projectRestoreInvariant(value) {
     ||!RESTORE_NATIVE_GRAPHQL_FIELDS.every(k=>typeof c.nativeGraphqlFields[k]==='boolean'))))
   return {...result,catalogue:{status:'INVALID_SHAPE'}};
  return {...result,catalogue:{status:'COMPLETE',sections:RESTORE_CATALOGUE_SECTIONS.filter(k=>c.sections.includes(k)),
-  ...(hasNative?{nativeGraphqlFields:Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,c.nativeGraphqlFields[k]]))}:{})}};
+  ...(hasNative?{nativeGraphqlFields:Object.fromEntries(RESTORE_NATIVE_GRAPHQL_FIELDS.map(k=>[k,c.nativeGraphqlFields[k]]))}:{}),
+  ...(hasFacts?{facts:projectCatalogueFactsDiagnostic(c.facts)}:{})}};
 }
 export const GRAPHQL_DIAGNOSTIC_CONTEXTS = Object.freeze(['SOURCE_CAPTURE','SOURCE_SNAPSHOT','TARGET_RESTORED',
  'TARGET_COMPARE','PARTITION','NORMALIZE','EXPORT_PREREQUISITES','EXPORT_REMAINDER','EXPORT_ASSEMBLY']);

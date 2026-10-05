@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { localRuntime } from '../local-runtime.mjs';
+import { catalogueDiagnosticSql, catalogueFactsDiagnostic, CATALOGUE_PRIVATE_KEY } from './catalogue-facts-diagnostic.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, requireRestoreInvariant, catalogueRestoreDiagnostic, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
@@ -84,6 +85,7 @@ FROM pg_db_role_setting s LEFT JOIN pg_database d ON d.oid=s.setdatabase
 LEFT JOIN pg_roles r ON r.oid=s.setrole;
 ROLLBACK;`;
 export const ROLE_SETTINGS_SQL = "ALTER ROLE authenticator SET pgrst.db_pre_request='public.fn_pre_request_compte_actif';\nALTER ROLE authenticator SET statement_timeout='120s';";
+const CATALOGUE_DIAGNOSTIC_SQL = catalogueDiagnosticSql(readFileSync(new URL('../sql/catalogue.sql',import.meta.url),'utf8'));
 const GRAPHQL_WITNESS_SQL = readFileSync(new URL('./graphql-native-witness.sql',import.meta.url),'utf8');
 
 // A negative proof is accepted only for the exact expected missing PDF while
@@ -115,6 +117,8 @@ export async function proveControlledMissingPdf(runtime,fixture) {
 export function nativeRuntime(privateDir) {
   const base = localRuntime(privateDir), run = base.run;
   const preparedRestores = new WeakMap();
+  // Run-local memory only: never enumerable on a catalogue or serialized snapshot.
+  const catalogueFacts = new WeakMap();
   let preparedToken=null,targetRecreated=false;
   const callId=randomUUID();let command = 0, check = 0;
   const call = (args, input, restoreOperation = null) => {
@@ -137,8 +141,12 @@ export function nativeRuntime(privateDir) {
       '-U','supabase_admin','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),restoreOperation);
   };
   const runtime={...base,
-    catalogue:async side=>({...await base.catalogue(side),databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
-      nativeGraphql:(side==='source'?assertGraphqlNativeBaseline:assertGraphqlWitness)(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')}),
+    catalogue:async side=>{
+      const {[CATALOGUE_PRIVATE_KEY]:facts,...original}=await base.sqlJson(side,CATALOGUE_DIAGNOSTIC_SQL);
+      const catalogue={...original,databaseRoleSettings:await base.sqlJson(side,SETTINGS_SQL),
+        nativeGraphql:(side==='source'?assertGraphqlNativeBaseline:assertGraphqlWitness)(await base.sqlJson(side,GRAPHQL_WITNESS_SQL),side==='source'?'SOURCE_CAPTURE':'TARGET_RESTORED')};
+      catalogueFacts.set(catalogue,facts);return catalogue;
+    },
     assertTargetFilesEmpty:async()=>{
       await targetState();const path=join(privateDir,`target-empty-b-${++check}`);
       await base.copyFilesOut('target',path);assertEmptyFileTree(path);
@@ -205,7 +213,8 @@ export function nativeRuntime(privateDir) {
       // Canonical ACL tuples, owner and every other catalogue field still compare exactly.
       const comparable=value=>({...value,nativeGraphql:graphqlComparableWitness(value.nativeGraphql)});
       requireRestoreInvariant(JSON.stringify(comparable(target))===JSON.stringify(comparable(snapshot.catalogue)),'CATALOGUE_PARITY',
-        ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target)));
+        ()=>catalogueRestoreDiagnostic(comparable(snapshot.catalogue),comparable(target),
+          catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target))));
       return parity;
     },
     startSourceForUi:async()=>{

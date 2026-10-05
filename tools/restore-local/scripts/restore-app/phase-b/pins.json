@@ -19,6 +19,7 @@
     "tools/restore-local/scripts/restore-app/phase-b/browser-entry.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/browser-input.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/build-app.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/catalogue-facts-diagnostic.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/closed-json-reporter.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -37,6 +38,8 @@
     "tools/restore-local/scripts/restore-app/phase-b/restore-target.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/review.json",
     "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-diagnostic.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-native-baseline.test.mjs",
@@ -83,7 +86,9 @@
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-rights.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-schema-diagnostic.test.mjs",
     "tools/restore-local/scripts/restore-app/phase-b/tests/graphql-native-baseline.test.mjs",
-    "tools/restore-local/scripts/restore-app/phase-b/tests/restore-invariant-diagnostic.test.mjs"
+    "tools/restore-local/scripts/restore-app/phase-b/tests/restore-invariant-diagnostic.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-diagnostic.test.mjs",
+    "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs"
   ],
   "pinnedFiles": [
     {
@@ -262,14 +267,19 @@
       "sha256": "64ca778e580587a54f1ceb64c7af7f2a65dce678a171dbfa89ee8119d7b08943"
     },
     {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-facts-diagnostic.mjs",
+      "bytes": 13335,
+      "sha256": "0d2e1b5a5ba3881e2ab7a6fae953c5c17a72855a608b2fa8748b05c18ae54734"
+    },
+    {
       "path": "tools/restore-local/scripts/restore-app/phase-b/closed-json-reporter.mjs",
       "bytes": 701,
       "sha256": "b5dbd4ddf63814a8d4221b140f0747ad3b5ab77c3cafc4d28fa69f24751d2234"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
-      "bytes": 23364,
-      "sha256": "b6dd0f476792452b2df82380601d508c14ddae704ed7917d095a13373963393f"
+      "bytes": 23677,
+      "sha256": "444969889b400cbec07eeb56fefa59970e6afc88675517327737a8821027d874"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -323,8 +333,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/native-runtime.mjs",
-      "bytes": 23232,
-      "sha256": "141909367435b2a74a9ef17dc6f3814438b77ad4dde8ff4cec22353581c16c7f"
+      "bytes": 23890,
+      "sha256": "b6b4cbd29830635ac0cac4accafbb76de73ea52436b20e67506d52aedd30bdd8"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/private-app.mjs",
@@ -338,13 +348,23 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1066,
-      "sha256": "54a76ecdb7c09a723e2d32842939cafec2aad2170a8aa4d0cd75b941aa684867"
+      "bytes": 1091,
+      "sha256": "661f1326cbc7b3c7d702707f6c05c1503f2f22c0182fd7e42fcfacb207a45f7f"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
       "bytes": 5624,
       "sha256": "3dbd1d6bdf868396b512d78efb6f3943abfd4a417824e1ff7bdde0e1a2ff51eb"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-diagnostic.test.mjs",
+      "bytes": 12845,
+      "sha256": "10b46b4953c5a1a97cf8cbc138bfbc7ea732f782ac93c738f8b59a45526666ca"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-facts-runtime.test.mjs",
+      "bytes": 8413,
+      "sha256": "93d74d67c9211da18676945611196e51f70d4a051354ed13c3fe1c770b7ad686"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",
@@ -390,6 +410,11 @@
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/private-app.test.mjs",
       "bytes": 3714,
       "sha256": "91bf3a7c8f4867b27dc76f220995483f933ff1891bdc51c84ba14e93d5152e9a"
+    },
+    {
+      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/restore-invariant-diagnostic.test.mjs",
+      "bytes": 9554,
+      "sha256": "48f0df53e0f7af87d7a5c5402344093244b3039380502d779ca8d395015097a9"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/runtime-startup.test.mjs",
@@ -555,11 +580,6 @@
       "path": "vercel.json",
       "bytes": 4753,
       "sha256": "b0d3b40db80a99a25ba72db43f36bfb0dab503cbf016dcf621d823ba5c00d377"
-    },
-    {
-      "path": "tools/restore-local/scripts/restore-app/phase-b/tests/restore-invariant-diagnostic.test.mjs",
-      "bytes": 9554,
-      "sha256": "48f0df53e0f7af87d7a5c5402344093244b3039380502d779ca8d395015097a9"
     }
   ],
   "migrations": [
