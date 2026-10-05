@@ -3,6 +3,7 @@ import copy
 from contextlib import ExitStack
 import importlib.util
 import json
+import os
 from pathlib import Path
 import stat
 import tempfile
@@ -50,9 +51,18 @@ class MappingDiagnosticTests(unittest.TestCase):
             target.write_text(CANARY)
             (directory / 'mapping.txt').symlink_to(target)
             (directory / 'configuration.txt').symlink_to(directory / 'absent-target')
+            def reject_following_stat(path, *, follow_symlinks=True):
+                # Python 3.12 implements Path.lstat via stat(follow_symlinks=False).
+                # Permit that exact non-following call, never a normal stat.
+                if follow_symlinks is not False:
+                    raise AssertionError('following stat')
+                return os.lstat(path)
             with mock.patch.object(r8.Path, 'read_text', side_effect=AssertionError('content read')), \
-                 mock.patch.object(r8.Path, 'stat', side_effect=AssertionError('following stat')):
+                 mock.patch.object(r8.Path, 'stat', new=reject_following_stat):
                 result = r8.mapping_file_states(directory)
+                self.assertEqual(stat.S_IFMT((directory / 'mapping.txt').stat(follow_symlinks=False).st_mode), stat.S_IFLNK)
+                with self.assertRaisesRegex(AssertionError, 'following stat'):
+                    (directory / 'mapping.txt').stat()
         self.assertEqual(result, [row(name, 'not_regular', True, False, True) for name in r8.MAPPING_FILES])
 
     def test_directory_and_special_file_are_not_regular(self):
