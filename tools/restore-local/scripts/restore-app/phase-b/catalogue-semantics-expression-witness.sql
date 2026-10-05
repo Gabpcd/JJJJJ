@@ -192,7 +192,7 @@ BEGIN
      OR l->>'secondaryPrettyDefinition' IS DISTINCT FROM v->>'secondaryPrettyDefinition'))
    OR (r.uncovered AND (l->'bindings'->>'complete'<>'false' OR v->'bindings'->>'complete'<>'false'))
    OR (NOT r.uncovered AND (l->'bindings'->>'complete'<>'true' OR v->'bindings'->>'complete'<>'true'))
-  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_CHECK_CASE'; END IF;
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_CHECK_CASE_'||r.name; END IF;
   INSERT INTO b22_cases VALUES(r.name,l,v);
   ALTER TABLE b21_expr.v2_subject DROP CONSTRAINT probe_check;
  END LOOP;

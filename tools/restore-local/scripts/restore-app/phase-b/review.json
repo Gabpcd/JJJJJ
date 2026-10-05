@@ -17,5 +17,5 @@
       "sha256": "cfc9e94cbc7f09a1ad7f78270d66ad5a0207f1b1c3cca4b7c7f54ba021aa6f2e"
     }
   },
-  "note": "B22 reviewed for one isolated CI qualification only. Candidate manifest caa8a05515e5ef1516538659663da89d6f91cad8b3693b7e17470223e4b70a4b; independent review SHA256 0ace6a1798419c7b16ace25081cd2ff9297d89b97cef4d8aa54863c44408add3. Root verified the comparator, SQL witnesses, runtime guards, 20 files, 109 pins, 219 canonical migrations and 445 pure tests. PostgreSQL17.6 native witnesses and target UI remain unqualified until successful execution. Product stays 7dfdeb42f724a1d80f78318ecf468d248b321a68; no production/provider operation or mobile delivery."
+  "note": "B22 closed SQL diagnostics reviewed by root and independent reviewer. Manifest cf4dd4b46d9effe862621acad750b4ab7f884b592829a49b13ef6f2035f712e7; review SHA25670faed1a29d4f52b53f1a922f6e34239ebd3213bef56cb5084ebbfa47ec83c7a. Strict string SQLSTATE and closed assertion/phase/outcome only; unchanged predicates/comparator; 448 pure tests and 12 independent adversaries. One isolated diagnostic run; product7dfdeb42 unchanged, no provider or mobile delivery, no restoration/target UI qualification yet."
 }

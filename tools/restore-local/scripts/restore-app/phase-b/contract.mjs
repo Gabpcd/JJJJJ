@@ -144,12 +144,12 @@ export function projectGraphqlDiagnostic(value) {
    ?{wrapperSchemaDelta:projectGraphqlSchemaDelta(value.wrapperSchemaDelta,PG_RESTORE_ROLES)}:{})};
 }
 export function closedFailure(error, stage) { return { result:'PHASE_B_REFUSED',stage:STAGES.has(stage)?stage:'identity',
- code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:/^[A-Z0-9]{5}$/.test(error?.diagnostic?.sqlstate??'')?error.diagnostic.sqlstate:null,
+ code:CODES.has(error?.code)?error.code:'B_FAILED',sqlstate:typeof error?.diagnostic?.sqlstate==='string'&&/^[A-Z0-9]{5}$/.test(error.diagnostic.sqlstate)?error.diagnostic.sqlstate:null,
  sqlLine:Number.isSafeInteger(error?.diagnostic?.line)&&error.diagnostic.line>0&&error.diagnostic.line<1_000_000?error.diagnostic.line:null,
  ...(stage==='restore'&&error?.code==='B_CALL'&&error?.restoreCall?{restoreCall:projectRestoreCall(error.restoreCall)}:{}),
  ...(stage==='restore'&&error?.code==='B_RESTORE'&&error?.restoreInvariant?{restoreInvariant:projectRestoreInvariant(error.restoreInvariant)}:{}),
  ...(error?.code==='B_GRAPHQL_RESTORE_REFUSED'?{graphql:projectGraphqlDiagnostic(error?.graphql)}:{}),
- ...(error?.code==='B_SEMANTICS_WITNESS'?{semanticsWitness:projectB21WitnessFailure(error?.b21WitnessReason)}:{}),
+ ...(error?.code==='B_SEMANTICS_WITNESS'?{semanticsWitness:projectB21WitnessFailure(error?.b21WitnessReason,error?.b21Sql)}:{}),
  restored:false,appVerified:false,readyForNationalLaunch:false }; }
 export function assertReview(review) {
  requireValue(review?.productSha===PRODUCT_SHA && review?.approved===true && /^[a-f0-9]{40}$/.test(review.phaseAHarnessSha??'')

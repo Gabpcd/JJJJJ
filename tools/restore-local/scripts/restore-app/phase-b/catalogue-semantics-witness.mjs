@@ -17,7 +17,30 @@ export const B22_EXPRESSION_CASES=Object.freeze({CHECK_PRETTY_ROUNDTRIP:true,POL
  USER_COLLATION:false,USER_DOMAIN:false,USER_ARRAY:false,USER_OPERATOR:false});
 const keys=(v,expected)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===expected.length&&expected.every(k=>Object.hasOwn(v,k));
 export function b21WitnessFailure(reason){return Object.assign(Error('B_SEMANTICS_WITNESS'),{code:'B_SEMANTICS_WITNESS',b21WitnessReason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN'});}
-export function projectB21WitnessFailure(reason){return {schemaVersion:1,reason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN'};}
+const sqlPhases=['CREATE_DATABASE','ACL','EXPRESSION','ROLLBACK'];
+const sqlAssertions=['B21_DEFAULT_CREATION_ONLY','B21_GRANTOR_PRESERVED','B21_GRANT_OPTION','B21_INHERIT_OFF','B21_INHERIT_ON',
+ 'B21_NULL_DEFAULT','B21_NULL_EMPTY_OWNER','B21_ORDER','B21_OWNER','B21_REAL_REVOKE_NOT_REJECTED','B21_SEQUENCE_TYPE','B21_SYNTHETIC_CONTEXT',
+ 'B21_CHECK_ROUNDTRIP','B21_DEFERRABILITY_CHANGE_REJECTED','B21_FIXED_CONTEXT','B21_LITERAL_CHANGE_REJECTED','B21_NOT_VALID_CAPTURED',
+ 'B21_OID_JSON_TYPE','B21_POLICY_CHANGE_REJECTED','B21_REGCLASS_NATIVE_REBIND','B21_TIMEZONE_VARIATION','B21_VALIDATION_CHANGE_REJECTED',
+ 'B22_COUNTEREXAMPLE','B22_POLICY_ROUNDTRIP','B22_WITH_CHECK',...Object.keys(B22_EXPRESSION_CASES).map(k=>'B22_CHECK_CASE_'+k)];
+export function projectB21SqlFailure(v) {
+ return {phase:sqlPhases.includes(v?.phase)?v.phase:'UNKNOWN',
+  outcome:['EXIT','TIMEOUT','SIGNAL','EXECUTION_ERROR','OUTPUT_BOUND'].includes(v?.outcome)?v.outcome:'UNKNOWN',
+  sqlstate:typeof v?.sqlstate==='string'&&/^[A-Z0-9]{5}$/.test(v.sqlstate)?v.sqlstate:null,
+  line:Number.isSafeInteger(v?.line)&&v.line>0&&v.line<1000000?v.line:null,
+  assertion:v?.sqlstate==='55000'&&sqlAssertions.includes(v?.assertion)?v.assertion:null};
+}
+export function b21SqlFailure(result,phase) {
+ const bytes=result?.stderr,valid=Buffer.isBuffer(bytes)&&bytes.length<=65536&&bytes.equals(Buffer.from(bytes.toString('utf8')));
+ const first=valid?bytes.toString('utf8').split(/\r?\n/).find(s=>/^(?:psql:<stdin>:\d+:\s*)?(?:ERROR|FATAL):/.test(s)):undefined;
+ const record=first?/^(?:psql:<stdin>:(\d+):\s*)?(?:ERROR|FATAL):\s+([A-Z0-9]{5}):\s*(.*)$/.exec(first):null;
+ const sql=projectB21SqlFailure({phase,outcome:result?.error?.code==='ETIMEDOUT'?'TIMEOUT':result?.error?.code==='ENOBUFS'?'OUTPUT_BOUND':result?.error?'EXECUTION_ERROR':result?.signal?'SIGNAL':'EXIT',
+  sqlstate:record?.[2],line:record?.[1]?Number(record[1]):null,assertion:record?.[2]==='55000'?record?.[3]:null});
+ // No raw stderr, SQL, process error, signal or private message survives.
+ return Object.assign(b21WitnessFailure('SQL'),{b21Sql:sql,diagnostic:{sqlstate:sql.sqlstate,line:sql.line}});
+}
+export function projectB21WitnessFailure(reason,sql){return {schemaVersion:1,reason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN',
+ ...(reason==='SQL'&&sql!==undefined?{sql:projectB21SqlFailure(sql)}:{})};}
 export function buildB21NativeWitnessSql(kind,original){
  if(!['acl','expression'].includes(kind)||typeof original!=='string'||original.split('-- B21_CAPTURE_FUNCTION\n').length!==2)throw b21WitnessFailure('CONTEXT');
  return original.replace('-- B21_CAPTURE_FUNCTION\n',b21WitnessCaptureSql(kind==='acl'?'b21_fixture':'b21_expr'));

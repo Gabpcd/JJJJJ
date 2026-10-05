@@ -4,7 +4,7 @@ import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
-import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES } from '../catalogue-semantics-witness.mjs';
+import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
 import { relation,expression,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
@@ -95,6 +95,7 @@ function harness(t,{failSql=false,unclean=false,existingSource=false,imageVolume
   assert.equal(args[0],'exec');assert.equal(present,true);
   if(args.includes('pg_isready'))return output('');
   assert.equal(args[2],name);assert.equal(args[args.indexOf('-h')+1],'/var/run/postgresql');
+  assert.ok(args.includes('VERBOSITY=verbose'));
   const sql=options.input.toString();
   if(sql.startsWith('CREATE DATABASE')){events.push('database');return output('');}
   if(sql.startsWith('SELECT jsonb_build_object')){events.push('rollback');return output({clean:!unclean});}
@@ -109,8 +110,41 @@ test('dedicated native runner has no source/target resources and proves rollback
  assert.deepEqual(h.events,['create','start','database','acl','rollback','expression','rollback','remove']);
 });
 test('native SQL failure discards private error and still removes only the owned witness container',async t=>{
- const h=harness(t,{failSql:true});await assert.rejects(()=>runB21NativeWitnesses(run),e=>{const r=closedFailure(e,'semantics_witnesses');assert.equal(r.semanticsWitness.reason,'SQL');assert.ok(!JSON.stringify(r).includes(PRIVATE_CANARY));return true;});
+ const h=harness(t,{failSql:true});await assert.rejects(()=>runB21NativeWitnesses(run),e=>{const r=closedFailure(e,'semantics_witnesses');assert.equal(r.semanticsWitness.reason,'SQL');assert.equal(r.semanticsWitness.sql.phase,'ACL');assert.equal(r.semanticsWitness.sql.outcome,'EXIT');assert.ok(!JSON.stringify(r).includes(PRIVATE_CANARY));return true;});
  assert.equal(h.isPresent(),false);assert.equal(h.events.at(-1),'remove');
+});
+test('witness SQL failure keeps only the first ERROR code, line and exact synthetic assertion',()=>{
+ const stderr=Buffer.from(`WARNING: ${PRIVATE_CANARY}\npsql:<stdin>:421: ERROR:  55000: B22_CHECK_CASE_USER_DOMAIN\nCONTEXT: ${PRIVATE_CANARY}\npsql:<stdin>:900: ERROR:  42P01: ${PRIVATE_CANARY}`);
+ const e=b21SqlFailure({status:3,signal:null,stderr},'EXPRESSION'),r=closedFailure(e,'semantics_witnesses');
+ assert.deepEqual(r.semanticsWitness.sql,{phase:'EXPRESSION',outcome:'EXIT',sqlstate:'55000',line:421,assertion:'B22_CHECK_CASE_USER_DOMAIN'});
+ assert.equal(r.sqlstate,'55000');assert.equal(r.sqlLine,421);assert.ok(!JSON.stringify(r).includes(PRIVATE_CANARY));assert.equal(e.stderr,undefined);
+});
+test('unknown and malformed SQL diagnostics never expose arbitrary messages or labels',()=>{
+ for(const stderr of [Buffer.from(`psql:<stdin>:44: ERROR:  42P01: ${PRIVATE_CANARY}`),
+  Buffer.from(`psql:<stdin>:44: ERROR:  55000: B22_CHECK_CASE_USER_DOMAIN ${PRIVATE_CANARY}`),
+  Buffer.from(`CONTEXT: ERROR: 55000: B22_CHECK_CASE_USER_DOMAIN\n${PRIVATE_CANARY}`),
+  Buffer.from('psql:<stdin>:2: ERROR:  42P01: B22_CHECK_CASE_USER_DOMAIN'),
+  Buffer.from(`psql:<stdin>:2: ERROR: ${PRIVATE_CANARY}\npsql:<stdin>:3: ERROR:  55000: B22_CHECK_CASE_USER_DOMAIN`),
+  Buffer.alloc(65537,65),Buffer.from([0xff,0xfe])]){
+  const r=closedFailure(b21SqlFailure({status:1,signal:null,stderr},PRIVATE_CANARY),'semantics_witnesses');
+  assert.equal(r.semanticsWitness.sql.phase,'UNKNOWN');assert.equal(r.semanticsWitness.sql.assertion,null);assert.ok(!JSON.stringify(r).includes(PRIVATE_CANARY));
+ }
+ const r=projectB21SqlFailure({phase:PRIVATE_CANARY,outcome:PRIVATE_CANARY,sqlstate:'invalid',line:1000000,assertion:PRIVATE_CANARY,raw:PRIVATE_CANARY});
+ assert.deepEqual(r,{phase:'UNKNOWN',outcome:'UNKNOWN',sqlstate:null,line:null,assertion:null});
+ for(const sqlstate of [['55000'],{private:PRIVATE_CANARY,toString(){return '55000';}},'42P01']){
+  const sql=projectB21SqlFailure({phase:'ACL',outcome:'EXIT',sqlstate,line:2,assertion:'B21_NULL_DEFAULT'});
+  assert.equal(sql.assertion,null);assert.equal(sql.sqlstate,typeof sqlstate==='string'?sqlstate:null);
+  const final=closedFailure({code:'B_SEMANTICS_WITNESS',b21WitnessReason:'SQL',b21Sql:{...sql,sqlstate},diagnostic:{sqlstate}},'semantics_witnesses');
+  assert.equal(final.sqlstate,typeof sqlstate==='string'?sqlstate:null);assert.ok(!JSON.stringify(final).includes(PRIVATE_CANARY));
+ }
+});
+test('SQL timeout, output bound, signal and executor failure remain failed and distinct',()=>{
+ for(const [detail,outcome] of [[{error:{code:'ETIMEDOUT',message:PRIVATE_CANARY}},'TIMEOUT'],[{error:{code:'ENOBUFS'}},'OUTPUT_BOUND'],
+  [{signal:'SIGTERM'},'SIGNAL'],[{error:{code:'ENOENT',message:PRIVATE_CANARY}},'EXECUTION_ERROR']]){
+  const e=b21SqlFailure({...detail,status:null,stderr:Buffer.from(PRIVATE_CANARY)},'ROLLBACK'),r=closedFailure(e,'semantics_witnesses');
+  assert.equal(e.code,'B_SEMANTICS_WITNESS');assert.equal(r.semanticsWitness.sql.outcome,outcome);assert.equal(r.restored,false);assert.equal(r.appVerified,false);
+  assert.equal(r.semanticsWitness.sql.sqlstate,null);assert.ok(!JSON.stringify(r).includes(PRIVATE_CANARY));
+ }
 });
 test('rollback failure stops before the next witness and cleans up',async t=>{
  const h=harness(t,{unclean:true});await assert.rejects(()=>runB21NativeWitnesses(run),e=>e.b21WitnessReason==='ROLLBACK');assert.ok(!h.events.includes('expression'));assert.equal(h.isPresent(),false);

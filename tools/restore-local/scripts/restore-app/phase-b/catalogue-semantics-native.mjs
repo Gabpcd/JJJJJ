@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { runName } from '../../restore/bootstrap.mjs';
-import { buildB21NativeWitnessSql,decodeB21Witness,validateB21NativeWitnesses,b21WitnessFailure } from './catalogue-semantics-witness.mjs';
+import { buildB21NativeWitnessSql,decodeB21Witness,validateB21NativeWitnesses,b21WitnessFailure,b21SqlFailure } from './catalogue-semantics-witness.mjs';
 
 export const B21_IMAGE='supabase/postgres@sha256:432d12926b09e10eb3317b0e2e9672c9ce8ea6bccb359857a31ff9f90683161d';
 export const B21_LABEL='org.jolene.restore-b21';
@@ -12,8 +12,9 @@ export const B21_START_SCRIPT="umask 077\ninitdb -D /tmp/b21-data -U postgres --
 const invariant=(ok,reason)=>{if(!ok)throw b21WitnessFailure(reason);};
 const decode=(bytes,reason)=>{try{return JSON.parse(bytes.toString('utf8'));}catch{throw b21WitnessFailure(reason);}};
 function executor(){
- const call=(args,input,reason='CONTEXT')=>{
+ const call=(args,input,reason='CONTEXT',sqlPhase)=>{
   const r=spawnSync('docker',args,{input,encoding:null,maxBuffer:12*1024*1024,timeout:90_000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
+  if(reason==='SQL'&&(r.error||r.status!==0||r.signal!==null))throw b21SqlFailure(r,sqlPhase);
   invariant(!r.error&&r.status===0&&r.signal===null,reason);return r.stdout;
  };
  const contexts=decode(call(['context','inspect']),'CONTEXT');
@@ -79,14 +80,14 @@ export async function runB21NativeWitnesses(run){
    if(attempt<44)await new Promise(resolve=>setTimeout(resolve,1000));
   }
   invariant(ready,'STARTUP');
-  const sql=(body,database=B21_DATABASE)=>{inspect(call,run);return call(['exec','-i',named(run),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1',
-   '-U','postgres','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),'SQL');};
-  sql(`CREATE DATABASE ${B21_DATABASE} OWNER postgres TEMPLATE template0;`,'postgres');
+  const sql=(body,database=B21_DATABASE,phase)=>{inspect(call,run);return call(['exec','-i',named(run),'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose',
+   '-U','postgres','-h','/var/run/postgresql','-d',database,'-f','-'],Buffer.from(body),'SQL',phase);};
+  sql(`CREATE DATABASE ${B21_DATABASE} OWNER postgres TEMPLATE template0;`,'postgres','CREATE_DATABASE');
   const outputs=[];
   for(const kind of ['acl','expression']){
    const original=readFileSync(new URL(`./catalogue-semantics-${kind}-witness.sql`,import.meta.url),'utf8');
-   outputs.push(decodeB21Witness(sql(buildB21NativeWitnessSql(kind,original))));
-   const rolled=decode(sql("SELECT jsonb_build_object('clean',NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname IN('b21_fixture','b21_expr')) AND NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname IN('b21_owner','b21_reader','b21_delegate','b21_member','b21_other_owner')));"),'ROLLBACK');
+   outputs.push(decodeB21Witness(sql(buildB21NativeWitnessSql(kind,original),B21_DATABASE,kind.toUpperCase())));
+   const rolled=decode(sql("SELECT jsonb_build_object('clean',NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname IN('b21_fixture','b21_expr')) AND NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname IN('b21_owner','b21_reader','b21_delegate','b21_member','b21_other_owner')));",B21_DATABASE,'ROLLBACK'),'ROLLBACK');
    invariant(rolled?.clean===true&&Object.keys(rolled).length===1,'ROLLBACK');
   }
   receipt=validateB21NativeWitnesses(...outputs);
