@@ -52,7 +52,9 @@ const query=`WITH expression_objects AS (
  FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN('public','private','auth','storage')
 ), expressions AS (
- SELECT jsonb_build_object('kind',o.kind,'identity',o.identity,'localOid',o.oid,
+ -- PG17 jsonb emits oid as a string; bigint preserves the full unsigned OID
+ -- range as a JSON number, matching the strict private-row validator.
+ SELECT jsonb_build_object('kind',o.kind,'identity',o.identity,'localOid',o.oid::bigint,
   'metadata',o.metadata,'definition',o.definition,'prettyDefinition',o.pretty_definition,
   'secondaryDefinition',o.secondary_definition,
   'dependencies',(SELECT coalesce(jsonb_agg(z.v ORDER BY z.v::text),'[]'::jsonb) FROM (

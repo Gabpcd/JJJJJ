@@ -294,8 +294,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-expression-witness.sql",
-      "bytes": 9498,
-      "sha256": "dd8032c9b805cda9752e21b0f43d1a62820d5fec14c6e1c101bd58dd09e795d5"
+      "bytes": 10180,
+      "sha256": "3e86670b2c80887c23f9698e4079b13f29bbd830d9fcc50af68e1fb801d45687"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-native.mjs",
@@ -304,8 +304,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-probe.mjs",
-      "bytes": 9447,
-      "sha256": "f973dda51cec209f25604fc4577929cc26c989a38d627b22da720146b4d6aadb"
+      "bytes": 9603,
+      "sha256": "1f6ae4274ba62b0867c48853917b2266da3c359352c89f3a404e8d41fc6b4a1b"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-witness.mjs",
@@ -389,8 +389,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1251,
-      "sha256": "52c370204bea59db98022a82c7d9ebae227c1c7497d2a2939fef68ea26c6e7b1"
+      "bytes": 1248,
+      "sha256": "ca83cba2c28af71d323fce04c0fccb5ccc7221e06e2d203a30b18565cd345fc0"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -409,8 +409,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-diagnostic.test.mjs",
-      "bytes": 6214,
-      "sha256": "3313f084e699200c7855f7505aa1097e523927019051a3b021946411e834d9c4"
+      "bytes": 6977,
+      "sha256": "6d7b0031c2b406b662341d03648ca2e3a5390144a19cfc7a3f4cab90d6d12b5f"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-fixture.mjs",
@@ -419,8 +419,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-native.test.mjs",
-      "bytes": 10242,
-      "sha256": "0ca92ca7de73689c165b7ff44c4dd0eafdc280c8208dfd3931e99b14040aa817"
+      "bytes": 10730,
+      "sha256": "8beb8b5a8b017daa11106811712363391369b77691b3ba96cc6c87bb815ed6e7"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/contracts.test.mjs",

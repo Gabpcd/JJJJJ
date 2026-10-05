@@ -35,6 +35,20 @@ CREATE TABLE b21_expr.subject(id integer,clock timestamptz,
 CREATE TABLE b21_expr.copy_subject(id integer,clock timestamptz);
 CREATE POLICY probe ON b21_expr.subject USING (id>0 AND 'b21_expr.oid_target'::regclass IS NOT NULL);
 
+-- The shared projection must transport OIDs as JSON numbers, without truncating
+-- the unsigned 32-bit range or relaxing the JavaScript row validator.
+DO $oid_json_type$
+DECLARE captured jsonb;
+BEGIN
+ captured:=b21_expr.capture();
+ IF jsonb_typeof(to_jsonb(4294967295::oid)) IS DISTINCT FROM 'string'
+  OR to_jsonb(4294967295::oid::bigint) IS DISTINCT FROM to_jsonb(4294967295::bigint)
+  OR jsonb_array_length(captured->'expressions')=0
+  OR EXISTS(SELECT 1 FROM jsonb_array_elements(captured->'expressions') q(v)
+   WHERE jsonb_typeof(v->'localOid') IS DISTINCT FROM 'number')
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B21_OID_JSON_TYPE'; END IF;
+END $oid_json_type$;
+
 CREATE FUNCTION b21_expr.policy_dependencies() RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $function$
  SELECT coalesce(jsonb_agg(j ORDER BY j::text),'[]'::jsonb) FROM (

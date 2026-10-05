@@ -49,6 +49,13 @@ test('native private rows traverse the actual semantic comparators and a closed 
   const v=fixture();edit(v);assert.throws(()=>validateB21NativeWitnesses(...v),e=>{assert.ok(!JSON.stringify(closedFailure(e,'semantics_witnesses')).includes(PRIVATE_CANARY));return e.code==='B_SEMANTICS_WITNESS';});
  }
 });
+test('native expression JSON with an uncast oid string fails the existing strict row gate',()=>{
+ const [acl,expressions]=fixture();
+ expressions.cases[0].left.localOid=String(expressions.cases[0].left.localOid);
+ const decoded=decodeB21Witness(Buffer.from(JSON.stringify(expressions)));
+ assert.equal(typeof decoded.cases[0].left.localOid,'string');
+ assert.throws(()=>validateB21NativeWitnesses(acl,decoded),e=>e.code==='B_SEMANTICS_WITNESS'&&e.b21WitnessReason==='PRIVATE_SHAPE');
+});
 test('container isolation rejects every host/network/identity escape before SQL or deletion',()=>{
  assert.equal(validateB21NativeContainer(container(),run),true);
  for(const edit of [v=>v.Name='/foreign',v=>v.Config.Labels[B21_LABEL]='foreign',v=>v.Config.Image='postgres:latest',v=>v.Config.User='root',

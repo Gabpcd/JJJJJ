@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildB21ProbeSql,decodeB21Probe,b21WitnessCaptureSql } from '../catalogue-semantics-probe.mjs';
-import { catalogueSemanticsDiagnostic,projectCatalogueSemanticsDiagnostic,compareB21Relation,compareB21Expression,validateB21Probe } from '../catalogue-semantics-diagnostic.mjs';
+import { catalogueSemanticsDiagnostic,projectCatalogueSemanticsDiagnostic,compareB21Relation,compareB21Expression,validateB21Probe,validB21Expression } from '../catalogue-semantics-diagnostic.mjs';
 import { catalogueRestoreDiagnostic,requireRestoreInvariant,closedFailure } from '../contract.mjs';
 import { b21Fixture,diagnosticArgs,relation,expression,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 const compare=v=>catalogueSemanticsDiagnostic(...diagnosticArgs(v));
@@ -53,11 +53,21 @@ test('public projection rejects extra fields, forged enums, arithmetic and nonfi
   const v=structuredClone(good);edit(v);assert.deepEqual(safe(projectCatalogueSemanticsDiagnostic(v)),{schemaVersion:1,status:'INVALID_SHAPE'});
  }
 });
+test('native OID strings remain refused while numeric unsigned OID bounds stay exact',()=>{
+ for(const localOid of [1,2147483648,4294967295])assert.equal(validB21Expression({...expression(),localOid}),true);
+ for(const localOid of ['123','4294967295','',null,0,-1,4294967296,1.5,NaN,Infinity]){
+  assert.equal(validB21Expression({...expression(),localOid}),false);
+ }
+ const f=b21Fixture();f.sourceProbe.current.expressions[0].localOid='123';f.sourceProbe.fixed.expressions[0].localOid='123';
+ assert.equal(safe(compare(f)).status,'INVALID_SHAPE');
+});
 test('probe keeps original body bytes, fixes context in one read-only snapshot and decodes only three bounded JSON lines',()=>{
  const original=readFileSync(new URL('../../sql/catalogue.sql',import.meta.url),'utf8'),sql=buildB21ProbeSql(original);
  assert.ok(sql.includes(original.slice('BEGIN READ ONLY;\n'.length,-'ROLLBACK;\n'.length)));
  assert.ok(sql.startsWith('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;'));assert.ok(sql.endsWith('ROLLBACK;\n'));
  assert.equal((sql.match(/WITH expression_objects AS/g)||[]).length,2);assert.ok(sql.includes("THEN 's'::\"char\" ELSE 'r'::\"char\""));
+ assert.equal((sql.match(/'localOid',o\.oid::bigint/g)||[]).length,2);
+ for(const schema of ['b21_fixture','b21_expr'])assert.match(b21WitnessCaptureSql(schema),/'localOid',o\.oid::bigint/);
  assert.ok(sql.includes("SELECT coalesce(jsonb_agg(jsonb_build_array(a.type,a.object_names,a.object_args) ORDER BY q.ord),'[]'::jsonb)"));
  assert.throws(()=>buildB21ProbeSql(original+' '),/B21_SQL_PIN/);assert.throws(()=>b21WitnessCaptureSql('public'),/B21_WITNESS_SCOPE/);
  const f=b21Fixture(),p=f.sourceProbe;assert.deepEqual(decodeB21Probe(Buffer.from([p.anchor,p.current,p.fixed].map(JSON.stringify).join('\n'))),p);
