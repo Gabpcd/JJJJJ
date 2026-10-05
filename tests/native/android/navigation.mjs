@@ -310,8 +310,9 @@ try {
     validations, apiCalls: report.calls.length, errors,
   }, null, 2));
 } catch (error) {
-  await capture('failure').catch(() => {});
+  // Record the original cause before any potentially blocked native capture.
   await save('failure.json', JSON.stringify({ message: error.message, stack: error.stack, validations, errors }, null, 2));
+  await capture('failure').catch(() => {});
   // Preserve the original failure; this terminal diagnostic never retries the UI.
   try {
     const accessibility = await captureAccessibility(device.serial(), {
