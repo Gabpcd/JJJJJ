@@ -180,6 +180,28 @@ try {
   const nativeWindow = await nativeShell('dumpsys window');
   await save('android-window-before-interaction.txt', nativeWindow);
   requireAppWindow(nativeWindow);
+
+  // The first native selector also installs and starts Playwright's driver.
+  // Pay that bounded setup cost once before authentication, not on reload.
+  const accessibilityStarted = performance.now();
+  let accessibilityDeadline;
+  try {
+    await Promise.race([
+      (async () => {
+        await device.wait({ pkg }, { timeout: 60000 });
+        assert.equal((await nativeShell(`pidof ${pkg}`)).trim(), originalAppPid, 'Accessibility driver setup must preserve the original app process');
+        requireAppWindow(await nativeShell('dumpsys window'));
+      })(),
+      new Promise((_, reject) => {
+        accessibilityDeadline = setTimeout(() => reject(new Error('ANDROID_ACCESSIBILITY_DRIVER_TIMEOUT')), 60000);
+      }),
+    ]);
+  } finally { clearTimeout(accessibilityDeadline); }
+  const accessibilityElapsed = Math.ceil(performance.now() - accessibilityStarted);
+  assert(accessibilityElapsed <= 60000, 'Accessibility driver setup exceeded its fixed deadline');
+  metric('native-accessibility-driver-ready', {
+    sameProcess: true, appWindow: true, elapsedMs: accessibilityElapsed,
+  });
   assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), 'android', 'Must exercise the native Capacitor bridge');
   await page.addLocatorHandler(page.getByRole('button', { name: 'Plus tard', exact: true }), async (button) => { await button.click(); });
   // Native PluginHeaders are built from Java/Kotlin reflection, not the web fallback registry.
