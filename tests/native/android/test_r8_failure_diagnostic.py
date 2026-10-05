@@ -9,7 +9,9 @@ class ClosedDiagnosticTests(unittest.TestCase):
    with self.assertRaises(r8.R8Refused) as cm:r8.require(False, reason)
    value=r8.closed_failure(cm.exception)
    self.assertEqual(value['reason'],reason)
-   self.assertEqual(set(value),{'schemaVersion','status','reason','exceptionKind','uiValidated','storeBuild'})
+   expected={'schemaVersion','status','reason','exceptionKind','uiValidated','storeBuild'}
+   if reason=='MAPPING_FILE':expected.add('mappingFiles')
+   self.assertEqual(set(value),expected)
    self.assertFalse(value['uiValidated']);self.assertFalse(value['storeBuild'])
  def test_unknown_messages_never_escape(self):
   for error in [RuntimeError('do-not-export-this-payload'), KeyError('do-not-export-this-payload'), ValueError('do-not-export-this-payload'),r8.R8Refused('do-not-export-this-payload')]:

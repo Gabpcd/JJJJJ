@@ -22,6 +22,18 @@ const nativeShell = async (command) => (await device.shell(command)).toString();
 const save = (name, value) => writeFile(`${output}/${name}`, value);
 const metric = (kind, data) => validations.push({ kind, ...data });
 async function capture(name) {
+  // A DOM assertion can finish before Android has painted the new WebView
+  // frame. Keep the native screenshot (including IME) and await two frame callbacks.
+  if (page) await page.evaluate(() => new Promise((resolve, reject) => {
+    let first = 0, second = 0;
+    const timeout = setTimeout(() => {
+      cancelAnimationFrame(first); cancelAnimationFrame(second);
+      reject(new Error('ANDROID_CAPTURE_PAINT_TIMEOUT'));
+    }, 2000);
+    first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => { clearTimeout(timeout); resolve(); });
+    });
+  }));
   await device.screenshot({ path: `${output}/${name}.png` });
   if (page) {
     const collection = [];

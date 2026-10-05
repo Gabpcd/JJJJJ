@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import struct
 import subprocess
 import zipfile
@@ -23,17 +24,83 @@ def require(ok, reason='UNCLASSIFIED'):
         raise R8Refused(reason)
 
 
+MAPPING_FILES = ('mapping.txt', 'configuration.txt')
+MAPPING_SIZE_CATEGORIES = ('0', '0_32M', '32_128M', '128_256M', 'over256M')
+
+
+def unavailable_mapping_files():
+    return [{'file': name, 'present': None, 'regular': None, 'symlink': None,
+             'sizeCategory': 'unavailable'} for name in MAPPING_FILES]
+
+
+def mapping_file_states(mapping_dir):
+    # Only fixed local file metadata: no contents, paths, timestamps or target reads.
+    result = []
+    for name in MAPPING_FILES:
+        row = {'file': name, 'present': None, 'regular': None, 'symlink': None,
+               'sizeCategory': 'unavailable'}
+        try:
+            info = (mapping_dir / name).lstat()
+        except FileNotFoundError:
+            row.update(present=False, regular=False, symlink=False, sizeCategory='absent')
+        except OSError:
+            pass
+        else:
+            regular, symlink = stat.S_ISREG(info.st_mode), stat.S_ISLNK(info.st_mode)
+            category = 'not_regular'
+            if regular:
+                size = info.st_size
+                if type(size) is not int or size < 0:
+                    result.append(row)
+                    continue
+                category = ('0' if size == 0 else '0_32M' if size <= 32 * 1024 * 1024
+                            else '32_128M' if size <= 128 * 1024 * 1024
+                            else '128_256M' if size <= 256 * 1024 * 1024 else 'over256M')
+            row.update(present=True, regular=regular, symlink=symlink, sizeCategory=category)
+        result.append(row)
+    return result
+
+
+def closed_mapping_files(value):
+    # Reconstruct a fixed alphabet at the output boundary; never serialize input rows.
+    if type(value) is not list or len(value) != len(MAPPING_FILES):
+        return unavailable_mapping_files()
+    result = []
+    keys = {'file', 'present', 'regular', 'symlink', 'sizeCategory'}
+    for name, row in zip(MAPPING_FILES, value):
+        if type(row) is not dict or set(row) != keys or type(row['file']) is not str or row['file'] != name:
+            return unavailable_mapping_files()
+        category = row['sizeCategory']
+        if type(category) is not str:
+            return unavailable_mapping_files()
+        flags = (row['present'], row['regular'], row['symlink'])
+        if category == 'unavailable':
+            valid = all(flag is None for flag in flags)
+        else:
+            valid = all(type(flag) is bool for flag in flags) and (
+                category == 'absent' and flags == (False, False, False)
+                or category == 'not_regular' and flags in ((True, False, False), (True, False, True))
+                or category in MAPPING_SIZE_CATEGORIES and flags == (True, True, False))
+        if not valid:
+            return unavailable_mapping_files()
+        result.append({'file': name, 'present': flags[0], 'regular': flags[1],
+                       'symlink': flags[2], 'sizeCategory': category})
+    return result
+
+
 def closed_failure(error):
     # No exception message, file content, class name or stack leaves this path.
     kinds = {ValueError: 'VALUE', KeyError: 'KEY', TypeError: 'TYPE',
              UnicodeDecodeError: 'ENCODING', FileNotFoundError: 'FILE_ABSENT',
              PermissionError: 'FILE_ACCESS', zipfile.BadZipFile: 'ZIP',
              subprocess.CalledProcessError: 'GIT_PROCESS', struct.error: 'BINARY'}
-    return {'schemaVersion': 1, 'status': 'refused',
-            'reason': error.reason if isinstance(error, R8Refused) and error.reason in REASONS else 'UNCLASSIFIED',
-            'exceptionKind': 'INVARIANT' if isinstance(error, R8Refused) else kinds.get(type(error), 'OTHER'),
-            'uiValidated': False, 'storeBuild': False}
-
+    result = {'schemaVersion': 1, 'status': 'refused',
+              'reason': error.reason if isinstance(error, R8Refused) and error.reason in REASONS else 'UNCLASSIFIED',
+              'exceptionKind': 'INVARIANT' if isinstance(error, R8Refused) else kinds.get(type(error), 'OTHER'),
+              'uiValidated': False, 'storeBuild': False}
+    if result['reason'] == 'MAPPING_FILE':
+        result['mappingFiles'] = closed_mapping_files(getattr(error, 'mapping_files', None))
+    return result
 
 
 def dex_classes(data):
@@ -117,7 +184,14 @@ def main():
     texts = {}
     for name in ['mapping.txt', 'configuration.txt']:
         path = mapping_dir / name
-        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size <= 32 * 1024 * 1024, 'MAPPING_FILE')
+        try:
+            require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size <= 32 * 1024 * 1024, 'MAPPING_FILE')
+        except R8Refused as error:
+            try:
+                error.mapping_files = mapping_file_states(mapping_dir)
+            except Exception:
+                pass  # A diagnostic error must not replace the original refusal.
+            raise
         texts[name] = path.read_text()
     plugins = json.loads(Path('android/app/src/main/assets/capacitor.plugins.json').read_text())
     metadata = json.loads((root / 'outputs/apk/recetteOptimized/output-metadata.json').read_text())
