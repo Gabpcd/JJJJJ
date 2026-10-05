@@ -10,7 +10,7 @@ import subprocess
 import zipfile
 
 
-REASONS = frozenset(('APK_FILE', 'CI_CONTEXT', 'COMMIT_IDENTITY', 'DEX_ARCHIVE_ENTRIES', 'DEX_ARCHIVE_SIZE', 'DEX_CLASS_DESCRIPTOR', 'DEX_CROSS_FILE_DUPLICATE', 'DEX_DUPLICATE_CLASS', 'DEX_HEADER', 'DEX_SIZE', 'DEX_STRING_INDEX', 'DEX_STRING_OFFSET', 'DEX_STRING_TERMINATOR', 'DEX_TABLE_BOUNDS', 'DEX_TYPE_INDEX', 'DEX_ULEB_BOUNDS', 'DEX_ULEB_INVALID', 'DEX_VERSION', 'FIXTURE_IDENTITY', 'GLOBAL_OPTIMIZATION_DISABLED', 'MAIN_ACTIVITY_ABSENT', 'MAPPING_CLASS_ENTRIES', 'MAPPING_FILE', 'PLUGIN_DUPLICATE', 'PLUGIN_LIST_SHAPE', 'PLUGIN_NAME_INVALID', 'PLUGIN_NOT_PRESERVED', 'PRODUCTION_CONFIG_PRESENT', 'R8_COMPILER_MARKER', 'RENAMING_ABSENT', 'UNCLASSIFIED'))
+REASONS = frozenset(('APK_FILE', 'CI_CONTEXT', 'COMMIT_IDENTITY', 'DEX_ARCHIVE_ENTRIES', 'DEX_ARCHIVE_SIZE', 'DEX_CLASS_DESCRIPTOR', 'DEX_CROSS_FILE_DUPLICATE', 'DEX_DUPLICATE_CLASS', 'DEX_HEADER', 'DEX_SIZE', 'DEX_STRING_INDEX', 'DEX_STRING_OFFSET', 'DEX_STRING_TERMINATOR', 'DEX_TABLE_BOUNDS', 'DEX_TYPE_INDEX', 'DEX_ULEB_BOUNDS', 'DEX_ULEB_INVALID', 'DEX_VERSION', 'FIXTURE_IDENTITY', 'GLOBAL_OPTIMIZATION_DISABLED', 'MAIN_ACTIVITY_ABSENT', 'MAPPING_CLASS_ENTRIES', 'MAPPING_FILE', 'MAPPING_LINE_SIZE', 'MAPPING_STREAM_SIZE', 'MAPPING_TABLE_SIZE', 'PLUGIN_DUPLICATE', 'PLUGIN_LIST_SHAPE', 'PLUGIN_NAME_INVALID', 'PLUGIN_NOT_PRESERVED', 'PRODUCTION_CONFIG_PRESENT', 'R8_COMPILER_MARKER', 'RENAMING_ABSENT', 'UNCLASSIFIED'))
 
 
 class R8Refused(ValueError):
@@ -26,6 +26,35 @@ def require(ok, reason='UNCLASSIFIED'):
 
 MAPPING_FILES = ('mapping.txt', 'configuration.txt')
 MAPPING_SIZE_CATEGORIES = ('0', '0_32M', '32_128M', '128_256M', 'over256M')
+MAPPING_STREAM_LIMIT = 128 * 1024 * 1024
+MAPPING_LINE_LIMIT = 128 * 1024
+MAPPING_TABLE_LIMIT = 8 * 1024 * 1024
+
+
+def read_mapping(path, expected_bytes):
+    # R8 line/method metadata can exceed 32 MiB even for a valid small DEX.
+    # Read and hash every byte, retaining only the class entries used below.
+    # Unlike a whole-file read, both line and retained-table memory are bounded.
+    require(type(expected_bytes) is int and 0 < expected_bytes <= MAPPING_STREAM_LIMIT, 'MAPPING_STREAM_SIZE')
+    entries, retained, consumed, compiler = [], 0, 0, False
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        while True:
+            line = stream.readline(MAPPING_LINE_LIMIT + 1)
+            if not line:
+                break
+            require(len(line) <= MAPPING_LINE_LIMIT, 'MAPPING_LINE_SIZE')
+            consumed += len(line)
+            require(consumed <= expected_bytes, 'MAPPING_STREAM_SIZE')
+            digest.update(line)
+            text = line.decode('utf-8', errors='strict').rstrip('\r\n')
+            compiler |= '# compiler: R8' in text
+            if re.fullmatch(r'(\S+) -> (\S+):', text):
+                retained += len(line)
+                require(retained <= MAPPING_TABLE_LIMIT and len(entries) < 100_000, 'MAPPING_TABLE_SIZE')
+                entries.append(text + '\n')
+    require(consumed == expected_bytes, 'MAPPING_STREAM_SIZE')
+    return ('# compiler: R8\n' if compiler else '') + ''.join(entries), digest.hexdigest()
 
 
 def unavailable_mapping_files():
@@ -181,26 +210,30 @@ def main():
             classes.update(declared)
             dex_receipts.append({'file': entry.filename, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
     mapping_dir = root / 'outputs/mapping/recetteOptimized'
-    texts = {}
+    sizes = {}
     for name in ['mapping.txt', 'configuration.txt']:
         path = mapping_dir / name
         try:
-            require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size <= 32 * 1024 * 1024, 'MAPPING_FILE')
+            limit = MAPPING_STREAM_LIMIT if name == 'mapping.txt' else 32 * 1024 * 1024
+            require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size <= limit, 'MAPPING_FILE')
+            sizes[name] = path.stat().st_size
         except R8Refused as error:
             try:
                 error.mapping_files = mapping_file_states(mapping_dir)
             except Exception:
                 pass  # A diagnostic error must not replace the original refusal.
             raise
-        texts[name] = path.read_text()
+    mapping, mapping_sha = read_mapping(mapping_dir / 'mapping.txt', sizes['mapping.txt'])
+    configuration = (mapping_dir / 'configuration.txt').read_text()
     plugins = json.loads(Path('android/app/src/main/assets/capacitor.plugins.json').read_text())
     metadata = json.loads((root / 'outputs/apk/recetteOptimized/output-metadata.json').read_text())
     require(metadata['applicationId'] == 'app.jolene.recette' and metadata['variantName'] == 'recetteOptimized', 'FIXTURE_IDENTITY')
-    receipt = inspect_r8(texts['mapping.txt'], texts['configuration.txt'], plugins, classes)
+    receipt = inspect_r8(mapping, configuration, plugins, classes)
     receipt.update({'sha': sha, 'variant': 'recetteOptimized', 'applicationId': 'app.jolene.recette', 'dex': dex_receipts,
                     'apkSha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
-                    'mappingSha256': hashlib.sha256(texts['mapping.txt'].encode()).hexdigest(),
-                    'configurationSha256': hashlib.sha256(texts['configuration.txt'].encode()).hexdigest(),
+                    'mappingSha256': mapping_sha,
+                    'mappingBytes': sizes['mapping.txt'],
+                    'configurationSha256': hashlib.sha256(configuration.encode()).hexdigest(),
                     'storeBuild': False, 'uiValidated': False})
     output = Path('test-results/android-native/r8-artifacts.json')
     output.parent.mkdir(parents=True, exist_ok=True)

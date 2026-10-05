@@ -93,7 +93,12 @@ export async function prepareAdbRoot({ adb, record, now = () => performance.now(
           rootRequests++;
           await emit('root-requested', { rootRequests });
           const result = await run('root');
-          if (!['restarting adbd as root', 'adbd is already running as root'].includes(result)) refuse('ROOT_REFUSED');
+          const reply = result === '' ? 'empty' : result === 'restarting adbd as root' ? 'restarting'
+            : result === 'adbd is already running as root' ? 'already-root' : 'refused';
+          await emit('root-reply', { reply });
+          if (reply === 'refused') refuse('ROOT_REFUSED');
+          // AOSP adb_root also accepts an empty reply while the daemon restarts.
+          // It is only an acknowledgement: the fresh stable UID probes remain mandatory.
           // The command may return before adbd restarts. Only fresh uid and
           // absence probes after the restart can establish readiness.
         }

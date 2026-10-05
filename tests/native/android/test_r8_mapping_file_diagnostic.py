@@ -173,7 +173,7 @@ class MappingDiagnosticTests(unittest.TestCase):
             with self.assertRaises(r8.R8Refused) as cm:
                 r8.main()
             self.assertEqual(cm.exception.reason, 'MAPPING_FILE')
-            self.assertEqual(reads.call_count, int(mapping_size > 0))
+            self.assertEqual(reads.call_count, 0)
             return cm.exception, ls.call_count
 
     def test_first_mapping_failure_captures_both_files_without_content_reads(self):

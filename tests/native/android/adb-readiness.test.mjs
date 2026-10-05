@@ -145,7 +145,7 @@ test('refuses unknown state, unexpected UID and production-build root denial wit
     ['get-state', 'unauthorized', /STATE_REFUSED/],
     ['shell id -u', '1000', /UID_REFUSED/],
     ['root', 'adbd cannot run as root in production builds', /ROOT_REFUSED/],
-    ['root', '', /ROOT_REFUSED/],
+    ['root', 'unexpected reply', /ROOT_REFUSED/],
   ]) {
     const f = fixture({ respond: ({ args }) => args.join(' ') === command ? response : undefined });
     await assert.rejects(f.run(), expected);
@@ -154,11 +154,24 @@ test('refuses unknown state, unexpected UID and production-build root denial wit
   }
 });
 
+test('empty successful adb reply still needs two fresh stable root probes', async () => {
+  const f = fixture({ respond: ({ args, setUid }) => {
+    if (args[0] === 'root') { setUid('0'); return ''; }
+  } });
+  await f.run();
+  assert.equal(rootCalls(f).length, 1);
+  assert.equal(f.records.at(-1).elapsedMs, 2000);
+  assert.equal(f.records.filter(entry => entry.phase === 'probe' && entry.uid === 0).length, 2);
+  assert.equal(f.records.find(entry => entry.phase === 'root-reply').reply, 'empty');
+});
+
 test('a root command that never establishes UID 0 cannot pass and is requested at most three times', async () => {
-  const f = fixture({ respond: ({ args }) => args[0] === 'root' ? 'restarting adbd as root' : undefined });
-  await assert.rejects(f.run(), /ROOT_REQUEST_LIMIT/);
-  assert.equal(rootCalls(f).length, 3);
-  assert.equal(isReady(f), false);
+  for (const reply of ['restarting adbd as root', '']) {
+    const f = fixture({ respond: ({ args }) => args[0] === 'root' ? reply : undefined });
+    await assert.rejects(f.run(), /ROOT_REQUEST_LIMIT/);
+    assert.equal(rootCalls(f).length, 3);
+    assert.equal(isReady(f), false);
+  }
 });
 
 test('persistent root closed is capped at three requests; persistent offline at thirty probes', async () => {
