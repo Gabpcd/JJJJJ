@@ -133,7 +133,7 @@ final class Auth107Tests: XCTestCase {
   func contentText(_ name: String) {
     let predicate = NSPredicate { _, _ in
       self.app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label == %@", name, name + ", heading")).allElementsBoundByIndex.contains {
-        $0.exists && (!self.tablet || $0.frame.minX >= self.navigation.frame.maxX)
+        $0.exists && $0.isHittable && (!self.tablet || $0.frame.minX >= self.navigation.frame.maxX)
       }
     }
     let expectation = XCTNSPredicateExpectation(predicate: predicate, object: app)
@@ -263,7 +263,11 @@ final class Auth107Tests: XCTestCase {
       }
       app.terminate(); app.launch()
       XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30))
-      later(timeout: 7)
+      // Première reprise : le pré-prompt est programmé seulement après le
+      // checkPermissions natif asynchrone. Attendre ici sa fenêtre complète,
+      // avant de demander un bouton que ce dialogue peut retirer de l'AX.
+      // Après « Plus tard », le choix local persiste pour les autres reprises.
+      later(timeout: role == "soignant" ? 30 : 7)
       attendreNavigation()
       accueil(role, phase: "relancement")
       logout(role)
