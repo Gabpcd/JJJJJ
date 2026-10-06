@@ -53,7 +53,8 @@ function socketAbsent(stdout) {
 /** Terminal cleanup only. The driver was installed by this scenario on its
  * dedicated fixture emulator; no UI action or assertion is repeated here. */
 export async function closeAndroidDriver(serial, { expectedPid, driverAttempted, closeClient,
-  run = execute, now = () => performance.now(), budgetMs = 30000 } = {}) {
+  run = execute, now = () => performance.now(), budgetMs = 30000,
+  pause = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
   const result = { schema: 1, status: 'FAILED', phase: 'context', code: 'INVALID_CONTEXT',
     clientClosed: false, driverStopRequested: false, driverProcessesAbsent: false,
     driverSocketAbsent: false, originalProcessPreserved: false };
@@ -71,7 +72,7 @@ export async function closeAndroidDriver(serial, { expectedPid, driverAttempted,
   try {
     if (typeof serial !== 'string' || !/^[\w.:-]+$/.test(serial)
       || typeof expectedPid !== 'string' || !/^[1-9]\d*$/.test(expectedPid)
-      || typeof driverAttempted !== 'boolean' || typeof closeClient !== 'function'
+      || typeof driverAttempted !== 'boolean' || typeof closeClient !== 'function' || typeof pause !== 'function'
       || !Number.isInteger(budgetMs) || budgetMs < 1 || budgetMs > 30000) fail('INVALID_CONTEXT');
     phase = 'close-client';
     let timer;
@@ -101,15 +102,26 @@ export async function closeAndroidDriver(serial, { expectedPid, driverAttempted,
         result.driverStopRequested = true;
       } else if (before.some(row => driverProcess(row.name))) fail('DRIVER_NOT_OWNED');
     }
-    phase = 'driver-socket-absence';
-    result.driverSocketAbsent = socketAbsent((await adb(['shell', socketCommand])).stdout);
-    if (!result.driverSocketAbsent) fail('DRIVER_SOCKET_REMAINS');
-    phase = 'driver-process-absence';
-    const after = processes((await adb(['shell', processCommand])).stdout);
-    sameApp(after, expectedPid);
-    result.originalProcessPreserved = true;
-    result.driverProcessesAbsent = !after.some(row => driverProcess(row.name));
-    if (!result.driverProcessesAbsent) fail('DRIVER_PROCESS_REMAINS');
+    // am force-stop peut revenir avant la disparition de la socket Unix.
+    // Attendre sa fermeture effective, sans rejouer l'UI ni redémarrer l'app.
+    // Le nombre de sondes ET le budget total restent bornés ; aucune erreur
+    // ADB, projection invalide ou substitution du processus app n'est ignorée.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      phase = 'driver-socket-absence';
+      result.driverSocketAbsent = socketAbsent((await adb(['shell', socketCommand])).stdout);
+      phase = 'driver-process-absence';
+      const after = processes((await adb(['shell', processCommand])).stdout);
+      result.originalProcessPreserved = false;
+      sameApp(after, expectedPid);
+      result.originalProcessPreserved = true;
+      result.driverProcessesAbsent = !after.some(row => driverProcess(row.name));
+      if (result.driverSocketAbsent && result.driverProcessesAbsent) break;
+      if (attempt === 19) {
+        phase = result.driverSocketAbsent ? 'driver-process-absence' : 'driver-socket-absence';
+        fail(result.driverSocketAbsent ? 'DRIVER_PROCESS_REMAINS' : 'DRIVER_SOCKET_REMAINS');
+      }
+      await pause(budget(100));
+    }
     // A completion that lost a delayed timer race must still respect budget.
     budget(1);
     if (!firstFailure) {

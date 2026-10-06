@@ -30,7 +30,7 @@ test('Unicode exact : Łukasz, İpek, accents, grec et cyrillique dans facture e
 function sansEffet(banc, depuis = 0) {
   assert.deepEqual(banc.inconnus, []);
   const effets = banc.appels.slice(depuis).filter(a => a.method !== 'GET'
-    && a.path !== '/rest/v1/rpc/fn_verifier_pre_facturation');
+    && !['/rest/v1/rpc/fn_verifier_pre_facturation','/rest/v1/rpc/fn_calculer_montant_periode'].includes(a.path));
   assert.deepEqual(effets, [], 'aucun numéro, insert/update, Storage, émission, commission ni email');
 }
 
@@ -80,7 +80,7 @@ test('doublon : le nouveau contrôle ne bloque pas la réparation idempotente de
   const response = await banc.genererFacture();
   assert.equal(response.status, 409); assert.equal((await response.json()).facture_id, banc.factures[0].id);
   assert.deepEqual(banc.appels.slice(depuis).filter(a => a.method !== 'GET').map(a => a.path),
-    ['/rest/v1/rpc/fn_verifier_pre_facturation', '/rest/v1/rpc/fn_preparer_facture_commission_periode']);
+    ['/rest/v1/rpc/fn_calculer_montant_periode', '/rest/v1/rpc/fn_verifier_pre_facturation', '/rest/v1/rpc/fn_preparer_facture_commission_periode']);
   assert.equal(banc.documents.size, 4); assert.equal(banc.versions.length, 2); assert.deepEqual(banc.inconnus, []);
 });
 
@@ -198,4 +198,22 @@ test('fixture frontend de remplacement : vrais PDF paginés Unicode et XML380 au
   assert.equal(banc.factures[1].nature_correction, 'REMPLACEMENT');
   assert.equal(banc.factures[1].montant_ttc, 72); assert.equal(banc.factures[1].taux_horaire_snapshot, 18);
   assert.equal(banc.factures[0].statut, 'REMPLACEE');
+});
+
+test('bornes effectives : la dernière vacation après minuit peut être facturée', async () => {
+  const banc=creerBanc({bornesFacturation:{borne_debut_facturation:'2026-09-21',borne_fin_facturation:'2026-09-28'}});
+  banc.mission.fin_le='2026-09-27T23:45:00Z';banc.mission.statut='TERMINEE';
+  const response=await banc.invoquer({mission_id:banc.mission.id,periode_debut:'2026-09-21',periode_fin:'2026-09-28',est_facture_finale_mission:true});
+  assert.equal(response.status,200,JSON.stringify(await response.json()));
+  assert.equal(banc.factures[0].periode_fin,'2026-09-28');
+  assert.deepEqual(banc.inconnus,[]);
+});
+test('historique incohérent : refus409 explicite avant toute réservation ou émission', async () => {
+  const banc=creerBanc({erreurHistorique:true});
+  const response=await banc.genererFacture();
+  assert.equal(response.status,409);
+  const body=await response.json();
+  assert.equal(body.error,'FACTURATION_HISTORIQUE_A_RECONCILIER');
+  assert.match(body.message,/factures précédentes doivent être régularisées/);
+  sansEffet(banc);
 });
