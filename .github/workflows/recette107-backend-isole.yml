@@ -1,0 +1,72 @@
+name: Recette 1.0.7 — invariants serveur isolés
+
+on:
+  push:
+    branches: [codex/recette-1-0-7-20261006]
+    paths:
+      - .github/workflows/recette107-backend-isole.yml
+      - scripts/ci/recette107-signature-race.py
+      - scripts/ci/recette107-finances-frontiere-pg17.py
+      - scripts/ci/recette107-finances-frontiere.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  invariants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - audit: signature
+            database: signature_otp_diagnostic
+            script: recette107-signature-race.py
+          - audit: finances
+            database: recette107_finances
+            script: recette107-finances-frontiere-pg17.py
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+          POSTGRES_DB: ${{ matrix.database }}
+        ports: [54329:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          path: product
+          persist-credentials: false
+      - name: Exécuter les fonctions exactes sur PostgreSQL 17 jetable
+        env:
+          JOLENE_SIGNATURE_WITNESS: CI_EPHEMERE
+          JOLENE_FINANCES_WITNESS: CI_EPHEMERE
+          PGHOST: 127.0.0.1
+          PGPORT: '54329'
+          PGDATABASE: ${{ matrix.database }}
+          PGUSER: postgres
+          PGPASSWORD: fixture-ci-ephemere
+          RECETTE_PRODUCT_DIR: ${{ github.workspace }}/product
+          RECETTE_PROOFS_DIR: ${{ github.workspace }}/preuves/${{ matrix.audit }}
+        run: python3 -B tooling/scripts/ci/${{ matrix.script }}
+      - name: Conserver le résultat, y compris une régression reproduite
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: recette107-backend-${{ matrix.audit }}-${{ github.run_id }}
+          path: preuves/${{ matrix.audit }}
+          if-no-files-found: error
+          retention-days: 14
