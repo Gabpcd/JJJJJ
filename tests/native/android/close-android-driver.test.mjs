@@ -16,6 +16,7 @@ function setup({ change = async () => undefined, closeError, driverAttempted = t
   const calls = [];
   let psReads = 0, clock = 0;
   const options = { expectedPid, driverAttempted, now: () => clock,
+    pause: async ms => { clock += ms; },
     closeClient: async () => { calls.push({ phase: 'close' }); if (closeError) throw closeError; },
     run: async (file, args, settings) => {
       assert.equal(file, 'adb'); assert.deepEqual(args.slice(0, 2), ['-s', serial]);
@@ -213,4 +214,36 @@ test('navigation catch keeps original cause when failure receipt or terminal cap
       expectedPid, [], []), error => error === original);
     assert.equal(order[0], 'failure.json');
   }
+});
+
+
+test('delayed Unix socket removal is observed without stopping the app or replaying UI', async () => {
+  let reads = 0;
+  const f = setup({ change: async ({ phase }) => phase === 'socket'
+    ? { stdout: sockets(++reads < 4 ? '@playwright_android_driver_socket' : '') } : undefined });
+  const receipt = await f.run();
+  assert.equal(receipt.status, 'COMPLETE'); assert.equal(reads, 4);
+  assert.equal(receipt.originalProcessPreserved, true);
+  assert.equal(f.calls.filter(c => c.phase === 'stop').length, 1);
+  assert.equal(f.calls.filter(c => c.phase === 'close').length, 1);
+});
+
+test('app replacement during socket shutdown remains a failure', async () => {
+  let processReads = 0;
+  const f = setup({ change: async ({ phase }) => phase === 'socket'
+    ? { stdout: sockets('@playwright_android_driver_socket') }
+    : phase === 'ps' && ++processReads === 3 ? { stdout: ps().replace('42 app.', '43 app.') } : undefined });
+  const receipt = await f.run();
+  assert.equal(receipt.status, 'FAILED'); assert.equal(receipt.code, 'APP_PROCESS_CHANGED');
+  assert.equal(receipt.originalProcessPreserved, false);
+  assert.equal(f.calls.filter(c => c.phase === 'stop').length, 1);
+});
+
+test('persistent socket has a bounded number of observations even with a frozen clock', async () => {
+  const f = setup({ change: async ({ phase }) => phase === 'socket'
+    ? { stdout: sockets('@playwright_android_driver_socket') } : undefined });
+  f.options.pause = async () => {};
+  const receipt = await f.run();
+  assert.equal(receipt.status, 'FAILED'); assert.equal(receipt.code, 'DRIVER_SOCKET_REMAINS');
+  assert.equal(f.calls.filter(c => c.phase === 'socket').length, 20);
 });
