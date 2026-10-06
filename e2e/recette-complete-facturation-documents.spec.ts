@@ -271,7 +271,11 @@ test('Documents F1 établissement : une facture absente interdit le paiement, y 
   const banc = creerBanc(); banc.soignant.prenom = '李';
   const refus = await banc.genererFacture(), payload = await refus.json();
   expect(refus.status).toBe(422); expect(banc.documents.size).toBe(0); expect(banc.factures).toEqual([]);
-  expect(banc.appels.filter(a => a.method !== 'GET' && a.path !== '/rest/v1/rpc/fn_verifier_pre_facturation')).toEqual([]);
+  // Ces deux RPC POST sont des lectures de contrôle ; toute réservation,
+  // génération de pièce ou tentative de paiement reste interdite ici.
+  expect(banc.appels.filter(a => a.method !== 'GET' && ![
+    '/rest/v1/rpc/fn_verifier_pre_facturation', '/rest/v1/rpc/fn_calculer_montant_periode',
+  ].includes(a.path))).toEqual([]);
   const { etat } = await simulerEtablissement(page);
   const reseau = await encadrer(page, banc);
   etat.overrides.set('fn_mon_etablissement_complet', { ...etablissement, type: 'CLINIQUE_PRIVEE', est_compte_test: true });
