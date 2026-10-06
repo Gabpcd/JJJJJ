@@ -1,0 +1,48 @@
+name: Recette 1.0.7 — détail catalogue staging lecture seule
+
+on:
+  push:
+    branches: [codex/recette-1-0-7-20261006]
+    paths:
+      - .github/workflows/recette-d2-catalogue-detail.yml
+      - scripts/ci/d2-catalogue-detail.mjs
+      - scripts/ci/d2-catalogue-decompose-readonly.sql
+      - scripts/ci/d2-schema-projection-readonly.sql
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue-detail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Lire les outils du diagnostic
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Lire le produit exact 1.0.7 build 24
+        uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          path: product
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Collecter uniquement métadonnées et empreintes du staging
+        timeout-minutes: 2
+        env:
+          D2_PRODUCT_CHECKOUT: ${{ github.workspace }}/product
+          STAGING_REF_SECRET: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+        run: node tooling/scripts/ci/d2-catalogue-detail.mjs
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: d2-catalogue-detail-readonly
+          path: d2-catalogue-detail-proof/*.json
+          if-no-files-found: error
+          retention-days: 7
