@@ -1,0 +1,85 @@
+name: iOS simulateur — 1.0.7 build 24
+
+on:
+  push:
+    branches: [codex/recette-1-0-7-20261006]
+    paths:
+      - '.github/workflows/ios-version-soumise.yml'
+      - 'scripts/native/prepare-ios-version-soumise.mjs'
+      - 'scripts/native/prepare-ios-uitests.rb'
+      - 'scripts/native/run-ios-version-soumise.sh'
+      - 'tests/native/ios/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-version-soumise-24
+  cancel-in-progress: false
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      NATIVE_RECETTE: '1'
+      GIT_COMMIT_SHA: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+      VITE_NATIVE_BUILD: 'true'
+      VITE_SUPABASE_URL: http://127.0.0.1:8904
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_native_fixture
+      VITE_SUPABASE_ANON_KEY: sb_publishable_native_fixture
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      SENTRY_UPLOAD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: source
+      - name: Construire uniquement le frontend exact et le banc isolé
+        working-directory: source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GIT_COMMIT_SHA"
+          npm ci
+          npm run build
+          node ../tooling/scripts/native/prepare-ios-version-soumise.mjs
+          npx cap sync ios
+          bundle exec ruby ../tooling/scripts/native/prepare-ios-uitests.rb ../tooling/tests/native/ios/NavigationTests.swift
+      - name: Compiler pour simulateur, puis iPhone et iPad séquentiels
+        working-directory: source
+        run: bash ../tooling/scripts/native/run-ios-version-soumise.sh
+      - name: Conserver les assertions, captures et échecs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-1.0.7-24-${{ github.run_id }}
+          path: source/test-results/ios-native/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preuves légères pour la revue visuelle
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-1.0.7-24-review-${{ github.run_id }}
+          path: source/test-results/ios-native/review/
+          if-no-files-found: warn
+          retention-days: 7

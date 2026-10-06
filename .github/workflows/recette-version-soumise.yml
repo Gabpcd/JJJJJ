@@ -60,6 +60,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RECETTE_SOURCE_SHA"
+          # Playwright résout outputDir et le reporter relativement au dossier
+          # de configuration e2e. Un chemin absolu relie rapport et artefact.
+          echo "RECETTE_RESULTS_DIR=$PWD/test-results/recette-version-soumise" >> "$GITHUB_ENV"
           node --input-type=module <<'NODE'
           import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
           import { createHash } from 'node:crypto';
