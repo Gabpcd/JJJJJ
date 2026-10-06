@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('otp_diagnostic', ROOT/'scripts/ci/signature-otp-diagnostic-pg17.py')
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)
-MIGRATION = '20261004124300_refuser_signature_otp_et_document_incoherents.sql'
+BASE_MIGRATION = '20261004124300_refuser_signature_otp_et_document_incoherents.sql'
+MIGRATION = '20261006144554_serialiser_renvoi_et_validation_signature.sql'
 
 
 class WitnessFailure(Exception):
@@ -507,7 +508,7 @@ SELECT jsonb_build_object('schemaVersion',1,'phase','fixed-qualification','postg
  'casesPassed',(SELECT count(*) FROM observations),'cases',(SELECT jsonb_object_agg(case_name,passed) FROM observations));
 ROLLBACK;
 """
-    return setup + migration + tests
+    return setup + (ROOT / 'supabase/migrations' / BASE_MIGRATION).read_text() + migration + tests
 
 
 def main():

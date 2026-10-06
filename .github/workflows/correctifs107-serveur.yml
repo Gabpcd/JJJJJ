@@ -1,0 +1,61 @@
+name: Correctifs 1.0.7 — invariants serveur
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  invariants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - audit: signature
+            database: signature_otp_diagnostic
+            script: recette107-signature-race.py
+          - audit: finances
+            database: recette107_finances
+            script: recette107-finances-frontiere-pg17.py
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+          POSTGRES_DB: ${{ matrix.database }}
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exécuter les fonctions corrigées sur PostgreSQL 17 jetable
+        env:
+          JOLENE_SIGNATURE_WITNESS: CI_EPHEMERE
+          JOLENE_FINANCES_WITNESS: CI_EPHEMERE
+          PGHOST: 127.0.0.1
+          PGPORT: '54329'
+          PGDATABASE: ${{ matrix.database }}
+          PGUSER: postgres
+          PGPASSWORD: fixture-ci-ephemere
+          RECETTE_PRODUCT_DIR: ${{ github.workspace }}
+          RECETTE_PROOFS_DIR: ${{ github.workspace }}/preuves/${{ matrix.audit }}
+        run: python3 -B scripts/ci/${{ matrix.script }}
+      - name: Conserver les preuves ciblées
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: correctifs107-${{ matrix.audit }}-${{ github.run_id }}
+          path: preuves/${{ matrix.audit }}
+          if-no-files-found: error
+          retention-days: 14
