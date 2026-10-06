@@ -1,0 +1,177 @@
+name: Recette simulée de la version soumise 1.0.7 (24)
+
+# Vérification seulement : le produit testé est le commit soumis aux stores.
+# Les comptes, OTP, pointages et paiements de ces huit specs sont simulés.
+on:
+  push:
+    branches: ['codex/recette-1-0-7-20261006']
+    paths: ['.github/workflows/recette-version-soumise.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-recette-version-soumise-1-0-7-24
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  CI: 'true'
+  RECETTE_SOURCE_SHA: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+  RECETTE_RESULTS_DIR: test-results/recette-version-soumise
+  RECETTE_PROOFS_DIR: recette-version-soumise-preuves
+  PLAYWRIGHT_BASE_URL: http://127.0.0.1:8890
+  RECETTE_START_SERVER: '1'
+  VITE_SUPABASE_URL: http://127.0.0.1:8890
+  VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_jolene_simulation
+  VITE_SUPABASE_ANON_KEY: sb_publishable_jolene_simulation
+  VITE_STRIPE_PUBLISHABLE_KEY: ''
+  VITE_SENTRY_DSN: ''
+  VITE_TURNSTILE_SITE_KEY: ''
+  VITE_ENV: test
+  SENTRY_UPLOAD_ENABLED: 'false'
+
+jobs:
+  simulation:
+    name: Version soumise — ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ipad-portrait, ipad-paysage, iphone, android, ordinateur]
+    env:
+      RECETTE_PROJECT: ${{ matrix.project }}
+    steps:
+      - name: Charger uniquement le produit soumis
+        uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Attester la source, la version et le périmètre simulé
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RECETTE_SOURCE_SHA"
+          node --input-type=module <<'NODE'
+          import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const release = JSON.parse(readFileSync('config/mobile-release.json', 'utf8'));
+          assert.equal(release.marketingVersion, '1.0.7');
+          assert.equal(release.buildNumber, 24);
+          const specs = [
+            'e2e/recette-complete-mission.spec.ts',
+            'e2e/recette-complete-candidatures-deux-as.spec.ts',
+            'e2e/recette-complete-signature-autorisation.spec.ts',
+            'e2e/recette-complete-signature-integrite.spec.ts',
+            'e2e/recette-complete-coherence-presences.spec.ts',
+            'e2e/recette-complete-facturation-documents.spec.ts',
+            'e2e/recette-complete-paiements-liberaux.spec.ts',
+            'e2e/recette-complete-honoraires-documents-gains.spec.ts',
+          ];
+          const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+          const manifest = {
+            schemaVersion: 1,
+            observedAt: new Date().toISOString(),
+            mode: 'UI_MOCK_ONLY',
+            sourceSha: process.env.RECETTE_SOURCE_SHA,
+            workflowSha: process.env.GITHUB_SHA,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            marketingVersion: release.marketingVersion,
+            buildNumber: release.buildNumber,
+            project: process.env.RECETTE_PROJECT,
+            baseURL: process.env.PLAYWRIGHT_BASE_URL,
+            workers: 1,
+            retries: 0,
+            stripeConfiguration: 'sans_cle',
+            realBackend: false,
+            realProvider: false,
+            physicalDevice: false,
+            storeBinaryExecuted: false,
+            configSha256: hash('e2e/playwright.recette-complete.config.ts'),
+            lockfileSha256: hash('package-lock.json'),
+            specs: specs.map(path => ({ path, sha256: hash(path) })),
+          };
+          mkdirSync(process.env.RECETTE_PROOFS_DIR, { recursive: true });
+          writeFileSync(`${process.env.RECETTE_PROOFS_DIR}/source-manifest.json`, JSON.stringify(manifest, null, 2) + '\n');
+          NODE
+      - name: Installer les dépendances verrouillées
+        run: npm ci
+      - name: Construire le frontend local sans télémétrie
+        run: npm run build
+        env:
+          GIT_COMMIT_SHA: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+      - name: Exécuter uniquement les huit spécifications retenues
+        run: >-
+          npx playwright test
+          --config=e2e/playwright.recette-complete.config.ts
+          --project=${{ matrix.project }}
+          --workers=1 --retries=0 --global-timeout=1800000
+          e2e/recette-complete-mission.spec.ts
+          e2e/recette-complete-candidatures-deux-as.spec.ts
+          e2e/recette-complete-signature-autorisation.spec.ts
+          e2e/recette-complete-signature-integrite.spec.ts
+          e2e/recette-complete-coherence-presences.spec.ts
+          e2e/recette-complete-facturation-documents.spec.ts
+          e2e/recette-complete-paiements-liberaux.spec.ts
+          e2e/recette-complete-honoraires-documents-gains.spec.ts
+      - name: Refuser les exclusions, échecs et reprises de tests
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const root = process.env.RECETTE_RESULTS_DIR;
+          const report = JSON.parse(readFileSync(`${root}/results.json`, 'utf8'));
+          const manifest = JSON.parse(readFileSync(`${process.env.RECETTE_PROOFS_DIR}/source-manifest.json`, 'utf8'));
+          const tests = [];
+          const files = new Set();
+          const visit = suite => {
+            for (const spec of suite.specs || []) {
+              files.add(spec.file);
+              tests.push(...(spec.tests || []));
+            }
+            for (const child of suite.suites || []) visit(child);
+          };
+          for (const suite of report.suites || []) visit(suite);
+          const expectedFiles = manifest.specs.map(spec => spec.path.replace(/^e2e\//, '')).sort();
+          const actualFiles = [...files].map(path => path.replace(/^e2e\//, '')).sort();
+          const once = tests.every(test => test.projectName === process.env.RECETTE_PROJECT
+            && test.status === 'expected' && test.results?.length === 1
+            && test.results[0].status === 'passed' && test.results[0].retry === 0);
+          const verdict = {
+            mode: manifest.mode, sourceSha: manifest.sourceSha, project: manifest.project,
+            stats: report.stats, tests: tests.length, files: actualFiles, everyTestPassedOnce: once,
+          };
+          writeFileSync(`${process.env.RECETTE_PROOFS_DIR}/verdict.json`, JSON.stringify(verdict, null, 2) + '\n');
+          assert.deepEqual(actualFiles, expectedFiles, 'Les huit spécifications exactes doivent être exécutées.');
+          assert.ok(tests.length > 0 && once, 'Chaque test doit réussir une fois, sans exclusion ni reprise.');
+          assert.equal(report.stats.expected, tests.length);
+          for (const key of ['unexpected', 'skipped', 'flaky']) assert.equal(report.stats[key], 0, key);
+          assert.equal((report.errors || []).length, 0, 'Erreur globale Playwright.');
+          NODE
+      - name: Conserver les résultats et preuves ciblées
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: recette-version-soumise-1.0.7-24-${{ matrix.project }}
+          path: |
+            recette-version-soumise-preuves/source-manifest.json
+            test-results/recette-version-soumise/results.json
+            recette-version-soumise-preuves/verdict.json
+            test-results/recette-version-soumise/**/*.png
+            test-results/recette-version-soumise/**/*.pdf
+            test-results/recette-version-soumise/**/trace.zip
+          if-no-files-found: error
+          retention-days: 7

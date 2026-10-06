@@ -1,0 +1,61 @@
+name: Recette 1.0.7 — diagnostic staging lecture seule
+
+on:
+  push:
+    branches: [codex/recette-1-0-7-20261006]
+    paths: [.github/workflows/recette-d2-diagnostic.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Lire seulement les empreintes et compteurs du catalogue staging
+        env:
+          STAGING_REF_SECRET: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import {writeFileSync} from 'node:fs';
+          import {sqlCatalogueD, catalogueD, validerCatalogueD, STAGING_REF} from './scripts/ci/candidatures-fixture-contract.mjs';
+          const receipt={sourceSha:'bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84',version:'1.0.7',build:24,readOnly:true,status:'NOT_RUN'};
+          try {
+            if(STAGING_REF!=='mejpriaetwgtcstbgfid'||process.env.STAGING_REF_SECRET!==STAGING_REF||!process.env.STAGING_TOKEN) throw new Error('CONFIGURATION');
+            const response=await fetch(`https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(35000),headers:{Authorization:`Bearer ${process.env.STAGING_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({query:sqlCatalogueD})});
+            receipt.httpStatus=response.status;
+            if(!response.ok) throw new Error('HTTP_REFUSED');
+            const rows=await response.json();
+            if(!Array.isArray(rows)||rows.length!==1) throw new Error('RESPONSE_SHAPE');
+            const row=rows[0],observed={};
+            for(const key of ['schema','fonctions','triggers']) {
+              if(typeof row?.[key]!=='string'||!/^[a-f0-9]{32}$/.test(row[key])) throw new Error('RESPONSE_SHAPE');
+              observed[key]=row[key];
+            }
+            for(const key of ['crons_actifs','audit_fk']) {
+              if(!Number.isSafeInteger(row?.[key])||row[key]<0||row[key]>1000000) throw new Error('RESPONSE_SHAPE');
+              observed[key]=row[key];
+            }
+            receipt.expected={...catalogueD,crons_actifs:0,audit_fk:0};receipt.observed=observed;
+            try{validerCatalogueD(observed);receipt.status='CATALOGUE_ACCEPTED';}
+            catch{receipt.status='CATALOGUE_REFUSED';process.exitCode=1;}
+          }catch(error){receipt.status=['CONFIGURATION','HTTP_REFUSED','RESPONSE_SHAPE'].includes(error?.message)?error.message:'TRANSPORT_OR_PARSE_FAILURE';process.exitCode=1;}
+          writeFileSync('d2-catalogue-readonly.json',JSON.stringify(receipt,null,2)+'\n');
+          console.log(JSON.stringify(receipt));
+          JS
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: d2-catalogue-readonly
+          path: d2-catalogue-readonly.json
+          if-no-files-found: error
+          retention-days: 7
