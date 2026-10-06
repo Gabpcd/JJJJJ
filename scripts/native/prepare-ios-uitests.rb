@@ -29,6 +29,10 @@ target.source_build_phase.add_file_reference(group.new_file('NavigationTests.swi
 target.build_configurations.each do |configuration|
   configuration.build_settings.merge!({
     'PRODUCT_BUNDLE_IDENTIFIER' => 'app.jolene.recette.uitests',
+    # new_target ne reprend pas le PRODUCT_NAME de la cible App. Sans cette
+    # valeur, Xcode crée -Runner.app/PlugIns/.xctest et fait entrer le répertoire
+    # du bundle en collision avec sa commande de liaison universelle.
+    'PRODUCT_NAME' => '$(TARGET_NAME)',
     'SWIFT_VERSION' => '5.0', 'GENERATE_INFOPLIST_FILE' => 'YES',
     'TEST_TARGET_NAME' => 'App', 'CODE_SIGNING_ALLOWED' => 'NO',
     'TARGETED_DEVICE_FAMILY' => '1,2', 'IPHONEOS_DEPLOYMENT_TARGET' => '15.0'
