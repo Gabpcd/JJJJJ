@@ -74,16 +74,19 @@ for(const role of ['SOIGNANT','ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
   } finally {await context.close();}
  });
 }
-function factures() {
+function factures(corrigees=false) {
  const proof=receipt('finances','receipt.json');
  expect(proof.qualification).toBe('FIX_VERIFIED');expect(proof.invoicedHt).toBe(480);expect(proof.commissionHt).toBe(72);
- return {honoraires:proof.honoraires.map((f:any)=>({...f,mission_intitule:'Mission de nuit fictive',etablissement_nom:'Clinique fictive',
+ const source=corrigees?proof.cases['correction-documentaire-ui']:proof;
+ if(corrigees){expect(source.cumulHt).toBe(140);expect(source.semaineSuivante.montant_ht_periode).toBe(80);}
+ return {honoraires:source.honoraires.map((f:any)=>({...f,mission_intitule:'Mission de nuit fictive',etablissement_nom:'Clinique fictive',
   statut_litige:'NORMAL',montant_tva:0,taux_tva:0,date_emission:'2026-09-09T09:00:00Z',emise_le:'2026-09-09T09:00:00Z',
   notifiee_soignant_le:'2026-09-09T09:00:00Z',verification_echeance_le:'2026-10-09T09:00:00Z'})),
  commissions:proof.commissions.map((f:any)=>({...f,facture_id:f.id,chorus_pro_statut:'NON_APPLICABLE'}))};
 }
-test('FIN107 soignant : deux périodes, 200 et 280 euros, conservées après rechargement',async({page},info)=>{
- const {honoraires}=factures();const etat=await simulerSoignant(page),verifier=await fermerReseau(page);
+for(const corrigees of [false,true]) {
+ test(`FIN107 soignant : périodes ${corrigees?'corrigée 60 puis 80':'200 puis 280'} conservées après rechargement`,async({page},info)=>{
+ const {honoraires}=factures(corrigees);const etat=await simulerSoignant(page),verifier=await fermerReseau(page);
  Object.assign(etat.profile,{type_exercice:'LIBERAL',statut_liberal:'EN_COURS'});
  const rows=honoraires.map((f:any)=>({...f,soignant_id:idsSoignant.user,etablissement_id:idsSoignant.etab}));
  etat.overrides.set('fn_mes_factures_honoraires',rows);etat.tables.set('factures_honoraires',rows);
@@ -92,12 +95,13 @@ test('FIN107 soignant : deux périodes, 200 et 280 euros, conservées après rec
  for(const reload of [false,true]) {
   if(reload)await recharger(page);
   for(const f of rows)await expect(page.getByText(f.numero_facture,{exact:true})).toBeVisible();
-  await expect(page.getByRole('tabpanel')).toContainText(/200,00\s*€/);
-  await expect(page.getByRole('tabpanel')).toContainText(/280,00\s*€/);
+  await expect(page.getByRole('tabpanel')).toContainText(corrigees?/60,00\s*€/:/200,00\s*€/);
+  await expect(page.getByRole('tabpanel')).toContainText(corrigees?/80,00\s*€/:/280,00\s*€/);
  }
  await page.screenshot({path:info.outputPath('soignant-deux-periodes.png'),fullPage:true});
  expect(etat.unknown).toEqual([]);expect(etat.errors).toEqual([]);verifier();
 });
+}
 test('FIN107 établissement : commissions distinctes 36 et 50,40 euros TTC après rechargement',async({page},info)=>{
  const {commissions}=factures();const {etat}=await simulerEtablissement(page),verifier=await fermerReseau(page);
  etat.overrides.set('fn_mon_etablissement_complet',{...etablissement,type:'CLINIQUE_PRIVEE',est_compte_test:true,

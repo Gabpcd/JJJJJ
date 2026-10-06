@@ -43,7 +43,12 @@ CREATE TABLE public.factures (
  date_emission timestamptz, date_echeance date, est_secteur_public boolean,
  mode_paiement text, chorus_pro_statut text, type_document text
 );
+CREATE TABLE public.litiges (
+ id uuid PRIMARY KEY, mission_id uuid,soignant_id uuid,etablissement_id uuid,
+ facture_id uuid,statut text,resolu_par uuid,resolu_le timestamptz
+);
 CREATE TABLE public.journaux_audit (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),cree_le timestamptz DEFAULT clock_timestamp(),
  acteur_id uuid, type_acteur text, action text, type_ressource text,
  id_ressource uuid, details jsonb
 );
@@ -310,6 +315,150 @@ BEGIN
  END LOOP;
 END;
 $evolution$;
+-- Documents/audits synthétiques, avec vrais gardes de période et calculs.
+-- Le circuit de résolution complet est testé séparément dans la base staging.
+CREATE FUNCTION pg_temp.doc107(pid uuid,parent uuid,typ text,nature text,amount numeric,etat text)
+RETURNS void LANGUAGE sql AS $doc$
+ INSERT INTO public.factures_honoraires(id,numero_facture,mission_id,soignant_id,etablissement_id,
+ type_document,nature_correction,statut,periode_debut,periode_fin,est_facture_finale_mission,
+ facture_precedente_id,montant_ht,montant_ttc,quantite_heures_snapshot)
+ VALUES(pid,'DOC-'||pid,'f1070000-0000-4000-8000-000000000003',
+ 'f1070000-0000-4000-8000-000000000001','f1070000-0000-4000-8000-000000000002',
+ typ,nature,etat,'2026-08-31','2026-09-06',false,parent,amount,amount,amount/20);
+$doc$;
+CREATE FUNCTION pg_temp.audit107(action_fin text,source_id uuid,sortie_id uuid,avant numeric,apres numeric)
+RETURNS uuid LANGUAGE plpgsql AS $audit$
+DECLARE lid uuid:=gen_random_uuid(); admin_id uuid:='f1070000-0000-4000-8000-000000000099';
+BEGIN
+ INSERT INTO public.litiges SELECT lid,mission_id,soignant_id,etablissement_id,id,
+ 'RESOLU_ADMIN',admin_id,clock_timestamp() FROM public.factures_honoraires WHERE id=source_id;
+ INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details)
+ VALUES(admin_id,'ADMIN_PLATEFORME','LITIGE_RESOLUTION','litige',lid,
+ CASE WHEN action_fin='COMPLEMENT' THEN jsonb_build_object('evenement','FACTURE_COMPLEMENTAIRE_HONORAIRES',
+ 'facture_origine_id',source_id,'facture_complementaire_id',sortie_id,'delta_ttc',apres-avant)
+ ELSE jsonb_build_object('evenement','LITIGE_RESOLUTION_FINANCIERE','action_financiere',action_fin,
+ 'facture_id',source_id,'nouvelle_facture_id',CASE WHEN action_fin='ANNULER_REEMETTRE' THEN sortie_id END,
+ 'avoir_id',CASE WHEN action_fin='AVOIR' THEN sortie_id END,'montant_avant_ht',avant,'montant_apres_ht',apres) END);
+ RETURN lid;
+END;
+$audit$;
+DO $corrections_documentaires$
+DECLARE mid uuid:='f1070000-0000-4000-8000-000000000003';
+ original uuid:='f10700c0-0000-4000-8000-000000000001';
+ correction uuid:='f10700c0-0000-4000-8000-000000000002';
+ suivante uuid:='f10700c0-0000-4000-8000-000000000003';
+ cas text; lid uuid; verdict jsonb; refuse boolean; attendu_refus boolean; avant_pieces jsonb;
+ preuve_ui jsonb;
+BEGIN
+ FOREACH cas IN ARRAY ARRAY['remplacement','remplacements-successifs','recalculs-successifs',
+ 'recalcul-remplacement','avoir','complement','complement-recalcule',
+ 'sans-audit','audit-duplique','litige-ouvert','litige-autre-mission','litige-autre-partie',
+ 'audit-autre-source','audit-autre-periode','audit-montant-invalide','derive-apres-correction',
+ 'ancien-double-petit-avoir','avoir-annule','remplacement-branche-morte'] LOOP
+  BEGIN
+   DELETE FROM public.factures_honoraires WHERE mission_id=mid;
+   DELETE FROM public.mission_creneaux WHERE mission_id=mid;
+   UPDATE public.missions SET debut_le='2026-08-31 09:00Z',fin_le='2026-09-08 13:00Z',
+     net_a_payer=160,total_brut=160 WHERE id=mid;
+   INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause) VALUES
+     (mid,'2026-08-31 09:00Z','2026-08-31 13:00Z','PREVISIONNEL',false),
+     (mid,'2026-09-08 09:00Z','2026-09-08 13:00Z','PREVISIONNEL',false);
+   PERFORM pg_temp.doc107(original,NULL,'FACTURE','ORIGINALE',80,'EMISE');
+   PERFORM set_config('jolene.generate_invoice_context','true',true);
+   attendu_refus:=cas IN ('sans-audit','audit-duplique','litige-ouvert','litige-autre-mission',
+    'litige-autre-partie','audit-autre-source','audit-autre-periode','audit-montant-invalide',
+    'derive-apres-correction','ancien-double-petit-avoir','avoir-annule','remplacement-branche-morte');
+   IF cas='recalculs-successifs' THEN
+    UPDATE public.factures_honoraires SET montant_ht=50,montant_ttc=50,statut='BROUILLON' WHERE id=original;
+    PERFORM pg_temp.audit107('RECALCUL',original,NULL,80,60);
+    PERFORM pg_temp.audit107('RECALCUL',original,NULL,60,50);
+   ELSIF cas IN ('avoir','ancien-double-petit-avoir','avoir-annule') THEN
+    UPDATE public.factures_honoraires SET statut='PAYEE',
+      montant_ht=CASE WHEN cas='ancien-double-petit-avoir' THEN 320 ELSE 80 END,
+      montant_ttc=CASE WHEN cas='ancien-double-petit-avoir' THEN 320 ELSE 80 END WHERE id=original;
+    PERFORM pg_temp.doc107(correction,original,'AVOIR','AVOIR',
+      CASE WHEN cas='ancien-double-petit-avoir' THEN 1 ELSE 20 END,'EMISE');
+    lid:=pg_temp.audit107('AVOIR',original,correction,
+      CASE WHEN cas='ancien-double-petit-avoir' THEN 320 ELSE 80 END,
+      CASE WHEN cas='ancien-double-petit-avoir' THEN 319 ELSE 60 END);
+    IF cas='ancien-double-petit-avoir' THEN UPDATE public.missions SET net_a_payer=400 WHERE id=mid; END IF;
+    IF cas='avoir-annule' THEN
+      UPDATE public.factures_honoraires SET statut='ANNULEE' WHERE id=correction;
+      UPDATE public.missions SET net_a_payer=200 WHERE id=mid;
+    END IF;
+   ELSIF cas IN ('complement','complement-recalcule') THEN
+    UPDATE public.factures_honoraires SET statut='PAYEE' WHERE id=original;
+    PERFORM pg_temp.doc107(correction,original,'FACTURE','COMPLEMENT',10,'BROUILLON');
+    lid:=pg_temp.audit107('COMPLEMENT',original,correction,80,90);
+    IF cas='complement-recalcule' THEN
+      UPDATE public.factures_honoraires SET montant_ht=17,montant_ttc=17 WHERE id=correction;
+      PERFORM pg_temp.audit107('RECALCUL',correction,NULL,10,15);
+      PERFORM pg_temp.audit107('RECALCUL',correction,NULL,15,17);
+    END IF;
+   ELSE
+    UPDATE public.factures_honoraires SET statut='REMPLACEE' WHERE id=original;
+    PERFORM pg_temp.doc107(correction,original,'FACTURE','REMPLACEMENT',60,'EMISE');
+    lid:=pg_temp.audit107('ANNULER_REEMETTRE',original,correction,80,60);
+    IF cas='remplacements-successifs' THEN
+      UPDATE public.factures_honoraires SET statut='REMPLACEE' WHERE id=correction;
+      PERFORM pg_temp.doc107(suivante,correction,'FACTURE','REMPLACEMENT',70,'EMISE');
+      PERFORM pg_temp.audit107('ANNULER_REEMETTRE',correction,suivante,60,70);
+    ELSIF cas='recalcul-remplacement' THEN
+      UPDATE public.factures_honoraires SET montant_ht=50,montant_ttc=50,statut='BROUILLON' WHERE id=correction;
+      PERFORM pg_temp.audit107('RECALCUL',correction,NULL,60,50);
+    ELSIF cas='sans-audit' THEN DELETE FROM public.journaux_audit WHERE id_ressource=lid;
+    ELSIF cas='audit-duplique' THEN
+      INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details)
+      SELECT acteur_id,type_acteur,action,type_ressource,id_ressource,details FROM public.journaux_audit WHERE id_ressource=lid;
+    ELSIF cas='litige-ouvert' THEN UPDATE public.litiges SET statut='OUVERT' WHERE id=lid;
+    ELSIF cas='litige-autre-mission' THEN UPDATE public.litiges SET mission_id=gen_random_uuid() WHERE id=lid;
+    ELSIF cas='litige-autre-partie' THEN UPDATE public.litiges SET soignant_id=gen_random_uuid() WHERE id=lid;
+    ELSIF cas='audit-autre-source' THEN
+      UPDATE public.journaux_audit SET details=jsonb_set(details,'{facture_id}',to_jsonb(gen_random_uuid())) WHERE id_ressource=lid;
+    ELSIF cas='audit-autre-periode' THEN
+      UPDATE public.factures_honoraires SET periode_debut='2026-08-24',periode_fin='2026-08-30' WHERE id=original;
+    ELSIF cas='audit-montant-invalide' THEN
+      UPDATE public.journaux_audit SET details=jsonb_set(details,'{montant_avant_ht}','"invalide"') WHERE id_ressource=lid;
+    ELSIF cas='derive-apres-correction' THEN UPDATE public.missions SET net_a_payer=170 WHERE id=mid;
+    ELSIF cas='remplacement-branche-morte' THEN
+      -- Une ancienne branche morte ne doit pas convertir le net courant60
+      -- en nominal80 en lui réattribuant sa décision −20.
+      UPDATE public.factures_honoraires SET statut='ANNULEE' WHERE id=correction;
+      PERFORM pg_temp.doc107(suivante,NULL,'FACTURE','ORIGINALE',60,'EMISE');
+    END IF;
+   END IF;
+   PERFORM set_config('jolene.generate_invoice_context','',true);
+   SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) INTO avant_pieces FROM public.factures_honoraires f;
+   refuse:=false;
+   BEGIN verdict:=public.fn_calculer_montant_periode(mid,'2026-09-07','2026-09-08');
+   EXCEPTION WHEN check_violation THEN
+     IF SQLERRM<>'FACTURATION_HISTORIQUE_A_RECONCILIER' THEN RAISE; END IF;
+     refuse:=true;
+   END;
+   IF refuse IS DISTINCT FROM attendu_refus THEN RAISE EXCEPTION 'CORRECTION_%_REFUS_%_ATTENDU_%',cas,refuse,attendu_refus; END IF;
+   IF NOT refuse AND (verdict->>'montant_ht_periode')::numeric<>80 THEN RAISE EXCEPTION 'SEMAINE_SUIVANTE_MODIFIEE_%',cas; END IF;
+   IF avant_pieces IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.factures_honoraires f)
+     THEN RAISE EXCEPTION 'CORRECTION_DOCUMENTAIRE_MUTEE_%',cas; END IF;
+   IF cas='remplacement' THEN
+     INSERT INTO public.factures_honoraires(id,numero_facture,mission_id,soignant_id,etablissement_id,
+       type_document,nature_correction,statut,periode_debut,periode_fin,est_facture_finale_mission,
+       montant_ht,montant_ttc,quantite_heures_snapshot)
+     VALUES(suivante,'SUITE-APRES-CORRECTION',mid,'f1070000-0000-4000-8000-000000000001',
+       'f1070000-0000-4000-8000-000000000002','FACTURE','ORIGINALE','EMISE','2026-09-07','2026-09-08',true,
+       (verdict->>'montant_ht_periode')::numeric,(verdict->>'montant_ht_periode')::numeric,4);
+     preuve_ui:=jsonb_build_object('semaineSuivante',verdict,
+       'honoraires',(SELECT jsonb_agg(to_jsonb(f) ORDER BY periode_debut) FROM public.factures_honoraires f WHERE statut<>'REMPLACEE'),
+       'cumulHt',(SELECT sum(montant_ht) FROM public.factures_honoraires WHERE statut<>'REMPLACEE'));
+   END IF;
+   RAISE EXCEPTION SQLSTATE 'Z1070' USING MESSAGE='ROLLBACK_SYNTHETIC_CASE';
+  EXCEPTION WHEN SQLSTATE 'Z1070' THEN NULL;
+  END;
+  INSERT INTO observations VALUES('correction-'||cas,'true');
+ END LOOP;
+ INSERT INTO observations VALUES('correction-documentaire-ui',preuve_ui);
+END;
+$corrections_documentaires$;
+
 SELECT jsonb_build_object('qualification','FIX_VERIFIED','sourceSha','bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84',
  'mode','PG17_ISOLE_FONCTIONS_REELLES_SCHEMA_REDUIT','providerCalled',false,'realUiExecuted',false,
  'physicalHours',24,'invoicedHours',(SELECT sum(quantite_heures_snapshot) FROM public.factures_honoraires),
