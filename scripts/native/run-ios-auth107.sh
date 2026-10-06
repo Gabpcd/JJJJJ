@@ -124,6 +124,10 @@ from pathlib import Path
 p=Path(sys.argv[1]);data=json.loads((p/'api-report.json').read_text())
 checks={'xctestPassed':(p/'xctest-exit.txt').read_text().strip()=='0',
  'noUnhandledErrors':data['errors']==[],
+ # L'observateur Promise peut consommer un rejet natif avant l'événement
+ # unhandledrejection : chaque résultat de lock est donc contrôlé séparément.
+ 'noLockRejections':all(c.get('status') in ['normal-requested','normal-released','steal-requested','steal-released']
+   for c in data.get('observations',[]) if c.get('type')=='lock'),
  'twoRealSignups':sum(c.get('path')=='/auth/v1/signup' and c.get('status')=='200' for c in data['calls'])==2,
  'realRegistrationRpc':sum(c.get('path')=='/rest/v1/rpc/fn_demarrer_inscription' and c.get('status')=='200' for c in data['calls'])==2}
 (p/'summary.json').write_text(json.dumps({'mode':'SIMULATEUR_IOS_AUTH_ET_DB_STAGING_REELS','checks':checks,'diagnostics':data,'success':all(checks.values())},indent=2)+'\n')
