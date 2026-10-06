@@ -95,15 +95,20 @@ manifest=json.loads((source/'attachments/manifest.json').read_text())
 assert isinstance(manifest,list),'Format des pièces XCTest inconnu'
 wanted=['soignant-inscription-portrait-Explorer','etab-inscription-portrait-Publier',
  'etab-reconnexion-paysage-Accueil','soignant-session-apres-relancement']
-selected=[]
+selected=[]; representative_count=0
 for test in manifest:
  for a in test['attachments']:
   file=source/'attachments'/a['exportedFileName'];name=a['suggestedHumanReadableName']
   if file.suffix.lower() not in ['.png','.jpg','.jpeg','.heic'] or '-accessibilite' in name:continue
-  if not (any(marker in name for marker in wanted) or a['isAssociatedWithFailure']):continue
-  if len(selected)>=6:break
+  failure=a['isAssociatedWithFailure']
+  final='etat-final-meme-en-echec' in name
+  representative=any(marker in name for marker in wanted)
+  if not (failure or final or representative):continue
+  if not (failure or final):
+   if representative_count>=6:continue
+   representative_count+=1
   target=f'{len(selected)+1:02d}-{file.name}'
-  shutil.copyfile(file,dest/target);selected.append({'file':target,'name':name,'failure':a['isAssociatedWithFailure']})
+  shutil.copyfile(file,dest/target);selected.append({'file':target,'name':name,'failure':failure,'finalState':final})
 (dest/'captures.json').write_text(json.dumps(selected,ensure_ascii=False,indent=2)+'\n')
 shutil.copyfile(source/'xctest-summary.json',dest/'xctest-summary.json')
 PY
@@ -111,6 +116,10 @@ PY
     failed=1
   fi
   xcrun simctl io "$simulator" screenshot "$output/final.png" || failed=1
+  mkdir -p "$proof/review/$kind"
+  # Secours même si setUp échoue avant launch ou si xcresult n'a pas de capture.
+  # Cet écran est pris après XCTest/tearDown, pas à l'instant exact de l'échec.
+  if [ -f "$output/final.png" ]; then cp "$output/final.png" "$proof/review/$kind/final-after-xctest.png"; fi
   curl --fail --silent http://127.0.0.1:8904/__recette/bilan >"$output/api-report.json" || failed=1
   python3 - "$output" <<'PY' || failed=1
 import json,sys

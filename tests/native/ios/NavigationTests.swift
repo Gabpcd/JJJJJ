@@ -11,15 +11,15 @@ final class NavigationTests: XCTestCase {
 
   override func setUpWithError() throws {
     continueAfterFailure = false
-    XCUIDevice.shared.orientation = .portrait
     app.launchArguments += ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR"]
     app.launch()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30))
+    orient(landscape: false)
   }
 
   override func tearDownWithError() throws {
     preuve("etat-final-meme-en-echec")
     app.terminate()
-    XCUIDevice.shared.orientation = .portrait
   }
 
   func preuve(_ name: String) {
@@ -43,7 +43,7 @@ final class NavigationTests: XCTestCase {
     return element
   }
 
-  func later() {
+  func later(timeout: TimeInterval = 0) {
     let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     let alert = system.alerts.firstMatch
     if alert.exists {
@@ -54,8 +54,22 @@ final class NavigationTests: XCTestCase {
       preuve("permission-notifications-refusee")
       refuse.tap()
     }
-    let button = app.buttons["Plus tard"]
-    if button.waitForExistence(timeout: 2) { button.tap() }
+    // Le pré-prompt natif arrive 5 s après checkPermissions à partir de la
+    // deuxième session (DemandePermissionPush.tsx). Ne fermer que ce dialogue.
+    let prompt = app.otherElements.matching(NSPredicate(
+      format: "label == %@ OR label == %@",
+      "Recevoir les alertes missions ?, web dialog",
+      "Recevoir les notifications de votre établissement ?, web dialog"
+    )).firstMatch
+    if prompt.exists || (timeout > 0 && prompt.waitForExistence(timeout: timeout)) {
+      let button = prompt.buttons["Plus tard"]
+      visible(button)
+      XCTAssertTrue(button.isHittable, prompt.debugDescription)
+      preuve("prepermission-notifications-plus-tard")
+      button.tap()
+      let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: prompt)
+      XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed, app.debugDescription)
+    }
   }
 
   func closeKeyboardIfDone() {
@@ -79,11 +93,13 @@ final class NavigationTests: XCTestCase {
   }
 
   func navigationButton(_ button: XCUIElement) -> XCUIElement {
+    later()
     visible(button)
     if tablet {
-      for _ in 0..<6 { if button.isHittable { break }; navigation.swipeDown() }
-      for _ in 0..<12 { if button.isHittable { break }; navigation.swipeUp() }
+      for _ in 0..<6 { later(); if button.isHittable { break }; navigation.swipeDown() }
+      for _ in 0..<12 { later(); if button.isHittable { break }; navigation.swipeUp() }
     }
+    later()
     XCTAssertTrue(button.isHittable, app.debugDescription)
     return button
   }
@@ -146,8 +162,8 @@ final class NavigationTests: XCTestCase {
       reachable(app.switches.matching(NSPredicate(format: "label CONTAINS %@", "conditions générales de vente")).firstMatch).tap()
     }
     reachable(app.buttons["Créer mon compte"]).tap()
+    later(timeout: 7)
     visible(navigation, timeout: 30)
-    later()
   }
 
   func fiveTabs(_ role: String, phase: String, orientation: String) {
@@ -181,15 +197,31 @@ final class NavigationTests: XCTestCase {
     }
   }
 
+  func orient(landscape: Bool) {
+    later()
+    // Un simulateur neuf est déjà en portrait. Changer l'orientation avant
+    // le lancement peut expirer sans interface pour confirmer la rotation.
+    if (app.frame.width > app.frame.height) != landscape {
+      XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
+    }
+    let dimensions = NSPredicate { _, _ in
+      let size = self.app.frame.size
+      return size.width > 0 && size.height > 0 && (landscape ? size.width > size.height : size.height > size.width)
+    }
+    XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: dimensions, object: app)], timeout: 20), .completed, "Orientation demandée non appliquée")
+  }
+
   func orientations(_ role: String, phase: String) {
-    XCUIDevice.shared.orientation = .portrait
+    orient(landscape: false)
     fiveTabs(role, phase: phase, orientation: "portrait")
+    let portraitSize = XCUIScreen.main.screenshot().image.size
+    XCTAssertGreaterThan(portraitSize.height, portraitSize.width, "Orientation portrait non appliquée")
     if tablet {
-      XCUIDevice.shared.orientation = .landscapeLeft
+      orient(landscape: true)
       fiveTabs(role, phase: phase, orientation: "paysage")
       let size = XCUIScreen.main.screenshot().image.size
       XCTAssertGreaterThan(size.width, size.height, "Orientation iPad paysage non appliquée")
-      XCUIDevice.shared.orientation = .portrait
+      orient(landscape: false)
     }
   }
 
@@ -205,12 +237,15 @@ final class NavigationTests: XCTestCase {
       orientations(role, phase: "inscription")
       // Redémarrage complet de l'app : la session doit subsister sans resaisie.
       app.terminate(); app.launch()
+      XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30))
+      later(timeout: 7)
       visible(navigation, timeout: 30)
       nav(role == "etab" ? "Publier" : "Mes missions")
       preuve(role + "-session-apres-relancement")
       logout(role)
       credentials(role)
       reachable(app.buttons["Se connecter"]).tap()
+      later(timeout: 7)
       visible(navigation, timeout: 30)
       orientations(role, phase: "reconnexion")
       logout(role)
