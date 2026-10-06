@@ -16,17 +16,19 @@ import time
 
 PIN = os.environ.get('GITHUB_SHA')
 CID = 'f1040000-0000-4000-8000-000000000003'
-UID = 'f1040000-0000-4000-8000-000000000001'
+ROLE = os.environ.get('RECETTE_SIGNATURE_ROLE', 'soignant')
+assert ROLE in ['soignant','etablissement'], 'ROLE_REFUSED'
+UID = 'f1040000-0000-4000-8000-000000000001' if ROLE=='soignant' else 'f1040000-0000-4000-8000-000000000002'
 EMPTY = """SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace)=0
  AND (SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','extensions','private','vault','net'))=0
  AND (SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role'))=0"""
 PHOTO = f"""SELECT jsonb_build_object(
  'proofStatus',s.statut_signature,'proofSignedAt',s.signe_a,'otpValidatedAt',s.otp_valide_a,
  'proofUser',s.signataire_user_id,'documentHash',s.hash_document,'smsCount',s.sms_envoyes_count,
- 'contractSigned',c.signature_soignant,'contractStatus',c.statut,
+ 'contractSigned',c.signature_{ROLE},'contractStatus',c.statut,
  'syntheticHttpRequests',(SELECT count(*) FROM net.fixture_requests))
  FROM public.signatures_contrats s JOIN public.contrats_mission c ON c.id=s.contrat_id
- WHERE c.id='{CID}' AND s.signataire_role='soignant'"""
+ WHERE c.id='{CID}' AND s.signataire_role='{ROLE}'"""
 
 
 def build_fixture(product):
@@ -52,8 +54,9 @@ def build_fixture(product):
         body = re.search(r'\bAS\s+(\$[A-Za-z_0-9]*\$)(.*?)\1', definition, re.S).group(2)
         hashes[name] = hashlib.sha256(body.encode()).hexdigest()
     setup += f"""
-SELECT pg_temp.seed_signature('soignant');
-UPDATE public.soignants SET telephone='+33600000001' WHERE id='{UID}';
+SELECT pg_temp.seed_signature('{ROLE}');
+UPDATE public.soignants SET telephone='+33600000001';
+UPDATE public.etablissements SET telephone_contact='+33600000002';
 INSERT INTO vault.decrypted_secrets VALUES
  ('supabase_url','https://'||repeat('a',20)||'.supabase.co'),
  ('service_role_key','synthetic-ci-only-not-a-token');
@@ -117,7 +120,7 @@ def main():
     report = {'schemaVersion': 1, 'sourceSha': subprocess.check_output(['git','-C',str(product),'rev-parse','HEAD'],text=True).strip(), 'completed': False,
               'mode': 'PG17_EPHEMERAL_EXACT_FUNCTIONS_SQL_HTTP_DOUBLE',
               'providerCalls': 0, 'realTestBackend': False, 'concurrentSessions': 2,
-              'observerSessions': 1, 'isolation': 'READ COMMITTED',
+              'observerSessions': 1, 'isolation': 'READ COMMITTED', 'role':ROLE,
               'scope': 'Existing 98-case fixture: canonical tables/functions, contract guards and certificate policies; no full App RLS, Storage, pg_net, provider or physical device.'}
     env = {k: os.environ[k] for k in ['PATH', 'PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD'] if k in os.environ}
     stage = 'guard'
@@ -166,7 +169,7 @@ SELECT set_config('request.headers','{{}}',true);"""
             sender_pid = int(sender.run('SELECT pg_backend_pid()'))
             stage = 'hold-pending-signature-row'
             signer.run(f"SELECT id FROM public.contrats_mission WHERE id='{CID}' FOR UPDATE")
-            signer.run(f"SELECT id FROM public.signatures_contrats WHERE contrat_id='{CID}' AND signataire_role='soignant' FOR UPDATE")
+            signer.run(f"SELECT id FROM public.signatures_contrats WHERE contrat_id='{CID}' AND signataire_role='{ROLE}' FOR UPDATE")
             stage = 'resend-blocked-on-contract'
             sender.run('SET LOCAL ROLE authenticated')
             marker = sender.issue(f"SELECT public.fn_envoyer_otp_signature('{CID}')")

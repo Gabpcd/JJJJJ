@@ -19,7 +19,7 @@ PRODUCT = Path(os.environ.get('RECETTE_PRODUCT_DIR', str(ROOT))).resolve()
 PIN = 'bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84'
 NAMES = ['fn_calculer_montant_periode', 'fn_anti_seed_facture_honoraire',
          'fn_verrouiller_periode_facture_honoraires', 'fn_no_overlap_creneaux',
-         'fn_preparer_facture_commission_periode']
+         'fn_preparer_facture_commission_periode', 'fn_lister_missions_a_facturer']
 
 
 def git(*args):
@@ -57,8 +57,12 @@ def prepare(output):
         raise RuntimeError('FIXTURE_MARKER')
     migration = (PRODUCT / 'supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql').read_text()
     sql = fixture.replace(marker, '\n'.join(latest[name]['sql'] for name in NAMES) + '\n' + migration)
-    body = re.search(r'AS (\$[A-Za-z0-9_]*\$)(.*?)\1', migration, re.S).group(2)
-    latest['fn_calculer_montant_periode'] = {'body':body, 'file':'supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql','line':13}
+    baseline_calculator = latest['fn_calculer_montant_periode']['sql']
+    for name in ['fn_calculer_montant_periode', 'fn_lister_missions_a_facturer']:
+        definition = re.search(r'CREATE OR REPLACE FUNCTION public\.' + name + r'\(.*?AS \$function\$(.*?)\$function\$;', migration, re.S)
+        latest[name] = {'body':definition.group(1), 'sql':definition.group(0), 'file':'supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql','line':migration[:definition.start()].count('\n')+1}
+    sql = sql.replace('-- BASELINE_CALCULATOR_FOR_HISTORY', 'EXECUTE $historical$' + baseline_calculator + '$historical$;')
+    sql = sql.replace('-- CANDIDATE_CALCULATOR_AFTER_HISTORY', 'EXECUTE $candidate$' + latest['fn_calculer_montant_periode']['sql'] + '$candidate$;')
     output.mkdir(parents=True, exist_ok=True)
     (output / 'assembled.sql').write_text(sql)
     manifest = {'sourceSha': candidate, 'baselineSha': PIN, 'version': '1.0.7', 'build': 24,
@@ -88,7 +92,7 @@ def main():
     args = parser.parse_args()
     sql, manifest = prepare(args.output)
     if args.prepare_only:
-        print(json.dumps({'prepared': True, 'executed': False, 'sourceSha': PIN, 'functionCount': len(NAMES)}))
+        print(json.dumps({'prepared': True, 'executed': False, 'sourceSha': manifest['sourceSha'], 'functionCount': len(NAMES)}))
         return 0
     guard()
     env = {k: os.environ[k] for k in ['PATH', 'PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD'] if k in os.environ}
@@ -112,7 +116,7 @@ def main():
         raise RuntimeError('FINANCES_CORRECTION_NOT_VERIFIED')
     if report.get('routineBodyMd5') != {n: f['bodyMd5'] for n, f in manifest['functions'].items()}:
         raise RuntimeError('FINANCES_INSTALLED_FUNCTION_MISMATCH')
-    report.update(postgresMajor=17, rollbackVerified=True, functions=manifest['functions'])
+    report.update(sourceSha=manifest['sourceSha'], baselineSha=PIN, postgresMajor=17, rollbackVerified=True, functions=manifest['functions'])
     (args.output / 'receipt.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))
     return 0

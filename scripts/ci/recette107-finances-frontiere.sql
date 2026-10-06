@@ -47,6 +47,20 @@ CREATE TABLE public.journaux_audit (
  acteur_id uuid, type_acteur text, action text, type_ressource text,
  id_ressource uuid, details jsonb
 );
+ALTER TABLE public.missions
+ ADD COLUMN statut text DEFAULT 'TERMINEE',
+ ADD COLUMN est_arret_maladie boolean DEFAULT false,
+ ADD COLUMN mode_remuneration text DEFAULT 'TAUX_HORAIRE',
+ ADD COLUMN statut_validation_tva text DEFAULT 'CONFIRMEE',
+ ADD COLUMN nature_tva_prestation text DEFAULT 'SOIN_THERAPEUTIQUE_EXONERE',
+ ADD COLUMN nature_tva_confirmee_soignant text DEFAULT 'SOIN_THERAPEUTIQUE_EXONERE',
+ ADD COLUMN nature_tva_confirmee_par uuid DEFAULT 'f1070000-0000-4000-8000-000000000001',
+ ADD COLUMN remplacement_de_mission_id uuid;
+ALTER TABLE public.factures_honoraires ADD COLUMN annee_iso integer, ADD COLUMN numero_semaine_iso integer;
+CREATE TABLE public.soignants(id uuid PRIMARY KEY,mandat_facturation_signe boolean DEFAULT true,
+ mandat_facturation_version text DEFAULT '1.4',statut_tva_honoraires text DEFAULT 'FRANCHISE_EN_BASE');
+CREATE TABLE public.presences(mission_id uuid,valide_par_etablissement boolean,pointage_depart_le timestamptz,motif_litige text);
+INSERT INTO public.soignants(id) VALUES ('f1070000-0000-4000-8000-000000000001');
 -- SOURCE_FUNCTIONS_EXACTES
 CREATE TRIGGER trg_anti_seed_facture_honoraire BEFORE INSERT ON public.factures_honoraires
  FOR EACH ROW EXECUTE FUNCTION public.fn_anti_seed_facture_honoraire();
@@ -122,6 +136,7 @@ BEGIN
  FOREACH cas IN ARRAY ARRAY['minuit','arrondi','bases-differentes','heure-ete','heure-hiver','hors-periode','periode-invalide','sans-duree','timezone'] LOOP
   ok:=false;
   BEGIN
+   DELETE FROM public.factures_honoraires WHERE mission_id=mid;
    DELETE FROM public.mission_creneaux WHERE mission_id=mid;
    IF cas IN ('minuit','hors-periode','timezone') THEN
     INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause)
@@ -186,6 +201,115 @@ BEGIN
  END LOOP;
 END;
 $boundaries$;
+DO $evolution$
+DECLARE mid uuid:='f1070000-0000-4000-8000-000000000003';
+ a jsonb; b jsonb; bornes jsonb; liste jsonb; cas text; refuse boolean; ancien jsonb; correction numeric;
+BEGIN
+ FOREACH cas IN ARRAY ARRAY['hebdo-puis-pointage','majorations-evolutives','historique-double','historique-complement','fin-hors-planning'] LOOP
+  BEGIN
+   DELETE FROM public.factures_honoraires WHERE mission_id=mid;
+   DELETE FROM public.mission_creneaux WHERE mission_id=mid;
+   UPDATE public.missions SET debut_le='2026-08-31 09:00Z',fin_le='2026-09-08 17:00Z',
+     net_a_payer=320,total_brut=320,statut='EN_COURS' WHERE id=mid;
+   INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause) VALUES
+     (mid,'2026-08-31 09:00Z','2026-08-31 17:00Z','PREVISIONNEL',false),
+     (mid,'2026-09-08 09:00Z','2026-09-08 17:00Z','PREVISIONNEL',false),
+     (mid,'2026-08-31 09:00Z','2026-08-31 17:30Z','EFFECTIF',false);
+   IF cas='majorations-evolutives' THEN UPDATE public.missions SET net_a_payer=330 WHERE id=mid; END IF;
+   IF cas='historique-double' THEN
+    DELETE FROM public.mission_creneaux WHERE type_creneau='EFFECTIF';
+    INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause)
+     VALUES(mid,'2026-09-06 22:00Z','2026-09-07 06:00Z','PREVISIONNEL',false);
+    UPDATE public.missions SET net_a_payer=480,total_brut=480 WHERE id=mid;
+    -- BASELINE_CALCULATOR_FOR_HISTORY
+   END IF;
+   IF cas='historique-complement' THEN
+    UPDATE public.mission_creneaux SET fin='2026-08-31 17:00Z' WHERE type_creneau='EFFECTIF';
+   END IF;
+   a:=public.fn_calculer_montant_periode(mid,'2026-08-31','2026-09-06');
+   INSERT INTO public.factures_honoraires(id,numero_facture,mission_id,soignant_id,etablissement_id,
+    type_document,nature_correction,statut,periode_debut,periode_fin,est_facture_finale_mission,
+    montant_ht,montant_ttc,quantite_heures_snapshot)
+   VALUES('f1070009-0000-4000-8000-000000000009','EVOLUTION-S1',mid,
+    'f1070000-0000-4000-8000-000000000001','f1070000-0000-4000-8000-000000000002',
+    'FACTURE','ORIGINALE','EMISE','2026-08-31','2026-09-06',false,
+    (a->>'montant_ht_periode')::numeric,(a->>'montant_ht_periode')::numeric,(a->>'duree_periode_heures')::numeric);
+   IF cas IN ('majorations-evolutives','historique-double','historique-complement') THEN
+    UPDATE public.factures_honoraires SET statut='PAYEE' WHERE numero_facture='EVOLUTION-S1';
+   END IF;
+   SELECT to_jsonb(fh) INTO ancien FROM public.factures_honoraires fh WHERE numero_facture='EVOLUTION-S1';
+   IF cas='historique-double' THEN
+    -- CANDIDATE_CALCULATOR_AFTER_HISTORY
+   ELSE
+    INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause)
+     VALUES(mid,'2026-09-08 09:00Z','2026-09-08 17:00Z','EFFECTIF',false);
+    UPDATE public.missions SET net_a_payer=CASE WHEN cas='majorations-evolutives' THEN 340 ELSE 330 END,
+     statut='TERMINEE' WHERE id=mid;
+   END IF;
+   IF cas='historique-complement' THEN
+    UPDATE public.mission_creneaux SET fin='2026-08-31 17:30Z'
+     WHERE type_creneau='EFFECTIF' AND debut<'2026-09-07';
+   END IF;
+   IF cas IN ('majorations-evolutives','historique-double','historique-complement') THEN
+    refuse:=false;
+    BEGIN PERFORM public.fn_calculer_montant_periode(mid,'2026-09-07','2026-09-08');
+    EXCEPTION WHEN check_violation THEN
+      IF SQLERRM<>'FACTURATION_HISTORIQUE_A_RECONCILIER' THEN RAISE; END IF;
+      refuse:=true;
+    END;
+    IF NOT refuse THEN RAISE EXCEPTION 'INCOMPATIBLE_HISTORY_ACCEPTED'; END IF;
+    -- Fixtures documentaires équivalentes aux corrections du circuit existant.
+    -- Le contexte de génération est celui prévu par le vrai trigger anti-seed.
+    correction:=CASE cas WHEN 'historique-double' THEN -120
+      WHEN 'majorations-evolutives' THEN -0.16 ELSE 10 END;
+    PERFORM set_config('jolene.generate_invoice_context','true',true);
+    INSERT INTO public.factures_honoraires(id,numero_facture,mission_id,soignant_id,etablissement_id,
+      type_document,nature_correction,statut,periode_debut,periode_fin,est_facture_finale_mission,
+      facture_precedente_id,montant_ht,montant_ttc,quantite_heures_snapshot)
+    VALUES('f1070010-0000-4000-8000-000000000010','REGULARISATION-S1',mid,
+      'f1070000-0000-4000-8000-000000000001','f1070000-0000-4000-8000-000000000002',
+      CASE WHEN correction<0 THEN 'AVOIR' ELSE 'FACTURE' END,
+      CASE WHEN correction<0 THEN 'AVOIR' ELSE 'COMPLEMENT' END,
+      'EMISE','2026-08-31','2026-09-06',false,'f1070009-0000-4000-8000-000000000009',
+      abs(correction),abs(correction),NULL);
+    PERFORM set_config('jolene.generate_invoice_context','',true);
+    b:=public.fn_calculer_montant_periode(mid,'2026-09-07','2026-09-08');
+    IF (a->>'montant_ht_periode')::numeric+correction+(b->>'montant_ht_periode')::numeric
+      IS DISTINCT FROM (SELECT net_a_payer FROM public.missions WHERE id=mid)
+    THEN RAISE EXCEPTION 'RECONCILED_HISTORY_CANNOT_RESUME'; END IF;
+   ELSE
+    b:=public.fn_calculer_montant_periode(mid,'2026-09-07','2026-09-08');
+    IF (a->>'montant_ht_periode')::numeric<>170 OR (b->>'montant_ht_periode')::numeric<>160
+      OR (a->>'montant_ht_periode')::numeric+(b->>'montant_ht_periode')::numeric<>330
+    THEN RAISE EXCEPTION 'EVOLVING_MISSION_TOTAL_LOST'; END IF;
+   END IF;
+   IF (SELECT to_jsonb(fh) FROM public.factures_honoraires fh WHERE numero_facture='EVOLUTION-S1') IS DISTINCT FROM ancien
+    THEN RAISE EXCEPTION 'HISTORICAL_INVOICE_CHANGED'; END IF;
+   IF cas='fin-hors-planning' THEN
+    DELETE FROM public.factures_honoraires WHERE mission_id=mid;
+    DELETE FROM public.mission_creneaux WHERE debut>='2026-09-07';
+    UPDATE public.missions SET fin_le='2026-09-08 23:45Z',net_a_payer=335 WHERE id=mid;
+    INSERT INTO public.mission_creneaux(mission_id,debut,fin,type_creneau,est_pause) VALUES
+     (mid,'2026-09-08 16:00Z','2026-09-08 23:45Z','PREVISIONNEL',false),
+     (mid,'2026-09-08 16:00Z','2026-09-09 00:15Z','EFFECTIF',false);
+    bornes:=public.fn_calculer_montant_periode(mid);
+    liste:=public.fn_lister_missions_a_facturer('2026-09-10');
+    IF bornes->>'borne_fin_facturation' IS DISTINCT FROM '2026-09-09'
+      OR liste->'finales'->0->>'periode_fin' IS DISTINCT FROM '2026-09-09'
+    THEN RAISE EXCEPTION 'EFFECTIVE_END_NOT_LISTED'; END IF;
+    a:=public.fn_calculer_montant_periode(mid,'2026-08-31','2026-09-06');
+    b:=public.fn_calculer_montant_periode(mid,'2026-09-07','2026-09-09');
+    IF (a->>'montant_ht_periode')::numeric+(b->>'montant_ht_periode')::numeric<>335
+     OR (a->>'duree_periode_heures')::numeric+(b->>'duree_periode_heures')::numeric<>16.75
+    THEN RAISE EXCEPTION 'EFFECTIVE_OVERRUN_LOST'; END IF;
+   END IF;
+   RAISE EXCEPTION SQLSTATE 'Z1070' USING MESSAGE='ROLLBACK_SYNTHETIC_CASE';
+  EXCEPTION WHEN SQLSTATE 'Z1070' THEN NULL;
+  END;
+  INSERT INTO observations VALUES(cas,'true');
+ END LOOP;
+END;
+$evolution$;
 SELECT jsonb_build_object('qualification','FIX_VERIFIED','sourceSha','bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84',
  'mode','PG17_ISOLE_FONCTIONS_REELLES_SCHEMA_REDUIT','providerCalled',false,'realUiExecuted',false,
  'physicalHours',24,'invoicedHours',(SELECT sum(quantite_heures_snapshot) FROM public.factures_honoraires),
@@ -195,6 +319,6 @@ SELECT jsonb_build_object('qualification','FIX_VERIFIED','sourceSha','bf1c0ebf77
  'routineBodyMd5',(SELECT jsonb_object_agg(proname,md5(prosrc)) FROM pg_proc
    WHERE pronamespace='public'::regnamespace AND proname IN ('fn_calculer_montant_periode',
    'fn_anti_seed_facture_honoraire','fn_verrouiller_periode_facture_honoraires',
-   'fn_no_overlap_creneaux','fn_preparer_facture_commission_periode')),
+   'fn_no_overlap_creneaux','fn_preparer_facture_commission_periode','fn_lister_missions_a_facturer')),
  'cases',(SELECT jsonb_object_agg(name,value) FROM observations));
 ROLLBACK;
