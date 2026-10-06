@@ -65,3 +65,67 @@ jobs:
           path: preuves/${{ matrix.audit }}
           if-no-files-found: error
           retention-days: 14
+  frontend:
+    needs: invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [iphone, android, ipad-portrait, ipad-paysage, ordinateur]
+    env:
+      CI: 'true'
+      RECETTE_START_SERVER: '1'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8890
+      RECETTE_RESULTS_DIR: ${{ github.workspace }}/test-results/correctifs107-ui
+      CORRECTIFS107_RECEIPTS: ${{ github.workspace }}/preuves-ui
+      VITE_SUPABASE_URL: http://127.0.0.1:8890
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_jolene_simulation
+      VITE_SUPABASE_ANON_KEY: sb_publishable_jolene_simulation
+      VITE_STRIPE_PUBLISHABLE_KEY: ''
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      SENTRY_UPLOAD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-finances-${{ github.run_id }}
+          path: preuves-ui/finances
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-signature-soignant-${{ github.run_id }}
+          path: preuves-ui/signature-soignant
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-signature-etablissement-${{ github.run_id }}
+          path: preuves-ui/signature-etablissement
+      - run: npm ci
+      - run: npm run build
+      - name: Parcours visibles avec réponses issues des reçus PG17
+        run: >-
+          npx playwright test --config=e2e/playwright.recette-complete.config.ts
+          --project=${{ matrix.project }} --workers=1 --retries=0
+          e2e/recette-complete-correctifs107.spec.ts
+      - name: Conserver les écrans et assertions simulés
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: correctifs107-ui-${{ matrix.project }}-${{ github.run_id }}
+          path: |
+            test-results/correctifs107-ui/results.json
+            test-results/correctifs107-ui/**/*.png
+            test-results/correctifs107-ui/**/trace.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -122,7 +122,6 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
   deploy-functions:
-    needs: deploy-migrations
     name: Deploy edge functions
     runs-on: ubuntu-latest
     needs: deploy-migrations # Attendre que le schéma soit à jour avant de déployer le code qui l'utilise

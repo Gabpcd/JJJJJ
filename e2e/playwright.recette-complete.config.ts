@@ -9,6 +9,8 @@ const webkit = process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH;
 export default defineConfig({
   testDir: '.',
   testMatch: '**/recette-complete-*.spec.ts',
+  // Les réponses doivent provenir du banc PG17 du même commit.
+  testIgnore: process.env.CORRECTIFS107_RECEIPTS ? [] : ['**/recette-complete-correctifs107.spec.ts'],
   outputDir: sortie,
   timeout: 90_000,
   expect: { timeout: 12_000 },

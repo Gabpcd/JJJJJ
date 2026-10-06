@@ -315,6 +315,8 @@ SELECT jsonb_build_object('qualification','FIX_VERIFIED','sourceSha','bf1c0ebf77
  'physicalHours',24,'invoicedHours',(SELECT sum(quantite_heures_snapshot) FROM public.factures_honoraires),
  'missionHt',480,'invoicedHt',(SELECT sum(montant_ht) FROM public.factures_honoraires),
  'commissionHt',(SELECT sum(montant_ht) FROM public.factures),'commissionTtc',(SELECT sum(montant_ttc) FROM public.factures),
+ 'honoraires',(SELECT jsonb_agg(to_jsonb(f) ORDER BY periode_debut) FROM public.factures_honoraires f),
+ 'commissions',(SELECT jsonb_agg(to_jsonb(f) ORDER BY periode_debut) FROM public.factures f),
  'invoiceCount',(SELECT count(*) FROM public.factures_honoraires),'commissionCount',(SELECT count(*) FROM public.factures),
  'routineBodyMd5',(SELECT jsonb_object_agg(proname,md5(prosrc)) FROM pg_proc
    WHERE pronamespace='public'::regnamespace AND proname IN ('fn_calculer_montant_periode',
