@@ -33,6 +33,17 @@ final class Auth107Tests: XCTestCase {
     XCTAssertTrue(element.waitForExistence(timeout: timeout), app.debugDescription)
   }
 
+  func attendreNavigation() {
+    // Le dialogue peut arriver après le premier contrôle, une fois le plugin
+    // natif chargé. Il masque alors la navigation dans l'arbre accessible.
+    let end = Date().addingTimeInterval(30)
+    while Date() < end {
+      later()
+      if navigation.waitForExistence(timeout: 1) { return }
+    }
+    XCTFail("Navigation absente après fermeture des pré-prompts : " + app.debugDescription)
+  }
+
   func reachable(_ element: XCUIElement) -> XCUIElement {
     visible(element)
     for _ in 0..<6 {
@@ -163,7 +174,7 @@ final class Auth107Tests: XCTestCase {
     }
     reachable(app.buttons["Créer mon compte"]).tap()
     later(timeout: 7)
-    visible(navigation, timeout: 30)
+    attendreNavigation()
   }
 
   func fiveTabs(_ role: String, phase: String, orientation: String) {
@@ -238,6 +249,12 @@ final class Auth107Tests: XCTestCase {
     preuve(role + "-" + phase + "-accueil")
   }
   func testAuthReellePremiereInscriptionEtReprise() throws {
+    // Diagnostic du tout premier démarrage d'un simulateur CI neuf : mesurer
+    // l'attente, sans relancer l'app ni effacer son stockage pour la débloquer.
+    let initial = Date()
+    visible(app.buttons["Créer un compte soignant"], timeout: 90)
+    let timing = XCTAttachment(string: "Premier écran accessible après \(Date().timeIntervalSince(initial)) secondes d'attente XCTest")
+    timing.name = "premier-ecran-delai"; timing.lifetime = .keepAlways; add(timing)
     for role in ["soignant", "etab"] {
       signup(role)
       accueil(role, phase: "inscription")
@@ -247,13 +264,13 @@ final class Auth107Tests: XCTestCase {
       app.terminate(); app.launch()
       XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30))
       later(timeout: 7)
-      visible(navigation, timeout: 30)
+      attendreNavigation()
       accueil(role, phase: "relancement")
       logout(role)
       credentials(role)
       reachable(app.buttons["Se connecter"]).tap()
       later(timeout: 7)
-      visible(navigation, timeout: 30)
+      attendreNavigation()
       accueil(role, phase: "reconnexion")
       logout(role)
     }

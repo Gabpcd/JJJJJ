@@ -50,6 +50,16 @@ if(url.hostname==='mejpriaetwgtcstbgfid.supabase.co')report({type:'request',path
 return response;}catch(error){throw error;}};
 window.addEventListener('error',e=>report({type:'error',message:e.message}));
 window.addEventListener('unhandledrejection',e=>report({type:'rejection',message:String(e.reason)}));
+// Observation seule : conserver les options, le callback et la promesse natifs.
+if(navigator.locks){const originalRequest=navigator.locks.request.bind(navigator.locks);
+navigator.locks.request=(name,...args)=>{const start=Date.now(),options=typeof args[0]==='object'?args[0]:{};
+const path=String(name),status=options.steal?'steal':'normal';
+report({type:'lock',path,status:status+'-requested',duration:0});
+const pending=originalRequest(name,...args);pending.then(
+()=>report({type:'lock',path,status:status+'-released',duration:Date.now()-start}),
+error=>report({type:'lock',path,status:status+'-'+error.name,duration:Date.now()-start}));return pending;};}
+report({type:'lifecycle',status:'html-loaded',duration:performance.now()});
+window.addEventListener('load',()=>report({type:'lifecycle',status:'window-loaded',duration:performance.now()}));
 window.addEventListener('securitypolicyviolation',e=>report({type:'csp',blockedURI:e.blockedURI,directive:e.violatedDirective}));</script>`;
 assert(html.includes('<head>'));
 await writeFile('dist/index.html', html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${csp}">${monitor}`));

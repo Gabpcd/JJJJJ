@@ -94,6 +94,8 @@ selected=[]; representative_count=0
 for test in manifest:
  for a in test['attachments']:
   file=source/'attachments'/a['exportedFileName'];name=a['suggestedHumanReadableName']
+  if name.startswith('premier-ecran-delai') and file.suffix.lower()=='.txt':
+   shutil.copyfile(file,dest/'premier-ecran-delai.txt')
   if file.suffix.lower() not in ['.png','.jpg','.jpeg','.heic'] or '-accessibilite' in name:continue
   failure=a['isAssociatedWithFailure']
   final='etat-final-meme-en-echec' in name

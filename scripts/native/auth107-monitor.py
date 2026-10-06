@@ -2,7 +2,7 @@
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json,os,re
 from pathlib import Path
-calls=[];errors=[]
+calls=[];errors=[];observations=[]
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_OPTIONS(self): self.reply({})
@@ -11,7 +11,7 @@ class Handler(BaseHTTPRequestHandler):
   for k,v in {'Content-Type':'application/json','Content-Length':str(len(payload)),'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'}.items():self.send_header(k,v)
   self.end_headers();self.wfile.write(payload)
  def do_GET(self):
-  if self.path=='/__recette/bilan':self.reply({'calls':calls,'errors':errors})
+  if self.path=='/__recette/bilan':self.reply({'calls':calls,'errors':errors,'observations':observations})
   else:self.reply({},404)
  def do_POST(self):
   if self.path!='/__recette/erreur':return self.reply({},404)
@@ -21,6 +21,7 @@ class Handler(BaseHTTPRequestHandler):
   for k in ['type','message','path','status','duration','directive']:
    if k in value:
     safe[k]=re.sub(r'eyJ[A-Za-z0-9_\-.]+','[REDACTED]',str(value[k]))[:500]
-  (calls if safe.get('type')=='request' else errors).append(safe)
+  target=calls if safe.get('type')=='request' else observations if safe.get('type') in ['lock','lifecycle'] else errors
+  target.append(safe)
   self.reply({})
 ThreadingHTTPServer(('127.0.0.1',8904),Handler).serve_forever()

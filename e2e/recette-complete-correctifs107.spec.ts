@@ -19,6 +19,11 @@ async function fermerReseau(page:Page) {
   await page.clock.setFixedTime(new Date(now));
   await page.route('**/*',async route=>{
     const r=route.request(),u=new URL(r.url());
+    // Le module facturation charge Stripe.js dès son import. Ce double local
+    // suffit pour consulter les factures ; aucune API Stripe n'est appelée.
+    if(u.hostname==='js.stripe.com' && r.method()==='GET' && r.resourceType()==='script') {
+      return route.fulfill({contentType:'application/javascript',body:'window.Stripe = function(){ return {}; };'});
+    }
     if(!['127.0.0.1','localhost'].includes(u.hostname)||/^\/(functions|storage)\//.test(u.pathname)) {
       interdits.push(`${r.method()} ${u.origin}${u.pathname}`);return route.abort();
     }
