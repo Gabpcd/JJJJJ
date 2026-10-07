@@ -4,7 +4,7 @@ import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { b23LegacyWitnessCaptureSql } from '../catalogue-semantics-probe.mjs';
+import { b23LegacyWitnessCaptureSql,b21WitnessCaptureSql } from '../catalogue-semantics-probe.mjs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
 import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,B23_ANCHOR_CASES,validateB23AnchorWitnesses,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
 import { relation,expression,capture,b24ColumnFixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
@@ -270,4 +270,14 @@ test('witness SQL uses the same native capture with a fixed synthetic schema and
   assert.ok(!sql.includes('-- B21_CAPTURE_FUNCTION'));assert.ok(sql.includes("current_database()<>'jolene_b21_semantics_test'"));assert.ok(sql.includes("current_setting('server_version_num')<>'170006'"));
  }
  assert.throws(()=>buildB21NativeWitnessSql('foreign',''),/B_SEMANTICS_WITNESS/);assert.throws(()=>decodeB21Witness(Buffer.from('{}\n{}')),/B_SEMANTICS_WITNESS/);
+});
+
+test('native witness interpolation preserves regex dollar anchors literally without duplicating SQL',()=>{
+ for(const kind of ['acl','expression']){
+  const original=readFileSync(new URL('../catalogue-semantics-'+kind+'-witness.sql',import.meta.url),'utf8');
+  const sql=buildB21NativeWitnessSql(kind,original);
+  const capture=b21WitnessCaptureSql(kind==='acl'?'b21_fixture':'b21_expr')+(kind==='expression'?b23LegacyWitnessCaptureSql():'');
+  assert.equal(sql,original.split('-- B21_CAPTURE_FUNCTION\n').join(capture));
+  assert.equal(sql.split("t.typname ~ '^[a-z_][a-z0-9_]*$'").length-1,1);
+ }
 });

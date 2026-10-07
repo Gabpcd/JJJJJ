@@ -58,7 +58,7 @@ export function projectB21WitnessFailure(reason,sql){return {schemaVersion:1,rea
  ...(reason==='SQL'&&sql!==undefined?{sql:projectB21SqlFailure(sql)}:{})};}
 export function buildB21NativeWitnessSql(kind,original){
  if(!['acl','expression'].includes(kind)||typeof original!=='string'||original.split('-- B21_CAPTURE_FUNCTION\n').length!==2)throw b21WitnessFailure('CONTEXT');
- return original.replace('-- B21_CAPTURE_FUNCTION\n',b21WitnessCaptureSql(kind==='acl'?'b21_fixture':'b21_expr')+(kind==='expression'?b23LegacyWitnessCaptureSql():''));
+ return original.replace('-- B21_CAPTURE_FUNCTION\n',()=>b21WitnessCaptureSql(kind==='acl'?'b21_fixture':'b21_expr')+(kind==='expression'?b23LegacyWitnessCaptureSql():''));
 }
 export function decodeB21Witness(bytes){
  try{if(!Buffer.isBuffer(bytes)||bytes.length>8*1024*1024||!bytes.equals(Buffer.from(bytes.toString('utf8'))))throw Error();
