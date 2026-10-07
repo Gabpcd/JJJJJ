@@ -1,7 +1,7 @@
 import { ORIGINE_UI } from './dashboard-ui-contract.mjs';
 import { STAGING_URL } from './prepare-load-fixtures.mjs';
 
-const phases = new Set(['backend','preview','browser','page','login','dashboard','reload','cleanup']);
+const phases = new Set(['backend','preview','browser','page','login','dashboard','reload','coupure','reprise','cleanup']);
 const methodes = new Set(['GET','HEAD','POST','OPTIONS','PATCH','PUT','DELETE']);
 const chemins = new Map([
   ['/auth/v1/token','auth-token'], ['/auth/v1/user','auth-user'],
