@@ -172,10 +172,26 @@ test('le canari de chaque profil refuse le voisin, un profil validé et une erre
       t.reponses.push({ body }); t.module.default(data); assert.equal(t.verifications.at(-1).ok, false);
     }
   }
-  assert.equal(t.compteurs.length, 0);
+  assert.equal(t.compteurs.filter(c => c.name === 'dashboard_reponses_profil').length, 0);
+  assert.equal(t.compteurs.filter(c => c.name === 'dashboard_echec_contrat_200').length, 30);
   assert.equal(t.latences.length, 30, 'Les latences des réponses refusées restent mesurées.');
   assert.throws(() => t.module.default({ sessions: [] }));
   for (const vu of [0, -1, 1.5, undefined]) assert.throws(() => slotDashboard(vu));
+});
+test('E garde les contrôles rouges et compte chaque échec sans donnée de réponse', async () => {
+  const t = await charger('05-dashboard-concurrent'); preflightPool(t); const data = t.module.setup();
+  const cas = [[0,'transport'],[200,'contrat_200'],[401,'http_401'],[429,'http_429'],[502,'http_502'],[503,'http_503'],[418,'autre_statut']];
+  for (const [status,classe] of cas) {
+    globalThis.__VU = 1;
+    t.reponses.push({ status, body: { message: 'CANARI_PRIVE_NE_PAS_PUBLIER' } });
+    t.module.default(data);
+    assert.equal(t.verifications.at(-1).ok, false);
+    assert.deepEqual(t.compteurs.at(-1), { name: `dashboard_echec_${classe}`, value: 1, tags: undefined });
+  }
+  assert(!JSON.stringify(t.compteurs).includes('CANARI_PRIVE'));
+  for(const status of ['401', 'CANARI_PRIVE', null, undefined, -1, 10000]) assert.equal(t.module.classerEchecDashboard(status),'autre_statut');
+  assert.deepEqual(t.module.options.thresholds.checks,['rate==1']);
+  assert.deepEqual(t.module.options.thresholds['http_req_failed{name:rpc_dashboard}'],['rate<0.01']);
 });
 for (const [lettre, nom] of [['D', '04-candidatures-simultanees'], ['F', '06-cron-weekly-invoicing']]) {
   test(`${lettre} échoue explicitement avant toute requête, y compris sans setup`, async () => {

@@ -23,6 +23,16 @@ import { SUPABASE_URL, authedHeaders, loginDashboardFixture } from '../helpers/a
 import { dashboardFixtureValide, exigerDashboardMetier } from '../helpers/contrats.js';
 
 const reponsesParProfil = new Counter('dashboard_reponses_profil');
+// Un échec isolé doit rester explicable sans publier réponse, compte ou jeton.
+// Classes fixes : aucun message fournisseur ni statut libre dans les métriques.
+const statutsDiagnostic = [400, 401, 403, 404, 408, 409, 422, 429, 500, 502, 503, 504];
+const classesDiagnostic = ['transport', 'contrat_200', 'autre_statut', ...statutsDiagnostic.map(s => `http_${s}`)];
+const echecsDiagnostic = Object.fromEntries(classesDiagnostic.map(c => [c, new Counter(`dashboard_echec_${c}`)]));
+export function classerEchecDashboard(statut) {
+  if (statut === 0) return 'transport';
+  if (statut === 200) return 'contrat_200';
+  return statutsDiagnostic.includes(statut) ? `http_${statut}` : 'autre_statut';
+}
 const latencesParProfil = Array.from({ length: NOMBRE_PROFILS_DASHBOARD }, (_, slot) =>
   new Trend(`dashboard_duree_profil_${slot}`, true));
 const seuilsProfils = Object.fromEntries(Array.from({ length: NOMBRE_PROFILS_DASHBOARD }, (_, slot) =>
@@ -84,6 +94,7 @@ export default function (data) {
     },
   });
   if (valide) reponsesParProfil.add(1, { slot: String(slot) });
+  else echecsDiagnostic[classerEchecDashboard(res.status)].add(1);
   sleep(0.5);
 }
 

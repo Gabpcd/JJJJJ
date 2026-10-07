@@ -4,10 +4,19 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { configurationUI, contratEcritures, ORIGINE_UI, projectionEtatUI, requeteUIAutorisee, sqlEtatUI, sqlGardeUI, verifierEtatUI, verifierGardeUI } from '../../scripts/ci/dashboard-ui-contract.mjs';
 import { creerDiagnosticUI, bilanCleanupUI } from '../../scripts/ci/dashboard-ui-diagnostic.mjs';
-import { dashboardUIValide, preparerHtmlPreview } from '../../scripts/ci/recette-dashboard-staging.mjs';
+import { dashboardUIValide, preparerHtmlPreview, creerCoupuresDashboard } from '../../scripts/ci/recette-dashboard-staging.mjs';
 import { manifestePoolDashboard } from '../../scripts/ci/prepare-dashboard-pool.mjs';
 import { STAGING_REF, STAGING_URL } from '../../scripts/ci/prepare-load-fixtures.mjs';
 const membres = manifestePoolDashboard('ui-123-1').membres.map(m => ({ slot:m.slot,userId:m.userId,email:m.email,runId:m.runId,password:`Aa1!canari-UI-prive-${m.slot}-aucun-artifact` }));
+test('les coupures se limitent au RPC staging puis cessent avant la reprise réelle',()=>{
+ const p=creerCoupuresDashboard(),url=STAGING_URL+'/rest/v1/rpc/fn_dashboard_soignant_complet';
+ for(const [u,m] of [[url,'GET'],[url+'?secret=canari','POST'],[url.replace(STAGING_REF,'production'),'POST'],[STAGING_URL+'/auth/v1/token','POST']])assert.equal(p.interrompre(u,m),false);
+ assert.throws(()=>p.preuve());assert.equal(p.interrompre(url,'POST'),true);assert.equal(p.interrompre(url,'POST'),false);
+ p.phase('persistante');assert.equal(p.interrompre(url,'POST'),true);assert.equal(p.interrompre(url,'POST'),true);
+ assert.throws(()=>p.preuve());p.phase('terminee');assert.equal(p.interrompre(url,'POST'),false);
+ assert.deepEqual(p.preuve(),{coupure_initiale_simulee:1,coupures_persistantes_simulees:2,reprise_automatique:true,bouton_reessayer:true,recharge_apres_reprise:true});
+ assert.throws(()=>p.phase('inconnue'));assert(!JSON.stringify(p.preuve()).includes('canari'));
+});
 const env = { STAGING_SUPABASE_PROJECT_REF:STAGING_REF, STAGING_SUPABASE_URL:STAGING_URL, STAGING_SUPABASE_ACCESS_TOKEN:'secret-test',
   STAGING_SUPABASE_ANON_KEY:'anon-test', LOAD_TEST_RUN_ID:'ui-123-1', LOAD_DASHBOARD_POOL_JSON:JSON.stringify(membres) };
 const avant = [0,1].map(slot => ({ slot,auth:1,profils:1,preferences:1,preferences_off:1,sessions:1,identites:1,

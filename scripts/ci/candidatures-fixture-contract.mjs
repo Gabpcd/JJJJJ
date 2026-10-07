@@ -28,9 +28,11 @@ export function configurationD(env) {
 export function utilisateurDValide(u,m,i) { const a=m.membres[i]; return u?.id===a.userId && u.email===a.email && u.app_metadata?.role===a.role
   && u.app_metadata.est_compte_test===true && u.app_metadata.is_test_playwright===true && u.app_metadata.load_fixture_kind==='CANDIDATURES_D2' && u.app_metadata.load_fixture_run===m.runId && (i!==2 || u.app_metadata.etablissement_id===a.userId); }
 export const tablesD=['auth.users','public.soignants','public.etablissements','public.missions','public.mission_creneaux','public.candidatures','public.notifications','public.preferences_notifications','public.rate_limits','public.journaux_audit'];
-// Snapshot staging lu le 30/09/2026 ; aucune actualisation automatique. Le
+// Snapshot staging relu le 07/10/2026 via le contexte Management par défaut
+// (pg_catalog, public, extensions), après alignement 1.0.7 (run 37655471894). Le
 // hash large bloque aussi une modification d'un helper indirect non inventorié.
-export const catalogueD={schema:'c08ea254b6046c8e722425d54ca440f6',fonctions:'61e759a93b1cd36ad15c84c8799ef425',triggers:'c07c6a042974d351870d2e16a4b777fa'};
+// Aucune actualisation automatique ni acceptation d'un second catalogue.
+export const catalogueD={schema:'50ffb897282c56accac47939fd14f570',fonctions:'a07506f6aa41e694f45df63f439cb611',triggers:'4d397cb130fb538a265c742a3cc562ce'};
 export const sqlSchemaD=`SELECT md5(jsonb_build_object(
  'colonnes',(SELECT jsonb_agg(jsonb_build_array(a.attrelid::regclass::text,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,pg_get_expr(d.adbin,d.adrelid)) ORDER BY a.attrelid::regclass::text,a.attnum) FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attnum>0 AND NOT a.attisdropped AND a.attrelid IN (${tablesD.map(t=>`${literal(t)}::regclass`).join(',')})),
  'contraintes',(SELECT jsonb_agg(jsonb_build_array(c.conrelid::regclass::text,c.conname,pg_get_constraintdef(c.oid)) ORDER BY c.conrelid::regclass::text,c.conname) FROM pg_constraint c WHERE c.conrelid IN (${tablesD.map(t=>`${literal(t)}::regclass`).join(',')}) OR c.confrelid IN (${tablesD.map(t=>`${literal(t)}::regclass`).join(',')}))

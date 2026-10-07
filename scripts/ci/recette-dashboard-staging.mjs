@@ -29,7 +29,7 @@ export function dashboardUIValide(data, membre) {
     && data.heures_semaine === 0 && data.notifs_non_lues === 0
     && ['nb_missions','brut_total','net_total'].every(k => data.gains_mois[k] === 0);
 }
-export async function parcourirDashboard(page, membre, { expect, verifierReponse, capturer = async () => {}, marquerPhase = () => {} }) {
+export async function parcourirDashboard(page, membre, { expect, verifierReponse, capturer = async () => {}, marquerPhase = () => {}, piloterPanne }) {
   const reponseDashboard = () => page.waitForResponse(r => r.url().endsWith('/rest/v1/rpc/fn_dashboard_soignant_complet') && r.request().method() === 'POST');
   marquerPhase('page');
   await page.goto('/connexion');
@@ -51,6 +51,40 @@ export async function parcourirDashboard(page, membre, { expect, verifierReponse
   await page.waitForLoadState('networkidle');
   await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveCount(0);
   await capturer('recharge');
+  if (piloterPanne) {
+    marquerPhase('coupure'); piloterPanne('persistante');
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Impossible de charger ton tableau de bord', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Réessayer', exact: true })).toBeVisible();
+    await capturer('coupure');
+    marquerPhase('reprise'); piloterPanne('terminee');
+    const [reprise] = await Promise.all([reponseDashboard(), page.getByRole('button', { name: 'Réessayer', exact: true }).click()]);
+    await verifierReponse(reprise, membre);
+    await expect(page.locator('main').getByRole('heading', { level: 1 })).toContainText('Recette');
+    await expect(page).toHaveURL(/\/soignant\/tableau-de-bord$/);
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveCount(0);
+    await capturer('reprise');
+    const [rechargeReprise] = await Promise.all([reponseDashboard(), page.reload()]);
+    await verifierReponse(rechargeReprise, membre);
+    await expect(page.locator('main').getByRole('heading', { level: 1 })).toContainText('Recette');
+    await capturer('reprise-recharge');
+  }
+}
+
+/** Ne coupe que le RPC de lecture nommé, après son contrôle d'autorisation. */
+export function creerCoupuresDashboard() {
+  let phase = 'initiale', initiales = 0, persistantes = 0;
+  return {
+    phase(p) { if (!['persistante','terminee'].includes(p)) throw new Error('Phase de coupure invalide.'); phase=p; },
+    interrompre(url, methode) {
+      if (url !== `${STAGING_URL}/rest/v1/rpc/fn_dashboard_soignant_complet` || methode !== 'POST') return false;
+      if (phase === 'initiale' && initiales === 0) { initiales++; return true; }
+      if (phase === 'persistante') { persistantes++; return true; }
+      return false;
+    },
+    preuve() { if (initiales !== 1 || persistantes < 2 || persistantes > 10 || phase !== 'terminee') throw new Error('Coupures non prouvées.');
+      return { coupure_initiale_simulee: initiales, coupures_persistantes_simulees: persistantes, reprise_automatique: true, bouton_reessayer: true, recharge_apres_reprise: true }; },
+  };
 }
 
 async function lireSQL(query, env) {
@@ -100,7 +134,7 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
     browser = await webkit.launch();
     for (const [slot, appareil] of ['iPhone 13','iPad Pro 11'].entries()) {
       diagnostic.phase('browser', slot);
-      const membre = membres[slot], anomalies = [], lectures = [];
+      const membre = membres[slot], anomalies = [], lectures = [], coupures = creerCoupuresDashboard();
       // Contextes privés en mémoire : aucun storageState, trace, vidéo ou HAR.
       const contexte = await browser.newContext({ ...devices[appareil], baseURL: ORIGINE_UI, locale: 'fr-FR', timezoneId: 'Europe/Paris', serviceWorkers: 'block' });
       try {
@@ -112,6 +146,7 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
           if (!requeteUIAutorisee({ url: r.url(), method: r.method(), body }, membre)) { anomalies.push('requete-refusee'); diagnostic.requete({ url: r.url(), method: r.method(), statut: 'refusee' }); return route.abort(); }
           const u = new URL(r.url());
           if (u.origin === STAGING_URL) lectures.push({ methode: r.method(), endpoint: u.pathname });
+          if (coupures.interrompre(r.url(), r.method())) return route.abort('connectionreset');
           return route.continue();
         });
         contexte.on('response', response => diagnostic.requete({ url: response.url(), method: response.request().method(), statut: response.status() }));
@@ -120,6 +155,7 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
         page.setDefaultTimeout(20_000); page.setDefaultNavigationTimeout(25_000);
         page.on('pageerror', () => { anomalies.push('javascript'); diagnostic.javascript(); }); // Ne jamais sérialiser une exception navigateur.
         await parcourirDashboard(page, membre, { expect, marquerPhase: phase => diagnostic.phase(phase, slot),
+          piloterPanne: phase => coupures.phase(phase),
           verifierReponse: async response => {
             if (response.status() !== 200 || !dashboardUIValide(await response.json(), membre)) throw new Error('Dashboard réel différent du profil minimal attendu.');
           },
@@ -131,16 +167,16 @@ export async function executerRecetteDashboard({ action = 'run', env = process.e
         });
         const writes = lectures.filter(r => ['/rest/v1/rpc/fn_audit_connexion','/rest/v1/rpc/fn_maj_activite_soignant'].includes(r.endpoint));
         if (anomalies.length || writes.length !== 2 || new Set(writes.map(r => r.endpoint)).size !== 2) throw new Error('Écritures navigateur UI inattendues.');
-        preuves.push({ slot, appareil, connexion_formulaire: true, dashboard_identite: true, recharge: true, anomalies: 0,
+        preuves.push({ slot, appareil, connexion_formulaire: true, dashboard_identite: true, recharge: true, anomalies: 0, ...coupures.preuve(),
           lectures: [...new Set(lectures.map(r => `${r.methode} ${r.endpoint}`))].sort() });
       } finally { await contexte.close(); }
     }
     diagnostic.phase('backend', null);
     const apres = await lireSQL(sqlEtatUI(membres), env); sauver('apres', projectionEtatUI(apres)); verifierEtatUI(apres, avant);
-    sauver('resultat', { mode: 'staging-reel', succes: true, preuves, diagnostic: diagnostic.resultat() }); succes = true;
+    sauver('resultat', { mode: 'staging-reel-avec-coupures-reseau-simulees', succes: true, preuves, diagnostic: diagnostic.resultat() }); succes = true;
   } finally {
     // Écrire avant la fermeture pour conserver la phase même si le navigateur tombe.
-    if (!succes) sauver('resultat', { mode: 'staging-reel', succes: false, profils_valides: preuves.length, diagnostic: diagnostic.resultat() });
+    if (!succes) sauver('resultat', { mode: 'staging-reel-avec-coupures-reseau-simulees', succes: false, profils_valides: preuves.length, diagnostic: diagnostic.resultat() });
     try { await browser?.close(); } finally { preview?.kill('SIGTERM'); }
   }
 }
