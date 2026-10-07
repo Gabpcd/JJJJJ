@@ -46,11 +46,21 @@ final class Auth107Tests: XCTestCase {
 
   func reachable(_ element: XCUIElement) -> XCUIElement {
     visible(element)
+    // WKWebView peut déclarer hittable un bouton situé sous la navigation
+    // fixe. Un tap utilisateur doit viser le bouton entièrement dégagé.
+    func uncovered() -> Bool {
+      let frame = element.frame
+      var viewport = app.frame.insetBy(dx: 8, dy: 8)
+      if !tablet && navigation.exists {
+        viewport.size.height = max(0, navigation.frame.minY - 8 - viewport.minY)
+      }
+      return element.isHittable && !frame.isEmpty && viewport.contains(frame)
+    }
     for _ in 0..<6 {
-      if element.isHittable { return element }
+      if uncovered() { return element }
       app.swipeUp()
     }
-    XCTAssertTrue(element.isHittable, app.debugDescription)
+    XCTAssertTrue(uncovered(), "Contrôle encore masqué après défilement : " + app.debugDescription)
     return element
   }
 
@@ -238,7 +248,9 @@ final class Auth107Tests: XCTestCase {
 
   func logout(_ role: String) {
     nav(role == "etab" ? "Menu" : "Profil")
-    reachable(accountButton("Se déconnecter")).tap()
+    let button = reachable(accountButton("Se déconnecter"))
+    preuve(role + "-deconnexion-bouton-degage")
+    button.tap()
     visible(app.buttons["Se connecter"])
   }
 
