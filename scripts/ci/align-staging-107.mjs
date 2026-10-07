@@ -56,10 +56,10 @@ export function transaction(c,migrations,commit){
  return `BEGIN; SET LOCAL search_path=public,pg_catalog; SET LOCAL TIME ZONE 'UTC'; SET LOCAL statement_timeout='60s'; SET LOCAL lock_timeout='3s';
  SELECT pg_advisory_xact_lock(184731,107);
  LOCK TABLE supabase_migrations.schema_migrations IN SHARE ROW EXCLUSIVE MODE NOWAIT;
- DO $align_before$ DECLARE c record; BEGIN
+ DO $align_before$ DECLARE v_align_catalogue record; BEGIN
  IF NOT (${quiet}) THEN RAISE EXCEPTION 'ALIGN_NOT_QUIET'; END IF;
- SELECT * INTO c FROM (${sqlCatalogueD}) q;
- IF c.schema<>${literal(expected.schema)} OR c.fonctions<>${literal(expected.fonctions)} OR c.triggers<>${literal(expected.triggers)} OR c.crons_actifs<>0 OR c.audit_fk<>0 THEN RAISE EXCEPTION 'ALIGN_CATALOGUE_CHANGED'; END IF;
+ SELECT * INTO v_align_catalogue FROM (${sqlCatalogueD}) q;
+ IF v_align_catalogue.schema<>${literal(expected.schema)} OR v_align_catalogue.fonctions<>${literal(expected.fonctions)} OR v_align_catalogue.triggers<>${literal(expected.triggers)} OR v_align_catalogue.crons_actifs<>0 OR v_align_catalogue.audit_fk<>0 THEN RAISE EXCEPTION 'ALIGN_CATALOGUE_CHANGED'; END IF;
  IF EXISTS(SELECT 1 FROM supabase_migrations.schema_migrations WHERE version IN(${versions})) THEN RAISE EXCEPTION 'ALIGN_ALREADY_APPLIED'; END IF;
  ${assertFunctions(c,'before')}
  END $align_before$;

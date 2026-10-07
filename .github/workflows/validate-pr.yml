@@ -892,6 +892,8 @@ jobs:
         run: python3 scripts/ci/paiements-concurrence-pg17.py
       - name: Catalogue F1 — cast du type interne et états des triggers
         run: node --test tests/postgres/f1-cloud-catalogue-cast.pg17.mjs
+      - name: Alignement staging — résolution des alias du catalogue
+        run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17
