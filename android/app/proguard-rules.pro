@@ -1,21 +1,16 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Capacitor 8.4.1 exports consumerProguardFiles covering plugin classes,
+# @PluginMethod and permission/activity callbacks. Do not duplicate those rules
+# or retain com.getcapacitor.**, all plugins, or the whole app here.
+# The optimized Android defaults retain @JavascriptInterface entry points.
+# Preserve native source locations for retrace with the exact mapping.txt.
+-keepattributes SourceFile,LineNumberTable
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Capacitor reads nested permission annotations at runtime. Optimized Android
+# run 37296899799 crashed in getPermissionStates/checkPermissions after signup.
+# Keep these two annotation contracts, not the bridge or all plugin code.
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+-keep @interface com.getcapacitor.annotation.CapacitorPlugin { *; }
+-keep @interface com.getcapacitor.annotation.Permission { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# No -dontoptimize, -dontshrink, -dontobfuscate or blanket -dontwarn.
+# Add narrowly scoped rules only for a demonstrated reflection failure.

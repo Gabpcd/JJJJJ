@@ -1,7 +1,8 @@
 # Simulation native Android
 
-Le workflow `android-native-recette.yml` construit un **APK debug Capacitor réel**
-du SHA de la PR, sous l'identifiant séparé `app.jolene.recette`, puis le lance sur
+Le workflow `android-native-recette.yml` exerce deux variantes réelles du SHA :
+**debug** et **recetteOptimized** (configuration R8 de release, non debuggable,
+signature debug éphémère). Les deux utilisent l'identifiant séparé `app.jolene.recette`, puis le lance sur
 un émulateur Android 15 / Pixel 7 distant. Aucun SDK ou image système volumineux
 n'est installé sur le poste local. Aucun secret, compte réel ou store n'est utilisé.
 Firebase reçoit uniquement des ressources debug fictives du projet
@@ -86,3 +87,32 @@ node --check tests/native/android/navigation.mjs
 node --test tests/native/android/*.test.mjs
 bash -n scripts/native/run-android-recette.sh
 ```
+
+
+## Qualification R8
+
+La variante `recetteOptimized` est ajoutée uniquement par le préparateur dans le
+checkout CI éphémère. `initWith release` conserve les règles et optimisations de
+release ; `matchingFallbacks = ['release']` sélectionne les plugins release.
+Le manifeste et les ressources Firebase fictives debug sont réutilisés. Aucun
+secret release, Play, compte réel ou distribution n'intervient. Le débogage CDP
+de la WebView reste explicitement activé dans cette seule configuration fictive,
+indépendamment du drapeau Android `debuggable`, vérifié faux sur l'APK optimisé.
+
+Le contrôle avant installation lit le DEX réellement présent dans cet APK, les
+noms des plugins attendus après `cap sync`, le mapping et la configuration R8.
+Il refuse les interrupteurs globaux d'optimisation, l'absence de renommage ou un
+plugin retiré/renommé. Les empreintes et comptes sont conservés, pas l'APK ni le
+mapping complet. Ce contrôle n'est pas le calcul de pourcentage Google Play.
+
+Les deux variantes imposent les mêmes vingt contrôles d'onglets, clavier et
+retour natifs. Elles vérifient aussi les dix-huit plugins enregistrés par le
+bridge natif et des vrais appels locaux App, Preferences et Filesystem (écriture,
+lecture, suppression dans le cache de l'application fictive). Camera, code-barres,
+biométrie matérielle, partage externe et notification physique ne sont pas
+qualifiés par ces appels ; aucun message ou changement de store/OTA n'est tenté.
+
+Pour le binaire non debuggable, la collecte NetLog utilise l'adb root déjà requis
+sur l'émulateur au lieu de `run-as`, exclusivement sous `app.jolene.recette`.
+L'isolation UID et les assertions de zéro trafic sortant restent obligatoires.
+Un refus CDP, permission, réflexion ou réseau reste un échec sans nouvelle tentative.

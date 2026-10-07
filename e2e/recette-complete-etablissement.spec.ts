@@ -123,6 +123,26 @@ for(const entree of ['connexion','inscription'] as const){
    }else if(cible.startsWith('parametres')){
     const tab=source==='api'?'Sécurité & RGPD':source==='profil'?'Profil':'Opérations';
     await expect(page.getByRole('tab',{name:tab,exact:true})).toHaveAttribute('aria-selected','true');
+    // Radix peut activer l'onglet avant le montage et les lectures de son contenu.
+    // Le calme réseau de l'ancien chargement ne prouve pas que ces effets ont démarré.
+    const panneau=page.getByRole('tabpanel',{name:tab,exact:true});
+    await expect(panneau).toBeVisible();
+    if(source==='profil'){
+     await expect(panneau.getByLabel('Nom',{exact:true})).toHaveValue(etablissement.nom);
+    }else if(source==='api'){
+     await expect(panneau.getByRole('heading',{name:'Données personnelles (RGPD)',exact:true})).toBeVisible();
+     await expect(panneau.getByText('Aucune clé API. Générez-en une pour commencer.',{exact:true})).toBeVisible();
+    }else{
+     await expect(panneau.getByRole('heading',{name:'Géolocalisation',exact:true})).toBeVisible();
+     await expect(panneau.getByRole('heading',{name:'Tolérance pointage GPS',exact:true})).toBeVisible();
+     if(mode==='minimal'){
+      await expect(panneau.getByText('Complétez le dossier de votre établissement pour consulter son groupe.',{exact:true})).toBeVisible();
+     }else{
+      await expect(panneau.getByRole('heading',{name:'Établissement indépendant',exact:true})).toBeVisible();
+     }
+     await expect(panneau.getByText('Aucune exclusion',{exact:true})).toBeVisible();
+    }
+    await expect(panneau.getByRole('status',{name:'Chargement en cours',exact:true})).toHaveCount(0);
    }else if(cible.startsWith('rh')){
     if(mode==='complet')await expect(page.getByRole('tab',{name:'Analytics',exact:true})).toHaveAttribute('aria-selected','true');
     else await expect(page.getByRole('link',{name:'Préparer une mission',exact:true})).toBeVisible();

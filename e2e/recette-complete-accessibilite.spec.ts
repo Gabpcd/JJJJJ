@@ -199,6 +199,12 @@ async function naviguer(page: Page, info: TestInfo, role: 'soignant' | 'etabliss
     // contenu évite de tester Tab entre un écran vide et l'arrivée des boutons.
     await expect(page.locator('main').getByRole('heading', { name: 'Résidence Camille — recette', exact: true })).toBeVisible();
   }
+  if (role === 'soignant' && entree.chemin === 'mon-compte') {
+    // Le menu passe actif avant le chargement du compte. La traversée Tab puis
+    // Maj+Tab doit porter sur ses vrais contrôles, pas sur le fallback lazy.
+    await expect(page.locator('main').getByRole('heading', { name: 'Camille Recette', exact: true })).toBeVisible();
+    await expect(page.locator('main').getByRole('button', { name: 'Mon profil', exact: true })).toBeVisible();
+  }
   if (role === 'soignant' && entree.chemin === 'recherche-missions') {
     const quiz = page.getByRole('dialog', { name: '5 questions pour un deck qui te ressemble', exact: true });
     await expect(quiz).toBeVisible();

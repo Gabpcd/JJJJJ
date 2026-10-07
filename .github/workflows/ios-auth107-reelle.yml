@@ -1,0 +1,87 @@
+name: Inscription 1.0.7 — Auth réel TEST iOS
+on:
+  push:
+    branches: [codex/correctifs-serveur-1-0-7]
+    paths:
+      - .github/workflows/ios-auth107-reelle.yml
+      - scripts/ci/auth107-staging.mjs
+      - scripts/native/*auth107*
+      - scripts/native/prepare-ios-uitests.rb
+      - tests/native/ios/Auth107Tests.swift
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 55
+    concurrency:
+      group: jolene-supabase-staging-writes
+      queue: max
+      cancel-in-progress: false
+    env:
+      CI: 'true'
+      NATIVE_RECETTE: '1'
+      GIT_COMMIT_SHA: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+      VITE_NATIVE_BUILD: 'true'
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      SENTRY_UPLOAD_ENABLED: 'false'
+      STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: bf1c0ebf771533bb1666ae5f2bfd09560e4b0c84
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: source
+      - name: Résoudre les accès TEST sans production
+        run: node tooling/scripts/ci/prepare-staging-api-env.mjs
+      - name: Préparer quatre identités uniques sans modifier Auth
+        run: |
+          mkdir -p source/test-results/ios-native
+          node tooling/scripts/ci/auth107-staging.mjs prepare tooling/tests/native/ios/Auth107Tests.swift
+      - name: Construire le frontend 1.0.7 exact et le banc iOS
+        working-directory: source
+        env:
+          VITE_SUPABASE_URL: ${{ env.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.STAGING_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run build
+          node ../tooling/scripts/native/prepare-ios-auth107.mjs
+          npx cap sync ios
+          bundle exec ruby ../tooling/scripts/native/prepare-ios-uitests.rb ../tooling/tests/native/ios/Auth107Tests.swift
+      - name: Inscription réelle, relancement et reconnexion iPhone puis iPad
+        working-directory: source
+        run: bash ../tooling/scripts/native/run-ios-auth107.sh
+      - name: Restaurer Auth et désactiver seulement les comptes de ce run
+        if: always()
+        working-directory: source
+        run: node ../tooling/scripts/ci/auth107-staging.mjs cleanup
+      - name: Preuves ciblées sans sessions, mots de passe ni archives de compilation
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-auth107-review-${{ github.run_id }}
+          path: |
+            source/test-results/ios-native/review/
+            source/test-results/ios-native/auth-cleanup.json
+          if-no-files-found: warn
+          retention-days: 14

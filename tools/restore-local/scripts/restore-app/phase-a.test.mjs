@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -215,10 +215,12 @@ test('workflow is manual exact branch with private raw logs, explicit closed upl
 });
 
 
-test('219 import must identify current product and exact ordered migration bytes before runtime exists', async () => {
+test('221 import must identify current product and exact ordered migration bytes before runtime exists', async () => {
   for (const patch of [value => { value.product_sha = '0'.repeat(40); },
     value => { value.migrations.pop(); }, value => { value.migrations.reverse(); },
-    value => { value.migrations[218].sha256 = hash('wrong OTP'); }]) {
+    value => { value.migrations[218].sha256 = hash('wrong OTP'); },
+    value => { value.migrations[219].sha256 = hash('wrong signature lock'); },
+    value => { value.migrations[220].sha256 = hash('wrong period totals'); }]) {
     const h = harness(), importer = h.dependencies.importer;
     h.dependencies.importer = async () => { const result = await importer(); patch(result); return result; };
     await assert.rejects(h.execute(), /PHASE_A_IMPORT_REQUIRED/);
@@ -480,4 +482,14 @@ test('same-run catalogue and checkpoint retain full native rows including instal
   assert.match(checkpoint,/to_jsonb/);
   assert.match(checkpoint,/n\.nspname IN\('auth','storage','public','private'\)/);
   assert.match(checkpoint,/jsonb_agg\(to_jsonb\(t\) ORDER BY to_jsonb\(t\)::text\)/);
+});
+
+test('current-product OTP witness pins both actual bodies from the version7 server migration',()=>{
+ const migration=readFileSync(new URL('../../../../supabase/migrations/20261006144554_serialiser_renvoi_et_validation_signature.sql',import.meta.url),'utf8');
+ const witness=readFileSync(new URL('./sql/current-product-witness.sql',import.meta.url),'utf8');
+ const definitions=[...migration.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\([\s\S]*?AS (\$[A-Za-z_]*\$)([\s\S]*?)\2/g)];
+ assert.deepEqual(definitions.map(m=>m[1]),['fn_envoyer_otp_signature','fn_signer_contrat_otp']);
+ for(const m of definitions){const md5=createHash('md5').update(m[3]).digest('hex');assert(witness.includes("'"+md5+"'"));}
+ assert(witness.includes("proowner='postgres'::regrole"));assert(witness.includes("proconfig=ARRAY['search_path=public, extensions']"));
+ assert(witness.includes("NOT has_function_privilege('anon',oid,'EXECUTE')"));
 });

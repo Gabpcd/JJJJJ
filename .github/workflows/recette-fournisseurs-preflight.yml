@@ -23,13 +23,16 @@ jobs:
         with:
           node-version: '24'
       - name: Gardes hors réseau
-        run: node --test tests/node/recette-fournisseurs-collector.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs
+        run: node --test tests/node/recette-fournisseurs-collector.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-summary.node.mjs
       - name: Collecter les seules métadonnées (aucun transport)
         run: node scripts/recette-fournisseurs/collect-preflight.mjs
         env:
           RECETTE_CANDIDATE_SHA: ${{ github.sha }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Résumer la collecte et ses limites sans qualifier les transports
+        if: always()
+        run: node scripts/recette-fournisseurs/summarize-preflight.mjs >> "$GITHUB_STEP_SUMMARY"
       - name: Conserver uniquement le rapport expurgé même si NON PRÊT
         if: always()
         uses: actions/upload-artifact@v5

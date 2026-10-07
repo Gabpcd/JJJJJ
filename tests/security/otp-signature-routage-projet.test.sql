@@ -12,8 +12,10 @@ CREATE TEMP TABLE contrats_mission(
   statut text, signature_soignant boolean, signature_etablissement boolean
 );
 CREATE TEMP TABLE signatures_contrats(
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   contrat_id uuid, signataire_user_id uuid, signataire_role text,
   otp_envoye_a timestamptz, otp_code_hash text, statut_signature text,
+  signe_a timestamptz, otp_valide_a timestamptz,
   audit_trail jsonb, sms_envoyes_count integer, sms_premier_envoi_a timestamptz,
   otp_tentatives integer DEFAULT 0, modifie_le timestamptz,
   UNIQUE(contrat_id, signataire_role)

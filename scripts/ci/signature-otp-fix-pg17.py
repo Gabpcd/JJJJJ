@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('otp_diagnostic', ROOT/'scripts/ci/signature-otp-diagnostic-pg17.py')
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)
-MIGRATION = '20261004124300_refuser_signature_otp_et_document_incoherents.sql'
+BASE_MIGRATION = '20261004124300_refuser_signature_otp_et_document_incoherents.sql'
+MIGRATION = '20261006144554_serialiser_renvoi_et_validation_signature.sql'
 
 
 class WitnessFailure(Exception):
@@ -501,13 +502,29 @@ BEGIN
  IF sending->>'error_code' IS DISTINCT FROM 'TROP_DE_SMS_IP' OR EXISTS(SELECT 1 FROM net.fixture_requests)
     OR pg_temp.signature_photo() IS DISTINCT FROM old THEN RAISE EXCEPTION 'IP_LIMIT_NOT_PRESERVED'; END IF;
  INSERT INTO observations VALUES('synthetic-request-keeps-ip-limit',true);
+ FOREACH who IN ARRAY ARRAY['soignant','etablissement'] LOOP
+  PERFORM pg_temp.seed_signature(who);
+  PERFORM set_config('request.headers','{}',true);
+  SELECT hash_document INTO h FROM public.contrats_mission WHERE id=cid;
+  r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
+  IF (r->>'success')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'HISTORY_SETUP_FAILED'; END IF;
+  UPDATE public.signatures_contrats SET statut_signature='otp_envoye' WHERE contrat_id=cid;
+  old:=pg_temp.signature_photo(); DELETE FROM net.fixture_requests;
+  r:=public.fn_envoyer_otp_signature(cid);
+  IF r->>'error_code' IS DISTINCT FROM 'DEJA_SIGNE' OR pg_temp.signature_photo() IS DISTINCT FROM old
+    OR EXISTS(SELECT 1 FROM net.fixture_requests) THEN RAISE EXCEPTION 'HISTORICAL_PROOF_RESEND_CHANGED'; END IF;
+  r:=public.fn_signer_contrat_otp(cid,'123456',h,NULL);
+  IF r->>'error_code' IS DISTINCT FROM 'DEJA_SIGNE' OR pg_temp.signature_photo() IS DISTINCT FROM old
+    THEN RAISE EXCEPTION 'HISTORICAL_PROOF_RESIGNED'; END IF;
+  INSERT INTO observations VALUES('historical-regressed-status-immutable-'||who,true);
+ END LOOP;
 END;
 $witness$;
 SELECT jsonb_build_object('schemaVersion',1,'phase','fixed-qualification','postgresMajor',17,'providerCalls',0,
  'casesPassed',(SELECT count(*) FROM observations),'cases',(SELECT jsonb_object_agg(case_name,passed) FROM observations));
 ROLLBACK;
 """
-    return setup + migration + tests
+    return setup + (ROOT / 'supabase/migrations' / BASE_MIGRATION).read_text() + migration + tests
 
 
 def main():
@@ -537,7 +554,7 @@ def main():
       json.loads((ROOT/'tests/fixtures/connect-pretransfer-auth-dependencies.json').read_text()),
       (ROOT/'supabase/migrations'/MIGRATION).read_text())
     report=json.loads(run(sql).splitlines()[-1]); assert run(empty)=='t'
-    assert report['casesPassed']==98 and all(report['cases'].values())
+    assert report['casesPassed']==100 and all(report['cases'].values())
     report['migrationSha256']=hashlib.sha256((ROOT/'supabase/migrations'/MIGRATION).read_bytes()).hexdigest()
     report['sourceBeforeBodySha256']=diagnostic.BEFORE_BODY
     report['scope']='PG17 synthetic OTP, contract guards, certificate policies and SQL-only Vault/HTTP doubles; no provider/network/SMS/Storage/full App RLS'

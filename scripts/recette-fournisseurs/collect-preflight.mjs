@@ -12,7 +12,7 @@ export const EDGES = Object.freeze(['send-sms', 'escrow-debit-echeance', 'escrow
 export const SQL_FUNCTIONS = Object.freeze(['fn_envoyer_otp_signature', 'fn_escrow_debits_a_echeance',
   'fn_escrow_releases_a_traiter', 'fn_stripe_refunds_reels_a_traiter']);
 const SECRET_NAMES = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM_NUMBER',
-  'TWILIO_PHONE_NUMBER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET'];
+  'TWILIO_PHONE_NUMBER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PLATFORM_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET'];
 const VAULT_NAMES = ['supabase_url', 'service_role_key'];
 const SHA = /^[a-f0-9]{40}$/;
 const validSha = value => typeof value === 'string' && SHA.test(value) && !/^0+$/.test(value);

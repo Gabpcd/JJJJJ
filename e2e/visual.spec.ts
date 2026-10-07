@@ -7,11 +7,11 @@
  *
  * Génération des baselines :
  *   1. Lancer le workflow `playwright-visual-update.yml` (workflow_dispatch)
- *   2. Le workflow run `npx playwright test e2e/visual --update-snapshots`
- *      sur Chromium et commit les screenshots via PR auto.
+ *   2. Le workflow utilise playwright.visual.config.ts sur Chromium et
+ *      ouvre une PR de captures depuis main. Une branche produit un artefact.
  *   3. Merger la PR.
  *
- * En local : `npx playwright test e2e/visual --update-snapshots --project=chromium`
+ * En local : `npx playwright test --config=playwright.visual.config.ts --update-snapshots`
  *
  * En CI (sans baseline) : le test échoue avec "missing snapshot" — c'est
  * le signal pour générer.
@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Visual regression — pages critiques', () => {
   // Skip sur projets non-chromium : les baselines sont générées sur Chromium uniquement
-  test.beforeEach((_fixtures, testInfo) => {
+  test.beforeEach(({ browserName: _browserName }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'Visual regression : Chromium uniquement');
   });
 

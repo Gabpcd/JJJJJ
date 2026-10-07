@@ -181,3 +181,138 @@ test('real maxBuffer overflow is fatal despite a plausible current IME state', a
   await assert.rejects(captureIme(serial, f.options), error => error.cause.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
   assert.equal(f.imeCalls, 1);
 });
+
+test('closed diagnostic locates PID and focus checks before and after collection', async () => {
+  const lostFocus = 'mCurrentFocus=Window{abc u0 other/.MainActivity}\n';
+  for (const [config, phase, expectedReads] of [
+    [{ pids: ['4400'] }, 'before-pid-check', 0],
+    [{ windows: [lostFocus] }, 'before-window-check', 0],
+    [{ pids: [pid, '4400'] }, 'after-pid-check', 1],
+    [{ windows: [windowDump, lostFocus] }, 'after-window-check', 1],
+  ]) {
+    const f = fixture(config);
+    await assert.rejects(captureIme(serial, f.options), error => {
+      assert(error.message.endsWith(`[phase=${phase}; code=ASSERTION_FAILED]`));
+      assert.equal(error.cause.code, 'ERR_ASSERTION');
+      return true;
+    });
+    assert.equal(f.imeCalls, expectedReads);
+    assert(!f.entries.some(entry => entry.phase === 'complete'));
+  }
+});
+
+test('closed diagnostic distinguishes each IME structural assertion', async () => {
+  for (const [value, phase] of [
+    [dump, 'ime-marker-check'],
+    [complete.replace('Current Input Method Manager state:', 'missing header'), 'ime-header-check'],
+    [complete.replace('mStartInputHistory:', 'missingHistory:'), 'ime-history-check'],
+    [complete.replace('  mStartInputHistory:', 'Error dumping service\n  mStartInputHistory:'), 'ime-service-check'],
+    [complete.replace('mInputShown=false', 'no current visibility'), 'ime-visibility-check'],
+  ]) {
+    const f = fixture({ ime: [value] });
+    await assert.rejects(captureIme(serial, f.options), error => {
+      assert(error.message.endsWith(`[phase=${phase}; code=ASSERTION_FAILED]`));
+      return true;
+    });
+    assert.equal(f.imeCalls, 1);
+    assert(!f.calls.some(call => call.args[0] === 'wait-for-device'));
+  }
+});
+
+test('closed diagnostic codes never copy arbitrary inner error data into failure.json fields', async () => {
+  const privateValue = 'DO_NOT_PUBLISH_INNER_ERROR_DATA';
+  for (const [properties, code] of [
+    [{ code: 'ENOENT' }, 'FILE_NOT_FOUND'],
+    [{ code: 'EACCES' }, 'ACCESS_DENIED'],
+    [{ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }, 'OUTPUT_LIMIT'],
+    [{ killed: true, signal: 'SIGTERM' }, 'PROCESS_KILLED'],
+    [{ code: 255 }, 'ADB_EXIT_255'],
+    [{ code: 1 }, 'ADB_EXIT_NONZERO'],
+    [{ code: privateValue }, 'OTHER'],
+    [{ code: 0 }, 'OTHER'],
+    [{}, 'OTHER'],
+  ]) {
+    const cause = Object.assign(new Error(privateValue), {
+      stdout: privateValue, stderr: privateValue, command: privateValue, ...properties,
+    });
+    const f = fixture({ pids: [cause] });
+    await assert.rejects(captureIme(serial, f.options), error => {
+      assert.equal(error.cause, cause);
+      assert(error.message.endsWith(`[phase=before-pid-read; code=${code}]`));
+      // navigation.mjs saves precisely these two outer error fields.
+      assert(!JSON.stringify({ message: error.message, stack: error.stack }).includes(privateValue));
+      return true;
+    });
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.imeCalls, 0);
+    assert.deepEqual(f.entries, []);
+  }
+});
+
+test('closed diagnostic locates window transport and the unchanged failed reconnect', async () => {
+  const cause = Object.assign(new Error('read failed'), { code: 1 });
+  for (const [config, phase] of [
+    [{ windows: [cause] }, 'before-window-read'],
+    [{ windows: [windowDump, cause] }, 'after-window-read'],
+    [{ ime: [interrupted()], waitError: cause }, 'reconnect-wait'],
+    [{ ime: [interrupted()], pids: [pid, cause] }, 'reconnected-pid-read'],
+    [{ ime: [interrupted()], windows: [windowDump, cause] }, 'reconnected-window-read'],
+  ]) {
+    const f = fixture(config);
+    await assert.rejects(captureIme(serial, f.options), error => {
+      assert.equal(error.cause, cause);
+      assert(error.message.endsWith(`[phase=${phase}; code=ADB_EXIT_NONZERO]`));
+      return true;
+    });
+    assert(f.imeCalls <= 1);
+    assert(!f.entries.some(entry => entry.phase === 'complete'));
+  }
+});
+
+test('closed diagnostic preserves IME read failure after successful failure recording', async () => {
+  const cause = Object.assign(new Error('read failed'), { code: 1 });
+  const f = fixture({ ime: [cause] });
+  await assert.rejects(captureIme(serial, f.options), error => {
+    assert.equal(error.cause, cause);
+    assert(error.message.endsWith('[phase=ime-read; code=ADB_EXIT_NONZERO]'));
+    return true;
+  });
+  assert.equal(f.imeCalls, 1);
+  assert.deepEqual(f.entries.map(entry => entry.phase), ['collection-failed']);
+});
+
+test('closed diagnostic locates artifact writes without extra recording or retries', async () => {
+  for (const [config, failedEntry, phase] of [
+    [{}, 'complete', 'complete-record'],
+    [{ ime: [interrupted()] }, 'collection-failed', 'collection-failure-record'],
+    [{ ime: [interrupted()] }, 'transport-recovered-same-app', 'transport-recovery-record'],
+  ]) {
+    const f = fixture(config);
+    const cause = new Error('artifact write failed');
+    let records = 0;
+    f.options.record = async entry => {
+      records++;
+      if (entry.phase === failedEntry) throw cause;
+    };
+    await assert.rejects(captureIme(serial, f.options), error => {
+      assert.equal(error.cause, cause);
+      assert(error.message.endsWith(`[phase=${phase}; code=OTHER]`));
+      return true;
+    });
+    assert.equal(f.imeCalls, 1);
+    assert.equal(records, failedEntry === 'transport-recovered-same-app' ? 2 : 1);
+  }
+});
+
+
+test('ENOENT while recording does not claim ADB is missing', async () => {
+  const f = fixture();
+  const cause = Object.assign(new Error('fixture output missing'), { code: 'ENOENT' });
+  f.options.record = async () => { throw cause; };
+  await assert.rejects(captureIme(serial, f.options), error => {
+    assert.equal(error.cause, cause);
+    assert(error.message.endsWith('[phase=complete-record; code=FILE_NOT_FOUND]'));
+    return true;
+  });
+  assert.equal(f.imeCalls, 1);
+});

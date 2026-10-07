@@ -10,7 +10,7 @@ const home = windowDump(homeComponent);
 const noFocus = 'WINDOW MANAGER WINDOWS\n  mCurrentFocus=null\n';
 const anr = (pkg = launcherPackage) => windowDump(`Application Not Responding: ${pkg}`);
 const stopLauncher = `am force-stop ${launcherPackage}`;
-const startLauncher = `am start -W -n ${launcherPackage}/.NexusLauncherActivity`;
+const startLauncher = `am start -n ${launcherPackage}/.NexusLauncherActivity`;
 
 function fixture({ windows = () => home, packages = () => '', failCommand } = {}) {
   let time = 0;
@@ -131,4 +131,22 @@ test('propagates Android diagnostic failures instead of retrying or suppressing 
   await assert.rejects(f.run(), /adb unavailable/);
   assert.equal(f.commands.filter((cmd) => cmd === 'dumpsys window').length, 1);
   assert.equal(f.records.at(-1).phase, 'failed');
+});
+
+
+test('asynchronous home request waits for actual delayed native focus then stability', async () => {
+  const f = fixture({ windows: (time) => time < 15_000 ? noFocus : home });
+  await f.run();
+  assert.equal(f.commands.filter((cmd) => cmd === startLauncher).length, 1);
+  assert.equal(f.commands.some((cmd) => cmd.includes(' -W ')), false);
+  assert.deepEqual(f.records.at(-1), { phase: 'ready-before-installation', elapsedMs: 25_000,
+    stableMs: 10_000, recoveries: 0 });
+});
+
+test('a successful home command never masks a subsequent Android app error', async () => {
+  const f = fixture({ windows: (time) => time < 1000 ? noFocus : anr(fixturePackage) });
+  await assert.rejects(f.run(), /Unexpected Android error/);
+  assert.equal(f.commands.filter((cmd) => cmd === startLauncher).length, 1);
+  assert.equal(f.commands.includes(stopLauncher), false);
+  assert.equal(f.records.some((entry) => entry.phase === 'ready-before-installation'), false);
 });
