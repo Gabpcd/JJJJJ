@@ -96,6 +96,13 @@ for test in manifest:
   file=source/'attachments'/a['exportedFileName'];name=a['suggestedHumanReadableName']
   if name.startswith('premier-ecran-delai') and file.suffix.lower()=='.txt':
    shutil.copyfile(file,dest/'premier-ecran-delai.txt')
+  # Ces pièces sont prises uniquement sur le compte authentifié, avant le
+  # tap de déconnexion (jamais sur un formulaire contenant un mot de passe).
+  if '-deconnexion-bouton-degage' in name and file.suffix.lower() in ['.txt','.png','.jpg','.jpeg','.heic']:
+   target=f'{len(selected)+1:02d}-{file.name}'
+   shutil.copyfile(file,dest/target)
+   selected.append({'file':target,'name':name,'failure':a['isAssociatedWithFailure'],'beforeLogout':True})
+   continue
   if file.suffix.lower() not in ['.png','.jpg','.jpeg','.heic'] or '-accessibilite' in name:continue
   failure=a['isAssociatedWithFailure']
   final='etat-final-meme-en-echec' in name
