@@ -1,5 +1,5 @@
 {
-  "productSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
+  "productSha": "58968a0e42d65b90d0c8916479149326635a390e",
   "qualifiedHarnessSha": "4a14fc96bdf9f640e8877eaa53802b22ff295459",
   "v2ManifestSha256": "6ee835f7ff3fe75b2974e8940e6d41ed1623a75de66569a40e24920a4599c6ca",
   "schemaVersion": 2,
@@ -246,7 +246,7 @@
     {
       "path": "tools/restore-local/scripts/restore-app/identity.mjs",
       "bytes": 5276,
-      "sha256": "12e33a36ca5dd28a65595acd908c08cfe1432217bef7f66c6937174400457ce4"
+      "sha256": "1f68b4d4d1394da1c0858c2d511606d8b3810fad732bf2a1e39cfd136f2b987e"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/local-runtime.mjs",
@@ -265,8 +265,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 34644,
-      "sha256": "3105ae8eff2d1a0e00d60deeb76247e97ffb337146801fcaec9ece2104a15416"
+      "bytes": 35743,
+      "sha256": "6a1446c7c5a8e0916c5c2d5f5bd687b9d3c4d8785cdb643028d39ed6f9a108ef"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/browser-driver.mjs",
@@ -346,7 +346,7 @@
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
       "bytes": 25332,
-      "sha256": "4cceed37de2ac817dfe2afbda47aecc1b1f1bd031f101adb2f3f32f3a2c8311a"
+      "sha256": "fee79676e1a34ba93dca90b3c3a51541545302afe138bb4591dc177b3390180f"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -386,12 +386,12 @@
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/identity.mjs",
       "bytes": 5386,
-      "sha256": "013b94eb800bb19e2d3e2673e914cddb2a8e9d3e0ef9c3881aaa2f70352f40fe"
+      "sha256": "9da933fd7216c3541c8ac1362507a5f63e33cf55e9c001732827e725fe69a014"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/main.mjs",
-      "bytes": 7874,
-      "sha256": "5dc9c9a7df0f85647a3f45424ccd843057070bff75b97ac21baf9c3a81afd2bf"
+      "bytes": 7903,
+      "sha256": "f749ae7ea3e029371218874f17157904bf663a6a9693e209bdb7d42af6771457"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/matrix-contract.mjs",
@@ -415,8 +415,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1971,
-      "sha256": "39f3c01072024ffd414bc369a22218c9ee5c04b4abfc49e583e6423dba30b52c"
+      "bytes": 1428,
+      "sha256": "ce8371b6d3a290cdd98eb2347347a2753d775c1182214fa1bc5955492932e4b3"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -530,8 +530,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/pins.json",
-      "bytes": 58986,
-      "sha256": "612136300e87cccd88b522ab76aef06fb707db4eb2c4a77c70aa95e28cf3b161"
+      "bytes": 59457,
+      "sha256": "7092dbb359cc848e37dfd652b46a2db66944d46b5dc33c84775747b6240268ff"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
@@ -560,8 +560,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/current-product-witness.sql",
-      "bytes": 2364,
-      "sha256": "b080dfe6ef929676c08948bddc5563e0c55ed86e83bfe09df8314f89be236ae1"
+      "bytes": 2390,
+      "sha256": "02852b89867d4c2b3b276f9955ff81dd52e140cd25ddd9b03d217a0378b10a48"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
@@ -1779,18 +1779,30 @@
       "path": "supabase/migrations/20261004124300_refuser_signature_otp_et_document_incoherents.sql",
       "bytes": 19024,
       "sha256": "31c1e33750e493188609729d71b2b1b38c4c53fb04e22efef92f7920611db843"
+    },
+    {
+      "path": "supabase/migrations/20261006144554_serialiser_renvoi_et_validation_signature.sql",
+      "bytes": 16925,
+      "sha256": "6a98fbc8d7670bdb16ad3bd4a5873ae6ed0b0a6f4b328d35c3b88cfd7f792f63"
+    },
+    {
+      "path": "supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql",
+      "bytes": 20538,
+      "sha256": "4fdb0d23be95467e0db5c17cc52032dced5d1e31611edf2a8457272c5341623d"
     }
   ],
-  "productTree": "e1a55a786dfe18ec3f75f795244f5ea5b8c02726",
-  "migrationCount": 219,
-  "priorQualifiedProductSha": "01b135471e1e6ee7ee31439ffc248c8b8519260c",
+  "productTree": "ea07da01a2d4e9b96a6fd8e1c4a5ca01b87dcf1e",
+  "migrationCount": 221,
+  "priorQualifiedProductSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
   "productImportQualified": false,
   "requiresManualPhaseAReview": true,
-  "phaseABaseOverlay": "V9_CAPTURE_REFERENCES_REVIEWED_B_EXECUTION_HOLD",
+  "phaseABaseOverlay": "VERSION7_A7_CAPTURE_REVIEWED_ONE_ISOLATED_B7_ATTEMPT",
   "phaseBReviewPath": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-  "phaseAManifestSha256": "227c516f6776c27433b7ff5d841ee6f347306545860ee94a450e8dad91e2c2a1",
-  "phaseARuntimeReviewSha256": "3d9e370746f06badaffe290148113123e51a2d9b72536d568b3be6e79ebb3fd4",
-  "phaseAQualifiedRunId": "37231913015",
-  "phaseAQualifiedHarnessSha": "f8cb8b05a6ce1cb1d330e0d235b4b4142720aa9c",
-  "phaseAReferenceCaptureQualified": true
+  "phaseAQualifiedRunId": "37644158273",
+  "phaseAQualifiedHarnessSha": "3eedd64a7cff347e035e9e24f89778024f3a832f",
+  "phaseAReferenceCaptureQualified": true,
+  "historicalPhaseAManifestSha256": "227c516f6776c27433b7ff5d841ee6f347306545860ee94a450e8dad91e2c2a1",
+  "historicalPhaseARuntimeReviewSha256": "3d9e370746f06badaffe290148113123e51a2d9b72536d568b3be6e79ebb3fd4",
+  "phaseAManifestSha256": "b279a13634c88d4660a9255ae04bf818a6e2b9e71360f3e315b3a91ddcb363d9",
+  "phaseBExecutionReviewManifestSha256": "ae9ac06e50cd7ed8f8cc56445476723a73ebebf228087d024c2a9f0e1cac14ab"
 }

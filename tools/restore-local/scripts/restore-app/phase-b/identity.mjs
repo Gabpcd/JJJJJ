@@ -5,8 +5,8 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
-export const PRODUCT_SHA = '7dfdeb42f724a1d80f78318ecf468d248b321a68';
-export const MIGRATION_COUNT = 219;
+export const PRODUCT_SHA = '58968a0e42d65b90d0c8916479149326635a390e';
+export const MIGRATION_COUNT = 221;
 export const WORKFLOW_PATH = '.github/workflows/restore-local-bootstrap.yml';
 export const BRANCH = 'ci/restore-app-phase-b-20261004';
 export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../../../..');

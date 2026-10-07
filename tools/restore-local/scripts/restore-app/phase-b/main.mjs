@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, lstatSync, realpath
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { source, recoverySource, ROOT } from './identity.mjs';
+import { source, recoverySource, ROOT, MIGRATION_COUNT } from './identity.mjs';
 import { IMAGE, assertReview, requireValue, closedFailure } from './contract.mjs';
 import { closedFailure as phaseAFailure } from '../projection.mjs';
 import { FAILURE_CODES } from '../failure.mjs';
@@ -43,7 +43,7 @@ export async function main(args,env=process.env){
  directory(evidence.privateRoot);directory(evidence.proofRoot);paths={private:evidence.privateRoot,proof:evidence.proofRoot,stack:join(evidence.privateRoot,'stack')};
  const review=JSON.parse(readFileSync(new URL('./review.json',import.meta.url),'utf8'));
  if(!recovery)assertReview(review); // Missing A review refuses before resource preparation or downloads.
- if(command==='identity'){const result={result:'PHASE_B_IDENTITY_PASSED',productSha:evidence.productSha,harnessSha:evidence.harnessSha,migrationCount:219,
+ if(command==='identity'){const result={result:'PHASE_B_IDENTITY_PASSED',productSha:evidence.productSha,harnessSha:evidence.harnessSha,migrationCount:MIGRATION_COUNT,
    phaseAReviewed:true,reviewedPhaseARun:review.phaseARunId,readyForNationalLaunch:false};save('identity.json',result);return result;}
  if(command==='units'){
   stage='units';const tests=evidence.pins.nodeTests;

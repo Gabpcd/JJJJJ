@@ -1,0 +1,131 @@
+name: Correctifs 1.0.7 — invariants serveur
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  invariants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - audit: signature-soignant
+            database: signature_otp_diagnostic
+            script: recette107-signature-race.py
+            role: soignant
+          - audit: signature-etablissement
+            database: signature_otp_diagnostic
+            script: recette107-signature-race.py
+            role: etablissement
+          - audit: finances
+            database: recette107_finances
+            script: recette107-finances-frontiere-pg17.py
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+          POSTGRES_DB: ${{ matrix.database }}
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exécuter les fonctions corrigées sur PostgreSQL 17 jetable
+        env:
+          JOLENE_SIGNATURE_WITNESS: CI_EPHEMERE
+          JOLENE_FINANCES_WITNESS: CI_EPHEMERE
+          PGHOST: 127.0.0.1
+          PGPORT: '54329'
+          PGDATABASE: ${{ matrix.database }}
+          PGUSER: postgres
+          PGPASSWORD: fixture-ci-ephemere
+          RECETTE_SIGNATURE_ROLE: ${{ matrix.role }}
+          RECETTE_PRODUCT_DIR: ${{ github.workspace }}
+          RECETTE_PROOFS_DIR: ${{ github.workspace }}/preuves/${{ matrix.audit }}
+        run: python3 -B scripts/ci/${{ matrix.script }}
+      - name: Conserver les preuves ciblées
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: correctifs107-${{ matrix.audit }}-${{ github.run_id }}
+          path: preuves/${{ matrix.audit }}
+          if-no-files-found: error
+          retention-days: 14
+  frontend:
+    needs: invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [iphone, android, ipad-portrait, ipad-paysage, ordinateur]
+    env:
+      CI: 'true'
+      RECETTE_START_SERVER: '1'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8890
+      RECETTE_RESULTS_DIR: ${{ github.workspace }}/test-results/correctifs107-ui
+      CORRECTIFS107_RECEIPTS: ${{ github.workspace }}/preuves-ui
+      VITE_SUPABASE_URL: http://127.0.0.1:8890
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_jolene_simulation
+      VITE_SUPABASE_ANON_KEY: sb_publishable_jolene_simulation
+      VITE_STRIPE_PUBLISHABLE_KEY: ''
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      SENTRY_UPLOAD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-finances-${{ github.run_id }}
+          path: preuves-ui/finances
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-signature-soignant-${{ github.run_id }}
+          path: preuves-ui/signature-soignant
+      - uses: actions/download-artifact@v5
+        with:
+          name: correctifs107-signature-etablissement-${{ github.run_id }}
+          path: preuves-ui/signature-etablissement
+      - run: npm ci
+      - run: npm run build
+      - name: Parcours visibles avec réponses issues des reçus PG17
+        run: >-
+          npx playwright test --config=e2e/playwright.recette-complete.config.ts
+          --project=${{ matrix.project }} --workers=1 --retries=0
+          e2e/recette-complete-correctifs107.spec.ts
+      - name: Conserver les écrans et assertions simulés
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: correctifs107-ui-${{ matrix.project }}-${{ github.run_id }}
+          path: |
+            test-results/correctifs107-ui/results.json
+            test-results/correctifs107-ui/**/*.png
+            test-results/correctifs107-ui/**/trace.zip
+          if-no-files-found: error
+          retention-days: 14

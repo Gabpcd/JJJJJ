@@ -1,5 +1,5 @@
 {
-  "productSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
+  "productSha": "58968a0e42d65b90d0c8916479149326635a390e",
   "qualifiedHarnessSha": "4a14fc96bdf9f640e8877eaa53802b22ff295459",
   "v2ManifestSha256": "6ee835f7ff3fe75b2974e8940e6d41ed1623a75de66569a40e24920a4599c6ca",
   "schemaVersion": 2,
@@ -43,8 +43,8 @@
   "pinnedFiles": [
     {
       "path": ".github/workflows/restore-local-bootstrap.yml",
-      "bytes": 9196,
-      "sha256": "3b07c8bf6456880f8d4737d40c00ea03dbd56921aaed652bed570a067a18742c"
+      "bytes": 14340,
+      "sha256": "5590670938cb867c548281f3651ea1991587cab4f9481e072991d2f3b89a6dbc"
     },
     {
       "path": "scripts/ci/connect-test-fixture-sql.mjs",
@@ -154,12 +154,12 @@
     {
       "path": "tools/restore-local/scripts/restore-app/identity.mjs",
       "bytes": 5276,
-      "sha256": "12e33a36ca5dd28a65595acd908c08cfe1432217bef7f66c6937174400457ce4"
+      "sha256": "1f68b4d4d1394da1c0858c2d511606d8b3810fad732bf2a1e39cfd136f2b987e"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/local-runtime.mjs",
-      "bytes": 14661,
-      "sha256": "680e602e1058aa3ecca21a534cbdb4e75ac204f57e523301151d5f878b6171b5"
+      "bytes": 14764,
+      "sha256": "bf543c5d54c1eff145a5d51ab93d17cc72bcf4d34e86e80633d3df573bf007a5"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a-core.mjs",
@@ -173,8 +173,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-a.test.mjs",
-      "bytes": 34644,
-      "sha256": "3105ae8eff2d1a0e00d60deeb76247e97ffb337146801fcaec9ece2104a15416"
+      "bytes": 35743,
+      "sha256": "6a1446c7c5a8e0916c5c2d5f5bd687b9d3c4d8785cdb643028d39ed6f9a108ef"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/projection.mjs",
@@ -203,8 +203,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/current-product-witness.sql",
-      "bytes": 2364,
-      "sha256": "b080dfe6ef929676c08948bddc5563e0c55ed86e83bfe09df8314f89be236ae1"
+      "bytes": 2390,
+      "sha256": "02852b89867d4c2b3b276f9955ff81dd52e140cd25ddd9b03d217a0378b10a48"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/sql/native-versions.sql",
@@ -323,8 +323,8 @@
     },
     {
       "path": "vercel.json",
-      "bytes": 4705,
-      "sha256": "b15e394c1ff63ec77240f0e11fee99f59b4084ee079d688d5f167496a7400377"
+      "bytes": 4753,
+      "sha256": "b0d3b40db80a99a25ba72db43f36bfb0dab503cbf016dcf621d823ba5c00d377"
     }
   ],
   "migrations": [
@@ -1422,10 +1422,21 @@
       "path": "supabase/migrations/20261004124300_refuser_signature_otp_et_document_incoherents.sql",
       "bytes": 19024,
       "sha256": "31c1e33750e493188609729d71b2b1b38c4c53fb04e22efef92f7920611db843"
+    },
+    {
+      "path": "supabase/migrations/20261006144554_serialiser_renvoi_et_validation_signature.sql",
+      "bytes": 16925,
+      "sha256": "6a98fbc8d7670bdb16ad3bd4a5873ae6ed0b0a6f4b328d35c3b88cfd7f792f63"
+    },
+    {
+      "path": "supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql",
+      "bytes": 20538,
+      "sha256": "4fdb0d23be95467e0db5c17cc52032dced5d1e31611edf2a8457272c5341623d"
     }
   ],
-  "productTree": "e1a55a786dfe18ec3f75f795244f5ea5b8c02726",
-  "migrationCount": 219,
-  "priorQualifiedProductSha": "01b135471e1e6ee7ee31439ffc248c8b8519260c",
-  "productImportQualified": false
+  "productTree": "ea07da01a2d4e9b96a6fd8e1c4a5ca01b87dcf1e",
+  "migrationCount": 221,
+  "priorQualifiedProductSha": "7dfdeb42f724a1d80f78318ecf468d248b321a68",
+  "productImportQualified": false,
+  "requiresManualPhaseAReview": true
 }

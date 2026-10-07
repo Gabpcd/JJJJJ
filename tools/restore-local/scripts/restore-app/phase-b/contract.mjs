@@ -11,7 +11,7 @@ const A_STAGES = ['identity','units','plan','preload','preflight','up','inspect'
  'capture_checkpoint_before','capture_catalogue','capture_dump','capture_toc','capture_files','capture_checkpoint_after',
  'project_toc','source_off','complete','cleanup','absence'];
 export const BRANCH = 'ci/restore-app-phase-b-20261004';
-export const PRODUCT_SHA = '7dfdeb42f724a1d80f78318ecf468d248b321a68';
+export const PRODUCT_SHA = '58968a0e42d65b90d0c8916479149326635a390e';
 export const IMAGE = 'mcr.microsoft.com/playwright@sha256:65cefd09a5e943921ecd3a6e5414c603db2eb161e9eb48f2e2ccc63486dc7dc0';
 export const LABEL = 'org.jolene.restore-drill';
 export const DB = 'jolene_candidatures_pg17_test';

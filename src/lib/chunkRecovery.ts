@@ -60,7 +60,14 @@ export function recoverFromChunkLoadError(
   if (!isChunkLoadError(error)) return false;
 
   const release = options.release ?? APP_RELEASE;
-  const storage = options.storage ?? window.sessionStorage;
+  let storage: StorageMinimal;
+  try {
+    storage = options.storage ?? window.sessionStorage;
+  } catch {
+    // Certains contextes Safari refusent aussi l'accès au stockage lui-même.
+    // Conserver le rejet d'import initial, sans lancer de reload sans verrou.
+    return false;
+  }
   const now = options.now ?? Date.now();
   const marker = readMarker(storage);
 
@@ -97,7 +104,9 @@ export function installVitePreloadRecovery(release = APP_RELEASE): () => void {
       preloadEvent.payload ?? new Error('modulepreload failed'),
       {
         release,
-        beforeReload: () => event.preventDefault(),
+        // Ne pas annuler l'événement : Vite transformerait le rejet en
+        // module undefined, que React.lazy tenterait de lire avant le reload.
+        // Conserver l'erreur d'origine pour lazyRetry et l'ErrorBoundary.
       },
     );
   };

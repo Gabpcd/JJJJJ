@@ -1,11 +1,11 @@
--- Current main7df/219 catalogue witness, executed only after the integral import.
+-- Current version7 + server fixes main58968/221 catalogue witness, executed only after the integral import.
 -- Read-only: does not create Auth users, request OTP or alter permissions.
 BEGIN READ ONLY;
 SET LOCAL statement_timeout='15s';
 WITH routines AS (
  SELECT p.*, e.expected_md5 FROM (VALUES
- ('public.fn_envoyer_otp_signature(uuid)'::regprocedure, '24271f58b25ddaaf943c33041f31192a'),
- ('public.fn_signer_contrat_otp(uuid,text,text,text)'::regprocedure, '9d56c7dca13f13fd3d75f601b8b3ac73')
+ ('public.fn_envoyer_otp_signature(uuid)'::regprocedure, '786555c2ebd4bf148204b18cb48e9c1c'),
+ ('public.fn_signer_contrat_otp(uuid,text,text,text)'::regprocedure, '2272b4cd2d7429ab73e58964b1c166d5')
  ) AS e(oid,expected_md5) JOIN pg_proc p ON p.oid=e.oid
 ), columns AS (
  SELECT attname,has_column_privilege('authenticated','public.signatures_contrats',attname,'SELECT') AS readable,

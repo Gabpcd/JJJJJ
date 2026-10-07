@@ -1237,8 +1237,17 @@ Deno.serve(async (req) => {
       return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
     }
     if (isHebdoMode) {
-      const debutMission = String(mission.debut_le || '').slice(0, 10);
-      const finMission = String(mission.fin_le || '').slice(0, 10);
+      // Le pointage peut dépasser le dernier jour prévu (vacation de nuit).
+      // Même bornage serveur que le listeur, sans perdre cette dernière fraction.
+      const { data: bornes, error: bornesError } = await supabaseAdmin.rpc(
+        'fn_calculer_montant_periode', { p_mission_id: mission_id },
+      );
+      const debutMission = String((bornes as any)?.borne_debut_facturation || '');
+      const finMission = String((bornes as any)?.borne_fin_facturation || '');
+      if (bornesError || !/^\d{4}-\d{2}-\d{2}$/.test(debutMission)
+        || !/^\d{4}-\d{2}-\d{2}$/.test(finMission)) {
+        return json(req, { error: 'BORNES_FACTURATION_INDISPONIBLES' }, 409);
+      }
       const periodeValide = /^\d{4}-\d{2}-\d{2}$/.test(String(periode_debut))
         && /^\d{4}-\d{2}-\d{2}$/.test(String(periode_fin))
         && periode_debut <= periode_fin
@@ -1422,6 +1431,12 @@ Deno.serve(async (req) => {
         .rpc('fn_calculer_montant_periode', {
           p_mission_id: mission_id, p_periode_debut: periode_debut, p_periode_fin: periode_fin,
         });
+      if (calcErr?.message?.includes('FACTURATION_HISTORIQUE_A_RECONCILIER')) {
+        return json(req, {
+          error: 'FACTURATION_HISTORIQUE_A_RECONCILIER',
+          message: 'Les factures précédentes doivent être régularisées avant de facturer cette période.',
+        }, 409);
+      }
       if (calcErr) return json(req, { error: `Erreur calcul montant période : ${calcErr.message}` }, 500);
       amountHt = Number((calc as any)?.montant_ht_periode) || 0;
       quantiteHeures = Number((calc as any)?.duree_periode_heures) || null;

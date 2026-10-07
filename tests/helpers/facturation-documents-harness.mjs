@@ -82,7 +82,7 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
   return handler;
 }
 
-export function creerBanc({ panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE', apresReservation = null, reservationConcurrenteEmise = false, numeroAvoir = 'F1-AVOIR-PARTIEL', numeroRemplacement = 'F1-RECTIFICATIVE-SEMAINE' } = {}) {
+export function creerBanc({ bornesFacturation = null, erreurHistorique = false, panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE', apresReservation = null, reservationConcurrenteEmise = false, numeroAvoir = 'F1-AVOIR-PARTIEL', numeroRemplacement = 'F1-RECTIFICATIVE-SEMAINE' } = {}) {
   const documents = new Map(), factures = [], versions = [], appels = [], inconnus = [], logs = [];
   const baux = new Map(), emissions = [];
   const pannes = { xml: panneXml, perdreReponseFinale: false };
@@ -160,7 +160,7 @@ export function creerBanc({ panneXml = false, pagination = false, unicode = fals
             if (pannes.perdreReponseFinale) { pannes.perdreReponseFinale = false; return json({ message: 'Réponse perdue après commit simulé' }, 503); }
             return json(b.resultat);
           }
-          case 'fn_calculer_montant_periode': assert.equal(body.p_mission_id, ids.mission); return json({ montant_ht_periode: 80, duree_periode_heures: 4, taux_horaire_base_fige: 20 });
+          case 'fn_calculer_montant_periode': assert.equal(body.p_mission_id, ids.mission); if (body.p_periode_debut && erreurHistorique) return json({code:'23514',message:'FACTURATION_HISTORIQUE_A_RECONCILIER'},400); return json({ montant_ht_periode: 80, duree_periode_heures: 4, taux_horaire_base_fige: 20, borne_debut_facturation: String(mission.debut_le).slice(0,10), borne_fin_facturation: String(mission.fin_le).slice(0,10), ...(bornesFacturation || {}) });
           case 'fn_cumul_factures_mission': assert.equal(body.p_mission_id, ids.mission); return json({ cumul_ht: 0, nb_factures: 0 });
           case 'fn_param_num': assert.equal(body.p_cle, 'delai_paiement_prive_j'); return json(30);
           case 'fn_preparer_facture_commission_periode': assert(factures.some(f => f.id === body.p_facture_honoraire_id && f.type_document === 'FACTURE' && f.nature_correction === 'ORIGINALE')); return json({ facture_id: ids.commission });
