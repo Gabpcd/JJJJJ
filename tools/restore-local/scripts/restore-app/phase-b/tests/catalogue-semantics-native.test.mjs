@@ -4,11 +4,17 @@ import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { b23LegacyWitnessCaptureSql } from '../catalogue-semantics-probe.mjs';
 import { runB21NativeWitnesses,validateB21NativeContainer,B21_IMAGE,B21_LABEL,B21_START_SCRIPT } from '../catalogue-semantics-native.mjs';
 import { buildB21NativeWitnessSql,validateB21NativeWitnesses,projectB21NativeWitnessReceipt,decodeB21Witness,B21_ACL_CASES,B21_EXPRESSION_CASES,B22_EXPRESSION_CASES,B23_ANCHOR_CASES,validateB23AnchorWitnesses,b21SqlFailure,projectB21SqlFailure } from '../catalogue-semantics-witness.mjs';
 import { relation,expression,capture,b24ColumnFixture,PRIVATE_CANARY } from './catalogue-semantics-fixture.mjs';
 import { closedFailure } from '../contract.mjs';
 const run='jolene-restore-drill-987654-1',name=run+'-b21-semantics';
+test('the B25 correction preserves the independent B24 legacy capture byte for byte',()=>{
+ const sql=b23LegacyWitnessCaptureSql();
+ assert.equal(Buffer.byteLength(sql),11960);
+ assert.equal(createHash('sha256').update(sql).digest('hex'),'334f501464fff172f04d8c826f282c99fe4bd1d425b526ab1c6a5abcee1979d7');
+});
 const contextCommon=['LEFT_MISSING','RIGHT_MISSING','RELATIONS','EXPRESSION','LEFT_COMPLETE','RIGHT_COMPLETE','UNCLASSIFIED'];
 const contextPairs={TYPE_CONTEXT:[...contextCommon,'BINDINGS','UNCOVERED_COUNT'],
  MIXED_CONTEXT:[...contextCommon,'BINDINGS','UNCOVERED_COUNT','COVERED_COUNT','TOTAL_COUNT'],
@@ -47,13 +53,7 @@ test('a later B24 context marker cannot replace the first SQL error or an invali
   Buffer.from('ERROR:  55000: '+known+'\n'+'x'.repeat(65536))])
   assert.equal(b21SqlFailure({stderr},'EXPRESSION').b21Sql.assertion,null);
 });
-test('B24 SQL only decorates the original failing assertion and preserves every predicate and later witness byte',()=>{
- const sql=readFileSync(new URL('../catalogue-semantics-expression-witness.sql',import.meta.url),'utf8');
- const diagnostic=/THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT_'\|\|item\.name\|\|'_'\|\|CASE\n[\s\S]*?ELSE 'UNCLASSIFIED' END; END IF;/g;
- assert.equal([...sql.matchAll(diagnostic)].length,1);
- const original=sql.replace(diagnostic,"THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_CONTEXT'; END IF;");
- assert.equal(createHash('sha256').update(original).digest('hex'),'f952aeb09eecac54068860ee1b87630936614ce90ae903b5ce5dcfcb2bd8af83');
-});
+
 function anchorFixture(){
  return Object.keys(B23_ANCHOR_CASES).map(name=>{
   const left=capture(),right=capture(),l=expression(),r=structuredClone(l);
@@ -95,7 +95,7 @@ function fixture(){
   expr.cases.push({name:n,left:a,right:b});
  }
  for(const [n,expected] of Object.entries(B22_EXPRESSION_CASES)){
-  const a=expression(['POLICY_PRETTY_ROUNDTRIP','WITH_CHECK','NULL_PREDICATE'].includes(n)?'policy':'constraint'),b=structuredClone(a);
+  const a=expression(['POLICY_PRETTY_ROUNDTRIP','WITH_CHECK','NULL_PREDICATE','USER_POLICY_UNUSED_DOMAIN'].includes(n)?'policy':'constraint'),b=structuredClone(a);
   a.secondaryDefinition=b.secondaryDefinition=a.secondaryPrettyDefinition=b.secondaryPrettyDefinition=PRIVATE_CANARY;
   if(n!=='WITH_CHECK')b.definition+=' grouped';
   if(n.startsWith('USER_'))a.bindings.complete=b.bindings.complete=false;
@@ -110,7 +110,7 @@ function container(){return {Name:'/'+name,Config:{Labels:{[B21_LABEL]:run},Imag
   Tmpfs:{'/tmp':'rw,noexec,nosuid,size=256m,mode=1777','/var/run/postgresql':'rw,noexec,nosuid,size=16m,mode=1777'}},
  NetworkSettings:{Ports:{'5432/tcp':null},Networks:{none:{}}},Mounts:[],State:{Status:'created',OOMKilled:false}};}
 test('native private rows traverse the actual semantic comparators and a closed receipt',()=>{
- const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,12);assert.equal(receipt.anchorContextCases,7);
+ const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,13);assert.equal(receipt.anchorContextCases,7);
  assert.ok(!JSON.stringify(receipt).includes(PRIVATE_CANARY));assert.deepEqual(projectB21NativeWitnessReceipt(receipt),receipt);
  assert.throws(()=>projectB21NativeWitnessReceipt({...receipt,sql:PRIVATE_CANARY}),/B_SEMANTICS_WITNESS/);
  for(const edit of [v=>v[0].cases.find(r=>r.name==='REAL_REVOKE').right=structuredClone(v[0].cases.find(r=>r.name==='REAL_REVOKE').left),

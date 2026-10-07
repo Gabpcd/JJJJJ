@@ -23,17 +23,32 @@ test('explicit binding schema preserves covered strings and rejects omissions/ov
  for(const value of [-2147483648,-1,0,2147483647]){const x=structuredClone(row);x.bindings.uncoveredColumns[0][2]=value;assert(validB21Expression(x));}
 });
 test('new native cases use the actual validator but cannot grant an uncovered exception',()=>{
- assert.deepEqual(validateB24ColumnWitnesses(b24ColumnFixture()),{columnBindingCases:9,columnBindingSameValidator:true});
+ assert.deepEqual(validateB24ColumnWitnesses(b24ColumnFixture()),{columnBindingCases:10,columnBindingSameValidator:true});
  for(const edit of [v=>v.pop(),v=>v.push(v[0]),v=>v[0].extra=PRIVATE_CANARY,
   v=>v[0].right.expressions[0].bindings.complete=true,
   v=>v[0].left.expressions[0].localOid++,
   v=>v.find(r=>r.name==='TYPE_CHANGE').right=structuredClone(v.find(r=>r.name==='TYPE_CHANGE').left),
+  v=>v.find(r=>r.name==='WHOLE_ROW_TYPE_CHANGE').right=structuredClone(v.find(r=>r.name==='WHOLE_ROW_TYPE_CHANGE').left),
   v=>v.find(r=>r.name==='TYPEMOD_CHANGE').right.expressions[0].bindings.uncoveredColumns[0][2]=12,
   v=>v.find(r=>r.name==='MIXED_CONTEXT').left.expressions[0].bindings.columns=[],
   v=>v.find(r=>r.name==='FUNCTION_CONTEXT').right=structuredClone(v.find(r=>r.name==='FUNCTION_CONTEXT').left)]){
   const rows=b24ColumnFixture();edit(rows);assert.throws(()=>validateB24ColumnWitnesses(rows),/B_SEMANTICS_WITNESS/);
  }
 });
+for(const [name,index,value] of [['type',1,['private',PRIVATE_CANARY]],['typmod',2,13],['collation',3,['private',PRIVATE_CANARY]]])
+ test('a whole-row policy '+name+' drift refuses the anchor with no normalization',()=>{
+  const pair=b24ColumnFixture().find(x=>x.name==='WHOLE_ROW_CONTEXT');
+  const original={catalogue_sha256:'a'.repeat(64),database:[],roles:[],memberships:[]};
+  pair.right.expressions[0].bindings.uncoveredColumns[0][index]=value;
+  const probe={anchor:original,current:pair.left,fixed:pair.right};
+  assert.equal(validateB21Probe(probe,original),'INCOMPLETE');
+  const target={...original,catalogue_sha256:'b'.repeat(64)};
+  const facts={schemaVersion:1,status:'COMPLETE',facts:[]};
+  const result=catalogueParityV2(original,target,facts,facts,probe,{anchor:target,current:pair.right,fixed:pair.right});
+  assert.equal(result.v2Equal,false);assert.equal(result.reason,'ANCHOR');
+  assert.equal(result.expressionNormalizedCount,0);assert.equal(result.aclNormalizedCount,0);
+  assert(!JSON.stringify(result).includes(PRIVATE_CANARY));
+ });
 for(const [name,index,value] of [['type',1,['private',PRIVATE_CANARY]],['typmod',2,13],['collation',3,['private',PRIVATE_CANARY]]])
  test('a real '+name+' drift remains INCOMPLETE and is located without publishing the value',()=>{
   const pair=b24ColumnFixture()[0],original={catalogue_sha256:'a'.repeat(64),database:[],roles:[],memberships:[]};

@@ -171,7 +171,13 @@ SELECT CASE WHEN octet_length(v::text)>16777216 OR
  jsonb_array_length(v->'expressions')+jsonb_array_length(v->'relations')>100000
  THEN jsonb_build_object('schemaVersion',1,'status','BOUND_EXCEEDED') ELSE v END FROM payload;
 `;
-const query=legacyQuery.replace(legacyColumns,stableColumns);
+// PostgreSQL 17 omits a normal dependency for a whole-row Var. A policy's
+// automatic relation dependency must therefore cover every column too. This
+// conservatively refuses normalisation for an unreferenced custom column.
+// Preserve legacyQuery byte-for-byte for the historical native witnesses.
+const query=legacyQuery.replace(legacyColumns,stableColumns)
+ .replace("(d.refobjsubid=0 AND d.deptype<>'a') whole_row","(d.refobjsubid=0) whole_row")
+ .replace("THEN d.deptype='a' OR NOT EXISTS(SELECT 1 FROM covered_columns z", "THEN NOT EXISTS(SELECT 1 FROM covered_columns z");
 
 // The witnesses use the identical native projection, in their dedicated cluster.
 // This is a fixed synthetic scope, never an environment or CLI override.

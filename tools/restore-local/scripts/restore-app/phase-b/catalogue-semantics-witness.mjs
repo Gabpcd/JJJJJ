@@ -14,11 +14,11 @@ export const B21_EXPRESSION_CASES=Object.freeze({CHECK_ROUNDTRIP:'strictFixedEqu
  DEFERRABILITY_CHANGE:'persistentDifferenceCount',LITERAL_CHANGE:'persistentDifferenceCount'});
 export const B22_EXPRESSION_CASES=Object.freeze({CHECK_PRETTY_ROUNDTRIP:true,POLICY_PRETTY_ROUNDTRIP:true,
  BOOLEAN_PRECEDENCE:false,RIGHT_SUBTRACTION:false,CAST_CHANGE:false,LITERAL_SAME_BINDINGS:false,NULL_PREDICATE:false,WITH_CHECK:false,
- USER_COLLATION:false,USER_DOMAIN:false,USER_ARRAY:false,USER_OPERATOR:false});
+ USER_COLLATION:false,USER_DOMAIN:false,USER_ARRAY:false,USER_OPERATOR:false,USER_POLICY_UNUSED_DOMAIN:false});
 export const B23_ANCHOR_CASES=Object.freeze({TYPE_CONTEXT:'INCOMPLETE',FUNCTION_CONTEXT:'INCOMPLETE',FIXED_STABLE:'COMPLETE',
  TYPE_CHANGE:'INCOMPLETE',TYPEMOD_CHANGE:'INCOMPLETE',COLLATION_CHANGE:'INCOMPLETE',SIGNATURE_CHANGE:'INCOMPLETE'});
 export const B24_COLUMN_CASES=Object.freeze({TYPE_CONTEXT:'COMPLETE',MIXED_CONTEXT:'COMPLETE',WHOLE_ROW_CONTEXT:'COMPLETE',FIXED_STABLE:'COMPLETE',
- TYPE_CHANGE:'INCOMPLETE',TYPEMOD_CHANGE:'INCOMPLETE',COLLATION_CHANGE:'INCOMPLETE',PREDICATE_CHANGE:'INCOMPLETE',FUNCTION_CONTEXT:'INCOMPLETE'});
+ TYPE_CHANGE:'INCOMPLETE',WHOLE_ROW_TYPE_CHANGE:'INCOMPLETE',TYPEMOD_CHANGE:'INCOMPLETE',COLLATION_CHANGE:'INCOMPLETE',PREDICATE_CHANGE:'INCOMPLETE',FUNCTION_CONTEXT:'INCOMPLETE'});
 const keys=(v,expected)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===expected.length&&expected.every(k=>Object.hasOwn(v,k));
 export function b21WitnessFailure(reason){return Object.assign(Error('B_SEMANTICS_WITNESS'),{code:'B_SEMANTICS_WITNESS',b21WitnessReason:B21_WITNESS_REASONS.includes(reason)?reason:'UNKNOWN'});}
 const sqlPhases=['CREATE_DATABASE','ACL','EXPRESSION','ROLLBACK'];
@@ -36,7 +36,7 @@ const sqlAssertions=['B21_DEFAULT_CREATION_ONLY','B21_GRANTOR_PRESERVED','B21_GR
  'B21_OID_JSON_TYPE','B21_POLICY_CHANGE_REJECTED','B21_REGCLASS_NATIVE_REBIND','B21_TIMEZONE_VARIATION','B21_VALIDATION_CHANGE_REJECTED',
  'B22_COUNTEREXAMPLE','B22_POLICY_ROUNDTRIP','B22_WITH_CHECK',...Object.keys(B22_EXPRESSION_CASES).map(k=>'B22_CHECK_CASE_'+k),
  'B23_ANCHOR_CONTEXT','B23_ANCHOR_FIXED','B23_ANCHOR_TYPE','B23_ANCHOR_TYPEMOD','B23_ANCHOR_COLLATION','B23_ANCHOR_SIGNATURE',
- 'B24_COLUMN_CONTEXT',...b24ContextAssertions,'B24_COLUMN_FIXED','B24_COLUMN_TYPE','B24_COLUMN_TYPEMOD','B24_COLUMN_COLLATION','B24_COLUMN_PREDICATE','B24_COLUMN_LEGACY_LINK'];
+ 'B25_UNUSED_DOMAIN_POLICY','B25_WHOLE_ROW_DEPENDENCY','B25_WHOLE_ROW_LEGACY_LINK','B25_WHOLE_ROW_TYPE','B24_COLUMN_CONTEXT',...b24ContextAssertions,'B24_COLUMN_FIXED','B24_COLUMN_TYPE','B24_COLUMN_TYPEMOD','B24_COLUMN_COLLATION','B24_COLUMN_PREDICATE','B24_COLUMN_LEGACY_LINK'];
 export function projectB21SqlFailure(v) {
  return {phase:sqlPhases.includes(v?.phase)?v.phase:'UNKNOWN',
   outcome:['EXIT','TIMEOUT','SIGNAL','EXECUTION_ERROR','OUTPUT_BOUND'].includes(v?.outcome)?v.outcome:'UNKNOWN',
@@ -98,6 +98,7 @@ export function validateB21NativeWitnesses(acl,expressions){
   if(catalogueV2ExpressionEqual(row.left,row.right)!==expected)throw b21WitnessFailure('EXPRESSION_COMPARISON');
   if(expected&&(row.left.definition===row.right.definition||row.left.prettyDefinition!==row.right.prettyDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
   // This negative must isolate WITH CHECK, not fail for unrelated drift.
+  if(name==='NULL_PREDICATE'&&(!row.left.bindings.complete||!row.right.bindings.complete))throw b21WitnessFailure('EXPRESSION_COMPARISON');
   if(name==='WITH_CHECK'&&(!['identity','metadata','dependencies','bindings','definition','prettyDefinition']
    .every(k=>JSON.stringify(row.left[k])===JSON.stringify(row.right[k]))
    ||!row.left.bindings.complete||typeof row.left.secondaryDefinition!=='string'||typeof row.right.secondaryDefinition!=='string'
@@ -108,7 +109,7 @@ export function validateB21NativeWitnesses(acl,expressions){
  validateB24ColumnWitnesses(expressions.columnCases);
  return projectB21NativeWitnessReceipt({schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,
   aclCases:9,expressionCases:8,realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,
-  catalogueV2Cases:12,catalogueV2SameComparators:true,anchorContextCases:7,anchorContextSameValidator:true,columnBindingCases:9,columnBindingSameValidator:true,
+  catalogueV2Cases:13,catalogueV2SameComparators:true,anchorContextCases:7,anchorContextSameValidator:true,columnBindingCases:10,columnBindingSameValidator:true,
   sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false});
 }
 // The native context change must reproduce the unchanged private validator's
@@ -163,7 +164,7 @@ export function validateB24ColumnWitnesses(values){
    if(l.bindings.uncoveredColumns.length!==1||r.bindings.uncoveredColumns.length!==1)throw b21WitnessFailure('EXPRESSION_COMPARISON');
    if(['TYPE_CONTEXT','MIXED_CONTEXT','WHOLE_ROW_CONTEXT'].includes(name)&&!equal(l.bindings,r.bindings))throw b21WitnessFailure('EXPRESSION_COMPARISON');
    if(['MIXED_CONTEXT','WHOLE_ROW_CONTEXT'].includes(name)&&(l.bindings.columns.length!==1||l.bindings.columnCount!==2))throw b21WitnessFailure('EXPRESSION_COMPARISON');
-   const index={TYPE_CHANGE:1,TYPEMOD_CHANGE:2,COLLATION_CHANGE:3}[name];
+   const index={TYPE_CHANGE:1,WHOLE_ROW_TYPE_CHANGE:1,TYPEMOD_CHANGE:2,COLLATION_CHANGE:3}[name];
    if(index!==undefined&&equal(l.bindings.uncoveredColumns[0][index],r.bindings.uncoveredColumns[0][index]))throw b21WitnessFailure('EXPRESSION_COMPARISON');
    if(name==='PREDICATE_CHANGE'&&l.definition===r.definition)throw b21WitnessFailure('EXPRESSION_COMPARISON');
   }
@@ -174,14 +175,14 @@ export function validateB24ColumnWitnesses(values){
     ||comparison.aclNormalizedCount!==0||comparison.expressionNormalizedCount!==0)throw b21WitnessFailure('EXPRESSION_COMPARISON');
   }
  }
- return {columnBindingCases:9,columnBindingSameValidator:true};
+ return {columnBindingCases:10,columnBindingSameValidator:true};
 }
 // Final publication is reconstructed, including for tests feeding forged receipts.
 export function projectB21NativeWitnessReceipt(v){
  const expected={schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,aclCases:9,expressionCases:8,
-  realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,catalogueV2Cases:12,catalogueV2SameComparators:true,
+  realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,catalogueV2Cases:13,catalogueV2SameComparators:true,
   anchorContextCases:7,anchorContextSameValidator:true,
-  columnBindingCases:9,columnBindingSameValidator:true,
+  columnBindingCases:10,columnBindingSameValidator:true,
   sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false};
  if(!keys(v,Object.keys(expected))||!Object.keys(expected).every(k=>v[k]===expected[k]))throw b21WitnessFailure('PRIVATE_SHAPE');
  return expected;

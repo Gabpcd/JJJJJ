@@ -203,21 +203,22 @@ BEGIN
   OR (NULL::boolean IS NOT TRUE) IS NOT TRUE OR (NOT NULL::boolean) IS NOT NULL
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_COUNTEREXAMPLE'; END IF;
 END $b22_checks$;
-CREATE POLICY probe_policy ON b21_expr.v2_subject USING (a OR (b OR c)) WITH CHECK(a);
+CREATE TABLE b21_expr.v2_policy_subject(a boolean,b boolean,c boolean);
+CREATE POLICY probe_policy ON b21_expr.v2_policy_subject USING (a OR (b OR c)) WITH CHECK(a);
 DO $b22_policies$
 DECLARE l jsonb; v jsonb;
 BEGIN
- l:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
- EXECUTE format('ALTER POLICY probe_policy ON b21_expr.v2_subject USING (%s)',l->>'prettyDefinition');
- v:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ l:=b21_expr.fact('policy','b21_expr.v2_policy_subject','probe_policy');
+ EXECUTE format('ALTER POLICY probe_policy ON b21_expr.v2_policy_subject USING (%s)',l->>'prettyDefinition');
+ v:=b21_expr.fact('policy','b21_expr.v2_policy_subject','probe_policy');
  IF l->>'definition'=v->>'definition' OR l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition'
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_POLICY_ROUNDTRIP'; END IF;
  INSERT INTO b22_cases VALUES('POLICY_PRETTY_ROUNDTRIP',l,v);
  l:=v;
  -- Keep the same column dependency: USING and WITH CHECK record dependencies
  -- separately, so switching a to b changes the dependency multiplicities.
- ALTER POLICY probe_policy ON b21_expr.v2_subject WITH CHECK(NOT a);
- v:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
+ ALTER POLICY probe_policy ON b21_expr.v2_policy_subject WITH CHECK(NOT a);
+ v:=b21_expr.fact('policy','b21_expr.v2_policy_subject','probe_policy');
  IF l->>'definition' IS DISTINCT FROM v->>'definition'
   OR l->>'prettyDefinition' IS DISTINCT FROM v->>'prettyDefinition' OR l->'dependencies' IS DISTINCT FROM v->'dependencies'
   OR l->'metadata' IS DISTINCT FROM v->'metadata' OR l->'bindings' IS DISTINCT FROM v->'bindings'
@@ -226,11 +227,25 @@ BEGIN
   OR true IS NOT TRUE OR (NOT true) IS NOT FALSE
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B22_WITH_CHECK'; END IF;
  INSERT INTO b22_cases VALUES('WITH_CHECK',l,v);
- ALTER POLICY probe_policy ON b21_expr.v2_subject USING (a IS NOT TRUE);
- l:=b21_expr.fact('policy','b21_expr.v2_subject','probe_policy');
- ALTER POLICY probe_policy ON b21_expr.v2_subject USING (NOT a);
- INSERT INTO b22_cases VALUES('NULL_PREDICATE',l,b21_expr.fact('policy','b21_expr.v2_subject','probe_policy'));
+ ALTER POLICY probe_policy ON b21_expr.v2_policy_subject USING (a IS NOT TRUE);
+ l:=b21_expr.fact('policy','b21_expr.v2_policy_subject','probe_policy');
+ ALTER POLICY probe_policy ON b21_expr.v2_policy_subject USING (NOT a);
+ INSERT INTO b22_cases VALUES('NULL_PREDICATE',l,b21_expr.fact('policy','b21_expr.v2_policy_subject','probe_policy'));
 END $b22_policies$;
+
+CREATE POLICY unused_domain_policy ON b21_expr.v2_subject USING (a OR (b OR c));
+DO $b25_unused$
+DECLARE l jsonb; r jsonb;
+BEGIN
+ l:=b21_expr.fact('policy','b21_expr.v2_subject','unused_domain_policy');
+ EXECUTE format('ALTER POLICY unused_domain_policy ON b21_expr.v2_subject USING (%s)',l->>'prettyDefinition');
+ r:=b21_expr.fact('policy','b21_expr.v2_subject','unused_domain_policy');
+ IF l->'bindings'->>'complete' IS DISTINCT FROM 'false' OR r->'bindings'->>'complete' IS DISTINCT FROM 'false'
+  OR l->>'definition'=r->>'definition' OR l->>'prettyDefinition' IS DISTINCT FROM r->>'prettyDefinition'
+  OR (l->'bindings'->>'columnCount')::int<>9 OR jsonb_array_length(l->'bindings'->'uncoveredColumns')<>2
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B25_UNUSED_DOMAIN_POLICY'; END IF;
+ INSERT INTO b22_cases VALUES('USER_POLICY_UNUSED_DOMAIN',l,r);
+END $b25_unused$;
 
 -- B23 diagnoses the current/fixed anchor itself, without accepting any new
 -- equality. These native captures retain all projected fields and local OIDs.
@@ -324,6 +339,17 @@ CREATE TABLE b21_expr.anchor_uncovered_mod(t varchar(8) COLLATE b21_expr.anchor_
 CREATE TABLE b21_expr.anchor_mixed(a boolean,d b21_expr.anchor_domain,CONSTRAINT anchor_check CHECK(a OR d IS NOT NULL));
 CREATE TABLE b21_expr.anchor_whole(a boolean,d b21_expr.anchor_domain);
 CREATE POLICY anchor_policy ON b21_expr.anchor_whole USING(row_to_json(anchor_whole) IS NOT NULL);
+DO $b25_dependencies$
+DECLARE p oid;
+BEGIN
+ SELECT oid INTO STRICT p FROM pg_policy WHERE polrelid='b21_expr.anchor_whole'::regclass AND polname='anchor_policy';
+ IF (SELECT count(*) FROM pg_depend WHERE classid='pg_policy'::regclass AND objid=p AND refclassid='pg_class'::regclass
+     AND refobjid='b21_expr.anchor_whole'::regclass AND refobjsubid=0 AND deptype='a')<>1
+  OR EXISTS(SELECT 1 FROM pg_depend WHERE classid='pg_policy'::regclass AND objid=p AND refclassid='pg_class'::regclass
+     AND refobjid='b21_expr.anchor_whole'::regclass AND (refobjsubid<>0 OR deptype<>'a'))
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B25_WHOLE_ROW_DEPENDENCY'; END IF;
+END $b25_dependencies$;
+
 DO $b24_columns$
 DECLARE l jsonb; r jsonb; le jsonb; re jsonb; ll jsonb; rr jsonb; covered_legacy jsonb; item record; pair record;
 BEGIN
@@ -349,9 +375,17 @@ BEGIN
     FROM jsonb_array_elements(re->'columns') old(v)
     WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(le->'uncoveredColumns') unseen(u)
      WHERE v->>0=(u->0->>0)||'.'||(u->0->>1)||'.'||(u->0->>2));
+   IF item.name='WHOLE_ROW_CONTEXT' THEN
+    IF pair.current_capture - 'expressions' IS DISTINCT FROM pair.legacy_capture - 'expressions'
+     OR (pair.current_capture->'expressions'->0)-'bindings' IS DISTINCT FROM (pair.legacy_capture->'expressions'->0)-'bindings'
+     OR re IS DISTINCT FROM '{"schemaVersion":2,"complete":true,"factKeys":[["relation","b21_expr.anchor_whole"]],"columns":[],"columnCount":0,"uncoveredColumns":[]}'::jsonb
+     OR le IS DISTINCT FROM '{"schemaVersion":2,"complete":false,"factKeys":[["relation","b21_expr.anchor_whole"]],"columns":[["b21_expr.anchor_whole.a","boolean",null]],"columnCount":2,"uncoveredColumns":[[["b21_expr","anchor_whole","d"],["b21_expr","anchor_domain"],-1,null]]}'::jsonb
+    THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B25_WHOLE_ROW_LEGACY_LINK'; END IF;
+   ELSE
    IF le->'factKeys' IS DISTINCT FROM re->'factKeys' OR le->'columns' IS DISTINCT FROM covered_legacy
     OR le->'columnCount' IS DISTINCT FROM re->'columnCount' OR le->'complete' IS DISTINCT FROM re->'complete'
    THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_LEGACY_LINK'; END IF;
+   END IF;
   END LOOP;
   le:=l->'expressions'->0; re:=r->'expressions'->0;
   IF le IS NULL OR re IS NULL OR l->'relations' IS DISTINCT FROM r->'relations'
@@ -394,6 +428,14 @@ BEGIN
  IF l->'expressions'->0->'bindings'->'uncoveredColumns'->0->1 IS NOT DISTINCT FROM r->'expressions'->0->'bindings'->'uncoveredColumns'->0->1
  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B24_COLUMN_TYPE'; END IF;
  INSERT INTO b24_column_cases VALUES('TYPE_CHANGE',l,r);
+
+ l:=b21_expr.column_capture('b21_expr.anchor_whole','policy','anchor_policy');
+ ALTER TABLE b21_expr.anchor_whole ALTER d TYPE b21_expr.anchor_domain_other USING d::integer::b21_expr.anchor_domain_other;
+ r:=b21_expr.column_capture('b21_expr.anchor_whole','policy','anchor_policy');
+ IF (l->'expressions'->0)-'bindings' IS DISTINCT FROM (r->'expressions'->0)-'bindings'
+  OR l->'expressions'->0->'bindings'->'uncoveredColumns'->0->1 IS NOT DISTINCT FROM r->'expressions'->0->'bindings'->'uncoveredColumns'->0->1
+ THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B25_WHOLE_ROW_TYPE'; END IF;
+ INSERT INTO b24_column_cases VALUES('WHOLE_ROW_TYPE_CHANGE',l,r);
 
  l:=b21_expr.column_capture('b21_expr.anchor_uncovered_mod','constraint','anchor_check');
  ALTER TABLE b21_expr.anchor_uncovered_mod ALTER t TYPE varchar(9) COLLATE b21_expr.anchor_c;

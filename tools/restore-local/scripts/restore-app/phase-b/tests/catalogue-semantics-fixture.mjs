@@ -15,18 +15,18 @@ export function capture(){return {schemaVersion:1,status:'COMPLETE',postgresVers
  IntervalStyle:'postgres',extra_float_digits:'3',quote_all_identifiers:'off',standard_conforming_strings:'on',bytea_output:'hex',lc_monetary:'C',server_encoding:'UTF8',client_encoding:'UTF8'})[k]])),
  resolvedSchemas:['pg_catalog'],currentUser:'postgres',sessionUser:'postgres',relations:[],expressions:[]};}
 export function b24ColumnFixture(){
- return ['TYPE_CONTEXT','MIXED_CONTEXT','WHOLE_ROW_CONTEXT','FIXED_STABLE','TYPE_CHANGE','TYPEMOD_CHANGE','COLLATION_CHANGE','PREDICATE_CHANGE','FUNCTION_CONTEXT'].map(name=>{
-  const left=capture(),right=capture(),l=expression(name==='WHOLE_ROW_CONTEXT'?'policy':'constraint');
+ return ['TYPE_CONTEXT','MIXED_CONTEXT','WHOLE_ROW_CONTEXT','FIXED_STABLE','TYPE_CHANGE','WHOLE_ROW_TYPE_CHANGE','TYPEMOD_CHANGE','COLLATION_CHANGE','PREDICATE_CHANGE','FUNCTION_CONTEXT'].map(name=>{
+  const left=capture(),right=capture(),l=expression(name.startsWith('WHOLE_ROW_')?'policy':'constraint');
   l.bindings.complete=false;
   if(name!=='FUNCTION_CONTEXT'){
    l.bindings.uncoveredColumns=[[['public','subject','typed'],['public','synthetic_domain'],-1,null]];
-   if(['MIXED_CONTEXT','WHOLE_ROW_CONTEXT'].includes(name)){l.bindings.columnCount=2;l.bindings.factKeys.push(['column','public.subject.typed']);}
+   if((['MIXED_CONTEXT','WHOLE_ROW_CONTEXT','WHOLE_ROW_TYPE_CHANGE'].includes(name))){l.bindings.columnCount=2;l.bindings.factKeys.push(['column','public.subject.typed']);}
    else{l.bindings.columns=[];l.bindings.factKeys=[['column','public.subject.typed']];}
-   if(name==='WHOLE_ROW_CONTEXT')l.bindings.factKeys=[['relation','public.subject']];
+   if(name.startsWith('WHOLE_ROW_'))l.bindings.factKeys=[['relation','public.subject']];
   }
   const r=structuredClone(l);left.expressions=[l];right.expressions=[r];
   if(name.endsWith('_CONTEXT'))left.context.search_path='b21_expr,pg_catalog';
-  if(name==='TYPE_CHANGE')r.bindings.uncoveredColumns[0][1][1]='other_domain';
+  if(['TYPE_CHANGE','WHOLE_ROW_TYPE_CHANGE'].includes(name))r.bindings.uncoveredColumns[0][1][1]='other_domain';
   if(name==='TYPEMOD_CHANGE'){l.bindings.uncoveredColumns[0][2]=12;r.bindings.uncoveredColumns[0][2]=13;}
   if(name==='COLLATION_CHANGE'){l.bindings.uncoveredColumns[0][3]=['public','first'];r.bindings.uncoveredColumns[0][3]=['public','second'];}
   if(name==='PREDICATE_CHANGE'){r.definition+=' changed';r.prettyDefinition+=' changed';r.localOid++;}
