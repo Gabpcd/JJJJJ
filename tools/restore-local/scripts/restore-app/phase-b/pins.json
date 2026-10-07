@@ -297,8 +297,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-parity-v2.mjs",
-      "bytes": 8912,
-      "sha256": "f3e336a5a770ea16644e10aa55d1c617f87144e46e531d820408489645f78ef1"
+      "bytes": 14996,
+      "sha256": "8cc8d6a8b2a38403a3b4557d09f5528c4bf3b641be4c5305029e6322a3dd48f9"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/catalogue-semantics-acl-witness.sql",
@@ -337,8 +337,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/contract.mjs",
-      "bytes": 25024,
-      "sha256": "5ad541dfeb0a97cc6871895c668249887026e107e55a66f792e59f037f5cabfb"
+      "bytes": 25332,
+      "sha256": "4cceed37de2ac817dfe2afbda47aecc1b1f1bd031f101adb2f3f32f3a2c8311a"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/core.mjs",
@@ -392,8 +392,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/native-runtime.mjs",
-      "bytes": 26553,
-      "sha256": "9233847c8eab6c484c17ea7bc300e411d6c3167d32939acc64d8305bca724f0a"
+      "bytes": 26816,
+      "sha256": "1a9f06351f1b9641d2b78d4f101634a1081e2bb9e516c8ea06071751fdba7ffa"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/private-app.mjs",
@@ -407,8 +407,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/review.json",
-      "bytes": 1397,
-      "sha256": "dcda0aa0a17dbb9b146a4a6d7d213ddb247aee35fca1b4f7c366d7419928eea5"
+      "bytes": 1466,
+      "sha256": "5a3429fe833e9f1b888352568ce5311c7dbf70390ed86286e5e3fd594e8c1fc9"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/browser-input.test.mjs",
@@ -437,8 +437,8 @@
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-parity-v2.test.mjs",
-      "bytes": 7749,
-      "sha256": "d160412975df5ce4e167769b2d7270ca3fd5f6db04d50caad86774ce0e4ab462"
+      "bytes": 13516,
+      "sha256": "2e97df3cc57116b0b000288b8e0d0b5b03f548d3888c5bbc17e251541842926a"
     },
     {
       "path": "tools/restore-local/scripts/restore-app/phase-b/tests/catalogue-semantics-diagnostic.test.mjs",

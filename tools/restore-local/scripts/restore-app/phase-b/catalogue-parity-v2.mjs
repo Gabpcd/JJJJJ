@@ -125,3 +125,87 @@ export function catalogueParityV2(source,target,sourceFacts,targetFacts,sourcePr
   return result(aclNormalizedCount+expressionNormalizedCount>0?'NORMALIZED':'HASH_WITHOUT_FACT_DELTA');
  }catch{return result('SHAPE');}
 }
+
+// Advisory only, called after the original refusal. No identities, SQL, types,
+// values or hashes cross this projection, and it cannot grant equivalence.
+const bindingFields=['selected','incompleteCoverage','metadataDifference','expressionDifference','referenceFactMissing',
+ 'columnFactMissing','columnTypeMismatch','none','sourceComplete','targetComplete','sourceCovered','targetCovered',
+ 'sourceUncovered','targetUncovered','sourceTotal','targetTotal','factKeysEqual','coveredEqual','uncoveredEqual',
+ 'prettyEqual','secondaryEqual','secondaryPrettyEqual','sourceExplicit','targetExplicit','sourceAutoOnly','targetAutoOnly',
+ 'sourceOther','targetOther'];
+const bindingFail=()=>({schemaVersion:1,status:'INVALID_SHAPE'});
+export function projectCatalogueBindingDiagnostic(value){
+ if(!plain(value)||!equal(Object.keys(value).sort(),['schemaVersion','status','kinds'].sort())||value.schemaVersion!==1
+  ||value.status!=='COMPLETE'||!Array.isArray(value.kinds)||value.kinds.length!==2)return bindingFail();
+ const kinds=[];
+ for(const [index,kind] of ['policy','constraint'].entries()){
+  const row=value.kinds[index];
+  if(!plain(row)||row.kind!==kind||!equal(Object.keys(row).sort(),['kind',...bindingFields].sort())
+   ||bindingFields.some(k=>!Number.isSafeInteger(row[k])||row[k]<0||row[k]>CATALOGUE_FACT_BOUND**2)
+   ||row.selected>CATALOGUE_FACT_BOUND
+   ||['incompleteCoverage','metadataDifference','expressionDifference','referenceFactMissing','columnFactMissing','columnTypeMismatch','none'].reduce((s,k)=>s+row[k],0)!==row.selected
+   ||['sourceComplete','targetComplete','factKeysEqual','coveredEqual','uncoveredEqual','prettyEqual','secondaryEqual','secondaryPrettyEqual'].some(k=>row[k]>row.selected)
+   ||['source','target'].some(s=>row[s+'Covered']+row[s+'Uncovered']!==row[s+'Total']||row[s+'Explicit']+row[s+'AutoOnly']+row[s+'Other']!==row[s+'Uncovered']
+    ||row[s+'Total']>row.selected*CATALOGUE_FACT_BOUND||row[s+'Uncovered']>(row.selected-row[s+'Complete'])*CATALOGUE_FACT_BOUND))return bindingFail();
+  kinds.push({kind,...Object.fromEntries(bindingFields.map(k=>[k,row[k]]))});
+ }
+ return {schemaVersion:1,status:'COMPLETE',kinds};
+}
+export function catalogueBindingDiagnostic(source,target,sourceFacts,targetFacts,sourceProbe,targetProbe){
+ try{
+  if(captureStatus(sourceFacts)!=='COMPLETE'||captureStatus(targetFacts)!=='COMPLETE'
+   ||validateB21Probe(sourceProbe,source)!=='COMPLETE'||validateB21Probe(targetProbe,target)!=='COMPLETE')return bindingFail();
+  const left=map(sourceFacts.facts,factKey),right=map(targetFacts.facts,factKey);
+  if(!left||!right||left.size!==right.size||[...left.keys()].some(k=>!right.has(k)))return bindingFail();
+  const kinds=[];
+  for(const kind of ['policy','constraint']){
+   const row={kind,...Object.fromEntries(bindingFields.map(k=>[k,0]))};
+   const selected=sourceFacts.facts.filter(r=>r[0]===kind);
+   const captures=[sourceProbe.current,sourceProbe.fixed,targetProbe.current,targetProbe.fixed].map(p=>map(p.expressions.filter(x=>x.kind===kind),x=>canonical([kind,x.identity.join('.')])));
+   if(captures.some(m=>!m||m.size!==selected.length))return bindingFail();
+   for(const x of selected){
+    const key=factKey(x),y=right.get(key),[u,uf,v,vf]=captures.map(m=>m.get(key));
+    if(!y||![u,uf,v,vf].every(Boolean))return bindingFail();
+    for(const [fact,p] of [[x,u],[y,v]])if(p.definition!==(kind==='policy'?fact[2].qual:fact[2])
+     ||(kind==='policy'&&!equal(p.secondaryDefinition,fact[2].with_check)))return bindingFail();
+    if(equal(x[2],y[2]))continue;
+    // This diagnostic only classifies expression drift. Other policy facts
+    // remain outside its scope, just as they refuse the original comparator.
+    if(kind==='policy'){
+     const rest=p=>Object.fromEntries(Object.entries(p).filter(([k])=>k!=='qual'));
+     if(!equal(rest(x[2]),rest(y[2])))return bindingFail();
+    }
+    row.selected++;
+    for(const [side,p] of [['source',uf],['target',vf]]){
+     row[side+'Complete']+=Number(p.bindings.complete);row[side+'Covered']+=p.bindings.columns.length;
+     row[side+'Uncovered']+=p.bindings.uncoveredColumns.length;row[side+'Total']+=p.bindings.columnCount;
+     for(const [identity] of p.bindings.uncoveredColumns){
+      const explicit=p.dependencies.some(d=>d[1]==='table column'&&equal(d[2],identity));
+      const auto=p.dependencies.some(d=>d[0]==='a'&&d[1]==='table'&&equal(d[2],identity.slice(0,2)));
+      row[side+(explicit?'Explicit':auto?'AutoOnly':'Other')]++;
+     }
+    }
+    for(const [field,a,b] of [['factKeysEqual',uf.bindings.factKeys,vf.bindings.factKeys],['coveredEqual',uf.bindings.columns,vf.bindings.columns],
+     ['uncoveredEqual',uf.bindings.uncoveredColumns,vf.bindings.uncoveredColumns]])row[field]+=Number(setEqual(a,b));
+    row.prettyEqual+=Number(equal(uf.prettyDefinition,vf.prettyDefinition));
+    row.secondaryEqual+=Number(equal(uf.secondaryDefinition,vf.secondaryDefinition));
+    row.secondaryPrettyEqual+=Number(equal(uf.secondaryPrettyDefinition,vf.secondaryPrettyDefinition));
+    // Same order as the existing comparator; all changed expressions are
+    // inspected, even if the comparator already stopped on the first one.
+    let gate='none';
+    if(!equal(uf.metadata,vf.metadata)||!setEqual(uf.dependencies,vf.dependencies))gate='metadataDifference';
+    else if(!uf.bindings.complete||!vf.bindings.complete)gate='incompleteCoverage';
+    else if(!catalogueV2ExpressionEqual(uf,vf))gate='expressionDifference';
+    else if([...uf.bindings.factKeys,...vf.bindings.factKeys].some(ref=>!left.has(canonical(ref))||!right.has(canonical(ref))))gate='referenceFactMissing';
+    else for(const [facts,p] of [[left,uf],[right,vf]]){
+     for(const column of p.bindings.columns){const fact=facts.get(canonical(['column',column[0]]));
+      if(!fact){gate='columnFactMissing';break;}if(fact[2][0]!==column[1]){gate='columnTypeMismatch';break;}}
+     if(gate!=='none')break;
+    }
+    row[gate]++;
+   }
+   kinds.push(row);
+  }
+  return projectCatalogueBindingDiagnostic({schemaVersion:1,status:'COMPLETE',kinds});
+ }catch{return bindingFail();}
+}

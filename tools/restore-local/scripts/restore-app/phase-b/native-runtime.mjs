@@ -7,7 +7,7 @@ import { catalogueDiagnosticSql, catalogueFactsDiagnostic, CATALOGUE_PRIVATE_KEY
 import { buildB21ProbeSql, decodeB21Probe } from './catalogue-semantics-probe.mjs';
 import { catalogueAnchorDiagnostic } from './catalogue-anchor-diagnostic.mjs';
 import { catalogueSemanticsDiagnostic, validateB21Probe } from './catalogue-semantics-diagnostic.mjs';
-import { catalogueParityV2 } from './catalogue-parity-v2.mjs';
+import { catalogueParityV2,catalogueBindingDiagnostic } from './catalogue-parity-v2.mjs';
 import { fileTree, assertEmptyFileTree } from '../snapshot-restore.mjs';
 import { projectSqlDiagnostic } from '../../restore/bootstrap.mjs';
 import { DB, digest, requireValue, requireRestoreInvariant, catalogueRestoreDiagnostic, projectRestoreCall, projectPgRestoreDiagnostic } from './contract.mjs';
@@ -245,7 +245,9 @@ export function nativeRuntime(privateDir) {
           catalogueFactsDiagnostic(catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target)),
           catalogueSemanticsDiagnostic(snapshot.catalogue,target,catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),
             catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target)),catalogueComparison,
-          {source:catalogueAnchors.get(snapshot.catalogue),target:catalogueAnchors.get(target)}));
+          {source:catalogueAnchors.get(snapshot.catalogue),target:catalogueAnchors.get(target)},
+          catalogueBindingDiagnostic(comparable(snapshot.catalogue),comparable(target),catalogueFacts.get(snapshot.catalogue),catalogueFacts.get(target),
+            catalogueProbes.get(snapshot.catalogue),catalogueProbes.get(target))));
       return {...parity,catalogueComparison};
     },
     startSourceForUi:async()=>{
