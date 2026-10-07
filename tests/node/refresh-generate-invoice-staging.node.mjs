@@ -34,7 +34,7 @@ function harness(overrides = {}) {
 }
 test('single staging deployment preserves JWT and other functions; public probes never carry credentials', async () => {
   const h = harness(), result = await h.run(); assert.equal(result.status, 'success'); assert.equal(h.state.deployments, 1);
-  assert.equal(result.before.version, 15); assert.equal(result.after.version, 16); assert.equal(result.after.verify_jwt, false);
+  assert.equal(result.before.version, 22); assert.equal(result.after.version, 23); assert.equal(result.after.verify_jwt, false);
   assert.equal(result.after.other_functions_metadata_unchanged, true); assert.equal(result.after.other_functions_count, 1);
   assert.equal(result.business_flow_verified, false); assert.equal(result.cloud_font_rendering_verified, false); assert.equal(result.probes.exact_deployed_version_attributed, false);
   assert.equal(h.state.mainReads, 2); assert.equal(h.state.metadataReads, 2); assert.equal(h.state.fetches.length, 7);
@@ -60,7 +60,7 @@ test('dirty checkout, wrong SHA, true/missing/duplicate JWT section or alternate
 test('main movement is refused before metadata or immediately before deployment', async () => {
   for (const stage of [1,2]) { const h = harness({ mainSha: n => n === stage ? 'b'.repeat(40) : SHA }), r = await h.run(); assert.equal(r.code,'MAIN_MOVED'); assert.equal(h.state.deployments,0); assert.equal(h.state.metadataReads,stage === 1 ? 0 : 1); }
 });
-test('v15/JWT/hash/status drift, missing target, duplicate or malformed metadata cannot reach deploy', async () => {
+test('v22/JWT/hash/status drift, missing target, duplicate or malformed metadata cannot reach deploy', async () => {
   for (const mutate of [r=>r[0].version++,r=>r[0].verify_jwt=true,r=>r[0].ezbr_sha256='9'.repeat(64),r=>r[0].status='REMOVED',r=>r.shift(),r=>r.push(r[0]),r=>r[0].id='-'.repeat(36),r=>r[0].ezbr_sha256=SECRET,r=>r[0].ezbr_sha256='0'.repeat(64)]) {
     const rows=before(); mutate(rows); const h=harness({before:rows}),r=await h.run();assert.equal(r.status,'failed');assert.equal(h.state.deployments,0);assert.ok(!JSON.stringify(r).includes(SECRET));
   }
@@ -75,7 +75,7 @@ test('other function addition/deletion or any metadata change fails even after s
   }
 });
 test('same deployment, jumped version, changed ID/JWT and nonactive target never claim confirmation', async () => {
-  for (const mutate of [r=>r[0].version=15,r=>r[0].version=17,r=>r[0].id='00000000-0000-4000-8000-000000000003',r=>r[0].verify_jwt=true,r=>r[0].status='THROTTLED',r=>r[0].ezbr_sha256=EXPECTED.ezbr_sha256]) { const rows=after();mutate(rows);const h=harness({after:rows}),r=await h.run();assert.equal(r.code,'DEPLOYMENT_NOT_CONFIRMED');assert.equal(h.state.deployments,1);assert.equal(r.probes,null); }
+  for (const mutate of [r=>r[0].version=22,r=>r[0].version=24,r=>r[0].id='00000000-0000-4000-8000-000000000003',r=>r[0].verify_jwt=true,r=>r[0].status='THROTTLED',r=>r[0].ezbr_sha256=EXPECTED.ezbr_sha256]) { const rows=after();mutate(rows);const h=harness({after:rows}),r=await h.run();assert.equal(r.code,'DEPLOYMENT_NOT_CONFIRMED');assert.equal(h.state.deployments,1);assert.equal(r.probes,null); }
 });
 test('a lost CLI result is uncertain and never retried or followed by a business probe', async () => {
   const h=harness({deployError:true}),r=await h.run();assert.equal(r.code,'DEPLOY_RESULT_UNCERTAIN');assert.equal(r.deployment_attempted,true);assert.equal(r.deployment_confirmed,false);assert.equal(h.state.deployments,1);assert.equal(h.state.metadataReads,1);assert.equal(r.probes,null);assert.ok(!JSON.stringify(r).includes(SECRET));

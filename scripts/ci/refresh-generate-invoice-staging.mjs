@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 export const PROJECT = 'mejpriaetwgtcstbgfid';
 export const FUNCTION = 'generate-invoice';
-export const EXPECTED = Object.freeze({ version: 15, verify_jwt: false,
-  ezbr_sha256: '1be7e9620e5f61af304b4bafc029c0a0f4a80c99dd50e22a9ba9b17d23a46c1d' });
+// Observed 2026-10-07; only the reviewed current main source may replace it.
+export const EXPECTED = Object.freeze({ version: 22, verify_jwt: false,
+  ezbr_sha256: '9f5b5fd3511eb526d21c7a2ebfd428a50e58d49f5fc9ce552d3cd6e0f01dd86c' });
 const API = `https://api.supabase.com/v1/projects/${PROJECT}`;
 const MAIN = 'https://api.github.com/repos/Gabpcd/JJJJJ/git/ref/heads/main';
 const URL_FUNCTION = `https://${PROJECT}.supabase.co/functions/v1/${FUNCTION}`;

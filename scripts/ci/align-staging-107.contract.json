@@ -1,0 +1,589 @@
+{
+  "schemaVersion": 1,
+  "project": "mejpriaetwgtcstbgfid",
+  "productionReference": "flripxtsyegjshnhzjkz",
+  "referenceSha": "4bd2841b793ad11815053c58e519a44f52387f73",
+  "observedAt": "2026-10-07",
+  "catalogueBefore": {
+    "schema": "50c6d607e8acff2f18deb6cd50672a3a",
+    "fonctions": "a3287832377793660986b34c9b08454e",
+    "triggers": "4d397cb130fb538a265c742a3cc562ce"
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/20261006144554_serialiser_renvoi_et_validation_signature.sql",
+      "version": "20261006144554",
+      "name": "serialiser_renvoi_et_validation_signature",
+      "sha256": "6a98fbc8d7670bdb16ad3bd4a5873ae6ed0b0a6f4b328d35c3b88cfd7f792f63"
+    },
+    {
+      "path": "supabase/migrations/20261006144619_repartir_creneaux_facturation_par_periode.sql",
+      "version": "20261006144619",
+      "name": "repartir_creneaux_facturation_par_periode",
+      "sha256": "4fdb0d23be95467e0db5c17cc52032dced5d1e31611edf2a8457272c5341623d"
+    }
+  ],
+  "functions": [
+    {
+      "signature": "public.fn_bloquer_insertion_validation_tva_directe()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "9767654868f044c4a8eb51cd01f4e5c0",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_insertion_validation_tva_directe()",
+        "definition": "d9ba90146782dd433d2d8d0bd298cfde",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "9767654868f044c4a8eb51cd01f4e5c0",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_insertion_validation_tva_directe()",
+        "definition": "d9ba90146782dd433d2d8d0bd298cfde",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_bloquer_paiement_facture_en_litige()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "549bf1be0fd345f6656ca825214f5951",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_paiement_facture_en_litige()",
+        "definition": "37eef2f6a8f66b104a3428f51c0ab127",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "549bf1be0fd345f6656ca825214f5951",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_paiement_facture_en_litige()",
+        "definition": "37eef2f6a8f66b104a3428f51c0ab127",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_bloquer_retrocession_prelaunch()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "66ca2371d3c1246f47be6fabbdd569a6",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_retrocession_prelaunch()",
+        "definition": "d10c77cbbb6bba37aaac005071dee0df",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "66ca2371d3c1246f47be6fabbdd569a6",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_bloquer_retrocession_prelaunch()",
+        "definition": "d10c77cbbb6bba37aaac005071dee0df",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_calculer_financier_mission()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "0c3fc9261f2a8dfe16c8f62fe3dfa635",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "fn_calculer_financier_mission()",
+        "definition": "639b3082612cff00c42a34ef718363ed",
+        "securitydefiner": true
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "0c3fc9261f2a8dfe16c8f62fe3dfa635",
+        "owner": "postgres",
+        "config": [
+          "search_path=public"
+        ],
+        "schema": "public",
+        "signature": "fn_calculer_financier_mission()",
+        "definition": "639b3082612cff00c42a34ef718363ed",
+        "securitydefiner": true
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_calculer_montant_periode(uuid,date,date)",
+      "before": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "e081b0e03baaa71aca630678749f90eb",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_calculer_montant_periode(uuid,date,date)",
+        "definition": "87ba52b66493235a8fb7163c356670a7",
+        "securitydefiner": true
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "c75db0f37b899a3687dc11b070a80443",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_calculer_montant_periode(uuid,date,date)",
+        "definition": "11c356c3cca4905a7958f2fce5530150",
+        "securitydefiner": true
+      },
+      "revokePublic": false
+    },
+    {
+      "signature": "public.fn_corriger_strategie_facturation_assignation()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "3455f29f4606a72b82bffeeda9c64806",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_corriger_strategie_facturation_assignation()",
+        "definition": "728d9206360e209cb292a1dfe3813732",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "3455f29f4606a72b82bffeeda9c64806",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_corriger_strategie_facturation_assignation()",
+        "definition": "728d9206360e209cb292a1dfe3813732",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_envoyer_otp_signature(uuid)",
+      "before": {
+        "acl": [
+          "postgres=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "24271f58b25ddaaf943c33041f31192a",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_envoyer_otp_signature(uuid)",
+        "definition": "1e69d3ca5f8243e0188fe815e8f6746a",
+        "securitydefiner": true
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "786555c2ebd4bf148204b18cb48e9c1c",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_envoyer_otp_signature(uuid)",
+        "definition": "9a6734a7ac73dc1d90b1d36c0ec4f7db",
+        "securitydefiner": true
+      },
+      "revokePublic": false
+    },
+    {
+      "signature": "public.fn_lister_missions_a_facturer(date)",
+      "before": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "c01e9f584cdc9f0806fcc3455657cdd9",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_lister_missions_a_facturer(date)",
+        "definition": "bd7cb9196ce179aec09cf6a2956cf8c3",
+        "securitydefiner": true
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "84c3ac8a260d3b978d7fadd34efce3e7",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions",
+          "TimeZone=UTC"
+        ],
+        "schema": "public",
+        "signature": "fn_lister_missions_a_facturer(date)",
+        "definition": "b0c1246244a3815690401c69f3be12fc",
+        "securitydefiner": true
+      },
+      "revokePublic": false
+    },
+    {
+      "signature": "public.fn_normaliser_nature_correction_facture()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "f93ecd3af2b91c06e04087599eedcfe5",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_normaliser_nature_correction_facture()",
+        "definition": "1a0a86e71099ccc65cad669dd230e708",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "f93ecd3af2b91c06e04087599eedcfe5",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_normaliser_nature_correction_facture()",
+        "definition": "1a0a86e71099ccc65cad669dd230e708",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_preserver_document_facture_honoraires()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "e6ed12bcc2f60cb532c972a6d4b0d296",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_preserver_document_facture_honoraires()",
+        "definition": "014bac5372e77b8e691cc059a8526d34",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "e6ed12bcc2f60cb532c972a6d4b0d296",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_preserver_document_facture_honoraires()",
+        "definition": "014bac5372e77b8e691cc059a8526d34",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_preserver_preuve_mandat_facturation()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "a7f9998248b901a222bffb9367bb8483",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_preserver_preuve_mandat_facturation()",
+        "definition": "823117fb617200dd22f4201f864a04fe",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "a7f9998248b901a222bffb9367bb8483",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_preserver_preuve_mandat_facturation()",
+        "definition": "823117fb617200dd22f4201f864a04fe",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_proteger_validation_tva_mission()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "e28543c5600eb88170b1f6c4708bb9ba",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_proteger_validation_tva_mission()",
+        "definition": "ce1f4065f0386ef1cf6caedceb0d5654",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "e28543c5600eb88170b1f6c4708bb9ba",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_proteger_validation_tva_mission()",
+        "definition": "ce1f4065f0386ef1cf6caedceb0d5654",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_signer_contrat_otp(uuid,text,text,text)",
+      "before": {
+        "acl": [
+          "postgres=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "9d56c7dca13f13fd3d75f601b8b3ac73",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_signer_contrat_otp(uuid,text,text,text)",
+        "definition": "535642d06fe7a3678f7424489e323674",
+        "securitydefiner": true
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "authenticated=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "2272b4cd2d7429ab73e58964b1c166d5",
+        "owner": "postgres",
+        "config": [
+          "search_path=public, extensions"
+        ],
+        "schema": "public",
+        "signature": "fn_signer_contrat_otp(uuid,text,text,text)",
+        "definition": "fa9d8f96e4aaac3660293d1635590ff3",
+        "securitydefiner": true
+      },
+      "revokePublic": false
+    },
+    {
+      "signature": "public.fn_strategie_facturation_pour_periode(timestamp with time zone,timestamp with time zone)",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "b27640df7395dd11d4affdc07e062c03",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_strategie_facturation_pour_periode(timestamp with time zone,timestamp with time zone)",
+        "definition": "7a1b85d661b9b2cc90c9b0a7586afac6",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "b27640df7395dd11d4affdc07e062c03",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_strategie_facturation_pour_periode(timestamp with time zone,timestamp with time zone)",
+        "definition": "7a1b85d661b9b2cc90c9b0a7586afac6",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_verrouiller_periode_facture_honoraires()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "11ab08125d80dea07aaacf9ecc98b15e",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_verrouiller_periode_facture_honoraires()",
+        "definition": "a512b47052ce7d221f95ca7751d156e7",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "11ab08125d80dea07aaacf9ecc98b15e",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public"
+        ],
+        "schema": "public",
+        "signature": "fn_verrouiller_periode_facture_honoraires()",
+        "definition": "a512b47052ce7d221f95ca7751d156e7",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    },
+    {
+      "signature": "public.fn_verrouiller_proposition_litige_en_attente()",
+      "before": {
+        "acl": [
+          "=X/postgres",
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "bf62b56a6b46b1e15738a2a95600de86",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public, auth"
+        ],
+        "schema": "public",
+        "signature": "fn_verrouiller_proposition_litige_en_attente()",
+        "definition": "97d275fe5337eb05686b24b857989d2d",
+        "securitydefiner": false
+      },
+      "after": {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body": "bf62b56a6b46b1e15738a2a95600de86",
+        "owner": "postgres",
+        "config": [
+          "search_path=pg_catalog, public, auth"
+        ],
+        "schema": "public",
+        "signature": "fn_verrouiller_proposition_litige_en_attente()",
+        "definition": "97d275fe5337eb05686b24b857989d2d",
+        "securitydefiner": false
+      },
+      "revokePublic": true
+    }
+  ]
+}

@@ -1,12 +1,16 @@
-name: Actualiser generate-invoice staging (manuel uniquement)
+name: Aligner signature et facturation 1.0.7 sur staging (manuel)
 
 on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: 'SHA main exact relu et approuvé pour ce seul déploiement'
+        description: 'SHA main exact relu : deux migrations 1.0.7, douze ACL restreintes et generate-invoice TEST'
         type: string
         required: true
+      align_sql_107:
+        description: 'Appliquer aussi les deux migrations 1.0.7 et les douze restrictions ACL revues (une seule fois)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,7 +48,14 @@ jobs:
         with:
           node-version: '24.14.0'
       - name: Test refusals and closed reports without credentials or network
-        run: node --test tests/node/refresh-generate-invoice-staging.node.mjs
+        run: node --test tests/node/refresh-generate-invoice-staging.node.mjs tests/node/align-staging-107.node.mjs
+      - name: Aligner uniquement les quatre fonctions et douze ACL revues, sans toucher aux données métier
+        if: inputs.align_sql_107
+        timeout-minutes: 6
+        run: node scripts/ci/align-staging-107.mjs
+        env:
+          INVOICE_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
       - name: Install the pinned Supabase CLI
         uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # official v1 branch, observed 2026-10-01
         with:
@@ -60,7 +71,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: generate-invoice-staging-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/generate-invoice-staging-proof/result.json
+          path: |
+            ${{ runner.temp }}/generate-invoice-staging-proof/result.json
+            ${{ runner.temp }}/align-staging-107-proof/result.json
           retention-days: 7
           if-no-files-found: error
           include-hidden-files: false
