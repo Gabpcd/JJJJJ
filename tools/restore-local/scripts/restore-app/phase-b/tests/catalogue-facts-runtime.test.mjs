@@ -98,10 +98,11 @@ test('missing target facts cannot bypass a rejection',async t=>{
   const v=closedFailure(error,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.facts.status,'NOT_CAPTURED');return true;
  });
 });
-test('equal original catalogues still pass the unchanged predicate without diagnostic capture',async t=>{
+test('equal raw catalogues cannot bypass missing private evidence',async t=>{
  const h=harness(t,{targetHash:'a',targetFacts:false}),snapshot=await h.capture();await h.runtime.stopSource();
- const result=await h.runtime.assertSourceOffAndTargetCatalogExact(snapshot);assert.equal(result.nativeGraphqlRestoredExact,true);
- // A diagnostic is not a second acceptance rule and is not evaluated on pass.
+ await assert.rejects(()=>h.runtime.assertSourceOffAndTargetCatalogExact(snapshot),e=>{
+  const v=closedFailure(e,'restore');assert.equal(v.code,'B_RESTORE');assert.equal(v.restoreInvariant.catalogue.comparison.v2Equal,false);return true;
+ });
 });
 test('source-off guard rejects before reading target catalogue when source is running',async t=>{
  const h=harness(t,{targetState:'running'}),snapshot=await h.capture();await h.runtime.stopSource();

@@ -12,10 +12,6 @@ const relation=f=>f.targetProbe.current.relations[0];
 const syncRelations=f=>{f.targetProbe.fixed.relations=structuredClone(f.targetProbe.current.relations);};
 const syncMetadata=f=>{for(const x of f.targetProbe.fixed.expressions){const y=f.targetProbe.current.expressions.find(r=>r.kind===x.kind);y.metadata=structuredClone(x.metadata);y.dependencies=structuredClone(x.dependencies);y.bindings=structuredClone(x.bindings);}};
 
-test('B26 diagnosis preserves every byte of the previously reviewed parity comparator',()=>{
- const sql=readFileSync(new URL('../catalogue-parity-v2.mjs',import.meta.url),'utf8').split('\n// Advisory only,')[0];
- assert.equal(createHash('sha256').update(sql).digest('hex'),'f3e336a5a770ea16644e10aa55d1c617f87144e46e531d820408489645f78ef1');
-});
 const bindingDiagnostic=f=>catalogueBindingDiagnostic(...diagnosticArgs(f));
 function eachPolicy(f,edit){for(const side of ['source','target'])for(const view of ['current','fixed'])edit(f[side+'Probe'][view].expressions.find(x=>x.kind==='policy'));}
 test('B26 exhaustively classifies changed expressions and keeps private names and definitions out',()=>{
@@ -92,7 +88,7 @@ test('v2 compares complete private objects, keeps v1 red and never publishes ide
  assert.deepEqual(compare(f),r);
 });
 test('exact original equality retains its own explicitly identified rule',()=>{
- const f=v2Fixture();f.target=structuredClone(f.source);
+ const f=v2Fixture();f.target=structuredClone(f.source);f.targetFacts=structuredClone(f.sourceFacts);f.targetProbe=structuredClone(f.sourceProbe);
  assert.deepEqual(compare(f),{schemaVersion:2,status:'EQUAL',reason:'V1_EXACT',v1Equal:true,v2Equal:true,aclNormalizedCount:0,expressionNormalizedCount:0});
 });
 test('all original non-hash fields, unknown fields and field order remain strict',()=>{

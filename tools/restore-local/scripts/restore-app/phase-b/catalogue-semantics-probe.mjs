@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {extendScalarEnumBindings} from './catalogue-enum-bindings.mjs';
 
 // Pure SQL constructor. Runtime bytes and identities stay in run-local memory.
 export const ORIGINAL_SQL_SHA256='29098b4dc0caf44f2a4501517603ee8fa78b2b00ab84a0ca7a34031dadc63969';
@@ -175,9 +176,9 @@ SELECT CASE WHEN octet_length(v::text)>16777216 OR
 // automatic relation dependency must therefore cover every column too. This
 // conservatively refuses normalisation for an unreferenced custom column.
 // Preserve legacyQuery byte-for-byte for the historical native witnesses.
-const query=legacyQuery.replace(legacyColumns,stableColumns)
+const query=extendScalarEnumBindings(legacyQuery.replace(legacyColumns,stableColumns)
  .replace("(d.refobjsubid=0 AND d.deptype<>'a') whole_row","(d.refobjsubid=0) whole_row")
- .replace("THEN d.deptype='a' OR NOT EXISTS(SELECT 1 FROM covered_columns z", "THEN NOT EXISTS(SELECT 1 FROM covered_columns z");
+ .replace("THEN d.deptype='a' OR NOT EXISTS(SELECT 1 FROM covered_columns z", "THEN NOT EXISTS(SELECT 1 FROM covered_columns z"));
 
 // The witnesses use the identical native projection, in their dedicated cluster.
 // This is a fixed synthetic scope, never an environment or CLI override.

@@ -247,6 +247,71 @@ BEGIN
  INSERT INTO b22_cases VALUES('USER_POLICY_UNUSED_DOMAIN',l,r);
 END $b25_unused$;
 
+-- B27: enum coverage is earned by native, ordered type evidence.
+CREATE ROLE b27_enum_owner NOLOGIN;
+DO $b27_enums$
+DECLARE scenario text; l jsonb; r jsonb; type_before oid; type_after oid;
+BEGIN
+ FOREACH scenario IN ARRAY ARRAY['ENUM_ROUNDTRIP','ENUM_LABEL_ADD','ENUM_LABEL_RENAME','ENUM_LABEL_ORDER',
+  'ENUM_OWNER','ENUM_ACL','ENUM_DOMAIN','ENUM_ARRAY','ENUM_COMPOSITE','ENUM_OPCLASS'] LOOP
+  CREATE TYPE b21_expr.enum_status AS ENUM ('ONLINE','AWAY','OFFLINE');
+  CREATE TABLE b21_expr.enum_subject(a boolean,b boolean,c boolean,status b21_expr.enum_status);
+  CREATE POLICY probe ON b21_expr.enum_subject USING (a OR (b OR c));
+  l:=b21_expr.fact('policy','b21_expr.enum_subject','probe');
+  type_before:='b21_expr.enum_status'::regtype;
+  DROP TABLE b21_expr.enum_subject;
+  DROP TYPE b21_expr.enum_status;
+  IF scenario='ENUM_LABEL_ORDER' THEN
+   CREATE TYPE b21_expr.enum_status AS ENUM ('AWAY','ONLINE','OFFLINE');
+  ELSE
+   CREATE TYPE b21_expr.enum_status AS ENUM ('ONLINE','AWAY','OFFLINE');
+  END IF;
+  type_after:='b21_expr.enum_status'::regtype;
+  IF scenario='ENUM_LABEL_ADD' THEN ALTER TYPE b21_expr.enum_status ADD VALUE 'BUSY'; END IF;
+  IF scenario='ENUM_LABEL_RENAME' THEN ALTER TYPE b21_expr.enum_status RENAME VALUE 'AWAY' TO 'BUSY'; END IF;
+  IF scenario='ENUM_OWNER' THEN ALTER TYPE b21_expr.enum_status OWNER TO b27_enum_owner; END IF;
+  IF scenario='ENUM_ACL' THEN REVOKE USAGE ON TYPE b21_expr.enum_status FROM PUBLIC; END IF;
+  IF scenario='ENUM_OPCLASS' THEN
+   CREATE FUNCTION b21_expr.enum_compare(b21_expr.enum_status,b21_expr.enum_status) RETURNS integer
+    LANGUAGE sql IMMUTABLE STRICT AS 'SELECT CASE WHEN $1::text=$2::text THEN 0 WHEN $1::text<$2::text THEN -1 ELSE 1 END';
+   CREATE OPERATOR CLASS b21_expr.enum_custom DEFAULT FOR TYPE b21_expr.enum_status USING btree AS
+    OPERATOR 1 < (anyenum,anyenum), OPERATOR 2 <= (anyenum,anyenum), OPERATOR 3 = (anyenum,anyenum),
+    OPERATOR 4 >= (anyenum,anyenum), OPERATOR 5 > (anyenum,anyenum),
+    FUNCTION 1 b21_expr.enum_compare(b21_expr.enum_status,b21_expr.enum_status);
+  END IF;
+  CREATE TABLE b21_expr.enum_subject(a boolean,b boolean,c boolean,status b21_expr.enum_status);
+  IF scenario='ENUM_DOMAIN' THEN
+   CREATE DOMAIN b21_expr.enum_domain AS b21_expr.enum_status;
+   ALTER TABLE b21_expr.enum_subject ALTER status TYPE b21_expr.enum_domain;
+  ELSIF scenario='ENUM_ARRAY' THEN
+   ALTER TABLE b21_expr.enum_subject ALTER status TYPE b21_expr.enum_status[] USING ARRAY[status];
+  ELSIF scenario='ENUM_COMPOSITE' THEN
+   CREATE TYPE b21_expr.enum_composite AS (status b21_expr.enum_status);
+   ALTER TABLE b21_expr.enum_subject ALTER status TYPE b21_expr.enum_composite USING ROW(status)::b21_expr.enum_composite;
+  END IF;
+  EXECUTE format('CREATE POLICY probe ON b21_expr.enum_subject USING (%s)',l->>'prettyDefinition');
+  r:=b21_expr.fact('policy','b21_expr.enum_subject','probe');
+  IF l IS NULL OR r IS NULL OR type_before=type_after OR l->'localOid'=r->'localOid'
+   OR l->'metadata' IS DISTINCT FROM r->'metadata' OR l->'dependencies' IS DISTINCT FROM r->'dependencies'
+   OR l->>'definition'=r->>'definition' OR l->>'prettyDefinition' IS DISTINCT FROM r->>'prettyDefinition'
+   OR l->'bindings'->>'complete'<>'true' OR (l->'bindings'->>'columnCount')::int<>4
+   OR (SELECT count(*) FROM jsonb_array_elements(l->'bindings'->'columns') v WHERE jsonb_array_length(v)=4)<>1
+   OR (scenario IN('ENUM_DOMAIN','ENUM_ARRAY','ENUM_COMPOSITE','ENUM_OPCLASS') AND r->'bindings'->>'complete'<>'false')
+   OR (scenario NOT IN('ENUM_DOMAIN','ENUM_ARRAY','ENUM_COMPOSITE','ENUM_OPCLASS') AND r->'bindings'->>'complete'<>'true')
+  THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='B27_ENUM_NATIVE'; END IF;
+  INSERT INTO b22_cases VALUES(scenario,l,r);
+  DROP TABLE b21_expr.enum_subject;
+  IF scenario='ENUM_OPCLASS' THEN
+   DROP OPERATOR CLASS b21_expr.enum_custom USING btree;
+   DROP OPERATOR FAMILY b21_expr.enum_custom USING btree;
+   DROP FUNCTION b21_expr.enum_compare(b21_expr.enum_status,b21_expr.enum_status);
+  END IF;
+  IF scenario='ENUM_DOMAIN' THEN DROP DOMAIN b21_expr.enum_domain; END IF;
+  IF scenario='ENUM_COMPOSITE' THEN DROP TYPE b21_expr.enum_composite; END IF;
+  DROP TYPE b21_expr.enum_status;
+ END LOOP;
+END $b27_enums$;
+
 -- B23 diagnoses the current/fixed anchor itself, without accepting any new
 -- equality. These native captures retain all projected fields and local OIDs.
 CREATE TEMP TABLE b23_anchor_cases(name text PRIMARY KEY,left_capture jsonb,right_capture jsonb);

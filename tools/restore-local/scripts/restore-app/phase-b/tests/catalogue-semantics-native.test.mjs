@@ -100,6 +100,20 @@ function fixture(){
   if(n!=='WITH_CHECK')b.definition+=' grouped';
   if(n.startsWith('USER_'))a.bindings.complete=b.bindings.complete=false;
   else if(n==='WITH_CHECK')b.secondaryDefinition+=' changed';
+  else if(n.startsWith('ENUM_')){
+   const proof={schemaVersion:1,shape:'PG17_SCALAR_ENUM',column:['public','subject','status'],identity:['public','enum_status'],owner:'owner',acl:null,labels:['ONLINE','AWAY','OFFLINE']};
+   a.bindings.columns.push(['public.subject.status','public.enum_status',null,proof]);a.bindings.columnCount++;
+   b.bindings=structuredClone(a.bindings);b.localOid++;
+   const e=b.bindings.columns.at(-1)[3];
+   if(n==='ENUM_LABEL_ADD')e.labels.push('BUSY');
+   if(n==='ENUM_LABEL_RENAME')e.labels[1]='BUSY';
+   if(n==='ENUM_LABEL_ORDER')e.labels.reverse();
+   if(n==='ENUM_OWNER')e.owner='other';
+   if(n==='ENUM_ACL')e.acl=['owner=U/owner'];
+   if(['ENUM_DOMAIN','ENUM_ARRAY','ENUM_COMPOSITE','ENUM_OPCLASS'].includes(n)){
+    b.bindings.columns.pop();b.bindings.uncoveredColumns=[[['public','subject','status'],['public','unsupported'],-1,null]];b.bindings.complete=false;
+   }
+  }
   else if(!expected)b.prettyDefinition+=' changed';
   expr.v2Cases.push({name:n,left:a,right:b});
  }
@@ -110,7 +124,7 @@ function container(){return {Name:'/'+name,Config:{Labels:{[B21_LABEL]:run},Imag
   Tmpfs:{'/tmp':'rw,noexec,nosuid,size=256m,mode=1777','/var/run/postgresql':'rw,noexec,nosuid,size=16m,mode=1777'}},
  NetworkSettings:{Ports:{'5432/tcp':null},Networks:{none:{}}},Mounts:[],State:{Status:'created',OOMKilled:false}};}
 test('native private rows traverse the actual semantic comparators and a closed receipt',()=>{
- const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,13);assert.equal(receipt.anchorContextCases,7);
+ const f=fixture(),receipt=validateB21NativeWitnesses(...f);assert.equal(receipt.aclCases,9);assert.equal(receipt.expressionCases,8);assert.equal(receipt.catalogueV2Cases,23);assert.equal(receipt.anchorContextCases,7);
  assert.ok(!JSON.stringify(receipt).includes(PRIVATE_CANARY));assert.deepEqual(projectB21NativeWitnessReceipt(receipt),receipt);
  assert.throws(()=>projectB21NativeWitnessReceipt({...receipt,sql:PRIVATE_CANARY}),/B_SEMANTICS_WITNESS/);
  for(const edit of [v=>v[0].cases.find(r=>r.name==='REAL_REVOKE').right=structuredClone(v[0].cases.find(r=>r.name==='REAL_REVOKE').left),

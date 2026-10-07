@@ -14,7 +14,8 @@ export const B21_EXPRESSION_CASES=Object.freeze({CHECK_ROUNDTRIP:'strictFixedEqu
  DEFERRABILITY_CHANGE:'persistentDifferenceCount',LITERAL_CHANGE:'persistentDifferenceCount'});
 export const B22_EXPRESSION_CASES=Object.freeze({CHECK_PRETTY_ROUNDTRIP:true,POLICY_PRETTY_ROUNDTRIP:true,
  BOOLEAN_PRECEDENCE:false,RIGHT_SUBTRACTION:false,CAST_CHANGE:false,LITERAL_SAME_BINDINGS:false,NULL_PREDICATE:false,WITH_CHECK:false,
- USER_COLLATION:false,USER_DOMAIN:false,USER_ARRAY:false,USER_OPERATOR:false,USER_POLICY_UNUSED_DOMAIN:false});
+ USER_COLLATION:false,USER_DOMAIN:false,USER_ARRAY:false,USER_OPERATOR:false,USER_POLICY_UNUSED_DOMAIN:false,
+ ENUM_ROUNDTRIP:true,ENUM_LABEL_ADD:false,ENUM_LABEL_RENAME:false,ENUM_LABEL_ORDER:false,ENUM_OWNER:false,ENUM_ACL:false,ENUM_DOMAIN:false,ENUM_ARRAY:false,ENUM_COMPOSITE:false,ENUM_OPCLASS:false});
 export const B23_ANCHOR_CASES=Object.freeze({TYPE_CONTEXT:'INCOMPLETE',FUNCTION_CONTEXT:'INCOMPLETE',FIXED_STABLE:'COMPLETE',
  TYPE_CHANGE:'INCOMPLETE',TYPEMOD_CHANGE:'INCOMPLETE',COLLATION_CHANGE:'INCOMPLETE',SIGNATURE_CHANGE:'INCOMPLETE'});
 export const B24_COLUMN_CASES=Object.freeze({TYPE_CONTEXT:'COMPLETE',MIXED_CONTEXT:'COMPLETE',WHOLE_ROW_CONTEXT:'COMPLETE',FIXED_STABLE:'COMPLETE',
@@ -30,7 +31,7 @@ const b24ContextAssertions=Object.entries({
  WHOLE_ROW_CONTEXT:[...b24ContextCommon,'BINDINGS','UNCOVERED_COUNT','COVERED_COUNT','TOTAL_COUNT'],
  FUNCTION_CONTEXT:[...b24ContextCommon,'FUNCTION_FACT_KEYS','FUNCTION_COLUMNS','FUNCTION_UNCOVERED_COUNT']
 }).flatMap(([name,invariants])=>invariants.map(invariant=>'B24_COLUMN_CONTEXT_'+name+'_'+invariant));
-const sqlAssertions=['B21_DEFAULT_CREATION_ONLY','B21_GRANTOR_PRESERVED','B21_GRANT_OPTION','B21_INHERIT_OFF','B21_INHERIT_ON',
+const sqlAssertions=['B27_ENUM_NATIVE','B21_DEFAULT_CREATION_ONLY','B21_GRANTOR_PRESERVED','B21_GRANT_OPTION','B21_INHERIT_OFF','B21_INHERIT_ON',
  'B21_NULL_DEFAULT','B21_NULL_EMPTY_OWNER','B21_ORDER','B21_OWNER','B21_REAL_REVOKE_NOT_REJECTED','B21_SEQUENCE_TYPE','B21_SYNTHETIC_CONTEXT',
  'B21_CHECK_ROUNDTRIP','B21_DEFERRABILITY_CHANGE_REJECTED','B21_FIXED_CONTEXT','B21_LITERAL_CHANGE_REJECTED','B21_NOT_VALID_CAPTURED',
  'B21_OID_JSON_TYPE','B21_POLICY_CHANGE_REJECTED','B21_REGCLASS_NATIVE_REBIND','B21_TIMEZONE_VARIATION','B21_VALIDATION_CHANGE_REJECTED',
@@ -103,13 +104,17 @@ export function validateB21NativeWitnesses(acl,expressions){
    .every(k=>JSON.stringify(row.left[k])===JSON.stringify(row.right[k]))
    ||!row.left.bindings.complete||typeof row.left.secondaryDefinition!=='string'||typeof row.right.secondaryDefinition!=='string'
    ||row.left.secondaryDefinition===row.right.secondaryDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
+  if(name.startsWith('ENUM_')&&(!['identity','metadata','dependencies','prettyDefinition','secondaryDefinition','secondaryPrettyDefinition']
+   .every(k=>JSON.stringify(row.left[k])===JSON.stringify(row.right[k]))||row.left.localOid===row.right.localOid
+   ||!row.left.bindings.complete||row.left.bindings.columns.filter(c=>c.length===4).length!==1
+   ||row.right.bindings.complete===['ENUM_DOMAIN','ENUM_ARRAY','ENUM_COMPOSITE','ENUM_OPCLASS'].includes(name)))throw b21WitnessFailure('EXPRESSION_COMPARISON');
   if(name.startsWith('USER_')&&(row.left.bindings.complete||row.right.bindings.complete||row.left.prettyDefinition!==row.right.prettyDefinition))throw b21WitnessFailure('EXPRESSION_COMPARISON');
  }
  validateB23AnchorWitnesses(expressions.anchorCases);
  validateB24ColumnWitnesses(expressions.columnCases);
  return projectB21NativeWitnessReceipt({schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,
   aclCases:9,expressionCases:8,realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,
-  catalogueV2Cases:13,catalogueV2SameComparators:true,anchorContextCases:7,anchorContextSameValidator:true,columnBindingCases:10,columnBindingSameValidator:true,
+  catalogueV2Cases:23,catalogueV2SameComparators:true,anchorContextCases:7,anchorContextSameValidator:true,columnBindingCases:10,columnBindingSameValidator:true,
   sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false});
 }
 // The native context change must reproduce the unchanged private validator's
@@ -180,7 +185,7 @@ export function validateB24ColumnWitnesses(values){
 // Final publication is reconstructed, including for tests feeding forged receipts.
 export function projectB21NativeWitnessReceipt(v){
  const expected={schemaVersion:1,result:'B21_NATIVE_WITNESSES_PASSED',postgresVersionNum:170006,aclCases:9,expressionCases:8,
-  realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,catalogueV2Cases:13,catalogueV2SameComparators:true,
+  realRevokeRejected:true,predicateChangeRejected:true,validationChangeRejected:true,catalogueV2Cases:23,catalogueV2SameComparators:true,
   anchorContextCases:7,anchorContextSameValidator:true,
   columnBindingCases:10,columnBindingSameValidator:true,
   sameComparators:true,rollbackVerified:true,cleanupVerified:true,providerContacted:false};

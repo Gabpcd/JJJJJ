@@ -1,5 +1,6 @@
 import { captureStatus, CATALOGUE_FACT_BOUND } from './catalogue-facts-diagnostic.mjs';
 import { validateB21Probe, compareB21Relation, compareB21Expression } from './catalogue-semantics-diagnostic.mjs';
+import { columnFactTypeMatches } from './catalogue-enum-bindings.mjs';
 
 // Versioned comparison, not a rewrite of catalogue.sql or of restored objects.
 // Private facts stay in memory. Counters describe a decision; they never make it.
@@ -44,7 +45,7 @@ export function projectCatalogueParityV2(v) {
  if(!plain(v)||Object.keys(v).length!==keys.length||!keys.every(k=>Object.hasOwn(v,k))||v.schemaVersion!==2
   ||!['EQUAL','REFUSED'].includes(v.status)||!reasons.includes(v.reason)||typeof v.v1Equal!=='boolean'||typeof v.v2Equal!=='boolean'
   ||!['aclNormalizedCount','expressionNormalizedCount'].every(k=>Number.isSafeInteger(v[k])&&v[k]>=0&&v[k]<=CATALOGUE_FACT_BOUND)
-  ||v.aclNormalizedCount+v.expressionNormalizedCount>CATALOGUE_FACT_BOUND||v.v1Equal&&!v.v2Equal
+  ||v.aclNormalizedCount+v.expressionNormalizedCount>CATALOGUE_FACT_BOUND
   ||(v.status==='EQUAL')!==v.v2Equal||(v.v2Equal?!['V1_EXACT','NORMALIZED'].includes(v.reason):['V1_EXACT','NORMALIZED'].includes(v.reason))
   ||(v.reason==='V1_EXACT'&&(!v.v1Equal||v.aclNormalizedCount+v.expressionNormalizedCount!==0))
   ||(v.reason==='NORMALIZED'&&(v.v1Equal||v.aclNormalizedCount+v.expressionNormalizedCount===0)))
@@ -59,7 +60,6 @@ export function catalogueParityV2(source,target,sourceFacts,targetFacts,sourcePr
  try {
   if(!plain(source)||!plain(target)||!['source','target'].every(k=>/^[a-f0-9]{64}$/.test((k==='source'?source:target).catalogue_sha256??'')))return result('SHAPE');
   v1Equal=JSON.stringify(source)===JSON.stringify(target);
-  if(v1Equal)return result('V1_EXACT');
   // Retain the exact former predicate on every field except the raw fact hash,
   // including unknown fields and top-level field order.
   const rest=v=>Object.fromEntries(Object.entries(v).filter(([k])=>k!=='catalogue_sha256'));
@@ -80,6 +80,7 @@ export function catalogueParityV2(source,target,sourceFacts,targetFacts,sourcePr
     ||m.current.size!==facts.facts.filter(r=>['policy','constraint'].includes(r[0])).length)return result('IDENTITY');
   for(const [key,x] of left){
    const y=right.get(key);if(!y)return result('IDENTITY');
+   if(v1Equal&&!equal(x,y))return result('FACT_DRIFT');
    const kind=x[0];
    if(kind==='relation'){
     const u=a.relations.get(x[1]),v=b.relations.get(y[1]);if(!u||!v)return result('IDENTITY');
@@ -103,6 +104,14 @@ export function catalogueParityV2(source,target,sourceFacts,targetFacts,sourcePr
     for(const [r,p] of [[x,u],[y,v]])if(p.definition!==(kind==='policy'?r[2].qual:r[2])
      ||(kind==='policy'&&!equal(p.secondaryDefinition,r[2].with_check)))return result('ANCHOR');
     if(!equal(uf.metadata,vf.metadata)||!setEqual(uf.dependencies,vf.dependencies))return result('METADATA_DRIFT');
+    // Scalar enum evidence is checked even when raw catalogue bytes match.
+    // A label/owner/ACL drift must never hide behind unchanged policy SQL.
+    const enumColumns=p=>p.bindings.columns.filter(c=>c.length===4);
+    if(!setEqual(enumColumns(uf),enumColumns(vf)))return result('EXPRESSION_DRIFT');
+    for(const [facts,p] of [[left,uf],[right,vf]])for(const column of enumColumns(p)){
+     const fact=facts.get(canonical(['column',column[0]]));
+     if(!fact||!columnFactTypeMatches(column,fact[2][0]))return result('BINDING_UNCOVERED');
+    }
     if(equal(x[2],y[2]))continue;
     if(kind==='policy'){
      const rest=v=>Object.fromEntries(Object.entries(v).filter(([k])=>k!=='qual'));
@@ -117,12 +126,12 @@ export function catalogueParityV2(source,target,sourceFacts,targetFacts,sourcePr
     }
     for(const [facts,row] of [[left,uf],[right,vf]])for(const column of row.bindings.columns){
      const fact=facts.get(canonical(['column',column[0]]));
-     if(!fact||fact[2][0]!==column[1])return result('BINDING_UNCOVERED');
+     if(!fact||!columnFactTypeMatches(column,fact[2][0]))return result('BINDING_UNCOVERED');
     }
     expressionNormalizedCount++;
    }else if(!equal(x,y))return result('FACT_DRIFT');
   }
-  return result(aclNormalizedCount+expressionNormalizedCount>0?'NORMALIZED':'HASH_WITHOUT_FACT_DELTA');
+  return result(v1Equal?'V1_EXACT':aclNormalizedCount+expressionNormalizedCount>0?'NORMALIZED':'HASH_WITHOUT_FACT_DELTA');
  }catch{return result('SHAPE');}
 }
 
@@ -199,7 +208,7 @@ export function catalogueBindingDiagnostic(source,target,sourceFacts,targetFacts
     else if([...uf.bindings.factKeys,...vf.bindings.factKeys].some(ref=>!left.has(canonical(ref))||!right.has(canonical(ref))))gate='referenceFactMissing';
     else for(const [facts,p] of [[left,uf],[right,vf]]){
      for(const column of p.bindings.columns){const fact=facts.get(canonical(['column',column[0]]));
-      if(!fact){gate='columnFactMissing';break;}if(fact[2][0]!==column[1]){gate='columnTypeMismatch';break;}}
+      if(!fact){gate='columnFactMissing';break;}if(!columnFactTypeMatches(column,fact[2][0])){gate='columnTypeMismatch';break;}}
      if(gate!=='none')break;
     }
     row[gate]++;
