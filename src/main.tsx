@@ -7,6 +7,7 @@ import { normaliserLienJolene } from './lib/nativeLinks';
 import { createNativeBackHandler } from './lib/nativeBack';
 import { fermerNavigateurPsc } from './lib/pscNavigation';
 import { installVitePreloadRecovery } from './lib/chunkRecovery';
+import { isInjectedBrowserCspProbe } from './lib/sentryInjectedScript';
 
 // ─── Sentry Initialization ───
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
@@ -106,6 +107,7 @@ if (SENTRY_DSN) {
     ignoreErrors: SENTRY_IGNORE_ERRORS,
     denyUrls: SENTRY_DENY_URLS,
     beforeSend(event) {
+      if (isInjectedBrowserCspProbe(event)) return null;
       if (event.request?.url) event.request.url = scrubUrl(event.request.url);
       if (event.request?.headers) {
         delete (event.request.headers as Record<string, unknown>).Authorization;

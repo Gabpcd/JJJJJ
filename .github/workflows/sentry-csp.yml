@@ -1,0 +1,66 @@
+name: Sentry CSP — sonde externe et erreurs applicatives
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/main.tsx'
+      - 'src/lib/sentryInjectedScript*'
+      - 'vercel.json'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'e2e/recette-complete-sentry-csp.spec.ts'
+      - 'e2e/playwright.recette-complete.config.ts'
+      - '.github/workflows/sentry-csp.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/main.tsx'
+      - 'src/lib/sentryInjectedScript*'
+      - 'vercel.json'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'e2e/recette-complete-sentry-csp.spec.ts'
+      - 'e2e/playwright.recette-complete.config.ts'
+      - '.github/workflows/sentry-csp.yml'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  simulation:
+    name: Sentry CSP — cinq formats
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    env:
+      VITE_SUPABASE_URL: http://127.0.0.2
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_simulation
+      VITE_SENTRY_DSN: http://recette@127.0.0.2/1
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      RECETTE_SENTRY_CSP: '1'
+      RECETTE_START_SERVER: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run src/lib/sentryInjectedScript.test.ts
+      - run: npm run build
+      - run: npx playwright test --config=e2e/playwright.recette-complete.config.ts e2e/recette-complete-sentry-csp.spec.ts
+      - name: Preuves locales simulées, sans données réelles
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: sentry-csp-cinq-formats
+          path: test-results/recette-complete/
+          retention-days: 7
