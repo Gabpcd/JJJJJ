@@ -13,7 +13,10 @@ import {
 import { PROJECT } from '../../scripts/ci/connect-test-fixture.mjs';
 import {
   AUTH_ONLY_SOURCE_FILES, checkAuthOnlyCi, openAuthOnlyJournal,
-  runAuthOnlyCi, verifyAuthOnlyProvenance, resolveStagingApiKeys, sealJournal, recipientKey,
+  runAuthOnlyCi, verifyAuthOnlyProvenance,
+} from '../../scripts/ci/auth-test-frontend-ci.mjs';
+import {
+  resolveStagingApiKeys, sealJournal, recipientKey,
 } from '../../scripts/ci/connect-test-fixture-ci.mjs';
 
 const pair=generateKeyPairSync('rsa',{modulusLength:4096});
@@ -451,8 +454,8 @@ test('versioned readiness stays closed until review evidence, and manual workflo
   const workflow=await readFile(new URL('../../.github/workflows/connect-test-fixture.yml',import.meta.url),'utf8');
   assert.match(workflow,/workflow_dispatch:/);assert.doesNotMatch(workflow,/pull_request:|\n  push:|schedule:|npm ci/);
   assert.match(workflow,/group: jolene-supabase-staging-writes/);assert.match(workflow,/github\.ref == 'refs\/heads\/main'/);
-  assert.match(workflow,/AUTH_ONLY_FRONTEND_V1\) node scripts\/ci\/connect-test-fixture-ci\.mjs check-auth-only/);
-  const authStep=workflow.slice(workflow.lastIndexOf('- name:',workflow.indexOf('run: node scripts/ci/connect-test-fixture-ci.mjs run-auth-only')),
+  assert.match(workflow,/AUTH_ONLY_FRONTEND_V1\) node scripts\/ci\/auth-test-frontend-ci\.mjs check-auth-only/);
+  const authStep=workflow.slice(workflow.lastIndexOf('- name:',workflow.indexOf('run: node scripts/ci/auth-test-frontend-ci.mjs run-auth-only')),
     workflow.indexOf('- name: Conserver'));
   assert.match(authStep,/if: inputs\.purpose == 'AUTH_ONLY_FRONTEND_V1'/);assert.doesNotMatch(authStep,/STRIPE|ANON_KEY|SERVICE_ROLE_KEY/);
   assert.ok(workflow.indexOf('node --test')<workflow.indexOf('secrets.STAGING_SUPABASE_ACCESS_TOKEN'));
@@ -485,7 +488,7 @@ test('offline handoff refuses initial or ambiguous encrypted checkpoints before 
       await writeFile(input,encrypted,{mode:0o600});
       // Decryption remains available for private diagnosis; CLI frontend handoff requires full proof.
       assert.deepEqual(openAuthOnlyJournal(JSON.parse(encrypted),privatePem,fingerprint),payload);
-      const response=spawnSync(process.execPath,[fileURLToPath(new URL('../../scripts/ci/connect-test-fixture-ci.mjs',import.meta.url)),
+      const response=spawnSync(process.execPath,[fileURLToPath(new URL('../../scripts/ci/auth-test-frontend-ci.mjs',import.meta.url)),
         'open-auth-only',input,keyPath,hash(encrypted),fingerprint,output],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
       assert.equal(response.status,1);assert.match(response.stderr,/AUTH_ONLY_INCOMPLETE_HANDOFF/);
       await assert.rejects(stat(output),{code:'ENOENT'});
@@ -503,7 +506,7 @@ test('offline successful handoff is private, has exactly two intentions, no busi
     const encrypted=JSON.stringify(sealJournal(payload,recipientKey(publicPem,fingerprint))),input=join(directory,'fixture.encrypted.json');
     const keyPath=join(directory,'recipient.private.pem'),output=join(directory,'opened');
     await writeFile(input,encrypted,{mode:0o600});await writeFile(keyPath,privatePem,{mode:0o600});
-    const args=[fileURLToPath(new URL('../../scripts/ci/connect-test-fixture-ci.mjs',import.meta.url)),
+    const args=[fileURLToPath(new URL('../../scripts/ci/auth-test-frontend-ci.mjs',import.meta.url)),
       'open-auth-only',input,keyPath,hash(encrypted),fingerprint,output];
     const execute=()=>spawnSync(process.execPath,args,{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
     const response=execute();assert.equal(response.status,0);
@@ -519,4 +522,20 @@ test('offline successful handoff is private, has exactly two intentions, no busi
     for(const actor of m.members)assert.ok(!`${response.stdout}${response.stderr}`.includes(actor.password));
     assert.equal(execute().status,1);
   }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('Auth-only adapter pins all six dependencies and cannot invoke the historical Connect CLI modes',async()=>{
+  assert.deepEqual([...AUTH_ONLY_SOURCE_FILES].sort(),[
+    'scripts/ci/auth-test-frontend.mjs','scripts/ci/auth-test-frontend-ci.mjs',
+    'scripts/ci/connect-test-fixture-ci.mjs','scripts/ci/connect-test-fixture.mjs',
+    'scripts/ci/connect-test-fixture-sql.mjs','.github/workflows/connect-test-fixture.yml',
+  ].sort());
+  const historical=await import('../../scripts/ci/connect-test-fixture-ci.mjs');
+  for(const name of ['AUTH_ONLY_SOURCE_FILES','checkAuthOnlyCi','runAuthOnlyCi','openAuthOnlyJournal'])assert.equal(historical[name],undefined);
+  const script=fileURLToPath(new URL('../../scripts/ci/auth-test-frontend-ci.mjs',import.meta.url));
+  for(const mode of ['check','run','open']) {
+    const response=spawnSync(process.execPath,[script,mode],{encoding:'utf8',env:{PATH:process.env.PATH},timeout:10000});
+    assert.equal(response.status,1);assert.equal(response.stdout,'');
+    assert.deepEqual(JSON.parse(response.stderr),{prepared:false,code:'CI_ARGUMENTS'});
+  }
 });

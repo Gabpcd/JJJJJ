@@ -52,7 +52,7 @@ jobs:
       - name: Refuser tout contexte, source, destinataire ou contrat non revu
         run: |
           case "$FIXTURE_PURPOSE" in
-            AUTH_ONLY_FRONTEND_V1) node scripts/ci/connect-test-fixture-ci.mjs check-auth-only ;;
+            AUTH_ONLY_FRONTEND_V1) node scripts/ci/auth-test-frontend-ci.mjs check-auth-only ;;
             CONNECT_DOCUMENTS_TEST_V1) node scripts/ci/connect-test-fixture-ci.mjs check ;;
             *) exit 1 ;;
           esac
@@ -67,7 +67,7 @@ jobs:
       - name: Créer seulement deux Auth TEST neufs ; aucun profil ni objet Stripe
         if: inputs.purpose == 'AUTH_ONLY_FRONTEND_V1'
         timeout-minutes: 9
-        run: node scripts/ci/connect-test-fixture-ci.mjs run-auth-only
+        run: node scripts/ci/auth-test-frontend-ci.mjs run-auth-only
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
