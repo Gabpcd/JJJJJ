@@ -161,6 +161,26 @@ final class StorePhysicalTests: XCTestCase {
 
   private func report(_ stage: String, screen: Screen?, stableFor: TimeInterval = 0, blockers: [String] = [], didScroll: Bool = false) throws {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    // Diagnostic seulement : aucun label brut ne quitte ce bloc et aucun
+    // résultat ne participe à recognisedScreen() ou aux assertions du test.
+    let marker = "Missions pour toi"
+    let markerQuery = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", marker))
+    var markerDiagnostics: [[String: Any]] = []
+    for index in 0..<min(markerQuery.count, 8) {
+      let element = markerQuery.element(boundBy: index)
+      guard element.exists else { continue }
+      let label = element.label
+      let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+      let normalized = label.components(separatedBy: CharacterSet.whitespacesAndNewlines)
+        .filter { !$0.isEmpty }.joined(separator: " ")
+      markerDiagnostics.append([
+        "elementType": element.elementType.rawValue,
+        "labelLength": label.utf16.count,
+        "labelTrimEquals": trimmed == marker,
+        "labelTrimEqualsHeading": trimmed == marker + ", heading",
+        "textNormalizedEquals": normalized == marker
+      ])
+    }
     let snapshot: [String: Any] = [
       "schema": "jolene-physical-public-markers/v2",
       "bundleUnderTest": "app.jolene",
@@ -175,6 +195,7 @@ final class StorePhysicalTests: XCTestCase {
       "didScroll": didScroll,
       "observedPublicMarkers": publicMarkers.filter { exactPublicText($0) },
       "observedNavigationLabels": navigationLabels.filter { navigation($0) != nil },
+      "markerDiagnostics": markerDiagnostics,
       "limitation": didScroll
         ? "Contenu du dashboard recherché après un seul défilement. Un succès exige son marqueur prêt et la navigation stables 6 s ; il ne valide pas tout le premier écran ni documents, caméra, GPS, push, PSC ou finance."
         : "Ouverture/reprise seulement ; aucune validation documents, caméra, GPS, push, PSC ou financière."
