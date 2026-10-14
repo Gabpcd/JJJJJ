@@ -1,15 +1,29 @@
 {
   "schemaVersion": 1,
   "purpose": "AUTH_ONLY_FRONTEND_V1",
-  "ready": false,
+  "ready": true,
   "projectRef": "mejpriaetwgtcstbgfid",
-  "reviewedSourceSha": null,
-  "reviewedSourceTree": null,
-  "sourcePins": null,
-  "expiresAt": null,
-  "reviewedBy": null,
-  "authEffectsReviewed": false,
-  "catalogue": null,
+  "reviewedSourceSha": "e09d04b0cc4dcf30550477434c860376c738919b",
+  "reviewedSourceTree": "49caa91e5c0b038c365a4a75ca06b9b08cdaccf9",
+  "sourcePins": {
+    "scripts/ci/auth-test-frontend.mjs": "835d555e6a33487249bfbeda8269a514ae4eae9319a6e1578023dc03baf2b8ff",
+    "scripts/ci/connect-test-fixture-ci.mjs": "8e55ac249a5f9d22fcccc8ffa83aa14e45991bedf816280e18e4c2c59207a230",
+    "scripts/ci/connect-test-fixture.mjs": "c90e10a07609694fe0cb5c622cf746b5628f0c03d97a7ee81b5a77ba98a765a8",
+    "scripts/ci/connect-test-fixture-sql.mjs": "6873caa7db2b72322d70ce45c60cfede794f0db6aca1aad7e2bd72e6a9f40741",
+    ".github/workflows/connect-test-fixture.yml": "626671f438e53f8a93143ae486a0e2548bce0cd7a52c66b3f78de2ef1fc9e1b3"
+  },
+  "expiresAt": "2026-10-14T20:30:00.000Z",
+  "reviewedBy": "B8 review_two_auth_test; root LIVE catalogue and Auth hooks read-only",
+  "authEffectsReviewed": true,
+  "catalogue": {
+    "activeCrons": 0,
+    "runningCrons": 0,
+    "queuedRequests": 0,
+    "profileTriggersValid": true,
+    "authTriggersFingerprint": "d8058d6cc6c7930a82a229768812742c",
+    "authInsertOrUpdateTriggers": 0,
+    "profileTriggersFingerprint": "e0c4d8cce77e1a63383bc846d0dc5d06"
+  },
   "authHooks": {
     "hook_custom_access_token_enabled": false,
     "hook_mfa_verification_attempt_enabled": false,
@@ -19,5 +33,5 @@
     "hook_before_user_created_enabled": false,
     "hook_after_user_created_enabled": false
   },
-  "reason": "Fermé : inventaire SQL Auth/profil LIVE, provenance des octets et revue indépendante à épingler. Les sept hooks désactivés ont été lus séparément ; cela ne suffit pas à ouvrir l'opérateur."
+  "reason": "Deux Auth TEST neufs seulement, sans profil ni rôle métier. Catalogue et sept hooks fermés lus en staging ; provenance exacte et fenêtre courte. Exécution manuelle sur main exact après CI et revue finale du contrat."
 }
