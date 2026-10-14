@@ -17,11 +17,11 @@ jobs:
         image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
         env:
           POSTGRES_DB: sms_install_sql_only_diagnostic
-          POSTGRES_USER: postgres
+          POSTGRES_USER: sms_fixture_admin
           POSTGRES_PASSWORD: fixture-ci-ephemere
         ports: ['127.0.0.1:54329:5432']
         options: >-
-          --health-cmd "pg_isready -U postgres -d sms_install_sql_only_diagnostic"
+          --health-cmd "pg_isready -U sms_fixture_admin -d sms_install_sql_only_diagnostic"
           --health-interval 5s --health-timeout 5s --health-retries 6
     env:
       JOLENE_SMS_INSTALL_SQL_ONLY_WITNESS: CI_EPHEMERE
@@ -46,6 +46,17 @@ jobs:
         run: |
           node --test tests/node/resume-sms-staging-sql-only.node.mjs tests/node/resume-sms-staging-sql-only-sql.node.mjs
           python3 -B -m unittest discover -s tests/python -p test_sms_install_sql_only_witness.py
+      - name: Créer le login postgres distinct du bootstrap CI
+        env:
+          PGUSER: sms_fixture_admin
+        run: |
+          psql -X -qAt -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          CREATE ROLE postgres LOGIN SUPERUSER PASSWORD 'fixture-ci-ephemere';
+          ALTER DATABASE sms_install_sql_only_diagnostic OWNER TO postgres;
+          ALTER SCHEMA public OWNER TO postgres;
+          COMMIT;
+          SQL
       - name: Reproduire les droits gérés, le refus ancien et le rollback réel
         run: python3 -B scripts/ci/sms-install-sql-only-pg17.py > sms-install-sql-only-pg17-public.json
       - name: Reçu synthétique borné uniquement

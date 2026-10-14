@@ -16,7 +16,8 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 ADMIN = 'sms_fixture_admin'
 CRON_OWNER = 'sms_fixture_cron_owner'
-ADMIN_PASSWORD = 'synthetic-ci-only-sms-admin'
+ADMIN_PASSWORD = 'fixture-ci-ephemere'
+DEMOTE_SQL = 'ALTER ROLE postgres NOSUPERUSER BYPASSRLS;'
 RENDERED_SHA256 = 'e67b1284644ca2aab7f51006e4641ff921175810897813a12a0f922d45ff45cf'
 CONTRACT = ROOT / 'scripts/ci/install-sms-staging-closed.contract.json'
 CANONICAL_SPEC = importlib.util.spec_from_file_location(
@@ -28,12 +29,14 @@ EMPTY = """SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='public'::re
  AND (SELECT count(*) FROM pg_namespace WHERE nspname IN
  ('auth','extensions','private','vault','net','cron','supabase_migrations'))=0
  AND (SELECT count(*) FROM pg_roles WHERE rolname IN
- ('anon','authenticated','service_role','sms_fixture_admin','sms_fixture_cron_owner'))=0"""
-ROLE_STATE = """SELECT jsonb_build_object('superuser',rolsuper,'bypassrls',rolbypassrls)
+ ('anon','authenticated','service_role','sms_fixture_cron_owner'))=0
+ AND (SELECT oid=10 AND rolsuper FROM pg_roles WHERE rolname='sms_fixture_admin')"""
+ROLE_STATE = """SELECT jsonb_build_object('superuser',rolsuper,'bypassrls',rolbypassrls,'bootstrap',oid=10)
  FROM pg_roles WHERE rolname='postgres'"""
 PRIVILEGES = """SELECT jsonb_build_object(
  'samePostgresSession',current_user='postgres' AND session_user='postgres',
  'nonSuperuser',NOT (SELECT rolsuper FROM pg_roles WHERE rolname=current_user),
+ 'nonBootstrapPostgres',(SELECT oid<>10 FROM pg_roles WHERE rolname=current_user),
  'bypassRls',(SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user),
  'distinctCronOwner',(SELECT relowner='sms_fixture_cron_owner'::regrole
    AND relrowsecurity AND NOT relforcerowsecurity FROM pg_class WHERE oid='cron.job'::regclass),
@@ -45,7 +48,7 @@ PRIVILEGES = """SELECT jsonb_build_object(
 """
 CLEANUP = """DROP SCHEMA IF EXISTS auth,extensions,private,vault,net,cron,supabase_migrations,public CASCADE;
  CREATE SCHEMA public;
- DROP ROLE IF EXISTS anon,authenticated,service_role,sms_fixture_cron_owner,sms_fixture_admin;
+ DROP ROLE IF EXISTS anon,authenticated,service_role,sms_fixture_cron_owner;
 """
 NODE_BUILD = """import{readFileSync as read}from'node:fs';
  import{snapshotSql,transactionSql}from'./scripts/ci/install-sms-staging-closed-sql.mjs';
@@ -118,8 +121,6 @@ REVOKE ALL ON cron.job FROM PUBLIC,postgres;
 GRANT SELECT ON cron.job TO postgres;
 CREATE TABLE cron.job_run_details(runid bigint PRIMARY KEY,status text,end_time timestamptz);
 CREATE TABLE net.http_request_queue(id bigint PRIMARY KEY);
-CREATE ROLE {ADMIN} LOGIN SUPERUSER PASSWORD '{ADMIN_PASSWORD}';
-ALTER ROLE postgres NOSUPERUSER BYPASSRLS;
 COMMIT;
 """
     contract = json.loads(CONTRACT.read_text())
@@ -181,14 +182,19 @@ def check_snapshot(value, contract, after=False, before=None):
         raise WitnessFailure('SMS_SQL_ONLY_INVARIANT_CHANGED')
 
 
+def demote_from_admin(env):
+    # The service bootstrap is a different OID10 role. Never try to demote the
+    # bootstrap superuser, and establish the reduced login in a fresh session.
+    return psql({**env, 'PGUSER': ADMIN, 'PGPASSWORD': ADMIN_PASSWORD}, DEMOTE_SQL, timeout=15)
+
+
 def clean(env, initial_role):
     admin_env = {**env, 'PGUSER': ADMIN, 'PGPASSWORD': ADMIN_PASSWORD}
     restore = 'ALTER ROLE postgres SUPERUSER ' + ('BYPASSRLS' if initial_role['bypassrls'] else 'NOBYPASSRLS') + ';'
     try:
         psql(admin_env, restore, timeout=15)
     except Exception:
-        # A failed setup transaction also rolled back the administrative role
-        # and demotion. Do not broaden any other destination or retry the DDL.
+        # Do not broaden the destination or retry DDL if the admin session fails.
         if json.loads(psql(env, ROLE_STATE, timeout=15)) != initial_role:
             return False
     psql(env, CLEANUP, timeout=30)
@@ -221,14 +227,16 @@ def main():
         if psql(env, EMPTY) != 't':
             raise WitnessFailure('SMS_SQL_ONLY_DATABASE_NOT_EMPTY')
         initial_role = json.loads(psql(env, ROLE_STATE))
-        if initial_role['superuser'] is not True:
+        if initial_role['superuser'] is not True or initial_role['bootstrap'] is not False:
             raise WitnessFailure('SMS_SQL_ONLY_BOOTSTRAP_SUPERUSER_REQUIRED')
         stage = 'mount-canonical-and-reduced-annexes'
         mounted = True
         psql(env, setup)
+        stage = 'demote-non-bootstrap-postgres-from-admin'
+        demote_from_admin(env)
         stage = 'prove-managed-style-privileges'
         privileges = json.loads(psql(env, 'BEGIN READ ONLY; SET LOCAL row_security=off; ' + PRIVILEGES + '; ROLLBACK;'))
-        if len(privileges) != 8 or any(value is not True for value in privileges.values()):
+        if len(privileges) != 9 or any(value is not True for value in privileges.values()):
             raise WitnessFailure('SMS_SQL_ONLY_PRIVILEGES_REFUSED')
         report['cases']['non-superuser-postgres-bypassrls-select-only-distinct-cron-owner'] = True
         stage = 'read-exact-before-routine-pins'

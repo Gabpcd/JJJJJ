@@ -80,7 +80,8 @@ class SmsSqlOnlyPreparationTests(TestCase):
         self.assertIn('CREATE TABLE IF NOT EXISTS private.sms_dispatch_idempotency', self.setup)
         self.assertIn('CREATE TABLE net.fixture_requests', self.setup)
         self.assertNotIn('CREATE EXTENSION pg_net', self.setup)
-        self.assertIn('ALTER ROLE postgres NOSUPERUSER BYPASSRLS;', self.setup)
+        self.assertNotIn('ALTER ROLE postgres NOSUPERUSER', self.setup)
+        self.assertNotIn('CREATE ROLE sms_fixture_admin', self.setup)
         self.assertIn('ALTER TABLE cron.job OWNER TO sms_fixture_cron_owner;', self.setup)
         self.assertIn('ALTER TABLE cron.job ENABLE ROW LEVEL SECURITY;', self.setup)
         self.assertIn('REVOKE ALL ON cron.job FROM PUBLIC,postgres;\nGRANT SELECT ON cron.job TO postgres;', self.setup)
@@ -92,6 +93,25 @@ class SmsSqlOnlyPreparationTests(TestCase):
         for routine in self.contract['beforeRoutines']:
             with self.subTest(signature=routine['signature']):
                 self.assertIn(routine['body_md5'], bodies)
+
+    def test_service_bootstrap_and_demotion_use_distinct_real_logins(self):
+        workflow = (ROOT / '.github/workflows/sms-install-sql-only-pg17.yml').read_text()
+        self.assertIn('POSTGRES_USER: sms_fixture_admin', workflow)
+        self.assertIn('PGUSER: postgres', workflow)
+        self.assertIn('CREATE ROLE postgres LOGIN SUPERUSER', workflow)
+        self.assertIn('ALTER DATABASE sms_install_sql_only_diagnostic OWNER TO postgres;', workflow)
+        self.assertIn('ALTER SCHEMA public OWNER TO postgres;', workflow)
+        self.assertIn("'bootstrap',oid=10", WITNESS.ROLE_STATE)
+        self.assertIn("'nonBootstrapPostgres',(SELECT oid<>10", WITNESS.PRIVILEGES)
+        self.assertNotIn('sms_fixture_admin', WITNESS.CLEANUP)
+        with mock.patch.object(WITNESS, 'psql', return_value='') as query:
+            WITNESS.demote_from_admin(approved_environment())
+        args, kwargs = query.call_args
+        self.assertEqual(args[0]['PGUSER'], 'sms_fixture_admin')
+        self.assertEqual(args[0]['PGHOST'], '127.0.0.1')
+        self.assertEqual(args[0]['PGDATABASE'], 'sms_install_sql_only_diagnostic')
+        self.assertEqual(args[1], 'ALTER ROLE postgres NOSUPERUSER BYPASSRLS;')
+        self.assertEqual(kwargs, {'timeout': 15})
 
     def test_both_real_constructors_receive_unchanged_pins_and_render(self):
         before = synthetic_before(self.contract)
