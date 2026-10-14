@@ -58,9 +58,13 @@ async function exercise(options={}){
  const fail=name=>{throw new Error(`Unexpected simulated I/O: ${name}`);};
  const sb={from(table){
   if(table==='preferences_notifications'){const q={select:()=>q,eq:()=>q,maybeSingle:async()=>({data:{canal_sms:options.preference!==false},error:null})};return q;}
+  if(table==='soignants'){const q={select:()=>q,eq:()=>q,maybeSingle:async()=>({data:{telephone:phone,supprime_le:null},error:null})};return q;}
   if(['sms_envoyes','journaux_audit'].includes(table))return {insert:async row=>{state.audits.push(row);return {error:null};}};
   return fail(table);
  },async rpc(name,args){
+  if(name==='fn_mes_permissions_etab')return {data:{etablissement_id:mission,permissions:{missions:true}},error:null};
+  if(name==='fn_pool_urgence_etablissement')return {data:[{soignant_id:actor}],error:null};
+  if(name==='fn_verifier_rate_limit'||name==='fn_doit_notifier')return {data:true,error:null};
   if(name==='fn_reserver_sms_signature_recette'||name==='fn_reserver_envoi_sms_idempotent'){
    state.reservations.push({name,args});return {data:{statut:options.reservation??'RESERVE'},error:options.sqlError?{}:null};
   }
@@ -71,7 +75,7 @@ async function exercise(options={}){
   'npm:@supabase/supabase-js@2.99.2':{createClient:()=>sb},
   '../_shared/rate-limit.ts':{applyRateLimit:()=>false,getClientIp:()=> '192.0.2.1'},
   '../_shared/cors.ts':{corsHeaders:{},jsonResponse:(_req,body,status=200)=>new Response(JSON.stringify(body),{status}),preflightResponse:()=>new Response(null,{status:204})},
-  '../_shared/admin-auth.ts':{verifyUserOrServiceRole:async()=>({ok:true,isServiceRole:options.service!==false,userId:actor,role:'SOIGNANT'}),verifyAdminOrServiceRole:async()=>({ok:true})},
+  '../_shared/admin-auth.ts':{verifyUserOrServiceRole:async()=>({ok:true,isServiceRole:options.service!==false,userId:actor,role:options.admin?'ADMIN_PLATEFORME':'SOIGNANT'}),verifyAdminOrServiceRole:async()=>({ok:true})},
   '../_shared/test-account.ts':{resolveOperationalTestAccount:async()=>({ok:true,isTest:options.isTest!==false}),resolveOperationalTestSource:async()=>({ok:true,isTest:options.isTest!==false})},
   '../_shared/signature-sms-staging-test.ts':helper,
  };
@@ -112,9 +116,28 @@ test('ambiguous transport finalizes INDETERMINE without retry or code log',async
  const result=await exercise({networkFailure:true});assert.equal(result.provider.length,1);
  assert.equal(result.finalizations[0].p_statut,'INDETERMINE');assert.equal(result.logs.join('').includes(syntheticCode),false);
 });
-test('non TEST normal handler keeps existing reservation without reading staging config',async()=>{
- const result=await exercise({isTest:false,env:{SIGNATURE_SMS_STAGING_TEST_RUN:'invalid'}});
+for(const [name,options] of [
+ ['NORMAL internal OTP with configured manifest',{isTest:false}],
+ ['NORMAL internal ordinary SMS',{isTest:false,payload:{type:'CUSTOM'}}],
+ ['NORMAL internal OTP without manifest',{isTest:false,env:{SIGNATURE_SMS_STAGING_TEST_RUN:undefined}}],
+ ['NORMAL internal OTP with invalid manifest',{isTest:false,env:{SIGNATURE_SMS_STAGING_TEST_RUN:'invalid'}}],
+ ['NORMAL browser urgent alert with full permissions',{isTest:false,service:false,payload:{type:'MISSION_URGENTE'}}],
+ ['NORMAL admin browser test',{isTest:false,service:false,admin:true,payload:{type:'TEST_ADMIN'}}],
+])test(`shared staging remains closed: ${name}`,async()=>{
+ const result=await exercise(options);assert.equal(result.status,200);assert.equal(result.body.reason,'staging_sms_closed');
+ assert.equal(result.provider.length,0);assert.equal(result.reservations.length,0);assert.equal(result.finalizations.length,0);
+});
+test('NORMAL staging browser cannot invoke OTP directly',async()=>{
+ const result=await exercise({isTest:false,service:false});assert.equal(result.status,403);assert.equal(result.provider.length,0);
+});
+test('production NORMAL internal OTP keeps existing reservation without reading staging config',async()=>{
+ const result=await exercise({isTest:false,env:{SUPABASE_URL:'https://flripxtsyegjshnhzjkz.supabase.co',SIGNATURE_SMS_STAGING_TEST_RUN:'invalid'}});
  assert.equal(result.status,200);assert.equal(result.reservations[0].name,'fn_reserver_envoi_sms_idempotent');
+ assert.equal(result.provider.length,1);
+});
+test('production NORMAL browser urgent alert keeps existing permissions and transport',async()=>{
+ const result=await exercise({isTest:false,service:false,payload:{type:'MISSION_URGENTE'},env:{SUPABASE_URL:'https://flripxtsyegjshnhzjkz.supabase.co'}});
+ assert.equal(result.status,200);assert.equal(result.provider.length,1);assert.equal(result.reservations[0].name,'fn_reserver_envoi_sms_idempotent');
 });
 
 const source=readFileSync('scripts/ci/sms-signature-staging-otp.source.sql','utf8');

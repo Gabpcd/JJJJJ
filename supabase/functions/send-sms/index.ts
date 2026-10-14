@@ -296,6 +296,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Provisioning a Twilio key on this shared staging project must not open
+    // any ordinary account or alert channel. Only the bound TEST OTP request
+    // above may reach the scoped reservation and then the provider.
+    if (supabaseUrl === 'https://mejpriaetwgtcstbgfid.supabase.co' && !stagingSmsRequest) {
+      return jsonResponse(req, { success: true, skipped: true, reason: 'staging_sms_closed' });
+    }
+
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
     // Compat : TWILIO_FROM_NUMBER (nouveau nom standard) avec fallback

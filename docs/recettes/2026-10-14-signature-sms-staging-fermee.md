@@ -42,6 +42,13 @@ résultats en cours/indéterminés ne provoquent aucun nouvel envoi. Une excepti
 budgétaire annule atomiquement la réservation. Aucun code OTP n'est renvoyé au
 client ou ajouté à l'audit applicatif.
 
+Sur le projet staging exact, tous les autres SMS restent fermés, y compris
+ceux des comptes classés NORMAL déjà présents. Provisionner une clé Twilio
+ne peut donc pas ouvrir leurs alertes ou OTP ordinaires. Les refus TEST
+historiques restent en place ; le comportement NORMAL de production est
+conservé. Les tests du vrai handler vérifient cette barrière avant réservation
+et transport, avec clés/fournisseur entièrement fictifs.
+
 Les préférences SMS restent obligatoires. Si `canal_sms=false`, l'interface
 ne reçoit pas d'admission et aucun transport n'a lieu. Leur activation doit
 être un choix explicite des seuls comptes contrôlés, dans l'interface. Aucun
