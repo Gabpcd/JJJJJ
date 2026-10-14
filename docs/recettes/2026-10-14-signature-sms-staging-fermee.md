@@ -61,6 +61,18 @@ lecture échoue fermée lorsque le supplément manque. Relecture après chargeme
 changement de document ou retour de fenêtre ; fermeture à expiration. La RPC
 métier et le dispatcher vérifient encore le périmètre avant chaque envoi.
 
+L'admission distingue un nouvel envoi d'un OTP courant encore validable. Son
+`otp_expires_at` provient de `signatures_contrats.otp_envoye_a + 10 minutes`.
+Après rechargement ou retour CANVAS→OTP, la saisie et le consentement repartent
+vides, avec cette échéance absolue limitée aussi par la capacité ; aucun SMS
+n'est demandé automatiquement. À budget zéro, seul ce code peut être validé.
+Chaque envoi réussi relit l'admission sans changer de mode, afin qu'un retour
+CANVAS→OTP immédiat dispose aussi de l'OTP courant et du budget actualisé.
+Chaque sélection OTP relit également l'admission : elle couvre un envoi achevé
+après le démontage du formulaire, sans réutiliser son ancienne autorisation.
+Un simple retour de fenêtre conserve la saisie du même périmètre, mais bloque
+toutes les actions pendant la relecture et ferme à l'échéance précédente.
+
 ## Vérification disponible et limites
 
 Commande locale sans secret ni réseau :

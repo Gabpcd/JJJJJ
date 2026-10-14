@@ -14,6 +14,13 @@ export async function readSignatureSmsStagingAdmission(client: RpcClient, url: s
       || result.can_send !== (Number(result.remaining) > 0) || (!result.can_send && !result.can_validate)) return null;
     const expiresAt = Date.parse(result.expires_at);
     if (!Number.isFinite(expiresAt) || expiresAt <= now || expiresAt > now + 60 * 60_000) return null;
-    return {expiresAt, canSend: result.can_send, canValidate: result.can_validate};
+    let otpExpiresAt: number | null = null;
+    if (result.can_validate) {
+      if (typeof result.otp_expires_at !== 'string') return null;
+      const expiry = Date.parse(result.otp_expires_at);
+      if (!Number.isFinite(expiry) || expiry <= now || expiry > now + 10 * 60_000) return null;
+      otpExpiresAt = Math.min(expiry, expiresAt);
+    } else if (result.otp_expires_at != null) return null;
+    return {expiresAt, canSend: result.can_send, canValidate: result.can_validate, otpExpiresAt};
   } catch { return null; }
 }

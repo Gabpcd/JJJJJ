@@ -44,6 +44,108 @@ async function attachSummary(info:TestInfo,label:string,h:ReturnType<typeof cree
 }
 
 for(const role of ['SOIGNANT','ADMIN_ETABLISSEMENT'] as RoleRecette[]){
+  test(`SMS STAGING SIMULÉ — ${role} : CANVAS pendant SMS2 puis OTP après réponse sans reload ni focus`,async({browser},info)=>{
+    const h=await scene(browser,info,role);h.control.enabled=true;
+    try{
+      await h.page.goto(`/contrat/${ids.contrat}`);await openOtp(h.page);
+      const releaseSms=h.control.retenirProchainSms();await resend(h.page).click();
+      await expect.poll(()=>h.control.pendingSms).toBe(1);expect(h.control.smsAttempts).toBe(2);
+      const readsBeforeCanvas=h.control.admissionReads;
+      await h.page.getByRole('radio',{name:/Signature manuscrite/}).check();await expect(codeInput(h.page)).toHaveCount(0);
+      releaseSms();await expect.poll(()=>h.control.pendingSms).toBe(0);
+      expect(h.control.admissionReads).toBe(readsBeforeCanvas);
+      // The radio is hidden while this admission is held; check() would wait
+      // for a control that can return only after the release below.
+      const releaseAdmission=h.control.retenirProchaineAdmission();await otpOption(h.page).click();
+      await expect.poll(()=>h.control.pendingAdmissions).toBe(1);
+      expect(h.control.admissionReads).toBe(readsBeforeCanvas+1);
+      await expect(send(h.page)).toBeDisabled();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(0);
+      releaseAdmission();await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('');
+      await expect(otpOption(h.page)).toBeChecked();
+      await expect(h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/})).not.toBeChecked();
+      await expect(resend(h.page)).toBeDisabled();await expect(send(h.page)).toHaveCount(0);
+      await codeInput(h.page).fill('123456');await h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
+      await preuveMission(h.page,info,role+'-sms-canvas-pendant-envoi');await sign(h.page).click();
+      await expect(h.page.getByText('✅ Vous avez déjà signé ce contrat',{exact:true})).toBeVisible();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(1);assertNoProvider(h);
+    }finally{await attachSummary(info,'sms-canvas-pending-send-'+role,h);await h.context.close();}
+  });
+
+  test(`SMS STAGING SIMULÉ — ${role} : CANVAS→OTP directement après SMS2 sans reload ni focus`,async({browser},info)=>{
+    const h=await scene(browser,info,role);h.control.enabled=true;
+    try{
+      await h.page.goto(`/contrat/${ids.contrat}`);await openOtp(h.page);await secondSms(h.page);
+      await expect.poll(()=>h.control.admissionReads).toBeGreaterThanOrEqual(4);
+      await expect.poll(()=>h.control.pendingAdmissions).toBe(0);
+      await expect(resend(h.page)).toBeDisabled();
+      await h.page.getByRole('radio',{name:/Signature manuscrite/}).check();await otpOption(h.page).check();
+      await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('');
+      await expect(h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/})).not.toBeChecked();
+      await expect(resend(h.page)).toBeDisabled();await expect(send(h.page)).toHaveCount(0);
+      await codeInput(h.page).fill('123456');
+      await h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(0);
+      await preuveMission(h.page,info,role+'-sms-canvas-direct-apres-envoi');
+      await sign(h.page).click();
+      await expect(h.page.getByText('✅ Vous avez déjà signé ce contrat',{exact:true})).toBeVisible();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(1);assertNoProvider(h);
+    }finally{await attachSummary(info,'sms-canvas-direct-'+role,h);await h.context.close();}
+  });
+
+  test(`SMS STAGING SIMULÉ — ${role} : OTP2 après reload puis CANVAS→OTP sans troisième SMS`,async({browser},info)=>{
+    const h=await scene(browser,info,role);h.control.enabled=true;
+    try{
+      await h.page.goto(`/contrat/${ids.contrat}`);await openOtp(h.page);await secondSms(h.page);
+      expect(h.control.smsAttempts).toBe(2);
+      await h.page.reload();await expect(otpOption(h.page)).toBeVisible();await otpOption(h.page).check();
+      await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('');
+      await expect(h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/})).not.toBeChecked();
+      await expect(resend(h.page)).toBeDisabled();await expect(send(h.page)).toHaveCount(0);
+      await codeInput(h.page).fill('123456');
+      await h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
+      await h.page.getByRole('radio',{name:/Signature manuscrite/}).check();
+      await expect(codeInput(h.page)).toHaveCount(0);await otpOption(h.page).check();
+      await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('');
+      await expect(h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/})).not.toBeChecked();
+      await codeInput(h.page).fill('123456');
+      await h.page.getByRole('checkbox',{name:/J'ai lu l'intégralité du contrat/}).check();
+      const release=h.control.retenirProchaineAdmission();await simulatedSmsReturn(h.page);
+      await expect.poll(()=>h.control.pendingAdmissions).toBe(1);
+      await expect(codeInput(h.page)).toBeDisabled();await expect(sign(h.page)).toBeDisabled();await expect(resend(h.page)).toBeDisabled();
+      release();await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('123456');
+      await expect(resend(h.page)).toBeDisabled();await expect(sign(h.page)).toBeEnabled();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(0);
+      await preuveMission(h.page,info,role+'-sms-continuation-remontee');
+      await sign(h.page).click();
+      await expect(h.page.getByText('✅ Vous avez déjà signé ce contrat',{exact:true})).toBeVisible();
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(1);assertNoProvider(h);
+    }finally{await attachSummary(info,'sms-otp2-remount-'+role,h);await h.context.close();}
+  });
+
+  test(`SMS STAGING SIMULÉ — ${role} : remount OTP2 conserve l’échéance originale du code`,async({browser},info)=>{
+    const h=await scene(browser,info,role);h.control.enabled=true;
+    try{
+      await h.page.goto(`/contrat/${ids.contrat}`);await openOtp(h.page);await secondSms(h.page);
+      h.control.time=Date.parse(now)+9*60_000;
+      await h.page.clock.fastForward(9*60_000);
+      await h.page.reload();await expect(otpOption(h.page)).toBeVisible();await otpOption(h.page).check();
+      await expect(codeInput(h.page)).toBeEnabled();await expect(codeInput(h.page)).toHaveValue('');
+      await h.page.getByRole('radio',{name:/Signature manuscrite/}).check();await otpOption(h.page).check();
+      await expect(codeInput(h.page)).toBeEnabled();await expect(resend(h.page)).toBeDisabled();
+      const release=h.control.retenirProchaineAdmission();await simulatedSmsReturn(h.page);
+      await expect.poll(()=>h.control.pendingAdmissions).toBe(1);await expect(codeInput(h.page)).toBeDisabled();
+      h.control.time=Date.parse(now)+10*60_000;
+      await h.page.clock.fastForward(60_000+1);
+      await expect(codeInput(h.page)).toHaveCount(0);await expect(otpOption(h.page)).toHaveCount(0);
+      await expect(h.page.getByRole('radio',{name:/Signature manuscrite/})).toBeChecked();
+      release();await expect.poll(()=>h.control.pendingAdmissions).toBe(0);
+      await h.page.reload();await expect(otpOption(h.page)).toHaveCount(0);
+      expect(h.control.smsAttempts).toBe(2);expect(h.control.validations).toBe(0);
+      await preuveMission(h.page,info,role+'-sms-remount-code-expire');assertNoProvider(h);
+    }finally{await attachSummary(info,'sms-remount-expiry-'+role,h);await h.context.close();}
+  });
+
   test(`SMS STAGING SIMULÉ — ${role} : TEST canvas, retour Messages et deuxième OTP sans troisième SMS`,async({browser},info)=>{
     const h=await scene(browser,info,role);
     try{

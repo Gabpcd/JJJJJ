@@ -11,13 +11,20 @@ export function creerSignatureSmsStagingSimulee() {
   const admittedHash = state.contrat.hash_document;
   let issuedAt: number | null = null;
   let nextHold: Promise<void> | null = null;
+  let nextSmsHold: Promise<void> | null = null;
   const control = {
     enabled: false, revoked: false, time: Date.parse(now), expiresAt: Date.parse(now) + 60 * 60_000,
-    admissionReads: 0, pendingAdmissions: 0, smsAttempts: 0, validations: 0,
+    admissionReads: 0, pendingAdmissions: 0, pendingSms: 0, smsAttempts: 0, validations: 0,
     retenirProchaineAdmission() {
       expect(nextHold).toBeNull();
       let release!: () => void;
       nextHold = new Promise<void>(resolve => {release = resolve;});
+      return release;
+    },
+    retenirProchainSms() {
+      expect(nextSmsHold).toBeNull();
+      let release!: () => void;
+      nextSmsHold = new Promise<void>(resolve => {release = resolve;});
       return release;
     },
   };
@@ -31,7 +38,8 @@ export function creerSignatureSmsStagingSimulee() {
     const canSend = active && control.smsAttempts < 2;
     const canValidate = active && issuedAt !== null && control.time - issuedAt < 10 * 60_000;
     return {admitted:canSend || canValidate,can_send:canSend,can_validate:canValidate,
-      remaining:Math.max(0,2-control.smsAttempts),expires_at:new Date(control.expiresAt).toISOString()};
+      remaining:Math.max(0,2-control.smsAttempts),expires_at:new Date(control.expiresAt).toISOString(),
+      otp_expires_at:canValidate ? new Date(issuedAt!+10*60_000).toISOString() : null};
   }
   async function installer(context: BrowserContext, role: RoleRecette) {
     await base.installer(context,role,{supabaseOriginSimulee:STAGING_SMS_SIMULE});
@@ -56,6 +64,8 @@ export function creerSignatureSmsStagingSimulee() {
         if(!receipt(role).can_send)return json(route,{success:false,error_code:'SMS_RECETTE_INDISPONIBLE'});
         control.smsAttempts++;issuedAt=control.time;
         state.sms.push({role,contrat_id:ids.contrat});
+        const hold=nextSmsHold;nextSmsHold=null;
+        if(hold){control.pendingSms++;await hold;control.pendingSms--;}
         return json(route,{success:true,role:role==='SOIGNANT'?'soignant':'etablissement',telephone_masked:'numéro fictif',sms_restants:Math.max(0,3-control.smsAttempts),expire_dans_minutes:10});
       }
       control.validations++;

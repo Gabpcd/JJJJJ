@@ -161,13 +161,23 @@ test('UI never calls admission on production or malformed IDs',async()=>{
 test('UI read is exact caller-bound RPC and requires finite fresh bounded admission',async()=>{
  const now=Date.now(),valid={admitted:true,can_send:true,can_validate:false,remaining:2,expires_at:new Date(now+30_000).toISOString()};let call;
  const client={rpc:async(name,args)=>{call={name,args};return {data:valid,error:null};}};
- assert.deepEqual(await ui.readSignatureSmsStagingAdmission(client,env.SUPABASE_URL,contract,now),{expiresAt:now+30_000,canSend:true,canValidate:false});
+ assert.deepEqual(await ui.readSignatureSmsStagingAdmission(client,env.SUPABASE_URL,contract,now),{expiresAt:now+30_000,canSend:true,canValidate:false,otpExpiresAt:null});
  assert.deepEqual(call,{name:'fn_admission_otp_signature_recette',args:{p_contrat_id:contract}});
  for(const change of [{admitted:false},{admitted:'true'},{remaining:0},{remaining:3},{expires_at:'invalid'},{expires_at:new Date(now).toISOString()},{expires_at:new Date(now+3600_001).toISOString()}]){
   assert.equal(await ui.readSignatureSmsStagingAdmission({rpc:async()=>({data:{...valid,...change},error:null})},env.SUPABASE_URL,contract,now),null);
  }
  assert.equal(await ui.readSignatureSmsStagingAdmission({rpc:async()=>({data:valid,error:{}})},env.SUPABASE_URL,contract,now),null);
- assert.deepEqual(await ui.readSignatureSmsStagingAdmission({rpc:async()=>({data:{...valid,remaining:0,can_send:false,can_validate:true},error:null})},env.SUPABASE_URL,contract,now),
-  {expiresAt:now+30_000,canSend:false,canValidate:true});
+ assert.deepEqual(await ui.readSignatureSmsStagingAdmission({rpc:async()=>({data:{...valid,remaining:0,can_send:false,can_validate:true,otp_expires_at:new Date(now+20_000).toISOString()},error:null})},env.SUPABASE_URL,contract,now),
+  {expiresAt:now+30_000,canSend:false,canValidate:true,otpExpiresAt:now+20_000});
  assert.equal(await ui.readSignatureSmsStagingAdmission({rpc:async()=>({data:{...valid,remaining:0,can_send:false,can_validate:false},error:null})},env.SUPABASE_URL,contract,now),null);
+});
+test('current OTP continuation is absolute, future and bounded by the capacity deadline',async()=>{
+ const now=Date.now(),valid={admitted:true,can_send:false,can_validate:true,remaining:0,
+  expires_at:new Date(now+30_000).toISOString(),otp_expires_at:new Date(now+50_000).toISOString()};
+ const read=data=>ui.readSignatureSmsStagingAdmission({rpc:async()=>({data,error:null})},env.SUPABASE_URL,contract,now);
+ assert.deepEqual(await read(valid),{expiresAt:now+30_000,canSend:false,canValidate:true,otpExpiresAt:now+30_000});
+ for(const expiry of [undefined,null,42,'invalid',new Date(now).toISOString(),new Date(now-1).toISOString(),new Date(now+600_001).toISOString()]){
+  assert.equal(await read({...valid,otp_expires_at:expiry}),null);
+ }
+ assert.equal(await read({...valid,can_send:true,remaining:1,can_validate:false}),null);
 });

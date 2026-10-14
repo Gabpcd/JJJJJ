@@ -46,8 +46,8 @@ const ALLOWLIST = new Set([
 const STAGING_SIGNATURE_RPC = 'fn_admission_otp_signature_recette';
 const STAGING_SIGNATURE_HELPER = 'src/lib/signatureSmsStagingAdmission.ts';
 const STAGING_SIGNATURE_SOURCES = [
-  [STAGING_SIGNATURE_HELPER, 'fda22f98aeeb9c3b4ce6ec5b6559f1fb50f49dcdcb40aea3c514dba7dfa4a41d'],
-  ['scripts/ci/sms-signature-staging.sql', '184d939363c14273f2c98a4cca200767a6439c67fd7856b556d42c2405e527ae'],
+  [STAGING_SIGNATURE_HELPER, '69741c88bea71a6605e2635e57bbbe0bd6c3e2fe4a9b89d5fd92b8c628d37ca8'],
+  ['scripts/ci/sms-signature-staging.sql', 'bebec00216399fae311a19fe0c9229b0b8b0cffcc4f82ed5c3662cc266e64ee9'],
 ];
 
 function stagingSignatureReferenceExists(name, file) {

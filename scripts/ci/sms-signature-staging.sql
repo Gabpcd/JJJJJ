@@ -120,20 +120,21 @@ END; $scope$;
 -- Explicit caller-bound disclosure: no recipient phone, provider or capacity ID.
 CREATE FUNCTION public.fn_admission_otp_signature_recette(p_contrat_id uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $admission$
-DECLARE c private.signature_sms_test_capacities; used smallint; actor_role text; can_validate boolean;
+DECLARE c private.signature_sms_test_capacities; used smallint; actor_role text; can_validate boolean; otp_expires_at timestamptz;
 BEGIN
  IF auth.uid() IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN RETURN jsonb_build_object('admitted',false); END IF;
  c:=private.fn_signature_sms_test_scope(p_contrat_id,auth.uid());
  used:=CASE WHEN auth.uid()=c.soignant_id THEN c.soignant_attempts ELSE c.etablissement_attempts END;
  actor_role:=CASE WHEN auth.uid()=c.soignant_id THEN 'soignant' ELSE 'etablissement' END;
- SELECT EXISTS(SELECT 1 FROM public.signatures_contrats s
+ SELECT s.otp_envoye_a+interval '10 minutes' INTO otp_expires_at FROM public.signatures_contrats s
    WHERE s.contrat_id=c.contrat_id AND s.signataire_user_id=auth.uid() AND s.signataire_role=actor_role
      AND s.statut_signature='otp_envoye' AND s.signe_a IS NULL AND s.otp_valide_a IS NULL
      AND s.otp_code_hash ~ '^[0-9a-f]{64}$' AND COALESCE(s.otp_tentatives,0)<5
      AND s.sms_envoyes_count BETWEEN 1 AND 3 AND s.sms_premier_envoi_a IS NOT NULL
-     AND s.otp_envoye_a<=clock_timestamp() AND s.otp_envoye_a>clock_timestamp()-interval '10 minutes') INTO can_validate;
+     AND s.otp_envoye_a<=clock_timestamp() AND s.otp_envoye_a>clock_timestamp()-interval '10 minutes';
+ can_validate:=otp_expires_at IS NOT NULL;
  RETURN jsonb_build_object('admitted',used<c.max_attempts_per_actor OR can_validate,
-   'can_send',used<c.max_attempts_per_actor,'can_validate',can_validate,
+   'can_send',used<c.max_attempts_per_actor,'can_validate',can_validate,'otp_expires_at',otp_expires_at,
    'expires_at',c.expires_at,'remaining',c.max_attempts_per_actor-used);
 EXCEPTION WHEN OTHERS THEN RETURN jsonb_build_object('admitted',false);
 END; $admission$;

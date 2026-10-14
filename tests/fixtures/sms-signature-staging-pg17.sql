@@ -4,7 +4,7 @@ BEGIN;
 SET LOCAL statement_timeout='20s';
 CREATE TEMP TABLE sms_observations(name text PRIMARY KEY,passed boolean NOT NULL);
 
-CREATE FUNCTION pg_temp.seed_sms(who text,p_expired boolean DEFAULT false) RETURNS void
+CREATE FUNCTION pg_temp.seed_sms(who text,p_expired boolean DEFAULT false,p_capacity_lifetime interval DEFAULT interval '25 minutes') RETURNS void
 LANGUAGE plpgsql AS $seed$
 BEGIN
  DELETE FROM private.signature_sms_test_capacities;
@@ -25,7 +25,7 @@ BEGIN
  INSERT INTO private.signature_sms_test_capacities(id,project_ref,run_id,source_sha,manifest_sha256,enabled,installed_at,expires_at,
    mission_id,contrat_id,document_sha256,soignant_id,etablissement_id,soignant_phone,etablissement_phone,twilio_account_sid,sender_phone)
  SELECT 'f1040000-0000-4000-8000-000000000008','mejpriaetwgtcstbgfid','sms-signature-pg17-synthetic',repeat('a',40),repeat('b',64),true,
-   clock_timestamp()-interval '30 minutes',clock_timestamp()+CASE WHEN p_expired THEN interval '-1 minute' ELSE interval '25 minutes' END,
+   clock_timestamp()-interval '30 minutes',clock_timestamp()+CASE WHEN p_expired THEN interval '-1 minute' ELSE p_capacity_lifetime END,
    mission_id,id,hash_document,soignant_id,etablissement_id,'+33600000001','+33600000002','AC'||repeat('a',32),'+33100000000'
  FROM public.contrats_mission;
 END;
@@ -69,6 +69,7 @@ $reserve$;
 
 DO $cases$
 DECLARE who text; actor uuid; r jsonb; a jsonb; before jsonb; denied boolean; mutation text; label text; key text; code text; h text; used integer; n integer; sig record;
+ otp_expiry timestamptz; capacity_expiry timestamptz;
  cid uuid:='f1040000-0000-4000-8000-000000000003';
 BEGIN
  IF has_function_privilege('anon','public.fn_admission_otp_signature_recette(uuid)','EXECUTE')
@@ -94,11 +95,42 @@ BEGIN
  FOREACH who IN ARRAY ARRAY['soignant','etablissement'] LOOP
   actor:=CASE WHEN who='soignant' THEN 'f1040000-0000-4000-8000-000000000001'::uuid ELSE 'f1040000-0000-4000-8000-000000000002'::uuid END;
   PERFORM pg_temp.seed_sms(who);
+  -- An older valid code must retain its own deadline, not receive ten more
+  -- minutes whenever admission is queried after a reload or CANVAS -> OTP.
+  UPDATE public.signatures_contrats SET otp_envoye_a=clock_timestamp()-interval '4 minutes';
+  SELECT otp_envoye_a+interval '10 minutes' INTO STRICT otp_expiry FROM public.signatures_contrats WHERE signataire_user_id=actor;
   a:=pg_temp.sms_admission();
   IF a->'admitted' IS DISTINCT FROM 'true'::jsonb OR a->'can_send' IS DISTINCT FROM 'true'::jsonb OR (a->>'remaining')::int<>2
-   OR EXISTS(SELECT 1 FROM jsonb_object_keys(a) k WHERE k NOT IN('admitted','can_send','can_validate','remaining','expires_at'))
+   OR a->'can_validate' IS DISTINCT FROM 'true'::jsonb
+   OR (a->>'otp_expires_at')::timestamptz IS DISTINCT FROM otp_expiry
+   OR EXISTS(SELECT 1 FROM jsonb_object_keys(a) k WHERE k NOT IN('admitted','can_send','can_validate','remaining','expires_at','otp_expires_at'))
   THEN RAISE EXCEPTION 'SMS_ADMISSION_INITIAL_INVALID'; END IF;
   INSERT INTO sms_observations VALUES('initial-caller-bound-admission-'||who,true);
+  before:=pg_temp.sms_photo();
+  r:=pg_temp.sms_admission();
+  IF (r->>'otp_expires_at')::timestamptz IS DISTINCT FROM otp_expiry
+    OR pg_temp.sms_photo() IS DISTINCT FROM before
+  THEN RAISE EXCEPTION 'SMS_READMISSION_RENEWED_OR_MUTATED_OTP'; END IF;
+  INSERT INTO sms_observations VALUES('admission-keeps-original-otp-expiry-'||who,true);
+
+  -- Capability and code expiry are independent: the shorter capability is
+  -- the effective bound without rewriting the code's original deadline.
+  PERFORM pg_temp.seed_sms(who,false,interval '2 minutes');
+  UPDATE public.signatures_contrats SET otp_envoye_a=clock_timestamp()-interval '4 minutes';
+  SELECT otp_envoye_a+interval '10 minutes' INTO STRICT otp_expiry FROM public.signatures_contrats WHERE signataire_user_id=actor;
+  SELECT expires_at INTO STRICT capacity_expiry FROM private.signature_sms_test_capacities;
+  a:=pg_temp.sms_admission();
+  IF a->'can_validate' IS DISTINCT FROM 'true'::jsonb
+    OR (a->>'otp_expires_at')::timestamptz IS DISTINCT FROM otp_expiry
+    OR (a->>'expires_at')::timestamptz IS DISTINCT FROM capacity_expiry
+    OR capacity_expiry>=otp_expiry OR capacity_expiry<=clock_timestamp()
+    OR least((a->>'otp_expires_at')::timestamptz,(a->>'expires_at')::timestamptz) IS DISTINCT FROM capacity_expiry
+  THEN RAISE EXCEPTION 'SMS_CAPACITY_AND_OTP_EXPIRIES_NOT_INDEPENDENT'; END IF;
+  PERFORM pg_temp.seed_sms(who,true);
+  a:=pg_temp.sms_admission();
+  IF a IS DISTINCT FROM '{"admitted":false}'::jsonb
+  THEN RAISE EXCEPTION 'SMS_EXPIRED_CAPACITY_EXPOSED_CURRENT_OTP'; END IF;
+  INSERT INTO sms_observations VALUES('capacity-expiry-bounds-current-otp-'||who,true);
 
   FOREACH label IN ARRAY ARRAY['disabled','revoked','expired','phone-drift','not-test-profile','not-test-auth','banned','deleted-auth','deleted-profile','preference-off','mission-actor-drift','document-drift','project-drift'] LOOP
    PERFORM pg_temp.seed_sms(who,label='expired');
@@ -189,9 +221,18 @@ BEGIN
    RESET ROLE;
   END LOOP;
   a:=pg_temp.sms_admission();
+  SELECT otp_envoye_a+interval '10 minutes' INTO STRICT otp_expiry FROM public.signatures_contrats WHERE signataire_user_id=actor;
   IF a->'admitted' IS DISTINCT FROM 'true'::jsonb OR a->'can_send' IS DISTINCT FROM 'false'::jsonb
     OR a->'can_validate' IS DISTINCT FROM 'true'::jsonb OR (a->>'remaining')::int<>0
+    OR (a->>'otp_expires_at')::timestamptz IS DISTINCT FROM otp_expiry
   THEN RAISE EXCEPTION 'SMS_SECOND_OTP_NOT_ADMITTED_AT_ZERO_BUDGET'; END IF;
+  before:=pg_temp.sms_photo();
+  r:=pg_temp.sms_admission();
+  IF r->'can_validate' IS DISTINCT FROM 'true'::jsonb OR r->'can_send' IS DISTINCT FROM 'false'::jsonb
+    OR (r->>'remaining')::int<>0 OR (r->>'otp_expires_at')::timestamptz IS DISTINCT FROM otp_expiry
+    OR pg_temp.sms_photo() IS DISTINCT FROM before
+  THEN RAISE EXCEPTION 'SMS_ZERO_BUDGET_READMISSION_RENEWED_OR_MUTATED_OTP'; END IF;
+  INSERT INTO sms_observations VALUES('second-otp-expiry-survives-readmission-zero-budget-'||who,true);
   FOREACH mutation IN ARRAY ARRAY[
    'UPDATE public.signatures_contrats SET otp_envoye_a=now()-interval ''11 minutes''',
    'UPDATE public.signatures_contrats SET otp_tentatives=5',
@@ -202,6 +243,7 @@ BEGIN
     EXECUTE mutation;
     a:=pg_temp.sms_admission();
     IF a->'admitted' IS DISTINCT FROM 'false'::jsonb OR a->'can_validate' IS DISTINCT FROM 'false'::jsonb
+      OR a->'otp_expires_at' IS DISTINCT FROM 'null'::jsonb
     THEN RAISE EXCEPTION 'SMS_INVALID_OTP_ADMITTED_WITH_ZERO_BUDGET'; END IF;
     RAISE EXCEPTION 'SMS_FIXTURE_RESTORE';
    EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'SMS_FIXTURE_RESTORE' THEN RAISE; END IF; END;

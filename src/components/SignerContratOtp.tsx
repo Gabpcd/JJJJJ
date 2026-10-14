@@ -11,6 +11,10 @@ interface Props {
   actionsSuspendues?: boolean;
   /** Une continuation OTP valide n'autorise pas un nouveau SMS hors budget. */
   nouvelEnvoiAutorise?: boolean;
+  /** Continuation relue par le serveur, bornée aussi par la capacité staging. */
+  otpCourantExpireA?: number | null;
+  /** Actualiser l'admission staging après un envoi réussi, sans changer de mode. */
+  onOtpEnvoye?: () => void;
   /** Hash SHA-256 du contenu HTML/PDF affiché à l'utilisateur (preuve d'intégrité). */
   hashDocument?: string | null;
   /** Image base64 de la signature manuscrite (optionnel, complément). */
@@ -59,7 +63,7 @@ export function SignerContratOtp(props: Props) {
   return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}:${props.documentPret}`} {...props} />;
 }
 
-function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSuspendues = false, nouvelEnvoiAutorise = true, signatureImage, onSigne }: Props) {
+function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSuspendues = false, nouvelEnvoiAutorise = true, otpCourantExpireA, onOtpEnvoye, signatureImage, onSigne }: Props) {
   const actif = useRef(true);
   const operationEnCours = useRef(false);
   useEffect(() => {
@@ -67,23 +71,40 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSus
     return () => { actif.current = false; };
   }, []);
   const [retour, setRetour] = useState<{ type: 'succes' | 'erreur'; message: string } | null>(null);
-  const [etape, setEtape] = useState<Etape>('idle');
+  const [etape, setEtape] = useState<Etape>(() => otpCourantExpireA && otpCourantExpireA > Date.now() ? 'otp_envoye' : 'idle');
   const [otp, setOtp] = useState('');
   const [telMasked, setTelMasked] = useState<string | null>(null);
   const [accepte, setAccepte] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tentativesRestantes, setTentativesRestantes] = useState<number | null>(null);
-  const [secondesRestantes, setSecondesRestantes] = useState(0);
+  const [echeanceOtpRecuperee, setEcheanceOtpRecuperee] = useState<number | null>(otpCourantExpireA ?? null);
+  const [secondesRestantes, setSecondesRestantes] = useState(() => otpCourantExpireA ? Math.max(0, Math.ceil((otpCourantExpireA - Date.now()) / 1000)) : 0);
   const [smsRestants, setSmsRestants] = useState<number | null>(null);
   const [erreurBloquante, setErreurBloquante] = useState<{ code?: string; message: string } | null>(null);
 
   useEffect(() => {
+    if (otpCourantExpireA === undefined) return;
+    if (otpCourantExpireA === null) {
+      setEcheanceOtpRecuperee(null);
+      setSecondesRestantes(0);
+      setOtp('');
+      setAccepte(false);
+      setEtape(current => current === 'signe' ? current : 'idle');
+      return;
+    }
+    setEcheanceOtpRecuperee(otpCourantExpireA);
+    setSecondesRestantes(Math.max(0, Math.ceil((otpCourantExpireA - Date.now()) / 1000)));
+    setEtape(current => current === 'idle' && otpCourantExpireA > Date.now() ? 'otp_envoye' : current);
+  }, [otpCourantExpireA]);
+
+  useEffect(() => {
     if (etape !== 'otp_envoye' || secondesRestantes <= 0) return;
     const interval = setInterval(() => {
-      setSecondesRestantes(s => Math.max(0, s - 1));
+      setSecondesRestantes(s => echeanceOtpRecuperee === null ? Math.max(0, s - 1)
+        : Math.max(0, Math.ceil((echeanceOtpRecuperee - Date.now()) / 1000)));
     }, 1000);
     return () => clearInterval(interval);
-  }, [etape, secondesRestantes]);
+  }, [etape, secondesRestantes, echeanceOtpRecuperee]);
 
   const otpExpire = etape === 'otp_envoye' && secondesRestantes === 0;
   const mmss = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;
@@ -122,12 +143,14 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSus
       setTelMasked(result.telephone_masked || null);
       setSmsRestants(typeof result.sms_restants === 'number' ? result.sms_restants : null);
       setSecondesRestantes(OTP_DUREE_SEC);
+      setEcheanceOtpRecuperee(null);
       setOtp('');
       setEtape('otp_envoye');
       setRetour({
         type: 'succes',
         message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,
       });
+      onOtpEnvoye?.();
     } catch (err: any) {
       if (!actif.current) return;
       setRetour({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
@@ -138,7 +161,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSus
   }
 
   async function signer() {
-    if (actionsSuspendues || !documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
+    if (actionsSuspendues || !documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire
+      || (echeanceOtpRecuperee !== null && echeanceOtpRecuperee <= Date.now())) return;
     if (!/^[0-9]{6}$/.test(otp)) {
       setRetour({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { telechargerOuPartager } from '@/lib/telechargement';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -159,8 +159,9 @@ export default function ContratMission() {
   const [modeSignature, setModeSignature] = useState<'CANVAS' | 'OTP_SMS'>('OTP_SMS');
   const [smsExterneDesactive, setSmsExterneDesactive] = useState(false);
   const [signatureCompteTest, setSignatureCompteTest] = useState(false);
-  const [smsRecetteAdmission, setSmsRecetteAdmission] = useState<{ scope: string; expiresAt: number; canSend: boolean } | null>(null);
+  const [smsRecetteAdmission, setSmsRecetteAdmission] = useState<{ scope: string; expiresAt: number; canSend: boolean; canValidate: boolean; otpExpiresAt: number | null } | null>(null);
   const [smsRecetteRelecture, setSmsRecetteRelecture] = useState<{ scope: string; expiresAt: number } | null>(null);
+  const relireSmsRecette = useRef<(() => void) | null>(null);
   const [fallbackHtml, setFallbackHtml] = useState('');
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
   const [renduContratEnCours, setRenduContratEnCours] = useState(false);
@@ -285,19 +286,23 @@ export default function ContratMission() {
       if (!actif || request !== requestNumber) return;
       clearTimeout(expiration);
       if (!admission || admission.expiresAt <= Date.now()) { fermer(); return; }
-      admittedUntil = admission.expiresAt;
+      admittedUntil = admission.canSend ? admission.expiresAt : admission.otpExpiresAt;
+      if (admittedUntil === null || admittedUntil <= Date.now()) { fermer(); return; }
       setSmsRecetteRelecture(null);
-      setSmsRecetteAdmission({scope: smsRecetteScope, expiresAt: admission.expiresAt, canSend: admission.canSend});
+      setSmsRecetteAdmission({scope: smsRecetteScope, expiresAt: admittedUntil, canSend: admission.canSend,
+        canValidate: admission.canValidate, otpExpiresAt: admission.otpExpiresAt});
       expiration = setTimeout(() => {
         if (actif && request === requestNumber) fermer();
-      }, admission.expiresAt - Date.now());
+      }, admittedUntil - Date.now());
     };
     void relire();
     const auRetour = () => { void relire(); };
+    relireSmsRecette.current = auRetour;
     window.addEventListener('focus', auRetour);
     return () => {
       actif = false;
       clearTimeout(expiration);
+      if (relireSmsRecette.current === auRetour) relireSmsRecette.current = null;
       window.removeEventListener('focus', auRetour);
     };
   }, [signatureCompteTest, smsRecetteScope, contrat?.id, hashContratAffiche]);
@@ -669,7 +674,10 @@ export default function ContratMission() {
                       Recette TEST : SMS de signature autorisé uniquement pour ce contrat.
                     </div>
                   )}
-                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'OTP_SMS')}>
+                  <RadioGroup value={modeSignature} onValueChange={(v) => {
+                    if (signatureCompteTest && v === 'OTP_SMS') relireSmsRecette.current?.();
+                    setModeSignature(v as 'CANVAS' | 'OTP_SMS');
+                  }}>
                     {!smsOtpDesactive && <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
                       <RadioGroupItem value="OTP_SMS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div className="flex-1">
@@ -697,6 +705,9 @@ export default function ContratMission() {
                     documentPret={contratServeurPret && !!contractHtml}
                     actionsSuspendues={signatureCompteTest && smsOtpDesactive}
                     nouvelEnvoiAutorise={!signatureCompteTest || (!smsOtpDesactive && smsRecetteAdmission?.canSend === true)}
+                    otpCourantExpireA={signatureCompteTest && smsRecetteAdmission?.scope === smsRecetteScope
+                      ? smsRecetteAdmission.canValidate ? smsRecetteAdmission.otpExpiresAt : null : undefined}
+                    onOtpEnvoye={signatureCompteTest ? () => relireSmsRecette.current?.() : undefined}
                     hashDocument={hashContratAffiche}
                     onSigne={async () => {
                       // Refresh contrat après signature

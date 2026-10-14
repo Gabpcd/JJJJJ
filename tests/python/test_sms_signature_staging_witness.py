@@ -36,6 +36,10 @@ class SmsWitnessPreparationTests(TestCase):
         self.assertNotIn('INSERT INTO private.signature_sms_test_capacities', setup)
         self.assertIn('CREATE TEMP TABLE sms_observations', fixture)
         self.assertIn("'second-sms-zero-budget-no-resend-valid-signature-'", fixture)
+        for observation in ['admission-keeps-original-otp-expiry-',
+                            'capacity-expiry-bounds-current-otp-',
+                            'second-otp-expiry-survives-readmission-zero-budget-']:
+            self.assertIn("'" + observation + "'", fixture)
         self.assertIn('INTO STRICT code FROM net.fixture_requests WHERE body', fixture)
         self.assertIn('BEGIN;', fixture)
 
