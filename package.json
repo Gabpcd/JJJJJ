@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:contrat": "node scripts/check-contrat-frontend-backend.mjs",
+    "test:contrat": "node --test tests/node/check-contrat-frontend-backend.node.mjs",
     "check:mobile-version": "node scripts/check-mobile-build-alignment.mjs",
     "preflight:mobile": "npm run check:mobile-version && MOBILE_BUILD_PROFILE=store REQUIRE_MOBILE_SECRETS=1 node scripts/prepare-mobile-secrets.mjs",
     "preflight:mobile:dev": "npm run check:mobile-version && MOBILE_BUILD_PROFILE=development ALLOW_NON_LIVE_STRIPE_KEY=1 REQUIRE_MOBILE_SECRETS=1 node scripts/prepare-mobile-secrets.mjs",

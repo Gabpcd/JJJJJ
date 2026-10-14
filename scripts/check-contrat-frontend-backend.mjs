@@ -24,6 +24,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, extname } from 'node:path';
 
 const ROOT = process.cwd();
@@ -36,6 +37,27 @@ const FUNCTIONS_DIR = join(ROOT, 'supabase', 'functions');
 const ALLOWLIST = new Set([
   'fn_xxx', // placeholder de doc (JSDoc useApiCall + docs/*), pas un vrai appel
 ]);
+
+// Ce supplément est volontairement hors migrations et hors schéma PROD.
+// Reconnaître uniquement l'appel revu dans son helper gardé sur le projet
+// staging exact, avec son SQL versionné. Aucun nom n'est ajouté à l'ensemble
+// global des RPC existants : un autre appel au même nom reste un raccord cassé.
+// Toute modification du helper ou du SQL exige une nouvelle revue des pins.
+const STAGING_SIGNATURE_RPC = 'fn_admission_otp_signature_recette';
+const STAGING_SIGNATURE_HELPER = 'src/lib/signatureSmsStagingAdmission.ts';
+const STAGING_SIGNATURE_SOURCES = [
+  [STAGING_SIGNATURE_HELPER, '69741c88bea71a6605e2635e57bbbe0bd6c3e2fe4a9b89d5fd92b8c628d37ca8'],
+  ['scripts/ci/sms-signature-staging.sql', 'bebec00216399fae311a19fe0c9229b0b8b0cffcc4f82ed5c3662cc266e64ee9'],
+];
+
+function stagingSignatureReferenceExists(name, file) {
+  if (name !== STAGING_SIGNATURE_RPC) return null;
+  if (file !== STAGING_SIGNATURE_HELPER) return false;
+  return STAGING_SIGNATURE_SOURCES.every(([path, sha256]) => {
+    const full = join(ROOT, path);
+    return existsSync(full) && createHash('sha256').update(readFileSync(full)).digest('hex') === sha256;
+  });
+}
 
 const ATTENTES_RELANCE_MS = [1_000, 3_000, 7_000];
 
@@ -190,11 +212,18 @@ async function prodIntrospection() {
 }
 
 // ── 4. Diff + rapport ────────────────────────────────────────────────────────
-function check(label, refs, existing, lines) {
+function check(label, refs, existing, lines, scopedReferenceExists = () => null) {
   const missing = [];
   for (const [name, where] of refs) {
     if (ALLOWLIST.has(name)) continue;
-    if (!existing.has(name)) missing.push({ name, where: [...where] });
+    const unresolved = [...where].filter((file) => {
+      const scoped = scopedReferenceExists(name, file);
+      return scoped === null ? !existing.has(name) : !scoped;
+    });
+    if (unresolved.length) missing.push({ name, where: unresolved });
+    else if (name === STAGING_SIGNATURE_RPC && label === 'RPC') {
+      lines.push(`ℹ️  RPC staging ${name} : appel et supplément SQL versionnés vérifiés, déploiement non attesté.`);
+    }
   }
   if (missing.length) {
     lines.push(`\n❌ ${label} introuvable(s) (${missing.length}) :`);
@@ -220,7 +249,7 @@ async function main() {
   const lines = [];
   lines.push(`Contrat front ↔ back — ${files.length} fichiers src/ analysés.`);
   let nbMissing = 0;
-  nbMissing += check('RPC', rpcs, fnExisting, lines);
+  nbMissing += check('RPC', rpcs, fnExisting, lines, stagingSignatureReferenceExists);
   nbMissing += check('Edge function (invoke)', invokes, edgeExisting, lines);
   nbMissing += check('Bucket storage', buckets, bucketExisting, lines);
 

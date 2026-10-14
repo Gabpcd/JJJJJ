@@ -2,6 +2,14 @@ name: Préparer les acteurs Connect TEST (manuel fermé)
 on:
   workflow_dispatch:
     inputs:
+      purpose:
+        description: Choisir explicitement le périmètre fermé ; Auth seul crée deux comptes sans profil
+        required: true
+        type: choice
+        default: AUTH_ONLY_FRONTEND_V1
+        options:
+          - AUTH_ONLY_FRONTEND_V1
+          - CONNECT_DOCUMENTS_TEST_V1
       expected_main_sha:
         description: SHA main exact portant l'opérateur et son contrat relus
         required: true
@@ -30,6 +38,7 @@ jobs:
       EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
       RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
       RECIPIENT_SHA256: ${{ inputs.recipient_sha256 }}
+      FIXTURE_PURPOSE: ${{ inputs.purpose }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -39,16 +48,29 @@ jobs:
         with:
           node-version: '24.14.0'
       - name: Contrats et chiffrement sans secret ni réseau
-        run: node --test tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
+        run: node --test tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs tests/node/auth-test-frontend-ci.node.mjs
       - name: Refuser tout contexte, source, destinataire ou contrat non revu
-        run: node scripts/ci/connect-test-fixture-ci.mjs check
+        run: |
+          case "$FIXTURE_PURPOSE" in
+            AUTH_ONLY_FRONTEND_V1) node scripts/ci/auth-test-frontend-ci.mjs check-auth-only ;;
+            CONNECT_DOCUMENTS_TEST_V1) node scripts/ci/connect-test-fixture-ci.mjs check ;;
+            *) exit 1 ;;
+          esac
       - name: Préparer la seule fixture ; chiffrer chaque intention et reçu
+        if: inputs.purpose == 'CONNECT_DOCUMENTS_TEST_V1'
         timeout-minutes: 9
         run: node scripts/ci/connect-test-fixture-ci.mjs run
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Créer seulement deux Auth TEST neufs ; aucun profil ni objet Stripe
+        if: inputs.purpose == 'AUTH_ONLY_FRONTEND_V1'
+        timeout-minutes: 9
+        run: node scripts/ci/auth-test-frontend-ci.mjs run-auth-only
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
       - name: Conserver seulement le journal chiffré et les booléens
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

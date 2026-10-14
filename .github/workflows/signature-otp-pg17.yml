@@ -49,3 +49,47 @@ jobs:
           path: signature-otp-fixed-public.json
           retention-days: 7
           if-no-files-found: error
+  signature-sms-staging:
+    if: github.repository == 'Gabpcd/JJJJJ'
+    name: Signature SMS staging fermée — PostgreSQL 17 éphémère
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: signature_otp_diagnostic
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d signature_otp_diagnostic"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_SIGNATURE_WITNESS: CI_EPHEMERE
+      JOLENE_SMS_STAGING_WITNESS: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '54329'
+      PGDATABASE: signature_otp_diagnostic
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Vérifier le SHA exécuté
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Vérifier les gardes et la préparation du témoin
+        run: python3 -B -m unittest discover -s tests/python -p test_sms_signature_staging_witness.py
+      - name: Qualifier ACL, confinement, OTP2 budget zéro et verrous réels
+        run: python3 -B scripts/ci/sms-signature-staging-pg17.py > signature-sms-staging-pg17-public.json
+      - name: Reçu synthétique uniquement
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: signature-sms-staging-pg17-public
+          path: signature-sms-staging-pg17-public.json
+          retention-days: 7
+          if-no-files-found: error

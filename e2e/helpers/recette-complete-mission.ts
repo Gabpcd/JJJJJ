@@ -75,26 +75,34 @@ export function creerMissionSimulee() {
       return true;
     }));
   }
-  async function installer(context: BrowserContext, role: RoleRecette) {
+  async function installer(context: BrowserContext, role: RoleRecette, options: {supabaseOriginSimulee?: 'https://mejpriaetwgtcstbgfid.supabase.co'} = {}) {
+    const stageSimule = options.supabaseOriginSimulee;
+    if (stageSimule && stageSimule !== 'https://mejpriaetwgtcstbgfid.supabase.co') throw new Error('Origine de simulation refusée');
     const user = {id: role === 'SOIGNANT' ? ids.soignant : ids.etablissement,
       email: role === 'SOIGNANT' ? soignant.email : etablissement.email_contact, aud:'authenticated',role:'authenticated',
-      email_confirmed_at: now, app_metadata:{role, etablissement_id: role === 'ADMIN_ETABLISSEMENT' ? ids.etablissement : null},
+      email_confirmed_at: now, app_metadata:{role, etablissement_id: role === 'ADMIN_ETABLISSEMENT' ? ids.etablissement : null,
+        ...(stageSimule ? {est_compte_test:true} : {})},
       user_metadata:{prenom: role === 'SOIGNANT' ? soignant.prenom : 'Clinique', nom:'Recette'}, identities:[]};
     const session = {user, token_type:'bearer',access_token:'simulation-mission-'+role,refresh_token:'simulation-refresh',
       expires_in:86400,expires_at:1799999999};
-    await context.addInitScript(({session}) => {
+    await context.addInitScript(({session, storageKey}) => {
       if (!['127.0.0.1','localhost'].includes(location.hostname)) return;
-      sessionStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+      sessionStorage.setItem(storageKey, JSON.stringify(session));
       localStorage.setItem('cookie-consent','refused');
-    }, {session});
+    }, {session, storageKey: stageSimule ? 'sb-mejpriaetwgtcstbgfid-auth-token' : 'sb-127-auth-token'});
     await context.routeWebSocket('**/*', socket => socket.close());
     const suivreErreurs=(page:Page)=>page.on('pageerror',error=>state.errors.push(error.message));
     context.pages().forEach(suivreErreurs);context.on('page',suivreErreurs);
     await context.route('**/*', async route => {
       const req=route.request(), url=new URL(req.url()), name=url.pathname.split('/').pop()!;
       const json = (data: any, status=200, extraHeaders:Record<string,string>={}) => route.fulfill({status, json:data,
-        headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*',...extraHeaders}});
-      if (!['127.0.0.1','localhost'].includes(url.hostname)) {
+        headers:{'access-control-allow-origin':'*','access-control-allow-headers':stageSimule
+          ? (req.headers()['access-control-request-headers'] || 'authorization,apikey,content-type,x-client-info,x-supabase-api-version') : '*',
+          ...(stageSimule ? {'access-control-allow-methods':'GET,POST,HEAD,OPTIONS'} : {}),...extraHeaders}});
+      // The optional staging hostname remains fully intercepted. Only its API
+      // paths are accepted; no request to that host can reach route.continue().
+      const apiStageSimulee = !!stageSimule && url.origin === stageSimule && /^\/(auth|rest|functions|storage)\/v1\//.test(url.pathname);
+      if (!['127.0.0.1','localhost'].includes(url.hostname) && !apiStageSimulee) {
         state.external.push(url.origin); return route.abort('blockedbyclient');
       }
       if (url.pathname.startsWith('/auth/v1/')) {
@@ -107,7 +115,11 @@ export function creerMissionSimulee() {
           // Retirer uniquement ces hints évite aussi toute connexion anticipée externe.
           // Reprendre une seule rupture TCP du GET HTML local, jamais une écriture.
           // Une erreur HTTP ou une deuxième coupure restent bloquantes pour la recette.
-          const response=await chargerHtmlLocal(route);
+          const response=await chargerHtmlLocal(route,stageSimule ? 0 : undefined);
+          if(stageSimule && response.status()>=300 && response.status()<400){
+            state.errors.push('REDIRECTION_HTML_LOCALE_REFUSEE');
+            return route.abort('blockedbyclient');
+          }
           const html=(await response.text()).replace(/<link\b(?=[^>]*\brel=["'](?:preconnect|dns-prefetch)["'])[^>]*>/gi,'');
           return route.fulfill({response,body:html});
         }

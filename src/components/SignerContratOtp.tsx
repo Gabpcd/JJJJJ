@@ -7,6 +7,14 @@ interface Props {
   contratId: string;
   /** Le document original affiché doit être disponible et figé avant tout OTP. */
   documentPret: boolean;
+  /** Relecture d'admission : conserver la saisie, suspendre toute action. */
+  actionsSuspendues?: boolean;
+  /** Une continuation OTP valide n'autorise pas un nouveau SMS hors budget. */
+  nouvelEnvoiAutorise?: boolean;
+  /** Continuation relue par le serveur, bornée aussi par la capacité staging. */
+  otpCourantExpireA?: number | null;
+  /** Actualiser l'admission staging après un envoi réussi, sans changer de mode. */
+  onOtpEnvoye?: () => void;
   /** Hash SHA-256 du contenu HTML/PDF affiché à l'utilisateur (preuve d'intégrité). */
   hashDocument?: string | null;
   /** Image base64 de la signature manuscrite (optionnel, complément). */
@@ -55,7 +63,7 @@ export function SignerContratOtp(props: Props) {
   return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}:${props.documentPret}`} {...props} />;
 }
 
-function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureImage, onSigne }: Props) {
+function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSuspendues = false, nouvelEnvoiAutorise = true, otpCourantExpireA, onOtpEnvoye, signatureImage, onSigne }: Props) {
   const actif = useRef(true);
   const operationEnCours = useRef(false);
   useEffect(() => {
@@ -63,23 +71,40 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
     return () => { actif.current = false; };
   }, []);
   const [retour, setRetour] = useState<{ type: 'succes' | 'erreur'; message: string } | null>(null);
-  const [etape, setEtape] = useState<Etape>('idle');
+  const [etape, setEtape] = useState<Etape>(() => otpCourantExpireA && otpCourantExpireA > Date.now() ? 'otp_envoye' : 'idle');
   const [otp, setOtp] = useState('');
   const [telMasked, setTelMasked] = useState<string | null>(null);
   const [accepte, setAccepte] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tentativesRestantes, setTentativesRestantes] = useState<number | null>(null);
-  const [secondesRestantes, setSecondesRestantes] = useState(0);
+  const [echeanceOtpRecuperee, setEcheanceOtpRecuperee] = useState<number | null>(otpCourantExpireA ?? null);
+  const [secondesRestantes, setSecondesRestantes] = useState(() => otpCourantExpireA ? Math.max(0, Math.ceil((otpCourantExpireA - Date.now()) / 1000)) : 0);
   const [smsRestants, setSmsRestants] = useState<number | null>(null);
   const [erreurBloquante, setErreurBloquante] = useState<{ code?: string; message: string } | null>(null);
 
   useEffect(() => {
+    if (otpCourantExpireA === undefined) return;
+    if (otpCourantExpireA === null) {
+      setEcheanceOtpRecuperee(null);
+      setSecondesRestantes(0);
+      setOtp('');
+      setAccepte(false);
+      setEtape(current => current === 'signe' ? current : 'idle');
+      return;
+    }
+    setEcheanceOtpRecuperee(otpCourantExpireA);
+    setSecondesRestantes(Math.max(0, Math.ceil((otpCourantExpireA - Date.now()) / 1000)));
+    setEtape(current => current === 'idle' && otpCourantExpireA > Date.now() ? 'otp_envoye' : current);
+  }, [otpCourantExpireA]);
+
+  useEffect(() => {
     if (etape !== 'otp_envoye' || secondesRestantes <= 0) return;
     const interval = setInterval(() => {
-      setSecondesRestantes(s => Math.max(0, s - 1));
+      setSecondesRestantes(s => echeanceOtpRecuperee === null ? Math.max(0, s - 1)
+        : Math.max(0, Math.ceil((echeanceOtpRecuperee - Date.now()) / 1000)));
     }, 1000);
     return () => clearInterval(interval);
-  }, [etape, secondesRestantes]);
+  }, [etape, secondesRestantes, echeanceOtpRecuperee]);
 
   const otpExpire = etape === 'otp_envoye' && secondesRestantes === 0;
   const mmss = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;
@@ -100,7 +125,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
   }
 
   async function envoyerOtp() {
-    if (!documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
+    if (actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
     operationEnCours.current = true;
     setLoading(true);
     setRetour(null);
@@ -118,12 +143,14 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
       setTelMasked(result.telephone_masked || null);
       setSmsRestants(typeof result.sms_restants === 'number' ? result.sms_restants : null);
       setSecondesRestantes(OTP_DUREE_SEC);
+      setEcheanceOtpRecuperee(null);
       setOtp('');
       setEtape('otp_envoye');
       setRetour({
         type: 'succes',
         message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,
       });
+      onOtpEnvoye?.();
     } catch (err: any) {
       if (!actif.current) return;
       setRetour({ type: 'erreur', message: extraireMessageErreur(err) || 'Erreur réseau. Réessayez.' });
@@ -134,7 +161,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
   }
 
   async function signer() {
-    if (!documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
+    if (actionsSuspendues || !documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire
+      || (echeanceOtpRecuperee !== null && echeanceOtpRecuperee <= Date.now())) return;
     if (!/^[0-9]{6}$/.test(otp)) {
       setRetour({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;
@@ -234,11 +262,13 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
           {retour.message}
         </div>
       )}
+      {actionsSuspendues && <p role="status" className="text-xs text-muted-foreground">Vérification de la signature en cours…</p>}
 
       <label className="flex items-start gap-2 cursor-pointer">
         <input
           type="checkbox"
           checked={accepte}
+          disabled={actionsSuspendues}
           onChange={e => setAccepte(e.target.checked)}
           className="mt-0.5 accent-primary"
         />
@@ -251,7 +281,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
         <button
           type="button"
           onClick={envoyerOtp}
-          disabled={!documentPret || !hashDocument || !accepte || loading || !!erreurBloquante}
+          disabled={actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || !accepte || loading || !!erreurBloquante}
           className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -284,7 +314,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             value={otp}
             onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="123456"
-            disabled={otpExpire}
+            disabled={actionsSuspendues || otpExpire}
             className="input-base text-center text-lg tracking-widest font-mono disabled:opacity-50"
             aria-label="Code SMS à 6 chiffres"
           />
@@ -302,8 +332,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             <button
               type="button"
               onClick={envoyerOtp}
-              disabled={!documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}
-              title={smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
+              disabled={actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}
+              title={!nouvelEnvoiAutorise ? 'Aucun nouvel envoi autorisé pour cette recette' : smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
               {otpExpire ? 'Recevoir un nouveau code' : 'Renvoyer le code'}
@@ -311,7 +341,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             <button
               type="button"
               onClick={signer}
-              disabled={!documentPret || !hashDocument || !accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
+              disabled={actionsSuspendues || !documentPret || !hashDocument || !accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
