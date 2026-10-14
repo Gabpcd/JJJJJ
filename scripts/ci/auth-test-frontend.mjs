@@ -47,9 +47,9 @@ export function validateAuthOnlyUser(user,member,m) {
 }
 export function authOnlyCatalogueSql() {
   return `SELECT jsonb_build_object(
-    'authTriggersFingerprint',(SELECT md5(coalesce(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled::text||':'||md5(pg_get_functiondef(p.oid))||':'||p.proowner::regrole::text||':'||coalesce(p.proacl::text,''),E'\\n' ORDER BY t.tgname),'')) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE t.tgrelid='auth.users'::regclass AND NOT t.tgisinternal),
+    'authTriggersMd5',(SELECT md5(coalesce(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled::text||':'||md5(pg_get_functiondef(p.oid))||':'||p.proowner::regrole::text||':'||coalesce(p.proacl::text,''),E'\\n' ORDER BY t.tgname),'')) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE t.tgrelid='auth.users'::regclass AND NOT t.tgisinternal),
     'authInsertOrUpdateTriggers',(SELECT count(*)::int FROM pg_trigger WHERE tgrelid='auth.users'::regclass AND NOT tgisinternal AND (tgtype::int & 20)<>0),
-    'profileTriggersFingerprint',(SELECT md5(coalesce(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled::text||':'||md5(pg_get_functiondef(p.oid))||':'||p.proowner::regrole::text,E'\\n' ORDER BY t.tgrelid::regclass::text),'')) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE t.tgrelid IN('public.soignants'::regclass,'public.etablissements'::regclass) AND t.tgname='trg_forcer_compte_test_prelaunch' AND NOT t.tgisinternal),
+    'profileTriggersMd5',(SELECT md5(coalesce(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled::text||':'||md5(pg_get_functiondef(p.oid))||':'||p.proowner::regrole::text,E'\\n' ORDER BY t.tgrelid::regclass::text),'')) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE t.tgrelid IN('public.soignants'::regclass,'public.etablissements'::regclass) AND t.tgname='trg_forcer_compte_test_prelaunch' AND NOT t.tgisinternal),
     'profileTriggersValid',(SELECT count(*)=2 AND bool_and(t.tgenabled='O' AND n.nspname='private' AND p.proname='fn_forcer_compte_test_prelaunch' AND p.prosecdef AND p.proowner='postgres'::regrole) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace n ON n.oid=p.pronamespace WHERE t.tgrelid IN('public.soignants'::regclass,'public.etablissements'::regclass) AND t.tgname='trg_forcer_compte_test_prelaunch' AND NOT t.tgisinternal),
     'queuedRequests',(SELECT count(*)::int FROM net.http_request_queue),
     'activeCrons',(SELECT count(*)::int FROM cron.job WHERE active),
@@ -96,8 +96,8 @@ export function checkAuthOnlyContract(c,m,now=Date.now()) {
     &&c.authEffectsReviewed===true&&typeof c.reviewedBy==='string'&&c.reviewedBy.trim().length>=3
     &&Date.parse(c.expiresAt)>now&&Date.parse(c.expiresAt)-now<=4*3600000,'AUTH_ONLY_CONTRACT');
   const cat=c.catalogue;
-  requireThat(cat&&Object.keys(cat).sort().join()==='activeCrons,authInsertOrUpdateTriggers,authTriggersFingerprint,profileTriggersFingerprint,profileTriggersValid,queuedRequests,runningCrons'
-    &&['authTriggersFingerprint','profileTriggersFingerprint'].every(k=>/^[a-f0-9]{32}$/.test(cat[k]??''))
+  requireThat(cat&&Object.keys(cat).sort().join()==='activeCrons,authInsertOrUpdateTriggers,authTriggersMd5,profileTriggersMd5,profileTriggersValid,queuedRequests,runningCrons'
+    &&['authTriggersMd5','profileTriggersMd5'].every(k=>/^[a-f0-9]{32}$/.test(cat[k]??''))
     &&['authInsertOrUpdateTriggers','queuedRequests','activeCrons','runningCrons'].every(k=>cat[k]===0)&&cat.profileTriggersValid===true,'AUTH_ONLY_CATALOGUE_PIN');
   requireThat(equal(projectAuthHooks(c.authHooks),Object.fromEntries(AUTH_HOOK_FLAGS.map(k=>[k,false]))),'AUTH_ONLY_HOOK_ACTIVE');
 }

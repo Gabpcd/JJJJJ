@@ -24,7 +24,7 @@ const fingerprint=hash(pair.publicKey.export({type:'spki',format:'der'}));
 const mainSha='a'.repeat(40),reviewedSha='b'.repeat(40),reviewedTree='c'.repeat(40);
 const sources=Object.fromEntries(AUTH_ONLY_SOURCE_FILES.map((path,index)=>[path,`reviewed auth-only source ${index}`]));
 const manifest=()=>newAuthOnlyManifest('auth-test-ci-12345678-1',mainSha);
-const catalogue=()=>({authTriggersFingerprint:'1'.repeat(32),profileTriggersFingerprint:'2'.repeat(32),
+const catalogue=()=>({authTriggersMd5:'1'.repeat(32),profileTriggersMd5:'2'.repeat(32),
   authInsertOrUpdateTriggers:0,profileTriggersValid:true,queuedRequests:0,activeCrons:0,runningCrons:0});
 const hooks=()=>Object.fromEntries(AUTH_HOOK_FLAGS.map(key=>[key,false]));
 const contract=()=>({schemaVersion:1,purpose:AUTH_ONLY_PURPOSE,ready:true,projectRef:PROJECT,
@@ -88,7 +88,7 @@ test('main identity, first attempt, reviewed bytes, expiry and explicit Auth rev
 
 test('quiescence, live trigger pins and disabled Auth hooks cannot drift or disappear',()=>{
   for(const change of [{authInsertOrUpdateTriggers:1},{profileTriggersValid:false},{queuedRequests:1},{activeCrons:1},
-    {runningCrons:1},{authTriggersFingerprint:null},{profileTriggersFingerprint:null}])
+    {runningCrons:1},{authTriggersMd5:null},{profileTriggersMd5:null}])
     assert.throws(()=>checkAuthOnlyCi(env(),local,{...contract(),catalogue:{...catalogue(),...change}},sources));
   for(const authHooks of [{}, {...hooks(),hook_before_user_created_enabled:true},
     {...hooks(),hook_before_user_created_enabled:'false'},
@@ -139,7 +139,7 @@ function harness(m,options={}) {
       else if(u.pathname===`${base}/database/query`) {
         const body=JSON.parse(init.body);assert.equal(body.read_only,false);
         assert.match(body.query,/^BEGIN READ ONLY;/);assert.match(body.query,/ROLLBACK;$/);
-        const receipt=body.query.includes("'authTriggersFingerprint'")?catalogue():cleanSnapshot(state.users.length);
+        const receipt=body.query.includes("'authTriggersMd5'")?catalogue():cleanSnapshot(state.users.length);
         value=[{receipt:options.observation?options.observation(receipt,state):receipt}];
       }else assert.fail(`Forbidden management endpoint ${u.pathname}`);
     }else {
@@ -218,7 +218,7 @@ test('trigger, hook or provider side effects after one actor stop the second Aut
       if(state.users.length!==1)return value;
       if(kind==='main'&&u.origin==='https://api.github.com')return {...value,object:{sha:reviewedSha,type:'commit'}};
       if(kind==='hook'&&u.pathname.endsWith('/config/auth'))return {...value,hook_send_email_enabled:true};
-      if(kind==='catalogue'&&Array.isArray(value)&&value[0]?.receipt?.authTriggersFingerprint)return [{receipt:{...catalogue(),authTriggersFingerprint:'f'.repeat(32)}}];
+      if(kind==='catalogue'&&Array.isArray(value)&&value[0]?.receipt?.authTriggersMd5)return [{receipt:{...catalogue(),authTriggersMd5:'f'.repeat(32)}}];
       return value;
     }});
     await assert.rejects(runPreparation(m,h));assert.equal(h.state.posts.length,1);assert.equal(m.steps.auth1,undefined);
@@ -346,7 +346,7 @@ test('fixed staging identity, hooks and catalogue are verified before API key re
     {project:{id:PROJECT,status:'ACTIVE_HEALTHY',database:{host:'db.foreign.supabase.co'}}},
     {config:{...hooks(),hook_send_email_enabled:true}},
     {config:{...hooks(),hook_unreviewed_enabled:false}},
-    {catalogue:{...catalogue(),authTriggersFingerprint:'f'.repeat(32)}},
+    {catalogue:{...catalogue(),authTriggersMd5:'f'.repeat(32)}},
     {catalogue:{...catalogue(),queuedRequests:1}},
   ]) {
     const refused=ciRunner({management:change,prepare:async()=>assert.fail('A refused preflight must not prepare actors')});
