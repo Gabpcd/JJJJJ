@@ -1,0 +1,55 @@
+name: PSC staging — diagnostic en lecture seule
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: SHA exact relu (40 caractères)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jolene-supabase-staging-writes
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vérifier la référence avant tout accès staging
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$GITHUB_REPOSITORY" != Gabpcd/JJJJJ ] ||
+             { [ "$GITHUB_REF" != refs/heads/main ] && [ "$GITHUB_REF" != refs/heads/test/recette-complete-20261014 ]; } ||
+             ! [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]] || [ "$EXPECTED_SHA" != "$GITHUB_SHA" ]; then
+            echo PSC_DIAGNOSTIC_CONTEXT_REFUSED
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Tests hors réseau du rapport et des refus
+        run: node --test tests/node/psc-staging-diagnostic.node.mjs
+      - name: Lire la configuration et invoquer uniquement le diagnostic PSC
+        run: node scripts/ci/psc-staging-diagnostic.mjs
+        env:
+          PSC_DIAGNOSTIC_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Conserver seulement le rapport expurgé
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: psc-staging-diagnostic-${{ github.sha }}
+          path: psc-staging-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
