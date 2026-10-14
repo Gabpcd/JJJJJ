@@ -38,6 +38,13 @@ SQL_ERROR_CODES = set()
 
 
 class Session(RACE.Session):
+    def __init__(self, env, directory, name):
+        super().__init__(env, directory, name)
+        # SQLSTATE only, never SQL/error context, is safe to retain when a
+        # syntax/catalogue error prevents any reviewed RAISE from running.
+        self.process.stdin.write('\\set VERBOSITY verbose\n')
+        self.process.stdin.flush()
+
     def wait(self, marker, timeout=20):
         try:
             return super().wait(marker, timeout)
@@ -45,9 +52,12 @@ class Session(RACE.Session):
             # Never publish stderr/SQL context, even though this DB is synthetic.
             # Preserve only RAISE constants declared in the reviewed source.
             error = Path(self.err.name).read_text(errors='replace')[-12000:]
-            found = re.search(r'ERROR:\s+([A-Z][A-Z0-9_]+)(?:\n|$)', error)
+            found = re.search(r'ERROR:\s+(?:[A-Z0-9]{5}:\s+)?([A-Z][A-Z0-9_]+)(?:\n|$)', error)
             if found and found.group(1) in SQL_ERROR_CODES:
                 raise RuntimeError(found.group(1)) from None
+            state = re.search(r'ERROR:\s+([A-Z0-9]{5}):', error)
+            if state:
+                raise RuntimeError('SMS_SQLSTATE_' + state.group(1)) from None
             raise
 
 

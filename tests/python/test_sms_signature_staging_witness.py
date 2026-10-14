@@ -2,7 +2,9 @@
 import importlib.util
 import os
 from pathlib import Path
-from unittest import TestCase, mock, main
+import tempfile
+from types import SimpleNamespace
+from unittest import TestCase, mock, main, skipUnless
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('sms_staging_witness', ROOT / 'scripts/ci/sms-signature-staging-pg17.py')
@@ -48,6 +50,41 @@ class SmsWitnessPreparationTests(TestCase):
         self.assertNotIn('SELECT', bound.upper())
         self.assertIn("'" + key + "'", bound)
         self.assertIn("'" + 'c' * 64 + "'", bound)
+
+    def test_sql_diagnostics_keep_only_reviewed_code_or_sqlstate(self):
+        with tempfile.TemporaryDirectory(prefix='sms-witness-diagnostic-') as temporary:
+            errorfile = Path(temporary) / 'synthetic.stderr'
+            session = WITNESS.Session.__new__(WITNESS.Session)
+            session.err = SimpleNamespace(name=str(errorfile))
+            reviewed = 'SIGNATURE_SMS_TEST_SCOPE_REFUSED'
+            WITNESS.SQL_ERROR_CODES.add(reviewed)
+            for raw, expected in [
+                ('ERROR: 42601: syntax error containing private@example.invalid\nCONTEXT: secret fixture text', 'SMS_SQLSTATE_42601'),
+                ('ERROR: P0001: ' + reviewed + '\nCONTEXT: secret fixture text', reviewed),
+                ('ERROR: P0001: UNREVIEWED_PRIVATE_MESSAGE\n', 'SMS_SQLSTATE_P0001'),
+            ]:
+                with self.subTest(expected=expected):
+                    errorfile.write_text(raw)
+                    with mock.patch.object(WITNESS.RACE.Session, 'wait', side_effect=RuntimeError('PSQL_SESSION_FAILED')):
+                        with self.assertRaisesRegex(RuntimeError, '^' + expected + '$'):
+                            session.wait('MARKER')
+
+    @skipUnless(importlib.util.find_spec('pglast'), 'Optional existing parser; CI validates with real PG17 instead')
+    def test_all_fixture_and_setup_plpgsql_units_parse(self):
+        from pglast import parse_sql, parse_plpgsql
+        setup, fixture, _ = WITNESS.build_fixture()
+        self.assertGreater(len(parse_sql(setup)), 100)
+        self.assertGreater(len(parse_plpgsql(setup)), 20)
+        self.assertEqual(len(parse_plpgsql(fixture)), 5)
+        self.assertGreater(len(parse_sql(fixture)), 5)
+        # Regression of the real first CI failure: the unparenthesised CASE
+        # closes PLpgSQL's IF expression at its inner THEN token.
+        historical = fixture.replace(
+            "IS DISTINCT FROM (CASE WHEN label='ENVOYE' THEN 'DEJA_ENVOYE' ELSE label END)",
+            "IS DISTINCT FROM CASE WHEN label='ENVOYE' THEN 'DEJA_ENVOYE' ELSE label END")
+        self.assertNotEqual(historical, fixture)
+        with self.assertRaises(Exception):
+            parse_plpgsql(historical)
 
 
 if __name__ == '__main__':

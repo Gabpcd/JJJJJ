@@ -148,7 +148,7 @@ BEGIN
    END IF;
    before:=pg_temp.sms_photo();
    r:=pg_temp.sms_reserve(CASE WHEN label='CONFLIT' THEN repeat('e',64) ELSE repeat('d',64) END);
-   IF r->>'statut' IS DISTINCT FROM CASE WHEN label='ENVOYE' THEN 'DEJA_ENVOYE' ELSE label END
+   IF r->>'statut' IS DISTINCT FROM (CASE WHEN label='ENVOYE' THEN 'DEJA_ENVOYE' ELSE label END)
      OR pg_temp.sms_photo() IS DISTINCT FROM before
    THEN RAISE EXCEPTION 'SMS_IDEMPOTENCE_MUTATED_OR_REPEATED'; END IF;
    INSERT INTO sms_observations VALUES('idempotence-keeps-'||who||'-'||label,true);
