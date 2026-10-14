@@ -18,7 +18,9 @@ final class StorePhysicalTests: XCTestCase {
   ]
 
   private enum Screen: String {
-    case publicLanding, authentication, connectedSoignant, connectedEtablissement
+    // Le dashboard peut être exploré en mode invité : sa présence ne prouve
+    // aucune session authentifiée ni identité vérifiée.
+    case publicLanding, authentication, soignantDashboard, etablissementDashboard
   }
 
   // Uniquement du vocabulaire statique déjà public. Ne jamais exporter
@@ -138,10 +140,10 @@ final class StorePhysicalTests: XCTestCase {
     )
     for label in navigationLabels {
       guard let nav = navigation(label) else { continue }
-      if soignantContentReady && nav.buttons["Explorer"].exists && nav.buttons["Mes missions"].exists { return .connectedSoignant }
-      if soignantContentReady && nav.buttons["Trouver une mission"].exists && nav.buttons["Mes missions"].exists { return .connectedSoignant }
-      if etablissementContentReady && nav.buttons["Publier"].exists && nav.buttons["Messages"].exists { return .connectedEtablissement }
-      if etablissementContentReady && nav.buttons["Publier une mission"].exists && nav.buttons["Missions"].exists { return .connectedEtablissement }
+      if soignantContentReady && nav.buttons["Explorer"].exists && nav.buttons["Mes missions"].exists { return .soignantDashboard }
+      if soignantContentReady && nav.buttons["Trouver une mission"].exists && nav.buttons["Mes missions"].exists { return .soignantDashboard }
+      if etablissementContentReady && nav.buttons["Publier"].exists && nav.buttons["Messages"].exists { return .etablissementDashboard }
+      if etablissementContentReady && nav.buttons["Publier une mission"].exists && nav.buttons["Missions"].exists { return .etablissementDashboard }
     }
     let authHeading = [
       "Connexion", "Connexion, heading", "Créez votre compte.", "Créez votre compte., heading",
