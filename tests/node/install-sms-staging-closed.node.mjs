@@ -85,6 +85,7 @@ function harness(options={}){
   if(url===`${API}/functions/${FUNCTION}/body`){
    state.bodyReads++;state.events.push('body');
    const files=state.deploys?closure:baselineFiles;
+   if(options.bodyWire)return options.bodyWire({files,after:state.deploys>0,state,contract:c});
    return response(edit('body',{files:[...files].map(([path,content])=>({name:'/synthetic/source/'+path,content}))},{after:state.deploys>0}));
   }
   if(url===`${API}/database/query`){
@@ -305,6 +306,79 @@ test('wire-format multipart file bodies preserve the reviewed function paths and
  assert.deepEqual(await readResponse(response({files:[{name:'synthetic.ts',content:CANARY}]}),true),{files:[{name:'synthetic.ts',content:CANARY}]});
  await assert.rejects(readResponse(new Response(`--${boundary}\r\nContent-Disposition: form-data; name="files"\r\n\r\n${CANARY}\r\n--${boundary}--\r\n`,
   {headers:{'content-type':`multipart/form-data; boundary=${boundary}`}}),true),/EDGE_MULTIPART_REFUSED/);
+});
+// Reconstruct the captured GET body from already pinned Git blobs rather than
+// duplicate its source files. Byte length and SHA pin the complete real wire.
+const wireBoundary='----WebKitFormBoundary7MA4YWxkTrZu0gW';
+const wireDeploymentId=`${PROJECT}_${versioned.edgeBefore.id}_23`;
+const wireMetadata={deployment_id:wireDeploymentId,original_size:7996122,compressed_size:1233143,module_count:5,
+ deno2_entrypoint_path:'functions/send-sms/index.ts'};
+const wireMetadataPart=value=>({name:'metadata',type:'application/json',content:typeof value==='string'?value:JSON.stringify(value)});
+function wireFileParts(files=baselineFiles){
+ const paths=files===baselineFiles?['send-sms/index.ts','_shared/rate-limit.ts','_shared/cors.ts','_shared/admin-auth.ts','_shared/test-account.ts']:
+  [...files.keys()].map(path=>path.slice('supabase/functions/'.length));
+ return paths.map(path=>({name:'file',filename:'functions/'+path,type:'text/plain',content:files.get('supabase/functions/'+path)}));
+}
+function wireBytes(parts){
+ return Buffer.concat([...parts.flatMap(part=>[
+  Buffer.from(`--${wireBoundary}\r\nContent-Disposition: form-data; name="${part.name}"${part.filename===undefined?'':`; filename="${part.filename}"`}\r\nContent-Type: ${part.type??'text/plain'}\r\n\r\n`),
+  Buffer.from(part.content),Buffer.from('\r\n')]),Buffer.from(`--${wireBoundary}--\r\n`)]);
+}
+const wireResponse=parts=>new Response(wireBytes(parts),{headers:{'content-type':`multipart/form-data; boundary=${wireBoundary}`}});
+test('the exact captured Management body accepts only metadata beside the five pinned source files',async()=>{
+ const parts=[wireMetadataPart(wireMetadata),...wireFileParts()],bytes=wireBytes(parts);
+ assert.equal(bytes.length,47109);assert.equal(digest(bytes),'b90aae9788b680a92a95f9ea51155be7bfc32d1fac3ebbe7efa61a096b274d65');
+ const parsed=await readResponse(wireResponse(parts),true,wireDeploymentId);
+ assert.equal(parsed.files.length,5);assert.deepEqual(Object.keys(parsed),['files']);
+ assert.equal(closureDigest(checkBody(parsed,new Map(Object.entries(versioned.edgeBefore.files)))),versioned.edgeBefore.closureSha256);
+ // Metadata order has no bearing on the source closure.
+ for(const at of [2,5]){
+  const reordered=wireFileParts();reordered.splice(at,0,wireMetadataPart(wireMetadata));
+  assert.deepEqual(await readResponse(wireResponse(reordered),true,wireDeploymentId),parsed);
+ }
+});
+test('multipart metadata rejects malformed, duplicate, unknown and filename-disguised parts',async()=>{
+ const invalid=[wireMetadataPart('{'),wireMetadataPart(''),wireMetadataPart('null'),wireMetadataPart('[]'),wireMetadataPart('1'),
+  wireMetadataPart({...wireMetadata,import_map_path:'import_map.json'}),wireMetadataPart({...wireMetadata,deno2_entrypoint_path:'functions/other/index.ts'}),
+  wireMetadataPart({...wireMetadata,deployment_id:wireDeploymentId.replace(/_23$/,'_24')}),
+  wireMetadataPart({...wireMetadata,original_size:0}),wireMetadataPart({...wireMetadata,compressed_size:1.5}),
+  wireMetadataPart({...wireMetadata,original_size:Number.MAX_SAFE_INTEGER+1}),wireMetadataPart({...wireMetadata,module_count:33}),
+  {...wireMetadataPart(wireMetadata),name:'unknown'},
+  {...wireMetadataPart(wireMetadata),filename:'metadata.json'},
+  {...wireMetadataPart(wireMetadata),filename:'functions/send-sms/index.ts'},
+  wireMetadataPart(' '.repeat(4097)),
+  {name:'metadata',content:Buffer.from([0xc3,0x28])}];
+ const missing=structuredClone(wireMetadata);delete missing.module_count;invalid.push(wireMetadataPart(missing));
+ for(const part of invalid)await assert.rejects(readResponse(wireResponse([part,...wireFileParts()]),true,wireDeploymentId),/EDGE_MULTIPART_REFUSED/);
+ await assert.rejects(readResponse(wireResponse([wireMetadataPart(wireMetadata),...wireFileParts(),wireMetadataPart(wireMetadata)]),true,wireDeploymentId),/EDGE_MULTIPART_REFUSED/);
+ await assert.rejects(readResponse(wireResponse([wireMetadataPart(wireMetadata),...wireFileParts()]),true),/EDGE_MULTIPART_REFUSED/);
+ await assert.rejects(readResponse(wireResponse([...Array.from({length:32},()=>wireFileParts()[0]),wireMetadataPart(wireMetadata)]),true,wireDeploymentId),/EDGE_MULTIPART_REFUSED/);
+ await assert.rejects(readResponse(wireResponse([{...wireFileParts()[0],content:Buffer.from([0xc3,0x28])}]),true),/EDGE_MULTIPART_REFUSED/);
+ let cancelled=false;
+ const oversized=new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(8*1024*1024+1));},cancel(){cancelled=true;}}),
+  {headers:{'content-type':`multipart/form-data; boundary=${wireBoundary}`}});
+ await assert.rejects(readResponse(oversized,true,wireDeploymentId),/RESPONSE_SIZE_REFUSED/);assert.equal(cancelled,true);
+});
+test('metadata cannot relax source hashes, paths, cardinality or duplicates',async()=>{
+ const expected=new Map(Object.entries(versioned.edgeBefore.files));
+ for(const change of [parts=>parts.pop(),parts=>parts.push(parts[0]),parts=>parts[0].content+='\n',
+  parts=>parts[0].filename='functions/unknown.ts',parts=>parts[0].filename='functions/../send-sms/index.ts']){
+  const files=wireFileParts();change(files);
+  const parsed=await readResponse(wireResponse([wireMetadataPart(wireMetadata),...files]),true,wireDeploymentId);
+  assert.throws(()=>checkBody(parsed,expected),/EDGE_(?:BODY_REFUSED|SOURCE_DRIFT)/);
+ }
+});
+test('installer binds multipart metadata to baseline and deployed versions before any SQL transaction',async()=>{
+ const bodyWire=({files,after})=>wireResponse([wireMetadataPart({...wireMetadata,
+  deployment_id:wireDeploymentId.replace(/_23$/,after?'_24':'_23'),module_count:files.size}),...wireFileParts(files)]);
+ const good=harness({bodyWire});const report=await good.run();assert.equal(report.status,'success');assert.equal(good.state.deploys,1);noLeak(good.state,report);
+ for(const wrongAfter of [false,true]){
+  const bad=harness({bodyWire:info=>info.after===wrongAfter?wireResponse([wireMetadataPart({...wireMetadata,
+   deployment_id:wireDeploymentId.replace(/_23$/,info.after?'_23':'_24')}),...wireFileParts(info.files)]):bodyWire(info)});
+  const refused=await bad.run();assert.equal(refused.code,'EDGE_MULTIPART_REFUSED');
+  assert.equal(refused.deploymentAttempted,wrongAfter);assert.equal(refused.commitAttempted,false);assert.equal(refused.providerInvoked,false);
+  assert.equal(bad.state.deploys,wrongAfter?1:0);noSqlMutation(bad.state);noLeak(bad.state,refused);
+ }
 });
 test('CLI pins its version, deploys send-sms alone and receives a reduced environment',()=>{
  const calls=[];

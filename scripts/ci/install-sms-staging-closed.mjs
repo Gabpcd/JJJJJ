@@ -129,19 +129,31 @@ export function checkBody(value,expected){
  }
  return actual;
 }
-// Management API bodies are multipart files (the MCP normalizes them to JSON).
-// Parse that actual wire format in memory with built-in Node APIs, bounded first.
-export async function readResponse(response,files=false){
+// Management API bodies contain source files and optional deployment metadata.
+// Metadata never substitutes for the pinned source paths, hashes or closure.
+export async function readResponse(response,files=false,deploymentId){
  const reader=response.body?.getReader();if(!reader)fail('RESPONSE_BODY_REFUSED');
  const chunks=[];let size=0;
  while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;
   if(size>LIMIT){await reader.cancel();fail('RESPONSE_SIZE_REFUSED');}chunks.push(Buffer.from(value));}
  const bytes=Buffer.concat(chunks,size),contentType=response.headers.get('content-type')??'';
  if(files&&/^multipart\/form-data\s*;/i.test(contentType)){
-  let form;try{form=await new Response(bytes,{headers:{'content-type':contentType}}).formData();}catch{fail('EDGE_MULTIPART_REFUSED');}
-  const result=[];
-  for(const [,part] of form){
-   if(typeof part==='string'||typeof part.name!=='string'||result.length>=32||part.size>LIMIT)fail('EDGE_MULTIPART_REFUSED');
+  // formData decodes string parts permissively; reject invalid UTF-8 first.
+  let form;try{new TextDecoder('utf-8',{fatal:true}).decode(bytes);form=await new Response(bytes,{headers:{'content-type':contentType}}).formData();}catch{fail('EDGE_MULTIPART_REFUSED');}
+  const result=[];let metadataSeen=false,parts=0;
+  for(const [name,part] of form){
+   if(++parts>32)fail('EDGE_MULTIPART_REFUSED');
+   if(name==='metadata'){
+    if(metadataSeen||typeof part!=='string'||Buffer.byteLength(part)>4096)fail('EDGE_MULTIPART_REFUSED');
+    let metadata;try{metadata=JSON.parse(part);}catch{fail('EDGE_MULTIPART_REFUSED');}
+    if(!exact(metadata,['deployment_id','original_size','compressed_size','module_count','deno2_entrypoint_path'])
+      ||typeof deploymentId!=='string'||metadata.deployment_id!==deploymentId
+      ||metadata.deno2_entrypoint_path!=='functions/send-sms/index.ts'
+      ||['original_size','compressed_size','module_count'].some(k=>!Number.isSafeInteger(metadata[k])||metadata[k]<=0)
+      ||metadata.module_count>32)fail('EDGE_MULTIPART_REFUSED');
+    metadataSeen=true;continue;
+   }
+   if(typeof part==='string'||typeof part.name!=='string'||part.size>LIMIT)fail('EDGE_MULTIPART_REFUSED');
    let content;try{content=new TextDecoder('utf-8',{fatal:true}).decode(await part.arrayBuffer());}catch{fail('EDGE_MULTIPART_REFUSED');}
    result.push({name:part.name,content});
   }
@@ -177,21 +189,22 @@ export async function installClosed({env,local,contract:c,fetchImpl=fetch,deploy
   closedStateVerified:false,businessRowsUnchanged:false,providerInvoked:false,authCreated:false,capabilityAllocated:false,credentialsChanged:false};
  const save=()=>{try{checkpoint(structuredClone(r));}catch{fail('CHECKPOINT_FAILED');}};
  let mutationStarted=false;
- async function request(url,body,management=false,files=false){
+ async function request(url,body,management=false,files=false,deploymentId){
   try{
    const response=await fetchImpl(url,{method:body===undefined?'GET':'POST',redirect:'error',signal:AbortSignal.timeout(110000),
     headers:management?{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`,'Content-Type':'application/json',...(files?{Accept:'multipart/form-data'}:{})}:
      {Authorization:`Bearer ${env.GITHUB_TOKEN}`,Accept:'application/vnd.github+json','User-Agent':'Jolene-closed-sms-install'},
     ...(body===undefined?{}:{body:JSON.stringify(body)})});
    if(!response.ok)fail('HTTP_REFUSED');
-   return await readResponse(response,files);
+   return await readResponse(response,files,deploymentId);
   }catch(e){if(e instanceof Refusal)throw e;fail('TRANSPORT_OR_JSON_UNCERTAIN');}
  }
  // Preserve Management's operator role for private/auth catalogues. Read-only
  // snapshots enforce BEGIN READ ONLY, postgres identity and row_security=off.
  const query=sql=>request(`${API}/database/query`,{query:sql,read_only:false},true);
  const main=async()=>{const x=await request(`${GH}/git/ref/heads/main`);if(x?.ref!=='refs/heads/main'||x.object?.type!=='commit'||x.object.sha!==env.GITHUB_SHA)fail('MAIN_MOVED');};
- const body=()=>request(`${API}/functions/${FUNCTION}/body`,undefined,true,true);
+ const body=(after=false)=>request(`${API}/functions/${FUNCTION}/body`,undefined,true,true,
+  `${PROJECT}_${c.edgeBefore.id}_${c.edgeBefore.version+(after?1:0)}`);
  try{
   checkContext(env,local,c);const {rendered,closure}=checkAssets(c,local);
   if(!env.STAGING_SUPABASE_ACCESS_TOKEN?.trim()||!env.GITHUB_TOKEN?.trim())fail('TOKENS_REQUIRED');
@@ -225,7 +238,7 @@ export async function installClosed({env,local,contract:c,fetchImpl=fetch,deploy
   r.status='uncertain';r.deploymentAttempted=true;save();mutationStarted=true;
   try{await deploy();}catch(e){if(e instanceof Refusal&&e.code==='CLI_VERSION_REFUSED'){r.status='failed';r.deploymentAttempted=false;mutationStarted=false;throw e;}fail('DEPLOY_RESULT_UNCERTAIN');}
   r.phase='verify_deployment';const deployed=checkMetadata(await request(`${API}/functions`,undefined,true),c,true,beforeEdge);
-  checkBody(await body(),new Map([...closure].map(([p,v])=>[p,digest(v)])));
+  checkBody(await body(true),new Map([...closure].map(([p,v])=>[p,digest(v)])));
   r.deploymentConfirmed=true;save();
   r.phase='rollback_once';await main();
   const preview=checkSnapshot(await query(transactionSql(c,rendered,before,false)),c,true,before);
