@@ -7,6 +7,10 @@ interface Props {
   contratId: string;
   /** Le document original affiché doit être disponible et figé avant tout OTP. */
   documentPret: boolean;
+  /** Relecture d'admission : conserver la saisie, suspendre toute action. */
+  actionsSuspendues?: boolean;
+  /** Une continuation OTP valide n'autorise pas un nouveau SMS hors budget. */
+  nouvelEnvoiAutorise?: boolean;
   /** Hash SHA-256 du contenu HTML/PDF affiché à l'utilisateur (preuve d'intégrité). */
   hashDocument?: string | null;
   /** Image base64 de la signature manuscrite (optionnel, complément). */
@@ -55,7 +59,7 @@ export function SignerContratOtp(props: Props) {
   return <SessionSignatureOtp key={`${props.contratId}:${props.hashDocument ?? ''}:${props.documentPret}`} {...props} />;
 }
 
-function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureImage, onSigne }: Props) {
+function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSuspendues = false, nouvelEnvoiAutorise = true, signatureImage, onSigne }: Props) {
   const actif = useRef(true);
   const operationEnCours = useRef(false);
   useEffect(() => {
@@ -100,7 +104,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
   }
 
   async function envoyerOtp() {
-    if (!documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
+    if (actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || operationEnCours.current || !accepte || erreurBloquante) return;
     operationEnCours.current = true;
     setLoading(true);
     setRetour(null);
@@ -134,7 +138,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
   }
 
   async function signer() {
-    if (!documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
+    if (actionsSuspendues || !documentPret || !hashDocument || operationEnCours.current || erreurBloquante || otpExpire) return;
     if (!/^[0-9]{6}$/.test(otp)) {
       setRetour({ type: 'erreur', message: 'Code à 6 chiffres requis.' });
       return;
@@ -234,11 +238,13 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
           {retour.message}
         </div>
       )}
+      {actionsSuspendues && <p role="status" className="text-xs text-muted-foreground">Vérification de la signature en cours…</p>}
 
       <label className="flex items-start gap-2 cursor-pointer">
         <input
           type="checkbox"
           checked={accepte}
+          disabled={actionsSuspendues}
           onChange={e => setAccepte(e.target.checked)}
           className="mt-0.5 accent-primary"
         />
@@ -251,7 +257,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
         <button
           type="button"
           onClick={envoyerOtp}
-          disabled={!documentPret || !hashDocument || !accepte || loading || !!erreurBloquante}
+          disabled={actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || !accepte || loading || !!erreurBloquante}
           className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -284,7 +290,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             value={otp}
             onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="123456"
-            disabled={otpExpire}
+            disabled={actionsSuspendues || otpExpire}
             className="input-base text-center text-lg tracking-widest font-mono disabled:opacity-50"
             aria-label="Code SMS à 6 chiffres"
           />
@@ -302,8 +308,8 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             <button
               type="button"
               onClick={envoyerOtp}
-              disabled={!documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}
-              title={smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
+              disabled={actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}
+              title={!nouvelEnvoiAutorise ? 'Aucun nouvel envoi autorisé pour cette recette' : smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
               {otpExpire ? 'Recevoir un nouveau code' : 'Renvoyer le code'}
@@ -311,7 +317,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, signatureI
             <button
               type="button"
               onClick={signer}
-              disabled={!documentPret || !hashDocument || !accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
+              disabled={actionsSuspendues || !documentPret || !hashDocument || !accepte || otp.length !== 6 || loading || otpExpire || !!erreurBloquante}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}

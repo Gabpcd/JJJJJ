@@ -19,6 +19,7 @@ import {
   resolveOperationalTestAccount,
   resolveOperationalTestSource,
 } from '../_shared/test-account.ts';
+import { signatureSmsStagingConfig, signatureSmsStagingRequest } from '../_shared/signature-sms-staging-test.ts';
 
 // ═══ [FIX 20] Préfixe SMS configurable ═══════════════════════════
 // Appelé par le handler et testé unitairement (export via globalThis).
@@ -220,7 +221,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Aucun canal SMS externe pour les fixtures, OTP compris. Le test admin
+    // Fixtures stay TEST. Only a separately allocated, server-bound staging
+    // signature capacity may reach the existing SMS transport and ledger.
+    // Aucun autre canal SMS externe pour les fixtures. Le test admin
     // sans destinataire explicite se classe avec l'identité de l'appelant ;
     // tout autre appel sans compte opérationnel identifiable échoue fermé.
     const classificationUserId = destinataireId
@@ -240,7 +243,10 @@ Deno.serve(async (req) => {
         error: 'Classification du destinataire indisponible',
       }, 503);
     }
-    if (testAccount.isTest) {
+    const stagingSmsRequest = testAccount.isTest && auth.isServiceRole && type === 'OTP_SIGNATURE'
+      ? await signatureSmsStagingRequest(signatureSmsStagingConfig(key => Deno.env.get(key)), auth.isServiceRole, body, telephone)
+      : null;
+    if (testAccount.isTest && !stagingSmsRequest) {
       await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
         acteur_id: null,
         type_acteur: 'SYSTEME',
@@ -270,7 +276,7 @@ Deno.serve(async (req) => {
         error: 'Classification de la source indisponible',
       }, 503);
     }
-    if (sourceAccount.isTest) {
+    if (sourceAccount.isTest && !stagingSmsRequest) {
       await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
         acteur_id: null,
         type_acteur: 'SYSTEME',
@@ -392,6 +398,9 @@ Deno.serve(async (req) => {
       ? contenu.substring(0, maxBodyLen - 3) + "..."
       : contenu;
     const fullBody = `${prefix}${smsBody}`;
+    if (stagingSmsRequest && (prefix !== 'Jolene: ' || fullBody !== `Jolene: ${contenuRaw}` || fullBody.length > 160)) {
+      return jsonResponse(req, { error: 'Format SMS de recette refuse' }, 503);
+    }
 
     let requestFingerprint: string | null = null;
     if (idempotencyKey) {
@@ -402,10 +411,9 @@ Deno.serve(async (req) => {
         contenu: fullBody,
       }));
       const { data: reservation, error: reservationError } =
-        await supabaseAdmin.rpc('fn_reserver_envoi_sms_idempotent', {
-          p_idempotency_key: idempotencyKey,
-          p_request_fingerprint: requestFingerprint,
-        });
+        await supabaseAdmin.rpc(stagingSmsRequest ? 'fn_reserver_sms_signature_recette' : 'fn_reserver_envoi_sms_idempotent', stagingSmsRequest
+          ? { ...stagingSmsRequest, p_request_fingerprint: requestFingerprint }
+          : { p_idempotency_key: idempotencyKey, p_request_fingerprint: requestFingerprint });
       if (reservationError) {
         console.error('[send-sms] réservation idempotente indisponible');
         return jsonResponse(req, {
