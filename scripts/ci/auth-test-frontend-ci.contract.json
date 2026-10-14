@@ -1,15 +1,30 @@
 {
   "schemaVersion": 1,
   "purpose": "AUTH_ONLY_FRONTEND_V1",
-  "ready": false,
+  "ready": true,
   "projectRef": "mejpriaetwgtcstbgfid",
-  "reviewedSourceSha": null,
-  "reviewedSourceTree": null,
-  "sourcePins": null,
-  "expiresAt": null,
-  "reviewedBy": null,
-  "authEffectsReviewed": false,
-  "catalogue": null,
+  "reviewedSourceSha": "53f38f11b128cf94636e6c8ba42d3d51487517c3",
+  "reviewedSourceTree": "26276460eeb8aa787c882048ec557174cc268a3a",
+  "sourcePins": {
+    "scripts/ci/auth-test-frontend.mjs": "ac8b6c40486ab97620655d8c05af642103c09f332a4fef4fe5ee1df3445cbc07",
+    "scripts/ci/auth-test-frontend-ci.mjs": "d6afa04d690d370027a166537b8839338f84250a23d8e6820c9b9dbffbc579ae",
+    "scripts/ci/connect-test-fixture-ci.mjs": "0660e5c5332fdbf55d9e1d0bb9e8aca2f613017df4116006acf42661fde0f391",
+    "scripts/ci/connect-test-fixture.mjs": "c90e10a07609694fe0cb5c622cf746b5628f0c03d97a7ee81b5a77ba98a765a8",
+    "scripts/ci/connect-test-fixture-sql.mjs": "6873caa7db2b72322d70ce45c60cfede794f0db6aca1aad7e2bd72e6a9f40741",
+    ".github/workflows/connect-test-fixture.yml": "c3a36ace77ba087720f6eec3d8b328eeddf76d4d9d609d70d118b4c877afc89b"
+  },
+  "expiresAt": "2026-10-14T20:30:00.000Z",
+  "reviewedBy": "B8 review_android_transport isolated Auth-only adapter; root LIVE catalogue and Auth hooks read-only",
+  "authEffectsReviewed": true,
+  "catalogue": {
+    "activeCrons": 0,
+    "runningCrons": 0,
+    "queuedRequests": 0,
+    "profileTriggersValid": true,
+    "authTriggersMd5": "d8058d6cc6c7930a82a229768812742c",
+    "authInsertOrUpdateTriggers": 0,
+    "profileTriggersMd5": "e0c4d8cce77e1a63383bc846d0dc5d06"
+  },
   "authHooks": {
     "hook_custom_access_token_enabled": false,
     "hook_mfa_verification_attempt_enabled": false,
@@ -19,5 +34,5 @@
     "hook_before_user_created_enabled": false,
     "hook_after_user_created_enabled": false
   },
-  "reason": "Fermé : inventaire SQL Auth/profil LIVE, provenance des octets et revue indépendante à épingler. Les sept hooks désactivés ont été lus séparément ; cela ne suffit pas à ouvrir l'opérateur."
+  "reason": "Deux Auth TEST neufs seulement, sans profil ni rôle métier. Adaptateur dédié relu, six dépendances épinglées, catalogue et sept hooks fermés lus en staging. Exécution manuelle sur main exact après CI ; ancien opérateur Connect inchangé et fermé."
 }
