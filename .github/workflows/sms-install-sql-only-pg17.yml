@@ -1,0 +1,58 @@
+name: Reprise SMS SQL-only — PostgreSQL 17
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resume-sql-only:
+    if: github.repository == 'Gabpcd/JJJJJ'
+    name: Reprise SMS SQL-only — PostgreSQL 17 éphémère
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: sms_install_sql_only_diagnostic
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sms_install_sql_only_diagnostic"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_SMS_INSTALL_SQL_ONLY_WITNESS: CI_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '54329'
+      PGDATABASE: sms_install_sql_only_diagnostic
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      - name: Vérifier le SHA exécuté
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Tester les refus et la préparation sans réseau
+        run: |
+          node --test tests/node/resume-sms-staging-sql-only.node.mjs tests/node/resume-sms-staging-sql-only-sql.node.mjs
+          python3 -B -m unittest discover -s tests/python -p test_sms_install_sql_only_witness.py
+      - name: Reproduire les droits gérés, le refus ancien et le rollback réel
+        run: python3 -B scripts/ci/sms-install-sql-only-pg17.py > sms-install-sql-only-pg17-public.json
+      - name: Reçu synthétique borné uniquement
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sms-install-sql-only-pg17-public
+          path: sms-install-sql-only-pg17-public.json
+          retention-days: 7
+          if-no-files-found: error
