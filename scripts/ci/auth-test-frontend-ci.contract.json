@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "purpose": "AUTH_ONLY_FRONTEND_V1",
+  "ready": false,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "reviewedSourceSha": null,
+  "reviewedSourceTree": null,
+  "sourcePins": null,
+  "expiresAt": null,
+  "reviewedBy": null,
+  "authEffectsReviewed": false,
+  "catalogue": null,
+  "authHooks": {
+    "hook_custom_access_token_enabled": false,
+    "hook_mfa_verification_attempt_enabled": false,
+    "hook_password_verification_attempt_enabled": false,
+    "hook_send_sms_enabled": false,
+    "hook_send_email_enabled": false,
+    "hook_before_user_created_enabled": false,
+    "hook_after_user_created_enabled": false
+  },
+  "reason": "Fermé : inventaire SQL Auth/profil LIVE, provenance des octets et revue indépendante à épingler. Les sept hooks désactivés ont été lus séparément ; cela ne suffit pas à ouvrir l'opérateur."
+}
