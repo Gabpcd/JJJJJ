@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "installationOnly": true,
+  "capabilityEnabled": false,
+  "reviewedProductSha": "5d8b08b879885d4807c6cfa6a15af0b176106239",
+  "baselineSourceSha": "692256518ffef551fab8739ddd90d7c865935370",
+  "edgeBefore": {
+    "id": "5e2f040c-7ad2-4d68-8b78-725a5880343d",
+    "version": 23,
+    "verify_jwt": false,
+    "import_map": false,
+    "bundleSha256": "82f795a1442482c674acbfd6fe7ab18b895cbdc7922736344cd40cdf86f43f3c",
+    "metadataSha256": "581aea184ee07047fab21b7c9cead28f86e65ca6bbf601b4d3c56b6471dc230a",
+    "closureSha256": "d1bb6c8ae0b015c3d52fc2cb586002320335ef806e96e7ec24770af2d111a376",
+    "files": {
+      "supabase/functions/_shared/admin-auth.ts": "367938019377395d5ee480416e25392d7d3ac0e5a8466c2ee8293640e5243318",
+      "supabase/functions/_shared/cors.ts": "2fdef467c6eae9fed9035b70a7f97074363faed944f72050d277ff5834139911",
+      "supabase/functions/_shared/rate-limit.ts": "6ecb4f1fa4e8dfd0f11d61a51d96bb3e572f14a14e3d07ccc749b4cd180d10f4",
+      "supabase/functions/_shared/test-account.ts": "c1edd45ac19ba32b1890c821604817532b90a88aed5ed659e702dce3ace15c68",
+      "supabase/functions/send-sms/index.ts": "5028640d2b81c4be8da49c8427f91f59eb8e527c4ea633a5c6c23abb9efaea13"
+    }
+  },
+  "assets": {
+    ".github/workflows/signature-otp-pg17.yml": {
+      "sha256": "9e14dae3163a704dbff4ef77f578e03bd2c8f238cbf8ab1ecbc0e78a842fd88b",
+      "gitBlob": "21bda518c6a92071c933a136beb57fb0d4d0d9cf"
+    },
+    ".github/workflows/signature-sms-staging.yml": {
+      "sha256": "7587d7b9330a3ca5ccea8571fd18b51ffdeb498f413e089d61f5b815fd0ef067",
+      "gitBlob": "6aa2cac61f8a5a24b20f8aded797745189b86d8d"
+    },
+    "e2e/helpers/recette-complete-mission.ts": {
+      "sha256": "00226a6daed123d2d1e2dde9fe9398c5d4bb6939c6f0022a730b8f8cf02c93a1",
+      "gitBlob": "c725a707d7fb101e0cf94967c66fd79cbe91ed28"
+    },
+    "e2e/helpers/recette-signature-sms-staging.ts": {
+      "sha256": "f81b908c3fc9f26fc0c2dc11c1b25a960c017f5dc7382aa134da26f68514a195",
+      "gitBlob": "2e0353cd552023f1ef4977da7ace863edf2ee596"
+    },
+    "e2e/playwright.recette-complete.config.ts": {
+      "sha256": "47195cabcd0bbaeb52c63efa81e30b4bd355eb0e934c1c33d709851df81c4c9f",
+      "gitBlob": "597659bb3ef08dd94a6ccbd5f7f5dfe4bb33fc9b"
+    },
+    "e2e/recette-complete-signature-sms-staging.spec.ts": {
+      "sha256": "546f6bfa6c8c4c8fb00102de6b40ec139f9fbb1b1136c392e29f697f2306d966",
+      "gitBlob": "e1ca3232912b4f0a53ac9be318cbbebd591ad758"
+    },
+    "scripts/ci/recette107-signature-race.py": {
+      "sha256": "3737ae7a7432025135a37859614933a80ec788de5c7946c1b03cad8fde96c2dd",
+      "gitBlob": "cacc05d534dc1f6f5d41f615fc56de86543ee991"
+    },
+    "scripts/ci/signature-otp-diagnostic-pg17.py": {
+      "sha256": "7744e6c83d7f79bc750774e055940d4b9ccdfa67358c028a000f87df228825db",
+      "gitBlob": "077670212cacf3137b9ee6247afceae0e6b138e3"
+    },
+    "scripts/ci/signature-otp-fix-pg17.py": {
+      "sha256": "733db35882a8273177cdf26b7e3f29ca083e39350c5f1234f506011b98a7ecc8",
+      "gitBlob": "b0f5054b692122fd86c977ea1ea35ddcfde77aa0"
+    },
+    "scripts/ci/sms-signature-staging-otp.source.sql": {
+      "sha256": "5d6ad83f50b15b633841ed853961f48dc9a54575b8abffb6b68f574360e1e052",
+      "gitBlob": "62a2d88bc5bdafe95d6c8cbb46af35fd5d66dd0b"
+    },
+    "scripts/ci/sms-signature-staging-pg17.py": {
+      "sha256": "e0ac15b81d8112b3baa3360a5c9ef389cb3151d556b935a52eecce10bb17222e",
+      "gitBlob": "6bab7dfbf5316e700cfac75f40d91cbd9fdf7ad1"
+    },
+    "scripts/ci/sms-signature-staging-render.mjs": {
+      "sha256": "a9a13b22b60c0c4702dca32431108c4b8710542e4019eb860a0368f4c5bfd934",
+      "gitBlob": "868fca0cd3b73c2442779d4e3a0348a5b13621be"
+    },
+    "scripts/ci/sms-signature-staging.sql": {
+      "sha256": "bebec00216399fae311a19fe0c9229b0b8b0cffcc4f82ed5c3662cc266e64ee9",
+      "gitBlob": "be21510b34cb7d67945c0957388380719ba39ce0"
+    },
+    "src/components/SignerContratOtp.tsx": {
+      "sha256": "65c46bcd6fbd2e50ebaa829afc4b61fc57ae0b9b6d08864dc4f9a95ea121e359",
+      "gitBlob": "0b5be30d0808d0927b5c862a80e9e66eed870251"
+    },
+    "src/lib/signatureSmsStagingAdmission.ts": {
+      "sha256": "69741c88bea71a6605e2635e57bbbe0bd6c3e2fe4a9b89d5fd92b8c628d37ca8",
+      "gitBlob": "567fa2f3a821dbf0144b3ddb63075044ad1e9fb8"
+    },
+    "src/pages/ContratMission.tsx": {
+      "sha256": "8f68d483154dc435b6fa734d4a98a4b78c793423e2cae238f49b074aa76b104a",
+      "gitBlob": "d35429816298beff1edd5001134941d429e69d9d"
+    },
+    "supabase/config.toml": {
+      "sha256": "6fc7136080beba09bf97de625863ff227c4701da22a79e8c408b8a902cf651aa",
+      "gitBlob": "dbc5b3eedd92448ed5581246fbcd277edaf34c33"
+    },
+    "supabase/functions/_shared/admin-auth.ts": {
+      "sha256": "367938019377395d5ee480416e25392d7d3ac0e5a8466c2ee8293640e5243318",
+      "gitBlob": "d0d4595374d6a94c5d254a8c9e74ead4a5a42401"
+    },
+    "supabase/functions/_shared/cors.ts": {
+      "sha256": "2fdef467c6eae9fed9035b70a7f97074363faed944f72050d277ff5834139911",
+      "gitBlob": "1ab40d00b90a6f5be475266e2db6018f166920b7"
+    },
+    "supabase/functions/_shared/rate-limit.ts": {
+      "sha256": "6ecb4f1fa4e8dfd0f11d61a51d96bb3e572f14a14e3d07ccc749b4cd180d10f4",
+      "gitBlob": "16812be5e9ef0a1997955419f980b51761ae3f2f"
+    },
+    "supabase/functions/_shared/signature-sms-staging-test.ts": {
+      "sha256": "9d114daf5212658b07e8517d0c7e1df48e487c84965d0cce447ae18e9e885a5d",
+      "gitBlob": "07ab0d262b8a4703a5cd9ffac92048b68fc26ae1"
+    },
+    "supabase/functions/_shared/test-account.ts": {
+      "sha256": "c1edd45ac19ba32b1890c821604817532b90a88aed5ed659e702dce3ace15c68",
+      "gitBlob": "be544f803af74c226cfe717efd29148873dcfff1"
+    },
+    "supabase/functions/send-sms/index.ts": {
+      "sha256": "058d13c505284ac61ba1d7150ec6ad2d8f7515e3267b2c1d39420fea46eeddc6",
+      "gitBlob": "16d61f03c1f2db7830a5133134e87a132e0e32c9"
+    },
+    "supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql": {
+      "sha256": "c123858a03b188317f4889de989ca2a104a205956256635595176aece0507faf",
+      "gitBlob": "efeca307c2df67ebae89bcc61ddba99e5bc8db68"
+    },
+    "supabase/migrations/20261004124300_refuser_signature_otp_et_document_incoherents.sql": {
+      "sha256": "31c1e33750e493188609729d71b2b1b38c4c53fb04e22efef92f7920611db843",
+      "gitBlob": "2792244e0faf6ba4d6e7bca8c862caea11c602e5"
+    },
+    "supabase/migrations/20261006144554_serialiser_renvoi_et_validation_signature.sql": {
+      "sha256": "6a98fbc8d7670bdb16ad3bd4a5873ae6ed0b0a6f4b328d35c3b88cfd7f792f63",
+      "gitBlob": "1192f1b6562b28e5383071323fc5db96c3207f45"
+    },
+    "supabase/schema/public.sql": {
+      "sha256": "ec4c4c0465b276242536e425d4e84eaea52691920506c56e5117a86f9b32c2c3",
+      "gitBlob": "97334faadf673bad35e4ff37c6b1c5ff29772229"
+    },
+    "tests/fixtures/connect-pretransfer-auth-dependencies.json": {
+      "sha256": "9657f7b291bc0a00117a64123b790264b11db4b99f6bd58e3d3f87c821f7ddea",
+      "gitBlob": "777c2a01b4fb2c4becbcdf520def4e97a958a20f"
+    },
+    "tests/fixtures/signature-otp-catalogue-before.json": {
+      "sha256": "604de65686e2f3779364e0910e68d8580726edb40eaec0943d51c75a42839a9c",
+      "gitBlob": "440c234f89ff636f2acb08ba1c5aded17c220889"
+    },
+    "tests/fixtures/signature-otp-sender-catalogue-before.json": {
+      "sha256": "a23e7242c084f337239697bc96d453f3b6c967fccb61acccefd8842a47040b6d",
+      "gitBlob": "ac652c7cfbba1646aded4e4cfbb8402797fadd3e"
+    },
+    "tests/fixtures/sms-signature-staging-pg17.sql": {
+      "sha256": "c5be3777afa1263c170d25385a463b1da252a4a0c7db928b5f30671abbb122a5",
+      "gitBlob": "23419768343641566f8b61badfc5b9156e6f4fff"
+    }
+  },
+  "renderedSha256": "e67b1284644ca2aab7f51006e4641ff921175810897813a12a0f922d45ff45cf",
+  "beforeRoutines": [
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "private.fn_finaliser_envoi_sms_idempotent(text,text,text,text,text)",
+      "body_md5": "4b5c611c5c678a9e007348c1d0ee5fea",
+      "definition_md5": "6be9ad192e76a8d0db635e3dbe42ccee",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "private.fn_reserver_envoi_sms_idempotent(text,text)",
+      "body_md5": "ced587d411ae661141166122ce6b83c6",
+      "definition_md5": "ad9e6976831cd06d02424383f299d429",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_envoyer_otp_signature(uuid)",
+      "body_md5": "786555c2ebd4bf148204b18cb48e9c1c",
+      "definition_md5": "9a6734a7ac73dc1d90b1d36c0ec4f7db",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=public, extensions"
+      ],
+      "acl": [
+        "authenticated=X/postgres",
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_finaliser_envoi_sms_idempotent(text,text,text,text,text)",
+      "body_md5": "4821190e769cc2fff3c3f61ce3260f66",
+      "definition_md5": "e42542e7ef57349e204fcccb500ba4ae",
+      "language": "sql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_reserver_envoi_sms_idempotent(text,text)",
+      "body_md5": "8f5bc4cd1d175a3fea7176924d79380b",
+      "definition_md5": "453d48ff3100fc905cff9dd0115b9f16",
+      "language": "sql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    }
+  ],
+  "afterRoutines": [
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "private.fn_signature_sms_test_immutable()",
+      "body_md5": "013a2f4cb0b06b7c5e240b82ca0c3fe1",
+      "language": "plpgsql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "s",
+      "signature": "private.fn_signature_sms_test_scope(uuid,uuid)",
+      "body_md5": "0564fdcab7d507bfd27c052af1a3e293",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "i",
+      "signature": "private.fn_signature_sms_test_telephone(text)",
+      "body_md5": "52fedbb770cab0b25da540397436cc78",
+      "language": "plpgsql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "s",
+      "signature": "public.fn_admission_otp_signature_recette(uuid)",
+      "body_md5": "85660904e41d71ffd29519c06d02e6ec",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "authenticated=X/postgres",
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_envoyer_otp_signature(uuid)",
+      "body_md5": "40a7915d52ac4d547656919867cb0501",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=public, extensions"
+      ],
+      "acl": [
+        "authenticated=X/postgres",
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_finaliser_envoi_sms_idempotent(text,text,text,text,text)",
+      "body_md5": "4821190e769cc2fff3c3f61ce3260f66",
+      "definition_md5": "e42542e7ef57349e204fcccb500ba4ae",
+      "language": "sql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_reserver_envoi_sms_idempotent(text,text)",
+      "body_md5": "8f5bc4cd1d175a3fea7176924d79380b",
+      "definition_md5": "453d48ff3100fc905cff9dd0115b9f16",
+      "language": "sql",
+      "security_definer": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    },
+    {
+      "owner": "postgres",
+      "strict": false,
+      "returns_set": false,
+      "volatility": "v",
+      "signature": "public.fn_reserver_sms_signature_recette(text,text,text,uuid,uuid,uuid,text,text,text,text,text,text)",
+      "body_md5": "5cdb926c77cf741a7ba5f953d52351b0",
+      "language": "plpgsql",
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    }
+  ],
+  "ci": {
+    "headSha": "5d8b08b879885d4807c6cfa6a15af0b176106239",
+    "executedSha": "8d21229d749c767ccac1341640856008a02541a9",
+    "parents": [
+      "692256518ffef551fab8739ddd90d7c865935370",
+      "5d8b08b879885d4807c6cfa6a15af0b176106239"
+    ],
+    "pg": {
+      "runId": "38591583136",
+      "jobIds": [
+        "115947553401"
+      ],
+      "workflow": ".github/workflows/signature-otp-pg17.yml",
+      "artifactId": "11907452997",
+      "artifactName": "signature-sms-staging-pg17-public",
+      "artifactZipSha256": "3bd039196141bd4f04420fbbde2a9b31352f59f0deeb579a3a8d66f42bc54158",
+      "casesPassed": 58,
+      "renderedSha256": "e67b1284644ca2aab7f51006e4641ff921175810897813a12a0f922d45ff45cf"
+    },
+    "ui": {
+      "runId": "38591583466",
+      "jobIds": [
+        "115947554684",
+        "115947555453",
+        "115947555189",
+        "115947555335",
+        "115947555195"
+      ],
+      "workflow": ".github/workflows/signature-sms-staging.yml",
+      "passed": 80
+    }
+  },
+  "manifestSha256": "ddbb4a7a0f7c9217017decdd434c5f151d504a311797a7f664959ca056cce368"
+}
