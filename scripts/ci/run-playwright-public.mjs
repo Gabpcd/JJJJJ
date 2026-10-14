@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { constants as osConstants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { projectSignupFinalAudit } from './signup-final-audit-public.mjs';
 
 const PHASES = Object.freeze({
   'app-review': ['tablet-ipad'],
@@ -165,8 +166,12 @@ export async function projectReport(report, { phase, cwd }) {
             requireValue(Array.isArray(result.errors));
             requireValue(!['passed', 'skipped'].includes(result.status) || (result.errors.length === 0 && !result.error), 'REPORT_INCONSISTENT');
             const assertion = await failureLocation(result, location, cwd);
+            let signupAudit;
+            try { signupAudit = projectSignupFinalAudit(result, { phase, file: location.file }); }
+            catch { throw new ClosedError('SIGNUP_AUDIT_REFUSED'); }
             return {
               ...(assertion ? { failureLocation: assertion } : {}),
+              ...(signupAudit ? { signupAudit } : {}),
               retry: index, status: result.status, durationMs: result.duration,
               code: result.status === 'timedOut' ? 'TIMEOUT' : result.status === 'interrupted' ? 'INTERRUPTED'
                 : result.status === 'failed' ? 'TEST_FAILED' : result.status === 'skipped' ? 'SKIPPED' : 'PASSED',
