@@ -196,12 +196,22 @@ test('CLI fails closed without credentials, emits only a static message and refu
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
-test('manual workflow exposes credentials only to collector and uploads only projected report', () => {
+test('manual workflow restricts credentials to two read collectors and uploads only their projected reports', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/recette-fournisseurs-preflight.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /workflow_dispatch:/); assert.doesNotMatch(workflow, /pull_request:|push:|schedule:|continue-on-error|functions deploy|db push|curl|secrets\.SUPABASE_ACCESS_TOKEN/);
+  assert.match(workflow, /workflow_dispatch:/); assert.doesNotMatch(workflow, /pull_request:|push:|schedule:|functions deploy|db push|curl|secrets\.SUPABASE_ACCESS_TOKEN/);
   assert.match(workflow, /contents: read/); assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /RECETTE_CANDIDATE_SHA: \$\{\{ github.sha \}\}/);
-  assert.match(workflow, /path: recette-fournisseurs-preflight.json/);
+  const steps = workflow.split(/^ {6}- /m).slice(1);
+  const privileged = steps.filter(step => /secrets\./.test(step));
+  assert.equal(privileged.length, 2);
+  assert.equal(privileged.filter(step => step.includes('run: node scripts/ci/psc-staging-diagnostic.mjs')).length, 1);
+  assert.equal(privileged.filter(step => step.includes('run: node scripts/recette-fournisseurs/collect-preflight.mjs')).length, 1);
+  const continuations = steps.filter(step => step.includes('continue-on-error'));
+  assert.equal(continuations.length, 1);
+  assert.match(continuations[0], /continue-on-error: true/);
+  assert.match(continuations[0], /run: node scripts\/ci\/psc-staging-diagnostic.mjs/);
+  assert.deepEqual([...workflow.matchAll(/^ {10}path: (.+)$/gm)].map(match => match[1]),
+    ['recette-fournisseurs-preflight.json', 'psc-staging-diagnostic.json']);
 });
 
 test('CLI invoked through a symlinked directory still records NON_PRET and exits 2', () => {
