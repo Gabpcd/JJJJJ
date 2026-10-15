@@ -76,11 +76,22 @@ function noLeak(h,r){assert.ok(!JSON.stringify([r,...h.state.reports]).includes(
  assert.ok(!/Bearer|SELECT |CREATE |entrypoint_path|definition_md5/.test(JSON.stringify([r,...h.state.reports])));}
 
 test('real manifest pins six source files; an unreviewed draft refuses before any network',async()=>{
- assert.equal(draft.ready,false);assert.equal(draft.recoveryCi,null);
  checkResumeContract(draft,historical,false);
  const unreviewed=repin({...structuredClone(draft),ready:false,recoveryCi:null});
+ assert.equal(unreviewed.ready,false);assert.equal(unreviewed.recoveryCi,null);
  const h=harness({contract:unreviewed}),r=await h.run();assert.equal(r.code,'RESUME_NOT_REVIEWED');
  assert.equal(h.state.calls.length,0);assert.equal(h.state.commits,0);noLeak(h,r);
+});
+test('the versioned manifest can be rearmed with a valid witness without changing operator sources',async()=>{
+ const manifestBefore=read(RESUME_CONTRACT),pathsBefore=[...OPERATOR_PATHS];
+ const sourcesBefore=Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))]));
+ assert.equal(OPERATOR_PATHS.includes(RESUME_CONTRACT),false);
+ const rearmed=contract();
+ assert.equal(checkResumeContract(rearmed,historical),rearmed);
+ const h=harness({contract:rearmed}),r=await h.run();assert.equal(r.status,'success');noLeak(h,r);
+ assert.equal(read(RESUME_CONTRACT),manifestBefore);
+ assert.deepEqual(OPERATOR_PATHS,pathsBefore);
+ assert.deepEqual(Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))])),sourcesBefore);
 });
 test('SQL-only success observes exact v24 throughout, rollback once, commit once, empty closed readback',async()=>{
  const h=harness(),r=await h.run();assert.equal(r.status,'success');assert.equal(r.code,null);
