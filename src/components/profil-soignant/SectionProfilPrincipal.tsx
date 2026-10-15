@@ -18,6 +18,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import type { ResumeCompletion } from '@/lib/profil-soignant';
 import { getMotifProfilIncomplet } from '@/lib/profil-soignant';
+import { CONTROLE_RPPS_SANS_SOURCE, presenterControleRpps } from '@/lib/rpps-verification-provenance';
 
 interface Props {
   userId: string;
@@ -123,10 +124,11 @@ function RppsVerifierInline(props: {
   const { userId, rpps, setRpps, prenom, setPrenom, nom, setNom, dateNaissance, setDateNaissance, onVerified, optionnel = false } = props;
   const { afficherNotification } = useNotification();
   const [verifying, setVerifying] = useState(false);
-  const [resultat, setResultat] = useState<null | { trouve: boolean; correspond?: boolean; nom_api?: string; prenom_api?: string; profession_api?: string }>(null);
+  const [resultat, setResultat] = useState<null | { trouve: boolean; correspond?: boolean; nom_api?: string; prenom_api?: string; profession_api?: string; source?: string }>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const peutVerifier = rpps.length === 11 && !!prenom && !!nom;
+  const provenanceResultat = presenterControleRpps(resultat?.source);
 
   const verifier = async () => {
     if (!peutVerifier) return;
@@ -175,10 +177,11 @@ function RppsVerifierInline(props: {
         nom_api: data.nom_api,
         prenom_api: data.prenom_api,
         profession_api: data.profession_api,
+        source: typeof data.source === 'string' ? data.source : undefined,
       });
 
       if (data.trouve && data.correspond) {
-        afficherNotification({ type: 'succes', message: 'RPPS vérifié avec succès !' });
+        afficherNotification({ type: 'succes', message: presenterControleRpps(data.source).titre });
         onVerified();
       } else if (data.trouve && !data.correspond) {
         afficherNotification({
@@ -186,7 +189,11 @@ function RppsVerifierInline(props: {
           message: `Les informations ne correspondent pas. API : ${data.prenom_api || ''} ${data.nom_api || ''}`,
         });
       } else {
-        afficherNotification({ type: 'erreur', message: 'RPPS introuvable dans l\'Annuaire Santé.' });
+        afficherNotification({ type: 'erreur', message: data.source === 'Mode test contrôlé'
+          ? 'Identifiant RPPS de test introuvable.'
+          : data.source === 'FHIR Annuaire Santé v2'
+            ? 'RPPS introuvable dans l’Annuaire Santé.'
+            : 'RPPS introuvable dans la réponse de vérification.' });
       }
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: 'Erreur serveur lors de la vérification.' });
@@ -200,7 +207,7 @@ function RppsVerifierInline(props: {
         <ShieldCheck className="h-4 w-4 text-primary" /> Vérification RPPS
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        Saisis ton numéro RPPS, prénom et nom tels qu'ils apparaissent dans l'Annuaire Santé.
+        Saisis ton numéro RPPS, prénom et nom.
       </p>
       <div className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -252,7 +259,7 @@ function RppsVerifierInline(props: {
             </p>
           )}
           <p className="text-[10px] text-muted-foreground mt-1">
-            Identifiant national à 11 chiffres. Les chiffres seuls ne suffisent pas : l'identité, la profession et le statut actif sont recoupés dans l'Annuaire Santé officiel (ANS).
+            Identifiant à 11 chiffres. Les chiffres seuls ne suffisent pas : le contrôle compare l’identité, la profession et le statut actif auprès de la source de vérification disponible.
           </p>
         </div>
 
@@ -269,10 +276,11 @@ function RppsVerifierInline(props: {
         </button>
 
         {resultat && resultat.trouve && resultat.correspond && (
-          <div className="p-3 rounded-xl border border-success/30 bg-success/5">
+          <div className="p-3 rounded-xl border border-success/30 bg-success/5" role="status">
             <p className="text-sm font-semibold text-success flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" /> RPPS vérifié — {resultat.prenom_api} {resultat.nom_api}
+              <ShieldCheck className="h-4 w-4" /> {provenanceResultat.titre} — {resultat.prenom_api} {resultat.nom_api}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{provenanceResultat.source}</p>
             {resultat.profession_api && (
               <p className="text-xs text-muted-foreground mt-1">Profession : {resultat.profession_api}</p>
             )}
@@ -284,14 +292,16 @@ function RppsVerifierInline(props: {
             <p className="text-xs text-muted-foreground mt-1">
               API : <strong>{resultat.prenom_api} {resultat.nom_api}</strong>. Vérifie l'orthographe.
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{provenanceResultat.source}</p>
           </div>
         )}
         {resultat && !resultat.trouve && (
           <div className="p-3 rounded-xl border border-destructive/30 bg-destructive/5">
             <p className="text-sm font-semibold text-destructive">RPPS introuvable</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Le numéro saisi n'est pas dans l'Annuaire Santé. Vérifie les chiffres.
+              La réponse de vérification ne contient pas ce numéro. Vérifie les chiffres.
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{provenanceResultat.source}</p>
           </div>
         )}
       </div>
@@ -709,19 +719,19 @@ export function SectionProfilPrincipal(props: Props) {
           </h2>
           <div className="p-3 rounded-xl border border-success/30 bg-success/5 mb-3">
             <p className="text-sm font-semibold text-success flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" /> RPPS vérifié
+              <ShieldCheck className="h-4 w-4" /> {CONTROLE_RPPS_SANS_SOURCE.titre}
               {rppsVerifieLe && (
                 <span className="text-xs font-normal text-muted-foreground">
                   · le {new Date(rppsVerifieLe).toLocaleDateString('fr-FR')}
                 </span>
               )}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Source : Annuaire Santé (ANS).</p>
+            <p className="text-xs text-muted-foreground mt-1">{CONTROLE_RPPS_SANS_SOURCE.source}</p>
           </div>
           <div className="space-y-3">
             <div>
               <label htmlFor="profil-profession" className="text-sm font-medium text-foreground mb-1.5 block">
-                Profession <span className="text-xs text-muted-foreground">(vérifiée RPPS — non modifiable)</span>
+                Profession <span className="text-xs text-muted-foreground">(non modifiable après le contrôle RPPS)</span>
               </label>
               <input
                 id="profil-profession"
@@ -748,7 +758,7 @@ export function SectionProfilPrincipal(props: Props) {
                   <span>Spécialité {profession === 'IDE' ? '(IPA uniquement)' : ''}</span>
                   {specialiteVerifiee && specialiteSource === 'RPPS' && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-success font-semibold">
-                      <ShieldCheck className="h-3 w-3" /> Vérifiée RPPS
+                      <ShieldCheck className="h-3 w-3" /> Donnée du contrôle RPPS
                     </span>
                   )}
                 </label>
@@ -768,7 +778,7 @@ export function SectionProfilPrincipal(props: Props) {
             )}
             <div>
               <label htmlFor="profil-rpps" className="text-sm font-medium text-foreground mb-1.5 block">
-                RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span>
+                RPPS <span className="text-xs text-muted-foreground">(non modifiable après le contrôle RPPS)</span>
               </label>
               <input id="profil-rpps" value={rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
             </div>
@@ -785,7 +795,7 @@ export function SectionProfilPrincipal(props: Props) {
               <label htmlFor="profil-prenom" className="text-sm font-medium text-foreground mb-1.5 block">
                 Prénom{' '}
                 {rppsVerifie && (
-                  <span className="text-xs text-muted-foreground">(vérifié RPPS — non modifiable)</span>
+                  <span className="text-xs text-muted-foreground">(non modifiable après le contrôle RPPS)</span>
                 )}
               </label>
               <input
@@ -800,7 +810,7 @@ export function SectionProfilPrincipal(props: Props) {
               <label htmlFor="profil-nom" className="text-sm font-medium text-foreground mb-1.5 block">
                 Nom{' '}
                 {rppsVerifie && (
-                  <span className="text-xs text-muted-foreground">(vérifié RPPS — non modifiable)</span>
+                  <span className="text-xs text-muted-foreground">(non modifiable après le contrôle RPPS)</span>
                 )}
               </label>
               <input
@@ -825,7 +835,7 @@ export function SectionProfilPrincipal(props: Props) {
             <label htmlFor="profil-date-naissance" className="text-sm font-medium text-foreground mb-1.5 block">
               Date de naissance{' '}
               {rppsVerifie && (
-                <span className="text-xs text-muted-foreground">(vérifiée — non modifiable)</span>
+                <span className="text-xs text-muted-foreground">(non modifiable après le contrôle RPPS)</span>
               )}
             </label>
             <input
