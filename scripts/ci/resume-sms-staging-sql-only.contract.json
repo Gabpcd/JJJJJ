@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "ready": false,
+  "ready": true,
   "projectRef": "mejpriaetwgtcstbgfid",
   "installationOnly": true,
   "capabilityEnabled": false,
@@ -24,6 +24,15 @@
       "supabase/functions/_shared/signature-sms-staging-test.ts": "9d114daf5212658b07e8517d0c7e1df48e487c84965d0cce447ae18e9e885a5d"
     }
   },
-  "recoveryCi": null,
-  "manifestSha256": "791c5885460b0c45b1dbcc165649b735c5feae62ad21834ca2871d2d68d15992"
+  "recoveryCi": {
+    "runId": "38684822564",
+    "jobId": "116257166236",
+    "headSha": "763bf5e8fe5e93b116c9a531fb666a4a326f7991",
+    "executedSha": "7ac810ee511d437eb4252d7086deb606a29b51fa",
+    "artifactId": "11948694907",
+    "artifactZipSha256": "f9b795f844a40e236a9979740fd1ca4112eeff214f1c5bc03763073792e681c5",
+    "artifactName": "sms-install-sql-only-pg17-public",
+    "workflow": ".github/workflows/sms-install-sql-only-pg17.yml"
+  },
+  "manifestSha256": "22cfeba9f2903e0a8270801dd3755f21780665857f8d21e85d7a95a1188b6f18"
 }
