@@ -15,10 +15,10 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
     const browserName = page.context().browser()?.browserType().name() ?? null;
     const uid = role === 'SOIGNANT' ? ids.soignant : ids.etablissement;
     const prefix = role === 'SOIGNANT' ? 'soignant' : 'etablissement';
-    const destination = `/${prefix}/tableau-de-bord`;
+    const destination = `/${prefix}/missions/${ids.mission}`;
     const notification = {
       id: '79000000-0000-4000-8000-000000000096', destinataire_id: uid,
-      titre: 'Notification de stabilité simulée', corps: 'Ouvrir le tableau de bord fictif.',
+      titre: 'Notification de stabilité simulée', corps: 'Ouvrir la mission fictive.',
       type: 'SYSTEME', lue: false, lien: destination, cree_le: now,
     };
     const interruption = 'Connexion aux notifications interrompue. Réessayez pour actualiser la liste.';
@@ -215,7 +215,11 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       }
       expect(await row.evaluate((element, p) => element.contains(document.elementFromPoint(p.x, p.y)), point)).toBe(true);
       await page.mouse.up(); pointerDown = false;
-      await expect(page).toHaveURL(new RegExp(`/${prefix}/tableau-de-bord$`));
+      await expect(page).toHaveURL(new RegExp(`${destination}$`));
+      // La destination fait partie de la même fixture fermée que la notification.
+      // Vérifier le contenu arrivé, puis toutes ses lectures avant le bilan réseau.
+      await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
+      await page.waitForLoadState('networkidle');
       await expect(dialog).toHaveCount(0);
       await expect.poll(() => marquages).toBe(1);
       await expect(bell(0)).toBeVisible();
