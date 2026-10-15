@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { constants as osConstants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { projectSignupFinalAudit } from './signup-final-audit-public.mjs';
+import { projectSignupFinalAudit, signupAuditRefusalDiagnostic } from './signup-final-audit-public.mjs';
 
 const PHASES = Object.freeze({
   'app-review': ['tablet-ipad'],
@@ -25,6 +25,9 @@ const NO_FOLLOW = constants.O_NOFOLLOW || 0;
 class ClosedError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
+// Only locally constructed, closed refusal details may reach the public receipt.
+// Never trust arbitrary properties or messages on a thrown Error.
+const signupRefusalDetails = new WeakMap();
 function requireValue(condition, code = 'REPORT_INVALID') {
   if (!condition) throw new ClosedError(code);
 }
@@ -168,7 +171,17 @@ export async function projectReport(report, { phase, cwd }) {
             const assertion = await failureLocation(result, location, cwd);
             let signupAudit;
             try { signupAudit = projectSignupFinalAudit(result, { phase, file: location.file }); }
-            catch { throw new ClosedError('SIGNUP_AUDIT_REFUSED'); }
+            catch (error) {
+              const refused = new ClosedError('SIGNUP_AUDIT_REFUSED');
+              const diagnostic = signupAuditRefusalDiagnostic(error);
+              if (diagnostic) signupRefusalDetails.set(refused, {
+                ...diagnostic,
+                attempt: { ...location, retry: index, status: result.status, durationMs: result.duration,
+                  ...(assertion ? { failureLocation: assertion } : {}) },
+                otherTestsOrRefusalsComplete: false,
+              });
+              throw refused;
+            }
             return {
               ...(assertion ? { failureLocation: assertion } : {}),
               ...(signupAudit ? { signupAudit } : {}),
@@ -282,7 +295,8 @@ export async function runPublicPlaywright(argv, { cwd = process.cwd(), env = pro
     // Never serialize exception messages, JSON excerpts, paths or child output.
     receipt = { schemaVersion: 1, phase: phase || null, sourceSha, complete: false, childExitCode: integer(childExitCode, 255) ? childExitCode : null,
       exitCode: integer(childExitCode, 255) && childExitCode !== 0 ? childExitCode : 1,
-      codes: [error instanceof ClosedError ? error.code : 'PRIVATE_RUN_FAILED'], counts: null, tests: [] };
+      codes: [error instanceof ClosedError ? error.code : 'PRIVATE_RUN_FAILED'], counts: null, tests: [],
+      ...(signupRefusalDetails.has(error) ? { signupAuditRefusal: signupRefusalDetails.get(error) } : {}) };
   } finally {
     await stdout?.close().catch(() => {});
     await stderr?.close().catch(() => {});

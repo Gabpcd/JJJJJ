@@ -114,7 +114,7 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
         className="fixed right-0 top-0 bottom-0 !max-h-none w-full max-w-md !p-0 bg-card shadow-2xl z-[70] flex flex-col animate-slide-in"
       >
         <div
-          className="flex items-center justify-between p-4 border-b border-border"
+          className="flex shrink-0 items-center justify-between p-4 border-b border-border"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
         >
           <h2 id={titleId} className="text-lg font-bold text-foreground">Notifications</h2>
@@ -122,7 +122,7 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
             <button
               type="button"
               onClick={marquerToutLu}
-              disabled={flux.count === 0}
+              disabled={!flux.hasLoaded || flux.count === 0}
               className="min-h-[44px] rounded-lg px-2 text-xs text-primary font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               Tout marquer comme lu
@@ -139,20 +139,9 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
           </div>
         </div>
         <div
-          className="flex-1 overflow-y-auto"
+          className="min-h-0 flex-1 overflow-y-auto"
           aria-busy={loading}
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {error && (
-            <div className="p-4 text-sm" role="alert">
-              <p>{error}</p>
-              <button type="button" onClick={() => void actualiser()} disabled={loading}
-                className="mt-2 min-h-[44px] rounded-lg px-3 font-medium text-primary hover:underline disabled:opacity-50">
-                Réessayer
-              </button>
-            </div>
-          )}
-          {loading && <div className="p-4 text-center text-muted-foreground text-sm" role="status">Actualisation...</div>}
           {notifications.length === 0 && !loading && !error ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Aucune notification</div>
           ) : (
@@ -180,6 +169,22 @@ export function PanneauNotifications({ open, onClose, flux }: PanneauNotificatio
               ))}
             </div>
           )}
+        </div>
+        {/* Le statut reste visible sans être inséré avant les lignes conservées. */}
+        <div
+          className={`max-h-[40%] shrink-0 overflow-y-auto ${error || loading ? 'border-t border-border' : ''}`}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {error && (
+            <div className="p-4 text-sm" role="alert">
+              <p>{error}</p>
+              <button type="button" onClick={() => void actualiser()} disabled={loading}
+                className="mt-2 min-h-[44px] rounded-lg px-3 font-medium text-primary hover:underline disabled:opacity-50">
+                Réessayer
+              </button>
+            </div>
+          )}
+          {loading && <div className="p-4 text-center text-muted-foreground text-sm" role="status">Actualisation...</div>}
         </div>
       </div>
     </>,
@@ -243,7 +248,7 @@ function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
       };
     }
   });
-  const { count, error, marquerLues } = flux;
+  const { count, hasLoaded, error, marquerLues } = flux;
   useEffect(() => {
     if (userId && location.pathname.endsWith('/notifications')) void marquerLues();
   }, [location.pathname, userId, marquerLues]);
@@ -253,14 +258,14 @@ function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
       <button
         ref={buttonRef}
         onClick={() => setOpen(true)}
-        aria-label={`${count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}${error ? ', actualisation nécessaire' : ''}`}
+        aria-label={`${!hasLoaded ? 'Notifications, compteur indisponible' : count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}${error ? ', actualisation nécessaire' : ''}`}
+        aria-description={error ?? undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
         className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2"
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
-        {error && <span aria-hidden="true" className="absolute -right-1 -bottom-1 text-destructive font-bold">!</span>}
-        {count > 0 && (
+        {hasLoaded && count > 0 && (
           <span className={`absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] flex items-center justify-center rounded-full bg-[#EF4444] text-white text-[10px] font-bold px-1 leading-none ${bouncing ? 'animate-bounce-badge' : ''}`}>
             {count > 9 ? '9+' : count}
           </span>
