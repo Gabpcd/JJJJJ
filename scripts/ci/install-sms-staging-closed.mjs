@@ -24,7 +24,7 @@ const hash=(v,n=64)=>typeof v==='string'&&new RegExp(`^[a-f0-9]{${n}}$`).test(v)
 const id=v=>typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v);
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const exact=(v,keys)=>object(v)&&Object.keys(v).sort().join(',')===keys.slice().sort().join(',');
-class Refusal extends Error {constructor(code){super(code);this.code=code;}}
+export class Refusal extends Error {constructor(code){super(code);this.code=code;}}
 const fail=code=>{throw new Refusal(code);};
 export const ASSET_PATHS=Object.freeze([
  'supabase/config.toml',
