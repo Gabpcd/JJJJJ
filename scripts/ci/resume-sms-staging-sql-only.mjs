@@ -4,7 +4,7 @@ import {readFileSync,writeFileSync,renameSync,mkdirSync,openSync,fsyncSync,close
 import {execFileSync} from 'node:child_process';
 import {resolve,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {PROJECT,REPOSITORY,FUNCTION,CONTRACT,ASSET_PATHS,digest,canonical,checkContract,
+import {PROJECT,REPOSITORY,FUNCTION,CONTRACT,ASSET_PATHS,Refusal,digest,canonical,checkContract,
  checkContext,checkAssets,checkBody,checkSnapshot,closureDigest,readResponse,readLocal} from './install-sms-staging-closed.mjs';
 import {functionsMetadata} from './refresh-generate-invoice-staging.mjs';
 import {snapshotSql} from './install-sms-staging-closed-sql.mjs';
@@ -26,8 +26,30 @@ const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 const exact=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&same(Object.keys(v).sort(),[...k].sort());
 const hash=(v,n=64)=>typeof v==='string'&&new RegExp(`^[a-f0-9]{${n}}$`).test(v)&&!/^0+$/.test(v);
 const id=v=>typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v);
-class Refusal extends Error{constructor(code){super(code);this.code=code;}}
 const fail=code=>{throw new Refusal(code);};
+const SNAPSHOT_KEYS=['quiet','absent','closed','routines','invariant','targets'];
+const INVARIANT_KEYS=['structure','routines','inventory','registry','rows'];
+const SNAPSHOT_DIAGNOSTIC_LIMIT=6;
+const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const publicBoolean=v=>typeof v==='boolean'?v:null;
+
+// Closed projection only: never copy response keys, routine metadata or rows.
+function snapshotDiagnostic(value,sequence,phase){
+ const row=Array.isArray(value)&&value.length===1?value[0]:null;
+ const s=object(row)?row.snapshot:null;
+ const invariant=object(s)&&object(s.invariant)?s.invariant:null;
+ const routines=object(s)&&Array.isArray(s.routines)?s.routines:null;
+ return {sequence,phase,responseIsArray:Array.isArray(value),
+  responseRowCount:Array.isArray(value)?Math.min(value.length,2):null,
+  responseRowCountCapped:Array.isArray(value)&&value.length>2,
+  envelopeExact:exact(row,['snapshot'])===true,snapshotPresent:object(row)&&Object.hasOwn(row,'snapshot'),
+  snapshotObject:object(s),snapshotKeysExact:exact(s,SNAPSHOT_KEYS)===true,
+  quiet:publicBoolean(s?.quiet),absent:publicBoolean(s?.absent),closed:publicBoolean(s?.closed),
+  routineCount:routines?Math.min(routines.length,32):null,routineCountCapped:!!routines&&routines.length>32,
+  invariantKeysExact:exact(invariant,INVARIANT_KEYS)===true,
+  invariant:Object.fromEntries(INVARIANT_KEYS.map(k=>[k,hash(invariant?.[k],32)?invariant[k]:null])),
+  targets:hash(s?.targets,32)?s.targets:null};
+}
 
 export function checkResumeContract(c,historical,requireReady=true){
  checkContract(historical);
@@ -68,7 +90,7 @@ export async function resumeSqlOnly({env,local,historical,contract:c,fetchImpl=f
  const r={schemaVersion:1,status:'failed',phase:'context',code:null,projectRef:PROJECT,sourceSha:null,manifestSha256:null,
   failedRunId:'38629072392',deploymentAttempted:false,deploymentConfirmed:false,existingDeploymentVerified:false,
   dryRunAttempted:false,dryRunVerified:false,commitAttempted:false,commitConfirmed:false,closedStateVerified:false,
-  businessRowsUnchanged:false,businessComparisonScope:'CURRENT_RECOVERY_ONLY',beforeInvariant:null,beforeTargets:null,
+  businessRowsUnchanged:false,businessComparisonScope:'CURRENT_RECOVERY_ONLY',beforeInvariant:null,beforeTargets:null,snapshotDiagnostics:[],
   cronJobControl:'OBSERVATION_BEFORE_AFTER_ACCESS_SHARE_ONLY',providerInvoked:false,authCreated:false,
   capabilityAllocated:false,credentialsChanged:false,httpFailure:null};
  const save=()=>{try{checkpoint(structuredClone(r));}catch{fail('CHECKPOINT_FAILED');}};
@@ -84,6 +106,13 @@ export async function resumeSqlOnly({env,local,historical,contract:c,fetchImpl=f
   }catch(e){if(e instanceof Refusal)throw e;fail('TRANSPORT_OR_JSON_UNCERTAIN');}
  };
  const query=(sql,label)=>request(`${API}/database/query`,label,{query:sql,read_only:false},true);
+ const checkedSnapshot=async(sql,label,after,before)=>{
+  const value=await query(sql,label);
+  if(r.snapshotDiagnostics.length>=SNAPSHOT_DIAGNOSTIC_LIMIT)fail('SNAPSHOT_DIAGNOSTIC_LIMIT');
+  r.snapshotDiagnostics.push(snapshotDiagnostic(value,r.snapshotDiagnostics.length+1,r.phase));
+  save();
+  return checkSnapshot(value,historical,after,before);
+ };
  const main=async()=>{const x=await request(`${GH}/git/ref/heads/main`,'main');
   if(x?.ref!=='refs/heads/main'||x.object?.type!=='commit'||x.object.sha!==env.GITHUB_SHA)fail('MAIN_MOVED');};
  const edge=async()=>checkResumeMetadata(await request(`${API}/functions`,'edge_catalogue',undefined,true),c);
@@ -123,20 +152,20 @@ export async function resumeSqlOnly({env,local,historical,contract:c,fetchImpl=f
   if(project.id!==PROJECT||project.region!=='eu-west-1'||project.status!=='ACTIVE_HEALTHY'
     ||project.database?.host!==`db.${PROJECT}.supabase.co`||project.database?.postgres_engine!=='17')fail('PROJECT_IDENTITY_REFUSED');
   r.phase='baseline';const beforeEdge=await edge();await body();r.existingDeploymentVerified=true;save();
-  const before=checkSnapshot(await query(snapshotSql(historical,false),'baseline_readonly'),historical,false);
+  const before=await checkedSnapshot(snapshotSql(historical,false),'baseline_readonly',false);
   r.beforeInvariant=structuredClone(before.invariant);r.beforeTargets=before.targets;save();
   await main();if(!same(await edge(),beforeEdge))fail('RESUME_EDGE_CATALOGUE_DRIFT');
-  checkSnapshot(await query(snapshotSql(historical,false),'baseline_readonly'),historical,false,before);
+  await checkedSnapshot(snapshotSql(historical,false),'baseline_readonly',false,before);
   r.phase='rollback_once';r.status='uncertain';r.dryRunAttempted=true;save();mutationStarted=true;
-  const preview=checkSnapshot(await query(transactionSqlOnly(historical,rendered,before,false),'preview_sql'),historical,true,before);
-  const restored=checkSnapshot(await query(snapshotSql(historical,false),'restored_readonly'),historical,false,before);
+  const preview=await checkedSnapshot(transactionSqlOnly(historical,rendered,before,false),'preview_sql',true,before);
+  const restored=await checkedSnapshot(snapshotSql(historical,false),'restored_readonly',false,before);
   if(!same(restored,before))fail('ROLLBACK_NOT_CONFIRMED');
   r.dryRunVerified=true;save();await main();
   if(!same(await edge(),beforeEdge))fail('RESUME_EDGE_CATALOGUE_DRIFT');await body();
   r.phase='commit_once';r.commitAttempted=true;save();
-  const committed=checkSnapshot(await query(transactionSqlOnly(historical,rendered,before,true),'commit_sql'),historical,true,before);
+  const committed=await checkedSnapshot(transactionSqlOnly(historical,rendered,before,true),'commit_sql',true,before);
   if(!same(committed,preview))fail('COMMIT_RESPONSE_MISMATCH');
-  r.phase='readback';const final=checkSnapshot(await query(snapshotSql(historical,true),'final_readonly'),historical,true,before);
+  r.phase='readback';const final=await checkedSnapshot(snapshotSql(historical,true),'final_readonly',true,before);
   if(!same(final,preview))fail('READBACK_MISMATCH');
   if(!same(await edge(),beforeEdge))fail('RESUME_EDGE_CATALOGUE_DRIFT');await body();
   r.commitConfirmed=true;r.closedStateVerified=true;r.businessRowsUnchanged=true;r.status='success';r.phase='complete';save();
