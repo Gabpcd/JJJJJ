@@ -17,6 +17,7 @@ interface ProfilLiberal {
   siret_liberal_verifie_le: string | null;
   siret_liberal_raison_sociale: string | null;
   siret_liberal_coherence_identite: boolean | null;
+  siret_liberal_source_verification: string | null;
   statut_liberal: string | null;
   type_contrat: string | null;
   assujetti_tva: boolean | null;
@@ -45,7 +46,7 @@ export function FinaliserInstallationLiberal() {
     if (!user) return;
     const { data } = await supabase
       .from('soignants')
-      .select('siret_liberal, siret_liberal_verifie, siret_liberal_verifie_le, siret_liberal_raison_sociale, siret_liberal_coherence_identite, statut_liberal, type_contrat, assujetti_tva, numero_tva')
+      .select('siret_liberal, siret_liberal_verifie, siret_liberal_verifie_le, siret_liberal_raison_sociale, siret_liberal_coherence_identite, siret_liberal_source_verification, statut_liberal, type_contrat, assujetti_tva, numero_tva')
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -211,7 +212,13 @@ export function FinaliserInstallationLiberal() {
             </div>
             {siretVerifie && (
               <div className="rounded-lg border border-success/30 bg-success/5 p-2" role="status">
-                <p className="text-xs font-medium text-success">SIRET officiel actif et identité vérifiée.</p>
+                <p className="text-xs font-medium text-success">
+                  {profil?.siret_liberal_source_verification === 'REGISTRE_OFFICIEL'
+                    ? 'Source : registre officiel — concordance d’identité vérifiée.'
+                    : profil?.siret_liberal_source_verification === 'REVUE_MANUELLE_IDENTITE'
+                      ? 'Source : revue manuelle de l’identité.'
+                      : 'SIRET enregistré — source de vérification non renseignée.'}
+                </p>
                 {profil?.siret_liberal_raison_sociale && (
                   <p className="mt-0.5 text-xs text-muted-foreground">{profil.siret_liberal_raison_sociale}</p>
                 )}

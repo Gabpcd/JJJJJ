@@ -3,6 +3,7 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 // Source unique de vérité (inclut AUXILIAIRE_PUERICULTURE) — évite la
 // désynchronisation qui affichait un badge « RPPS manquant » à tort.
 import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
+import { CONTROLE_RPPS_SANS_SOURCE } from '@/lib/rpps-verification-provenance';
 
 interface BadgeRPPSProps {
   rppsVerifie: boolean | null;
@@ -21,7 +22,7 @@ export function BadgeRPPS({ rppsVerifie, rpps, profession }: BadgeRPPSProps) {
   if (rppsVerifie) {
     return (
       <BadgeY2K variant="success" size="sm" icone={<ShieldCheck className="h-3 w-3" />}>
-        RPPS Vérifié
+        {CONTROLE_RPPS_SANS_SOURCE.titre}
       </BadgeY2K>
     );
   }
