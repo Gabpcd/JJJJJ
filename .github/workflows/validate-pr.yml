@@ -68,7 +68,7 @@ jobs:
         run: node --test tests/node/refresh-generate-invoice-staging.node.mjs tests/node/align-staging-107.node.mjs
 
       - name: Tester la préparation Connect staging fermée sans réseau
-        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs tests/node/connect-staging-catalogue.node.mjs tests/node/connect-staging-installed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs
+        run: node --test tests/node/connect-staging-closed.node.mjs tests/node/connect-staging-admission.node.mjs tests/node/connect-staging-catalogue.node.mjs tests/node/connect-staging-installed.node.mjs tests/node/connect-test-fixture.node.mjs tests/node/connect-test-fixture-ci.node.mjs tests/node/auth-test-frontend-ci.node.mjs
 
       - name: Gardes du témoin seed Connect sans réseau
         run: node --test tests/node/connect-test-fixture-rollback.node.mjs
@@ -211,11 +211,13 @@ jobs:
         # pas de `npm ci`. Introspection PROD via Management API (token + ref).
         # L'« existant » = état prod ∪ objets définis dans le repo (migrations +
         # supabase/functions), donc une PR qui ajoute backend+frontend ensemble
-        # ne déclenche pas de faux positif.
+        # ne déclenche pas de faux positif. Un unique supplément staging est
+        # reconnu par fichier appelant et empreintes des sources revues.
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
+          node --test tests/node/check-contrat-frontend-backend.node.mjs
           if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
             echo "::warning::Introspection PROD indisponible (secrets manquants) — vérification de contrat ignorée pour ne pas produire de faux négatifs."
             exit 0

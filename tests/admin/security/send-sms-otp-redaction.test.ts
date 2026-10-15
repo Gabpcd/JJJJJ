@@ -69,6 +69,7 @@ async function exercise(options: Options = {}, sourceOverride?: string) {
     return String(value);
   }).join(' '));
   const modules: Record<string, unknown> = {
+    '../_shared/signature-sms-staging-test.ts': { signatureSmsStagingConfig: () => null, signatureSmsStagingRequest: async () => null },
     'npm:@supabase/supabase-js@2.99.2': { createClient: () => sb },
     '../_shared/rate-limit.ts': { applyRateLimit: async () => true, getClientIp: () => '192.0.2.1' },
     '../_shared/cors.ts': {

@@ -24,6 +24,14 @@ jobs:
           node-version: '24'
       - name: Gardes hors réseau
         run: node --test tests/node/recette-fournisseurs-collector.node.mjs tests/node/recette-fournisseurs-preflight.node.mjs tests/node/recette-fournisseurs-summary.node.mjs
+      - name: Gardes PSC hors réseau avant tout accès privilégié
+        run: node --test tests/node/psc-staging-diagnostic.node.mjs
+      - name: Diagnostic PSC staging borné (NON PRÊT si source inconnue)
+        continue-on-error: true
+        run: node scripts/ci/psc-staging-diagnostic.mjs
+        env:
+          PSC_DIAGNOSTIC_EXPECTED_SHA: ${{ github.sha }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
       - name: Collecter les seules métadonnées (aucun transport)
         run: node scripts/recette-fournisseurs/collect-preflight.mjs
         env:
@@ -39,5 +47,13 @@ jobs:
         with:
           name: recette-fournisseurs-preflight-${{ github.sha }}
           path: recette-fournisseurs-preflight.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Conserver séparément le diagnostic PSC expurgé
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: psc-staging-diagnostic-${{ github.sha }}
+          path: psc-staging-diagnostic.json
           if-no-files-found: error
           retention-days: 14

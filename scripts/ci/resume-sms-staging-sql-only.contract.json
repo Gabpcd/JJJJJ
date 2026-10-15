@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "ready": true,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "installationOnly": true,
+  "capabilityEnabled": false,
+  "deploymentAllowed": false,
+  "failedRunId": "38629072392",
+  "deployedSourceSha": "8cc26771120fa962af431af1c0dc45ac82d8c500",
+  "historicalManifestSha256": "ddbb4a7a0f7c9217017decdd434c5f151d504a311797a7f664959ca056cce368",
+  "cronJobControl": "OBSERVATION_BEFORE_AFTER_ACCESS_SHARE_ONLY",
+  "edge": {
+    "id": "5e2f040c-7ad2-4d68-8b78-725a5880343d",
+    "version": 24,
+    "bundleSha256": "1953e87d1648427bcad2203e0f5bb04e091ec0c8c51e80a831a27b4d4248c52d",
+    "metadataSha256": "2e7d31688a07881361ce40976a238f9fb455e5b7e1355f60be0fe2bf62212717",
+    "closureSha256": "12a9b5e0b314b7dffd2b08c35a3b29233c60c4f4c35240b39751d6862a5773fd",
+    "files": {
+      "supabase/functions/send-sms/index.ts": "058d13c505284ac61ba1d7150ec6ad2d8f7515e3267b2c1d39420fea46eeddc6",
+      "supabase/functions/_shared/rate-limit.ts": "6ecb4f1fa4e8dfd0f11d61a51d96bb3e572f14a14e3d07ccc749b4cd180d10f4",
+      "supabase/functions/_shared/cors.ts": "2fdef467c6eae9fed9035b70a7f97074363faed944f72050d277ff5834139911",
+      "supabase/functions/_shared/admin-auth.ts": "367938019377395d5ee480416e25392d7d3ac0e5a8466c2ee8293640e5243318",
+      "supabase/functions/_shared/test-account.ts": "c1edd45ac19ba32b1890c821604817532b90a88aed5ed659e702dce3ace15c68",
+      "supabase/functions/_shared/signature-sms-staging-test.ts": "9d114daf5212658b07e8517d0c7e1df48e487c84965d0cce447ae18e9e885a5d"
+    }
+  },
+  "recoveryCi": {
+    "runId": "38684822564",
+    "jobId": "116257166236",
+    "headSha": "763bf5e8fe5e93b116c9a531fb666a4a326f7991",
+    "executedSha": "7ac810ee511d437eb4252d7086deb606a29b51fa",
+    "artifactId": "11948694907",
+    "artifactZipSha256": "f9b795f844a40e236a9979740fd1ca4112eeff214f1c5bc03763073792e681c5",
+    "artifactName": "sms-install-sql-only-pg17-public",
+    "workflow": ".github/workflows/sms-install-sql-only-pg17.yml"
+  },
+  "manifestSha256": "22cfeba9f2903e0a8270801dd3755f21780665857f8d21e85d7a95a1188b6f18"
+}

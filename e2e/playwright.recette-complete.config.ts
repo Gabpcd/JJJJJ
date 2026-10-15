@@ -14,6 +14,8 @@ export default defineConfig({
     ...(process.env.CORRECTIFS107_RECEIPTS ? [] : ['**/recette-complete-correctifs107.spec.ts']),
     // Le SDK doit être réellement initialisé avec le DSN du transport fictif.
     ...(process.env.RECETTE_SENTRY_CSP === '1' ? [] : ['**/recette-complete-sentry-csp.spec.ts']),
+    // This isolated build must contain the exact staging URL; API is mocked.
+    ...(process.env.RECETTE_SIGNATURE_SMS_STAGING === '1' ? [] : ['**/recette-complete-signature-sms-staging.spec.ts']),
   ],
   outputDir: sortie,
   timeout: 90_000,
