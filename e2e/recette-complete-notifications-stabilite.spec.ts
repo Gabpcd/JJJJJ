@@ -1,4 +1,4 @@
-import { test, expect, type WebSocketRoute, type JSHandle } from '@playwright/test';
+import { test, expect, type WebSocketRoute, type JSHandle, type Request } from '@playwright/test';
 import { communicationsSimulees } from './helpers/recette-complete-communications';
 import { ids, now, type RoleRecette } from './helpers/recette-complete-mission';
 
@@ -23,6 +23,54 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
     };
     const interruption = 'Connexion aux notifications interrompue. Réessayez pour actualiser la liste.';
     const pageErrors: string[] = [], consoleErrors: string[] = [];
+    // Les deux en-têtes ont chacun leur lecteur ; une cloche prête ne suffit pas
+    // pour recharger un document dont l'autre lecteur reçoit encore sa réponse.
+    const notificationReads = new Set<Request>();
+    const finishedReads = { GET: 0, HEAD: 0 };
+    const successfulHeadResponses = new WeakSet<Request>();
+    let deliveredHeads = 0;
+    type ReadPhase = 'initial-loading' | 'reload-startup' | 'interaction';
+    let readPhase: ReadPhase = 'initial-loading';
+    const startedReadPhases = new WeakMap<Request, ReadPhase>();
+    const failedReads: { method: string; reason: string; phase: ReadPhase; startPhase: ReadPhase | undefined; headHeadersDelivered: boolean }[] = [];
+    const unexpectedFailedReads: typeof failedReads = [];
+    let lastReadEvent = 0;
+    const isNotificationRead = (request: Request) => ['GET', 'HEAD'].includes(request.method())
+      && new URL(request.url()).pathname === '/rest/v1/notifications';
+    page.on('request', request => {
+      if (isNotificationRead(request)) { notificationReads.add(request); startedReadPhases.set(request, readPhase); lastReadEvent = Date.now(); }
+    });
+    page.on('response', response => {
+      const request = response.request();
+      if (isNotificationRead(request) && request.method() === 'HEAD' && response.status() === 200
+        && /^(?:0-0\/1|\*\/0)$/.test(response.headers()['content-range'] ?? '')) {
+        successfulHeadResponses.add(request); deliveredHeads += 1; lastReadEvent = Date.now();
+      }
+    });
+    page.on('requestfinished', request => {
+      if (notificationReads.delete(request)) {
+        finishedReads[request.method() as 'GET' | 'HEAD'] += 1; lastReadEvent = Date.now();
+      }
+    });
+    page.on('requestfailed', request => {
+      if (notificationReads.delete(request)) {
+        const failure = { method: request.method(), reason: request.failure()?.errorText ?? 'unknown',
+          phase: readPhase, startPhase: startedReadPhases.get(request),
+          headHeadersDelivered: successfulHeadResponses.has(request) };
+        failedReads.push(failure); lastReadEvent = Date.now();
+        // SUBSCRIBED remplace la première génération HTTP au démarrage.
+        // Conserver ces annulations prévues ; toute autre panne reste bloquante.
+        // Chromium peut terminer HEAD avec ERR_ABORTED après ses en-têtes 200.
+        // HEAD n'a pas de corps : le compteur exact est déjà livré au SDK.
+        const completedHead = failure.method === 'HEAD' && failure.headHeadersDelivered
+          && failure.reason === 'net::ERR_ABORTED';
+        const replacedStartupRead = ['initial-loading', 'reload-startup'].includes(failure.phase)
+          && ['cancelled', 'net::ERR_ABORTED'].includes(failure.reason);
+        if (!completedHead && !replacedStartupRead) unexpectedFailedReads.push(failure);
+      }
+    });
+    const drainReads = () => expect.poll(() => notificationReads.size === 0 && Date.now() - lastReadEvent >= 500,
+      { message: 'Les lectures des deux en-têtes sont livrées avant le rechargement' }).toBe(true);
     let marquages = 0, navigations = 0, souscriptions = 0;
     let paused = false, heldReads = 0, releaseReads: (() => void) | undefined;
     let readGate: Promise<void> | undefined;
@@ -43,7 +91,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
 
     type Join = {
       socket: WebSocketRoute; joinRef: string; ref: string; topic: string;
-      filters: Record<string, unknown>[]; array: boolean; ready: boolean;
+      filters: Record<string, unknown>[]; array: boolean; ready: boolean; active: boolean;
     };
     const joins: Join[] = [], sockets = new Set<WebSocketRoute>();
     const send = (join: Join, event: string, payload: unknown) => join.socket.send(JSON.stringify(join.array
@@ -60,16 +108,21 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       sockets.add(socket);
       socket.onClose(() => {
         sockets.delete(socket);
-        joins.filter(join => join.socket === socket).forEach(join => join.ready = false);
+        joins.filter(join => join.socket === socket).forEach(join => { join.ready = false; join.active = false; });
       });
       socket.onMessage(raw => {
         const message = JSON.parse(String(raw));
         const [joinRef, ref, topic, event, payload] = Array.isArray(message)
           ? message : [message.join_ref, message.ref, message.topic, message.event, message.payload];
         const join: Join = { socket, joinRef, ref, topic,
-          filters: payload?.config?.postgres_changes ?? [], array: Array.isArray(message), ready: false };
-        if (event === 'phx_join') { joins.push(join); if (!paused) accept(join); }
+          filters: payload?.config?.postgres_changes ?? [], array: Array.isArray(message), ready: false, active: event === 'phx_join' };
+        if (event === 'phx_join') {
+          joins.filter(old => old.socket === socket && old.topic === topic).forEach(old => { old.active = false; old.ready = false; });
+          joins.push(join); if (!paused) accept(join);
+        }
         else if (event === 'phx_leave' || event === 'heartbeat') {
+          if (event === 'phx_leave') joins.filter(old => old.socket === socket && old.topic === topic)
+            .forEach(old => { old.active = false; old.ready = false; });
           send(join, 'phx_reply', { status: 'ok', response: {} });
         }
       });
@@ -78,11 +131,21 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       paused = true;
       for (const socket of sockets) socket.close({ code: 1012, reason: 'Coupure simulée pendant interaction' });
       sockets.clear();
-      joins.forEach(join => join.ready = false);
+      joins.forEach(join => { join.ready = false; join.active = false; });
     };
     const resume = () => {
       paused = false;
-      joins.filter(join => sockets.has(join.socket) && !join.ready).forEach(accept);
+      joins.filter(join => sockets.has(join.socket) && join.active && !join.ready).forEach(accept);
+    };
+    const readBaseline = () => ({ GET: finishedReads.GET, HEAD: deliveredHeads });
+    const waitForReaders = async (since: typeof finishedReads) => {
+      await expect.poll(() => {
+        const current = joins.filter(join => sockets.has(join.socket) && join.active && join.topic.includes('notifications:'));
+        return current.length === 2 && current.every(join => join.ready);
+      }, { message: 'Les deux lecteurs de notifications ont repris leur souscription' }).toBe(true);
+      await expect.poll(() => finishedReads.GET >= since.GET + 2
+        && deliveredHeads >= since.HEAD + 2).toBe(true);
+      await drainReads();
     };
     await context.route('**/rest/v1/notifications?**', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -113,6 +176,8 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await page.goto(`/${prefix}/messagerie`);
       await expect.poll(() => souscriptions).toBeGreaterThan(0);
       await expect(bell(1)).toBeVisible();
+      await waitForReaders({ GET: 0, HEAD: 0 });
+      readPhase = 'interaction';
       await bell(1).focus();
       await expect(bell(1)).toBeFocused();
       await page.keyboard.press('Enter');
@@ -157,8 +222,11 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await expect(bell(1).getByText('1', { exact: true })).toBeVisible();
       await expect(bell(1).getByText('!', { exact: true })).toHaveCount(0);
       await expect(dialog.getByRole('status')).toHaveCount(0);
+      await drainReads();
+      const beforeResumeReads = readBaseline();
       resume();
       await expect.poll(() => souscriptions).toBeGreaterThan(avantReprise);
+      await waitForReaders(beforeResumeReads);
       await expect(dialog.getByRole('status')).toHaveCount(0);
       await expect(dialog.getByRole('alert')).toHaveCount(0);
       await expect(row).toHaveCount(1);
@@ -168,9 +236,17 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await expect(dialog).toHaveCount(0);
       await expect(bell(1)).toBeFocused();
       const avantReload = souscriptions;
+      // Ne pas provoquer nous-mêmes l'annulation d'une lecture pendant cette
+      // vérification de conservation après rechargement (aucun filtre d'erreur).
+      await drainReads();
+      expect(unexpectedFailedReads).toEqual([]);
+      const beforeReloadReads = readBaseline();
+      readPhase = 'reload-startup';
       await page.reload();
       await expect.poll(() => souscriptions).toBeGreaterThan(avantReload);
       await expect(bell(1)).toBeVisible();
+      await waitForReaders(beforeReloadReads);
+      readPhase = 'interaction';
       await bell(1).focus();
       await expect(bell(1)).toBeFocused();
       await page.keyboard.press('Enter');
@@ -224,7 +300,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
       await expect.poll(() => marquages).toBe(1);
       await expect(bell(0)).toBeVisible();
       expect(navigations).toBe(1); expect(notification.lue).toBe(true);
-      expect(pageErrors).toEqual([]); expect(consoleErrors).toEqual([]);
+      expect(unexpectedFailedReads).toEqual([]); expect(pageErrors).toEqual([]); expect(consoleErrors).toEqual([]);
       expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]);
       expect(state.sms).toEqual([]); expect(state.emails).toEqual([]); expect(state.signatures).toEqual([]);
     } finally {
@@ -238,7 +314,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
           keyboardPlatform: process.platform, browserName, forwardTabChord,
           marquages, navigations, souscriptions, heldReads, boundsBefore, boundsAfter,
           focusAfterDownKind, focusPreservedDuringDisconnection,
-          pageErrors, consoleErrors, unknown: state.unknown, external: state.external,
+          pageErrors, consoleErrors, finishedReads, deliveredHeads, failedReads, unexpectedFailedReads, readPhase, pendingReads: notificationReads.size, unknown: state.unknown, external: state.external,
         }, null, 2), contentType: 'application/json' });
       }
     }
