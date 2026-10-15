@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { extraireErreurEdgeFn } from "@/lib/erreurs";
 import { getAttribution } from "@/lib/attribution";
 import { reinitialiserCacheRole } from "@/hooks/useRole";
+import { urlCallbackPublique } from "@/lib/nativeLinks";
 
 export type TypeCompteInscription = "SOIGNANT" | "ETABLISSEMENT";
 export interface ParcoursInscription {
@@ -71,7 +72,7 @@ export async function creerCompteRapide(
         options: {
           ...options,
           data: { inscription_progressive: intention },
-          emailRedirectTo: "https://jolene.app/inscription/confirmer",
+          emailRedirectTo: urlCallbackPublique("/inscription/confirmer"),
         },
       });
   const compteExistant =
