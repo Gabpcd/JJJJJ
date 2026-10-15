@@ -3,16 +3,15 @@ import { aller, entrer, ids, preuve, recharger, sansDebordement, simulerSoignant
 
 // Frontend avec réponses entièrement simulées : aucune vérification officielle,
 // aucun fournisseur et aucune modification de compte ou de qualification réelle.
-const titrePersistant = 'Contrôle RPPS enregistré';
-const sourcePersistante = 'Source de vérification non disponible dans le profil.';
+const titrePersistant = 'RPPS Vérifié';
 const formats = ['iphone', 'android', 'ipad-portrait', 'ipad-paysage', 'ordinateur'];
 
 for (const scenario of [
   { nom: 'test', source: 'Mode test contrôlé', titre: 'Contrôle RPPS de test — aucune vérification officielle' },
   { nom: 'officiel', source: 'FHIR Annuaire Santé v2', titre: 'RPPS vérifié dans l’Annuaire Santé' },
-  { nom: 'inconnu', source: 'SOURCE_INCONNUE', titre: titrePersistant },
+  { nom: 'inconnu', source: 'SOURCE_INCONNUE', titre: 'Contrôle RPPS enregistré' },
 ]) {
-  test(`RPPS — réponse ${scenario.nom} puis rechargement sans provenance`, async ({ page }, info) => {
+  test(`RPPS — réponse ${scenario.nom} puis rechargement du verdict vérifié`, async ({ page }, info) => {
     expect(formats).toContain(info.project.name);
     const state = await simulerSoignant(page, 'complet');
     Object.assign(state.profile, { numero_rpps: '00100123456', rpps_verifie: false, tous_documents_valides: false });
@@ -53,21 +52,21 @@ for (const scenario of [
     await recharger(page);
 
     const main = page.locator('main');
-    await expect(main.getByText(sourcePersistante, { exact: true })).toBeVisible();
     await expect(main.getByText(titrePersistant, { exact: true }).first()).toBeVisible();
     await expect(main.getByText('Source : Annuaire Santé (ANS).', { exact: true })).toHaveCount(0);
-    await expect(main.getByText(/RPPS vérifié|Vérifiée RPPS|vérifié RPPS/)).toHaveCount(0);
+    await expect(main.getByText('Contrôle RPPS enregistré', { exact: true })).toHaveCount(0);
+    await expect(main.getByText('Source de vérification non disponible dans le profil.', { exact: true })).toHaveCount(0);
     for (const champ of ['#profil-rpps', '#profil-prenom', '#profil-nom', '#profil-date-naissance']) {
       await expect(page.locator(champ)).toHaveAttribute('readonly', '');
     }
     await sansDebordement(page);
     await preuve(page, `rpps-${scenario.nom}-rechargement-sans-source`, info, true);
 
-    // Les badges réutilisés ailleurs ne réinventent pas la provenance perdue.
+    // Les badges réutilisés affichent le verdict enregistré, sans nommer une source.
     for (const route of ['/soignant/tableau-de-bord', '/soignant/mon-compte']) {
       await aller(page, route);
       await expect(page.locator('main').getByText(titrePersistant, { exact: true })).toBeVisible();
-      await expect(page.locator('main').getByText('RPPS Vérifié', { exact: true })).toHaveCount(0);
+      await expect(page.locator('main').getByText('Contrôle RPPS enregistré', { exact: true })).toHaveCount(0);
       await sansDebordement(page);
     }
     const verification = state.calls.filter(call => call.name === 'verify-rpps');

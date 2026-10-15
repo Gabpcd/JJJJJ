@@ -40,7 +40,9 @@ export type TestAccountKey = keyof typeof TEST_ACCOUNTS;
  * Connecte le user via le formulaire `/connexion` (flow réel UI).
  * Attend la redirection vers le dashboard du rôle.
  */
-export async function loginAs(page: Page, account: TestAccountKey): Promise<void> {
+export async function loginAs(
+  page: Page, account: TestAccountKey, observeSubmission?: () => Promise<unknown>,
+): Promise<void> {
   const creds = TEST_ACCOUNTS[account];
   if (!creds.password) {
     throw new Error(`Secret de recette absent pour le compte ${account}.`);
@@ -48,7 +50,9 @@ export async function loginAs(page: Page, account: TestAccountKey): Promise<void
   await page.goto('/connexion');
   await page.locator('input[type="email"]').fill(creds.email);
   await page.locator('input[type="password"]').first().fill(creds.password);
-  await page.getByTestId('login-submit').click();
+  // Armer l'observation réseau après le chargement et la saisie, avant le clic.
+  // Son délai couvre la connexion, jamais le temps de préparation du formulaire.
+  await Promise.all([observeSubmission?.(), page.getByTestId('login-submit').click()]);
 
   const expectedUrl =
     creds.role === 'ADMIN_PLATEFORME'

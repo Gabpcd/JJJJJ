@@ -8,6 +8,9 @@ const closed = () => Object.assign(new Error('synthetic transport error'), {
 const offline = () => Object.assign(new Error('synthetic offline'), {
   code: 1, stderr: 'error: device offline\n', stdout: '', killed: false, signal: null,
 });
+const serialMissing = () => Object.assign(new Error('synthetic missing emulator'), {
+  code: 1, stderr: "error: device 'emulator-5554' not found\n", stdout: '', killed: false, signal: null,
+});
 
 function fixture({ initialUid = '2000', respond } = {}) {
   let time = 0, uid = initialUid;
@@ -60,6 +63,46 @@ test('observed root closed reprobes and does not reroot if the restart already s
     phase: 'transport-wait', elapsedMs: 0, attempt: 1, stage: 'root', reason: 'root_closed',
   });
   assert.equal(f.records.at(-1).uid, 0);
+});
+
+test('root closed then the exact missing emulator waits for two fresh root and absence probes', async () => {
+  const f = fixture({ respond: ({ args, time, setUid }) => {
+    if (args[0] === 'root') { setUid('0'); throw closed(); }
+    if (args[0] === 'get-state' && time === 1000) throw serialMissing();
+  } });
+  await f.run();
+  assert.equal(rootCalls(f).length, 1);
+  assert.deepEqual(f.records.filter(entry => entry.phase === 'transport-wait'), [
+    { phase: 'transport-wait', elapsedMs: 0, attempt: 1, stage: 'root', reason: 'root_closed' },
+    { phase: 'transport-wait', elapsedMs: 1000, attempt: 2, stage: 'state', reason: 'device_missing' },
+  ]);
+  assert.deepEqual(f.calls.filter(call => call.at === 1000).map(call => call.args), [['get-state']]);
+  for (const time of [2000, 3000]) {
+    assert.deepEqual(f.calls.filter(call => call.at === time).map(call => call.args), [
+      ['get-state'], ['shell', 'pm', 'list', 'packages', 'app.jolene.recette'], ['shell', 'id', '-u'],
+    ]);
+  }
+  assert.deepEqual(f.records.at(-1), { phase: 'ready-before-installation', elapsedMs: 3000,
+    attempt: 4, uid: 0, fixtureInstalled: false, stableMs: 1000, rootRequests: 1 });
+});
+
+test('a missing emulator resets prior stable root evidence and cannot hide a newly installed fixture', async () => {
+  for (const fixtureAppears of [false, true]) {
+    const f = fixture({ initialUid: '0', respond: ({ args, time }) => {
+      if (args[0] === 'get-state' && time === 1000) throw serialMissing();
+      if (fixtureAppears && args.includes('pm') && time >= 2000) return 'package:app.jolene.recette\n';
+    } });
+    if (fixtureAppears) {
+      await assert.rejects(f.run(), /APP_ALREADY_INSTALLED/);
+      assert.equal(isReady(f), false);
+      assert.equal(f.records.filter(entry => entry.phase === 'probe').length, 1);
+    } else {
+      await f.run();
+      assert.equal(f.records.at(-1).elapsedMs, 3000);
+      assert.equal(f.records.at(-1).stableMs, 1000);
+    }
+    assert.equal(rootCalls(f).length, 0);
+  }
 });
 
 test('closed before root takes effect permits a bounded fresh root request only after rechecking absence', async () => {
@@ -135,9 +178,66 @@ test('rejects unauthorized, multiple devices, timeouts, signals and unknown erro
 test('closed is admitted only for root, and absent-device only for the state probe', () => {
   assert.equal(transientAdbFailure(closed(), 'root'), 'root_closed');
   for (const stage of ['state', 'uid', 'absence']) assert.equal(transientAdbFailure(closed(), stage), null);
-  const missing = Object.assign(offline(), { stderr: 'error: no devices/emulators found' });
-  assert.equal(transientAdbFailure(missing, 'state'), 'device_missing');
-  assert.equal(transientAdbFailure(missing, 'root'), null);
+  for (const missing of [Object.assign(offline(), { stderr: 'error: no devices/emulators found' }), serialMissing()]) {
+    assert.equal(transientAdbFailure(missing, 'state'), 'device_missing');
+    for (const stage of ['root', 'absence', 'uid', 'unknown']) assert.equal(transientAdbFailure(missing, stage), null);
+  }
+});
+
+test('missing-emulator near matches and invalid process results fail closed without waiting', async () => {
+  const errors = [
+    ...[
+      "error: device 'emulator-5556' not found",
+      'error: device emulator-5554 not found',
+      'error: device "emulator-5554" not found',
+      "adb: device 'emulator-5554' not found",
+      "error: device 'emulator-5554' offline",
+      "error: device 'emulator-5554' unauthorized",
+      "error: device 'emulator-5554' not found: permission denied",
+      "error: device 'emulator-5554' not found\nerror: more than one device/emulator",
+      "error: device 'emulator-5554' not found\nApplication Not Responding: app.jolene.recette",
+    ].map(stderr => Object.assign(serialMissing(), { stderr })),
+    Object.assign(serialMissing(), { code: 2 }),
+    Object.assign(serialMissing(), { killed: true, signal: 'SIGTERM', code: null }),
+    Object.assign(serialMissing(), { signal: 'SIGTERM' }),
+    Object.assign(serialMissing(), { stdout: 'device\n' }),
+    Object.assign(serialMissing(), { stderr: null }),
+  ];
+  for (const error of errors) {
+    const f = fixture({ respond: () => { throw error; } });
+    await assert.rejects(f.run(), /COMMAND_REFUSED_STATE/);
+    assert.equal(f.calls.length, 1);
+    assert.equal(isReady(f), false);
+    assert.equal(f.records.some(entry => entry.phase === 'transport-wait'), false);
+  }
+});
+
+test('the exact missing-emulator failure outside get-state is never retried', async () => {
+  for (const [command, reason] of [
+    ['shell pm list packages app.jolene.recette', /COMMAND_REFUSED_ABSENCE/],
+    ['shell id -u', /COMMAND_REFUSED_UID/],
+    ['root', /COMMAND_REFUSED_ROOT/],
+  ]) {
+    const f = fixture({ respond: ({ args }) => { if (args.join(' ') === command) throw serialMissing(); } });
+    await assert.rejects(f.run(), reason);
+    assert.equal(f.calls.at(-1).args.join(' '), command);
+    assert.equal(isReady(f), false);
+    assert.equal(f.records.some(entry => entry.phase === 'transport-wait'), false);
+  }
+});
+
+test('persistent missing emulator remains capped at thirty probes and the sixty-second deadline', async () => {
+  for (const slowProbe of [false, true]) {
+    const f = fixture({ respond: ({ elapse }) => {
+      if (slowProbe) elapse(4000);
+      throw serialMissing();
+    } });
+    await assert.rejects(f.run(), slowProbe ? /TIMEOUT/ : /ATTEMPT_LIMIT/);
+    assert.equal(f.calls.length, slowProbe ? 12 : 30);
+    assert.equal(f.records.at(-1).elapsedMs, slowProbe ? 60000 : 30000);
+    assert.equal(rootCalls(f).length, 0);
+    assert.equal(isReady(f), false);
+  }
 });
 
 test('refuses unknown state, unexpected UID and production-build root denial without retry', async () => {

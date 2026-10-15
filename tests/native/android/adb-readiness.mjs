@@ -33,6 +33,9 @@ export function transientAdbFailure(error, stage) {
   const text = typeof error.stderr === 'string' ? error.stderr.trim() : '';
   if (text === 'error: device offline' || text === 'adb: device offline') return 'device_offline';
   if (stage === 'state' && text === 'error: no devices/emulators found') return 'device_missing';
+  // AOSP get-state reports the selected serial when ANDROID_SERIAL is set.
+  // Admit only this isolated runner emulator; other serials/stages fail closed.
+  if (stage === 'state' && text === "error: device 'emulator-5554' not found") return 'device_missing';
   if (stage === 'root' && text === 'adb: unable to connect for root: closed') return 'root_closed';
   if (stage === 'root' && text === 'adb: unable to connect for root: device offline') return 'device_offline';
   return null;

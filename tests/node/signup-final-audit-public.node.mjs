@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { projectSignupFinalAudit } from '../../scripts/ci/signup-final-audit-public.mjs';
+import { projectSignupFinalAudit, signupAuditRefusalDiagnostic } from '../../scripts/ci/signup-final-audit-public.mjs';
 import { projectReport, runPublicPlaywright } from '../../scripts/ci/run-playwright-public.mjs';
 
 const FILE = 'e2e/non-regression/signup-series-c-audit.spec.ts';
@@ -256,4 +256,237 @@ test('projection schema matches unique source routes and real viewports via Type
     assert.equal(new Set(actual).size, actual.length);
     assert.deepEqual(strings(branch), actual);
   }
+});
+
+
+// Refusal diagnostics are negative evidence, never a partial successful audit.
+function closedRefusal(result, selected = context) {
+  let error;
+  try { projectSignupFinalAudit(result, selected); }
+  catch (caught) { error = caught; }
+  assert.ok(error);
+  assert.equal(error.message, 'SIGNUP_AUDIT_REFUSED');
+  const diagnostic = signupAuditRefusalDiagnostic(error);
+  assert.ok(diagnostic);
+  const bytes = JSON.stringify(diagnostic);
+  assert.equal(bytes.includes(canary), false);
+  assert.doesNotMatch(bytes, /Bearer|Authorization|https?:|wss?:|privateHeaders|requestId|documentId|timestamp/);
+  assert.ok(bytes.length < 5000);
+  assert.deepEqual(Object.keys(diagnostic).sort(), [
+    'schemaVersion', 'checkpoint', 'attachmentRole', 'attachmentCount', 'attachmentCountLimitExceeded',
+    'knownAttachmentCount', 'duplicateKnownAttachments', 'attachmentsByRole', 'attachmentSizes',
+    'expectedMatrixRows', 'collections', 'roleHttpTruncated',
+  ].sort());
+  return { error, diagnostic };
+}
+
+async function refusedReceipt(mutator, { childExitCode = 1 } = {}) {
+  let answer;
+  await withReport(async state => {
+    await mutator(state);
+    let output = '';
+    const code = await runPublicPlaywright(['--phase', 'series-c-ios', '--', 'test'], {
+      cwd: state.cwd, env: { RUNNER_TEMP: state.directory }, getSourceSha: () => 'a'.repeat(40),
+      emit: value => { output += value; },
+      launch: async launchContext => {
+        await writeFile(launchContext.env.PLAYWRIGHT_JSON_OUTPUT_FILE, JSON.stringify(state.report));
+        return childExitCode;
+      },
+    });
+    assert.equal(code, 1);
+    assert.equal(output.includes(canary), false);
+    answer = JSON.parse(output);
+    assert.equal(answer.complete, false);
+    assert.equal(answer.childExitCode, childExitCode);
+    assert.equal(answer.exitCode, 1);
+    assert.equal(answer.counts, null);
+    assert.deepEqual(answer.tests, []);
+  });
+  return answer;
+}
+
+test('two finally attachments without matrix stay red and retain only safe failed/timedOut provenance', async () => {
+  for (const status of ['failed', 'timedOut']) {
+    const receipt = await refusedReceipt(({ cwd, attempt }) => {
+      attempt.status = status;
+      attempt.duration = 360000;
+      attempt.attachments = attempt.attachments.filter(item => item.name !== 'audit-compte-neuf-soignant.json');
+      attempt.errors = [{ message: canary, stack: canary,
+        location: { file: path.join(cwd, FILE), line: 1, column: 1 } }];
+    });
+    assert.deepEqual(receipt.codes, ['SIGNUP_AUDIT_REFUSED']);
+    const d = receipt.signupAuditRefusal;
+    assert.equal(d.checkpoint, 'KNOWN_ATTACHMENT_SET');
+    assert.equal(d.attachmentRole, 'soignant');
+    assert.equal(d.knownAttachmentCount, 2);
+    assert.deepEqual(d.attachmentsByRole.soignant, { matrix: false, roleHttp: true, transport: true });
+    assert.deepEqual(d.attachmentsByRole.etab, { matrix: false, roleHttp: false, transport: false });
+    assert.deepEqual(d.attempt, { file: FILE, line: 1, column: 1, retry: 0, status,
+      durationMs: 360000, failureLocation: { file: FILE, line: 1, column: 1 } });
+    assert.equal(d.otherTestsOrRefusalsComplete, false);
+  }
+});
+
+test('a refused projection never invents a failed child when the actual child returned zero', async () => {
+  const receipt = await refusedReceipt(({ attempt }) => { attempt.attachments.pop(); attempt.attachments.pop(); }, { childExitCode: 0 });
+  assert.equal(receipt.childExitCode, 0);
+  assert.equal(receipt.exitCode, 1);
+  assert.deepEqual(receipt.codes, ['SIGNUP_AUDIT_REFUSED']);
+});
+
+test('forged errors, primitive values and hostile getters have no diagnostic provenance', () => {
+  const forged = new Error('SIGNUP_AUDIT_REFUSED');
+  forged.signupAuditRefusal = { privateHeaders: canary };
+  const hostile = Object.create(null);
+  for (const key of ['message', 'diagnostic', 'signupAuditRefusal']) {
+    Object.defineProperty(hostile, key, { get() { throw new Error(canary); } });
+  }
+  const revocable = Proxy.revocable({}, {}); revocable.revoke();
+  for (const value of [forged, hostile, revocable.proxy, null, undefined, false, 0, canary, [], () => canary]) {
+    assert.equal(signupAuditRefusalDiagnostic(value), undefined);
+  }
+});
+
+test('public diagnostic clones cannot mutate stored provenance or inject private extras', () => {
+  const result = fixture().result(); result.attachments.splice(0, 1);
+  const { error, diagnostic } = closedRefusal(result);
+  diagnostic.attachmentsByRole.soignant.matrix = true;
+  diagnostic.attachmentSizes.matrix.decodedBytes = 999;
+  diagnostic.collections.matrixRows.count = 999;
+  diagnostic.checkpoint = canary;
+  diagnostic.privateHeaders = canary;
+  error.signupAuditRefusal = { checkpoint: canary };
+  const next = signupAuditRefusalDiagnostic(error);
+  assert.equal(next.attachmentsByRole.soignant.matrix, false);
+  assert.equal(next.attachmentSizes.matrix.decodedBytes, null);
+  assert.equal(next.collections.matrixRows.count, null);
+  assert.equal(next.checkpoint, 'KNOWN_ATTACHMENT_SET');
+  assert.equal(JSON.stringify(next).includes(canary), false);
+});
+
+test('missing, duplicate and mixed-role pieces report fixed presence bits while still refusing', () => {
+  for (const index of [0, 1, 2]) {
+    const result = fixture().result(); result.attachments.splice(index, 1);
+    const { diagnostic } = closedRefusal(result);
+    assert.equal(diagnostic.checkpoint, 'KNOWN_ATTACHMENT_SET');
+    assert.equal(diagnostic.knownAttachmentCount, 2);
+    assert.equal(diagnostic.duplicateKnownAttachments, false);
+    assert.equal(Object.values(diagnostic.attachmentsByRole.soignant).filter(Boolean).length, 2);
+  }
+  const duplicate = fixture().result(); duplicate.attachments.push(duplicate.attachments[0]);
+  assert.equal(closedRefusal(duplicate).diagnostic.duplicateKnownAttachments, true);
+  const mixed = fixture().result();
+  mixed.attachments[1].name = 'audit-compte-neuf-role-http-etab.json';
+  assert.equal(closedRefusal(mixed).diagnostic.checkpoint, 'ROLE_HTTP_ATTACHMENT');
+});
+
+test('attachment arrays and envelopes stay bounded without publishing names, paths or malformed bodies', () => {
+  for (const change of [
+    result => { result.attachments = { privateHeaders: canary }; },
+    result => { result.attachments = Array(101).fill({ name: canary }); },
+    result => { result.attachments[0].path = `/private/${canary}/../secret`; },
+    result => { result.attachments[0].contentType = canary; },
+    result => { result.attachments[0].body = canary; },
+    result => { result.attachments[0].body = Buffer.from(`{${canary}`).toString('base64'); },
+  ]) {
+    const result = fixture().result(); change(result);
+    closedRefusal(result);
+  }
+  const big = fixture().result(); big.attachments = Array(101).fill({ name: canary });
+  const d = closedRefusal(big).diagnostic;
+  assert.equal(d.attachmentCount, null); assert.equal(d.attachmentCountLimitExceeded, true);
+  assert.equal(d.knownAttachmentCount, null);
+});
+
+test('the exact 8MiB decoding boundary remains strict and reports no oversized numeric value', () => {
+  const MAX = 8 * 1024 * 1024;
+  for (const size of [MAX, MAX + 1]) {
+    const result = fixture().result();
+    result.attachments[0].body = Buffer.from('"' + 'x'.repeat(size - 2) + '"').toString('base64');
+    const d = closedRefusal(result).diagnostic;
+    assert.equal(d.checkpoint, size === MAX ? 'MATRIX_SHAPE' : 'MATRIX_ATTACHMENT');
+    assert.equal(d.attachmentSizes.matrix.decodedBytes, size === MAX ? MAX : null);
+    assert.equal(d.attachmentSizes.matrix.decodedLimitExceeded, size > MAX);
+  }
+});
+
+test('short/oversized matrices remain refused for both roles and both mobile phases', () => {
+  for (const role of ['soignant', 'etab']) for (const phase of ['series-c-ios', 'series-c-android']) {
+    for (const delta of [-1, 1]) {
+      const f = fixture(role, phase), expected = f.audit.length;
+      if (delta < 0) f.audit.pop(); else f.audit.push(f.audit[0]);
+      const d = closedRefusal(f.result(), { ...context, phase }).diagnostic;
+      assert.equal(d.checkpoint, 'MATRIX_SHAPE');
+      assert.equal(d.expectedMatrixRows, expected);
+      assert.equal(d.collections.matrixRows.count, delta < 0 ? expected - 1 : null);
+      assert.equal(d.collections.matrixRows.limitExceeded, delta > 0);
+    }
+  }
+});
+
+test('truncated and non-boolean RPC flags remain refused without coercing private values', () => {
+  for (const value of [true, undefined, 'false', canary, 0]) {
+    const f = fixture(); f.roleHttp.truncated = value;
+    const d = closedRefusal(f.result()).diagnostic;
+    assert.equal(d.checkpoint, 'ROLE_HTTP_SHAPE');
+    assert.equal(d.roleHttpTruncated, value === true ? true : null);
+  }
+});
+
+test('RPC and transport event caps still accept 2048 valid entries and refuse 2049', () => {
+  const rpc = { navigationId: 1, matrixIndex: 0, phase: 'inspection', scope: 'unknown',
+    event: 'request', failureCode: null, httpStatus: null, privateHeaders: canary };
+  const ws = { matrixIndex: 0, phase: 'inspection', event: 'websocket-requested',
+    connectionAttempt: 1, subsequentAttempts: 0, httpStatus: null, privateHeaders: canary };
+  for (const kind of ['rpc', 'ws']) {
+    const f = fixture();
+    if (kind === 'rpc') f.roleHttp.events = Array(2048).fill(rpc);
+    else f.transport.push(...Array(2048).fill(ws));
+    assert.ok(projectSignupFinalAudit(f.result(), context));
+    if (kind === 'rpc') f.roleHttp.events.push(rpc); else f.transport.push(ws);
+    const d = closedRefusal(f.result()).diagnostic;
+    const counter = kind === 'rpc' ? d.collections.roleHttpEvents : d.collections.transportEvents;
+    assert.equal(counter.count, null); assert.equal(counter.limitExceeded, true);
+    assert.equal(d.checkpoint, kind === 'rpc' ? 'ROLE_HTTP_EVENTS' : 'TRANSPORT_EVENTS');
+  }
+});
+
+test('invalid attempt metadata and arbitrary thrown errors cannot acquire a refusal receipt', async () => {
+  for (const change of [
+    attempt => { attempt.duration = Infinity; }, attempt => { attempt.duration = -1; },
+    attempt => { attempt.retry = 99; }, attempt => { attempt.status = canary; },
+  ]) {
+    const receipt = await refusedReceipt(({ attempt }) => { change(attempt); attempt.attachments.splice(0, 1); });
+    assert.equal(Object.hasOwn(receipt, 'signupAuditRefusal'), false);
+    assert.deepEqual(receipt.codes, ['REPORT_INVALID']);
+  }
+  await withReport(async ({ cwd, directory }) => {
+    let output = '';
+    const forged = new Error('SIGNUP_AUDIT_REFUSED'); forged.signupAuditRefusal = { body: canary };
+    await runPublicPlaywright(['--phase', 'series-c-ios', '--', 'test'], {
+      cwd, env: { RUNNER_TEMP: directory }, getSourceSha: () => 'a'.repeat(40),
+      emit: value => { output += value; }, launch: async () => { throw forged; },
+    });
+    const receipt = JSON.parse(output);
+    assert.deepEqual(receipt.codes, ['PRIVATE_RUN_FAILED']);
+    assert.equal(Object.hasOwn(receipt, 'signupAuditRefusal'), false);
+    assert.equal(output.includes(canary), false);
+  });
+});
+
+test('successful, absent and unknown-file projections retain their original public schemas', async () => {
+  const f = fixture();
+  const projected = projectSignupFinalAudit(f.result(), context);
+  assert.deepEqual(Object.keys(projected).sort(), ['schemaVersion', 'role', 'routeCount', 'viewportCount',
+    'inspectedCount', 'rows', 'roleRpcFailures', 'websocketErrors'].sort());
+  for (const attachments of [undefined, null, [], [{ name: canary, body: canary, path: canary }]]) {
+    assert.equal(projectSignupFinalAudit({ attachments }, context), undefined);
+  }
+  assert.equal(projectSignupFinalAudit(f.result(), { ...context, file: canary }), undefined);
+  await withReport(async ({ cwd, report, attempt }) => {
+    attempt.attachments = [];
+    const summary = await projectReport(report, { ...context, cwd });
+    assert.equal(summary.tests[0].attempts[0].code, 'TEST_FAILED');
+    assert.equal(Object.hasOwn(summary.tests[0].attempts[0], 'signupAuditRefusal'), false);
+  });
 });
