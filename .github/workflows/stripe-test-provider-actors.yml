@@ -1,0 +1,62 @@
+name: Préparer Customer et Express TEST (manuel fermé)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: SHA main exact portant le contrat et les sources relus
+        required: true
+        type: string
+      recipient_public_key:
+        description: Clé publique RSA4096 PEM éphémère locale
+        required: true
+        type: string
+      recipient_sha256:
+        description: SHA256 du SPKI DER de cette clé publique
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: jolene-supabase-staging-writes
+  queue: max
+  cancel-in-progress: false
+jobs:
+  prepare-provider-actors:
+    if: github.repository == 'Gabpcd/JJJJJ' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
+      RECIPIENT_SHA256: ${{ inputs.recipient_sha256 }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      - name: Refus locaux sans fournisseur ni secret
+        run: node --test tests/node/stripe-test-provider-actors.node.mjs
+      - name: Contrat et sources sans secret ni réseau
+        run: node scripts/ci/stripe-test-provider-actors-ci.mjs check
+      - name: Deux objets fournisseur TEST uniquement
+        timeout-minutes: 9
+        run: node scripts/ci/stripe-test-provider-actors-ci.mjs run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      - name: Conserver seulement le reçu chiffré et les booléens
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stripe-provider-actors-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/stripe-provider-proof/stripe-provider.encrypted.json
+            ${{ runner.temp }}/stripe-provider-proof/result.json
+          retention-days: 1
+          if-no-files-found: ignore
+          include-hidden-files: false
