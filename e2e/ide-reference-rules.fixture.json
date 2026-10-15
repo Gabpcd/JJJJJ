@@ -1,0 +1,65 @@
+[
+  {
+    "profession": "IDE",
+    "type_document": "ATTESTATION_URSSAF",
+    "description": "Attestation d'affiliation URSSAF (exercice libéral)",
+    "a_expiration": true,
+    "duree_validite_mois": 6,
+    "est_critique": true,
+    "type_exercice_requis": "LIBERAL_ONLY"
+  },
+  {
+    "profession": "IDE",
+    "type_document": "AUTORISATION_EXERCICE",
+    "description": "Autorisation d'exercice (diplôme étranger — procédure PAE / liste d'aptitude). Optionnel : à fournir uniquement si vous êtes formé(e) hors France.",
+    "a_expiration": false,
+    "duree_validite_mois": null,
+    "est_critique": false,
+    "type_exercice_requis": "TOUS"
+  },
+  {
+    "profession": "IDE",
+    "type_document": "CARTE_IDENTITE",
+    "description": "Carte nationale d'identité, passeport ou titre de séjour en cours de validité.",
+    "a_expiration": true,
+    "duree_validite_mois": null,
+    "est_critique": true,
+    "type_exercice_requis": "TOUS"
+  },
+  {
+    "profession": "IDE",
+    "description": "Diplôme requis hors dispense accordée par un RPPS validé par l'API.",
+    "a_expiration": false,
+    "est_critique": true,
+    "type_document": "DIPLOME",
+    "duree_validite_mois": null,
+    "type_exercice_requis": "TOUS"
+  },
+  {
+    "profession": "IDE",
+    "type_document": "RCP_ASSURANCE",
+    "description": "Assurance Responsabilité Civile Professionnelle (exercice libéral)",
+    "a_expiration": true,
+    "duree_validite_mois": 12,
+    "est_critique": true,
+    "type_exercice_requis": "LIBERAL_ONLY"
+  },
+  {
+    "profession": "IDE",
+    "type_document": "RIB",
+    "description": "Relevé d'Identité Bancaire — sert au versement de votre rémunération (salaire transmis à l'établissement, ou honoraires).",
+    "a_expiration": false,
+    "duree_validite_mois": null,
+    "est_critique": true,
+    "type_exercice_requis": "TOUS"
+  },
+  {
+    "profession": "IDE",
+    "type_document": "RPPS_ADELI",
+    "description": "Attestation d'inscription RPPS",
+    "a_expiration": false,
+    "duree_validite_mois": null,
+    "est_critique": true,
+    "type_exercice_requis": "TOUS"
+  }
+]

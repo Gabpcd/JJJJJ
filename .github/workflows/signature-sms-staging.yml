@@ -1,0 +1,68 @@
+name: Signature SMS staging — simulation cinq formats
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/pages/ContratMission*'
+      - 'src/components/SignerContratOtp*'
+      - 'src/lib/signatureSmsStagingAdmission*'
+      - 'e2e/recette-complete-signature-sms-staging.spec.ts'
+      - 'e2e/helpers/recette-signature-sms-staging.ts'
+      - 'e2e/helpers/recette-complete-mission.ts'
+      - 'e2e/playwright.recette-complete.config.ts'
+      - '.github/workflows/signature-sms-staging.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/pages/ContratMission*'
+      - 'src/components/SignerContratOtp*'
+      - 'src/lib/signatureSmsStagingAdmission*'
+      - 'e2e/recette-complete-signature-sms-staging.spec.ts'
+      - 'e2e/helpers/recette-signature-sms-staging.ts'
+      - 'e2e/helpers/recette-complete-mission.ts'
+      - 'e2e/playwright.recette-complete.config.ts'
+      - '.github/workflows/signature-sms-staging.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulation:
+    name: Signature SMS simulée (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [iphone, android, ipad-portrait, ipad-paysage, ordinateur]
+    env:
+      VITE_SUPABASE_URL: https://mejpriaetwgtcstbgfid.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_jolene_simulation
+      VITE_SUPABASE_ANON_KEY: sb_publishable_jolene_simulation
+      VITE_SENTRY_DSN: ''
+      VITE_TURNSTILE_SITE_KEY: ''
+      VITE_ENV: test
+      RECETTE_SIGNATURE_SMS_STAGING: '1'
+      RECETTE_START_SERVER: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build de simulation sans credential réel
+        run: npm run build
+      - name: Frontend réel, Auth et RPC explicitement simulés
+        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts e2e/recette-complete-signature-sms-staging.spec.ts --project=${{ matrix.project }}
+      - name: Preuves ciblées sans donnée réelle
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: signature-sms-simulee-${{ matrix.project }}
+          path: test-results/recette-complete/
+          retention-days: 7
+          if-no-files-found: error
