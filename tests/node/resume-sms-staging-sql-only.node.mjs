@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,statSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {PROJECT,REPOSITORY,CONTRACT,ASSET_PATHS,digest,canonical} from '../../scripts/ci/install-sms-staging-closed.mjs';
+import {PROJECT,REPOSITORY,CONTRACT,ASSET_PATHS,Refusal,checkSnapshot,digest,canonical} from '../../scripts/ci/install-sms-staging-closed.mjs';
 import {RESUME_CONTRACT,RECOVERY_WORKFLOW,RECOVERY_ARTIFACT,OPERATOR_PATHS,checkResumeContract,resumeSqlOnly,durableCheckpoint}
  from '../../scripts/ci/resume-sms-staging-sql-only.mjs';
 
@@ -33,6 +33,7 @@ function harness(options={}){
  const invariant=Object.fromEntries(['structure','routines','inventory','registry','rows'].map((k,i)=>[k,String(i+1).repeat(32)]));
  const before={quiet:true,absent:true,closed:false,routines:structuredClone(historical.beforeRoutines),invariant,targets:'6'.repeat(32)};
  const after={quiet:true,absent:false,closed:true,routines:historical.afterRoutines.map(r=>({...r,definition_md5:r.definition_md5??'f'.repeat(32)})),invariant,targets:'7'.repeat(32)};
+ const snapshotReply=(s,phase)=>{const rows=[{snapshot:s}];options.snapshotResponse?.(rows,state,phase);return response(rows);};
  const API=`https://api.supabase.com/v1/projects/${PROJECT}`,GH=`https://api.github.com/repos/${REPOSITORY}`;
  const fetchImpl=async(url,request)=>{
   state.calls.push({url,request});assert.equal(request.redirect,'error');assert.ok(request.signal instanceof AbortSignal);
@@ -59,14 +60,14 @@ function harness(options={}){
   assert.equal(url,`${API}/database/query`);assert.equal(request.method,'POST');
   const payload=JSON.parse(request.body);assert.equal(payload.read_only,false);
   if(payload.query.startsWith('BEGIN READ ONLY;')){state.reads++;
-   const s=structuredClone(state.commits?after:before);options.snapshot?.(s,state,'read');return response([{snapshot:s}]);}
+   const s=structuredClone(state.commits?after:before);options.snapshot?.(s,state,'read');return snapshotReply(s,'read');}
   assert.equal(state.reports.at(-1).status,'uncertain');
   assert.equal(state.reports.at(-1).dryRunAttempted,true);
   const isCommit=/COMMIT;$/.test(payload.query);
   if(isCommit){state.commits++;assert.equal(state.reports.at(-1).commitAttempted,true);}else{state.rollbacks++;assert.match(payload.query,/ROLLBACK;$/);}
   assert.ok(state.rollbacks===1&&state.commits<=1);
   assert.match(payload.query,/LOCK TABLE cron\.job IN ACCESS SHARE MODE NOWAIT;/);
-  const s=structuredClone(after);options.snapshot?.(s,state,isCommit?'commit':'preview');return response([{snapshot:s}]);
+  const phase=isCommit?'commit':'preview',s=structuredClone(after);options.snapshot?.(s,state,phase);return snapshotReply(s,phase);
  };
  return {state,contract:c,run:()=>resumeSqlOnly({env:{...env,...options.env},local:{...local,...options.local},historical,
   contract:c,fetchImpl,checkpoint:r=>{state.reports.push(structuredClone(r));if(options.checkpoint?.(r,state))throw Error(CANARY);}})};
@@ -77,8 +78,20 @@ function noLeak(h,r){assert.ok(!JSON.stringify([r,...h.state.reports]).includes(
 test('real manifest pins six source files; an unreviewed draft refuses before any network',async()=>{
  checkResumeContract(draft,historical,false);
  const unreviewed=repin({...structuredClone(draft),ready:false,recoveryCi:null});
+ assert.equal(unreviewed.ready,false);assert.equal(unreviewed.recoveryCi,null);
  const h=harness({contract:unreviewed}),r=await h.run();assert.equal(r.code,'RESUME_NOT_REVIEWED');
  assert.equal(h.state.calls.length,0);assert.equal(h.state.commits,0);noLeak(h,r);
+});
+test('the versioned manifest can be rearmed with a valid witness without changing operator sources',async()=>{
+ const manifestBefore=read(RESUME_CONTRACT),pathsBefore=[...OPERATOR_PATHS];
+ const sourcesBefore=Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))]));
+ assert.equal(OPERATOR_PATHS.includes(RESUME_CONTRACT),false);
+ const rearmed=contract();
+ assert.equal(checkResumeContract(rearmed,historical),rearmed);
+ const h=harness({contract:rearmed}),r=await h.run();assert.equal(r.status,'success');noLeak(h,r);
+ assert.equal(read(RESUME_CONTRACT),manifestBefore);
+ assert.deepEqual(OPERATOR_PATHS,pathsBefore);
+ assert.deepEqual(Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))])),sourcesBefore);
 });
 test('SQL-only success observes exact v24 throughout, rollback once, commit once, empty closed readback',async()=>{
  const h=harness(),r=await h.run();assert.equal(r.status,'success');assert.equal(r.code,null);
@@ -87,12 +100,53 @@ test('SQL-only success observes exact v24 throughout, rollback once, commit once
  for(const k of ['deploymentAttempted','deploymentConfirmed','providerInvoked','authCreated','capabilityAllocated','credentialsChanged'])assert.equal(r[k],false);
  assert.equal(r.businessComparisonScope,'CURRENT_RECOVERY_ONLY');assert.equal(r.beforeInvariant.rows,'5'.repeat(32));
  assert.equal(r.cronJobControl,'OBSERVATION_BEFORE_AFTER_ACCESS_SHARE_ONLY');
+ assert.equal(r.snapshotDiagnostics.length,6);
+ assert.deepEqual(r.snapshotDiagnostics.map(d=>d.sequence),[1,2,3,4,5,6]);
+ assert.deepEqual(r.snapshotDiagnostics.map(d=>d.phase),['baseline','baseline','rollback_once','rollback_once','commit_once','readback']);
+ assert.deepEqual(r.snapshotDiagnostics[0].invariant,r.beforeInvariant);
  assert.ok(h.state.calls.every(x=>x.request.method==='GET'||x.url.endsWith('/database/query')));noLeak(h,r);
 });
 for(const [key,value] of [['GITHUB_EVENT_NAME','push'],['GITHUB_REF','refs/heads/feature'],['EXPECTED_SHA','b'.repeat(40)],['GITHUB_RUN_ATTEMPT','2']])
  test(`bad trusted dispatch ${key} refuses before network`,async()=>{
-  const h=harness({env:{[key]:value}}),r=await h.run();assert.equal(r.code,'LOCAL_OR_SQL_REFUSAL');assert.equal(h.state.calls.length,0);noLeak(h,r);
+  const h=harness({env:{[key]:value}}),r=await h.run();assert.equal(r.code,'EXACT_TRUSTED_MAIN_REQUIRED');assert.equal(h.state.calls.length,0);noLeak(h,r);
  });
+test('the exported helper refusal is the class retained by the resume',()=>{
+ assert.throws(()=>checkSnapshot([],historical,false),e=>e instanceof Refusal&&e.code==='SQL_SNAPSHOT_SHAPE');
+});
+for(const [name,change,code,inspect] of [
+ ['quiet',s=>{s.quiet=false;},'SQL_SNAPSHOT_REFUSED',d=>assert.equal(d.quiet,false)],
+ ['routine metadata',s=>{s.routines[0].acl=[CANARY];},'SQL_ROUTINES_DRIFT',d=>assert.equal(d.routineCount,5)],
+ ['business invariant',s=>{s.invariant.rows='f'.repeat(32);},'BUSINESS_OR_CATALOGUE_CHANGED',d=>assert.equal(d.invariant.rows,'f'.repeat(32))],
+ ['untrusted snapshot fields',s=>{s.quiet=CANARY;s.invariant.rows=CANARY;s.targets=CANARY;s.extra=CANARY;},'SQL_SNAPSHOT_REFUSED',d=>{
+  assert.equal(d.quiet,null);assert.equal(d.invariant.rows,null);assert.equal(d.targets,null);assert.equal(d.snapshotKeysExact,false);
+ }],
+ ['oversized routine list',s=>{s.routines=Array.from({length:40},()=>({definition_md5:CANARY}));},'SQL_ROUTINES_DRIFT',d=>{
+  assert.equal(d.routineCount,32);assert.equal(d.routineCountCapped,true);
+ }],
+])test(`second baseline ${name} is checkpointed publicly before the imported refusal`,async()=>{
+ const h=harness({snapshot:(s,state,phase)=>{if(phase==='read'&&state.reads===2)change(s);}}),r=await h.run();
+ assert.equal(r.status,'failed');assert.equal(r.phase,'baseline');assert.equal(r.code,code);
+ assert.equal(r.dryRunAttempted,false);assert.equal(r.commitAttempted,false);
+ assert.equal(h.state.rollbacks,0);assert.equal(h.state.commits,0);assert.equal(r.snapshotDiagnostics.length,2);
+ const saved=h.state.reports.find(x=>x.snapshotDiagnostics.length===2);
+ assert.equal(saved.code,null);assert.equal(saved.dryRunAttempted,false);inspect(saved.snapshotDiagnostics[1]);noLeak(h,r);
+});
+for(const [name,change,count,capped] of [
+ ['empty response',rows=>rows.splice(0),0,false],
+ ['duplicate response',rows=>rows.push(rows[0],rows[0]),2,true],
+ ['extra envelope key',rows=>{rows[0].extra=CANARY;},1,false],
+])test(`second baseline ${name} keeps bounded shape diagnostics before refusal`,async()=>{
+ const h=harness({snapshotResponse:(rows,state,phase)=>{if(phase==='read'&&state.reads===2)change(rows);}}),r=await h.run();
+ assert.equal(r.code,'SQL_SNAPSHOT_SHAPE');assert.equal(r.dryRunAttempted,false);assert.equal(h.state.rollbacks,0);
+ const saved=h.state.reports.find(x=>x.snapshotDiagnostics.length===2),d=saved.snapshotDiagnostics[1];
+ assert.equal(saved.code,null);assert.equal(d.responseRowCount,count);assert.equal(d.responseRowCountCapped,capped);
+ assert.equal(d.envelopeExact,false);noLeak(h,r);
+});
+test('failure to checkpoint the second baseline diagnostic prevents all SQL writes',async()=>{
+ const h=harness({checkpoint:r=>r.snapshotDiagnostics.length===2}),r=await h.run();
+ assert.equal(r.code,'CHECKPOINT_FAILED');assert.equal(r.dryRunAttempted,false);assert.equal(r.commitAttempted,false);
+ assert.equal(h.state.rollbacks,0);assert.equal(h.state.commits,0);noLeak(h,r);
+});
 test('CI source drift, wrong v24 metadata and dirty checkout refuse before any SQL write',async()=>{
  for(const options of [{tree:t=>t[0].sha='f'.repeat(40)},{metadata:r=>r[0].version=25},{local:{clean:false}}]){
   const h=harness(options),r=await h.run();assert.notEqual(r.status,'success');assert.equal(h.state.rollbacks,0);assert.equal(h.state.commits,0);noLeak(h,r);

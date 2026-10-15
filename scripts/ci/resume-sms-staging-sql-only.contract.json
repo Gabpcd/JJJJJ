@@ -25,14 +25,14 @@
     }
   },
   "recoveryCi": {
-    "runId": "38638713994",
-    "jobId": "116108443756",
-    "headSha": "f26e81df15cea00313aff42ff08631bbebb07001",
-    "executedSha": "eb356b6e11987647696ee08589e620fe53977133",
-    "artifactId": "11928947715",
-    "artifactZipSha256": "5939490d5de2a501acc8958a74e2cd8a043ba8ec88f7469aac045db781bc7e37",
+    "runId": "38684822564",
+    "jobId": "116257166236",
+    "headSha": "763bf5e8fe5e93b116c9a531fb666a4a326f7991",
+    "executedSha": "7ac810ee511d437eb4252d7086deb606a29b51fa",
+    "artifactId": "11948694907",
+    "artifactZipSha256": "f9b795f844a40e236a9979740fd1ca4112eeff214f1c5bc03763073792e681c5",
     "artifactName": "sms-install-sql-only-pg17-public",
     "workflow": ".github/workflows/sms-install-sql-only-pg17.yml"
   },
-  "manifestSha256": "430efa6610caa0cea9270348b32e152fd38cd6e220d7fd2fd390d396c82b40f8"
+  "manifestSha256": "22cfeba9f2903e0a8270801dd3755f21780665857f8d21e85d7a95a1188b6f18"
 }
