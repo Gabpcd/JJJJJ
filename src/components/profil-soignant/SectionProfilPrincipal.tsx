@@ -18,7 +18,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import type { ResumeCompletion } from '@/lib/profil-soignant';
 import { getMotifProfilIncomplet } from '@/lib/profil-soignant';
-import { CONTROLE_RPPS_SANS_SOURCE, presenterControleRpps } from '@/lib/rpps-verification-provenance';
+import { presenterControleRpps } from '@/lib/rpps-verification-provenance';
 
 interface Props {
   userId: string;
@@ -719,14 +719,13 @@ export function SectionProfilPrincipal(props: Props) {
           </h2>
           <div className="p-3 rounded-xl border border-success/30 bg-success/5 mb-3">
             <p className="text-sm font-semibold text-success flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" /> {CONTROLE_RPPS_SANS_SOURCE.titre}
+              <ShieldCheck className="h-4 w-4" /> RPPS Vérifié
               {rppsVerifieLe && (
                 <span className="text-xs font-normal text-muted-foreground">
                   · le {new Date(rppsVerifieLe).toLocaleDateString('fr-FR')}
                 </span>
               )}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{CONTROLE_RPPS_SANS_SOURCE.source}</p>
           </div>
           <div className="space-y-3">
             <div>
