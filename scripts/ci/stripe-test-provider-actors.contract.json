@@ -1,25 +1,33 @@
 {
   "schemaVersion": 1,
-  "artifactKind": "LOCAL_AUTHOR_DRAFT_ONLY",
+  "artifactKind": "MANUAL_MAIN_PROVIDER_ONLY_TEST_CONTRACT",
   "purpose": "STRIPE_PROVIDER_ACTORS_TEST_V1",
-  "ready": false,
-  "canExecute": false,
+  "ready": true,
+  "canExecute": true,
   "projectRef": "mejpriaetwgtcstbgfid",
   "platformId": "acct_1T9pt0EVhQ7cb53W",
   "apiVersion": "2026-02-25.clover",
-  "reviewedSourceSha": null,
-  "reviewedSourceTree": null,
-  "sourcePins": null,
-  "expiresAt": null,
-  "reviewedBy": null,
+  "reviewedSourceSha": "71b1fceff772579976cbf5e696eeb7363eb75269",
+  "reviewedSourceTree": "ffd56c5502efea360427e69f1d57f63bba51e84b",
+  "sourcePins": {
+    "scripts/ci/stripe-test-provider-actors.mjs": "07ed096ca205a955b6a286923351472cfd77cd9133e850da6a64c91c5ca02d30",
+    "scripts/ci/stripe-test-provider-actors-ci.mjs": "16d5fbe70b71e54f330bdcffb617370683c485e3a92d5c362ab1dc8c2d9f5686",
+    ".github/workflows/stripe-test-provider-actors.yml": "d9bb34fddc7ffa7fbc871d74a69a13acb3072600ca52db9cf0a672360570c836",
+    "tests/node/stripe-test-provider-actors.node.mjs": "61331020bcc47b4b5bb431267e4ddfe5a668b4b8fbe4e5555c4cde1c4cefb222"
+  },
+  "expiresAt": "2026-10-15T12:03:35.253Z",
+  "reviewedBy": "root+independent-source-review-20261015",
   "actors": null,
-  "authOwner": null,
-  "authJournalSha256": null,
-  "uiEvidenceSha256": null,
-  "frontendCompletedReviewed": false,
-  "authJournalReviewed": false,
-  "stripeWebhookSafetyReviewed": false,
-  "catalogue": null,
+  "authOwner": "auth-test-ci-38619693349-1:3507ab761e9f7fd1ea45c63eb9e69c29860c9d18",
+  "authJournalSha256": "d3bb6f31d66845be7bfa16dee92d713caad6f7827bb8045ded57770e1bd891c7",
+  "uiEvidenceSha256": "a1ceac0bd3ada43cb9536a0a9ffcfd1c47ed7ca06d32429aea7fbe9649d82825",
+  "frontendCompletedReviewed": true,
+  "authJournalReviewed": true,
+  "stripeWebhookSafetyReviewed": true,
+  "catalogue": {
+    "routinesMd5": "99613635386487a69c8140cd3c4e66af",
+    "triggersMd5": "62e9482e5965040e763888baa8078bed"
+  },
   "edges": {
     "stripe-connect-webhook": {
       "version": 24,
@@ -103,14 +111,99 @@
     }
   ],
   "sourceInspection": {
-    "checkout": "/private/tmp/jolene-sms-staging-20261014",
-    "head": "e30f3aa29be1c9c3b70857b5cc07e77fd17b4bd3",
-    "localOriginMain": "f3fe9d4f2f594cb628f70fa239e2572adc2e1099",
-    "historicalStripeModulesUnchangedBetweenThoseRefs": true,
-    "liveQueriesOrMutationsPerformed": false,
-    "webhookProofPath": "/Users/gabrielle/Documents/Claude/Projects/Jolene/audits/2026-10-14-reprise/preflight-fournisseurs/stripe-test-webhooks-readonly.json",
-    "deployedEdgeProofDirectory": "/private/tmp/jolene-stripe-live-review-20261014",
-    "deployedWebhookPinsObservedByRoot": true
+    "preparationScope": "SOURCE_ONLY_NO_EXECUTION_BY_AUTHOR",
+    "versionedContractBaseSha256": "8252b3c229bc02513becdd3cec026c81ac10188c0e87569a76eb584e0b912b93",
+    "mainShaAtRootReadOnlyReadiness": "eec440b38345e08f0c9695b2a6a245de99544d19",
+    "reviewedRuntimeSourceSha": "71b1fceff772579976cbf5e696eeb7363eb75269",
+    "reviewedRuntimeSourceTree": "ffd56c5502efea360427e69f1d57f63bba51e84b",
+    "rootReadinessProof": {
+      "path": "audits/2026-10-14-reprise/preflight-fournisseurs/stripe-readiness-after-sms-reconciled-eec440b3.json",
+      "sha256": "17a1abe40b28199ca5d2375ba63828e95c78bdffb7a8e8b983f1533587543544",
+      "atUtc": "2026-10-15T07:53:54.328Z",
+      "managementRequests": 7,
+      "providerCalls": 0,
+      "authJournalCryptographicallyVerified": true,
+      "originalActorsCompared": true,
+      "trustedUiProjectionMatches": true,
+      "profilesAreOriginalTestPair": true,
+      "twoSnapshotsEqual": true,
+      "businessCounts": {
+        "candidatures": 0,
+        "contracts": 0,
+        "invoices": 0,
+        "mandates": 0,
+        "missions": 0,
+        "onboarding": 0,
+        "payments": 0
+      },
+      "quiet": {
+        "queuedRequests": 0,
+        "activeCrons": 0,
+        "runningCrons": 0
+      },
+      "catalogue": {
+        "routinesMd5": "99613635386487a69c8140cd3c4e66af",
+        "triggersMd5": "62e9482e5965040e763888baa8078bed"
+      },
+      "hooks": {
+        "hook_custom_access_token_enabled": false,
+        "hook_mfa_verification_attempt_enabled": false,
+        "hook_password_verification_attempt_enabled": false,
+        "hook_send_sms_enabled": false,
+        "hook_send_email_enabled": false,
+        "hook_before_user_created_enabled": false,
+        "hook_after_user_created_enabled": false
+      }
+    },
+    "rootProviderInventoryProof": {
+      "path": "audits/2026-10-14-reprise/preflight-fournisseurs/stripe-complete-provider-inventory-after-sms-20261015.json",
+      "sha256": "fad6df244a77d9d80e7a500cd99db6168feb47e3862ceede73a47fad50736c23",
+      "atUtc": "2026-10-15T07:58:43.536Z",
+      "stripeContext": "acct_1T9pt0EVhQ7cb53W",
+      "livemode": false,
+      "completeCustomers": {
+        "count": 14,
+        "hasMore": false,
+        "ownerMatches": 0
+      },
+      "completeConnectedAccounts": {
+        "count": 14,
+        "hasMore": false,
+        "ownerMatches": 0
+      },
+      "completeWebhookEndpoints": {
+        "count": 3,
+        "hasMore": false,
+        "ownerMatches": 0
+      },
+      "webhookDestinationsExact": true,
+      "enabledStageEndpoints": 2,
+      "disabledHistoricalProductionUrlEndpoints": 1,
+      "providerGets": 3,
+      "providerMutations": 0,
+      "newObjectsCreated": 0,
+      "customerSearchUsedInsteadOfList": false,
+      "privateProviderRecordsPublished": false,
+      "freshPrePostChecksStillRequired": true
+    },
+    "smsReconciliation": {
+      "schema": "jolene-sms-reconciliation-barrier/v1",
+      "runId": "38699509552",
+      "sourceSha": "eec440b38345e08f0c9695b2a6a245de99544d19",
+      "originalWorkflowConclusion": "failure",
+      "originalWorkflowStatus": "uncertain",
+      "originalReceiptSha256": "b9b2b47a8869849728a72344d3e8fcffbdd3dd1801f06f24a8e7c90e41cd6b15",
+      "reconciliationProofSha256": "9cdd957ae48087adfd51d1b6f4e604d2369c66d829b5adf5a9791dee659dca2d",
+      "snapshotValidationSha256": "baa597267d90bf23024520ee715875bd65c0dfb84daa596e1bfca8be1bb94d02",
+      "edgeReadOnlySha256": "f8b591f92073df63e2cbd08312e30af9e4ceb5808cd4421afbd54c0c9b62cd32",
+      "installedClosedStateReconciledReadOnly": true,
+      "originalWorkflowSuccessClaimed": false,
+      "sqlReplayed": false,
+      "providerCalled": false
+    },
+    "finalActivationCommitMainShaRemainsToBeChosenByRoot": true,
+    "actorUidsOrProfileValuesEmbedded": false,
+    "authorRuntimeOrProviderExecutionPerformed": false
   },
   "scope": {
     "maxStripePosts": 2,
@@ -132,16 +225,55 @@
       "postCreatePayoutsEnabledMustEqual": false
     },
     "kycVerificationOrTosAcceptance": 0,
-    "identityPrefill": "Synthetic first name, last name and email already entered in the UI; no phone, DOB, address, identity document, KYC verification or ToS acceptance."
+    "identityPrefill": "Only synthetic first name, last name and email already entered in the original reviewed TEST frontend pair. Values and UIDs remain private and are derived in runner memory; no phone, DOB, address, identity document, KYC verification or ToS acceptance.",
+    "postCreateDetailsSubmittedMustEqual": false,
+    "newOnboardingRows": 0,
+    "dbLinks": 0,
+    "qualificationVerified": false,
+    "onboardingVerified": false
   },
   "shortPath": [
-    "Complete the two exact Auth-only-owned TEST profiles in the visible frontend. Review private Auth/profile evidence; version only the owner marker, original Auth source SHA, journal digest and exact transmission projection digest. Never publish the actor UIDs or profile values.",
-    "Review this dedicated module and targeted refusal tests. Add one dedicated manual main-only workflow and activate its closed contract for at most four hours. Never reopen CONNECT_DOCUMENTS_TEST_V1 or import its execution pipeline.",
-    "Workflow uses the existing CI STRIPE_TEST_SECRET_KEY plus staging Management/GitHub read credentials. It never reads/writes a Stripe key in Vault, Edge secrets, an artifact or a local workstation.",
-    "Runner discovers exactly two existing Auth/profile actors by trusted owner metadata, validates roles/TEST and the reviewed transmission digest, and derives UIDs only in memory. Run once, attempt 1, exact main/source pins and one dispatch. Persist an encrypted atomic intent before each sole provider POST; recheck expiry immediately after checkpoint and before POST. An ambiguous intent stops without retry.",
-    "Review the encrypted IDs and real provider rereads, then bind them with a separately reviewed, exact stage-only CAS transaction. This provider module performs no link or onboarding-row mutation."
+    "Root has read-only verified the original two Auth-owned TEST frontend profiles, encrypted Auth journal provenance, exact private transmission projection and current empty cohort business counts. This contract versions only opaque owner/source/digests; actors remains null and no profile value or UID is embedded.",
+    "The dedicated reviewed manual main-only provider workflow is armed only until expiresAt, for one attempt on the exact final main SHA. Both readiness flags, source pins and all context checks are mandatory. Never reopen CONNECT_DOCUMENTS_TEST_V1 or import its execution pipeline.",
+    "Use only the existing CI STRIPE_TEST_SECRET_KEY plus GitHub and staging Management read credentials in the final operator step. Never read or write a Stripe key in Vault, Edge secrets, an artifact or the local workstation; never create or elevate a key.",
+    "Dispatch once at attempt 1 on the exact final main SHA. The runner discovers the original two actors read-only by trusted owner metadata and validates the exact reviewed projection before effects. Fresh main, source, hooks, webhook inventories, provider collision lists and backend snapshots remain mandatory before and after each effect. Persist an encrypted atomic intent before each sole POST; recheck expiry immediately before it. An ambiguous intent stops without retry.",
+    "Prepare exactly one TEST Customer for the existing establishment and one TEST individual Express Account for the existing caregiver, at most two provider POSTs. Reread both real provider objects; keep IDs and all request values encrypted. This operator performs no Auth creation, DB DML/linking, onboarding rows, Account Links, KYC, ToS acceptance, mission, invoice, payment or refund. Any later binding needs a separate reviewed stage-only CAS transaction."
   ],
-  "futureWorkflowRequirements": {
+  "allowedTechnicalWebhookEffects": {
+    "customerCreated": "Outside existing platform event allowlist; ignored.",
+    "accountUpdated": "TEST classification from exact metadata soignant_id resolves the existing TEST profile. Only technical webhook claim/audit TEST_SKIPPED may be written before early return; no qualification/onboarding/business mutation is authorized.",
+    "precondition": "Root has freshly verified both deployed webhook bundle pins and the complete exact three-endpoint TEST inventory in separate read-only proofs. The runner must verify them again before and after each provider POST; current source alone never substitutes for deployed metadata.",
+    "historicalDisabled": "Pin the complete three-endpoint list. Exactly the two known stage endpoints may be enabled. The known historical TEST endpoint to the production URL must remain disabled with API version 2026-03-25.dahlia; never modify/delete/reactivate it."
+  },
+  "validationLimits": [
+    "This template preparation is source-only: the author ran no runtime, network, provider operation, SQL, build, frontend or device campaign. Root performed the separately named read-only prerequisites; those did not create a new Stripe object.",
+    "No actor UID, profile value, secret or private journal content was read or embedded by this preparation. Only controlled opaque owner/source/digests, public read-only receipts, catalogue hashes and existing webhook metadata are included.",
+    "Read-only readiness and complete provider inventories do not prove the existing CI key can create Customer/Express objects. The future runner must satisfy all checks and stops at any refused or uncertain call without permission elevation or retry.",
+    "Exactly one Customer and one Express TEST Account are the future provider-only outcome. They do not prove professional qualification, PSC authentication, KYC, accepted ToS, Connect onboarding, a physical device capability, payment or refund.",
+    "The provider operator performs no Auth creation or DB DML. Existing deployed TEST webhooks may produce only the documented technical claim/audit TEST_SKIPPED effects; no qualification, onboarding or business mutation is authorized.",
+    "Every fresh pre/post check, encrypted intent checkpoint, single-dispatch/attempt barrier and expiry check remains enforced. Historical receipts do not authorize replay, automatic retry, acceptance of a partial journal or reuse of a failed intent.",
+    "This versioned contract permits only its bounded manual provider TEST window until expiresAt. actors remains null; actor UIDs and request values are derived privately in the runner. The TTL must remain positive and at most four hours whenever checked."
+  ],
+  "documentation": [
+    "https://docs.stripe.com/connect/express-accounts",
+    "https://docs.stripe.com/api/accounts/create",
+    "https://docs.stripe.com/api/idempotent_requests"
+  ],
+  "idempotency": "Purpose-scoped stable key hashes Auth owner + exact actor UUID; immutable request SHA-256 is in the encrypted intent. No automatic retry even though Stripe v1 supports idempotency. Keys may be pruned after at least 24h, so they are not a permanent duplicate barrier.",
+  "requiredExistingKeyPermissions": "The existing CI TEST key must permit Account/Balance/Customers/Accounts/WebhookEndpoints reads and Customer/Account creates. Root observed the complete TEST inventories through an authorized read-only context; that does not prove creation permissions of the CI key. A refused call stops without elevation, EnableConnect or retry. No key value is read or written by this template preparation.",
+  "uiEvidenceSha256Semantics": "SHA-256 of canonical transmissionProjection(current private DB snapshot, exact two-actor manifest): every exact Customer/Express request field plus IDs, Auth owner and both Auth/profile TEST flags. It is not a screenshot/file digest. Compare at FIRST preflight before either POST. No names, emails or phone numbers are bound in this versioned contract.",
+  "authSourceSha": "3507ab761e9f7fd1ea45c63eb9e69c29860c9d18",
+  "uidTransport": "readOwnedActors: fixed staging identity before read-only owner query; exact cohort=2 with one SOIGNANT and one ADMIN_ETABLISSEMENT, both genuine UI profiles TEST; strict private transmission projection equality. No incoming decryption secret.",
+  "reviewCorrections": [
+    "Full exact three-webhook inventory, exactly the two known stage endpoints enabled and the known historical TEST production-URL endpoint disabled.",
+    "uiEvidenceSha256 is the canonical exact transmission projection digest; compare immediately on discovery and the first preflight, never adopt the first observed unreviewed profile.",
+    "steps must be a plain object, never an array or non-object; encrypted JSON roundtrip tests assert intents and done provider IDs.",
+    "Expiry rechecked after asynchronous intent checkpoint immediately before either POST and before prepared result.",
+    "Signed metadata.etablissement_id must equal the establishment UID and be absent on caregiver; common validation covers discovery and every preflight.",
+    "Runtime and CLI require ready===true AND canExecute===true. False/missing canExecute refuses before Git/network, including with ready=true.",
+    "The final bounded window binds the exact root-reviewed Auth owner/source/journal/transmission digests and current catalogue/webhook evidence. The versioned actors field stays null and the runner independently repeats every check before either TEST POST."
+  ],
+  "workflowRequirements": {
     "path": ".github/workflows/stripe-test-provider-actors.yml",
     "permissions": {
       "contents": "read",
@@ -151,30 +283,13 @@
     "checkout": "exact github.sha, persist-credentials=false, pinned action commit",
     "runtime": "Node 24.14.0, builtins only, no npm install/build",
     "credentialScope": "Only final operator step env, no shell trace, no secret in argv/output/journal; optional restricted TEST key must already have required permissions, never elevate dynamically.",
-    "input": "Exactly expected_main_sha + PUBLIC recipient RSA4096 key/fingerprint. Versioned contract contains actors=null, trusted Auth owner/source SHA and projection digests. Runner discovers the exact two UIDs read-only by owner and binds its private runtime manifest in memory. No UIDs, profile values, email, phone or password in GitHub inputs/contract/output.",
+    "input": "Exactly expected_main_sha for the final activation commit, plus PUBLIC ephemeral RSA4096 recipient key/fingerprint. actors=null remains mandatory in the versioned contract. Discover the exact original TEST pair by owner read-only and bind only the private in-memory manifest. No actor UID, profile value, email, phone or password in workflow inputs, versioned contract or public output.",
     "artifacts": "Always upload only encrypted checkpoint and fixed booleans; do not upload plaintext profiles, request bodies, identifiers or provider error bodies.",
-    "checkpointLimit": "fsync/atomic rename proves the local runner checkpoint before effect, not independent remote durability. A killed runner can lose it before artifact upload. One-dispatch/attempt barrier and provider metadata collisions refuse automatic recreation; recovery is independent read-only reconciliation, never a blind rerun."
+    "checkpointLimit": "fsync/atomic rename proves the local runner checkpoint before effect, not independent remote durability. A killed runner can lose it before artifact upload. One-dispatch/attempt barrier and provider metadata collisions refuse automatic recreation; recovery is independent read-only reconciliation, never a blind rerun.",
+    "providerScope": "At most two Stripe POSTs: one Customer and one individual Express Account, TEST only, manual payout schedule, requested card_payments/transfers capabilities with charges_enabled=false, payouts_enabled=false and details_submitted=false required after creation. No external bank account, Account Link, KYC or ToS acceptance.",
+    "freshChecks": "Historical read-only proofs inform this closed template. They do not replace the runner checks of exact main/source bytes, Auth hooks, both deployed webhook pins, all three webhook destinations, complete Customer/Account lists, exact private transmission digest and unchanged backend snapshots before and after each POST."
   },
-  "allowedTechnicalWebhookEffects": {
-    "customerCreated": "Outside existing platform event allowlist; ignored.",
-    "accountUpdated": "TEST classification from exact metadata soignant_id resolves the existing TEST profile. Only technical webhook claim/audit TEST_SKIPPED may be written before early return; no qualification/onboarding/business mutation is authorized.",
-    "precondition": "Pin both deployed webhook edge bundles and exact TEST destinations first. Current source alone does not prove the deployment or its secret configuration.",
-    "historicalDisabled": "Pin the complete three-endpoint list. Exactly the two known stage endpoints may be enabled. The known historical TEST endpoint to the production URL must remain disabled with API version 2026-03-25.dahlia; never modify/delete/reactivate it."
-  },
-  "validationLimits": [
-    "Draft was not run against Stripe, Supabase or GitHub.",
-    "No Express account may be created before the two real frontend TEST profiles exist.",
-    "TEST Account objects do not prove authenticated PSC, professional qualification, completed Connect onboarding, physical device behavior or a payment/refund.",
-    "No public or private API key values have been read or saved by this preparation.",
-    "Dedicated CLI/workflow are local closed drafts only; complete local opening refuses all partial/ambiguous journals before mkdir or handoff. No reconciliation/retry mode exists.",
-    "Opaque Auth owner marker/source SHA may be versioned as requested; actor UIDs and all profile values remain private and are derived only in the runner. The current draft keeps owner/source/digests unbound and every readiness/review flag closed."
-  ],
-  "documentation": [
-    "https://docs.stripe.com/connect/express-accounts",
-    "https://docs.stripe.com/api/accounts/create",
-    "https://docs.stripe.com/api/idempotent_requests"
-  ],
-  "draftChecks": {
+  "historicalLocalSimulationChecks": {
     "nodeTestsPassed": 23,
     "transport": "IN_MEMORY_ONLY_NO_GLOBAL_FETCH",
     "snapshotSqlGrammarStatements": 5,
@@ -188,25 +303,15 @@
     "bothReadinessFlagsMandatoryBeforeGitOrTransport": true,
     "versionedContractTestAllowsReviewedFutureActivation": true,
     "cliRefusalTestsUseIndependentClosedCopies": true,
-    "runtimePastExpiryRefusesBeforeTransport": true
+    "runtimePastExpiryRefusesBeforeTransport": true,
+    "scope": "HISTORICAL_IN_MEMORY_SIMULATION_ONLY",
+    "rootReadOnlyPrerequisitesAreSeparateEvidence": true,
+    "executedByRearmTemplateAuthor": false
   },
-  "draftFileSha256": {
+  "reviewedRuntimeFileSha256": {
     "stripe-test-provider-actors.mjs": "07ed096ca205a955b6a286923351472cfd77cd9133e850da6a64c91c5ca02d30",
     "stripe-test-provider-actors-ci.mjs": "16d5fbe70b71e54f330bdcffb617370683c485e3a92d5c362ab1dc8c2d9f5686",
     "stripe-test-provider-actors.node.mjs": "61331020bcc47b4b5bb431267e4ddfe5a668b4b8fbe4e5555c4cde1c4cefb222",
     "stripe-test-provider-actors.yml": "d9bb34fddc7ffa7fbc871d74a69a13acb3072600ca52db9cf0a672360570c836"
-  },
-  "idempotency": "Purpose-scoped stable key hashes Auth owner + exact actor UUID; immutable request SHA-256 is in the encrypted intent. No automatic retry even though Stripe v1 supports idempotency. Keys may be pruned after at least 24h, so they are not a permanent duplicate barrier.",
-  "requiredExistingKeyPermissions": "Existing CI TEST key must permit Account/Balance/Customers/Accounts/WebhookEndpoints reads and Customer/Account creates. This has not been probed; a rejected call stops without permission elevation or EnableConnect.",
-  "uiEvidenceSha256Semantics": "SHA-256 of canonical transmissionProjection(current private DB snapshot, exact two-actor manifest): every exact Customer/Express request field plus IDs, Auth owner and both Auth/profile TEST flags. It is not a screenshot/file digest. Compare at FIRST preflight before either POST. No names, emails or phone numbers are bound in this versioned contract.",
-  "authSourceSha": null,
-  "uidTransport": "readOwnedActors: fixed staging identity before read-only owner query; exact cohort=2 with one SOIGNANT and one ADMIN_ETABLISSEMENT, both genuine UI profiles TEST; strict private transmission projection equality. No incoming decryption secret.",
-  "reviewCorrections": [
-    "Full exact three-webhook inventory, exactly the two known stage endpoints enabled and the known historical TEST production-URL endpoint disabled.",
-    "uiEvidenceSha256 is the canonical exact transmission projection digest; compare immediately on discovery and the first preflight, never adopt the first observed unreviewed profile.",
-    "steps must be a plain object, never an array or non-object; encrypted JSON roundtrip tests assert intents and done provider IDs.",
-    "Expiry rechecked after asynchronous intent checkpoint immediately before either POST and before prepared result.",
-    "Signed metadata.etablissement_id must equal the establishment UID and be absent on caregiver; common validation covers discovery and every preflight.",
-    "Runtime and CLI require ready===true AND canExecute===true. False/missing canExecute refuses before Git/network, including with ready=true."
-  ]
+  }
 }
