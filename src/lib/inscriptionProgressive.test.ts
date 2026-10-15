@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   creerCompteRapide,
   donneesFormulaire,
@@ -14,7 +14,9 @@ const m = vi.hoisted(() => ({
   getSession: vi.fn(),
   refresh: vi.fn(),
   signOut: vi.fn(),
+  native: vi.fn(),
 }));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: m.native } }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc: m.rpc,
@@ -41,11 +43,39 @@ const input = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  m.native.mockReturnValue(false);
   m.rpc.mockResolvedValue({ data: {}, error: null });
   m.getSession.mockResolvedValue({ data: { session: null } });
   m.refresh.mockResolvedValue({ error: null });
 });
+afterEach(() => vi.unstubAllGlobals());
 describe("inscription progressive", () => {
+  it.each(["SOIGNANT", "ETABLISSEMENT"] as const)(
+    "%s revient à l’origine web courante pour confirmer son email",
+    async (type) => {
+      const origin = "https://recette-jolene.example.invalid";
+      vi.stubGlobal("window", { location: { origin } });
+      m.signUp.mockResolvedValue({ data: { session: null, user: { identities: [{}] } }, error: null });
+      expect(await creerCompteRapide({ ...input, type })).toBe("confirmation");
+      expect(m.signUp).toHaveBeenCalledWith(expect.objectContaining({
+        options: expect.objectContaining({ emailRedirectTo: `${origin}/inscription/confirmer` }),
+      }));
+      expect(m.rpc).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["SOIGNANT", "ETABLISSEMENT"] as const)(
+    "%s conserve l’Universal Link public dans la coquille native",
+    async (type) => {
+      vi.stubGlobal("window", { location: { origin: "https://localhost" } });
+      m.native.mockReturnValue(true);
+      m.signUp.mockResolvedValue({ data: { session: null, user: { identities: [{}] } }, error: null });
+      expect(await creerCompteRapide({ ...input, type })).toBe("confirmation");
+      expect(m.signUp).toHaveBeenCalledWith(expect.objectContaining({
+        options: expect.objectContaining({ emailRedirectTo: "https://jolene.app/inscription/confirmer" }),
+      }));
+      expect(m.rpc).not.toHaveBeenCalled();
+    },
+  );
   it("attend la confirmation email avant de créer le brouillon", async () => {
     m.signUp.mockResolvedValue({
       data: { session: null, user: { identities: [{}] } },
