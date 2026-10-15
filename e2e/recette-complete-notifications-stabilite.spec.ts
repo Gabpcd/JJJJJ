@@ -65,7 +65,7 @@ for (const role of ['SOIGNANT', 'ADMIN_ETABLISSEMENT'] as RoleRecette[]) {
         const completedHead = failure.method === 'HEAD' && failure.headHeadersDelivered
           && failure.reason === 'net::ERR_ABORTED';
         const replacedStartupRead = ['initial-loading', 'reload-startup'].includes(failure.phase)
-          && ['cancelled', 'net::ERR_ABORTED'].includes(failure.reason);
+          && ['cancelled', 'net::ERR_ABORTED', 'Load request cancelled'].includes(failure.reason);
         if (!completedHead && !replacedStartupRead) unexpectedFailedReads.push(failure);
       }
     });

@@ -15,14 +15,16 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 
 async function connecterEtLireClePreference(page: Page) {
-  const reponseSession = page.waitForResponse(response =>
-    new URL(response.url()).pathname === '/auth/v1/token'
-    && response.request().method() === 'POST',
-  );
-  await loginAs(page, 'soignant');
-  const session = await (await reponseSession).json();
-  expect(session.user?.id).toMatch(/^[0-9a-f-]{36}$/i);
-  return `jolene_missions_view_pref:${session.user.id}`;
+  let session: { user?: { id?: string } } | undefined;
+  await loginAs(page, 'soignant', async () => {
+    const reponseSession = await page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/auth/v1/token'
+      && response.request().method() === 'POST',
+    );
+    session = await reponseSession.json();
+  });
+  expect(session?.user?.id).toMatch(/^[0-9a-f-]{36}$/i);
+  return `jolene_missions_view_pref:${session!.user!.id}`;
 }
 
 test.describe('Sprint 14 — UI swipe matching (réels)', () => {
