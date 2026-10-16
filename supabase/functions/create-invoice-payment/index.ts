@@ -1,3 +1,4 @@
+import { stagingInvoiceConfig, stagingInvoiceCheckoutExpiry, requireStagingInvoiceScope, stagingInvoiceCustomer, assertStagingInvoiceObject, requireStagingInvoiceEvent } from "../_shared/stripe-invoice-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
@@ -255,13 +256,19 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    if (testAccount.isTest) {
+    const stagingInvoice = stagingInvoiceConfig(name => Deno.env.get(name));
+    if (testAccount.isTest && !stagingInvoice) {
       return new Response(JSON.stringify({
         error: "TEST_ACCOUNT_PAYMENT_DISABLED",
       }), {
         status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
+    }
+
+    if (stagingInvoice) {
+      if (!testAccount.isTest) throw new Error('INVOICE_STAGING_TEST_REFUSED');
+      await requireStagingInvoiceScope(supabaseAdmin, stagingInvoice, facture.id);
     }
 
     const statutsPayables = ["EMISE", "EN_RETARD"];
@@ -366,7 +373,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    const customerId = await ensureCanonicalEtablissementCustomer(
+    const customerId = stagingInvoice ? await stagingInvoiceCustomer(stripe) : await ensureCanonicalEtablissementCustomer(
       stripe,
       supabaseAdmin,
       etablissementFacture,
@@ -382,6 +389,12 @@ Deno.serve(async (req) => {
       supabaseAdmin,
       paymentFlowClaimExpected,
     );
+    if (stagingInvoice && (!paymentFlowClaim.acquired
+      || paymentFlowClaim.claim.resources.length !== 2
+      || !paymentFlowClaim.claim.resources.includes(`FACTURE:${facture.id}`)
+      || !paymentFlowClaim.claim.resources.includes(`MISSION:${stagingInvoice.missionId}`))) {
+      throw new Error('INVOICE_STAGING_TEST_REFUSED');
+    }
     let existingIntent: Stripe.PaymentIntent | null = null;
     let existingSession: Stripe.Checkout.Session | null = null;
 
@@ -609,6 +622,12 @@ Deno.serve(async (req) => {
       customerId,
     );
 
+    if (stagingInvoice && existingIntent) {
+      if (!await requireStagingInvoiceEvent(supabaseAdmin, stripe, stagingInvoice, 'PLATFORM', {
+        type: 'payment_intent.succeeded', livemode: false, data: { object: existingIntent },
+      })) throw new Error('INVOICE_STAGING_TEST_REFUSED');
+    }
+
     if (existingIntent) {
       const incoherences = findInvoicePaymentIntentInconsistencies(existingIntent, {
         factureId: facture.id,
@@ -733,6 +752,7 @@ Deno.serve(async (req) => {
       facture.id,
       customerId,
     );
+    if (stagingInvoice && existingSession) assertStagingInvoiceObject(stagingInvoice, existingSession, true);
     let checkoutIdempotencyKey = `invoice_checkout_${facture.id}`;
     const intentTerminalConnu = !!existingIntent
       && ["canceled", "requires_payment_method"].includes(existingIntent.status);
@@ -880,6 +900,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Une seule Session TEST. Reprise ouverte ci-dessus ; aucune nouvelle
+    // version après expiration/échec/référence orpheline. La clé initiale reste fixe.
+    if (stagingInvoice && (existingSession || existingIntent || facture.stripe_payment_intent_id
+      || paymentFlowClaim.claim.stripe_checkout_session_id || paymentFlowClaim.claim.stripe_payment_intent_id)) {
+      throw new Error('INVOICE_STAGING_TEST_REFUSED');
+    }
+
     if (existingSession) {
       // Session expirée (ou encore marquée open après expires_at) : on la rend
       // explicitement inutilisable, puis on avance la version de façon stable.
@@ -896,7 +923,7 @@ Deno.serve(async (req) => {
     }
 
     step = '9_checkout';
-    const appUrl = getApplicationReturnOrigin(req);
+    const appUrl = stagingInvoice?.returnOrigin ?? getApplicationReturnOrigin(req);
 
     console.log(`[create-invoice-payment] step=9 creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
@@ -927,9 +954,8 @@ Deno.serve(async (req) => {
           etablissement_id: facture.etablissement_id,
         },
         description: `Facture ${facture.numero_facture}`,
-        // Stripe : statement_descriptor doit contenir au moins 1 lettre Latin, 5-22 chars, pas de caractères spéciaux.
-        // "JOLENE" suffit — pas de suffix (qui doit aussi respecter les règles Latin + ne pas dépasser combiné).
-        statement_descriptor: "JOLENE",
+        // Ne pas imposer un descripteur hors carte au Checkout : Stripe
+        // refuse statement_descriptor pour une carte. Le compte fournit le sien.
       },
     };
 
@@ -941,9 +967,16 @@ Deno.serve(async (req) => {
       sessionParams.cancel_url = `${appUrl}/etablissement/facturation`;
     }
 
+    if (stagingInvoice) {
+      await requireStagingInvoiceScope(supabaseAdmin, stagingInvoice, facture.id);
+      sessionParams.expires_at = stagingInvoiceCheckoutExpiry(stagingInvoice);
+    }
+
     const session = await stripe.checkout.sessions.create(sessionParams, {
       idempotencyKey: checkoutIdempotencyKey,
     });
+
+    if (stagingInvoice) assertStagingInvoiceObject(stagingInvoice, session, true);
 
     if (paymentFlowClaimExpected) {
       try {
