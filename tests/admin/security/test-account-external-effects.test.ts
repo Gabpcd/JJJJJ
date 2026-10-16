@@ -99,10 +99,17 @@ describe("comptes test exclus avant tout effet externe", () => {
     );
     expectBefore(
       handler,
-      "if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId)",
+      "if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId)",
       "stripe.transfers.create(",
       "stripe-webhook-handler",
     );
+    expectBefore(
+      handler,
+      "await requireStagingPayoutEventScope(",
+      "stagingConnectPayoutId = payout.id",
+      "admission du reçu bancaire TEST exact",
+    );
+    expect(handler).toContain('event.livemode === false && event.type.startsWith("payout.")');
     expect(handler).toContain('"STRIPE_WEBHOOK_TEST_SKIPPED"');
     expect(handler).toContain("await markEventProcessed()");
     expect(handler).toContain("test_skipped: true");

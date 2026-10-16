@@ -115,7 +115,7 @@ assert value(x['claim'])['acquired'] is True
 assert value('SELECT public.fn_connect_payouts_a_traiter(5);') == []
 assert value(f"SELECT public.fn_connect_payouts_test_a_traiter(1,'{x['cap']}');") == [{'id':x['t']}]
 assert value(f"SELECT public.fn_connect_payout_prendre('{x['t']}','{x['owner']}');")['livemode'] is False
-assert value(f"SELECT public.fn_connect_payout_prendre('{x['t']}','{x['other']}');") is None
+assert sql(CTX+f"SELECT public.fn_connect_payout_prendre('{x['t']}','{x['other']}') IS NULL;").splitlines()[-1] == 't'
 def start(cap=None,owner=None):
  return f"SELECT public.fn_connect_payout_demarrer_test('{x['t']}','{owner or x['owner']}','{cap or x['cap']}');"
 assert sql(CTX+f"SELECT public.fn_connect_payout_demarrer('{x['t']}','{x['owner']}');").splitlines()[-1] == 'f'

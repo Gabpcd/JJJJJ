@@ -98,7 +98,7 @@ p.stdin.write(CTX + f"BEGIN; SELECT public.fn_connect_payout_prendre('{T}','{OWN
 p.stdin.close()
 first = p.stdout.readline().strip()
 assert json.loads(first)['id'] == T, first
-assert sql(f"SELECT public.fn_connect_payout_prendre('{T}','{OTHER}')") == 'null'
+assert sql(f"SELECT public.fn_connect_payout_prendre('{T}','{OTHER}') IS NULL") == 't'
 assert p.wait(timeout=15) == 0, p.stderr.read()
 assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OWNER}')") == 'f'
 assert sql(f"SELECT standard_payout_first_post_at IS NULL FROM public.stripe_transfers WHERE id='{T}'") == 't'

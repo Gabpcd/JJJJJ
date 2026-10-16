@@ -124,6 +124,16 @@ test('document queue receipts allow only the three exact unsent copies and prese
   preexisting.emailDocuments=[source.emailDocuments[0]];
   assert.throws(()=>validateSnapshot(preexisting,manifest(),'empty'),/UNEXPECTED_EFFECTS/);
 });
+test('pre-migration receipt absence can describe an empty seed but cannot validate emitted documents',async()=>{
+  const m=manifest(),h=harness(m);validateSnapshot(h.snapshot(),m,'empty');
+  await run(m,h);const generated=h.snapshot();generated.emailDocuments=[];generated.emailQueue=0;
+  assert.throws(()=>validateSnapshot(generated,m,'generated'),/DOCUMENT_EMAIL_RECEIPTS/);
+  const sql=snapshotSql(m.sql);
+  assert.match(sql,/CASE WHEN to_regclass\('private\.facturation_email_livraisons'\) IS NULL THEN '\[\]'::jsonb/);
+  assert.match(sql,/XMLTABLE\('\/table\/row'[\s\S]*PASSING query_to_xml\('SELECT/);
+  assert.match(sql,/COLUMNS receipts text PATH 'receipts'/);
+  assert.doesNotMatch(sql,/EXCEPTION|WHEN OTHERS|CREATE FUNCTION/i);
+});
 test('live key and wrong provenance refuse before any transport',async()=>{
   for(const delta of [{env:{...env,STRIPE_TEST_SECRET_KEY:'sk_live_forbidden'}},{local:{sha:'b'.repeat(40),clean:true}},{local:{sha,clean:false}}]) {
     let n=0;await assert.rejects(executePreparation({manifest:manifest(),contract:contract(),seed,env,local:{sha,clean:true},fetcher:async()=>{n++;},...delta}));assert.equal(n,0);

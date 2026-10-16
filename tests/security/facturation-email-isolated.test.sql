@@ -110,9 +110,9 @@ BEGIN
     emise_le=now(),verification_echeance_le='2026-10-18T08:00:00Z' WHERE id='69510000-0000-4000-8000-000000000201';
   IF (SELECT count(*) FROM private.facturation_email_livraisons WHERE famille='HONORAIRES')<>2
     THEN RAISE EXCEPTION 'Deux copies honoraires attendues'; END IF;
-  IF EXISTS (SELECT FROM private.facturation_email_livraisons WHERE famille='HONORAIRES'
-    AND (corps#>>'{data,date_echeance}' IS DISTINCT FROM '25/11/2026'
-      OR corps#>>'{data,verification_echeance}' IS DISTINCT FROM '18/10/2026 à 10:00'))
+  IF EXISTS (SELECT FROM private.facturation_email_livraisons l WHERE l.famille='HONORAIRES'
+    AND (l.corps#>>'{data,date_echeance}' IS DISTINCT FROM '25/11/2026'
+      OR l.corps#>>'{data,verification_echeance}' IS DISTINCT FROM '18/10/2026 à 10:00'))
     THEN RAISE EXCEPTION 'Échéances honoraires incorrectes'; END IF;
   SELECT email_id,idempotency_key INTO email,cle FROM private.facturation_email_livraisons
     WHERE famille='HONORAIRES' AND destinataire_id='69510000-0000-4000-8000-000000000001';
