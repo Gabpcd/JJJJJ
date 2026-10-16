@@ -122,8 +122,13 @@ BEGIN
   r := public.fn_reserver_email_facturation(email);
   INSERT INTO private.email_dispatch_idempotency VALUES(cle,'ENVOYE');
   UPDATE private.facturation_email_livraisons SET prochaine_tentative_le=now()-interval '1 second' WHERE email_id=email;
-  IF public.fn_reserver_email_facturation(email)->>'statut'<>'DEJA_ENVOYE'
-    OR (SELECT statut FROM public.email_queue WHERE id=email)<>'ENVOYE' THEN RAISE EXCEPTION 'Copie déjà envoyée répétée'; END IF;
+  -- L'appel écrit la queue : l'observer dans une instruction suivante évite
+  -- qu'une sous-requête de la même expression soit évaluée avant cet effet.
+  r := public.fn_reserver_email_facturation(email);
+  IF r->>'statut' IS DISTINCT FROM 'DEJA_ENVOYE'
+    OR (SELECT statut FROM public.email_queue WHERE id=email) IS DISTINCT FROM 'ENVOYE'
+    OR (SELECT envoye AND envoye_le IS NOT NULL FROM public.email_queue WHERE id=email) IS DISTINCT FROM true
+    THEN RAISE EXCEPTION 'Copie déjà envoyée répétée'; END IF;
   -- Un document annulé entre émission et livraison n'est plus expédié.
   UPDATE public.factures_honoraires SET statut='ANNULEE' WHERE id='69510000-0000-4000-8000-000000000201';
   SELECT email_id INTO email FROM private.facturation_email_livraisons WHERE famille='HONORAIRES'
