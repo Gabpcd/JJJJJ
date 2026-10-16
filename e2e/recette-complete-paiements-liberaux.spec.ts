@@ -507,6 +507,7 @@ test('Soignant : transfert Stripe distinct de la banque, échec et confirmation 
   await simulation.installer(context, 'SOIGNANT');
   let phase: 'WAITING' | 'SUBMITTED' | 'FAILED' | 'PAID' = 'WAITING';
   const ledgerReads: string[] = [];
+  let globalCopiesReads = 0;
   await page.route('**/functions/**', async route => {
     const req = route.request(), url = new URL(req.url());
     if (req.method() === 'OPTIONS') return route.fallback();
@@ -521,6 +522,17 @@ test('Soignant : transfert Stripe distinct de la banque, échec et confirmation 
     if (name === 'fn_mes_revenus_connect') {
       expect(req.method()).toBe('POST');
       return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { mois_en_cours: 80, total: 80, en_attente: 0 } });
+    }
+    // Mes gains consulte la liste globale ; le helper mission conserve son
+    // exigence p_mission_id exact pour tous les écrans de détail existants.
+    if (url.pathname === '/rest/v1/rpc/fn_lister_copies_bulletins') {
+      expect(new URL(page.url()).pathname).toBe('/soignant/mes-gains');
+      expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+      expect(req.method()).toBe('POST');
+      expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+      expect(req.postDataJSON()).toEqual({ p_etablissement_id: null, p_mission_id: null });
+      globalCopiesReads++;
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [] });
     }
     if (name !== 'stripe_transfers' || !url.searchParams.get('select')?.includes('standard_payout_state')) return route.fallback();
     expect(req.method()).toBe('GET');
@@ -551,6 +563,7 @@ test('Soignant : transfert Stripe distinct de la banque, échec et confirmation 
   await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
   await page.reload();
   await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  expect(globalCopiesReads).toBeGreaterThan(0);
   expect(Array.from(new Set(ledgerReads))).toEqual(['WAITING', 'SUBMITTED', 'FAILED', 'PAID']);
   expect(simulation.state.sms).toEqual([]);
   expect(simulation.state.emails).toEqual([]);

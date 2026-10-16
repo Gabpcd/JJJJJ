@@ -939,7 +939,15 @@ jobs:
           PGOPTIONS: '-c jolene.isolated_sql_test=on'
         run: |
           createdb facturation_emails
-          psql -X -v ON_ERROR_STOP=1 -d facturation_emails -f tests/security/facturation-email-isolated.test.sql
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          sql = Path('supabase/migrations/20261016144756_fermer_replays_payout_et_isoler_sources_facturation.sql').read_text()
+          start = sql.index('CREATE OR REPLACE FUNCTION private.mettre_emission_facture_en_file()')
+          end = sql.index('END $fn$;', start) + len('END $fn$;')
+          Path(os.environ['RUNNER_TEMP'], 'facturation-email-corrective.sql').write_text(sql[start:end] + '\n')
+          PY
+          psql -X -v ON_ERROR_STOP=1 -v facturation_email_corrective="$RUNNER_TEMP/facturation-email-corrective.sql" -d facturation_emails -f tests/security/facturation-email-isolated.test.sql
       - name: Versement standard — admission, concurrence et constat PostgreSQL 17
         run: |
           createdb connect_standard_payouts

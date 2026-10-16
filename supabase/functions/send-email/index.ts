@@ -2,6 +2,7 @@ import { verifierPreferencesEvenementsEmail } from '../_shared/preferences-alert
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import { resolveFacturationEmailSource } from '../_shared/facturation-email-source.ts';
 import {
   resolveOperationalTestAccount,
   resolveOperationalTestSource,
@@ -1840,10 +1841,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const sourceAccount = await resolveOperationalTestSource(
-      supabaseService,
-      templateData,
-    );
+    const sourceAccount = type === 'FACTURE_EMISE'
+      ? await resolveFacturationEmailSource(supabaseService, templateData, destinataire_id)
+      : await resolveOperationalTestSource(supabaseService, templateData);
     if (!sourceAccount.ok) {
       console.error('[send-email] classification source test indisponible');
       return new Response(JSON.stringify({

@@ -17,6 +17,7 @@ import { PDFDocument, rgb, degrees } from 'npm:pdf-lib@1.17.1';
 import { chargerPolicesFacture, verifierCaracteresFacture, ErreurPoliceFacture, fontkit } from './fonts.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import { verifyCronServiceAuth } from '../_shared/cron-service-auth.ts';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -710,16 +711,19 @@ Deno.serve(async (req) => {
     await client.rpc('fn_terminer_generation_honoraires', { p_facture_id: factureId, p_token: token, p_documents: null });
   };
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) return json(req, { error: 'Non autorisé' }, 401);
+    const authHeader = req.headers.get('Authorization') || '';
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
+    // Même validation stricte des secrets configurés que les workers internes :
+    // une clé API secrète légitime n'est pas un JWT utilisateur Auth.
+    const serviceAuth = await verifyCronServiceAuth(req, supabaseAdmin);
+    const isServiceRole = serviceAuth.ok;
+    if (!isServiceRole && !authHeader.startsWith('Bearer ')) return json(req, { error: 'Non autorisé' }, 401);
     const token = authHeader.replace('Bearer ', '');
-    const isServiceRole = token === serviceRoleKey;
     let authenticatedUserId: string | null = null;
     // Le client porte le JWT utilisateur pour que le RPC RBAC évalue son rôle,
     // et non le service_role utilisé pour la génération des artefacts.

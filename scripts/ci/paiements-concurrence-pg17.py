@@ -255,6 +255,8 @@ print('PI_DEUX_FACTURES_ISOLEES_REPARATIONS_ET_CONTRADICTIONS',flush=True)
 # Commission séparée : fonctions de production exactes, aucune IO fournisseur.
 commission_migration = (ROOT/'supabase/migrations/20261016125632_securiser_reglement_commission_separee_et_taux_groupe.sql').read_text()
 commission_runtime = commission_migration[commission_migration.index('CREATE FUNCTION private.fn_admission_virement_commission'):commission_migration.index('-- Exposer le taux résolu')]
+corrective = (ROOT/'supabase/migrations/20261016144756_fermer_replays_payout_et_isoler_sources_facturation.sql').read_text()
+admission_corrective = corrective[corrective.index('CREATE OR REPLACE FUNCTION private.fn_admission_virement_commission'):corrective.index('-- EMAIL :')]
 sql("""CREATE TABLE public.etablissements(id uuid PRIMARY KEY,mode_paiement_commission text,est_secteur_public boolean DEFAULT false,chorus_pro_actif boolean DEFAULT false);
 ALTER TABLE public.missions ADD facture_id uuid;
 ALTER TABLE public.stripe_transfers ADD facture_id uuid;
@@ -265,6 +267,8 @@ CREATE FUNCTION public.mon_etablissement_id() RETURNS uuid LANGUAGE sql STABLE A
 CREATE FUNCTION public.fn_a_permission_etablissement(text,uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT $2=public.mon_etablissement_id() $$;
 """)
 sql(commission_runtime)
+sql(admission_corrective)
+print(json.dumps({'commission_corrective_sha256': hashlib.sha256(corrective.encode()).hexdigest()}),flush=True)
 sql(f"INSERT INTO public.etablissements(id,mode_paiement_commission) VALUES('{E}','CARTE');")
 base_seed = seed
 commission_liee = True
@@ -313,6 +317,37 @@ assert sql(f"SELECT statut IS NULL FROM public.factures WHERE id='{F2}'")=='t'
 # Confirmer/contester côté soignant reste un acte distinct, non effectué ici.
 assert sql(f"SELECT statut FROM public.paiements_soignant WHERE facture_honoraire_id='{H}'")=='DECLARE'
 assert sql("SELECT has_function_privilege('anon','public.fn_modalites_reglement_commission(uuid)','EXECUTE')")=='f'
+# Une première période Connect explicite ne bloque pas la commission finale
+# d'une autre FH réglée directement, même si missions.facture_id pointe F2.
+honoraires_directs = False
+seed()
+sql(f"""INSERT INTO public.factures_honoraires(id,mission_id,soignant_id,etablissement_id,type_document,statut,montant_ttc,est_facture_finale_mission,periode_fin)
+VALUES('{H2}','{M}','{S}','{E}','FACTURE','EMISE',60,true,current_date-1);
+INSERT INTO public.factures(id,mission_id,etablissement_id,facture_honoraire_id,type_document,statut)
+VALUES('{F2}','{M}','{E}','{H2}','FACTURE','EMISE');
+UPDATE public.missions SET statut='TERMINEE',facture_id='{F2}' WHERE id='{M}';""")
+assert json.loads(sql(CTX+INVOICE).splitlines()[-1])['acquired'] is True
+previous_trace = sql(CTX+f"""INSERT INTO public.stripe_transfers(mission_id,soignant_id,etablissement_id,facture_id,facture_honoraire_id,
+  montant_soignant,statut,stripe_transfer_id,stripe_payment_intent_id,stripe_charge_id,stripe_checkout_session_id)
+VALUES('{M}','{S}','{E}','{F}','{H}',80,'TRANSFERE','tr_periode_initiale','pi_periode_initiale','ch_periode_initiale','cs_periode_initiale') RETURNING id;""").splitlines()[-1]
+sql(CTX+f"""UPDATE public.factures_honoraires SET statut='PAYEE' WHERE id='{H}';
+UPDATE public.factures SET statut='PAYEE' WHERE id='{F}';
+INSERT INTO public.paiements_soignant(mission_id,soignant_id,etablissement_id,facture_honoraire_id,montant_net)
+VALUES('{M}','{S}','{E}','{H2}',60);""")
+initial_period = sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H}'")
+admission = f"SELECT public.fn_modalites_reglement_commission('{F2}');"
+assert json.loads(sql(CTX+admission).splitlines()[-1])['virement_autorise'] is True
+# En revanche une ancienne trace sans FH explicite de cette mission reste
+# ambiguë et ferme l'admission. Aucun lien historique n'est réattribué.
+sql(f"UPDATE public.stripe_transfers SET facture_honoraire_id=NULL,stripe_payment_intent_id=NULL WHERE id='{previous_trace}';")
+assert json.loads(sql(CTX+admission).splitlines()[-1])['motif']=='PAIEMENT_EN_LIGNE_ENGAGE'
+sql(f"UPDATE public.stripe_transfers SET facture_honoraire_id='{H}',stripe_payment_intent_id='pi_periode_initiale' WHERE id='{previous_trace}';")
+result = json.loads(sql(CTX+f"SELECT public.fn_declarer_virement('{F2}','VIR-FINALE-DIRECTE-2026');").splitlines()[-1])
+assert result.get('success') is True,result
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F2}'")=='VIREMENT_DECLARE'
+assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H}'")==initial_period
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F}'")=='PAYEE'
+print('COMMISSION_FINALE_DIRECTE_APRES_PERIODE_CONNECT_EXPLICITE_ET_LEGACY_AMBIGU_REFUSE',flush=True)
 print('COMMISSION_SEPAREE_PG17_OK : six courses avec attente réelle, pièce voisine refusée, aucune preuve bancaire implicite',flush=True)
 
 sql('TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions,public.journaux_audit,public.etablissements;')

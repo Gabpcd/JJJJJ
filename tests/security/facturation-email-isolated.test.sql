@@ -20,9 +20,10 @@ CREATE TABLE public.etablissements(id uuid PRIMARY KEY, supprime_le timestamptz)
 CREATE TABLE public.soignants(id uuid PRIMARY KEY, supprime_le timestamptz);
 CREATE TABLE public.factures(id uuid PRIMARY KEY, etablissement_id uuid, numero_facture text,
   statut text, montant_ht numeric, montant_tva numeric, montant_ttc numeric, type_document text DEFAULT 'FACTURE',
-  date_echeance date, periode_debut date, periode_fin date);
+  date_echeance date, periode_debut date, periode_fin date, mission_id uuid, facture_honoraire_id uuid);
 CREATE TABLE public.factures_honoraires(LIKE public.factures INCLUDING ALL,
   soignant_id uuid, pdf_s3_key text, facturx_xml_url text, emise_le timestamptz, verification_echeance_le timestamptz);
+CREATE TABLE public.missions(id uuid PRIMARY KEY, etablissement_id uuid, soignant_assigne_id uuid, facture_id uuid);
 CREATE TABLE private.email_dispatch_idempotency(idempotency_key text PRIMARY KEY, statut text);
 CREATE TABLE private.security_definer_inventory(signature text PRIMARY KEY,categorie text,definition_md5 text,justification text,recense_le timestamptz);
 INSERT INTO public.etablissements VALUES ('69510000-0000-4000-8000-000000000001',NULL);
@@ -32,6 +33,14 @@ INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht
 VALUES ('69510000-0000-4000-8000-000000000100','69510000-0000-4000-8000-000000000001','HISTORIQUE','EMISE',10,2,12);
 
 \ir ../../supabase/migrations/20261016125521_fiabiliser_emails_factures.sql
+-- Le step PG17 fournit le corps exact extrait de la sixième migration.
+-- Ne pas inclure son BEGIN/COMMIT : le rollback de ce témoin doit tout annuler.
+\if :{?facturation_email_corrective}
+\i :facturation_email_corrective
+\else
+\echo 'Refus : corps correctif email exact non fourni'
+\quit 3
+\endif
 
 DO $proof$
 DECLARE email uuid; r jsonb; cle text; corps jsonb; n integer; signature text;
@@ -154,6 +163,42 @@ BEGIN
     OR EXISTS(SELECT FROM private.facturation_email_livraisons WHERE document_id='69510000-0000-4000-8000-000000000202'
       AND destinataire_id='69510000-0000-4000-8000-000000000002') THEN RAISE EXCEPTION 'AVOIR_EMIS soignant doublé'; END IF;
 END $proof$;
+
+-- Les nouvelles copies portent les sources canoniques, distinctes du seul
+-- destinataire. La classification TEST/fournisseur relève du vrai transport.
+DO $sources$
+DECLARE corps jsonb;
+BEGIN
+  INSERT INTO public.missions VALUES ('69510000-0000-4000-8000-000000000301',
+    '69510000-0000-4000-8000-000000000001','69510000-0000-4000-8000-000000000002',NULL);
+  INSERT INTO public.factures_honoraires(id,etablissement_id,soignant_id,mission_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+  VALUES ('69510000-0000-4000-8000-000000000203','69510000-0000-4000-8000-000000000001',
+    '69510000-0000-4000-8000-000000000002','69510000-0000-4000-8000-000000000301','FH-203','EN_GENERATION',100,0,100);
+  INSERT INTO public.factures(id,etablissement_id,mission_id,facture_honoraire_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+  VALUES ('69510000-0000-4000-8000-000000000111','69510000-0000-4000-8000-000000000001',
+    '69510000-0000-4000-8000-000000000301','69510000-0000-4000-8000-000000000203','C-111','EMISE',15,3,18);
+  SELECT l.corps INTO corps FROM private.facturation_email_livraisons l WHERE document_id='69510000-0000-4000-8000-000000000111';
+  IF corps#>>'{data,mission_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000301'
+    OR corps#>>'{data,etablissement_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000001'
+    OR corps#>>'{data,soignant_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000002'
+    THEN RAISE EXCEPTION 'Sources commission individuelle absentes ou fabriquées'; END IF;
+  UPDATE public.factures_honoraires SET statut='EMISE',pdf_s3_key='source.pdf',facturx_xml_url='source.xml',emise_le=now()
+    WHERE id='69510000-0000-4000-8000-000000000203';
+  IF EXISTS(SELECT 1 FROM private.facturation_email_livraisons l WHERE document_id='69510000-0000-4000-8000-000000000203'
+    AND (l.corps#>>'{data,mission_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000301'
+      OR l.corps#>>'{data,etablissement_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000001'
+      OR l.corps#>>'{data,soignant_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000002'))
+    THEN RAISE EXCEPTION 'Sources copies honoraires incorrectes'; END IF;
+  -- Au moment de l'INSERT d'une commission groupée, ses liens missions sont
+  -- encore absents : aucun soignant arbitraire n'est placé dans le reçu.
+  INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+  VALUES ('69510000-0000-4000-8000-000000000112','69510000-0000-4000-8000-000000000001','C-112','EMISE',30,6,36);
+  UPDATE public.missions SET facture_id='69510000-0000-4000-8000-000000000112' WHERE id='69510000-0000-4000-8000-000000000301';
+  SELECT l.corps INTO corps FROM private.facturation_email_livraisons l WHERE document_id='69510000-0000-4000-8000-000000000112';
+  IF corps#>>'{data,etablissement_id}' IS DISTINCT FROM '69510000-0000-4000-8000-000000000001'
+    OR corps#>>'{data,mission_id}' IS NOT NULL OR corps#>>'{data,soignant_id}' IS NOT NULL
+    THEN RAISE EXCEPTION 'Source groupée déduite d’une mission arbitraire'; END IF;
+END $sources$;
 
 -- L'échec de file doit annuler aussi l'émission et son reçu, pas perdre la copie.
 CREATE FUNCTION pg_temp.refuser_facture_email() RETURNS trigger LANGUAGE plpgsql AS $fn$

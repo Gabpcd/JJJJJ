@@ -30,6 +30,7 @@ assert sql("SELECT current_setting('server_version_num')::int/10000") == '17'
 assert sql("SELECT count(*) FROM pg_tables WHERE schemaname='public'") == '0'
 engine = (ROOT/'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql').read_text()
 migration = (ROOT/'supabase/migrations/20261016125516_securiser_beneficiaire_connect_et_versements_standard.sql').read_text()
+corrective = (ROOT/'supabase/migrations/20261016144756_fermer_replays_payout_et_isoler_sources_facturation.sql').read_text()
 fixture = """
 CREATE SCHEMA auth; CREATE SCHEMA private;
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT current_setting('request.jwt.claims')::jsonb $$;
@@ -62,7 +63,10 @@ for name in ['fn_connect_exiger_service', 'fn_connect_operation_verrouiller', 'f
 gate = re.search(r"CREATE TABLE private\.stripe_connect_release_gate \([\s\S]*?INSERT INTO private\.stripe_connect_release_gate\(protocol,enabled\) VALUES\('CONNECT_PRETRANSFER_V1',false\);", engine)[0]
 sql(table + '\n' + gate + '\n' + '\n'.join(functions))
 sql(migration)
+constater = corrective[corrective.index('CREATE OR REPLACE FUNCTION public.fn_connect_payout_constater'):corrective.index('-- COMMISSION :')]
+sql(constater)
 print(json.dumps({'migration_sha256': hashlib.sha256(migration.encode()).hexdigest(),
+    'corrective_sha256': hashlib.sha256(corrective.encode()).hexdigest(),
     'canonical_engine_sha256': hashlib.sha256(('\n'.join(functions)).encode()).hexdigest(), 'postgres': 17}), flush=True)
 
 def uid(n):
@@ -139,6 +143,17 @@ assert sql(f"SELECT standard_payout_state='PAID' AND statut='PAYE' FROM public.s
 assert sql("SELECT count(*) FROM public.journaux_audit WHERE action='FINANCE_PAYOUT_PAID'") == '1'
 assert observe('failed') == {'review': True}
 assert sql(f"SELECT standard_payout_state='REVIEW' AND statut='TRANSFERE' FROM public.stripe_transfers WHERE id='{T}'") == 't'
+# Le webhook contradictoire sera rejoué : REVIEW ne doit pas redevenir FAILED
+# (ni PAID/SUBMITTED) et ne doit jamais rouvrir la tentative bancaire.
+review_snapshot = sql(f"SELECT row_to_json(s) FROM public.stripe_transfers s WHERE id='{T}'")
+for status in ['failed', 'canceled', 'pending', 'in_transit', 'paid']:
+    assert observe(status) == {'review': True}
+    assert sql(f"SELECT row_to_json(s) FROM public.stripe_transfers s WHERE id='{T}'") == review_snapshot
+    assert sql(f"SELECT public.fn_connect_payout_reessayer('{T}','{OWNER}','po_fixture')") == 'f'
+    assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OWNER}')") == 'f'
+assert sql("SELECT count(*) FROM public.journaux_audit WHERE action='FINANCE_PAYOUT_PAID'") == '1'
+assert sql("SELECT count(*) FROM public.journaux_audit WHERE action='FINANCE_PAYOUT_FAILED'") == '0'
+print('PAID_FAILED_REPLAY_REVIEW_PERSISTANT_SANS_RETRY_NI_POST', flush=True)
 print('PAID_PUIS_PENDING_INTRANSIT_NE_REGRESSE_PAS_AUDIT_UNIQUE', flush=True)
 
 # État initial d'un autre cas logique : setup local contrôlé, jamais une API.
