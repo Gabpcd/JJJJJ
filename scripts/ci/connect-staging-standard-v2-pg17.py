@@ -18,11 +18,39 @@ old_capacity = sql('SELECT to_jsonb(c)::text FROM private.stripe_connect_test_ca
 old_operation = sql('SELECT to_jsonb(o)::text FROM private.stripe_connect_avant_transfert o')
 old_cap = CAP
 
-# Seule adaptation de métadonnées du banc : le registre PG17 minimal V1 n'a
-# pas le DEFAULT de production. Aucune routine métier n'est remplacée.
+# Le registre PG17 minimal V1 n'a pas le DEFAULT de production.
 sql('ALTER TABLE private.security_definer_inventory ALTER COLUMN recense_le SET DEFAULT clock_timestamp();')
 payout = (ROOT/'supabase/migrations/20261016125516_securiser_beneficiaire_connect_et_versements_standard.sql').read_text()
+# Le snapshot courant contient désormais les colonnes payout. V1 extrait sa
+# table complète mais ni les routines ni les index/triggers payout. Revenir à
+# l'état pré-migration uniquement dans ce cluster neuf/local déjà contrôlé,
+# puis exécuter la migration réelle entière, sans IF NOT EXISTS ni CASCADE.
+payout_columns = [
+ 'standard_payout_state', 'standard_payout_account_id', 'standard_payout_attempt',
+ 'standard_payout_previous_id', 'standard_payout_known_ids', 'standard_payout_first_post_at',
+ 'standard_payout_next_read_at', 'standard_payout_owner', 'standard_payout_lease_until',
+ 'standard_payout_error_code',
+]
+payout_constraints = ['stripe_transfers_standard_payout_'+suffix+'_check'
+                      for suffix in ['attempt', 'identity', 'state']]
+assert json.loads(sql("SELECT json_agg(attname ORDER BY attname) FROM pg_attribute WHERE attrelid='public.stripe_transfers'::regclass AND NOT attisdropped AND attname LIKE 'standard_payout_%'")) == sorted(payout_columns)
+assert json.loads(sql("SELECT json_agg(conname ORDER BY conname) FROM pg_constraint WHERE conrelid='public.stripe_transfers'::regclass AND conname LIKE 'stripe_transfers_standard_payout_%'")) == sorted(payout_constraints)
+assert sql("SELECT NOT EXISTS(SELECT 1 FROM public.stripe_transfers WHERE standard_payout_state IS NOT NULL OR standard_payout_account_id IS NOT NULL OR standard_payout_attempt IS DISTINCT FROM 0 OR standard_payout_previous_id IS NOT NULL OR standard_payout_known_ids IS DISTINCT FROM '{}'::text[] OR standard_payout_first_post_at IS NOT NULL OR standard_payout_next_read_at IS NOT NULL OR standard_payout_owner IS NOT NULL OR standard_payout_lease_until IS NOT NULL OR standard_payout_error_code IS NOT NULL)") == 't'
+assert sql("SELECT to_regprocedure('public.fn_connect_payout_demarrer(uuid,uuid)') IS NULL AND NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.stripe_transfers'::regclass AND tgname='zzz_connect_admettre_payout_standard')") == 't'
+legacy_projection = "SELECT COALESCE(jsonb_agg(to_jsonb(s)-ARRAY["+','.join(literal(c) for c in payout_columns)+"] ORDER BY s.id),'[]'::jsonb)::text FROM public.stripe_transfers s"
+legacy_transfers = sql(legacy_projection)
+sql('ALTER TABLE public.stripe_transfers '+','.join(
+ ['DROP CONSTRAINT '+name+' RESTRICT' for name in payout_constraints]
+ +['DROP COLUMN '+name+' RESTRICT' for name in payout_columns])+';')
+assert sql("SELECT count(*) FROM pg_attribute WHERE attrelid='public.stripe_transfers'::regclass AND NOT attisdropped AND attname LIKE 'standard_payout_%'") == '0'
+assert sql(legacy_projection) == legacy_transfers
+print(json.dumps({'pre_payout_fixture':True,
+ 'snapshot_sha256':hashlib.sha256(snapshot.encode()).hexdigest(),
+ 'payout_migration_sha256':hashlib.sha256(payout.encode()).hexdigest(),
+ 'removed_columns':payout_columns,'removed_constraints':payout_constraints,
+ 'legacy_transfers_preserved':True,'ephemeral_local_pg17':True,'provider':False}),flush=True)
 sql(payout)
+assert sql(legacy_projection) == legacy_transfers
 live_before = sql("SELECT md5(pg_get_functiondef('public.fn_connect_payout_demarrer(uuid,uuid)'::regprocedure))")
 v2 = subprocess.run(['node','--input-type=module','-e',
  "import{readFileSync as r}from'node:fs';import{renderStagingAdmission as a}from'./scripts/ci/connect-staging-admission-render.mjs';import{renderStagingStandardV2 as b}from'./scripts/ci/connect-staging-standard-v2-render.mjs';process.stdout.write(b(a(r('supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql','utf8'),r('scripts/ci/connect-staging-admission.sql','utf8')),r('scripts/ci/connect-staging-standard-v2.sql','utf8'),r('supabase/migrations/20261016125516_securiser_beneficiaire_connect_et_versements_standard.sql','utf8')));"],

@@ -8,13 +8,12 @@ import {PROJECT,REPOSITORY,FUNCTION,CONTRACT,ASSET_PATHS,digest,canonical,closur
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const versioned=JSON.parse(readFileSync(new URL('../../'+CONTRACT,import.meta.url),'utf8'));
-// The real assets and Git blobs are exercised. Only cleanliness is synthetic:
-// this test is also run before the three new installation files are committed.
+// Exercise current assets with a synthetic in-memory contract. The versioned
+// historical contract is never repinned and must still refuse their drift.
 const actual=readLocal(root,versioned);
 const local={...actual,clean:true};
 const baselineFiles=new Map(Object.keys(versioned.edgeBefore.files).map(path=>[path,
  execFileSync('git',['-C',root,'show',`${versioned.baselineSourceSha}:${path}`],{encoding:'utf8',stdio:['ignore','pipe','pipe']})]));
-const closure=checkAssets(versioned,local).closure;
 const API=`https://api.supabase.com/v1/projects/${PROJECT}`;
 const GH=`https://api.github.com/repos/${REPOSITORY}`;
 const CANARY='private-canary-never-report-SMS-OTP-623019';
@@ -36,11 +35,13 @@ function edgeRows(c,after=false){
 }
 function contract(){
  const c=structuredClone(versioned);
+ c.assets=Object.fromEntries(ASSET_PATHS.map(path=>[path,{sha256:digest(local.files[path]),gitBlob:local.blobs[path]}]));
  // Production baseline metadata is deliberately not persisted in this test.
  // A synthetic catalogue keeps its own authenticated, complete metadata pin.
  c.edgeBefore.metadataSha256=digest(JSON.stringify(canonical(edgeRows(c)[0])));
  return repin(c);
 }
+const closure=checkAssets(contract(),local).closure;
 function snapshots(c){
  const invariant=Object.fromEntries(['structure','routines','inventory','registry','rows'].map((k,i)=>[k,String(i+1).repeat(32)]));
  return {before:{quiet:true,absent:true,closed:false,routines:structuredClone(c.beforeRoutines),invariant,targets:'6'.repeat(32)},
@@ -127,13 +128,20 @@ function noLeak(state,result){
 }
 function noSqlMutation(state){assert.equal(state.rollbacks,0);assert.equal(state.commits,0);}
 
-test('real manifest, tracked blobs, full render and historical five-file Edge source all match',()=>{
- checkContract(versioned);checkAssets(versioned,local);
+test('historical manifest stays intact while a synthetic contract exercises current assets and the full render',()=>{
+ checkContract(versioned);checkAssets(contract(),local);
  assert.equal(baselineFiles.size,5);assert.equal(closure.size,6);
  for(const [path,content] of baselineFiles)assert.equal(digest(content),versioned.edgeBefore.files[path]);
  assert.equal(closureDigest(baselineFiles),versioned.edgeBefore.closureSha256);
  assert.equal(contract().manifestSha256,repin(contract()).manifestSha256);
  assert.notEqual(contract().edgeBefore.metadataSha256,versioned.edgeBefore.metadataSha256);
+ assert.deepEqual(JSON.parse(readFileSync(new URL('../../'+CONTRACT,import.meta.url),'utf8')),versioned);
+});
+test('the real historical contract rejects current schema drift before network, deployment or SQL',async()=>{
+ assert.notEqual(digest(local.files['supabase/schema/public.sql']),versioned.assets['supabase/schema/public.sql'].sha256);
+ const h=harness({contract:versioned}),r=await h.run();
+ assert.equal(r.code,'LOCAL_ASSET_DRIFT');assert.equal(r.status,'failed');
+ assert.equal(h.state.calls.length,0);assert.equal(h.state.deploys,0);noSqlMutation(h.state);noLeak(h.state,r);
 });
 test('one deployment precedes a verified rollback, one commit and independent readback',async()=>{
  const h=harness(),r=await h.run();assert.equal(r.status,'success');assert.equal(r.code,null);
