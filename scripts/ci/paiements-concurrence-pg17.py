@@ -252,6 +252,68 @@ for change in ["stripe_payment_intent_id='pi_F153contradiction'",f"stripe_paymen
 assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H}'")==before_pi
 assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{H2}'")==other_pi
 print('PI_DEUX_FACTURES_ISOLEES_REPARATIONS_ET_CONTRADICTIONS',flush=True)
-sql('TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions,public.journaux_audit;')
-assert sql("SELECT (SELECT count(*) FROM public.missions)+(SELECT count(*) FROM public.paiements_soignant)+(SELECT count(*) FROM public.stripe_payment_flow_claims)")=='0'
+# Commission séparée : fonctions de production exactes, aucune IO fournisseur.
+commission_migration = (ROOT/'supabase/migrations/20261016125632_securiser_reglement_commission_separee_et_taux_groupe.sql').read_text()
+commission_runtime = commission_migration[commission_migration.index('CREATE FUNCTION private.fn_admission_virement_commission'):commission_migration.index('-- Exposer le taux résolu')]
+sql("""CREATE TABLE public.etablissements(id uuid PRIMARY KEY,mode_paiement_commission text,est_secteur_public boolean DEFAULT false,chorus_pro_actif boolean DEFAULT false);
+ALTER TABLE public.missions ADD facture_id uuid;
+ALTER TABLE public.factures ADD est_secteur_public boolean DEFAULT false,ADD stripe_hosted_url text,ADD stripe_invoice_id text,ADD facture_precedente_id uuid,ADD virement_reference text;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT auth.jwt()->>'role' $$;
+CREATE FUNCTION public.est_admin() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+CREATE FUNCTION public.mon_etablissement_id() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(auth.jwt()->>'etablissement_id','')::uuid $$;
+CREATE FUNCTION public.fn_a_permission_etablissement(text,uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT $2=public.mon_etablissement_id() $$;
+""")
+sql(commission_runtime)
+sql(f"INSERT INTO public.etablissements(id,mode_paiement_commission) VALUES('{E}','CARTE');")
+base_seed = seed
+commission_liee = True
+honoraires_directs = True
+
+def seed():
+    base_seed()
+    if commission_liee:
+        if honoraires_directs:
+            sql(CTX+MANUAL)
+    else:
+        sql(f"UPDATE public.factures SET facture_honoraire_id=NULL WHERE id='{F}'; UPDATE public.missions SET type_contrat_applique='SALARIE' WHERE id='{M}';")
+
+DECLARE_COMMISSION = f"SELECT public.fn_declarer_virement('{F}','VIR-COMMISSION-2026-001');"
+
+def assert_declaration(expected_error=None):
+    condition = "r->>'success' IS DISTINCT FROM 'true'" if expected_error is None else f"r->>'error' IS DISTINCT FROM '{expected_error}'"
+    return f"DO $assert$ DECLARE r jsonb; BEGIN r:=public.fn_declarer_virement('{F}','VIR-COMMISSION-2026-001'); IF {condition} THEN RAISE EXCEPTION 'Commission inattendue: %',r; END IF; END $assert$;"
+
+# Les honoraires directs sont déjà déclarés. Connect attend le vrai verrou,
+# puis son trigger refuse le règlement direct ; aucune session ne peut partir.
+race('commission_separee_puis_connect',assert_declaration(),INVOICE,'PAIEMENT_FACTURE_DEJA_DECLARE','1,0')
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F}'")=='VIREMENT_DECLARE'
+# À l'inverse, la réservation Connect arrivée avant toute déclaration ferme
+# l'admission commission après son attente, avec un refus JSON, sans écriture.
+honoraires_directs = False
+race('connect_puis_commission_separee',INVOICE,assert_declaration('PAIEMENT_EN_LIGNE_ENGAGE'),None,'0,1')
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F}'")=='EMISE'
+# Les mêmes advisory locks ferment aussi la course Checkout/SEPA autonome.
+commission_liee = False
+for flow in ['CHECKOUT_INVOICE','SEPA_INVOICE']:
+    standard = f"SELECT public.fn_stripe_payment_flow_claim('{flow}','commission:{F}','{F}',NULL);"
+    race(f'virement_puis_{flow}',assert_declaration(),standard,'COMMISSION_VIREMENT_DEJA_DECLARE','0,0')
+    race(f'{flow}_puis_virement',standard,assert_declaration('PAIEMENT_EN_LIGNE_ENGAGE'),None,'0,2')
+# La pièce exacte reste obligatoire : un règlement direct de H ne libère pas F2.
+commission_liee = True; honoraires_directs = True; seed()
+sql(f"INSERT INTO public.factures_honoraires(id,mission_id,soignant_id,etablissement_id,type_document,statut,montant_ttc) VALUES('{H2}','{M}','{S}','{E}','FACTURE','EMISE',60); INSERT INTO public.factures(id,mission_id,etablissement_id,facture_honoraire_id,type_document,statut) VALUES('{F2}','{M}','{E}','{H2}','FACTURE','EMISE');")
+r = json.loads(sql(CTX+f"SELECT public.fn_declarer_virement('{F2}','VIR-VOISIN-2026');").splitlines()[-1])
+assert r['error']=='HONORAIRES_DIRECTS_REQUIS',r
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F2}'")=='EMISE'
+# Un statut NULL n'est pas une facture payable, même par appel direct RPC.
+sql(f"UPDATE public.factures SET statut=NULL WHERE id='{F2}';")
+r = json.loads(sql(CTX+f"SELECT public.fn_declarer_virement('{F2}','VIR-NULL-2026');").splitlines()[-1])
+assert r['error']=='FACTURE_NON_PAYABLE',r
+assert sql(f"SELECT statut IS NULL FROM public.factures WHERE id='{F2}'")=='t'
+# Confirmer/contester côté soignant reste un acte distinct, non effectué ici.
+assert sql(f"SELECT statut FROM public.paiements_soignant WHERE facture_honoraire_id='{H}'")=='DECLARE'
+assert sql("SELECT has_function_privilege('anon','public.fn_modalites_reglement_commission(uuid)','EXECUTE')")=='f'
+print('COMMISSION_SEPAREE_PG17_OK : six courses avec attente réelle, pièce voisine refusée, aucune preuve bancaire implicite',flush=True)
+
+sql('TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions,public.journaux_audit,public.etablissements;')
+assert sql("SELECT (SELECT count(*) FROM public.missions)+(SELECT count(*) FROM public.paiements_soignant)+(SELECT count(*) FROM public.stripe_payment_flow_claims)+(SELECT count(*) FROM public.etablissements)")=='0'
 print('PAIEMENTS_CONCURRENCE_PG17_OK : zéro fixture restante dans la base éphémère',flush=True)

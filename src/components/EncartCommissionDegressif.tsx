@@ -10,7 +10,7 @@ interface EncartCommissionDegressifProps {
 /**
  * Encart commission : taux unique de 15 % HT (ou taux HT négocié de l'établissement).
  * Le modèle « paliers dégressifs par volume » a été abandonné (décision
- * produit 12/06/2026) — la facturation applique COALESCE(taux_negocie, 15).
+ * produit 12/06/2026) — cascade établissement, groupe, puis 15 % HT.
  */
 export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommissionDegressifProps) {
   if (netEstime <= 0) return null;

@@ -1,3 +1,4 @@
+import { tauxCommissionEtablissement } from '@/lib/tauxCommissionEtablissement';
 import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
@@ -958,7 +959,7 @@ function FacturationEtablissementContent() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {etab?.paliers_commission && (
-            <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
+            <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={tauxCommissionEtablissement(etab)} />
           )}
           {etab?.est_secteur_public && (
             <BadgeY2K variant="info" icone={<Landmark className="h-3 w-3" />}>Secteur public</BadgeY2K>

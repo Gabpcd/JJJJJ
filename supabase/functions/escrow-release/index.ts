@@ -23,6 +23,7 @@
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import { processStandardConnectPayouts } from "../_shared/stripe-standard-payout.ts";
 import {
   type EscrowPayoutExpectation,
   requireExactEscrowPayout,
@@ -509,7 +510,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  const success = echecs === 0;
+  // Même cron authentifié, ledger distinct : aucun payout standard n'est
+  // déduit du solde global ni de la file escrow.
+  let standard = { examined: 0, checked: 0, deferred: 0, review: 0, errors: 0 };
+  try {
+    standard = await processStandardConnectPayouts(admin, stripe);
+  } catch {
+    standard.errors++;
+    console.error("escrow-release: standard payout reconciliation unavailable");
+  }
+  const success = echecs === 0 && standard.errors === 0 && standard.review === 0;
   return new Response(
     JSON.stringify({
       success,
@@ -519,6 +529,7 @@ Deno.serve(async (req) => {
       attente_fonds,
       echecs,
       ignores,
+      standard,
     }),
     {
       status: success ? 200 : 500,

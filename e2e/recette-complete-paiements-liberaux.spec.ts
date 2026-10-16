@@ -15,7 +15,7 @@ const originale = '71000000-0000-4000-8000-000000000080';
 const remplacement = '71000000-0000-4000-8000-000000000060';
 const seconde = '71000000-0000-4000-8000-000000000081';
 const autreFacture = '71000000-0000-4000-8000-000000000090';
-const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_detail_facture','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
+const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_detail_facture','fn_modalites_reglement_commission','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
 async function action(page: Page, cible: Locator) {
   await cible.scrollIntoViewIfNeeded();
   if (test.info().project.use.hasTouch) await cible.tap(); else await cible.click();
@@ -36,7 +36,7 @@ async function verifierActionsPaiement(piece: Locator, nom: string) {
     return separes && centresAlignes && icone.x + icone.width <= texte.x;
   }, { message: 'Icône alignée avec le texte et actions de paiement sans recouvrement au survol' }).toBe(true);
 }
-async function fixture(page: Page, connect = false, commission = false, commissionScenario: 'mensuelle' | 'complementaire-salariee' | 'liee-payee' = 'mensuelle') {
+async function fixture(page: Page, connect = false, commission = false, commissionScenario: 'mensuelle' | 'complementaire-salariee' | 'liee-payee' | 'liee-directe' | 'liee-connect' = 'mensuelle') {
   const simulation = creerSuiviSimule(), { state } = simulation;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
     soignant_assigne_id: ids.soignant, taux_horaire_base: 20, total_brut: 160, net_a_payer: 160,
@@ -48,7 +48,7 @@ async function fixture(page: Page, connect = false, commission = false, commissi
   await simulation.installer(page.context(), 'ADMIN_ETABLISSEMENT');
   await page.clock.setFixedTime(new Date('2026-10-01T10:00:00Z'));
   const erreurs: string[] = [], interdits: string[] = [], mutations: { name: string; body: unknown }[] = [];
-  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
+  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200, virementRefuse: false };
   page.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()); });
   page.on('pageerror', e => erreurs.push(e.message));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -71,7 +71,7 @@ async function fixture(page: Page, connect = false, commission = false, commissi
     etablissement_id: ids.etablissement, statut: commissionScenario === 'liee-payee' ? 'PAYEE' : 'EMISE',
     type_document: commissionScenario === 'complementaire-salariee' ? 'FACTURE_COMPLEMENTAIRE' : 'FACTURE', est_secteur_public: false,
     mission_id: commissionScenario === 'mensuelle' ? null : ids.mission,
-    facture_honoraire_id: commissionScenario === 'liee-payee' ? seconde : null,
+    facture_honoraire_id: commissionScenario.startsWith('liee-') ? seconde : null,
     mode_paiement: commissionScenario === 'complementaire-salariee' ? 'VIREMENT' : 'STRIPE',
     montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 0,
     date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30' };
@@ -109,6 +109,15 @@ async function fixture(page: Page, connect = false, commission = false, commissi
         expect(connect).toBe(false); expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_montant: 60, p_methode: 'VIREMENT', p_reference: 'VIR-2026-060', p_date_paiement: '2026-10-01', p_attestation_sur_l_honneur: true });
         mutations.push({ name, body }); return json({ error: controle.refus });
       }
+      if (commission && name === 'fn_declarer_virement') {
+        expect(body).toEqual({ p_facture_id: commissionId, p_reference: 'VIR-COMMISSION-2026-001' });
+        mutations.push({ name, body });
+        if (controle.virementRefuse) return json({ error: 'PAIEMENT_EN_LIGNE_ENGAGE', message: 'Un paiement en ligne est déjà engagé pour cette facture.' });
+        expect(commissionScenario).toBe('liee-directe');
+        expect(factureCommission.statut).toBe('EMISE');
+        factureCommission.statut = 'VIREMENT_DECLARE';
+        return json({ success: true });
+      }
       if (name === 'fn_suivi_remboursements_connect_facture') {
         expect(connect && controle.retour).toBe(true);
         expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_checkout_session_id: 'cs_test_retour_liberal' });
@@ -116,6 +125,12 @@ async function fixture(page: Page, connect = false, commission = false, commissi
           source: 'CONNECT_AVANT_TRANSFERT', visibilite_montants: 'TOTAL_ETABLISSEMENT', paiement_statut: 'ECHOUE', operations: [], lecture_complete: true });
       }
       if (!lectureRpc.has(name)) { interdits.push(`RPC ${name}`); return route.abort(); }
+      if (commission && name === 'fn_modalites_reglement_commission') {
+        expect(body).toEqual({ p_facture_id: commissionId });
+        const autorise = ['EMISE','EN_RETARD'].includes(factureCommission.statut) && commissionScenario !== 'liee-connect';
+        return json({ facture_id: commissionId, virement_autorise: autorise,
+          motif: autorise ? null : commissionScenario === 'liee-connect' ? 'PAIEMENT_EN_LIGNE_ENGAGE' : 'FACTURE_NON_PAYABLE' });
+      }
       if (commission && name === 'fn_mes_factures') return json([factureCommission]);
       if (commission && name === 'fn_detail_facture') {
         expect(body).toEqual({ p_facture_id: commissionId });
@@ -432,4 +447,57 @@ for (const refus of [
   await expect(piece).toBeVisible();
   expect(f.mutations).toHaveLength(configurationFictive ? 1 : 0);
   f.verifier(configurationFictive ? [`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`] : []);
+});
+
+
+test('Commission libérale séparée : honoraires directs déclarés, virement exact et vérification conservée après recharge', async ({ page }, info) => {
+  const f = await fixture(page, false, true, 'liee-directe');
+  await page.goto('/etablissement/facturation?tab=commissions');
+  await action(page, page.getByRole('button', { name: 'Consulter les modalités de règlement', exact: true }));
+  await expect(page).toHaveURL(new RegExp(`/etablissement/facturation/${commissionId}$`));
+  await expect(page.getByText(/La commission Jolene reste à régler séparément/)).toBeVisible();
+  await expect(page.getByText(/Cette déclaration ne prouve pas la réception des fonds/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Payer|Payer par carte)$/ })).toHaveCount(0);
+  await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+  const valider = page.getByRole('button', { name: /J'ai effectué le virement/ });
+  await expect(valider).toBeDisabled();
+  await page.getByLabel('Référence de votre virement').fill('VIR-COMMISSION-2026-001');
+  await action(page, valider);
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Virement', exact: true })).toHaveCount(0);
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payée', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Virement|Payer)$/ })).toHaveCount(0);
+  expect(f.mutations).toEqual([{ name: 'fn_declarer_virement', body: {
+    p_facture_id: commissionId, p_reference: 'VIR-COMMISSION-2026-001' } }]);
+  f.verifier();
+  await info.attach('commission-separee-simulation', { body: JSON.stringify({ simulation: true,
+    providerVerified: false, invoiceExact: true, declarations: 1, status: 'VIREMENT_DECLARE',
+    paidClaimed: false }), contentType: 'application/json' });
+});
+
+test('Commission liée : Connect engagé interdit le virement séparé, y compris après recharge', async ({ page }) => {
+  const f = await fixture(page, false, true, 'liee-connect');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  for (const recharge of [false, true]) {
+    if (recharge) { await stabiliserActionsNationales(page); await page.reload(); }
+    await expect(page.getByText('Un paiement en ligne est déjà engagé. Consultez son suivi avant de déclarer un autre règlement.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Virement|Payer|Payer par carte)$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Consulter le règlement des honoraires', exact: true })).toBeVisible();
+  }
+  expect(f.mutations).toEqual([]); f.verifier();
+});
+
+test('Commission séparée : admission devenue périmée, refus serveur sans faux succès ni nouveau débit', async ({ page }) => {
+  const f = await fixture(page, false, true, 'liee-directe');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+  await page.getByLabel('Référence de votre virement').fill('VIR-COMMISSION-2026-001');
+  f.controle.virementRefuse = true;
+  await action(page, page.getByRole('button', { name: /J'ai effectué le virement/ }));
+  await expect(page.getByText('Un paiement en ligne est déjà engagé pour cette facture.', { exact: true })).toBeVisible();
+  await expect(page.getByText('✅ Virement déclaré — en attente de vérification', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toHaveCount(0);
+  expect(f.mutations).toHaveLength(1); f.verifier();
 });

@@ -713,6 +713,9 @@ jobs:
             tests/security/numerotation-factures.test.sql
             tests/security/diagnostic-financier-documentaire.test.sql
             tests/security/notification-remboursement-manuel.test.sql
+            tests/security/factures-relances-echeance.test.sql
+            tests/security/stripe-disponibilite-connect.test.sql
+            tests/security/connect-onboarding-payout-acl.test.sql
           )
           # Sans migration, ne pas exiger des fonctions main absentes du
           # staging : cette voie prouve seulement les trois bancs F1 LIVE.
@@ -896,6 +899,16 @@ jobs:
         run: node --test tests/postgres/f1-cloud-catalogue-cast.pg17.mjs
       - name: Alignement staging — résolution des alias du catalogue
         run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
+      - name: Factures — émission atomique et reprise email PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb facturation_emails
+          psql -X -v ON_ERROR_STOP=1 -d facturation_emails -f tests/security/facturation-email-isolated.test.sql
+      - name: Versement standard — admission, concurrence et constat PostgreSQL 17
+        run: |
+          createdb connect_standard_payouts
+          PGDATABASE=connect_standard_payouts python3 scripts/ci/connect-standard-payout-pg17.py
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17

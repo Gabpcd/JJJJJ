@@ -113,17 +113,17 @@ function lignesDocumentFactureCommission(missions: any[], facture: any, honorair
   }];
 }
 
-function presentationPaiementCommission(facture: any, etab: any, canManagePayments: boolean) {
+function presentationPaiementCommission(facture: any, etab: any, canManagePayments: boolean, virementAutorise: boolean) {
   const lieeHonoraires = Boolean(facture.facture_honoraire_id);
   const estSepaAutomatique = !lieeHonoraires && etab?.mode_paiement_commission === 'SEPA_DEBIT';
   const aRegler = facture.statut === 'EMISE' || facture.statut === 'EN_RETARD';
-  const canPay = canManagePayments && aRegler && ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
-    && !lieeHonoraires && !facture.est_secteur_public && !estSepaAutomatique;
+  const peutRegler = canManagePayments && aRegler && ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
+    && !facture.est_secteur_public && !estSepaAutomatique;
   return {
     lieeHonoraires,
     estSepaAutomatique,
-    canPay,
-    canPayCard: canPay && facture.type_document === 'FACTURE',
+    canPay: peutRegler && virementAutorise,
+    canPayCard: peutRegler && !lieeHonoraires && facture.type_document === 'FACTURE',
     modeLibelle: lieeHonoraires && facture.mode_paiement === 'STRIPE'
       ? 'Paiement avec les honoraires'
       : MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement,
@@ -423,6 +423,7 @@ export default function DetailFacture() {
   const [facture, setFacture] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [honoraires, setHonoraires] = useState<HonorairesCommission>(null);
+  const [modalites, setModalites] = useState<{ virement_autorise: boolean; motif: string | null } | null>(null);
   const [etab, setEtab] = useState<any>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -440,6 +441,7 @@ export default function DetailFacture() {
     setFacture(null);
     setMissions([]);
     setHonoraires(null);
+    setModalites(null);
     setEtab(null);
     setShowCheckout(false);
 
@@ -450,14 +452,21 @@ export default function DetailFacture() {
     }
 
     try {
-      const [resDetail, resE, contexte] = await Promise.all([
+      const [resDetail, resE, contexte, resModalites] = await Promise.all([
         supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
         supabase.rpc('fn_mon_etablissement_complet' as any),
         chargerContexteFactureCommission(supabase, id, etablissementId),
+        supabase.rpc('fn_modalites_reglement_commission' as any, { p_facture_id: id }),
       ]);
       if (numeroRequete !== requeteCourante.current) return;
       if (resDetail.error) throw resDetail.error;
       if (resE.error) throw resE.error;
+      if (resModalites.error) throw resModalites.error;
+      const modalitesRecues = resModalites.data as any;
+      if (modalitesRecues?.facture_id !== id || typeof modalitesRecues.virement_autorise !== 'boolean'
+        || !(modalitesRecues.motif === null || typeof modalitesRecues.motif === 'string')) {
+        throw new Error('Modalités de règlement indisponibles');
+      }
       if ((resDetail.data as any)?.error) throw new Error((resDetail.data as any).error);
       if ((resE.data as any)?.error) throw new Error((resE.data as any).error);
 
@@ -495,6 +504,7 @@ export default function DetailFacture() {
       if (numeroRequete !== requeteCourante.current) return;
       setFacture({ ...detail.facture, ...contexte.facture });
       setHonoraires(contexte.honoraires);
+      setModalites(modalitesRecues);
       setMissions(detail.missions.map((mission: any) => ({
         ...mission,
         segments_effectifs: segmentsParMission[mission.id] ?? [],
@@ -506,6 +516,7 @@ export default function DetailFacture() {
       setFacture(null);
       setMissions([]);
       setHonoraires(null);
+      setModalites(null);
       setEtab(null);
       setErreurChargement('Impossible de charger cette facture en toute sécurité.');
     } finally {
@@ -604,7 +615,7 @@ export default function DetailFacture() {
   );
 
   const { lieeHonoraires, estSepaAutomatique, canPay, canPayCard, modeLibelle } =
-    presentationPaiementCommission(facture, etab, canManagePayments);
+    presentationPaiementCommission(facture, etab, canManagePayments, modalites?.virement_autorise === true);
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
@@ -737,13 +748,22 @@ export default function DetailFacture() {
 
         {lieeHonoraires && honoraires && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-            <p>Cette commission est liée à la facture d’honoraires {honoraires.numero_facture}. Le paiement en ligne des honoraires inclut cette commission.</p>
+            <p>Cette commission est liée à la facture d’honoraires {honoraires.numero_facture}.</p>
+            {modalites?.virement_autorise ? (
+              <p className="mt-2">Un règlement direct des honoraires a été déclaré. La commission Jolene reste à régler séparément. Cette déclaration ne prouve pas la réception des fonds par le soignant.</p>
+            ) : facture.statut !== 'PAYEE' && (
+              <p className="mt-2">Le paiement groupé des honoraires inclut cette commission. Un règlement séparé est proposé seulement après déclaration du règlement direct des honoraires, si aucun paiement en ligne n’est engagé.</p>
+            )}
             <button type="button" className="mt-3 min-h-[44px] btn-secondary text-sm no-print" onClick={() => navigate(
               facture.statut === 'PAYEE'
                 ? '/etablissement/facturation?tab=historique'
                 : `/etablissement/facturation?tab=missions-a-payer&mission=${encodeURIComponent(honoraires.mission_id!)}&facture_honoraire=${encodeURIComponent(honoraires.id)}`,
             )}>{facture.statut === 'PAYEE' ? 'Consulter l’historique des paiements' : 'Consulter le règlement des honoraires'}</button>
           </div>
+        )}
+
+        {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && modalites?.motif === 'PAIEMENT_EN_LIGNE_ENGAGE' && (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">Un paiement en ligne est déjà engagé. Consultez son suivi avant de déclarer un autre règlement.</p>
         )}
 
         {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (

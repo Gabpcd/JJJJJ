@@ -1,3 +1,4 @@
+import { tauxCommissionEtablissement } from '@/lib/tauxCommissionEtablissement';
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -94,7 +95,8 @@ export default function DashboardEtablissement() {
     nom: string;
     paliers_commission?: { nom: string } | null;
     taux_commission_negocie?: number | null;
-    groupes_sante?: { nom: string } | null;
+    taux_commission_effectif?: number | null;
+    groupes_sante?: { nom: string; taux_commission_negocie?: number | null } | null;
     groupe_sante_id?: string | null;
     peut_publier_missions?: boolean;
     bloque_auto_le?: string | null;
@@ -462,7 +464,7 @@ export default function DashboardEtablissement() {
   }, [dashboardFetching, queryClient, user?.id, etablissementId]);
 
   const etab = useMemo(() => dashData?.etab ?? null, [dashData]);
-  const tauxCommissionHt = Number(etab?.taux_commission_negocie ?? 15);
+  const tauxCommissionHt = tauxCommissionEtablissement(etab);
   const formatTaux = (valeur: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(valeur);
   const missions = useMemo(() => dashData?.missions ?? [], [dashData]);
   const aDejaPublie = useMemo(() => dashData?.aDejaPublie ?? null, [dashData]);
@@ -721,7 +723,7 @@ export default function DashboardEtablissement() {
                 Bonjour, <span className="text-gradient-hero">{etab.nom}</span>
               </h1>
               {etab.paliers_commission && (
-                <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
+                <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={tauxCommissionEtablissement(etab)} />
               )}
             </div>
             {etab.groupes_sante && (
@@ -926,7 +928,7 @@ export default function DashboardEtablissement() {
                 onClick={(e) => { e.stopPropagation(); navigate('/etablissement/facturation'); }}
                 className="inline-flex items-center gap-0.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-primary transition-colors"
               >
-                {etab.taux_commission_negocie != null && etab.taux_commission_negocie !== 15 ? 'Taux négocié' : 'Taux standard'} — détail
+                {tauxCommissionHt !== 15 ? 'Taux négocié' : 'Taux standard'} — détail
                 <ChevronRight className="h-3 w-3" aria-hidden="true" />
               </button>
             </div>

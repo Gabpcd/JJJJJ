@@ -619,9 +619,9 @@ export default function AdminFacturation() {
                 const failed = Number(data.failed ?? 0);
                 const skippedTest = Number(data.skipped_test ?? 0);
                 if (charged > 0 && failed === 0) {
-                  toast.success(`${charged} facture(s) prélevée(s) par SEPA${skippedTest > 0 ? ` · ${skippedTest} donnée(s) de test neutralisée(s)` : ''}`);
+                  toast.success(`${charged} prélèvement(s) SEPA initié(s) — confirmation bancaire à suivre${skippedTest > 0 ? ` · ${skippedTest} donnée(s) de test neutralisée(s)` : ''}`);
                 } else if (charged > 0 || failed > 0) {
-                  toast.warning(`${charged} prélèvement(s) confirmé(s), ${failed} échec(s), ${skippedTest} donnée(s) de test neutralisée(s).`);
+                  toast.warning(`${charged} prélèvement(s) SEPA initié(s), ${failed} échec(s), ${skippedTest} donnée(s) de test neutralisée(s). Les encaissements restent à confirmer.`);
                 } else if (skippedTest > 0) {
                   toast.info(`${skippedTest} facture(s) de test neutralisée(s) — aucun prélèvement réel.`);
                 } else {

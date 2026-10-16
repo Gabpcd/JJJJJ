@@ -64,87 +64,6 @@ function creerBlobPdf(pdfBytes: Uint8Array): Blob {
   new Uint8Array(buffer).set(pdfBytes);
   return new Blob([buffer], { type: 'application/pdf' });
 }
-
-async function notifierEmissionDocument(
-  supabaseAdmin: ReturnType<typeof createClient>,
-  facture: {
-    id: string;
-    numero_facture: string;
-    soignant_id: string;
-    etablissement_id: string;
-    montant_ht?: number;
-    montant_tva?: number;
-    montant_ttc: number;
-    periode_debut?: string | null;
-    periode_fin?: string | null;
-    type_document?: string | null;
-  },
-  soignant: { prenom?: string | null },
-  delaiVerificationHeures: number,
-): Promise<void> {
-  const montantTtc = Number(facture.montant_ttc || 0).toFixed(2);
-  const periode = facture.periode_debut || facture.periode_fin
-    ? `${facture.periode_debut || '—'} → ${facture.periode_fin || '—'}`
-    : '—';
-  const payloadCommun = {
-    numero: facture.numero_facture,
-    facture_id: facture.id,
-    montant_ttc: montantTtc,
-    periode,
-  };
-  const envois = await Promise.allSettled([
-    supabaseAdmin.functions.invoke('send-email', {
-      body: {
-        type: 'FACTURE_EMISE',
-        destinataire_id: facture.soignant_id,
-        idempotency_key: `facture-emise-soignant:${facture.id}`,
-        data: {
-          ...payloadCommun,
-          destinataire_role: 'SOIGNANT',
-          prenom: soignant.prenom || '',
-          libelle_document: facture.type_document === 'AVOIR'
-            ? 'Avoir d\'honoraires'
-            : 'Facture d\'honoraires',
-          delai_verification_heures: String(delaiVerificationHeures),
-        },
-      },
-    }),
-    supabaseAdmin.functions.invoke('send-email', {
-      body: {
-        type: 'FACTURE_EMISE',
-        destinataire_id: facture.etablissement_id,
-        idempotency_key: `facture-emise-etablissement:${facture.id}`,
-        data: {
-          ...payloadCommun,
-          destinataire_role: 'ETABLISSEMENT',
-          montant_ht: Number(facture.montant_ht || 0).toFixed(2),
-          montant_tva: Number(facture.montant_tva || 0).toFixed(2),
-        },
-      },
-    }),
-  ]);
-
-  const erreurs = envois.flatMap((resultat, index) => {
-    if (resultat.status === 'rejected') {
-      return [{ destinataire: index === 0 ? 'SOIGNANT' : 'ETABLISSEMENT', erreur: String(resultat.reason) }];
-    }
-    const erreur = (resultat.value as { error?: { message?: string } }).error?.message;
-    return erreur
-      ? [{ destinataire: index === 0 ? 'SOIGNANT' : 'ETABLISSEMENT', erreur }]
-      : [];
-  });
-  if (erreurs.length > 0) {
-    console.warn('[generate-invoice] email emission differe', erreurs);
-    await supabaseAdmin.from('invoice_audit_log').insert({
-      invoice_id: facture.id,
-      action: 'EMAIL_EMISSION_A_REESSAYER',
-      actor_id: null,
-      payload_before: null,
-      payload_after: { erreurs },
-    });
-  }
-}
-
 type RegimeTvaHonoraires =
   | 'EXONERE_ART_261_4_1'
   | 'FRANCHISE_EN_BASE_ART_293_B'
@@ -1108,7 +1027,6 @@ Deno.serve(async (req) => {
 
       const [pdfSha256, xmlSha256] = await Promise.all([sha256Hex(pdfBytes), sha256Hex(xmlCii)]);
       const documents = { pdf_s3_key: storagePath, facturx_xml_url: xmlPath, pdf_sha256: pdfSha256, xml_sha256: xmlSha256 };
-      let delaiVerificationHeures = 48;
       if (estPremiereEmission) {
         const { data: emission, error: emissionError } = await supabaseAdmin.rpc('fn_terminer_generation_honoraires', {
           p_facture_id: facture_id, p_token: generationToken, p_documents: documents,
@@ -1118,7 +1036,6 @@ Deno.serve(async (req) => {
           return json(req, { error: 'Émission atomique interrompue', facture_id }, 500);
         }
         generationEnCours = null;
-        delaiVerificationHeures = Number(emission.delai_verification_heures) || 48;
       } else {
         // Une nouvelle version d’une pièce déjà émise ne l’émet pas une seconde fois.
         const { error: ledgerError } = await supabaseAdmin.from('factures_honoraires_documents').insert({
@@ -1170,25 +1087,8 @@ Deno.serve(async (req) => {
         } catch (e) { console.warn('Chorus regen deferred:', e); }
       }
 
-      if (estPremiereEmission) {
-        await notifierEmissionDocument(
-          supabaseAdmin,
-          {
-            id: facture.id,
-            numero_facture: facture.numero_facture,
-            soignant_id: facture.soignant_id,
-            etablissement_id: facture.etablissement_id,
-            montant_ht: Number(facture.montant_ht),
-            montant_tva: Number(facture.montant_tva),
-            montant_ttc: Number(facture.montant_ttc),
-            periode_debut: facture.periode_debut,
-            periode_fin: facture.periode_fin,
-            type_document: facture.type_document,
-          },
-          sg,
-          delaiVerificationHeures,
-        );
-      }
+      // L'émission SQL met atomiquement les copies documentaires en file durable.
+      // Le cron conserve la même identité et reprend les échecs bornés.
 
       if (tokenReservation && isServiceRole) {
         await supabaseAdmin.from('invoice_audit_log').insert({

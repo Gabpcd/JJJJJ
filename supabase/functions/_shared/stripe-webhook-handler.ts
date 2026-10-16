@@ -19,6 +19,7 @@ import {
 } from "./stripe-escrow-payout.ts";
 import { resolveOperationalTestAccount } from "./test-account.ts";
 import { arbitrateConnectOperation, readConnectOperation, processConnectPretransferRefund, assertConnectRefund } from "./stripe-connect-pretransfer.ts";
+import { reconcileStandardPayoutEvent } from "./stripe-standard-payout.ts";
 
 export type StripeWebhookSource = "PLATFORM" | "CONNECT";
 
@@ -1025,6 +1026,19 @@ export async function handleStripeWebhook(
       }
       return { sourceIds, linked: Number(data || 0) };
     };
+
+    // Un payout manuel standard possède une seule trace explicite. Ne jamais
+    // tenter le rapprochement legacy par composition de payout automatique.
+    if (verified.source === "CONNECT" && event.type.startsWith("payout.")
+      && (event.data.object as Stripe.Payout).metadata?.type === "CONNECT_STANDARD_PAYOUT") {
+      if (!eventAccount) throw new Error("Standard payout connected context missing");
+      await requireConnectedSoignantId();
+      await reconcileStandardPayoutEvent(supabaseAdmin, stripe, eventAccount, (event.data.object as Stripe.Payout).id);
+      await markEventProcessed();
+      return new Response(JSON.stringify({ received: true, standard_payout: "reconciled" }), {
+        status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     // Handle checkout.session.completed
     if (verified.source === "PLATFORM" && event.type === "checkout.session.completed") {
