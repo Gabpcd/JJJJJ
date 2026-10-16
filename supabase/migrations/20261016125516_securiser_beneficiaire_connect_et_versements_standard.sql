@@ -35,6 +35,7 @@ ALTER TABLE public.stripe_transfers
   ADD COLUMN standard_payout_account_id text,
   ADD COLUMN standard_payout_attempt integer NOT NULL DEFAULT 0,
   ADD COLUMN standard_payout_previous_id text,
+  ADD COLUMN standard_payout_known_ids text[] NOT NULL DEFAULT '{}',
   ADD COLUMN standard_payout_first_post_at timestamptz,
   ADD COLUMN standard_payout_next_read_at timestamptz,
   ADD COLUMN standard_payout_owner uuid,
@@ -143,7 +144,11 @@ BEGIN
      OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=s.mission_id
        AND (facture_id=s.facture_honoraire_id OR facture_id IS NULL)
        AND statut IN('OUVERT','EN_DISCUSSION','EN_MEDIATION','MEDIATION_EN_COURS','REVUE_ADMIN'))
-     OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=s.mission_id AND statut<>'REMBOURSE') THEN RETURN FALSE; END IF;
+     -- Le solde Connect appartient au soignant, pas à une seule mission.
+     -- Aucun nouveau payout standard tant qu'un escrow de ce compte reste
+     -- non terminal ou d'état inconnu, même sur une autre mission.
+     OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE soignant_id=s.soignant_id
+       AND (statut IS NULL OR statut NOT IN('PAYE','REMBOURSE'))) THEN RETURN FALSE; END IF;
   IF s.standard_payout_first_post_at < clock_timestamp()-interval '20 hours' THEN
     UPDATE public.stripe_transfers SET standard_payout_state='REVIEW',standard_payout_error_code='AMBIGUOUS_CREATE_EXPIRED',
       standard_payout_owner=NULL,standard_payout_lease_until=NULL WHERE id=s.id;
@@ -212,6 +217,8 @@ BEGIN
     RETURN jsonb_build_object('review',true);
   END IF;
   UPDATE public.stripe_transfers SET stripe_payout_id=pid,
+    standard_payout_known_ids=CASE WHEN pid=ANY(standard_payout_known_ids) THEN standard_payout_known_ids
+      ELSE array_append(standard_payout_known_ids,pid) END,
     standard_payout_state=CASE WHEN st='paid' THEN 'PAID' WHEN st IN('failed','canceled') THEN 'FAILED' ELSE 'SUBMITTED' END,
     statut=CASE WHEN st='paid' AND statut='TRANSFERE' THEN 'PAYE' ELSE statut END,
     paye_le=CASE WHEN st='paid' THEN COALESCE(paye_le,clock_timestamp()) ELSE paye_le END,
@@ -230,12 +237,42 @@ BEGIN
   RETURN jsonb_build_object('recorded',true,'state',st);
 END;$$;
 
+-- Lecture fermée des IDs de payouts rattachés au ledger du compte exact.
+-- Les metadata fournisseur seules ne suffisent pas à reconnaître un mouvement.
+CREATE FUNCTION public.fn_connect_payout_est_connu(p_account_id text,p_payout jsonb)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  IF p_payout->>'currency' IS DISTINCT FROM 'eur' OR p_payout->'automatic' IS DISTINCT FROM 'false'::jsonb
+    OR COALESCE(p_payout->>'id','')!~'^po_[A-Za-z0-9_]+$' THEN RETURN FALSE; END IF;
+  IF p_payout#>>'{metadata,type}'='CONNECT_STANDARD_PAYOUT' THEN
+    RETURN EXISTS(SELECT 1 FROM public.stripe_transfers s
+      JOIN private.stripe_connect_avant_transfert o ON o.trace_id=s.id AND o.session_id=s.stripe_checkout_session_id
+      WHERE s.standard_payout_account_id=p_account_id AND o.destination_id=p_account_id
+        AND p_payout->'livemode'=to_jsonb(o.livemode)
+        AND p_payout->>'id'=ANY(s.standard_payout_known_ids)
+        AND p_payout#>>'{metadata,trace_id}'=s.id::text
+        AND p_payout#>>'{metadata,transfer_id}'=s.stripe_transfer_id
+        AND p_payout#>>'{metadata,mission_id}'=s.mission_id::text
+        AND p_payout#>>'{metadata,soignant_id}'=s.soignant_id::text
+        AND (p_payout->>'amount')::bigint=round(s.montant_soignant*100)::bigint);
+  ELSIF p_payout#>>'{metadata,type}'='ESCROW_RELEASE' THEN
+    RETURN EXISTS(SELECT 1 FROM public.paiements_escrow e
+      JOIN public.stripe_connect_onboarding b ON b.soignant_id=e.soignant_id AND b.stripe_account_id=p_account_id
+      WHERE e.stripe_payout_id=p_payout->>'id' AND p_payout#>>'{metadata,paiement_escrow_id}'=e.id::text
+        AND p_payout#>>'{metadata,mission_id}'=e.mission_id::text
+        AND p_payout#>>'{metadata,soignant_id}'=e.soignant_id::text
+        AND (p_payout->>'amount')::bigint=e.honoraires_cents);
+  END IF;
+  RETURN FALSE;
+END;$$;
+
 CREATE FUNCTION public.fn_connect_payout_reporter(p_trace_id uuid,p_owner uuid,p_code text,p_review boolean DEFAULT false)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
   PERFORM private.fn_connect_exiger_service();
   IF p_code NOT IN('WAITING_FUNDS','WAITING_ACCOUNT','SOURCE_NOT_ACQUIRED','IDENTITY_MISMATCH',
-    'PAGINATION_INCOMPLETE','AMBIGUOUS_CREATE_EXPIRED','PROVIDER_OR_PERSISTENCE_ERROR','CHECKED') THEN
+    'PAGINATION_INCOMPLETE','UNKNOWN_ACCOUNT_PAYOUT','AMBIGUOUS_CREATE_EXPIRED','PROVIDER_OR_PERSISTENCE_ERROR','CHECKED') THEN
     RAISE EXCEPTION 'CONNECT_PAYOUT_ERROR_CODE'; END IF;
   UPDATE public.stripe_transfers SET standard_payout_next_read_at=clock_timestamp()+interval '30 minutes',
     standard_payout_owner=NULL,standard_payout_lease_until=NULL,
@@ -250,7 +287,7 @@ BEGIN
   FOR p IN SELECT oid,regexp_replace(oid::regprocedure::text,'^public[.]','') AS signature,prosrc FROM pg_proc
     WHERE pronamespace='public'::regnamespace AND proname IN
       ('fn_connect_payouts_a_traiter','fn_connect_payout_prendre','fn_connect_payout_demarrer',
-       'fn_connect_payout_reessayer','fn_connect_payout_constater','fn_connect_payout_reporter') LOOP
+       'fn_connect_payout_reessayer','fn_connect_payout_constater','fn_connect_payout_est_connu','fn_connect_payout_reporter') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC,anon,authenticated',p.signature);
     EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO service_role',p.signature);
     INSERT INTO private.security_definer_inventory(signature,categorie,definition_md5,justification)

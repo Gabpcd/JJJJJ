@@ -1,4 +1,4 @@
-import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope, requireStagingRefundEventScope } from "./stripe-connect-staging-test.ts";
+import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope, requireStagingRefundEventScope, requireStagingTransferScope, requireStagingPayoutEventScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -609,6 +609,15 @@ export async function handleStripeWebhook(
         stagingConnectRefundId = refund.id;
       }
     }
+    let stagingConnectPayoutId: string | null = null;
+    if (testRuntime && testClassification.isTest && verified.source === "CONNECT" && eventAccount
+      && event.livemode === false && event.type.startsWith("payout.")) {
+      const payout = event.data.object as Stripe.Payout;
+      if (payout.metadata?.type === "CONNECT_STANDARD_PAYOUT") {
+        await requireStagingPayoutEventScope(supabaseAdmin, stripe, testRuntime, eventAccount, payout.id);
+        stagingConnectPayoutId = payout.id;
+      }
+    }
     const refundOptions = stagingConnectEvent && testRuntime
       ? { allowCreate: true, beforeCreate: (op: Parameters<typeof requireStagingRefundScope>[2]) => requireStagingRefundScope(supabaseAdmin, testRuntime, op) }
       : { allowCreate: true };
@@ -673,7 +682,7 @@ export async function handleStripeWebhook(
     // peuvent encore émettre des webhooks. Après claim idempotent mais avant
     // toute mutation métier, transfert, notification ou lecture Stripe
     // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
-    if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId) {
+    if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId) {
       await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
@@ -1314,9 +1323,10 @@ export async function handleStripeWebhook(
         // fois et conserve la décision existante de remboursement intégral tardif.
         const transferAlreadyProven = Boolean(validatedTransferClaim?.stripe_transfer_id
           && ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(validatedTransferClaim.statut));
+        let transferOperation = existingOperation;
         if (!transferAlreadyProven) {
           const operation = await arbitrateConnectOperation(supabaseAdmin, stripe, validatedTransferClaim!.id, session.id);
-          if (stagingConnectEvent && operation.orientation !== "REFUND") throw new Error("CONNECT_TEST_TRANSFER_FORBIDDEN");
+          transferOperation = operation;
           if (operation.orientation === "REFUND") {
             const result = await processConnectPretransferRefund(supabaseAdmin, stripe, operation, crypto.randomUUID(), refundOptions);
             await markEventProcessed();
@@ -1354,6 +1364,10 @@ export async function handleStripeWebhook(
 
           let mouvementStripeConfirme = false;
           try {
+            if (stagingConnectEvent && testRuntime && !transferDejaCree) {
+              if (!transferOperation) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+              await requireStagingTransferScope(supabaseAdmin, stripe, testRuntime, transferOperation);
+            }
             // Idempotency key portée par la session Checkout : un retry du même
             // event réutilise la même clé (Stripe renvoie le transfer existant au
             // lieu d'en créer un second) ; un nouveau paiement légitime (nouvelle

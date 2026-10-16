@@ -6,7 +6,7 @@ const source='a'.repeat(40),seed=loadSeed();
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'Gabpcd/JJJJJ',PR_HEAD_REPOSITORY:'Gabpcd/JJJJJ',
   GITHUB_RUN_ID:'123456789',GITHUB_RUN_ATTEMPT:'1',SOURCE_SHA:source,STAGING_SUPABASE_PROJECT_REF:'mejpriaetwgtcstbgfid',STAGING_SUPABASE_ACCESS_TOKEN:'private-management-token'};
 const empty=()=>({catalogue:{...REVIEWED_CATALOGUE,commissionHelper:'c'.repeat(32),queuedRequests:0,activeCrons:0,runningCrons:0,generationUrlAbsent:true,supportStagingExact:true},
-  snapshot:{auth:[],soignants:[],etablissements:[],onboarding:[],invoices:[],commissions:[],mission:null,payments:0,paymentClaims:0,emailQueue:0,emailRetries:0,activeAdmin:0},
+  snapshot:{auth:[],soignants:[],etablissements:[],onboarding:[],invoices:[],commissions:[],mission:null,payments:0,paymentClaims:0,emailQueue:0,emailRetries:0,emailsSent:0,emailDocuments:[],activeAdmin:0},
   authInsertTriggers:0,externalNotifications:'1'.repeat(32),emailQueue:'2'.repeat(32),externalQueues:'3'.repeat(32),cohort:{mandats:0,creneaux:0,notifications:0,audit:0,preferences:0,sessions:0,identities:0}});
 const sentinel=[{proof:'CONNECT_TEST_FIXTURE_SEED_ROLLBACK',rolled_back:true,seed_sha256:SEED_SHA256}];
 function transport({lost=false,missing=false,drift=false}={}) {

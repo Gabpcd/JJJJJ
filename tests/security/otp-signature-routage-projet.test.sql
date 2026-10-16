@@ -5,11 +5,12 @@ BEGIN;
 
 CREATE TEMP TABLE otp_vault_config(name text PRIMARY KEY, decrypted_secret text);
 CREATE TEMP TABLE otp_comptes_fictifs(user_id uuid PRIMARY KEY, actif boolean NOT NULL);
-CREATE TEMP TABLE soignants(id uuid PRIMARY KEY, telephone text);
-CREATE TEMP TABLE etablissements(id uuid PRIMARY KEY, telephone_contact text);
+CREATE TEMP TABLE soignants(id uuid PRIMARY KEY, telephone text, est_compte_test boolean NOT NULL DEFAULT false);
+CREATE TEMP TABLE etablissements(id uuid PRIMARY KEY, telephone_contact text, est_compte_test boolean NOT NULL DEFAULT false);
 CREATE TEMP TABLE contrats_mission(
   id uuid PRIMARY KEY, soignant_id uuid, etablissement_id uuid, contenu_html text,
-  statut text, signature_soignant boolean, signature_etablissement boolean
+  statut text, signature_soignant boolean, signature_etablissement boolean,
+  mission_id uuid
 );
 CREATE TEMP TABLE signatures_contrats(
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -82,13 +83,13 @@ BEGIN
 END;
 $isoler_dependances$;
 
-INSERT INTO pg_temp.soignants VALUES ('97600000-0000-4000-8000-000000000001', '+33600000001');
-INSERT INTO pg_temp.etablissements VALUES ('97600000-0000-4000-8000-000000000002', '+33600000002');
+INSERT INTO pg_temp.soignants(id,telephone) VALUES ('97600000-0000-4000-8000-000000000001', '+33600000001');
+INSERT INTO pg_temp.etablissements(id,telephone_contact) VALUES ('97600000-0000-4000-8000-000000000002', '+33600000002');
 INSERT INTO pg_temp.contrats_mission VALUES (
   '97600000-0000-4000-8000-000000000003',
   '97600000-0000-4000-8000-000000000001',
   '97600000-0000-4000-8000-000000000002', '<p>Document fictif</p>',
-  'EN_ATTENTE_SIGNATURES', false, false
+  'EN_ATTENTE_SIGNATURES', false, false, '97600000-0000-4000-8000-000000000004'
 );
 SELECT set_config('request.jwt.claims', '{"sub":"97600000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 SELECT set_config('request.jwt.claim.sub', '97600000-0000-4000-8000-000000000001', true);

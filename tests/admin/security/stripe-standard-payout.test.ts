@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { processStandardConnectPayouts, reconcileStandardPayoutEvent, standardPayoutMetadata } from '../../../supabase/functions/_shared/stripe-standard-payout';
-import type { StandardPayoutWork } from '../../../supabase/functions/_shared/stripe-standard-payout';
+import type { StandardPayoutOptions, StandardPayoutWork } from '../../../supabase/functions/_shared/stripe-standard-payout';
 import type Stripe from 'stripe';
 
 const uuid = (n: number) => `98400000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -9,29 +9,32 @@ function simulation() {
   const w: StandardPayoutWork = { id: uuid(1), missionId: uuid(2), soignantId: uuid(3), etablissementId: uuid(4),
     factureHonoraireId: uuid(5), accountId: 'acct_fixture', customerId: 'cus_fixture', transferId: 'tr_fixture',
     paymentIntentId: 'pi_fixture', chargeId: 'ch_fixture', amountCents: 10000, totalCents: 11800,
-    livemode: false, state: 'WAITING', attempt: 0, payoutId: null, previousPayoutId: null, firstPostAt: null };
+    livemode: true, state: 'WAITING', attempt: 0, payoutId: null, previousPayoutId: null, firstPostAt: null };
   const state = { work: w, available: true, globalBalance: 10000, mode: 'manual', ownerMatches: true,
     refunded: false, disputed: false, reversed: false, net: 10000, admitted: true, claimed: true,
     lostResponse: false, persistenceFailure: false, createCalls: [] as Array<{ params: any; options: any }>,
     rpcCalls: [] as Array<{ name: string; args: any }>, payouts: [] as any[], saturated: false, wrongDestination: false,
-    returned: true, returnAvailable: true, currentPayout: null as any };
+    returned: true, returnAvailable: true, currentPayout: null as any, knownPayouts: new Set<string>(), ignoreObservation: false };
   const payout = (status = 'pending', attempt = state.work.attempt) => ({ id: `po_fixture${attempt}`, amount: 10000,
-    currency: 'eur', livemode: false, automatic: false, status, metadata: { ...standardPayoutMetadata(state.work), attempt: String(attempt) },
+    currency: 'eur', livemode: state.work.livemode, automatic: false, status, metadata: { ...standardPayoutMetadata(state.work), attempt: String(attempt) },
     failure_balance_transaction: ['failed', 'canceled'].includes(status) && state.returned ? 'txn_returned' : null });
   const db = { async rpc(name: string, args: any) {
     state.rpcCalls.push({ name, args });
-    if (name === 'fn_connect_payouts_a_traiter') return { data: [{ id: w.id }], error: null };
+    if (name === 'fn_connect_payouts_a_traiter' || name === 'fn_connect_payouts_test_a_traiter') return { data: [{ id: w.id }], error: null };
     if (name === 'fn_connect_payout_prendre') return { data: state.claimed ? { ...state.work } : null, error: null };
-    if (name === 'fn_connect_payout_demarrer') {
+    if (name === 'fn_connect_payout_demarrer' || name === 'fn_connect_payout_demarrer_test') {
       if (state.admitted) state.work.firstPostAt ||= new Date(NOW).toISOString();
       return { data: state.admitted, error: null };
     }
     if (name === 'fn_connect_payout_constater') {
+      if (state.ignoreObservation) return { data: { ignored: true }, error: null };
       if (state.persistenceFailure) return { data: null, error: { message: 'unavailable' } };
       state.work.payoutId = args.p_payout.id;
+      state.knownPayouts.add(args.p_payout.id);
       state.work.state = ['failed', 'canceled'].includes(args.p_payout.status) ? 'FAILED' : args.p_payout.status === 'paid' ? 'PAID' : 'SUBMITTED';
       return { data: { recorded: true }, error: null };
     }
+    if (name === 'fn_connect_payout_est_connu') return { data: state.knownPayouts.has(args.p_payout.id), error: null };
     if (name === 'fn_connect_payout_reessayer') {
       state.work = { ...state.work, state: 'WAITING', payoutId: null, previousPayoutId: args.p_previous_id,
         firstPostAt: null, attempt: state.work.attempt + 1 };
@@ -44,20 +47,20 @@ function simulation() {
     accounts: { retrieve: async () => ({ id: w.accountId, metadata: { soignant_id: state.ownerMatches ? w.soignantId : uuid(99) },
       settings: { payouts: { schedule: { interval: state.mode } } }, payouts_enabled: true, charges_enabled: true,
       details_submitted: true, requirements: {}, capabilities: { transfers: 'active' } }) },
-    transfers: { retrieve: async () => ({ id: w.transferId, amount: 10000, currency: 'eur', livemode: false,
+    transfers: { retrieve: async () => ({ id: w.transferId, amount: 10000, currency: 'eur', livemode: state.work.livemode,
       destination: state.wrongDestination ? 'acct_other' : w.accountId, source_transaction: w.chargeId, destination_payment: 'py_destination',
       transfer_group: `facture_${w.factureHonoraireId}`, reversed: state.reversed, amount_reversed: state.reversed ? 10000 : 0,
       metadata: { mission_id: w.missionId, soignant_id: w.soignantId, facture_honoraires_id: w.factureHonoraireId, payment_scope: 'INVOICE' } }) },
     paymentIntents: { retrieve: async () => ({ id: w.paymentIntentId, status: 'succeeded', amount: 11800, amount_received: 11800,
-      currency: 'eur', livemode: false, customer: w.customerId, latest_charge: w.chargeId }) },
-    customers: { retrieve: async () => ({ id: w.customerId, livemode: false, metadata: { etablissement_id: w.etablissementId } }) },
+      currency: 'eur', livemode: state.work.livemode, customer: w.customerId, latest_charge: w.chargeId }) },
+    customers: { retrieve: async () => ({ id: w.customerId, livemode: state.work.livemode, metadata: { etablissement_id: w.etablissementId } }) },
     charges: { retrieve: async (chargeId: string, options?: any) => {
       if (chargeId === 'py_destination') {
         expect(options).toEqual({ stripeAccount: w.accountId });
-        return { id: chargeId, source_transfer: w.transferId, amount: 10000, currency: 'eur', livemode: false,
+        return { id: chargeId, source_transfer: w.transferId, amount: 10000, currency: 'eur', livemode: state.work.livemode,
           paid: true, captured: true, refunded: false, amount_refunded: 0, balance_transaction: 'txn_destination' };
       }
-      return { id: w.chargeId, amount: 11800, currency: 'eur', livemode: false, payment_intent: w.paymentIntentId,
+      return { id: w.chargeId, amount: 11800, currency: 'eur', livemode: state.work.livemode, payment_intent: w.paymentIntentId,
         customer: w.customerId, paid: true, captured: true, status: 'succeeded', refunded: state.refunded,
         amount_refunded: state.refunded ? 100 : 0, disputed: state.disputed };
     } },
@@ -86,7 +89,7 @@ function simulation() {
       },
     },
   } as unknown as Stripe;
-  const run = (now = NOW) => processStandardConnectPayouts(db, stripe, { now, owner: () => uuid(90) });
+  const run = (now = NOW, options: StandardPayoutOptions = {}) => processStandardConnectPayouts(db, stripe, { now, owner: () => uuid(90), ...options });
   const lastReport = () => state.rpcCalls.filter(c => c.name === 'fn_connect_payout_reporter').at(-1)?.args;
   return { state, stripe, db, payout, run, lastReport };
 }
@@ -157,5 +160,62 @@ describe('standard Connect bank payouts — real helper, simulated provider', ()
     const s = simulation(); s.state.currentPayout = s.payout('failed');
     await reconcileStandardPayoutEvent(s.db, s.stripe, s.state.work.accountId, s.state.currentPayout.id);
     expect(s.state.work.state).toBe('FAILED'); expect(s.state.createCalls).toHaveLength(0);
+  });
+  it('an ignored stale nonterminal observation never becomes REVIEW in the final reporter', async () => {
+    const s = simulation(); s.state.payouts = [s.payout('pending')]; s.state.ignoreObservation = true;
+    expect(await s.run()).toMatchObject({ checked: 1, review: 0, errors: 0 });
+    expect(s.state.createCalls).toHaveLength(0); expect(s.lastReport()).toMatchObject({ p_code: 'CHECKED', p_review: false });
+  });
+  it.each([{}, { type: 'ESCROW_RELEASE', paiement_escrow_id: uuid(44) }])('unregistered external payout blocks a new payout even with app-looking metadata: %j', async metadata => {
+    const s = simulation(); s.state.payouts = [{ ...s.payout('paid'), id: 'po_external', metadata }];
+    expect(await s.run()).toMatchObject({ review: 1 }); expect(s.state.createCalls).toHaveLength(0);
+    expect(s.lastReport()).toMatchObject({ p_code: 'UNKNOWN_ACCOUNT_PAYOUT', p_review: true });
+  });
+  it('an exact ledger-linked other payout does not block a new standard payout', async () => {
+    const s = simulation(); s.state.payouts = [{ ...s.payout('paid'), id: 'po_other', metadata: { trace_id: uuid(44) } }];
+    s.state.knownPayouts.add('po_other'); expect(await s.run()).toMatchObject({ checked: 1 });
+    expect(s.state.createCalls).toHaveLength(1);
+  });
+  it('an external unknown payout never prevents reconciliation of an already identified payout', async () => {
+    const s = simulation(); s.state.currentPayout = s.payout('paid'); s.state.work.payoutId = s.state.currentPayout.id;
+    s.state.payouts = [{ ...s.payout('paid'), id: 'po_external', metadata: {} }];
+    expect(await s.run()).toMatchObject({ checked: 1 }); expect(s.state.work.state).toBe('PAID');
+    expect(s.state.createCalls).toHaveLength(0);
+  });
+  it('requires the TEST capacity and beforeCreate pair before even selecting a batch', async () => {
+    const s = simulation(); await expect(s.run(NOW, { testCapacityId: uuid(50) })).rejects.toThrow();
+    await expect(s.run(NOW, { beforeCreate: async () => undefined })).rejects.toThrow();
+    expect(s.state.rpcCalls).toHaveLength(0);
+  });
+  it('normal production processing refuses a TEST row without any TEST exception', async () => {
+    const s = simulation(); s.state.work.livemode = false;
+    expect(await s.run()).toMatchObject({ review: 1 }); expect(s.state.createCalls).toHaveLength(0);
+    expect(s.state.rpcCalls.some(c => c.name.endsWith('_test'))).toBe(false);
+  });
+  it('TEST selects only its capacity and reserves its budget before final TEST CAS and one POST', async () => {
+    const s = simulation(); s.state.work.livemode = false; let reservations = 0;
+    const beforeCreate = async (work: StandardPayoutWork) => {
+      expect(work.id).toBe(uuid(1)); expect(Object.isFrozen(work)).toBe(true);
+      expect(s.state.rpcCalls.some(c => c.name === 'fn_connect_payout_demarrer_test')).toBe(false);
+      reservations++;
+    };
+    expect(await s.run(NOW, { testCapacityId: uuid(50), beforeCreate })).toMatchObject({ checked: 1 });
+    expect(reservations).toBe(1); expect(s.state.createCalls).toHaveLength(1);
+    expect(s.state.rpcCalls).toContainEqual({ name: 'fn_connect_payouts_test_a_traiter', args: { p_limit: 1, p_capacity_id: uuid(50) } });
+    expect(s.state.rpcCalls).toContainEqual({ name: 'fn_connect_payout_demarrer_test', args: { p_trace_id: uuid(1), p_owner: uuid(90), p_capacity_id: uuid(50) } });
+    expect(s.state.rpcCalls.some(c => c.name === 'fn_connect_payouts_a_traiter' || c.name === 'fn_connect_payout_demarrer')).toBe(false);
+  });
+  it.each(['failed', 'canceled'])('TEST %s is reconciled but cannot create a second bank attempt', async status => {
+    const s = simulation(); s.state.work.livemode = false; s.state.currentPayout = s.payout(status);
+    s.state.work.payoutId = s.state.currentPayout.id;
+    expect(await s.run(NOW, { testCapacityId: uuid(50), beforeCreate: async () => { throw new Error('No second budget'); } })).toMatchObject({ checked: 1 });
+    expect(s.state.work.state).toBe('FAILED'); expect(s.state.createCalls).toHaveLength(0);
+    expect(s.state.rpcCalls.some(c => c.name === 'fn_connect_payout_reessayer')).toBe(false);
+  });
+  it('refused TEST budget never reaches the final CAS or provider POST', async () => {
+    const s = simulation(); s.state.work.livemode = false;
+    expect(await s.run(NOW, { testCapacityId: uuid(50), beforeCreate: async () => { throw new Error('TEST capacity closed'); } })).toMatchObject({ errors: 1 });
+    expect(s.state.createCalls).toHaveLength(0);
+    expect(s.state.rpcCalls.some(c => c.name === 'fn_connect_payout_demarrer_test')).toBe(false);
   });
 });

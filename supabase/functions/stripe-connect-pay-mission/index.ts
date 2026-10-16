@@ -1,4 +1,4 @@
-import { stagingConnectConfig, readStagingConnectCapacity, stagingCheckoutExpiresAt, authorizeStagingCheckout, verifyStagingStripeIdentity, type StagingConnectCapacity } from "../_shared/stripe-connect-staging-test.ts";
+import { stagingConnectConfig, readStagingConnectCapacity, stagingCheckoutExpiresAt, authorizeStagingCheckout, verifyStagingStripeIdentity, requireStagingTransferScope, type StagingConnectCapacity } from "../_shared/stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
@@ -365,7 +365,8 @@ Deno.serve(async (req) => {
     // La capacité ne peut jamais adopter une tentative historique ni toucher
     // une autre trace de la facture, même sur le projet staging.
     if (testCapacity && existingTransfer && (!testCapacity.operationId || !testCapacity.sessionId || !testCapacity.traceId
-      || existingTransfer.id !== testCapacity.traceId || existingTransfer.stripe_transfer_id
+      || existingTransfer.id !== testCapacity.traceId
+      || existingTransfer.stripe_transfer_id && (!testCapacity.transfersAllowed || existingTransfer.stripe_transfer_id !== testCapacity.transferId)
       || existingTransfer.mission_id !== testCapacity.missionId || existingTransfer.etablissement_id !== testCapacity.etablissementId
       || existingTransfer.soignant_id !== testCapacity.soignantId || existingTransfer.facture_id !== testCapacity.factureCommissionId
       || existingTransfer.facture_honoraire_id !== testCapacity.factureHonoraireId
@@ -726,7 +727,9 @@ Deno.serve(async (req) => {
       if (claimError || !claim && (testCapacity.claimReservedAt || testCapacity.operationId || testCapacity.sessionId)
         || claim && (!testCapacity.claimReservedAt || claim.flow !== "CONNECT_INVOICE"
         || claim.owner_token !== `connect-invoice:${testCapacity.factureHonoraireId}`
-        || claim.stripe_checkout_session_id !== testCapacity.sessionId || claim.stripe_payment_intent_id)) {
+        || claim.stripe_checkout_session_id !== testCapacity.sessionId
+        || claim.stripe_payment_intent_id && (!testCapacity.transfersAllowed
+          || claim.stripe_payment_intent_id !== existingTransfer?.stripe_payment_intent_id))) {
         throw new Error("CONNECT_STAGING_TEST_REFUSED");
       }
     }
@@ -953,17 +956,22 @@ Deno.serve(async (req) => {
       const session = await stripe.checkout.sessions.retrieve(testCapacity.sessionId);
       if (session.id !== testCapacity.sessionId || session.livemode !== false
         || session.metadata?.connect_operation_id !== testCapacity.operationId) throw new Error("CONNECT_STAGING_TEST_REFUSED");
-      if (session.status !== "open" || session.expires_at * 1000 <= Date.now()) {
+      const standardPaid = testCapacity.transfersAllowed && session.status === "complete" && session.payment_status === "paid";
+      if (!standardPaid && (session.status !== "open" || session.expires_at * 1000 <= Date.now())) {
         return new Response(JSON.stringify({error: "CONNECT_TEST_RECONCILIATION_REQUIRED",
           message: "Cette tentative doit être rapprochée avant tout nouveau règlement."}),
         {status:409,headers:{...corsHeaders(req),"Content-Type":"application/json"}});
       }
       await requireConnectCheckoutAdmission(supabaseAdmin, session);
-      if ((await verifierSessionConnect(session, false)).length) throw new Error("CONNECT_STAGING_TEST_REFUSED");
-      return new Response(JSON.stringify({success:true,resumed:true,client_secret:session.client_secret,
-        checkout_session_id:session.id,total:totalCents/100,commission:commissionCents/100,
-        commission_ttc:commissionCents/100,soignant:soignantCents/100,montant_soignant:soignantCents/100}),
-      {status:200,headers:{...corsHeaders(req),"Content-Type":"application/json"}});
+      if ((await verifierSessionConnect(session, standardPaid)).length) throw new Error("CONNECT_STAGING_TEST_REFUSED");
+      if (!standardPaid) {
+        return new Response(JSON.stringify({success:true,resumed:true,client_secret:session.client_secret,
+          checkout_session_id:session.id,total:totalCents/100,commission:commissionCents/100,
+          commission_ttc:commissionCents/100,soignant:soignantCents/100,montant_soignant:soignantCents/100}),
+        {status:200,headers:{...corsHeaders(req),"Content-Type":"application/json"}});
+      }
+      // V2 poursuit le rapprochement normal de cette même Session ; aucune
+      // nouvelle Session ou charge n'est admissible pour une capacité consommée.
     }
 
     const paymentFlowClaim = await acquireStripePaymentFlowClaim(
@@ -1050,6 +1058,7 @@ Deno.serve(async (req) => {
       if (!existingTransfer.stripe_transfer_id) {
         const operation = await arbitrateConnectOperation(supabaseAdmin, stripe, existingTransfer.id, session.id);
         if (operation.orientation !== "TRANSFER") throw new Error("CONNECT_REFUND_IN_PROGRESS");
+        if (testCapacity && testRuntime) await requireStagingTransferScope(supabaseAdmin, stripe, testRuntime, operation);
       }
 
       const transfer = existingTransfer.stripe_transfer_id

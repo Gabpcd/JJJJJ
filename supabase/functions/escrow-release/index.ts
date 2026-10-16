@@ -24,6 +24,7 @@ import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 import { processStandardConnectPayouts } from "../_shared/stripe-standard-payout.ts";
+import { stagingConnectConfig, requireStagingPayoutScope } from "../_shared/stripe-connect-staging-test.ts";
 import {
   type EscrowPayoutExpectation,
   requireExactEscrowPayout,
@@ -175,6 +176,28 @@ Deno.serve(async (req) => {
   const stripe = new Stripe(stripeKey, {
     apiVersion: "2026-02-25.clover",
   });
+
+  // Recette distincte, ancrée sur le seul projet staging et une clé TEST par
+  // stagingConnectConfig. Ce batch ne parcourt ni le ledger LIVE ni l'escrow.
+  // Absent en configuration : le consumer de production reste inchangé.
+  try {
+    const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    if (testRuntime) {
+      const standard = await processStandardConnectPayouts(admin, stripe, {
+        testCapacityId: testRuntime.capabilityId,
+        beforeCreate: work => requireStagingPayoutScope(admin, stripe, testRuntime, work),
+      });
+      const success = standard.errors === 0 && standard.review === 0;
+      return new Response(JSON.stringify({ success, mode: "CONNECT_STAGING_STANDARD_TEST_V2",
+        examined: 0, planifies: 0, payes: 0, attente_fonds: 0, echecs: 0, ignores: 0, standard }), {
+        status: success ? 200 : 500, headers: { "Content-Type": "application/json" },
+      });
+    }
+  } catch {
+    return new Response(JSON.stringify({ error: "CONNECT_STAGING_TEST_REFUSED" }), {
+      status: 503, headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const { data: dus, error: dusErr } = await admin.rpc("fn_escrow_releases_a_traiter", { p_limit: 50 });
   if (dusErr) {

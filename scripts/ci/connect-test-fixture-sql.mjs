@@ -73,6 +73,11 @@ export function snapshotSql(v) {
     'payments',(SELECT count(*) FROM public.paiements_soignant WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.paiements_mission WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.paiements_escrow WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.stripe_transfers WHERE mission_id=${m}::uuid),
     'paymentClaims',(SELECT count(*) FROM public.stripe_payment_flow_claims WHERE resource_key='MISSION:'||${m} OR resource_key IN(SELECT 'FACTURE:'||id::text FROM public.factures WHERE mission_id=${m}::uuid)),
     'emailQueue',(SELECT count(*) FROM public.email_queue WHERE destinataire_id IN(${s}::uuid,${e}::uuid)),
+    'emailsSent',(SELECT count(*) FROM public.emails_envoyes WHERE destinataire_id IN(${s}::uuid,${e}::uuid)),
+    'emailDocuments',(SELECT coalesce(jsonb_agg(jsonb_build_object('family',l.famille,'document',l.document_id,
+      'recipient',l.destinataire_id,'type',q.type,'state',q.statut,'sent',q.envoye) ORDER BY l.email_id),'[]')
+      FROM private.facturation_email_livraisons l JOIN public.email_queue q ON q.id=l.email_id
+      WHERE l.destinataire_id IN(${s}::uuid,${e}::uuid)),
     'emailRetries',(SELECT count(*) FROM public.invoice_audit_log WHERE invoice_id IN(SELECT id FROM public.factures_honoraires WHERE mission_id=${m}::uuid) AND action='EMAIL_EMISSION_A_REESSAYER'),
     'emailSkips',(SELECT count(*) FROM public.journaux_audit WHERE id_ressource IN(${s}::uuid,${e}::uuid) AND action='NOTIFICATION_SKIPPED' AND details->>'raison'='test_account' AND details->>'fonction' IS NULL)
   ) AS receipt;`;

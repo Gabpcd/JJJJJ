@@ -23,7 +23,12 @@ function harness(m,options={}) {
   const snapshot=()=>({auth:state.auth,soignants:state.seeded?[{id:m.members[0].id,email:m.members[0].email,test:true,source:'RECETTE_CONNECT_TEST_SYNTHETIQUE',account:state.linked?'acct_fixture':null,sms:false,smsAlerts:false,defacto:false}]:[],
     etablissements:state.seeded?[{id:m.members[1].id,email:m.members[1].email,test:true,source:'RECETTE_CONNECT_TEST_SYNTHETIQUE',customer:state.linked?'cus_fixture':null,sms:false,chorus:false}]:[],
     mission:state.seeded?{id:m.sql.ids.mission,soignant:m.members[0].id,etablissement:m.members[1].id,status:'EN_COURS',label:`RECETTE CONNECT TEST SYNTHETIQUE ${m.sql.runId}`,hours:8,effective:4,net:160,commission:24,startsOn:options.missionStartsOn??'2026-09-21',endsOn:'2026-10-09'}:null,
-    preferencesClosed:state.seeded,activeAdmin:0,payments:0,paymentClaims:0,emailQueue:0,emailRetries:0,emailSkips:state.generated?2:0,
+    preferencesClosed:state.seeded,activeAdmin:0,payments:0,paymentClaims:0,emailQueue:state.generated?3:0,emailRetries:0,emailSkips:0,emailsSent:0,
+    emailDocuments:state.generated?[
+      {family:'HONORAIRES',document:invoiceId,recipient:m.members[0].id,type:'FACTURATION_DOCUMENT',state:'EN_ATTENTE',sent:false},
+      {family:'HONORAIRES',document:invoiceId,recipient:m.members[1].id,type:'FACTURATION_DOCUMENT',state:'EN_ATTENTE',sent:false},
+      {family:'COMMISSION',document:commissionId,recipient:m.members[1].id,type:'FACTURATION_DOCUMENT',state:'EN_ATTENTE',sent:false},
+    ]:[],
     onboarding:state.linked?[{account:'acct_fixture',soignant:m.members[0].id,status:'EN_COURS',complete:false,charges:false,payouts:false,details:false}]:[],
     invoices:state.generated?[{id:invoiceId,soignant:m.members[0].id,etablissement:m.members[1].id,status:'EMISE',kind:'FACTURE',nature:'ORIGINALE',total:80,paid:false,versions:1,pdf:'invoices/synthetic.pdf',xml:'invoices/synthetic.xml'}]:[],
     commissions:state.generated?[{id:commissionId,honoraire:invoiceId,status:'EMISE',kind:'FACTURE',total:14.4,linked:false}]:[]});
@@ -96,6 +101,28 @@ test('a lost provider receipt stays ambiguous on resume without a second create'
   const m=manifest(),h=harness(m,{before:async(url,init)=>{if(url==='https://api.stripe.com/v1/accounts'&&init.method==='POST')throw Error('secret-token must not leak');}});
   await assert.rejects(run(m,h),/TRANSPORT_OR_JSON_UNCERTAIN/);assert.equal(m.steps.account.state,'intent');
   const n=h.state.calls.length;await assert.rejects(run(m,h),/AMBIGUOUS_PREVIOUS_ATTEMPT/);assert.equal(h.state.calls.length,n);
+});
+test('document queue receipts allow only the three exact unsent copies and preserve TEST suppression',async()=>{
+  const m=manifest(),h=harness(m);await run(m,h);
+  const source=h.snapshot();validateSnapshot(source,m,'generated');
+  const canceled=structuredClone(source);canceled.emailDocuments.forEach(x=>{x.state='ANNULE';});
+  validateSnapshot(canceled,m,'generated');
+  for(const change of [
+    r=>{r.emailsSent=1;},
+    r=>{r.emailQueue=4;},
+    r=>{r.emailDocuments[0].recipient=m.members[2].id;},
+    r=>{r.emailDocuments[0].document=commissionId;},
+    r=>{r.emailDocuments[0].family='COMMISSION';},
+    r=>{r.emailDocuments[0].type='FACTURE_EMISE';},
+    r=>{r.emailDocuments[0].state='ENVOYE';},
+    r=>{r.emailDocuments[0].state='ERREUR';},
+    r=>{r.emailDocuments[0].sent=true;},
+    r=>{r.emailDocuments[1]={...r.emailDocuments[0]};},
+    r=>{r.emailDocuments.pop();r.emailQueue--;},
+  ]) {const rejected=structuredClone(source);change(rejected);assert.throws(()=>validateSnapshot(rejected,m,'generated'));}
+  const preexisting=harness(manifest()).snapshot();preexisting.emailQueue=1;
+  preexisting.emailDocuments=[source.emailDocuments[0]];
+  assert.throws(()=>validateSnapshot(preexisting,manifest(),'empty'),/UNEXPECTED_EFFECTS/);
 });
 test('live key and wrong provenance refuse before any transport',async()=>{
   for(const delta of [{env:{...env,STRIPE_TEST_SECRET_KEY:'sk_live_forbidden'}},{local:{sha:'b'.repeat(40),clean:true}},{local:{sha,clean:false}}]) {

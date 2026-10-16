@@ -257,6 +257,7 @@ commission_migration = (ROOT/'supabase/migrations/20261016125632_securiser_regle
 commission_runtime = commission_migration[commission_migration.index('CREATE FUNCTION private.fn_admission_virement_commission'):commission_migration.index('-- Exposer le taux résolu')]
 sql("""CREATE TABLE public.etablissements(id uuid PRIMARY KEY,mode_paiement_commission text,est_secteur_public boolean DEFAULT false,chorus_pro_actif boolean DEFAULT false);
 ALTER TABLE public.missions ADD facture_id uuid;
+ALTER TABLE public.stripe_transfers ADD facture_id uuid;
 ALTER TABLE public.factures ADD est_secteur_public boolean DEFAULT false,ADD stripe_hosted_url text,ADD stripe_invoice_id text,ADD facture_precedente_id uuid,ADD virement_reference text;
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT auth.jwt()->>'role' $$;
 CREATE FUNCTION public.est_admin() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;

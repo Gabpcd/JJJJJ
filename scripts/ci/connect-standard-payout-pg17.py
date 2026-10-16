@@ -48,7 +48,7 @@ CREATE TABLE public.stripe_transfers(id uuid PRIMARY KEY,mission_id uuid,soignan
  stripe_reversal_statut text DEFAULT 'AUCUN',stripe_amount_reversed_cents integer DEFAULT 0,dispute_statut text);
 CREATE TABLE public.litiges(id uuid PRIMARY KEY,mission_id uuid,facture_id uuid,statut text);
 CREATE TABLE public.paiements_soignant(mission_id uuid,facture_honoraire_id uuid,statut text);
-CREATE TABLE public.paiements_escrow(mission_id uuid,statut text);
+CREATE TABLE public.paiements_escrow(id uuid,mission_id uuid,soignant_id uuid,statut text,stripe_payout_id text,honoraires_cents integer);
 CREATE TABLE public.journaux_audit(acteur_id uuid,type_acteur text,action text,type_ressource text,id_ressource uuid,details jsonb,navigateur_acteur text);
 CREATE TABLE private.security_definer_inventory(signature text PRIMARY KEY,categorie text,definition_md5 text,justification text);
 """
@@ -86,6 +86,11 @@ UPDATE public.stripe_transfers SET statut='TRANSFERE' WHERE id='{T}';
 """)
 assert sql(f"SELECT standard_payout_state='WAITING' AND standard_payout_account_id='acct_fixture' FROM public.stripe_transfers WHERE id='{T}'") == 't'
 assert json.loads(sql("SELECT public.fn_connect_payouts_a_traiter(5)")) == [{'id': T}]
+sql(f"UPDATE private.stripe_connect_avant_transfert SET livemode=false WHERE id='{O}'")
+assert json.loads(sql("SELECT public.fn_connect_payouts_a_traiter(5)")) == []
+sql(f"UPDATE private.stripe_connect_avant_transfert SET livemode=true WHERE id='{O}'; UPDATE public.soignants SET est_compte_test=true WHERE id='{S}'")
+assert json.loads(sql("SELECT public.fn_connect_payouts_a_traiter(5)")) == []
+sql(f"UPDATE public.soignants SET est_compte_test=false WHERE id='{S}'")
 
 # Deux sessions : la seconde attend le verrou SQL puis constate le lease gagné.
 p = subprocess.Popen(PSQL, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -99,17 +104,32 @@ assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OWNER}')") == 'f'
 assert sql(f"SELECT standard_payout_first_post_at IS NULL FROM public.stripe_transfers WHERE id='{T}'") == 't'
 sql("UPDATE private.stripe_connect_release_gate SET enabled=true WHERE protocol='CONNECT_PRETRANSFER_V1'")
 assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OTHER}')") == 'f'
+# Un escrow d'une AUTRE mission du même soignant ferme aussi le nouveau POST.
+sql(f"INSERT INTO public.paiements_escrow(id,mission_id,soignant_id,statut) VALUES('{uid(30)}','{uid(31)}','{S}','DEBITE')")
+assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OWNER}')") == 'f'
+assert sql(f"SELECT standard_payout_first_post_at IS NULL FROM public.stripe_transfers WHERE id='{T}'") == 't'
+sql(f"UPDATE public.paiements_escrow SET statut='PAYE' WHERE id='{uid(30)}'")
 assert sql(f"SELECT public.fn_connect_payout_demarrer('{T}','{OWNER}')") == 't'
 print('ADMISSION_CANONIQUE_LEASE_CONCURRENT_GATE_ET_CAS', flush=True)
 
-def observe(status, attempt=0, payout_id='po_fixture'):
+def payout_object(status, attempt=0, payout_id='po_fixture'):
     obj = {'id': payout_id, 'status': status, 'amount': 10000, 'currency': 'eur', 'livemode': True, 'automatic': False,
         'metadata': {'type': 'CONNECT_STANDARD_PAYOUT', 'trace_id': T, 'transfer_id': 'tr_fixture',
             'mission_id': M, 'soignant_id': S, 'attempt': str(attempt)}}
-    payload = json.dumps(obj).replace("'", "''")
+    return obj
+
+def observe(status, attempt=0, payout_id='po_fixture'):
+    payload = json.dumps(payout_object(status, attempt, payout_id)).replace("'", "''")
     return json.loads(sql(f"SELECT public.fn_connect_payout_constater('{T}','acct_fixture','{payload}'::jsonb)"))
 
+def known(payout_id):
+    payload = json.dumps(payout_object('pending', 0, payout_id)).replace("'", "''")
+    return sql(f"SELECT public.fn_connect_payout_est_connu('acct_fixture','{payload}'::jsonb)")
+
+assert known('po_fixture') == 'f'
 assert observe('pending')['recorded'] is True
+assert known('po_fixture') == 't'
+assert known('po_external') == 'f'
 assert sql(f"SELECT standard_payout_state='SUBMITTED' AND statut='TRANSFERE' FROM public.stripe_transfers WHERE id='{T}'") == 't'
 assert observe('paid')['recorded'] is True
 assert observe('pending') == {'ignored': True}

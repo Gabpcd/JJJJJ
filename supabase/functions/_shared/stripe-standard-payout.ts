@@ -8,7 +8,13 @@ export type StandardPayoutWork = {
   payoutId: string | null; previousPayoutId: string | null; firstPostAt: string | null;
 };
 type SafetyCode = "WAITING_FUNDS" | "WAITING_ACCOUNT" | "SOURCE_NOT_ACQUIRED" | "IDENTITY_MISMATCH"
-  | "PAGINATION_INCOMPLETE" | "AMBIGUOUS_CREATE_EXPIRED" | "PROVIDER_OR_PERSISTENCE_ERROR" | "CHECKED";
+  | "PAGINATION_INCOMPLETE" | "UNKNOWN_ACCOUNT_PAYOUT" | "AMBIGUOUS_CREATE_EXPIRED" | "PROVIDER_OR_PERSISTENCE_ERROR" | "CHECKED";
+export type StandardPayoutOptions = {
+  now?: number; owner?: () => string;
+  // Adaptateur staging borné seulement : paire obligatoire, aucun repli vers
+  // les RPC LIVE et aucune deuxième tentative bancaire dans cette capacité.
+  testCapacityId?: string; beforeCreate?: (work: StandardPayoutWork) => Promise<void>;
+};
 class PayoutSafetyError extends Error {
   constructor(readonly code: SafetyCode, readonly review = false) { super(code); }
 }
@@ -49,10 +55,16 @@ export function requireExactStandardPayout(p: Stripe.Payout, w: StandardPayoutWo
     || Object.entries(standardPayoutMetadata(w)).some(([k, v]) => p.metadata?.[k] !== v)) fail("IDENTITY_MISMATCH", true);
   return p;
 }
-async function recordPayout(db: Database, w: StandardPayoutWork, p: Stripe.Payout): Promise<void> {
+async function recordPayout(db: Database, w: StandardPayoutWork, p: Stripe.Payout): Promise<boolean> {
   requireExactStandardPayout(p, w);
   const result = await rpc(db, "fn_connect_payout_constater", { p_trace_id: w.id, p_account_id: w.accountId, p_payout: p });
-  if (!result || typeof result !== "object" || !("recorded" in result) || result.recorded !== true) fail("IDENTITY_MISMATCH", true);
+  if (result && typeof result === "object") {
+    if ("recorded" in result && result.recorded === true) return true;
+    // Le webhook a pu terminer le même objet pendant ce GET non terminal.
+    // Ne pas transformer ce reçu ignoré en REVIEW dans le reporter final.
+    if ("ignored" in result && result.ignored === true) return false;
+  }
+  fail("IDENTITY_MISMATCH", true);
 }
 
 // Liste complète bornée : une limite atteinte n'est jamais une preuve d'absence.
@@ -75,6 +87,26 @@ async function recoverPayout(stripe: Stripe, w: StandardPayoutWork): Promise<Str
       if (matches.length > 1) fail("IDENTITY_MISMATCH", true);
       return matches[0] || null;
     }
+    cursor = page.data.at(-1)?.id;
+    if (!cursor) fail("PAGINATION_INCOMPLETE", true);
+  }
+  fail("PAGINATION_INCOMPLETE", true);
+}
+
+// Avant chaque nouvelle création, tout payout de ce compte doit être relié
+// par son ID et son identité financière au ledger standard/escrow. Un libellé
+// ou des metadata app copiées sur un mouvement Dashboard ne suffisent pas.
+async function requireKnownAccountPayouts(db: Database, stripe: Stripe, w: StandardPayoutWork): Promise<void> {
+  let cursor: string | undefined;
+  const seen = new Set<string>();
+  for (let pageNumber = 0; pageNumber < 20; pageNumber++) {
+    const page = await stripe.payouts.list({ limit: 100, ...(cursor ? { starting_after: cursor } : {}) }, { stripeAccount: w.accountId });
+    for (const p of page.data) {
+      if (seen.has(p.id)) fail("PAGINATION_INCOMPLETE", true);
+      seen.add(p.id);
+      if (await rpc(db, "fn_connect_payout_est_connu", { p_account_id: w.accountId, p_payout: p }) !== true) fail("UNKNOWN_ACCOUNT_PAYOUT", true);
+    }
+    if (!page.has_more) return;
     cursor = page.data.at(-1)?.id;
     if (!cursor) fail("PAGINATION_INCOMPLETE", true);
   }
@@ -124,14 +156,15 @@ async function requireAcquiredFunds(stripe: Stripe, w: StandardPayoutWork, now: 
   if (!eur || eur.amount < w.amountCents || (eur.source_types?.card ?? 0) < w.amountCents) fail("WAITING_FUNDS");
 }
 
-async function processOne(db: Database, stripe: Stripe, initial: StandardPayoutWork, owner: string, now: number): Promise<void> {
+async function processOne(db: Database, stripe: Stripe, initial: StandardPayoutWork, owner: string, now: number, options: StandardPayoutOptions): Promise<void> {
   let w = initial;
   const existing = w.payoutId
     ? requireExactStandardPayout(await stripe.payouts.retrieve(w.payoutId, { stripeAccount: w.accountId }), w)
     : await recoverPayout(stripe, w);
   if (existing) {
-    await recordPayout(db, w, existing);
+    if (!await recordPayout(db, w, existing)) return;
     if (!["failed", "canceled"].includes(existing.status)) return;
+    if (options.testCapacityId) return; // Reçu terminal conservé, jamais un deuxième payout TEST.
     if (w.attempt >= 3) fail("PROVIDER_OR_PERSISTENCE_ERROR", true);
     // Un failed/canceled n'autorise pas un nouveau débit du solde tant que
     // Stripe n'a pas rendu les fonds de cet objet précis disponibles.
@@ -150,7 +183,13 @@ async function processOne(db: Database, stripe: Stripe, initial: StandardPayoutW
   if (w.firstPostAt && now - Date.parse(w.firstPostAt) >= 20 * 60 * 60 * 1000) fail("AMBIGUOUS_CREATE_EXPIRED", true);
   await requireReadyAccount(stripe, w);
   await requireAcquiredFunds(stripe, w, now);
-  if (await rpc(db, "fn_connect_payout_demarrer", { p_trace_id: w.id, p_owner: owner }) !== true) fail("WAITING_ACCOUNT");
+  await requireKnownAccountPayouts(db, stripe, w);
+  // La capacité TEST réserve son unique droit avant le CAS final. La RPC TEST
+  // revérifie ce droit sous les verrous immédiatement avant le POST bancaire.
+  await options.beforeCreate?.(Object.freeze({ ...w }));
+  const startRpc = options.testCapacityId ? "fn_connect_payout_demarrer_test" : "fn_connect_payout_demarrer";
+  if (await rpc(db, startRpc, { p_trace_id: w.id, p_owner: owner,
+    ...(options.testCapacityId ? { p_capacity_id: options.testCapacityId } : {}) }) !== true) fail("WAITING_ACCOUNT");
   // Aucun rollback après ce point : first_post_at + même clé bornent la reprise
   // même si Stripe répond après l'expiration du lease ou si la persistance échoue.
   const payout = await stripe.payouts.create({ amount: w.amountCents, currency: "eur", source_type: "card",
@@ -158,10 +197,13 @@ async function processOne(db: Database, stripe: Stripe, initial: StandardPayoutW
   await recordPayout(db, w, payout);
 }
 
-export async function processStandardConnectPayouts(db: Database, stripe: Stripe, options: { now?: number; owner?: () => string } = {}) {
+export async function processStandardConnectPayouts(db: Database, stripe: Stripe, options: StandardPayoutOptions = {}) {
+  if (Boolean(options.testCapacityId) !== (typeof options.beforeCreate === "function")
+    || options.testCapacityId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(options.testCapacityId)) fail("IDENTITY_MISMATCH", true);
   const summary = { examined: 0, checked: 0, deferred: 0, review: 0, errors: 0 };
-  const due = await rpc(db, "fn_connect_payouts_a_traiter", { p_limit: 5 });
-  if (!Array.isArray(due) || due.length > 10) fail("IDENTITY_MISMATCH", true);
+  const dueRpc = options.testCapacityId ? "fn_connect_payouts_test_a_traiter" : "fn_connect_payouts_a_traiter";
+  const due = await rpc(db, dueRpc, options.testCapacityId ? { p_limit: 1, p_capacity_id: options.testCapacityId } : { p_limit: 5 });
+  if (!Array.isArray(due) || due.length > (options.testCapacityId ? 1 : 10)) fail("IDENTITY_MISMATCH", true);
   for (const candidate of due) {
     if (!candidate || typeof candidate !== "object" || typeof candidate.id !== "string") fail("IDENTITY_MISMATCH", true);
     const owner = options.owner?.() || crypto.randomUUID();
@@ -172,7 +214,8 @@ export async function processStandardConnectPayouts(db: Database, stripe: Stripe
     let review = false;
     try {
       const work = parseStandardPayoutWork(value);
-      await processOne(db, stripe, work, owner, options.now ?? Date.now());
+      if (work.livemode !== !options.testCapacityId) fail("IDENTITY_MISMATCH", true);
+      await processOne(db, stripe, work, owner, options.now ?? Date.now(), options);
       summary.checked++;
     } catch (error) {
       code = error instanceof PayoutSafetyError ? error.code : "PROVIDER_OR_PERSISTENCE_ERROR";

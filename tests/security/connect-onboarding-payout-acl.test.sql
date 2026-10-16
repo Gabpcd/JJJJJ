@@ -26,7 +26,7 @@ BEGIN
     RAISE EXCEPTION 'Lecture client Connect supprimée'; END IF;
   FOR f IN SELECT oid FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
     ('fn_connect_payouts_a_traiter','fn_connect_payout_prendre','fn_connect_payout_demarrer',
-     'fn_connect_payout_reessayer','fn_connect_payout_constater','fn_connect_payout_reporter') LOOP
+     'fn_connect_payout_reessayer','fn_connect_payout_constater','fn_connect_payout_est_connu','fn_connect_payout_reporter') LOOP
     IF has_function_privilege('authenticated',f,'EXECUTE') OR has_function_privilege('anon',f,'EXECUTE')
       OR NOT has_function_privilege('service_role',f,'EXECUTE') THEN RAISE EXCEPTION 'ACL payout incorrecte : %',f; END IF;
   END LOOP;

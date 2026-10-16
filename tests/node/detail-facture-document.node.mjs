@@ -58,9 +58,10 @@ function clientWith(rows) {
   } };
 }
 
-function renderPage({ invoice = facture, fees = honoraires, etab = { mode_paiement_commission: 'SEPA_DEBIT' }, allowed = true, error = null } = {}) {
+function renderPage({ invoice = facture, fees = honoraires, etab = { mode_paiement_commission: 'SEPA_DEBIT' }, allowed = true, error = null,
+  admission = { facture_id: 'commission', virement_autorise: !invoice?.facture_honoraire_id, motif: invoice?.facture_honoraire_id ? 'HONORAIRES_DIRECTS_REQUIS' : null } } = {}) {
   stateIndex = 0; permission = allowed;
-  states = [false, invoice, [mission], fees, etab, true, false, error];
+  states = [false, invoice, [mission], fees, admission, etab, true, false, error];
   return renderToStaticMarkup(React.createElement(exports.default));
 }
 
@@ -90,11 +91,21 @@ test('le rendu lié affiche 4 h et la semaine, sans SEPA annoncé ni paiement is
   for (const forbidden of ['05/10/2026', '8 h retenues', 'Prélèvement SEPA', 'Carte bancaire', 'AUTONOMOUS_CHECKOUT', 'AUTONOMOUS_TRANSFER', 'Pointages détaillés']) assert.ok(!html.includes(forbidden), forbidden);
 });
 
-test('une commission liée ne peut jamais ouvrir un paiement séparé', () => {
+test('une commission liée sans admission explicite ne peut jamais ouvrir un paiement séparé', () => {
   for (const statut of ['EMISE', 'EN_RETARD', 'PAYEE', 'ANNULEE']) for (const mode of ['SEPA_DEBIT', 'STRIPE', null]) {
-    const result = exports.presentationPaiementCommission({ ...facture, statut }, { mode_paiement_commission: mode }, true);
+    const result = exports.presentationPaiementCommission({ ...facture, statut }, { mode_paiement_commission: mode }, true, false);
     assert.equal(result.canPay, false); assert.equal(result.estSepaAutomatique, false);
   }
+});
+
+test('l’admission de la pièce exacte ouvre seulement le virement séparé, jamais le Checkout lié', () => {
+  const admission = { facture_id: 'commission', virement_autorise: true, motif: null };
+  const result = exports.presentationPaiementCommission(facture, {}, true, true);
+  assert.equal(result.canPay, true); assert.equal(result.canPayCard, false);
+  assert.equal(exports.presentationPaiementCommission(facture, {}, false, true).canPay, false);
+  const html = renderPage({ etab: {}, admission });
+  assert.match(html, /AUTONOMOUS_TRANSFER/); assert.ok(!html.includes('AUTONOMOUS_CHECKOUT'));
+  assert.match(html, /ne prouve pas la réception des fonds par le soignant/);
 });
 
 test('le règlement cible la pièce ouverte et une facture payée mène explicitement à l’historique général', () => {
@@ -110,7 +121,7 @@ test('le règlement cible la pièce ouverte et une facture payée mène explicit
     ['PAYEE', 'Consulter l’historique des paiements', '/etablissement/facturation?tab=historique'],
   ]) {
     stateIndex = 0; permission = false;
-    states = [false, { ...facture, statut }, [mission], honoraires, {}, true, false, null];
+    states = [false, { ...facture, statut }, [mission], honoraires, { facture_id: 'commission', virement_autorise: false, motif: 'HONORAIRES_DIRECTS_REQUIS' }, {}, true, false, null];
     const button = visit(exports.default()); assert.ok(button);
     assert.equal(button.props.children, label);
     button.props.onClick();
@@ -125,11 +136,11 @@ test('une facture complémentaire salariée non liée reste payable, jamais un a
   const context = await exports.chargerContexteFactureCommission(client, 'commission', 'etab');
   assert.equal(context.honoraires, null);
   for (const statut of ['EMISE', 'EN_RETARD']) {
-    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, true).canPay, true);
-    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, true).canPayCard, false);
-    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, false).canPay, false);
-    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut, type_document: 'AVOIR' }, {}, true).canPay, false);
-    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut, facture_honoraire_id: 'fh' }, {}, true).canPay, false);
+    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, true, true).canPay, true);
+    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, true, true).canPayCard, false);
+    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut }, {}, false, true).canPay, false);
+    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut, type_document: 'AVOIR' }, {}, true, true).canPay, false);
+    assert.equal(exports.presentationPaiementCommission({ ...salaryInvoice, statut, facture_honoraire_id: 'fh' }, {}, true, false).canPay, false);
   }
   const html = renderPage({ invoice: salaryInvoice, fees: null, etab: {} });
   assert.ok(!html.includes('AUTONOMOUS_CHECKOUT')); assert.match(html, /AUTONOMOUS_TRANSFER/);
@@ -137,12 +148,12 @@ test('une facture complémentaire salariée non liée reste payable, jamais un a
 
 test('les commissions mensuelles distinctes conservent leurs modes et permissions', () => {
   const monthly = { ...facture, facture_honoraire_id: null, mission_id: null };
-  assert.equal(exports.presentationPaiementCommission(monthly, {}, true).canPay, true);
-  assert.equal(exports.presentationPaiementCommission(monthly, {}, false).canPay, false);
-  assert.equal(exports.presentationPaiementCommission({ ...monthly, est_secteur_public: true }, {}, true).canPay, false);
-  assert.equal(exports.presentationPaiementCommission({ ...monthly, type_document: 'AVOIR' }, {}, true).canPay, false);
-  assert.equal(exports.presentationPaiementCommission(monthly, { mode_paiement_commission: 'SEPA_DEBIT' }, true).canPay, false);
-  for (const [mode, label] of [['STRIPE', 'Paiement en ligne'], ['VIREMENT', 'Virement bancaire'], ['SEPA', 'Prélèvement SEPA'], ['CHORUS_PRO', 'Chorus Pro']]) assert.equal(exports.presentationPaiementCommission({ ...monthly, mode_paiement: mode }, {}, true).modeLibelle, label);
+  assert.equal(exports.presentationPaiementCommission(monthly, {}, true, true).canPay, true);
+  assert.equal(exports.presentationPaiementCommission(monthly, {}, false, true).canPay, false);
+  assert.equal(exports.presentationPaiementCommission({ ...monthly, est_secteur_public: true }, {}, true, true).canPay, false);
+  assert.equal(exports.presentationPaiementCommission({ ...monthly, type_document: 'AVOIR' }, {}, true, true).canPay, false);
+  assert.equal(exports.presentationPaiementCommission(monthly, { mode_paiement_commission: 'SEPA_DEBIT' }, true, true).canPay, false);
+  for (const [mode, label] of [['STRIPE', 'Paiement en ligne'], ['VIREMENT', 'Virement bancaire'], ['SEPA', 'Prélèvement SEPA'], ['CHORUS_PRO', 'Chorus Pro']]) assert.equal(exports.presentationPaiementCommission({ ...monthly, mode_paiement: mode }, {}, true, true).modeLibelle, label);
   const html = renderPage({ invoice: monthly, fees: null });
   assert.match(html, /utilise le prélèvement SEPA/); assert.ok(!html.includes('programmé'));
 });
@@ -150,7 +161,7 @@ test('les commissions mensuelles distinctes conservent leurs modes et permission
 test('un virement déclaré ne propose aucun nouveau paiement de commission', () => {
   for (const type_document of ['FACTURE', 'FACTURE_COMPLEMENTAIRE']) {
     const invoice = { ...facture, facture_honoraire_id: null, mission_id: null, type_document, statut: 'VIREMENT_DECLARE' };
-    const presentation = exports.presentationPaiementCommission(invoice, {}, true);
+    const presentation = exports.presentationPaiementCommission(invoice, {}, true, true);
     assert.equal(presentation.canPay, false, `${type_document} : virement déjà déclaré`);
     assert.equal(presentation.canPayCard, false, `${type_document} : carte après virement déclaré`);
     // renderPage garde showCheckout=true : le contenu dormant doit rester absent.
@@ -217,9 +228,18 @@ test('les vrais hooks affichent l’erreur initiale puis permettent une reprise 
   let invoiceNumber = 'COM-INITIAL';
   const contextFacture = Object.fromEntries(['id', 'etablissement_id', 'mission_id', 'facture_honoraire_id', 'type_document', 'mode_paiement'].map((key) => [key, facture[key]]));
   const client = clientWith({ factures: { data: contextFacture }, factures_honoraires: { data: honoraires } });
-  client.rpc = async (name) => name === 'fn_detail_facture'
-    ? new Promise((resolve) => { releaseDetail = () => resolve({ data: { facture: { ...facture, numero_facture: invoiceNumber }, missions: [mission] } }); })
-    : { data: { nom: 'Établissement TEST', mode_paiement_commission: 'SEPA_DEBIT' } };
+  client.rpc = async (name, args) => {
+    if (name === 'fn_detail_facture') {
+      assert.deepEqual(plain(args), { p_facture_id: 'commission' });
+      return new Promise((resolve) => { releaseDetail = () => resolve({ data: { facture: { ...facture, numero_facture: invoiceNumber }, missions: [mission] } }); });
+    }
+    if (name === 'fn_modalites_reglement_commission') {
+      assert.deepEqual(plain(args), { p_facture_id: 'commission' });
+      return { data: { facture_id: 'commission', virement_autorise: false, motif: 'HONORAIRES_DIRECTS_REQUIS' } };
+    }
+    if (name === 'fn_mon_etablissement_complet') return { data: { nom: 'Établissement TEST', mode_paiement_commission: 'SEPA_DEBIT' } };
+    throw new Error(`RPC non préparée : ${name}`);
+  };
   const live = {};
   const rerender = () => root.render(React.createElement(live.default));
   const retryScope = () => { scope = { ...scope, loading: true, resolved: false, error: null }; rerender(); };
