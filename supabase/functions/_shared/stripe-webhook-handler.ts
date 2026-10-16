@@ -1,3 +1,4 @@
+import { stagingInvoiceConfig, requireStagingInvoiceEvent } from "./stripe-invoice-staging-test.ts";
 import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope, requireStagingRefundEventScope, requireStagingTransferScope, requireStagingPayoutEventScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -579,6 +580,10 @@ export async function handleStripeWebhook(
     // Idempotence stricte par event.id (iter4 audit fix)
     // Empêche le re-traitement si Stripe renvoie le même webhook 2x.
     const testRuntime = stagingConnectConfig(name => Deno.env.get(name));
+    const invoiceTestRuntime = stagingInvoiceConfig(name => Deno.env.get(name));
+    const stagingInvoiceEvent = invoiceTestRuntime && testClassification.isTest
+      ? await requireStagingInvoiceEvent(supabaseAdmin, stripe, invoiceTestRuntime, verified.source, event)
+      : false;
     let stagingConnectEvent = false;
     if (testRuntime && testClassification.isTest && verified.source === "PLATFORM"
       && event.livemode === false && event.type === "checkout.session.completed") {
@@ -682,7 +687,7 @@ export async function handleStripeWebhook(
     // peuvent encore émettre des webhooks. Après claim idempotent mais avant
     // toute mutation métier, transfert, notification ou lecture Stripe
     // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
-    if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId) {
+    if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId && !stagingInvoiceEvent) {
       await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",

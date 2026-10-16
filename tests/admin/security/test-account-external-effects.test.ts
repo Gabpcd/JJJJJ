@@ -99,7 +99,7 @@ describe("comptes test exclus avant tout effet externe", () => {
     );
     expectBefore(
       handler,
-      "if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId)",
+      "if (testClassification.isTest && !stagingConnectEvent && !stagingConnectRefundId && !stagingConnectPayoutId && !stagingInvoiceEvent)",
       "stripe.transfers.create(",
       "stripe-webhook-handler",
     );

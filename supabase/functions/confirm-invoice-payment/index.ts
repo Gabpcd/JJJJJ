@@ -1,3 +1,4 @@
+import { stagingInvoiceConfig, requireStagingInvoiceScope, stagingInvoiceCustomer, requireStagingInvoiceEvent } from "../_shared/stripe-invoice-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
@@ -134,7 +135,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    if (testAccount.isTest) {
+    const stagingInvoice = stagingInvoiceConfig(name => Deno.env.get(name));
+    if (testAccount.isTest && !stagingInvoice) {
       return new Response(JSON.stringify({
         confirmed: false,
         error: "TEST_ACCOUNT_PAYMENT_DISABLED",
@@ -142,6 +144,10 @@ Deno.serve(async (req) => {
         status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
+    }
+    if (stagingInvoice) {
+      if (!testAccount.isTest) throw new Error('INVOICE_STAGING_TEST_REFUSED');
+      await requireStagingInvoiceScope(supabaseAdmin, stagingInvoice, facture.id);
     }
     if (facture.type_document !== "FACTURE") {
       return new Response(JSON.stringify({
@@ -176,6 +182,7 @@ Deno.serve(async (req) => {
     assertStripeSecretMode(stripeKey);
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2026-02-25.clover" });
+    if (stagingInvoice) await stagingInvoiceCustomer(stripe);
     const paymentIntent = await findMatchingPaymentIntent(
       stripe,
       facture.id,
@@ -200,6 +207,10 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    if (stagingInvoice && !await requireStagingInvoiceEvent(supabaseAdmin, stripe, stagingInvoice, 'PLATFORM', {
+      type: 'payment_intent.succeeded', livemode: false, data: { object: paymentIntent },
+    })) throw new Error('INVOICE_STAGING_TEST_REFUSED');
 
     const montantAttenduCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
     if (!Number.isSafeInteger(montantAttenduCents) || montantAttenduCents <= 0) {
