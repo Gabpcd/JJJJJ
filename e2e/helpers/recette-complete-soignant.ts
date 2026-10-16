@@ -71,7 +71,7 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
   // Contrat du suivi bancaire propre au soignant : les autres lectures du
   // ledger restent inconnues. Les scénarios documentaires n'ont aucun payout.
   if(url.pathname==='/rest/v1/stripe_transfers'){
-   const attendu:Record<string,string>={select:'id,mission_id,statut,montant_soignant,stripe_payout_id,standard_payout_state,paye_le',soignant_id:`eq.${ids.user}`,statut:'in.(CHARGE_REUSSI,TRANSFERE,PAYE)',order:'cree_le.desc,id.desc',limit:'20'};
+   const attendu:Record<string,string>={select:'*',soignant_id:`eq.${ids.user}`,statut:'in.(CHARGE_REUSSI,TRANSFERE,PAYE)',order:'cree_le.desc,id.desc',limit:'20'};
    // Le parcours minimal SOIGNANT résout aussi ce rôle de navigation (useRole),
    // sans profil métier ; la même lecture RLS propre au compte reste vide.
    const conforme=req.method()==='GET'&&['minimal','complet'].includes(state.mode)&&req.headers().authorization==='Bearer fixture-auth'
