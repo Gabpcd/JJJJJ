@@ -13,7 +13,7 @@ export const SEED_SHA256='57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9
 // Read-only review 2026-10-16: docs/recettes/2026-10-16-catalogue-fixture-connect.md.
 // Exact deployed metadata after the five reviewed migrations and closed V2.
 // The earlier SMS reconciliation remains recorded separately. No automatic repin.
-export const REVIEWED_CATALOGUE=Object.freeze({routines:'8e51417eabb5ac4376d1bec27aed5a04',triggers:'3d6ef14ab83acb02a8ca0df3bc36231d',columns:'b715fc97721c97f9a788b8cdc45a5e09'});
+export const REVIEWED_CATALOGUE=Object.freeze({routines:'f5a1148c69cd5d79f5447829d218b3b8',triggers:'3d6ef14ab83acb02a8ca0df3bc36231d',columns:'b715fc97721c97f9a788b8cdc45a5e09'});
 const ROOT=fileURLToPath(new URL('../../',import.meta.url));
 const ENDPOINT=`https://api.supabase.com/v1/projects/${PROJECT}/database/query`;
 const sha=value=>createHash('sha256').update(value).digest('hex');

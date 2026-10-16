@@ -166,3 +166,39 @@ Les données métier ne sont toujours pas épinglées comme immuables. Chaque ba
 conserve ses instantanés et ses relectures de restauration. Ni cette seconde
 reconnaissance ni le repin du témoin seed ne valent recette utilisateur intégrée,
 paiement Stripe TEST, versement ou remboursement réellement exécuté.
+
+
+## Correction additive après relecture indépendante
+
+Le commit `204d352df7998f820f7f3437c5ed4c9476d625d9` ajoute la migration
+`20261016144756`, sans modifier les cinq sources déjà installées. Les 61 suites
+SQL passent avec ses trois fonctions sous ROLLBACK. La relecture indépendante
+après annulation retrouve exactement les 1 135 routines, leurs propriétaires
+et droits, les triggers, les colonnes et les compteurs initiaux.
+
+Après le dry-run limité à cette migration, le CLI l'a appliquée au seul staging.
+Les sept statements conservés dans le registre correspondent octet pour octet
+à la source SHA256 `dc3fe609b61c25d64bdb171e96687b7e83cf3bd0c7bbfa64e13be9cfbcaec202`.
+Le total de la PR est donc de six migrations et 86 statements. Seuls les corps
+de `fn_connect_payout_constater`, `private.fn_admission_virement_commission` et
+`private.mettre_emission_facture_en_file` changent ; les propriétaires et ACL
+des 1 135 routines restent identiques. Aucun trigger ou colonne n'est modifié.
+
+Le nouveau verrou routines est `f5a1148c69cd5d79f5447829d218b3b8`. Les verrous
+triggers `3d6ef14ab83acb02a8ca0df3bc36231d` et colonnes
+`b715fc97721c97f9a788b8cdc45a5e09` restent inchangés. Les trois compteurs sont
+zéro ; le routage staging et l'absence d'URL de génération sont confirmés.
+
+Preuves locales conservées dans le sous-dossier `revue-finale` du dossier
+`audits/2026-10-14-reprise/preflight-fournisseurs/corrections-paiements-20261016` :
+
+| Lecture | SHA256 |
+| --- | --- |
+| `jolene-1063-review6-before.private.json` | `72e7a1562ccc9a714f179372e20e47c49c09431ed21efe8f9972738dfb189052` |
+| `jolene-1063-review6-after-preview.private.json` | `72e7a1562ccc9a714f179372e20e47c49c09431ed21efe8f9972738dfb189052` |
+| `jolene-1063-review6-installed.private.json` | `69590b9d5bb6649893012b3c0b44086d9e3ae7941ecad9cdd5b99cf8eac40e89` |
+| `jolene-1063-review6-61-preview.private.json` | `d82801be2657ca0963219cb91598b59ce6f5170199737c0acc28f138fb704608` |
+
+Cette preuve de déploiement SQL ne remplace ni les simulations frontend finales
+ni le parcours de paiement chez le fournisseur TEST. Aucun contrôle n'est
+désactivé : les 61 suites et la comparaison exacte des six sources restent exigées.

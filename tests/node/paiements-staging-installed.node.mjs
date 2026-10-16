@@ -45,9 +45,9 @@ function snapshot() {
   } }];
 }
 
-test('les cinq sources reconnues totalisent exactement 79 statements ; le catalogue est commun au témoin seed', () => {
+test('les six sources reconnues totalisent exactement 86 statements ; le catalogue est commun au témoin seed', () => {
   assert.equal(checkScope(changes, sources), true);
-  assert.equal(snapshot()[0].installation.migrations.reduce((sum, r) => sum + r.statements.length, 0), 79);
+  assert.equal(snapshot()[0].installation.migrations.reduce((sum, r) => sum + r.statements.length, 0), 86);
   assert.equal(checkInstallation(snapshot(), base, sources), 'installed');
   assert.deepEqual(reviewed.catalogue, REVIEWED_CATALOGUE);
 });
@@ -64,9 +64,9 @@ test('comparaison exacte des corps et de l’ordre, y compris commentaires ; auc
     assert.throws(() => checkInstallation(rows, base, sources), /STATEMENTS_CHANGED/);
   }
 });
-test('historique, sixième migration ou sources modifiées refusés avant tout appel', () => {
+test('historique, septième migration ou sources modifiées refusés avant tout appel', () => {
   for (const scope of [changes.slice(1), [...changes, ['A', 'supabase/migrations/20261017120000_other.sql']],
-    changes.map((r, i) => i === 0 ? ['M', r[1]] : r)]) assert.throws(() => checkScope(scope, sources), /EXACT_FIVE_REQUIRED/);
+    changes.map((r, i) => i === 0 ? ['M', r[1]] : r)]) assert.throws(() => checkScope(scope, sources), /EXACT_SIX_REQUIRED/);
   assert.throws(() => checkScope(changes, { ...sources, [reviewed.migrations[0][0]]: sources[reviewed.migrations[0][0]] + '\n' }), /SOURCE_CHANGED/);
   assert.equal(checkScope([['A', 'supabase/migrations/20261017120000_other.sql']], {}), false);
 });

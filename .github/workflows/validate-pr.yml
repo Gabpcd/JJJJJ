@@ -97,7 +97,7 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 
-      - name: Reconnaissance des cinq migrations paiements déjà installées
+      - name: Reconnaissance des six migrations paiements déjà installées
         run: node --test tests/node/paiements-staging-installed.node.mjs
 
       - name: Catalogue paiement indépendant sans réseau
@@ -410,7 +410,7 @@ jobs:
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/connect-staging-installed-proof.mjs inspect
 
-      - name: Paiements — reconnaître les cinq migrations déjà installées et leurs sources exactes
+      - name: Paiements — reconnaître les six migrations déjà installées et leurs sources exactes
         id: paiements_installation
         if: steps.migration_scope.outputs.has_migrations == 'true'
         env:
@@ -670,7 +670,7 @@ jobs:
             test "${MIGRATIONS[0]}" = 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql'
             MIGRATIONS=()
           fi
-          # Les cinq sources ont déjà été exécutées, puis comparées aux 79
+          # Les six sources ont déjà été exécutées, puis comparées aux 86
           # statements du registre et au catalogue revu après installation V2.
           # Les bancs PG17 rejouent leurs sources ; les 61 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.

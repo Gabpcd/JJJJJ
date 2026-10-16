@@ -45,10 +45,12 @@ export async function resolveFacturationEmailSource(
   if (recipientId !== document.etablissement_id && (kind !== 'HONORAIRES' || recipientId !== document.soignant_id)) return refused();
   const accounts = new Set<string>([document.etablissement_id]);
   const missions = new Set<string>();
+  let documentCaregiverKnown = false;
   if (document.mission_id) missions.add(document.mission_id);
   if (kind === 'HONORAIRES') {
     if (!validId(document.soignant_id)) return refused();
     accounts.add(document.soignant_id);
+    documentCaregiverKnown = true;
   } else {
     if (!Object.hasOwn(document, 'facture_honoraire_id')) return refused();
     if (!absentId(document.facture_honoraire_id)) {
@@ -61,6 +63,7 @@ export async function resolveFacturationEmailSource(
         || (document.mission_id !== null && fee.mission_id !== document.mission_id)) return refused();
       // The billed caregiver is immutable even if the mission assignment changes.
       accounts.add(fee.soignant_id);
+      documentCaregiverKnown = true;
       if (fee.mission_id) missions.add(fee.mission_id);
     }
     const { data, error, count } = await client.from('missions')
@@ -79,7 +82,8 @@ export async function resolveFacturationEmailSource(
     const { data, error } = await client.from('missions')
       .select('etablissement_id,soignant_assigne_id').eq('id', id).maybeSingle();
     if (error || !data || data.etablissement_id !== document.etablissement_id
-      || (!absentId(data.soignant_assigne_id) && !validId(data.soignant_assigne_id))) return refused();
+      || (!validId(data.soignant_assigne_id)
+        && !(data.soignant_assigne_id === null && documentCaregiverKnown))) return refused();
     if (data.soignant_assigne_id) accounts.add(data.soignant_assigne_id);
   }
   // Sequential bounded batches keep a monthly group from issuing hundreds of

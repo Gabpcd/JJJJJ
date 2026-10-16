@@ -106,7 +106,7 @@ const autreMission = '69510000-0000-4000-8000-000000000007';
 type SourceCanonique = {
   etablissementTest: boolean | null; soignantTest: boolean | null;
   missionAbsente?: boolean; honoraire?: boolean; groupee?: boolean; liee?: boolean;
-  assigneChange?: boolean; autreSoignantTest?: boolean; groupeCount?: number; documentAmbigu?: boolean;
+  assigneChange?: boolean; assigneAbsent?: boolean; autreSoignantTest?: boolean; groupeCount?: number; documentAmbigu?: boolean;
 };
 function simulationEnvoi(sourceCanonique?: SourceCanonique) {
   const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferences: 0, envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[] };
@@ -140,7 +140,7 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
       if (table === 'missions') {
         expect([sourceMission, autreMission]).toContain(id);
         return { data: sourceCanonique.missionAbsente ? null : { etablissement_id: sourceEtablissement,
-          soignant_assigne_id: sourceCanonique.assigneChange || id === autreMission ? autreSoignant : sourceSoignant }, error: null };
+          soignant_assigne_id: sourceCanonique.assigneAbsent ? null : sourceCanonique.assigneChange || id === autreMission ? autreSoignant : sourceSoignant }, error: null };
       }
       if (table === 'soignants') return { data: id === sourceSoignant ? { est_compte_test: sourceCanonique.soignantTest }
         : id === autreSoignant ? { est_compte_test: sourceCanonique.autreSoignantTest ?? false } : null, error: null };
@@ -277,8 +277,17 @@ describe('FACTURE_EMISE : vrai handler et classification documentaire canonique'
     expect(s.etat.lecturesSources).toContain('factures_honoraires:id:' + sourceHonoraires);
     expect(s.etat.envois).toHaveLength(0);
   });
+  it.each([false, true])('un assigné courant absent conserve le soignant documentaire connu, FH liée=%s', async liee => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false, assigneAbsent: true, honoraire: !liee, liee });
+    const response = await s.lancer('FACTURE_EMISE', undefined, {
+      facture_id: liee ? sourceCommission : sourceHonoraires, famille_document: liee ? 'COMMISSION' : 'HONORAIRES',
+    });
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ success: true });
+    expect(s.etat.envois).toHaveLength(1);
+  });
   it.each([
     { missionAbsente: true },
+    { assigneAbsent: true },
     { soignantTest: null },
     { groupee: true, groupeCount: 3 },
     { documentAmbigu: true },
