@@ -3,22 +3,30 @@ import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,statSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {PROJECT,REPOSITORY,CONTRACT,ASSET_PATHS,Refusal,checkSnapshot,digest,canonical} from '../../scripts/ci/install-sms-staging-closed.mjs';
+import {fileURLToPath} from 'node:url';
+import {PROJECT,REPOSITORY,CONTRACT,ASSET_PATHS,Refusal,checkSnapshot,digest,canonical,readLocal} from '../../scripts/ci/install-sms-staging-closed.mjs';
 import {RESUME_CONTRACT,RECOVERY_WORKFLOW,RECOVERY_ARTIFACT,OPERATOR_PATHS,checkResumeContract,resumeSqlOnly,durableCheckpoint}
  from '../../scripts/ci/resume-sms-staging-sql-only.mjs';
 
 const read=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
 const historical=JSON.parse(read(CONTRACT)),draft=JSON.parse(read(RESUME_CONTRACT));
 const CANARY='PRIVATE_OTP_623019_TOKEN_NEVER_REPORT';
-const local={sha:'a'.repeat(40),clean:true,files:Object.fromEntries(ASSET_PATHS.map(p=>[p,read(p)])),
- blobs:Object.fromEntries(ASSET_PATHS.map(p=>[p,historical.assets[p].gitBlob])),
+const local={...readLocal(fileURLToPath(new URL('../../',import.meta.url)),historical),sha:'a'.repeat(40),clean:true,
  operatorBlobs:Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(p,'sha1')]))};
 const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:REPOSITORY,
  GITHUB_REF:'refs/heads/main',GITHUB_SHA:local.sha,EXPECTED_SHA:local.sha,GITHUB_RUN_ID:'123456789',GITHUB_RUN_ATTEMPT:'1',
  STAGING_SUPABASE_ACCESS_TOKEN:'management-'+CANARY,GITHUB_TOKEN:'github-'+CANARY};
 const repin=c=>{const {manifestSha256,...payload}=c;c.manifestSha256=digest(JSON.stringify(canonical(payload)));return c;};
-function contract(){
+function syntheticHistoricalContract(){
+ // Simulated recovery pins today's bytes only in memory, never in the real
+ // historical installation/recovery manifests or their provider witnesses.
+ const c=structuredClone(historical);
+ c.assets=Object.fromEntries(ASSET_PATHS.map(p=>[p,{sha256:digest(local.files[p]),gitBlob:local.blobs[p]}]));
+ return repin(c);
+}
+function contract(h=syntheticHistoricalContract()){
  const c=structuredClone(draft);c.ready=true;
+ c.historicalManifestSha256=h.manifestSha256;
  c.recoveryCi={runId:'123',jobId:'456',headSha:'b'.repeat(40),executedSha:'c'.repeat(40),artifactId:'789',
   artifactZipSha256:'d'.repeat(64),artifactName:RECOVERY_ARTIFACT,workflow:RECOVERY_WORKFLOW};
  c.edge.metadataSha256=digest(JSON.stringify(canonical(edgeRows(c)[0])));return repin(c);
@@ -29,7 +37,8 @@ function edgeRows(c){return [{id:c.edge.id,slug:'send-sms',status:'ACTIVE',versi
  {id:'00000000-0000-4000-8000-000000000002',slug:'generate-invoice',status:'ACTIVE',version:22,verify_jwt:false,ezbr_sha256:'e'.repeat(64)}];}
 const response=v=>new Response(JSON.stringify(v),{headers:{'content-type':'application/json'}});
 function harness(options={}){
- const c=options.contract??contract(),state={calls:[],reports:[],rollbacks:0,commits:0,reads:0,edgeReads:0,bodyReads:0};
+ const h=options.historical??syntheticHistoricalContract();
+ const c=options.contract??contract(h),state={calls:[],reports:[],rollbacks:0,commits:0,reads:0,edgeReads:0,bodyReads:0};
  const invariant=Object.fromEntries(['structure','routines','inventory','registry','rows'].map((k,i)=>[k,String(i+1).repeat(32)]));
  const before={quiet:true,absent:true,closed:false,routines:structuredClone(historical.beforeRoutines),invariant,targets:'6'.repeat(32)};
  const after={quiet:true,absent:false,closed:true,routines:historical.afterRoutines.map(r=>({...r,definition_md5:r.definition_md5??'f'.repeat(32)})),invariant,targets:'7'.repeat(32)};
@@ -69,7 +78,7 @@ function harness(options={}){
   assert.match(payload.query,/LOCK TABLE cron\.job IN ACCESS SHARE MODE NOWAIT;/);
   const phase=isCommit?'commit':'preview',s=structuredClone(after);options.snapshot?.(s,state,phase);return snapshotReply(s,phase);
  };
- return {state,contract:c,run:()=>resumeSqlOnly({env:{...env,...options.env},local:{...local,...options.local},historical,
+ return {state,contract:c,run:()=>resumeSqlOnly({env:{...env,...options.env},local:{...local,...options.local},historical:h,
   contract:c,fetchImpl,checkpoint:r=>{state.reports.push(structuredClone(r));if(options.checkpoint?.(r,state))throw Error(CANARY);}})};
 }
 function noLeak(h,r){assert.ok(!JSON.stringify([r,...h.state.reports]).includes(CANARY));
@@ -79,19 +88,26 @@ test('real manifest pins six source files; an unreviewed draft refuses before an
  checkResumeContract(draft,historical,false);
  const unreviewed=repin({...structuredClone(draft),ready:false,recoveryCi:null});
  assert.equal(unreviewed.ready,false);assert.equal(unreviewed.recoveryCi,null);
- const h=harness({contract:unreviewed}),r=await h.run();assert.equal(r.code,'RESUME_NOT_REVIEWED');
+ const h=harness({contract:unreviewed,historical}),r=await h.run();assert.equal(r.code,'RESUME_NOT_REVIEWED');
  assert.equal(h.state.calls.length,0);assert.equal(h.state.commits,0);noLeak(h,r);
 });
-test('the versioned manifest can be rearmed with a valid witness without changing operator sources',async()=>{
- const manifestBefore=read(RESUME_CONTRACT),pathsBefore=[...OPERATOR_PATHS];
+test('synthetic recovery exercises current assets without changing either historical manifest or operator sources',async()=>{
+ const manifestBefore=read(RESUME_CONTRACT),historicalBefore=read(CONTRACT),pathsBefore=[...OPERATOR_PATHS];
  const sourcesBefore=Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))]));
  assert.equal(OPERATOR_PATHS.includes(RESUME_CONTRACT),false);
  const rearmed=contract();
- assert.equal(checkResumeContract(rearmed,historical),rearmed);
+ assert.equal(checkResumeContract(rearmed,syntheticHistoricalContract()),rearmed);
  const h=harness({contract:rearmed}),r=await h.run();assert.equal(r.status,'success');noLeak(h,r);
  assert.equal(read(RESUME_CONTRACT),manifestBefore);
+ assert.equal(read(CONTRACT),historicalBefore);
  assert.deepEqual(OPERATOR_PATHS,pathsBefore);
  assert.deepEqual(Object.fromEntries(OPERATOR_PATHS.map(p=>[p,digest(read(p))])),sourcesBefore);
+});
+test('the real historical contract pair rejects current schema drift before any network or SQL',async()=>{
+ assert.notEqual(digest(local.files['supabase/schema/public.sql']),historical.assets['supabase/schema/public.sql'].sha256);
+ const h=harness({historical,contract:draft}),r=await h.run();
+ assert.equal(r.code,'LOCAL_ASSET_DRIFT');assert.equal(r.status,'failed');
+ assert.equal(h.state.calls.length,0);assert.equal(h.state.rollbacks,0);assert.equal(h.state.commits,0);noLeak(h,r);
 });
 test('SQL-only success observes exact v24 throughout, rollback once, commit once, empty closed readback',async()=>{
  const h=harness(),r=await h.run();assert.equal(r.status,'success');assert.equal(r.code,null);
