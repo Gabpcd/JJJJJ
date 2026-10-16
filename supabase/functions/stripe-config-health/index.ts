@@ -323,7 +323,9 @@ Deno.serve(async (req) => {
     const webhookEndpointActive = platformEndpointActive && connectEndpointActive;
     const webhookEventsComplete = platformEventsComplete && connectEventsComplete;
     const connectRelease = await checkConnectRelease(supabaseBase);
-    const productionReady = livemode
+    // Le déploiement peut conserver volontairement Connect fermé. Tous les
+    // prérequis techniques restent obligatoires, y compris la lecture du gate.
+    const deploymentReady = livemode
       && webhookSecretConfigured
       && secrets.distinct
       && webhookEndpointActive
@@ -332,8 +334,8 @@ Deno.serve(async (req) => {
       && connectApiVersionOk
       && customerLinks.checked
       && customerLinks.all_valid
-      && connectRelease.checked
-      && connectRelease.open;
+      && connectRelease.checked;
+    const productionReady = deploymentReady && connectRelease.open;
     return json(req, {
       configured: true,
       reachable: true,
@@ -361,12 +363,13 @@ Deno.serve(async (req) => {
       expected_webhook_api_version: WEBHOOK_API_VERSION,
       connect_release_checked: connectRelease.checked,
       connect_release_open: connectRelease.open,
+      deployment_ready: deploymentReady,
       production_ready: productionReady,
       ...(!productionReady ? { error: !connectRelease.checked
         ? 'Disponibilité du paiement Connect non vérifiée.'
-        : !connectRelease.open
-          ? 'Paiement groupé libéral indisponible : ouverture Connect non effectuée.'
-          : 'Configuration Stripe incomplète : vérifier les webhooks et les comptes liés.' } : {}),
+        : !deploymentReady
+          ? 'Configuration Stripe incomplète : vérifier les webhooks et les comptes liés.'
+          : 'Paiement groupé libéral indisponible : ouverture Connect non effectuée.' } : {}),
     }, productionReady ? 200 : 503);
   } catch (error) {
     console.error('[stripe-config-health] Stripe unreachable', error instanceof Error ? error.message : 'unknown');

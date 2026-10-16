@@ -27,7 +27,7 @@ test('admin — paiement Connect fermé, reprise et rechargement du diagnostic',
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' } });
       lectures++;
       return route.fulfill({ status: ouvert ? 200 : 503, json: { authenticated: true, livemode: true, mode: 'live',
-        production_ready: ouvert, connect_release_checked: true, connect_release_open: ouvert,
+        deployment_ready: true, production_ready: ouvert, connect_release_checked: true, connect_release_open: ouvert,
         ...(!ouvert ? { error: 'Paiement groupé libéral indisponible : ouverture Connect non effectuée.' } : {}),
       } });
     }

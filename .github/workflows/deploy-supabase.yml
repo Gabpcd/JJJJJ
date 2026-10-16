@@ -324,9 +324,39 @@ jobs:
               code=000
             fi
 
-            if [ "$code" = '200' ] \
-              && jq -e '.production_ready == true' /tmp/stripe-health.json >/dev/null 2>&1; then
+            # Un gate Connect volontairement fermé n'empêche pas de livrer les
+            # corrections. Aucun autre prérequis LIVE ne peut être ignoré.
+            if jq -e --arg http "$code" '
+              .deployment_ready == true and .configured == true
+              and .reachable == true and .authenticated == true
+              and .livemode == true and .mode == "live"
+              and .webhook_secret_configured == true
+              and .platform_webhook_secret_configured == true
+              and .connect_webhook_secret_configured == true
+              and .webhook_secrets_distinct == true
+              and .webhook_endpoint_active == true and .webhook_events_complete == true
+              and .platform_webhook_endpoint_active == true
+              and .platform_webhook_events_complete == true
+              and .platform_webhook_api_version_ok == true
+              and .connect_webhook_endpoint_active == true
+              and .connect_webhook_events_complete == true
+              and .connect_webhook_api_version_ok == true
+              and .expected_webhook_api_version == "2026-02-25.clover"
+              and .customer_tenant_links_checked == true and .customer_tenant_links_ok == true
+              and (.customer_tenant_links_total | type == "number")
+              and .customer_tenant_links_total >= 0
+              and (.customer_tenant_links_total | floor == .)
+              and .customer_tenant_links_valid == .customer_tenant_links_total
+              and .customer_tenant_links_adoptable_legacy == 0
+              and .customer_tenant_links_indeterminate == 0
+              and .connect_release_checked == true
+              and (($http == "200" and .production_ready == true and .connect_release_open == true)
+                or ($http == "503" and .production_ready == false and .connect_release_open == false))
+            ' /tmp/stripe-health.json >/dev/null 2>&1; then
               ready=true
+              if [ "$code" = '503' ]; then
+                echo "::warning::Déploiement Stripe vérifié ; paiement groupé libéral toujours fermé. Aucun gate Connect ouvert."
+              fi
               break
             fi
 
