@@ -257,6 +257,8 @@ commission_migration = (ROOT/'supabase/migrations/20261016125632_securiser_regle
 commission_runtime = commission_migration[commission_migration.index('CREATE FUNCTION private.fn_admission_virement_commission'):commission_migration.index('-- Exposer le taux résolu')]
 corrective = (ROOT/'supabase/migrations/20261016144756_fermer_replays_payout_et_isoler_sources_facturation.sql').read_text()
 admission_corrective = corrective[corrective.index('CREATE OR REPLACE FUNCTION private.fn_admission_virement_commission'):corrective.index('-- EMAIL :')]
+complement_migration = (ROOT/'supabase/migrations/20261016151740_separer_claim_initial_et_complement_salarie.sql').read_text()
+complement_runtime = complement_migration[complement_migration.index('CREATE OR REPLACE FUNCTION private.fn_admission_virement_commission'):complement_migration.index('-- Fonction privée déjà')]
 sql("""CREATE TABLE public.etablissements(id uuid PRIMARY KEY,mode_paiement_commission text,est_secteur_public boolean DEFAULT false,chorus_pro_actif boolean DEFAULT false);
 ALTER TABLE public.missions ADD facture_id uuid;
 ALTER TABLE public.stripe_transfers ADD facture_id uuid;
@@ -268,7 +270,9 @@ CREATE FUNCTION public.fn_a_permission_etablissement(text,uuid) RETURNS boolean 
 """)
 sql(commission_runtime)
 sql(admission_corrective)
+sql(complement_runtime)
 print(json.dumps({'commission_corrective_sha256': hashlib.sha256(corrective.encode()).hexdigest()}),flush=True)
+print(json.dumps({'complement_corrective_sha256': hashlib.sha256(complement_migration.encode()).hexdigest()}),flush=True)
 sql(f"INSERT INTO public.etablissements(id,mode_paiement_commission) VALUES('{E}','CARTE');")
 base_seed = seed
 commission_liee = True
@@ -349,6 +353,76 @@ assert sql(f"SELECT row_to_json(h) FROM public.factures_honoraires h WHERE id='{
 assert sql(f"SELECT statut FROM public.factures WHERE id='{F}'")=='PAYEE'
 print('COMMISSION_FINALE_DIRECTE_APRES_PERIODE_CONNECT_EXPLICITE_ET_LEGACY_AMBIGU_REFUSE',flush=True)
 print('COMMISSION_SEPAREE_PG17_OK : six courses avec attente réelle, pièce voisine refusée, aucune preuve bancaire implicite',flush=True)
+
+# Forme réellement émise par fn_admin_resoudre_litige_salarie : même mission
+# salariée, facture_precedente_id=mission.facture_id, nouvelle dette sans FH.
+# Le transport carte est représenté par ses écritures locales, aucun fournisseur.
+commission_liee = False
+seed()
+sql(f"UPDATE public.missions SET facture_id='{F}',statut='TERMINEE' WHERE id='{M}';")
+initial_card = f"SELECT public.fn_stripe_payment_flow_claim('CHECKOUT_INVOICE','invoice:{F}','{F}',NULL);"
+assert json.loads(sql(CTX+initial_card).splitlines()[-1])['acquired'] is True
+sql(f"""UPDATE public.stripe_payment_flow_claims SET stripe_checkout_session_id='cs_initial_salarie' WHERE owner_token='invoice:{F}';
+UPDATE public.factures SET statut='PAYEE',stripe_payment_intent_id='pi_initial_salarie' WHERE id='{F}';
+INSERT INTO public.factures(id,mission_id,etablissement_id,type_document,statut,facture_precedente_id,montant_ht,montant_tva,montant_ttc)
+VALUES('{F2}','{M}','{E}','FACTURE_COMPLEMENTAIRE','EMISE','{F}',5,1,6);""")
+initial_invoice = sql(f"SELECT row_to_json(f) FROM public.factures f WHERE id='{F}'")
+claims_photo = "SELECT jsonb_agg(to_jsonb(c) ORDER BY resource_key) FROM public.stripe_payment_flow_claims c"
+initial_claims = sql(claims_photo)
+complement_admission = f"SELECT public.fn_modalites_reglement_commission('{F2}');"
+complement_declaration = f"SELECT public.fn_declarer_virement('{F2}','VIR-COMPLEMENT-SALARIE-2026');"
+assert json.loads(sql(CTX+complement_admission).splitlines()[-1])['virement_autorise'] is True
+# Sans preuve de règlement initial, ou dans un autre contexte métier, la
+# protection mission continue à interdire la déclaration du complément.
+for modifier, restaurer in [
+    (f"UPDATE public.factures SET statut='EMISE' WHERE id='{F}';", f"UPDATE public.factures SET statut='PAYEE' WHERE id='{F}';"),
+    (f"UPDATE public.missions SET type_contrat_applique='LIBERAL' WHERE id='{M}';", f"UPDATE public.missions SET type_contrat_applique='SALARIE' WHERE id='{M}';"),
+]:
+    sql(modifier)
+    assert json.loads(sql(CTX+complement_admission).splitlines()[-1])['motif']=='PAIEMENT_EN_LIGNE_ENGAGE'
+    sql(restaurer)
+# Une session, un propriétaire ou un flux divergent ne prouve pas que le claim
+# mission appartient à l'initiale réglée. Le reçu entier est conservé.
+for field, different, expected in [
+    ('owner_token','invoice:autre-piece',f'invoice:{F}'),
+    ('stripe_checkout_session_id','cs_autre_piece','cs_initial_salarie'),
+    ('flow','CONNECT_MISSION','CHECKOUT_INVOICE'),
+]:
+    sql(f"UPDATE public.stripe_payment_flow_claims SET {field}='{different}' WHERE resource_key='MISSION:{M}';")
+    assert json.loads(sql(CTX+complement_admission).splitlines()[-1])['motif']=='PAIEMENT_EN_LIGNE_ENGAGE'
+    sql(f"UPDATE public.stripe_payment_flow_claims SET {field}='{expected}' WHERE resource_key='MISSION:{M}';")
+    assert sql(claims_photo)==initial_claims
+# Un claim exact du complément reste toujours bloquant, même si un ancien
+# producteur a inscrit cette forme que le Checkout actuel n'admet plus.
+sql(f"""INSERT INTO public.stripe_payment_flow_claims(resource_key,flow,owner_token,stripe_checkout_session_id)
+VALUES('FACTURE:{F2}','CHECKOUT_INVOICE','invoice:{F2}','cs_complement_historique');""")
+assert json.loads(sql(CTX+complement_declaration).splitlines()[-1])['error']=='PAIEMENT_EN_LIGNE_ENGAGE'
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F2}'")=='EMISE'
+sql(f"DELETE FROM public.stripe_payment_flow_claims WHERE resource_key='FACTURE:{F2}';")
+assert sql(claims_photo)==initial_claims
+# La facture initiale ne bénéficie jamais de l'exception : son propre claim
+# mission/facture bloque encore un virement si elle est présentée EMISE.
+sql(f"UPDATE public.factures SET statut='EMISE' WHERE id='{F}';")
+assert json.loads(sql(CTX+DECLARE_COMMISSION).splitlines()[-1])['error']=='PAIEMENT_EN_LIGNE_ENGAGE'
+sql(f"UPDATE public.factures SET statut='PAYEE' WHERE id='{F}';")
+assert json.loads(sql(CTX+complement_declaration).splitlines()[-1]).get('success') is True
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F2}'")=='VIREMENT_DECLARE'
+assert sql(f"SELECT row_to_json(f) FROM public.factures f WHERE id='{F}'")==initial_invoice
+assert sql(claims_photo)==initial_claims
+assert json.loads(sql(CTX+complement_declaration).splitlines()[-1])['error']=='FACTURE_NON_PAYABLE'
+print('COMPLEMENT_SALARIE_DISTINCT_INITIAL_CARTE_PAYEE_ET_CLAIMS_EXACTS_CONSERVES',flush=True)
+
+# MISSION seul sur l'initiale : un claim FACTURE ne doit pas masquer cette
+# régression. Cette autre fixture locale reste payable hors claim et non payée.
+seed()
+sql(f"UPDATE public.missions SET facture_id='{F}' WHERE id='{M}';")
+assert json.loads(sql(CTX+f"SELECT public.fn_stripe_payment_flow_claim('CHECKOUT_INVOICE','invoice:{F}',NULL,'{M}');").splitlines()[-1])['acquired'] is True
+mission_only_claim = sql(claims_photo)
+assert sql("SELECT count(*) FROM public.stripe_payment_flow_claims")=='1'
+assert json.loads(sql(CTX+DECLARE_COMMISSION).splitlines()[-1])['error']=='PAIEMENT_EN_LIGNE_ENGAGE'
+assert sql(f"SELECT statut FROM public.factures WHERE id='{F}'")=='EMISE'
+assert sql(claims_photo)==mission_only_claim
+print('MISSION_INITIAL_SEUL_RESTE_BLOQUANT_SANS_CLAIM_FACTURE',flush=True)
 
 sql('TRUNCATE public.stripe_payment_flow_claims,public.stripe_transfers,public.paiements_soignant,public.factures,public.factures_honoraires,public.missions,public.journaux_audit,public.etablissements;')
 assert sql("SELECT (SELECT count(*) FROM public.missions)+(SELECT count(*) FROM public.paiements_soignant)+(SELECT count(*) FROM public.stripe_payment_flow_claims)+(SELECT count(*) FROM public.etablissements)")=='0'
