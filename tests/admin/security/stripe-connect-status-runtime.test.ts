@@ -85,7 +85,7 @@ function simulation() {
         const basename = name.split('/').at(-1)!;
         // Exécuter les protections réellement importées par le webhook, avec le
         // même environnement que le handler ; ne pas simuler une admission réussie.
-        if (['stripe-connect-staging-test.ts', 'financial-audit.ts'].includes(basename)) {
+        if (['stripe-connect-staging-test.ts', 'stripe-invoice-staging-test.ts', 'financial-audit.ts'].includes(basename)) {
           state.loadedHelpers.push(basename);
           return load(resolve(dirname(file), name)).exports;
         }
@@ -170,6 +170,7 @@ describe('Webhooks TEST : aucun effet métier sans admission de recette', () => 
       expect(result.status, JSON.stringify(s.state.errors)).toBe(200);
       expect(await result.json()).toEqual({ received: true, test_skipped: true });
       expect(s.state.loadedHelpers).toContain('stripe-connect-staging-test.ts');
+      expect(s.state.loadedHelpers).toContain('stripe-invoice-staging-test.ts');
       expect(s.state.loadedHelpers).toContain('financial-audit.ts');
       expect(s.state.rpcs).toEqual(['fn_stripe_webhook_event_claim', 'fn_ecrire_audit_safe']);
       expect(s.state.reads).toBe(0);
