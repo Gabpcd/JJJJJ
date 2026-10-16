@@ -24,7 +24,10 @@ export default function SuiviVersementsConnect() {
     void (async () => {
       try {
         const query = supabase.from('stripe_transfers')
-          .select('id,mission_id,statut,montant_soignant,stripe_payout_id,standard_payout_state,paye_le')
+          // Le frontend peut précéder la migration du suivi bancaire. Le
+          // mapper projette les seuls champs utiles et conserve REVIEW si
+          // l'ancien schéma ne fournit pas encore standard_payout_state.
+          .select('*')
           .eq('soignant_id', userId)
           .in('statut', ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'])
           .order('cree_le', { ascending: false })

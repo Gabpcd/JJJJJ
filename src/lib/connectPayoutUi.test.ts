@@ -16,7 +16,18 @@ describe('preuve de versement bancaire', () => {
   });
   it('refuse les états inconnus et les montants invalides', () => {
     expect(() => lireVersementsConnect([{ ...row, standard_payout_state: 'CREATING' }])).toThrow();
+    expect(() => lireVersementsConnect([{ ...row, standard_payout_state: undefined }])).toThrow();
     expect(() => lireVersementsConnect([{ ...row, montant_soignant: NaN }])).toThrow();
     expect(() => lireVersementsConnect([{ ...row, montant_soignant: -80 }])).toThrow();
+  });
+  it('accepte le schéma précédent sans inventer une preuve bancaire ni conserver les champs internes', () => {
+    const { standard_payout_state: _absent, ...legacy } = row;
+    const [parsed] = lireVersementsConnect([{ ...legacy, statut: 'PAYE',
+      stripe_payout_id: 'po_fixture', paye_le: '2026-10-16T12:00:00Z',
+      standard_payout_owner: 'internal-lease-canary', erreur: 'internal-error-canary' }]);
+    expect(parsed.standard_payout_state).toBe('REVIEW');
+    expect(etatVersementConnect(parsed)).toMatchObject({ label: 'Versement bancaire à vérifier', paid: false });
+    expect(parsed).not.toHaveProperty('standard_payout_owner');
+    expect(parsed).not.toHaveProperty('erreur');
   });
 });

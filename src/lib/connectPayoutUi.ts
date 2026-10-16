@@ -14,16 +14,18 @@ export function lireVersementsConnect(value: unknown): ConnectPayoutRow[] {
   return value.map(row => {
     const amount = typeof row?.montant_soignant === 'number' || typeof row?.montant_soignant === 'string'
       ? Number(row.montant_soignant) : NaN;
+    const payoutState = row && !Object.prototype.hasOwnProperty.call(row, 'standard_payout_state')
+      ? 'REVIEW' : row?.standard_payout_state;
     if (!row || typeof row.id !== 'string' || !row.id || typeof row.mission_id !== 'string' || !row.mission_id
       || !['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(row.statut)
       || !Number.isFinite(amount) || amount <= 0
       || (row.stripe_payout_id !== null && (typeof row.stripe_payout_id !== 'string' || !/^po_[A-Za-z0-9]+$/.test(row.stripe_payout_id)))
-      || ![null, 'WAITING', 'SUBMITTED', 'PAID', 'FAILED', 'REVIEW'].includes(row.standard_payout_state)
+      || ![null, 'WAITING', 'SUBMITTED', 'PAID', 'FAILED', 'REVIEW'].includes(payoutState)
       || (row.paye_le !== null && (typeof row.paye_le !== 'string' || !Number.isFinite(Date.parse(row.paye_le))))) {
       throw new Error('Versements indisponibles');
     }
     return { id: row.id, mission_id: row.mission_id, statut: row.statut, montant_soignant: amount,
-      stripe_payout_id: row.stripe_payout_id, standard_payout_state: row.standard_payout_state, paye_le: row.paye_le };
+      stripe_payout_id: row.stripe_payout_id, standard_payout_state: payoutState, paye_le: row.paye_le };
   });
 }
 

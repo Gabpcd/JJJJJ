@@ -51,6 +51,16 @@ describe('SuiviVersementsConnect', () => {
     expect(screen.getByRole('link', { name: 'Voir la mission' })).toHaveAttribute('href', '/soignant/missions/mission-1');
   });
 
+  it('présente un ancien paiement sans état bancaire comme restant à vérifier', async () => {
+    const { standard_payout_state: _absent, ...legacy } = trace({ statut: 'PAYE',
+      stripe_payout_id: 'po_fixture', paye_le: '2026-10-16T12:00:00Z' });
+    mocks.responses = [Promise.resolve({ data: [legacy], error: null })];
+    render(wrapper());
+    expect(await screen.findByText(/^Versement bancaire à vérifier/)).toHaveTextContent('80,00');
+    expect(screen.queryByText(/^Versement bancaire confirmé/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Le suivi des versements bancaires est indisponible/)).not.toBeInTheDocument();
+  });
+
   it.each(['INCONNU', 'ADMIN_ETABLISSEMENT', 'ADMIN_PLATEFORME'])('ne lit aucun ledger pour le rôle %s', async role => {
     mocks.role.role = role;
     render(wrapper());

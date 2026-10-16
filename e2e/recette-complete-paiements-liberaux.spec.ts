@@ -557,10 +557,10 @@ test('Commission séparée : admission devenue périmée, refus serveur sans fau
   expect(f.mutations).toHaveLength(1); f.verifier();
 });
 
-test('Soignant : transfert Stripe distinct de la banque, échec et confirmation persistants après recharge', async ({ page, context }) => {
+test('Soignant : ancien schéma, transfert Stripe distinct de la banque, échec et confirmation persistants après recharge', async ({ page, context }) => {
   const simulation = creerSuiviSimule();
   await simulation.installer(context, 'SOIGNANT');
-  let phase: 'WAITING' | 'SUBMITTED' | 'FAILED' | 'PAID' = 'WAITING';
+  let phase: 'LEGACY' | 'WAITING' | 'SUBMITTED' | 'FAILED' | 'PAID' = 'LEGACY';
   const ledgerReads: string[] = [];
   let globalCopiesReads = 0;
   await page.route('**/functions/**', async route => {
@@ -578,6 +578,15 @@ test('Soignant : transfert Stripe distinct de la banque, échec et confirmation 
       expect(req.method()).toBe('POST');
       return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { mois_en_cours: 80, total: 80, en_attente: 0 } });
     }
+    if (name === 'factures_honoraires' && url.searchParams.has('soignant_id')) {
+      expect(req.method()).toBe('GET');
+      expect(url.searchParams.get('soignant_id')).toBe(`eq.${ids.soignant}`);
+      expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+      expect(req.headers().prefer).toContain('count=exact');
+      expect(simulation.state.facture).toBeNull();
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'content-range', 'content-range': '*/0' }, json: [] });
+    }
     // Mes gains consulte la liste globale ; le helper mission conserve son
     // exigence p_mission_id exact pour tous les écrans de détail existants.
     if (url.pathname === '/rest/v1/rpc/fn_lister_copies_bulletins') {
@@ -589,37 +598,56 @@ test('Soignant : transfert Stripe distinct de la banque, échec et confirmation 
       globalCopiesReads++;
       return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [] });
     }
-    if (name !== 'stripe_transfers' || !url.searchParams.get('select')?.includes('standard_payout_state')) return route.fallback();
+    if (name !== 'stripe_transfers' || !url.searchParams.has('soignant_id')) return route.fallback();
     expect(req.method()).toBe('GET');
     expect(url.searchParams.get('soignant_id')).toBe(`eq.${ids.soignant}`);
     expect(url.searchParams.get('limit')).toBe('20');
     expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
     ledgerReads.push(phase);
+    // Le serveur antérieur rejette cette projection avant même de lire des
+    // lignes : conserver ce comportement reproduit l'erreur REST 42703.
+    if (phase === 'LEGACY' && url.searchParams.get('select')?.includes('standard_payout_state')) {
+      return route.fulfill({ status: 400, json: { code: '42703', message: 'column stripe_transfers.standard_payout_state does not exist' } });
+    }
     return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [{ id: '71000000-0000-4000-8000-000000000099', mission_id: ids.mission,
-      statut: phase === 'PAID' ? 'PAYE' : 'TRANSFERE', montant_soignant: 80,
-      standard_payout_state: phase, stripe_payout_id: phase === 'WAITING' ? null : 'po_simulation',
-      paye_le: phase === 'PAID' ? '2026-10-16T12:00:00Z' : null }] });
+      statut: phase === 'PAID' || phase === 'LEGACY' ? 'PAYE' : 'TRANSFERE', montant_soignant: 80,
+      ...(phase === 'LEGACY' ? {} : { standard_payout_state: phase }),
+      stripe_payout_id: phase === 'WAITING' ? null : 'po_simulation',
+      paye_le: phase === 'PAID' || phase === 'LEGACY' ? '2026-10-16T12:00:00Z' : null }] });
   });
   await page.goto('/soignant/stripe-connect');
   await expect(page.getByText('Total réglé', { exact: true })).toBeVisible();
   await expect(page.getByText('Total reçu', { exact: true })).toHaveCount(0);
   const bank = page.getByRole('region', { name: 'Versements bancaires Stripe' });
-  const labels = { WAITING: 'Transféré sur Stripe', SUBMITTED: 'Versement bancaire en cours', FAILED: 'Versement bancaire échoué', PAID: 'Versement bancaire confirmé' };
-  for (const next of ['WAITING', 'SUBMITTED', 'FAILED', 'PAID'] as const) {
+  const labels = { LEGACY: 'Versement bancaire à vérifier', WAITING: 'Transféré sur Stripe', SUBMITTED: 'Versement bancaire en cours', FAILED: 'Versement bancaire échoué', PAID: 'Versement bancaire confirmé' };
+  for (const next of ['LEGACY', 'WAITING', 'SUBMITTED', 'FAILED', 'PAID'] as const) {
     phase = next;
-    if (next !== 'WAITING') await page.reload();
+    if (next !== 'LEGACY') await page.reload();
     await expect(bank.getByText(new RegExp('^' + labels[next]))).toContainText('80,00');
     if (next !== 'PAID') await expect(bank.getByText(/^Versement bancaire confirmé/)).toHaveCount(0);
     await bank.scrollIntoViewIfNeeded();
     await expect(bank).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    if (next === 'LEGACY') {
+      await page.goto('/soignant/mes-gains');
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+      await page.reload();
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+      await expect(bank.getByText(/^Versement bancaire confirmé/)).toHaveCount(0);
+      await expect(page.getByText('Impossible de charger tous les revenus', { exact: true })).toHaveCount(0);
+      await page.screenshot({ path: test.info().outputPath('versement-ancien-schema.png'), fullPage: true });
+      await page.goto('/soignant/stripe-connect');
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+    }
   }
   await page.goto('/soignant/mes-gains');
   await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
   await page.reload();
   await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  await expect(page.getByText('Impossible de charger tous les revenus', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('versement-schema-actuel.png'), fullPage: true });
   expect(globalCopiesReads).toBeGreaterThan(0);
-  expect(Array.from(new Set(ledgerReads))).toEqual(['WAITING', 'SUBMITTED', 'FAILED', 'PAID']);
+  expect(Array.from(new Set(ledgerReads))).toEqual(['LEGACY', 'WAITING', 'SUBMITTED', 'FAILED', 'PAID']);
   expect(simulation.state.sms).toEqual([]);
   expect(simulation.state.emails).toEqual([]);
   expect(simulation.state.unknown).toEqual([]);
