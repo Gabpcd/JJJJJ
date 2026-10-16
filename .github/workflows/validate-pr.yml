@@ -97,6 +97,9 @@ jobs:
       - name: Isolation des migrations PR et du bootstrap staging
         run: node --test tests/node/staging-migration-base.node.mjs tests/node/staging-litige-reconciliation.node.mjs
 
+      - name: Reconnaissance des cinq migrations paiements déjà installées
+        run: node --test tests/node/paiements-staging-installed.node.mjs
+
       - name: Catalogue paiement indépendant sans réseau
         run: node --test tests/node/paiements-catalogue.node.mjs
 
@@ -379,7 +382,7 @@ jobs:
           fi
 
       - name: Setup Node pour les preuves annulées
-        if: steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'
+        if: steps.migration_scope.outputs.has_migrations == 'true' || steps.migration_scope.outputs.has_contract_fixture == 'true' || steps.migration_scope.outputs.has_connect_candidate == 'true' || steps.migration_scope.outputs.has_connect_fixture == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -406,6 +409,17 @@ jobs:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
         run: node scripts/ci/connect-staging-installed-proof.mjs inspect
+
+      - name: Paiements — reconnaître les cinq migrations déjà installées et leurs sources exactes
+        id: paiements_installation
+        if: steps.migration_scope.outputs.has_migrations == 'true'
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-staging-installed.mjs inspect
 
       - name: Contrat v1.1 draft — preuve SQL seulement, puis contrôle indépendant
         if: steps.migration_scope.outputs.has_contract_fixture == 'true'
@@ -443,7 +457,7 @@ jobs:
           version: 2.98.0
 
       - name: Synchroniser le schéma main vers le staging
-        if: steps.migration_scope.outputs.has_migrations == 'true' && steps.connect_installation.outputs.mode != 'installed'
+        if: steps.migration_scope.outputs.has_migrations == 'true' && steps.connect_installation.outputs.mode != 'installed' && steps.paiements_installation.outputs.mode != 'installed'
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
@@ -631,6 +645,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HAS_MIGRATIONS: ${{ steps.migration_scope.outputs.has_migrations }}
           CONNECT_INSTALLATION_MODE: ${{ steps.connect_installation.outputs.mode }}
+          PAIEMENTS_INSTALLATION_MODE: ${{ steps.paiements_installation.outputs.mode }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -652,6 +668,15 @@ jobs:
           if [ "$CONNECT_INSTALLATION_MODE" = 'installed' ]; then
             test "${#MIGRATIONS[@]}" -eq 1
             test "${MIGRATIONS[0]}" = 'supabase/migrations/20261001201055_reserver_remboursement_connect_avant_transfert.sql'
+            MIGRATIONS=()
+          fi
+          # Les cinq sources ont déjà été exécutées, puis comparées aux 79
+          # statements du registre et au catalogue revu après installation V2.
+          # Les bancs PG17 rejouent leurs sources ; les 61 suites ci-dessous
+          # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
+          if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
+            test "$CONNECT_INSTALLATION_MODE" != 'installed'
+            node scripts/ci/paiements-staging-installed.mjs verify
             MIGRATIONS=()
           fi
           SQL_TESTS=(
@@ -773,6 +798,16 @@ jobs:
             fi
           fi
           echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
+
+      - name: Paiements — relecture indépendante de l’installation après succès ou échec SQL
+        if: always() && steps.paiements_installation.outputs.mode == 'installed'
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/ci/paiements-staging-installed.mjs verify
 
       - name: Connect — delta exact staging annulé puis relecture indépendante
         if: steps.migration_scope.outputs.has_connect_candidate == 'true' && steps.connect_installation.outputs.mode == 'empty'

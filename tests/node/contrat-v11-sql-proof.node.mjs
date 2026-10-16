@@ -136,7 +136,7 @@ function scopeReel(t, changes, { existing = [], removed = [] } = {}) {
   const result = spawnSync('bash', ['-c', scope], { cwd: dir, env: { ...process.env, BASE_SHA: base, GITHUB_OUTPUT: output }, encoding: 'utf8' });
   return { result, outputs: Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map(l => l.split('='))) };
 }
-function executeCondition(step, outputs, successful = true, installationMode = '') {
+function executeCondition(step, outputs, successful = true, installationMode = '', paiementsMode = '') {
   if (!step.if) return successful;
   // Une branche OR après un statut explicite doit être interprétée séparément.
   // Ce format est absent du workflow : le refuser plutôt que simuler sa priorité.
@@ -148,6 +148,11 @@ function executeCondition(step, outputs, successful = true, installationMode = '
     if (installation) {
       assert.ok(['','empty','installed'].includes(installationMode), 'mode installation non couvert');
       return installation[1] === '==' ? installationMode === installation[2] : installationMode !== installation[2];
+    }
+    const paiements = /^steps\.paiements_installation\.outputs\.mode (==|!=) 'installed'$/.exec(term);
+    if (paiements) {
+      assert.ok(['', 'empty', 'unrecognized', 'installed'].includes(paiementsMode), 'mode paiements non couvert');
+      return paiements[1] === '==' ? paiementsMode === 'installed' : paiementsMode !== 'installed';
     }
     const match = /^steps\.migration_scope\.outputs\.(has_migrations|has_f1_regression|has_contract_fixture|has_connect_candidate|has_connect_fixture) == '(true|false)'$/.exec(term);
     assert.ok(match, 'condition nouvelle non couverte');
@@ -337,4 +342,19 @@ test('scope Connect installé conserve PG17 et suites, sans bootstrap ni preuve 
   }
   assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.mode == 'installed'"},s.outputs,true,'invalid'),/mode installation non couvert/);
   assert.throws(()=>executeCondition({if:"steps.connect_installation.outputs.unknown == 'installed'"},s.outputs),/condition nouvelle non couverte/);
+});
+
+test('scope paiements installé conserve les suites et le contrôle indépendant, sans bootstrap', t => {
+  const s = scopeReel(t, ['supabase/migrations/20261016125441_aligner_relances_commission_echeance.sql']);
+  assert.equal(s.result.status, 0);
+  for (const mode of ['empty', 'unrecognized', 'installed']) for (const success of [true, false]) {
+    const actifs = sqlJob.steps.filter(step => step.id !== 'migration_scope' && executeCondition(step, s.outputs, success, '', mode));
+    assert.equal(actifs.some(step => step.name === 'Synchroniser le schéma main vers le staging'), success && mode !== 'installed');
+    assert.equal(actifs.some(step => step.env?.HAS_MIGRATIONS), success);
+    assert.equal(actifs.some(step => step.run === 'node scripts/ci/paiements-staging-installed.mjs inspect'), success);
+    assert.equal(actifs.some(step => step.name === 'Paiements — relecture indépendante de l’installation après succès ou échec SQL'), mode === 'installed');
+    assert.ok(!actifs.some(step => /connect-staging-(?:admission-pg17|catalogue-proof)|contrat-v11-sql-proof/.test(step.run || '')));
+  }
+  assert.throws(() => executeCondition({ if: "steps.paiements_installation.outputs.mode == 'installed'" }, s.outputs, true, '', 'invalid'), /mode paiements non couvert/);
+  assert.throws(() => executeCondition({ if: "steps.paiements_installation.outputs.unknown == 'installed'" }, s.outputs), /condition nouvelle non couverte/);
 });

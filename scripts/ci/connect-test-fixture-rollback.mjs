@@ -11,8 +11,9 @@ import { catalogueSqlFixture, snapshotSql, literal } from './connect-test-fixtur
 
 export const SEED_SHA256='57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9badc4020ab';
 // Read-only review 2026-10-16: docs/recettes/2026-10-16-catalogue-fixture-connect.md.
-// Exact deployed metadata, reconciled with the closed SMS installation. No automatic repin.
-export const REVIEWED_CATALOGUE=Object.freeze({routines:'c9d5fa4245eea2bf374c213a2d4544a3',triggers:'62e9482e5965040e763888baa8078bed',columns:'90e5efeb01de258eda706210903145e1'});
+// Exact deployed metadata after the five reviewed migrations and closed V2.
+// The earlier SMS reconciliation remains recorded separately. No automatic repin.
+export const REVIEWED_CATALOGUE=Object.freeze({routines:'8e51417eabb5ac4376d1bec27aed5a04',triggers:'3d6ef14ab83acb02a8ca0df3bc36231d',columns:'b715fc97721c97f9a788b8cdc45a5e09'});
 const ROOT=fileURLToPath(new URL('../../',import.meta.url));
 const ENDPOINT=`https://api.supabase.com/v1/projects/${PROJECT}/database/query`;
 const sha=value=>createHash('sha256').update(value).digest('hex');
