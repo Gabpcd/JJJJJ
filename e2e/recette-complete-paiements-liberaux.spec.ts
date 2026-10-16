@@ -501,3 +501,79 @@ test('Commission séparée : admission devenue périmée, refus serveur sans fau
   await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toHaveCount(0);
   expect(f.mutations).toHaveLength(1); f.verifier();
 });
+
+test('Soignant : transfert Stripe distinct de la banque, échec et confirmation persistants après recharge', async ({ page, context }) => {
+  const simulation = creerSuiviSimule();
+  await simulation.installer(context, 'SOIGNANT');
+  let phase: 'WAITING' | 'SUBMITTED' | 'FAILED' | 'PAID' = 'WAITING';
+  const ledgerReads: string[] = [];
+  await page.route('**/functions/**', async route => {
+    const req = route.request(), url = new URL(req.url());
+    if (req.method() === 'OPTIONS') return route.fallback();
+    if (url.pathname.split('/').at(-1) !== 'stripe-connect-status') return route.fallback();
+    expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+    expect(req.method()).toBe('POST');
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { statut: 'COMPLET', onboarding_complete: true, charges_enabled: true, payouts_enabled: true, iban_last4: '0000' } });
+  });
+  await page.route('**/rest/v1/**', async route => {
+    const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').at(-1);
+    if (req.method() === 'OPTIONS') return route.fallback();
+    if (name === 'fn_mes_revenus_connect') {
+      expect(req.method()).toBe('POST');
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { mois_en_cours: 80, total: 80, en_attente: 0 } });
+    }
+    if (name !== 'stripe_transfers' || !url.searchParams.get('select')?.includes('standard_payout_state')) return route.fallback();
+    expect(req.method()).toBe('GET');
+    expect(url.searchParams.get('soignant_id')).toBe(`eq.${ids.soignant}`);
+    expect(url.searchParams.get('limit')).toBe('20');
+    expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+    ledgerReads.push(phase);
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [{ id: '71000000-0000-4000-8000-000000000099', mission_id: ids.mission,
+      statut: phase === 'PAID' ? 'PAYE' : 'TRANSFERE', montant_soignant: 80,
+      standard_payout_state: phase, stripe_payout_id: phase === 'WAITING' ? null : 'po_simulation',
+      paye_le: phase === 'PAID' ? '2026-10-16T12:00:00Z' : null }] });
+  });
+  await page.goto('/soignant/stripe-connect');
+  await expect(page.getByText('Total réglé', { exact: true })).toBeVisible();
+  await expect(page.getByText('Total reçu', { exact: true })).toHaveCount(0);
+  const bank = page.getByRole('region', { name: 'Versements bancaires Stripe' });
+  const labels = { WAITING: 'Transféré sur Stripe', SUBMITTED: 'Versement bancaire en cours', FAILED: 'Versement bancaire échoué', PAID: 'Versement bancaire confirmé' };
+  for (const next of ['WAITING', 'SUBMITTED', 'FAILED', 'PAID'] as const) {
+    phase = next;
+    if (next !== 'WAITING') await page.reload();
+    await expect(bank.getByText(new RegExp('^' + labels[next]))).toContainText('80,00');
+    if (next !== 'PAID') await expect(bank.getByText(/^Versement bancaire confirmé/)).toHaveCount(0);
+    await bank.scrollIntoViewIfNeeded();
+    await expect(bank).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
+  await page.goto('/soignant/mes-gains');
+  await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  await page.reload();
+  await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  expect(Array.from(new Set(ledgerReads))).toEqual(['WAITING', 'SUBMITTED', 'FAILED', 'PAID']);
+  expect(simulation.state.sms).toEqual([]);
+  expect(simulation.state.emails).toEqual([]);
+  expect(simulation.state.unknown).toEqual([]);
+  expect(simulation.state.errors).toEqual([]);
+});
+
+test('Établissement : miroir Stripe après recharge sans confirmation humaine inventée', async ({ page }) => {
+  const f = await fixture(page, true);
+  await page.route('**/rest/v1/paiements_soignant**', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    if (new URL(route.request().url()).searchParams.get('select') !== '*') return route.fallback();
+    expect(route.request().method()).toBe('GET');
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [{ id: 'miroir-stripe', mission_id: ids.mission, facture_honoraire_id: remplacement,
+      montant_net: 60, statut: 'CONFIRME', stripe_transfer_id: 'tr_simulation', confirme_par_soignant: true,
+      confirme_par_soignant_le: '2026-10-16T12:00:00Z' }] });
+  });
+  await page.goto(`/etablissement/missions/${ids.mission}`);
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    await expect(page.getByText('Paiement Stripe confirmé', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Le versement bancaire est suivi séparément/)).toBeVisible();
+    await expect(page.getByText('Paiement confirmé par le soignant', { exact: true })).toHaveCount(0);
+  }
+  expect(f.mutations).toEqual([]); f.verifier();
+});

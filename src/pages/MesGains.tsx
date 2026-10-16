@@ -5,6 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, Calculator, Landmark } from 'lucide-react';
 import PaiementsEscrowAVenir from '@/components/gains/PaiementsEscrowAVenir';
+import SuiviVersementsConnect from '@/components/gains/SuiviVersementsConnect';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
@@ -424,6 +425,7 @@ export function MesGainsApercuContent() {
       {/* Paiement rapide ⚡ (escrow) — bloc « À venir » en tête. Masqué si aucun
           paiement escrow (cf. PaiementsEscrowAVenir + spec §4). */}
       <PaiementsEscrowAVenir />
+      <SuiviVersementsConnect />
 
       {/* Honoraires : mêmes factures et montants que l’onglet Factures. */}
       {!erreurChargement && (pipeline.aValider.nb + pipeline.enAttente.nb + pipeline.paye.nb) > 0 && (
@@ -434,6 +436,7 @@ export function MesGainsApercuContent() {
               Tes honoraires, étape par étape
             </p>
           </div>
+          <p className="mb-3 text-xs text-muted-foreground">Ce suivi comptabilise les factures payées ou factorisées et les règlements enregistrés. Les versements bancaires Stripe sont suivis séparément.</p>
           <div className="grid grid-cols-3 gap-2">
             {[
               {
@@ -459,7 +462,7 @@ export function MesGainsApercuContent() {
               },
               {
                 label: 'Payé',
-                detail: 'règlement confirmé',
+                detail: 'factures et règlements enregistrés',
                 etape: pipeline.paye,
                 onClick: () => navigate(
                   pipeline.paye.nbFactures > 0
