@@ -5425,6 +5425,29 @@ $$;
 ALTER FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_acquitter_email_facturation"("p_email_id" "uuid", "p_reservation" "uuid", "p_resultat" "text", "p_erreur" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE l private.facturation_email_livraisons;
+BEGIN
+  IF p_resultat IS NULL OR p_resultat NOT IN ('ENVOYE', 'ANNULE', 'ERREUR') THEN RAISE EXCEPTION 'Résultat invalide'; END IF;
+  SELECT * INTO l FROM private.facturation_email_livraisons WHERE email_id = p_email_id FOR UPDATE;
+  IF NOT FOUND OR l.reservation IS NULL OR l.reservation IS DISTINCT FROM p_reservation THEN RAISE EXCEPTION 'Réservation facture invalide'; END IF;
+  UPDATE public.email_queue SET statut = p_resultat, envoye = p_resultat = 'ENVOYE',
+    envoye_le = CASE WHEN p_resultat = 'ENVOYE' THEN now() ELSE NULL END,
+    erreur = CASE p_resultat WHEN 'ERREUR' THEN left(coalesce(p_erreur, 'Transport facture à reprendre'), 1000)
+      WHEN 'ANNULE' THEN 'Envoi refusé par les préférences ou les garde-fous du transport' ELSE NULL END
+    WHERE id = p_email_id AND statut = 'EN_ATTENTE' AND type = 'FACTURATION_DOCUMENT';
+  UPDATE private.facturation_email_livraisons SET reservation = NULL,
+    prochaine_tentative_le = now() + make_interval(mins => least(60, 15 * greatest(1, l.tentatives)))
+    WHERE email_id = p_email_id;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_acquitter_email_facturation"("p_email_id" "uuid", "p_reservation" "uuid", "p_resultat" "text", "p_erreur" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -17127,15 +17150,16 @@ BEGIN
 
     FOR v_facture IN
         SELECT f.id, f.numero_facture, f.montant_ttc, f.date_emission,
+               COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) AS date_echeance,
                f.relance_1_le, f.relance_2_le, f.etablissement_id,
                e.nom AS etab_nom, e.email_contact AS etab_email
         FROM public.factures f
         JOIN public.etablissements e ON e.id = f.etablissement_id
         WHERE f.statut IN ('EMISE', 'EN_RETARD')
-        AND f.date_emission IS NOT NULL
+        AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
         AND (f.relance_1_le IS NULL OR f.relance_2_le IS NULL)
     LOOP
-        IF v_facture.date_emission + INTERVAL '7 days' <= NOW()
+        IF v_facture.date_echeance + 7 <= (NOW() AT TIME ZONE 'Europe/Paris')::date
            AND v_facture.relance_1_le IS NULL THEN
 
             IF v_facture.etab_email IS NOT NULL THEN
@@ -17146,6 +17170,7 @@ BEGIN
                         'numero_facture', v_facture.numero_facture,
                         'montant_ttc', ROUND(v_facture.montant_ttc, 2),
                         'date_emission', TO_CHAR(v_facture.date_emission AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'),
+                        'date_echeance', TO_CHAR(v_facture.date_echeance, 'DD/MM/YYYY'),
                         'etablissement_nom', v_facture.etab_nom
                     ));
                 v_count_emails := v_count_emails + 1;
@@ -17161,7 +17186,7 @@ BEGIN
             v_count_factures_j7 := v_count_factures_j7 + 1;
         END IF;
 
-        IF v_facture.date_emission + INTERVAL '21 days' <= NOW()
+        IF v_facture.date_echeance + 21 <= (NOW() AT TIME ZONE 'Europe/Paris')::date
            AND v_facture.relance_2_le IS NULL THEN
 
             IF v_facture.etab_email IS NOT NULL THEN
@@ -17172,6 +17197,7 @@ BEGIN
                         'numero_facture', v_facture.numero_facture,
                         'montant_ttc', ROUND(v_facture.montant_ttc, 2),
                         'date_emission', TO_CHAR(v_facture.date_emission AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'),
+                        'date_echeance', TO_CHAR(v_facture.date_echeance, 'DD/MM/YYYY'),
                         'etablissement_nom', v_facture.etab_nom,
                         'jours_retard', 21,
                         'jours_avant_blocage', 24
@@ -24909,6 +24935,246 @@ END;$$;
 ALTER FUNCTION "public"."fn_connect_checkout_verifier"("p_operation_id" "uuid", "p_session_id" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_constater"("p_trace_id" "uuid", "p_account_id" "text", "p_payout" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE s public.stripe_transfers; st text:=p_payout->>'status'; pid text:=p_payout->>'id'; expected_live boolean;
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  SELECT * INTO STRICT s FROM public.stripe_transfers WHERE id=p_trace_id FOR UPDATE;
+  SELECT livemode INTO STRICT expected_live FROM private.stripe_connect_avant_transfert WHERE trace_id=s.id;
+  IF s.standard_payout_state IS NULL OR p_account_id IS DISTINCT FROM s.standard_payout_account_id
+     OR COALESCE(pid,'')!~'^po_[A-Za-z0-9_]+$' OR st IS NULL OR st NOT IN('pending','in_transit','paid','failed','canceled')
+     OR (p_payout->>'amount')::bigint IS DISTINCT FROM round(s.montant_soignant*100)::bigint
+     OR p_payout->>'currency' IS DISTINCT FROM 'eur' OR p_payout#>>'{metadata,type}' IS DISTINCT FROM 'CONNECT_STANDARD_PAYOUT'
+     OR p_payout#>>'{metadata,trace_id}' IS DISTINCT FROM s.id::text
+     OR p_payout#>>'{metadata,transfer_id}' IS DISTINCT FROM s.stripe_transfer_id
+     OR p_payout#>>'{metadata,mission_id}' IS DISTINCT FROM s.mission_id::text
+     OR p_payout#>>'{metadata,soignant_id}' IS DISTINCT FROM s.soignant_id::text THEN
+    RAISE EXCEPTION 'CONNECT_PAYOUT_IDENTITY'; END IF;
+  IF p_payout->'livemode' IS DISTINCT FROM to_jsonb(expected_live) OR p_payout->'automatic' IS DISTINCT FROM 'false'::jsonb THEN
+    RAISE EXCEPTION 'CONNECT_PAYOUT_MODE'; END IF;
+  -- Une anomalie exige une résolution explicite. Aucun webhook rejoué ni GET
+  -- ultérieur ne peut convertir REVIEW en FAILED/PAID et rouvrir une tentative.
+  IF s.standard_payout_state='REVIEW' THEN RETURN jsonb_build_object('review',true); END IF;
+  IF p_payout#>>'{metadata,attempt}' IS DISTINCT FROM s.standard_payout_attempt::text THEN
+    -- Une ancienne tentative connue ne peut ni solder ni écraser la courante.
+    IF COALESCE(p_payout#>>'{metadata,attempt}','')~'^[0-3]$'
+      AND (p_payout#>>'{metadata,attempt}')::integer<s.standard_payout_attempt
+      AND st IN('failed','canceled') THEN RETURN jsonb_build_object('ignored',true); END IF;
+    UPDATE public.stripe_transfers SET standard_payout_state='REVIEW',standard_payout_error_code='OLD_PAYOUT_CONTRADICTORY'
+      WHERE id=s.id;
+    RETURN jsonb_build_object('review',true);
+  END IF;
+  IF s.stripe_payout_id IS NOT NULL AND s.stripe_payout_id<>pid THEN RAISE EXCEPTION 'CONNECT_PAYOUT_DUPLICATE'; END IF;
+  -- Un GET pending/in_transit commencé avant un webhook terminal peut finir
+  -- après lui. Il ne remet jamais en cause le constat terminal du même objet.
+  IF s.standard_payout_state IN('PAID','FAILED') AND st IN('pending','in_transit') THEN
+    RETURN jsonb_build_object('ignored',true);
+  END IF;
+  IF (s.standard_payout_state='PAID' AND st<>'paid') OR (s.standard_payout_state='FAILED' AND st NOT IN('failed','canceled')) THEN
+    UPDATE public.stripe_transfers SET standard_payout_state='REVIEW',standard_payout_error_code='PAYOUT_STATUS_CONTRADICTORY',
+      statut=CASE WHEN statut='PAYE' THEN 'TRANSFERE' ELSE statut END,
+      erreur='Le virement bancaire nécessite une vérification.'
+      WHERE id=s.id;
+    RETURN jsonb_build_object('review',true);
+  END IF;
+  UPDATE public.stripe_transfers SET stripe_payout_id=pid,
+    standard_payout_known_ids=CASE WHEN pid=ANY(standard_payout_known_ids) THEN standard_payout_known_ids
+      ELSE array_append(standard_payout_known_ids,pid) END,
+    standard_payout_state=CASE WHEN st='paid' THEN 'PAID' WHEN st IN('failed','canceled') THEN 'FAILED' ELSE 'SUBMITTED' END,
+    statut=CASE WHEN st='paid' AND statut='TRANSFERE' THEN 'PAYE' ELSE statut END,
+    paye_le=CASE WHEN st='paid' THEN COALESCE(paye_le,clock_timestamp()) ELSE paye_le END,
+    standard_payout_next_read_at=clock_timestamp()+CASE WHEN st IN('failed','canceled') THEN interval '1 day' ELSE interval '30 minutes' END,
+    standard_payout_error_code=CASE WHEN st IN('failed','canceled') THEN 'PAYOUT_TERMINAL_FAILURE' ELSE NULL END
+    WHERE id=s.id;
+  IF (st='paid' AND s.standard_payout_state<>'PAID')
+     OR (st IN('failed','canceled') AND s.standard_payout_state<>'FAILED') THEN
+    INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details,navigateur_acteur)
+    VALUES(s.soignant_id,'SYSTEME',CASE WHEN st='paid' THEN 'FINANCE_PAYOUT_PAID'
+      ELSE 'FINANCE_PAYOUT_FAILED' END,
+      'mission',s.mission_id,jsonb_build_object('evenement','CONNECT_STANDARD_PAYOUT_STATUS',
+        'trace_id',s.id,'stripe_payout_id',pid,'statut',st,'tentative',s.standard_payout_attempt),
+      'fn_connect_payout_constater');
+  END IF;
+  RETURN jsonb_build_object('recorded',true,'state',st);
+END;$_$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_constater"("p_trace_id" "uuid", "p_account_id" "text", "p_payout" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_demarrer"("p_trace_id" "uuid", "p_owner" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE s public.stripe_transfers; o private.stripe_connect_avant_transfert;
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  SELECT * INTO STRICT o FROM private.stripe_connect_avant_transfert WHERE trace_id=p_trace_id;
+  o:=private.fn_connect_operation_verrouiller(o.id);
+  SELECT * INTO STRICT s FROM public.stripe_transfers WHERE id=p_trace_id;
+  IF s.standard_payout_owner IS DISTINCT FROM p_owner OR p_owner IS NULL OR s.standard_payout_lease_until<=clock_timestamp()
+     OR s.standard_payout_state IS DISTINCT FROM 'WAITING' OR s.stripe_payout_id IS NOT NULL
+     OR s.statut IS DISTINCT FROM 'TRANSFERE' OR o.orientation IS DISTINCT FROM 'TRANSFER' OR o.livemode IS DISTINCT FROM TRUE
+     OR NOT private.fn_connect_creation_autorisee(o.id)
+     OR s.stripe_reversal_statut IS DISTINCT FROM 'AUCUN' OR s.stripe_amount_reversed_cents<>0
+     OR s.dispute_statut='OUVERT'
+     OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=s.mission_id
+       AND (facture_id=s.facture_honoraire_id OR facture_id IS NULL)
+       AND statut IN('OUVERT','EN_DISCUSSION','EN_MEDIATION','MEDIATION_EN_COURS','REVUE_ADMIN'))
+     -- Le solde Connect appartient au soignant, pas à une seule mission.
+     -- Aucun nouveau payout standard tant qu'un escrow de ce compte reste
+     -- non terminal ou d'état inconnu, même sur une autre mission.
+     OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE soignant_id=s.soignant_id
+       AND (statut IS NULL OR statut NOT IN('PAYE','REMBOURSE'))) THEN RETURN FALSE; END IF;
+  IF s.standard_payout_first_post_at < clock_timestamp()-interval '20 hours' THEN
+    UPDATE public.stripe_transfers SET standard_payout_state='REVIEW',standard_payout_error_code='AMBIGUOUS_CREATE_EXPIRED',
+      standard_payout_owner=NULL,standard_payout_lease_until=NULL WHERE id=s.id;
+    RETURN FALSE;
+  END IF;
+  UPDATE public.stripe_transfers SET standard_payout_first_post_at=COALESCE(standard_payout_first_post_at,clock_timestamp())
+    WHERE id=s.id;
+  RETURN TRUE;
+END;$$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_demarrer"("p_trace_id" "uuid", "p_owner" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_est_connu"("p_account_id" "text", "p_payout" "jsonb") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  IF p_payout->>'currency' IS DISTINCT FROM 'eur' OR p_payout->'automatic' IS DISTINCT FROM 'false'::jsonb
+    OR COALESCE(p_payout->>'id','')!~'^po_[A-Za-z0-9_]+$' THEN RETURN FALSE; END IF;
+  IF p_payout#>>'{metadata,type}'='CONNECT_STANDARD_PAYOUT' THEN
+    RETURN EXISTS(SELECT 1 FROM public.stripe_transfers s
+      JOIN private.stripe_connect_avant_transfert o ON o.trace_id=s.id AND o.session_id=s.stripe_checkout_session_id
+      WHERE s.standard_payout_account_id=p_account_id AND o.destination_id=p_account_id
+        AND p_payout->'livemode'=to_jsonb(o.livemode)
+        AND p_payout->>'id'=ANY(s.standard_payout_known_ids)
+        AND p_payout#>>'{metadata,trace_id}'=s.id::text
+        AND p_payout#>>'{metadata,transfer_id}'=s.stripe_transfer_id
+        AND p_payout#>>'{metadata,mission_id}'=s.mission_id::text
+        AND p_payout#>>'{metadata,soignant_id}'=s.soignant_id::text
+        AND (p_payout->>'amount')::bigint=round(s.montant_soignant*100)::bigint);
+  ELSIF p_payout#>>'{metadata,type}'='ESCROW_RELEASE' THEN
+    RETURN EXISTS(SELECT 1 FROM public.paiements_escrow e
+      JOIN public.stripe_connect_onboarding b ON b.soignant_id=e.soignant_id AND b.stripe_account_id=p_account_id
+      WHERE e.stripe_payout_id=p_payout->>'id' AND p_payout#>>'{metadata,paiement_escrow_id}'=e.id::text
+        AND p_payout#>>'{metadata,mission_id}'=e.mission_id::text
+        AND p_payout#>>'{metadata,soignant_id}'=e.soignant_id::text
+        AND (p_payout->>'amount')::bigint=e.honoraires_cents);
+  END IF;
+  RETURN FALSE;
+END;$_$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_est_connu"("p_account_id" "text", "p_payout" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_prendre"("p_trace_id" "uuid", "p_owner" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE s public.stripe_transfers; o private.stripe_connect_avant_transfert;
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  IF p_owner IS NULL THEN RAISE EXCEPTION 'CONNECT_PAYOUT_OWNER'; END IF;
+  SELECT * INTO o FROM private.stripe_connect_avant_transfert WHERE trace_id=p_trace_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'CONNECT_PAYOUT_NOT_ADMITTED'; END IF;
+  -- Ordre canonique mission→ST→FH→commission→intention, commun au webhook.
+  o:=private.fn_connect_operation_verrouiller(o.id);
+  SELECT * INTO STRICT s FROM public.stripe_transfers WHERE id=p_trace_id;
+  IF s.standard_payout_state IS NULL OR s.standard_payout_state NOT IN ('WAITING','SUBMITTED','FAILED')
+     OR (s.standard_payout_lease_until>clock_timestamp() AND s.standard_payout_owner IS DISTINCT FROM p_owner)
+     OR s.standard_payout_next_read_at>clock_timestamp() THEN RETURN NULL; END IF;
+  IF o.orientation IS DISTINCT FROM 'TRANSFER' OR o.destination_id IS DISTINCT FROM s.standard_payout_account_id
+     OR o.trace_id IS DISTINCT FROM s.id OR s.stripe_transfer_id IS NULL THEN
+    RAISE EXCEPTION 'CONNECT_PAYOUT_IDENTITY'; END IF;
+  UPDATE public.stripe_transfers SET standard_payout_owner=p_owner,
+    standard_payout_lease_until=clock_timestamp()+interval '5 minutes' WHERE id=s.id;
+  RETURN jsonb_build_object('id',s.id,'missionId',s.mission_id,'soignantId',s.soignant_id,
+    'etablissementId',s.etablissement_id,'factureHonoraireId',s.facture_honoraire_id,
+    'accountId',s.standard_payout_account_id,'customerId',o.customer_id,'transferId',s.stripe_transfer_id,
+    'paymentIntentId',s.stripe_payment_intent_id,'chargeId',s.stripe_charge_id,
+    'amountCents',o.soignant_cents,'totalCents',o.total_cents,'livemode',o.livemode,
+    'state',s.standard_payout_state,'attempt',s.standard_payout_attempt,
+    'payoutId',s.stripe_payout_id,'previousPayoutId',s.standard_payout_previous_id,
+    'firstPostAt',s.standard_payout_first_post_at);
+END;$$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_prendre"("p_trace_id" "uuid", "p_owner" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_reessayer"("p_trace_id" "uuid", "p_owner" "uuid", "p_previous_id" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE s public.stripe_transfers;
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  SELECT * INTO STRICT s FROM public.stripe_transfers WHERE id=p_trace_id FOR UPDATE;
+  IF s.standard_payout_owner IS DISTINCT FROM p_owner OR p_owner IS NULL OR s.standard_payout_lease_until<=clock_timestamp()
+     OR s.standard_payout_state IS DISTINCT FROM 'FAILED' OR s.stripe_payout_id IS DISTINCT FROM p_previous_id
+     OR s.standard_payout_attempt>=3 THEN RETURN FALSE; END IF;
+  UPDATE public.stripe_transfers SET standard_payout_state='WAITING',standard_payout_previous_id=stripe_payout_id,
+    stripe_payout_id=NULL,standard_payout_attempt=standard_payout_attempt+1,standard_payout_first_post_at=NULL,
+    standard_payout_error_code=NULL WHERE id=s.id;
+  RETURN TRUE;
+END;$$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_reessayer"("p_trace_id" "uuid", "p_owner" "uuid", "p_previous_id" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payout_reporter"("p_trace_id" "uuid", "p_owner" "uuid", "p_code" "text", "p_review" boolean DEFAULT false) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  IF p_code NOT IN('WAITING_FUNDS','WAITING_ACCOUNT','SOURCE_NOT_ACQUIRED','IDENTITY_MISMATCH',
+    'PAGINATION_INCOMPLETE','UNKNOWN_ACCOUNT_PAYOUT','AMBIGUOUS_CREATE_EXPIRED','PROVIDER_OR_PERSISTENCE_ERROR','CHECKED') THEN
+    RAISE EXCEPTION 'CONNECT_PAYOUT_ERROR_CODE'; END IF;
+  UPDATE public.stripe_transfers SET standard_payout_next_read_at=clock_timestamp()+interval '30 minutes',
+    standard_payout_owner=NULL,standard_payout_lease_until=NULL,
+    standard_payout_error_code=CASE WHEN p_code='CHECKED' THEN standard_payout_error_code ELSE p_code END,
+    standard_payout_state=CASE WHEN p_review THEN 'REVIEW' ELSE standard_payout_state END
+  WHERE id=p_trace_id AND standard_payout_owner=p_owner;
+END;$$;
+
+
+ALTER FUNCTION "public"."fn_connect_payout_reporter"("p_trace_id" "uuid", "p_owner" "uuid", "p_code" "text", "p_review" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_connect_payouts_a_traiter"("p_limit" integer DEFAULT 5) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  PERFORM private.fn_connect_exiger_service();
+  RETURN (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',s.id)), '[]'::jsonb)
+    FROM (SELECT st.id FROM public.stripe_transfers st
+      JOIN private.stripe_connect_avant_transfert o ON o.trace_id=st.id AND o.session_id=st.stripe_checkout_session_id
+        AND o.destination_id=st.standard_payout_account_id AND o.orientation='TRANSFER' AND o.livemode IS TRUE
+      JOIN public.soignants so ON so.id=st.soignant_id AND so.est_compte_test IS FALSE
+      JOIN public.etablissements e ON e.id=st.etablissement_id AND e.est_compte_test IS FALSE
+      WHERE st.standard_payout_state IN ('WAITING','SUBMITTED','FAILED')
+        AND st.standard_payout_next_read_at<=clock_timestamp()
+        AND (st.standard_payout_lease_until IS NULL OR st.standard_payout_lease_until<=clock_timestamp())
+      ORDER BY st.standard_payout_next_read_at,st.id LIMIT LEAST(GREATEST(p_limit,1),10))s);
+END;$$;
+
+
+ALTER FUNCTION "public"."fn_connect_payouts_a_traiter"("p_limit" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_connect_remboursement_constater"("p_operation_id" "uuid", "p_owner_token" "uuid", "p_refund" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -29122,51 +29388,44 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid"
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
-  v_facture public.factures%ROWTYPE;
-  v_mode_commission text;
+  f public.factures%ROWTYPE;
+  initiale public.factures%ROWTYPE;
+  ressource text;
+  admission jsonb;
 BEGIN
-  SELECT * INTO v_facture
-  FROM public.factures
-  WHERE id = p_facture_id
-  FOR UPDATE;
-  IF v_facture.id IS NULL THEN
-    RETURN jsonb_build_object('error', 'Facture introuvable');
+  SELECT * INTO initiale FROM public.factures WHERE id=p_facture_id;
+  IF initiale.id IS NULL THEN RETURN jsonb_build_object('error','Facture introuvable'); END IF;
+  IF NOT public.est_admin() AND COALESCE(auth.role(),'')<>'service_role'
+    AND (initiale.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+      OR public.fn_a_permission_etablissement('paiement',initiale.etablissement_id) IS NOT TRUE) THEN
+    RETURN jsonb_build_object('error','Non autorisé');
   END IF;
-  IF NOT public.est_admin()
-     AND COALESCE(auth.role(), '') <> 'service_role'
-     AND (
-       v_facture.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
-       OR public.fn_a_permission_etablissement('paiement', v_facture.etablissement_id) IS NOT TRUE
-     ) THEN
-    RETURN jsonb_build_object('error', 'Non autorisé');
+  IF p_reference IS NULL OR length(btrim(p_reference))<3 THEN
+    RETURN jsonb_build_object('error','Référence de virement requise.');
   END IF;
-
-  SELECT mode_paiement_commission INTO v_mode_commission
-  FROM public.etablissements
-  WHERE id = v_facture.etablissement_id;
-  IF v_facture.est_secteur_public THEN
-    RETURN jsonb_build_object('error', 'Cette facture est réglée via Chorus Pro.');
+  FOR ressource IN SELECT DISTINCT r FROM (
+    SELECT 'FACTURE:'||initiale.id::text r
+    UNION ALL SELECT 'MISSION:'||initiale.mission_id::text WHERE initiale.mission_id IS NOT NULL
+    UNION ALL SELECT 'MISSION:'||m.id::text FROM public.missions m WHERE m.facture_id=initiale.id
+  ) ressources ORDER BY r LOOP
+    PERFORM pg_advisory_xact_lock(hashtextextended(ressource,0));
+  END LOOP;
+  PERFORM 1 FROM public.missions m WHERE m.id=initiale.mission_id OR m.facture_id=initiale.id
+    ORDER BY m.id FOR UPDATE;
+  PERFORM 1 FROM public.factures_honoraires WHERE id=initiale.facture_honoraire_id FOR UPDATE;
+  SELECT * INTO f FROM public.factures WHERE id=initiale.id FOR UPDATE;
+  IF f.id IS NULL OR ROW(f.etablissement_id,f.mission_id,f.facture_honoraire_id)
+    IS DISTINCT FROM ROW(initiale.etablissement_id,initiale.mission_id,initiale.facture_honoraire_id) THEN
+    RETURN jsonb_build_object('error','Contexte facture modifié. Rechargez la facture.');
   END IF;
-  IF v_mode_commission = 'SEPA_DEBIT' THEN
-    RETURN jsonb_build_object(
-      'error', 'PAIEMENT_SEPA_AUTOMATIQUE',
-      'message', 'Le prélèvement SEPA est automatique : aucun virement manuel ne doit être déclaré.'
-    );
+  admission:=private.fn_admission_virement_commission(f.id);
+  IF (admission->>'virement_autorise')::boolean IS NOT TRUE THEN
+    RETURN jsonb_build_object('error',admission->>'motif',
+      'message','Ce virement ne peut pas être déclaré. Consultez les modalités de règlement actualisées.');
   END IF;
-  IF v_facture.statut NOT IN ('EMISE', 'EN_RETARD') THEN
-    RETURN jsonb_build_object('error', 'Statut incorrect : ' || v_facture.statut);
-  END IF;
-  IF p_reference IS NULL OR length(btrim(p_reference)) < 3 THEN
-    RETURN jsonb_build_object('error', 'Référence de virement requise.');
-  END IF;
-
-  UPDATE public.factures
-  SET virement_reference = btrim(p_reference),
-      mode_paiement = 'VIREMENT',
-      statut = 'VIREMENT_DECLARE',
-      modifie_le = now()
-  WHERE id = p_facture_id;
-  RETURN jsonb_build_object('success', true);
+  UPDATE public.factures SET virement_reference=btrim(p_reference),mode_paiement='VIREMENT',
+    statut='VIREMENT_DECLARE',modifie_le=now() WHERE id=f.id;
+  RETURN jsonb_build_object('success',true);
 END;
 $$;
 
@@ -30847,6 +31106,24 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_diagnostic_coherence_financiere"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_diagnostic_disponibilite_connect"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  RETURN jsonb_build_object('protocol', 'CONNECT_PRETRANSFER_V1', 'enabled',
+    EXISTS (SELECT 1 FROM private.stripe_connect_release_gate
+      WHERE protocol = 'CONNECT_PRETRANSFER_V1' AND enabled IS TRUE));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_diagnostic_disponibilite_connect"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_diffuser_pool_urgence"("p_mission_id" "uuid") RETURNS integer
@@ -37510,8 +37787,9 @@ BEGIN
         FROM public.factures f
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
-          AND f.date_emission IS NOT NULL
-          AND f.date_emission < NOW() - v_seuil;
+          AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
+          AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
+          < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
         IF v_paiements_retard_nb > 0 OR v_factures_retard_nb > 0 THEN
             v_raisons := jsonb_build_object(
@@ -37576,7 +37854,8 @@ BEGIN
         FROM public.factures f
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
-          AND f.date_emission < NOW() - v_seuil;
+          AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
+          < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
         IF v_paiements_retard_nb = 0 AND v_factures_retard_nb = 0 THEN
             UPDATE public.etablissements
@@ -37618,7 +37897,7 @@ $$;
 ALTER FUNCTION "public"."fn_gerer_blocage_etabs"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_gerer_blocage_etabs"() IS 'CP-C-3 blocage auto J+45 paiement soignant ou facture commission et deblocage auto post regularisation. Appelee par cron jobid 11.';
+COMMENT ON FUNCTION "public"."fn_gerer_blocage_etabs"() IS 'Blocage après 45 jours de retard : échéance facture commission, fin de mission pour paiement salarial direct. Réactivation après régularisation.';
 
 
 
@@ -42299,6 +42578,27 @@ $$;
 ALTER FUNCTION "public"."fn_missions_terminees_a_remercier"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_modalites_reglement_commission"("p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE f public.factures%ROWTYPE;
+BEGIN
+  SELECT * INTO f FROM public.factures WHERE id=p_facture_id;
+  IF f.id IS NULL OR (NOT public.est_admin() AND COALESCE(auth.role(),'')<>'service_role'
+    AND (f.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+      OR NOT (public.fn_a_permission_etablissement('lecture_paiement',f.etablissement_id) IS TRUE
+        OR public.fn_a_permission_etablissement('paiement',f.etablissement_id) IS TRUE))) THEN
+    RETURN jsonb_build_object('error','Facture indisponible ou accès refusé');
+  END IF;
+  RETURN private.fn_admission_virement_commission(f.id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_modalites_reglement_commission"("p_facture_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_mode_exercice"("p_profession" "text", "p_type_etab" "text", "p_finess_secteur" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE
     SET "search_path" TO 'public'
@@ -43941,7 +44241,9 @@ BEGIN
       et.adresse_rue, et.adresse_ville, et.adresse_code_postal, et.adresse_departement,
       et.adresse_lat, et.adresse_lng, et.email_contact, et.telephone_contact,
       et.stripe_customer_id, et.stripe_account_id,
-      et.taux_commission_negocie, et.mode_facturation, et.mode_paiement_commission,
+      et.taux_commission_negocie,
+      COALESCE(et.taux_commission_negocie, gs.taux_commission_negocie, 15) AS taux_commission_effectif,
+      et.mode_facturation, et.mode_paiement_commission,
       et.palier_commission_id, et.missions_mois_precedent, et.palier_recalcule_le,
       et.chorus_pro_actif, et.chorus_pro_identifiant, et.delai_paiement_jours,
       et.formule_abonnement, et.convention_collective, et.couleur_theme, et.logo_url,
@@ -43963,7 +44265,8 @@ BEGIN
       ) ELSE NULL END AS paliers_commission,
       CASE WHEN gs.id IS NOT NULL THEN jsonb_build_object(
         'id', gs.id,
-        'nom', gs.nom
+        'nom', gs.nom,
+        'taux_commission_negocie', gs.taux_commission_negocie
       ) ELSE NULL END AS groupes_sante
     FROM public.etablissements et
     LEFT JOIN public.paliers_commission pc ON pc.id = et.palier_commission_id
@@ -52995,6 +53298,28 @@ END $$;
 ALTER FUNCTION "public"."fn_reprendre_alertes_filtres"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_reprendre_emails_facturation"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE n integer;
+BEGIN
+  UPDATE public.email_queue q SET statut = 'EN_ATTENTE'
+  FROM private.facturation_email_livraisons l
+  WHERE q.id = l.email_id AND q.type = 'FACTURATION_DOCUMENT' AND q.statut = 'ERREUR'
+    AND l.prochaine_tentative_le <= now() AND l.tentatives < 5
+    -- L'ancien cron peut refuser ce nouveau type entre la migration et son
+    -- déploiement. Sans première réservation, aucun appel fournisseur n'a eu lieu.
+    AND ((l.premiere_tentative_le IS NULL AND l.tentatives = 0)
+      OR l.premiere_tentative_le >= now() - interval '20 hours');
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_reprendre_emails_facturation"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_reprendre_rappels_quotidiens"() RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -53083,6 +53408,59 @@ $_$;
 
 
 ALTER FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_email_facturation"("p_email_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE l private.facturation_email_livraisons; q public.email_queue; document jsonb; jeton uuid;
+BEGIN
+  SELECT * INTO l FROM private.facturation_email_livraisons WHERE email_id = p_email_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('statut', 'ABSENT'); END IF;
+  SELECT * INTO q FROM public.email_queue WHERE id = p_email_id FOR UPDATE;
+  IF q.statut <> 'EN_ATTENTE' THEN RETURN jsonb_build_object('statut', 'ATTENDRE'); END IF;
+  IF l.prochaine_tentative_le > now() THEN RETURN jsonb_build_object('statut', 'ATTENDRE'); END IF;
+  IF l.famille = 'COMMISSION' THEN
+    SELECT to_jsonb(f) INTO document FROM public.factures f WHERE id = l.document_id;
+  ELSE
+    SELECT to_jsonb(f) INTO document FROM public.factures_honoraires f WHERE id = l.document_id;
+  END IF;
+  IF document IS NULL OR document->>'statut' IS NULL OR document->>'statut' IN ('BROUILLON','EN_GENERATION','ERREUR_GENERATION','ANNULEE','REMPLACEE')
+    OR q.type <> 'FACTURATION_DOCUMENT' OR q.destinataire_id IS DISTINCT FROM l.destinataire_id OR q.data IS DISTINCT FROM l.corps
+    OR document->>'numero_facture' IS DISTINCT FROM l.corps#>>'{data,numero}'
+    OR round((document->>'montant_ht')::numeric, 2)::text IS DISTINCT FROM l.corps#>>'{data,montant_ht}'
+    OR round((document->>'montant_tva')::numeric, 2)::text IS DISTINCT FROM l.corps#>>'{data,montant_tva}'
+    OR round((document->>'montant_ttc')::numeric, 2)::text IS DISTINCT FROM l.corps#>>'{data,montant_ttc}'
+    OR to_char((document->>'date_echeance')::date, 'DD/MM/YYYY') IS DISTINCT FROM l.corps#>>'{data,date_echeance}'
+    OR NOT (l.destinataire_id::text = document->>'etablissement_id'
+      OR (l.famille = 'HONORAIRES' AND l.destinataire_id::text = document->>'soignant_id'))
+    OR NOT EXISTS (SELECT 1 FROM public.etablissements e WHERE e.id = (document->>'etablissement_id')::uuid AND e.supprime_le IS NULL)
+    OR (l.famille = 'HONORAIRES' AND NOT EXISTS (SELECT 1 FROM public.soignants s WHERE s.id = (document->>'soignant_id')::uuid AND s.supprime_le IS NULL))
+  THEN
+    UPDATE public.email_queue SET statut = 'ANNULE', erreur = 'Document ou destinataire devenu indisponible' WHERE id = p_email_id;
+    RETURN jsonb_build_object('statut', 'ANNULE');
+  END IF;
+  -- Une copie envoyée pendant le déploiement précédent vaut acquittement.
+  IF EXISTS (SELECT 1 FROM private.email_dispatch_idempotency d WHERE d.idempotency_key = l.idempotency_key AND d.statut = 'ENVOYE') THEN
+    UPDATE public.email_queue SET statut = 'ENVOYE', envoye = true, envoye_le = now(), erreur = NULL WHERE id = p_email_id;
+    RETURN jsonb_build_object('statut', 'DEJA_ENVOYE');
+  END IF;
+  -- Ne pas rejouer un résultat indéterminé après expiration de la fenêtre
+  -- d'idempotence fournisseur. L'erreur reste visible pour rapprochement manuel.
+  IF l.tentatives >= 5 OR l.premiere_tentative_le < now() - interval '20 hours' THEN
+    UPDATE public.email_queue SET statut = 'ERREUR', erreur = 'Envoi facture à vérifier : limite de reprise atteinte' WHERE id = p_email_id;
+    RETURN jsonb_build_object('statut', 'ERREUR');
+  END IF;
+  jeton := gen_random_uuid();
+  UPDATE private.facturation_email_livraisons SET tentatives = tentatives + 1,
+    premiere_tentative_le = coalesce(premiere_tentative_le, now()),
+    prochaine_tentative_le = now() + interval '15 minutes', reservation = jeton WHERE email_id = p_email_id;
+  RETURN jsonb_build_object('statut', 'RESERVE', 'reservation', jeton, 'corps', l.corps, 'idempotency_key', l.idempotency_key);
+END $$;
+
+
+ALTER FUNCTION "public"."fn_reserver_email_facturation"("p_email_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
@@ -54091,6 +54469,7 @@ DECLARE
     v_etab_id uuid := mon_etablissement_id();
     v_paiements_retard_nb int;
     v_factures_retard_nb int;
+    v_seuil_j integer := (public.fn_param_num('seuil_blocage_retard_j', 45))::integer;
 BEGIN
     IF v_etab_id IS NULL THEN
         RETURN jsonb_build_object('error', 'Accès refusé');
@@ -54100,13 +54479,13 @@ BEGIN
         RETURN jsonb_build_object('success', TRUE, 'debloque', FALSE, 'message', 'Votre compte n''est pas bloqué.');
     END IF;
 
-    -- Mêmes critères que fn_gerer_blocage_etabs (seuil 45 jours)
+    -- Même seuil paramétré et même échéance que fn_gerer_blocage_etabs
     SELECT COUNT(*) INTO v_paiements_retard_nb
     FROM missions m
     WHERE m.etablissement_id = v_etab_id
       AND m.type_contrat_applique = 'SALARIE'
       AND m.statut = 'TERMINEE'
-      AND m.fin_le < NOW() - INTERVAL '45 days'
+      AND m.fin_le < NOW() - make_interval(days => v_seuil_j)
       AND NOT EXISTS (
           SELECT 1 FROM paiements_soignant ps
           WHERE ps.mission_id = m.id AND ps.statut IN ('DECLARE', 'CONFIRME'));
@@ -54115,7 +54494,8 @@ BEGIN
     FROM factures f
     WHERE f.etablissement_id = v_etab_id
       AND f.statut IN ('EMISE', 'EN_RETARD')
-      AND f.date_emission < NOW() - INTERVAL '45 days';
+      AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
+          < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
     IF v_paiements_retard_nb = 0 AND v_factures_retard_nb = 0 THEN
         UPDATE etablissements SET bloque_auto_le = NULL, bloque_auto_raisons = NULL WHERE id = v_etab_id;
@@ -71179,9 +71559,22 @@ CREATE TABLE IF NOT EXISTS "public"."stripe_transfers" (
     "stripe_amount_reversed_cents" integer DEFAULT 0 NOT NULL,
     "stripe_reversal_statut" "text" DEFAULT 'AUCUN'::"text" NOT NULL,
     "facture_honoraire_id" "uuid",
+    "standard_payout_state" "text",
+    "standard_payout_account_id" "text",
+    "standard_payout_attempt" integer DEFAULT 0 NOT NULL,
+    "standard_payout_previous_id" "text",
+    "standard_payout_known_ids" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "standard_payout_first_post_at" timestamp with time zone,
+    "standard_payout_next_read_at" timestamp with time zone,
+    "standard_payout_owner" "uuid",
+    "standard_payout_lease_until" timestamp with time zone,
+    "standard_payout_error_code" "text",
     CONSTRAINT "stripe_transfers_amount_reversed_check" CHECK (("stripe_amount_reversed_cents" >= 0)),
     CONSTRAINT "stripe_transfers_dispute_statut_check" CHECK ((("dispute_statut" IS NULL) OR ("dispute_statut" = ANY (ARRAY['OUVERT'::"text", 'CLOS_won'::"text", 'CLOS_lost'::"text", 'CLOS_warning_closed'::"text", 'CLOS_warning_needs_response'::"text", 'CLOS_charge_refunded'::"text"])))),
     CONSTRAINT "stripe_transfers_reversal_statut_check" CHECK (("stripe_reversal_statut" = ANY (ARRAY['AUCUN'::"text", 'PARTIEL'::"text", 'TOTAL'::"text"]))),
+    CONSTRAINT "stripe_transfers_standard_payout_attempt_check" CHECK ((("standard_payout_attempt" >= 0) AND ("standard_payout_attempt" <= 3))),
+    CONSTRAINT "stripe_transfers_standard_payout_identity_check" CHECK ((("standard_payout_state" IS NULL) OR (("standard_payout_account_id" IS NOT NULL) AND ("facture_honoraire_id" IS NOT NULL) AND ("stripe_transfer_id" IS NOT NULL)))),
+    CONSTRAINT "stripe_transfers_standard_payout_state_check" CHECK (("standard_payout_state" = ANY (ARRAY['WAITING'::"text", 'SUBMITTED'::"text", 'PAID'::"text", 'FAILED'::"text", 'REVIEW'::"text"]))),
     CONSTRAINT "stripe_transfers_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'CHARGE_REUSSI'::"text", 'TRANSFERE'::"text", 'PAYE'::"text", 'ECHOUE'::"text", 'REMBOURSE'::"text", 'ANNULEE'::"text"])))
 );
 
@@ -74218,6 +74611,18 @@ CREATE UNIQUE INDEX "sms_envoyes_idempotency_key_uniq" ON "public"."sms_envoyes"
 
 
 
+CREATE INDEX "stripe_transfers_standard_payout_due" ON "public"."stripe_transfers" USING "btree" ("standard_payout_next_read_at") WHERE ("standard_payout_state" = ANY (ARRAY['WAITING'::"text", 'SUBMITTED'::"text", 'FAILED'::"text"]));
+
+
+
+CREATE UNIQUE INDEX "stripe_transfers_standard_payout_once" ON "public"."stripe_transfers" USING "btree" ("stripe_payout_id") WHERE (("standard_payout_state" IS NOT NULL) AND ("stripe_payout_id" IS NOT NULL));
+
+
+
+CREATE UNIQUE INDEX "stripe_transfers_standard_transfer_once" ON "public"."stripe_transfers" USING "btree" ("stripe_transfer_id") WHERE ("standard_payout_state" IS NOT NULL);
+
+
+
 CREATE UNIQUE INDEX "uidx_alertes_actives_source_type" ON "public"."alertes_systeme" USING "btree" ("source", "type_alerte") WHERE ("resolu_le" IS NULL);
 
 
@@ -74814,11 +75219,19 @@ CREATE OR REPLACE TRIGGER "trg_coherence_statut_soignant" BEFORE INSERT OR UPDAT
 
 
 
+CREATE OR REPLACE TRIGGER "trg_commission_virement_claim" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_claim_commission_virement"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_compteur_absences_sans_prevenir" AFTER INSERT OR UPDATE OF "statut", "absence_sans_prevenir" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_compteur_absences_sans_prevenir"();
 
 
 
 CREATE OR REPLACE TRIGGER "trg_connect_garder_orientation" BEFORE UPDATE ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "private"."fn_connect_garder_orientation_trace"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_connect_onboarding_serveur" BEFORE INSERT OR UPDATE ON "public"."stripe_connect_onboarding" FOR EACH ROW EXECUTE FUNCTION "private"."fn_connect_onboarding_exiger_serveur"();
 
 
 
@@ -74895,6 +75308,14 @@ CREATE OR REPLACE TRIGGER "trg_defaut_mode_paiement_secteur" BEFORE INSERT ON "p
 
 
 CREATE OR REPLACE TRIGGER "trg_desistement_garanti" AFTER UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_desistement_garanti"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_email_emission_commission" AFTER INSERT OR UPDATE OF "statut" ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."mettre_emission_facture_en_file"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_email_emission_honoraires" AFTER INSERT OR UPDATE OF "statut" ON "public"."factures_honoraires" FOR EACH ROW EXECUTE FUNCTION "private"."mettre_emission_facture_en_file"();
 
 
 
@@ -75495,6 +75916,10 @@ CREATE OR REPLACE TRIGGER "trg_zz_invalider_provenance_rib_etablissement" BEFORE
 
 
 CREATE OR REPLACE TRIGGER "trg_zzz_corriger_strategie_facturation" BEFORE UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_corriger_strategie_facturation_assignation"();
+
+
+
+CREATE OR REPLACE TRIGGER "zzz_connect_admettre_payout_standard" BEFORE INSERT OR UPDATE OF "statut" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "private"."fn_connect_admettre_payout_standard"();
 
 
 
@@ -78047,15 +78472,7 @@ CREATE POLICY "pol_conf_update_deny_anon" ON "public"."conformite_travail" FOR U
 
 
 
-CREATE POLICY "pol_connect_insert" ON "public"."stripe_connect_onboarding" FOR INSERT TO "authenticated" WITH CHECK (("soignant_id" = ( SELECT "auth"."uid"() AS "uid")));
-
-
-
 CREATE POLICY "pol_connect_select" ON "public"."stripe_connect_onboarding" FOR SELECT TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin")));
-
-
-
-CREATE POLICY "pol_connect_update" ON "public"."stripe_connect_onboarding" FOR UPDATE TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."est_admin"()));
 
 
 
@@ -79674,6 +80091,11 @@ GRANT ALL ON FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") TO "authenti
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_acquitter_email_facturation"("p_email_id" "uuid", "p_reservation" "uuid", "p_resultat" "text", "p_erreur" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acquitter_email_facturation"("p_email_id" "uuid", "p_reservation" "uuid", "p_resultat" "text", "p_erreur" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_acquitter_rappel_quotidien"("p_email_id" "uuid", "p_resultat" "text") TO "service_role";
 
@@ -81052,6 +81474,41 @@ GRANT ALL ON FUNCTION "public"."fn_connect_checkout_verifier"("p_operation_id" "
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_constater"("p_trace_id" "uuid", "p_account_id" "text", "p_payout" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_constater"("p_trace_id" "uuid", "p_account_id" "text", "p_payout" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_demarrer"("p_trace_id" "uuid", "p_owner" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_demarrer"("p_trace_id" "uuid", "p_owner" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_est_connu"("p_account_id" "text", "p_payout" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_est_connu"("p_account_id" "text", "p_payout" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_prendre"("p_trace_id" "uuid", "p_owner" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_prendre"("p_trace_id" "uuid", "p_owner" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_reessayer"("p_trace_id" "uuid", "p_owner" "uuid", "p_previous_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_reessayer"("p_trace_id" "uuid", "p_owner" "uuid", "p_previous_id" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payout_reporter"("p_trace_id" "uuid", "p_owner" "uuid", "p_code" "text", "p_review" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payout_reporter"("p_trace_id" "uuid", "p_owner" "uuid", "p_code" "text", "p_review" boolean) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_connect_payouts_a_traiter"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_connect_payouts_a_traiter"("p_limit" integer) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_connect_remboursement_constater"("p_operation_id" "uuid", "p_owner_token" "uuid", "p_refund" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_connect_remboursement_constater"("p_operation_id" "uuid", "p_owner_token" "uuid", "p_refund" "jsonb") TO "service_role";
 
@@ -81401,6 +81858,11 @@ GRANT ALL ON FUNCTION "public"."fn_detecter_teleportations"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_diagnostic_coherence_financiere"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_diagnostic_coherence_financiere"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_diagnostic_coherence_financiere"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_diagnostic_disponibilite_connect"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_diagnostic_disponibilite_connect"() TO "service_role";
 
 
 
@@ -82497,6 +82959,12 @@ GRANT ALL ON FUNCTION "public"."fn_missions_terminees_a_remercier"() TO "service
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_modalites_reglement_commission"("p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_modalites_reglement_commission"("p_facture_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_modalites_reglement_commission"("p_facture_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_mode_exercice"("p_profession" "text", "p_type_etab" "text", "p_finess_secteur" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_mode_exercice"("p_profession" "text", "p_type_etab" "text", "p_finess_secteur" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_mode_exercice"("p_profession" "text", "p_type_etab" "text", "p_finess_secteur" "text") TO "authenticated";
@@ -83444,6 +83912,11 @@ GRANT ALL ON FUNCTION "public"."fn_reprendre_alertes_filtres"() TO "service_role
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_reprendre_emails_facturation"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reprendre_emails_facturation"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() TO "service_role";
 
@@ -83451,6 +83924,11 @@ GRANT ALL ON FUNCTION "public"."fn_reprendre_rappels_quotidiens"() TO "service_r
 
 REVOKE ALL ON FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_reserver_copie_bulletin"("p_etablissement_id" "uuid", "p_soignant_id" "uuid", "p_periode_debut" "date", "p_periode_fin" "date", "p_mission_ids" "uuid"[], "p_idempotence" "uuid", "p_sha256_attendu" "text", "p_taille_attendue" bigint, "p_remplace_id" "uuid", "p_motif_remplacement" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reserver_email_facturation"("p_email_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_email_facturation"("p_email_id" "uuid") TO "service_role";
 
 
 
@@ -85491,7 +85969,7 @@ GRANT ALL ON TABLE "public"."streaks_soignant" TO "service_role";
 
 
 GRANT ALL ON TABLE "public"."stripe_connect_onboarding" TO "service_role";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."stripe_connect_onboarding" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stripe_connect_onboarding" TO "authenticated";
 
 
 
