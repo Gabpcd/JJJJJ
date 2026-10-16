@@ -1,4 +1,4 @@
-// Read-only recognition of the six manually deployed PR1063 migrations.
+// Read-only recognition of the seven manually deployed PR1063 migrations.
 // No bootstrap, SQL replay, repair, provider call or automatic repin.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -10,8 +10,8 @@ import { catalogueSqlFixture } from './connect-test-fixture-sql.mjs';
 import { readOnlySql, PROJECT } from './connect-test-fixture.mjs';
 
 export const REVIEWED_INSTALLATION = Object.freeze({
-  sourceSha: '204d352df7998f820f7f3437c5ed4c9476d625d9',
-  catalogue: { routines: 'f5a1148c69cd5d79f5447829d218b3b8', triggers: '3d6ef14ab83acb02a8ca0df3bc36231d', columns: 'b715fc97721c97f9a788b8cdc45a5e09' },
+  sourceSha: 'be0673dbe5533d2b4dc63b687fdb6f8a1f7f34ec',
+  catalogue: { routines: '487105aa42c50a5127ad408d5b62a249', triggers: '3d6ef14ab83acb02a8ca0df3bc36231d', columns: 'b715fc97721c97f9a788b8cdc45a5e09' },
   migrations: [
     ['20261016125441_aligner_relances_commission_echeance.sql', '3d3de03113eab292b81f6ae04c7e82cf932f3e6ca6b8c29c816e72ec42512c2c', 8],
     ['20261016125451_diagnostic_disponibilite_connect.sql', 'ed5f1ae477f221ebd32a5088b769fb533fd4527695e4d3dcc8e0fa009fe255d6', 7],
@@ -19,6 +19,7 @@ export const REVIEWED_INSTALLATION = Object.freeze({
     ['20261016125521_fiabiliser_emails_factures.sql', 'a929e9f09e3265da6e7499497952339c2992d77914bec9599bd69f4531dd4e94', 18],
     ['20261016125632_securiser_reglement_commission_separee_et_taux_groupe.sql', '7ac23bfd7885839c78d106eb3dddf82f29f45eeb287ae7a9d3454e9438880b13', 20],
     ['20261016144756_fermer_replays_payout_et_isoler_sources_facturation.sql', 'dc3fe609b61c25d64bdb171e96687b7e83cf3bd0c7bbfa64e13be9cfbcaec202', 7],
+    ['20261016151740_separer_claim_initial_et_complement_salarie.sql', 'b82d79b009e09a3079d1126e9003e88b4548f33b4734699d435dcadf6cbc2efe', 4],
   ],
 });
 const requireThat = (ok, code) => { if (!ok) throw new Error(`PAIEMENTS_INSTALLED_${code}`); };
@@ -29,7 +30,7 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 
 export function checkScope(changes, sources) {
   if (!changes.some(([, path]) => files.includes(path))) return false;
-  requireThat(same(changes, files.map(path => ['A', path])), 'EXACT_SIX_REQUIRED');
+  requireThat(same(changes, files.map(path => ['A', path])), 'EXACT_SEVEN_REQUIRED');
   REVIEWED_INSTALLATION.migrations.forEach(([name, hash]) => {
     requireThat(typeof sources[name] === 'string' && digest(sources[name]) === hash, 'SOURCE_CHANGED');
   });
@@ -75,7 +76,7 @@ export function checkInstallation(rows, baseVersions, sources, requireInstalled 
     requireThat(!requireInstalled && s.migrations.length === 0, 'INSTALLATION_DISAPPEARED');
     return 'empty'; // The existing main-only bootstrap still checks all versions.
   }
-  requireThat(present.length === 6 && s.migrations.length === 6, 'PARTIAL_INSTALLATION');
+  requireThat(present.length === 7 && s.migrations.length === 7, 'PARTIAL_INSTALLATION');
   requireThat(baseVersions.length > 0 && baseVersions.every(v => /^\d{14}$/.test(v))
     && new Set(baseVersions).size === baseVersions.length && !baseVersions.some(v => versions.includes(v))
     && same(s.versions, [...baseVersions, ...versions].sort()), 'REGISTRY_DRIFT');

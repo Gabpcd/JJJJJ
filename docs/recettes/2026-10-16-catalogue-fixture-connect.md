@@ -202,3 +202,41 @@ Preuves locales conservées dans le sous-dossier `revue-finale` du dossier
 Cette preuve de déploiement SQL ne remplace ni les simulations frontend finales
 ni le parcours de paiement chez le fournisseur TEST. Aucun contrôle n'est
 désactivé : les 61 suites et la comparaison exacte des six sources restent exigées.
+
+
+## Complément salarié distinct après paiement carte de l’initiale
+
+La revue indépendante de `2b81fa7` a identifié un cas où le claim de mission
+de l’initiale salariée payée empêchait le virement d’une facture complémentaire.
+Le commit `be0673dbe5533d2b4dc63b687fdb6f8a1f7f34ec` ajoute la seule migration
+`20261016151740`, SHA256 `b82d79b009e09a3079d1126e9003e88b4548f33b4734699d435dcadf6cbc2efe`.
+L’exception exige l’initiale canonique PAYEE du même établissement, son flux
+CHECKOUT_INVOICE, ses claims FACTURE/MISSION et leurs références cohérentes.
+Tout claim sur le complément lui-même demeure bloquant. Aucune ancienne pièce
+ou claim n’est réécrit.
+
+Les 61 suites SQL passent sous ROLLBACK avec ce seul corps supplémentaire.
+La relecture après annulation est identique à la lecture précédente. Le dry-run
+CLI ne proposait que cette migration ; après application au staging, les quatre
+statements du registre correspondent exactement à la source. Les sept migrations
+de la PR représentent désormais 90 statements, tous relus par le contrôle
+`checkInstallation` en mode installé. Seul le corps de
+`private.fn_admission_virement_commission(uuid)` change parmi les 1 135 routines ;
+les propriétaires, ACL, triggers et colonnes restent identiques.
+
+Le verrou routines devient `487105aa42c50a5127ad408d5b62a249`. Les canaux
+restent fermés (aucun cron ni requête réseau en file), gate général Connect fermé
+et capacités TEST révoquées. Preuves dans le même sous-dossier `revue-finale` :
+
+| Lecture | SHA256 |
+| --- | --- |
+| `jolene-1063-review7-before.private.json` | `63eb58c0ecfb8cc360a76a7e5865e88f57251ceffb3a0b939d32b526f996a858` |
+| `jolene-1063-review7-after-preview.private.json` | `63eb58c0ecfb8cc360a76a7e5865e88f57251ceffb3a0b939d32b526f996a858` |
+| `jolene-1063-review7-installed.private.json` | `e3e0371c423cf64ccd151d62f1f1e66a5f805f7cc6e91127c1fd9da8c3a4851f` |
+| `jolene-1063-review7-61-preview.private.json` | `eec1f731c58fbd74df67d798dee1c736f115cacf91e40fd522fe62508171b135` |
+| `jolene-1063-review7-all-installed.private.json` | `dad33e8c925ca70456f0dfbe701aeb22fadbe3ea11e7ca30f65f9615d4d4a7a1` |
+
+Cette relecture du staging n’atteste ni paiement Stripe, ni virement bancaire,
+ni validation complète du parcours. Le témoin PG17 couvre séparément les claims
+et la simulation frontend couvre la déclaration du complément avec réponses
+simulées. Leurs résultats doivent être vérifiés sur le candidat final.
