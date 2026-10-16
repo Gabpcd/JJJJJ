@@ -144,6 +144,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    else if(nom==='fn_modifier_preferences_notifications'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});Object.assign(preferences.global,{canal_email:p.p_canal_email,canal_push:p.p_canal_push,canal_sms:p.p_canal_sms,canal_in_app:p.p_canal_in_app});data={success:true};}
    else if(nom==='fn_inviter_membre_etab'){const p=req.postDataJSON();etat.operations.push({nom,payload:p});invitations.push({id:'invitation-recette',email_invite:p.p_email,role_propose:p.p_role,statut:'EN_ATTENTE',invite_le:new Date().toISOString(),expire_le:new Date(Date.now()+7*86400000).toISOString()});data={success:true};}
    else if(nom==='fn_detail_facture')data={error:'Facture introuvable'};
+   else if(nom==='fn_modalites_reglement_commission')data={error:'Facture introuvable'};
    else if(emptyRpcs.has(nom))data=[];
    else if(emptyTables.has(nom)&&['GET','HEAD'].includes(req.method()))data=object?null:[];
    else connu=false;

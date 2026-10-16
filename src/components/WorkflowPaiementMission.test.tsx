@@ -217,4 +217,31 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
     expect(screen.queryByRole('button', { name: /Déclarer le paiement|Payer via Stripe/ })).not.toBeInTheDocument();
   });
 
+  it('ne présente pas le miroir Stripe comme une confirmation humaine après rechargement', async () => {
+    mocks.from.mockImplementation((name: string) => queryResponse(name === 'paiements_soignant' ? [{
+      id: 'miroir-stripe', statut: 'CONFIRME', montant_net: 80, facture_honoraire_id: 'fh-1',
+      stripe_transfer_id: 'tr_fixture', confirme_par_soignant: true, confirme_par_soignant_le: '2026-10-16T12:00:00Z',
+    }] : name === 'stripe_transfers' ? [{ id: 'trace-1', statut: 'TRANSFERE', montant_soignant: 80 }] : []));
+    mocks.rpc.mockImplementation((name: string) => Promise.resolve({ data: name === 'fn_suivi_escrow_mission' ? [] : {
+      ...salaryPaymentInfo, type_contrat_applique: 'LIBERAL', mode_recommande: 'STRIPE_CONNECT',
+    }, error: null }));
+    const view = renderWorkflow({ typeContratApplique: 'LIBERAL' });
+    expect(await screen.findByText('Paiement Stripe confirmé')).toBeVisible();
+    expect(screen.getByText(/Le versement bancaire est suivi séparément/)).toBeVisible();
+    expect(screen.queryByText('Paiement confirmé par le soignant')).not.toBeInTheDocument();
+    view.unmount();
+    renderWorkflow({ typeContratApplique: 'LIBERAL' });
+    expect(await screen.findByText('Paiement Stripe confirmé')).toBeVisible();
+    expect(screen.queryByText(/Confirmé le/)).not.toBeInTheDocument();
+  });
+
+  it('conserve la confirmation humaine pour un règlement direct réellement confirmé', async () => {
+    mocks.from.mockImplementation((name: string) => queryResponse(name === 'paiements_soignant' ? [{
+      id: 'direct', statut: 'CONFIRME', montant_net: 80, stripe_transfer_id: null,
+      confirme_par_soignant: true, confirme_par_soignant_le: '2026-10-16T12:00:00Z',
+    }] : []));
+    renderWorkflow();
+    expect(await screen.findByText('Paiement confirmé par le soignant')).toBeVisible();
+    expect(screen.queryByText('Paiement Stripe confirmé')).not.toBeInTheDocument();
+  });
 });

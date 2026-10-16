@@ -12,6 +12,7 @@ import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, Alert
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { toast } from 'sonner';
 import { extraireErreurEdgeFn } from '@/lib/erreurs';
+import SuiviVersementsConnect from '@/components/gains/SuiviVersementsConnect';
 
 const formatEur = (v: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -400,19 +401,21 @@ export default function PageStripeConnect() {
                     <CarteKPIY2K
                       icone={<Banknote className="h-4 w-4" />}
                       valeur={formatEur(revenus.total)}
-                      label="Total reçu"
+                      label="Total réglé"
                       variant="soft"
                       onClick={() => navigate('/soignant/mes-gains?tab=factures')}
                     />
                     <CarteKPIY2K
                       icone={<Clock className="h-4 w-4" />}
                       valeur={formatEur(revenus.en_attente)}
-                      label="En attente"
+                      label="Autres paiements en attente"
                       variant="default"
                       onClick={() => navigate('/soignant/mes-gains?tab=avances')}
                     />
                   </div>
                 )}
+                {revenus ? <p className="text-xs text-muted-foreground mt-2">Ces montants incluent les transferts vers le solde Stripe et les règlements directs. Ils ne confirment pas à eux seuls une arrivée en banque.</p> : null}
+                <SuiviVersementsConnect />
 
                 {/* Quick links for liberal */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -18,23 +18,25 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
   const [loading, setLoading] = useState(false);
 
   const confirmer = async () => {
-    if (!user || !reference.trim()) return;
+    if (!user || loading || reference.trim().length < 3) return;
     setLoading(true);
-
-    const { data, error } = await supabase.rpc('fn_declarer_virement' as any, {
-      p_facture_id: facture.id,
-      p_reference: reference.trim(),
-    });
-    if (error || data?.error) {
-      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors de la déclaration du virement' });
+    try {
+      const { data, error } = await supabase.rpc('fn_declarer_virement' as any, {
+        p_facture_id: facture.id,
+        p_reference: reference.trim(),
+      });
+      if (error || data?.success !== true) {
+        afficherNotification({ type: 'erreur', message: data?.message || data?.error || 'Erreur lors de la déclaration du virement' });
+        return;
+      }
+      setOpen(false);
+      afficherNotification({ type: 'succes', message: '✅ Virement déclaré — en attente de vérification' });
+      onUpdate();
+    } catch {
+      afficherNotification({ type: 'erreur', message: 'La déclaration du virement n’a pas pu être confirmée. Consultez la facture avant de réessayer.' });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setLoading(false);
-    setOpen(false);
-    afficherNotification({ type: 'succes', message: '✅ Virement déclaré — en attente de vérification' });
-    onUpdate();
   };
 
   if (!open) {
@@ -70,11 +72,11 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
         />
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={confirmer} disabled={loading || !reference.trim()} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
+        <button type="button" onClick={confirmer} disabled={loading || reference.trim().length < 3} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           ✅ J'ai effectué le virement
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="btn-secondary text-xs">Annuler</button>
+        <button type="button" onClick={() => setOpen(false)} disabled={loading} className="btn-secondary text-xs">Annuler</button>
       </div>
     </div>
   );

@@ -68,6 +68,19 @@ export async function simulerSoignant(page: Page, mode: Mode = 'complet') {
   const body=req.postData()?.startsWith('{') ? req.postDataJSON() : null;
   if(req.method()==='OPTIONS')return fulfill({status:200,body:''});
   state.calls.push({name,method:req.method(),body,url:url.pathname+url.search});
+  // Contrat du suivi bancaire propre au soignant : les autres lectures du
+  // ledger restent inconnues. Les scénarios documentaires n'ont aucun payout.
+  if(url.pathname==='/rest/v1/stripe_transfers'){
+   const attendu:Record<string,string>={select:'*',soignant_id:`eq.${ids.user}`,statut:'in.(CHARGE_REUSSI,TRANSFERE,PAYE)',order:'cree_le.desc,id.desc',limit:'20'};
+   // Le parcours minimal SOIGNANT résout aussi ce rôle de navigation (useRole),
+   // sans profil métier ; la même lecture RLS propre au compte reste vide.
+   const conforme=req.method()==='GET'&&['minimal','complet'].includes(state.mode)&&req.headers().authorization==='Bearer fixture-auth'
+    &&[...url.searchParams].length===Object.keys(attendu).length
+    &&Object.entries(attendu).every(([cle,valeur])=>url.searchParams.get(cle)===valeur);
+   if(!conforme){state.unknown.push(`${req.method()} ${url.pathname} ${url.search}`);return fulfill({status:501,json:{message:'Lecture du ledger hors contrat de simulation',code:'RECETTE_INCONNU'}});}
+   if(state.failures.has(name))return fulfill({status:503,json:{message:'Service de simulation indisponible',code:'RECETTE_503'}});
+   return fulfill({json:[],headers:{'content-range':'*/0'}});
+  }
   const ecrituresTables:Record<string,string[]>={missions_sauvegardees:['DELETE'],documents_soignants:['PATCH'],notifications:['PATCH'],soignants:['PATCH']};
   if(url.pathname.startsWith('/rest/v1/')&&!url.pathname.startsWith('/rest/v1/rpc/')&&!['GET','HEAD'].includes(req.method())&&!ecrituresTables[name]?.includes(req.method())){
    state.unknown.push(`${req.method()} ${url.pathname}`);

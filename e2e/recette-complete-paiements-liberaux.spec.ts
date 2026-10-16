@@ -9,13 +9,14 @@ import { stabiliserActionsNationales } from './helpers/recette-complete-actions-
 const configurationFictive = process.env.RECETTE_STRIPE_CONFIGURATION === 'fictive';
 const indisponible = 'Le paiement par carte est momentanément indisponible. Réessayez plus tard.';
 const commissionId = '71000000-0000-4000-8000-000000000097';
+const commissionInitialeId = '71000000-0000-4000-8000-000000000098';
 const hostedUrl = 'https://checkout.stripe.com/c/pay/cs_test_fixture_configuration';
 const autreMission = '71000000-0000-4000-8000-000000000093';
 const originale = '71000000-0000-4000-8000-000000000080';
 const remplacement = '71000000-0000-4000-8000-000000000060';
 const seconde = '71000000-0000-4000-8000-000000000081';
 const autreFacture = '71000000-0000-4000-8000-000000000090';
-const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_detail_facture','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
+const lectureRpc = new Set(['fn_get_my_role','fn_compte_auth_actif','fn_mon_etablissement_complet','fn_etablissement_public','fn_etablissement_pour_mission','fn_etablissements_safe','fn_soignant_pour_etablissement','fn_messages_non_lus','fn_mes_permissions_etab','fn_obligations_financieres','fn_paiements_etablissement','fn_mes_factures','fn_detail_facture','fn_modalites_reglement_commission','fn_litige_pour_mission','fn_presences_detail_mission','fn_suivi_escrow_mission','fn_lister_copies_bulletins','fn_note_moyenne','fn_mode_exercice','fn_param_bool','fn_onboarding_soignant_statut','fn_alerte_cddu_repetitif','fn_etat_pointage_mission','fn_mode_paiement_mission','fn_score_etab_public','fn_user_id_pour_etablissement','fn_est_bloque','fn_interlocuteurs_conversations']);
 async function action(page: Page, cible: Locator) {
   await cible.scrollIntoViewIfNeeded();
   if (test.info().project.use.hasTouch) await cible.tap(); else await cible.click();
@@ -36,19 +37,22 @@ async function verifierActionsPaiement(piece: Locator, nom: string) {
     return separes && centresAlignes && icone.x + icone.width <= texte.x;
   }, { message: 'Icône alignée avec le texte et actions de paiement sans recouvrement au survol' }).toBe(true);
 }
-async function fixture(page: Page, connect = false, commission = false, commissionScenario: 'mensuelle' | 'complementaire-salariee' | 'liee-payee' = 'mensuelle') {
+async function fixture(page: Page, connect = false, commission = false, commissionScenario: 'mensuelle' | 'complementaire-salariee' | 'complementaire-initiale-carte-payee' | 'liee-payee' | 'liee-directe' | 'liee-connect' = 'mensuelle') {
   const simulation = creerSuiviSimule(), { state } = simulation;
+  const complementApresCarte = commissionScenario === 'complementaire-initiale-carte-payee';
+  const complementSalarie = commissionScenario === 'complementaire-salariee' || complementApresCarte;
   Object.assign(state.mission, { statut: connect ? 'EN_COURS' : 'TERMINEE', type_contrat_applique: 'LIBERAL',
     soignant_assigne_id: ids.soignant, taux_horaire_base: 20, total_brut: 160, net_a_payer: 160,
     intitule: 'Mission libérale documentaire', debut_le: '2026-09-14T08:00:00Z', fin_le: '2026-09-21T12:00:00Z' });
-  if (commissionScenario === 'complementaire-salariee') state.mission.type_contrat_applique = 'SALARIE';
+  if (complementSalarie) state.mission.type_contrat_applique = 'SALARIE';
+  if (complementApresCarte) Object.assign(state.mission, { facture_id: commissionInitialeId, commission_facturee: true });
   state.creneaux.splice(0,state.creneaux.length,
     {...state.creneaux[0],debut:'2026-09-14T08:00:00Z',fin:'2026-09-14T12:00:00Z'},
     {...state.creneaux[0],id:'71000000-0000-4000-8000-000000000014',debut:'2026-09-21T08:00:00Z',fin:'2026-09-21T12:00:00Z'});
   await simulation.installer(page.context(), 'ADMIN_ETABLISSEMENT');
   await page.clock.setFixedTime(new Date('2026-10-01T10:00:00Z'));
   const erreurs: string[] = [], interdits: string[] = [], mutations: { name: string; body: unknown }[] = [];
-  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200 };
+  const controle = { checkoutHeberge: false, modeInvalide: false, legacy: false, sansPiece: false, salarie: false, retour: false, historiqueIncomplet: false, historiqueLieComplet: false, refus: 'PAIEMENT_HISTORIQUE_A_RAPPROCHER', refusMessage: '', refusStatus: 200, virementRefuse: false };
   page.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()); });
   page.on('pageerror', e => erreurs.push(e.message));
   await page.context().routeWebSocket('**/*', socket => socket.close());
@@ -69,12 +73,17 @@ async function fixture(page: Page, connect = false, commission = false, commissi
     periode_debut: id === seconde ? '2026-09-21' : '2026-09-14', periode_fin: id === seconde ? '2026-09-27' : '2026-09-20', debut_le: state.mission.debut_le, fin_le: state.mission.fin_le, jours_depuis_fin: 1 });
   const factureCommission = { id: commissionId, facture_id: commissionId, numero_facture: 'COMMISSION-SIMULATION',
     etablissement_id: ids.etablissement, statut: commissionScenario === 'liee-payee' ? 'PAYEE' : 'EMISE',
-    type_document: commissionScenario === 'complementaire-salariee' ? 'FACTURE_COMPLEMENTAIRE' : 'FACTURE', est_secteur_public: false,
+    type_document: complementSalarie ? 'FACTURE_COMPLEMENTAIRE' : 'FACTURE', est_secteur_public: false,
     mission_id: commissionScenario === 'mensuelle' ? null : ids.mission,
-    facture_honoraire_id: commissionScenario === 'liee-payee' ? seconde : null,
-    mode_paiement: commissionScenario === 'complementaire-salariee' ? 'VIREMENT' : 'STRIPE',
+    facture_honoraire_id: commissionScenario.startsWith('liee-') ? seconde : null,
+    mode_paiement: complementSalarie ? 'VIREMENT' : 'STRIPE',
     montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 0,
-    date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30' };
+    date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30',
+    ...(complementApresCarte ? { facture_precedente_id: commissionInitialeId, stripe_payment_intent_id: null } : {}) };
+  const initialeCarte = complementApresCarte ? { ...factureCommission, id: commissionInitialeId, facture_id: commissionInitialeId,
+    numero_facture: 'COMMISSION-INITIALE-CARTE-PAYEE', type_document: 'FACTURE', statut: 'PAYEE', mode_paiement: 'STRIPE',
+    facture_precedente_id: null, stripe_payment_intent_id: 'pi_test_initiale_salariee_simulation', date_paiement: '2026-09-30' } : null;
+  const admissions: { facture_id: string; virement_autorise: boolean }[] = [];
   await page.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').at(-1)!;
     const json = (data: unknown, count = Array.isArray(data) ? data.length : 0, offset = 0) => route.fulfill({ json: data, headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers':'content-range', ...(Array.isArray(data)?{'content-range':data.length?`${offset}-${offset+data.length-1}/${count}`:`*/${count}`}:{}) } });
@@ -109,6 +118,15 @@ async function fixture(page: Page, connect = false, commission = false, commissi
         expect(connect).toBe(false); expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_montant: 60, p_methode: 'VIREMENT', p_reference: 'VIR-2026-060', p_date_paiement: '2026-10-01', p_attestation_sur_l_honneur: true });
         mutations.push({ name, body }); return json({ error: controle.refus });
       }
+      if (commission && name === 'fn_declarer_virement') {
+        expect(body).toEqual({ p_facture_id: commissionId, p_reference: complementApresCarte ? 'VIR-COMPLEMENT-SALARIE-2026-001' : 'VIR-COMMISSION-2026-001' });
+        mutations.push({ name, body });
+        if (controle.virementRefuse) return json({ error: 'PAIEMENT_EN_LIGNE_ENGAGE', message: 'Un paiement en ligne est déjà engagé pour cette facture.' });
+        expect(['liee-directe', 'complementaire-initiale-carte-payee']).toContain(commissionScenario);
+        expect(factureCommission.statut).toBe('EMISE');
+        factureCommission.statut = 'VIREMENT_DECLARE';
+        return json({ success: true });
+      }
       if (name === 'fn_suivi_remboursements_connect_facture') {
         expect(connect && controle.retour).toBe(true);
         expect(body).toEqual({ p_facture_honoraire_id: remplacement, p_checkout_session_id: 'cs_test_retour_liberal' });
@@ -116,10 +134,19 @@ async function fixture(page: Page, connect = false, commission = false, commissi
           source: 'CONNECT_AVANT_TRANSFERT', visibilite_montants: 'TOTAL_ETABLISSEMENT', paiement_statut: 'ECHOUE', operations: [], lecture_complete: true });
       }
       if (!lectureRpc.has(name)) { interdits.push(`RPC ${name}`); return route.abort(); }
-      if (commission && name === 'fn_mes_factures') return json([factureCommission]);
+      if (commission && name === 'fn_modalites_reglement_commission') {
+        const piece = initialeCarte && body.p_facture_id === commissionInitialeId ? initialeCarte : factureCommission;
+        expect(body).toEqual({ p_facture_id: piece.id });
+        const autorise = ['EMISE','EN_RETARD'].includes(piece.statut) && commissionScenario !== 'liee-connect';
+        admissions.push({ facture_id: piece.id, virement_autorise: autorise });
+        return json({ facture_id: piece.id, virement_autorise: autorise,
+          motif: autorise ? null : commissionScenario === 'liee-connect' ? 'PAIEMENT_EN_LIGNE_ENGAGE' : 'FACTURE_NON_PAYABLE' });
+      }
+      if (commission && name === 'fn_mes_factures') return json(initialeCarte ? [factureCommission, initialeCarte] : [factureCommission]);
       if (commission && name === 'fn_detail_facture') {
-        expect(body).toEqual({ p_facture_id: commissionId });
-        return json({ facture: factureCommission, missions: [] });
+        const piece = initialeCarte && body.p_facture_id === commissionInitialeId ? initialeCarte : factureCommission;
+        expect(body).toEqual({ p_facture_id: piece.id });
+        return json({ facture: piece, missions: [] });
       }
       if (commission && name === 'fn_obligations_financieres') return json({ total_du: commissionScenario === 'liee-payee' ? 0 : 14.4,
         total_soignants_du: 0, total_commissions_du: commissionScenario === 'liee-payee' ? 0 : 14.4, missions_non_payees: [],
@@ -134,9 +161,11 @@ async function fixture(page: Page, connect = false, commission = false, commissi
     if (url.pathname.startsWith('/rest/') && !url.pathname.includes('/rpc/')) {
       if (!['GET','HEAD'].includes(req.method())) { interdits.push(`${req.method()} ${name}`); return route.abort(); }
       if (commission && name === 'factures') {
-        expect([`eq.${commissionId}`, `in.(${commissionId})`]).toContain(url.searchParams.get('id'));
+        const initiale = initialeCarte && url.searchParams.get('id') === `eq.${commissionInitialeId}`;
+        expect([`eq.${commissionId}`, `in.(${commissionId})`, ...(initialeCarte ? [`eq.${commissionInitialeId}`] : [])]).toContain(url.searchParams.get('id'));
         expect(url.searchParams.get('etablissement_id')).toBe(`eq.${ids.etablissement}`);
-        return json(req.headers().accept?.includes('vnd.pgrst.object') ? factureCommission : [factureCommission]);
+        const piece = initiale ? initialeCarte : factureCommission;
+        return json(req.headers().accept?.includes('vnd.pgrst.object') ? piece : [piece]);
       }
       if (commission && name === 'missions' && url.searchParams.get('select') === 'id,type_contrat_applique') {
         expect(url.searchParams.get('id')).toBe(`eq.${ids.mission}`);
@@ -175,7 +204,7 @@ async function fixture(page: Page, connect = false, commission = false, commissi
     }
     return route.fallback();
   });
-  return { ...simulation, controle, mutations, docs,
+  return { ...simulation, controle, mutations, docs, initialeCarte, admissions,
     verifier(erreursAttendues: string[] = []) { expect(interdits).toEqual([]); expect(erreurs).toEqual(erreursAttendues); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]); expect(state.errors).toEqual([]); expect(state.emails).toEqual([]); expect(state.sms).toEqual([]); expect(state.signatures).toEqual([]); } };
 }
 for (const connect of [false,true]) test(`Libéral ${connect ? `Connect EN_COURS (${configurationFictive ? 'configuration fictive' : 'sans clé'})` : 'virement TERMINEE'} : détail → pièce exacte, filtre et reprise`, async ({ page }, info) => {
@@ -344,6 +373,47 @@ test('Détail commission complémentaire salariée : virement disponible, carte 
   f.verifier();
 });
 
+test('Complément salarié après initiale carte payée : déclaration du virement exact et reprise sans nouvelle carte', async ({ page }, info) => {
+  // Admission et paiement initial sont des réponses simulées. Ce scénario ne
+  // prouve ni la garde SQL des claims ni une réception bancaire/fournisseur.
+  const f = await fixture(page, false, true, 'complementaire-initiale-carte-payee');
+  await page.goto(`/etablissement/facturation/${commissionInitialeId}`);
+  await expect(page.getByText('COMMISSION-INITIALE-CARTE-PAYEE', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payée', { exact: true })).toBeVisible();
+  await expect(page.getByText('Paiement en ligne', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Payer|Payer par carte|Virement)$/ })).toHaveCount(0);
+  expect(f.mutations).toEqual([]);
+
+  await stabiliserActionsNationales(page);
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  await expect(page.getByText('COMMISSION-SIMULATION', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payée', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Payer|Payer par carte)$/ })).toHaveCount(0);
+  await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+  const declarer = page.getByRole('button', { name: /J'ai effectué le virement/ });
+  await expect(declarer).toBeDisabled();
+  await page.getByLabel('Référence de votre virement').fill('VIR-COMPLEMENT-SALARIE-2026-001');
+  await action(page, declarer);
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(page.getByText('COMMISSION-SIMULATION', { exact: true })).toBeVisible();
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payée', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Payer|Payer par carte|Virement)$/ })).toHaveCount(0);
+  expect(f.mutations).toEqual([{ name: 'fn_declarer_virement', body: {
+    p_facture_id: commissionId, p_reference: 'VIR-COMPLEMENT-SALARIE-2026-001' } }]);
+  expect(f.admissions).toContainEqual({ facture_id: commissionInitialeId, virement_autorise: false });
+  expect(f.admissions).toContainEqual({ facture_id: commissionId, virement_autorise: true });
+  expect(f.admissions).toContainEqual({ facture_id: commissionId, virement_autorise: false });
+  expect(f.initialeCarte).toMatchObject({ id: commissionInitialeId, statut: 'PAYEE', mode_paiement: 'STRIPE',
+    stripe_payment_intent_id: 'pi_test_initiale_salariee_simulation' });
+  f.verifier();
+  await info.attach('complement-salarie-apres-carte-simulation', { body: JSON.stringify({ simulation: true,
+    initialPaidStateSimulated: true, serverAdmissionSimulated: true, declarationCount: 1,
+    declaredInvoiceExact: true, status: 'VIREMENT_DECLARE', sqlAdmissionVerified: false,
+    providerVerified: false, bankReceiptVerified: false }), contentType: 'application/json' });
+});
+
 test('Détail commission liée payée : historique annoncé sans faux filtre ni nouveau paiement', async ({ page }, info) => {
   const f = await fixture(page, false, true, 'liee-payee');
   await page.goto(`/etablissement/facturation/${commissionId}`);
@@ -432,4 +502,174 @@ for (const refus of [
   await expect(piece).toBeVisible();
   expect(f.mutations).toHaveLength(configurationFictive ? 1 : 0);
   f.verifier(configurationFictive ? [`Failed to load resource: the server responded with a status of ${refus.status} (${refus.statusText})`] : []);
+});
+
+
+test('Commission libérale séparée : honoraires directs déclarés, virement exact et vérification conservée après recharge', async ({ page }, info) => {
+  const f = await fixture(page, false, true, 'liee-directe');
+  await page.goto('/etablissement/facturation?tab=commissions');
+  await action(page, page.getByRole('button', { name: 'Consulter les modalités de règlement', exact: true }));
+  await expect(page).toHaveURL(new RegExp(`/etablissement/facturation/${commissionId}$`));
+  await expect(page.getByText(/La commission Jolene reste à régler séparément/)).toBeVisible();
+  await expect(page.getByText(/Cette déclaration ne prouve pas la réception des fonds/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Payer|Payer par carte)$/ })).toHaveCount(0);
+  await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+  const valider = page.getByRole('button', { name: /J'ai effectué le virement/ });
+  await expect(valider).toBeDisabled();
+  await page.getByLabel('Référence de votre virement').fill('VIR-COMMISSION-2026-001');
+  await action(page, valider);
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Virement', exact: true })).toHaveCount(0);
+  await stabiliserActionsNationales(page); await page.reload();
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payée', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Virement|Payer)$/ })).toHaveCount(0);
+  expect(f.mutations).toEqual([{ name: 'fn_declarer_virement', body: {
+    p_facture_id: commissionId, p_reference: 'VIR-COMMISSION-2026-001' } }]);
+  f.verifier();
+  await info.attach('commission-separee-simulation', { body: JSON.stringify({ simulation: true,
+    providerVerified: false, invoiceExact: true, declarations: 1, status: 'VIREMENT_DECLARE',
+    paidClaimed: false }), contentType: 'application/json' });
+});
+
+test('Commission liée : Connect engagé interdit le virement séparé, y compris après recharge', async ({ page }) => {
+  const f = await fixture(page, false, true, 'liee-connect');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  for (const recharge of [false, true]) {
+    if (recharge) { await stabiliserActionsNationales(page); await page.reload(); }
+    await expect(page.getByText('Un paiement en ligne est déjà engagé. Consultez son suivi avant de déclarer un autre règlement.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Virement|Payer|Payer par carte)$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Consulter le règlement des honoraires', exact: true })).toBeVisible();
+  }
+  expect(f.mutations).toEqual([]); f.verifier();
+});
+
+test('Commission séparée : admission devenue périmée, refus serveur sans faux succès ni nouveau débit', async ({ page }) => {
+  const f = await fixture(page, false, true, 'liee-directe');
+  await page.goto(`/etablissement/facturation/${commissionId}`);
+  await action(page, page.getByRole('button', { name: 'Virement', exact: true }));
+  await page.getByLabel('Référence de votre virement').fill('VIR-COMMISSION-2026-001');
+  f.controle.virementRefuse = true;
+  await action(page, page.getByRole('button', { name: /J'ai effectué le virement/ }));
+  await expect(page.getByText('Un paiement en ligne est déjà engagé pour cette facture.', { exact: true })).toBeVisible();
+  await expect(page.getByText('✅ Virement déclaré — en attente de vérification', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Virement déclaré 🔍', { exact: true })).toHaveCount(0);
+  expect(f.mutations).toHaveLength(1); f.verifier();
+});
+
+test('Soignant : ancien schéma, transfert Stripe distinct de la banque, échec et confirmation persistants après recharge', async ({ page, context }) => {
+  const simulation = creerSuiviSimule();
+  await simulation.installer(context, 'SOIGNANT');
+  let phase: 'LEGACY' | 'WAITING' | 'SUBMITTED' | 'FAILED' | 'PAID' = 'LEGACY';
+  const ledgerReads: string[] = [];
+  let globalCopiesReads = 0;
+  await page.route('**/functions/**', async route => {
+    const req = route.request(), url = new URL(req.url());
+    if (req.method() === 'OPTIONS') return route.fallback();
+    if (url.pathname.split('/').at(-1) !== 'stripe-connect-status') return route.fallback();
+    expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+    expect(req.method()).toBe('POST');
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { statut: 'COMPLET', onboarding_complete: true, charges_enabled: true, payouts_enabled: true, iban_last4: '0000' } });
+  });
+  await page.route('**/rest/v1/**', async route => {
+    const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').at(-1);
+    if (req.method() === 'OPTIONS') return route.fallback();
+    if (name === 'fn_mes_revenus_connect') {
+      expect(req.method()).toBe('POST');
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { mois_en_cours: 80, total: 80, en_attente: 0 } });
+    }
+    if (name === 'factures_honoraires' && url.searchParams.has('soignant_id')) {
+      expect(req.method()).toBe('GET');
+      expect(url.searchParams.get('soignant_id')).toBe(`eq.${ids.soignant}`);
+      expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+      expect(req.headers().prefer).toContain('count=exact');
+      expect(simulation.state.facture).toBeNull();
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'content-range', 'content-range': '*/0' }, json: [] });
+    }
+    // Mes gains consulte la liste globale ; le helper mission conserve son
+    // exigence p_mission_id exact pour tous les écrans de détail existants.
+    if (url.pathname === '/rest/v1/rpc/fn_lister_copies_bulletins') {
+      expect(new URL(page.url()).pathname).toBe('/soignant/mes-gains');
+      expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+      expect(req.method()).toBe('POST');
+      expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+      expect(req.postDataJSON()).toEqual({ p_etablissement_id: null, p_mission_id: null });
+      globalCopiesReads++;
+      return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [] });
+    }
+    if (name !== 'stripe_transfers' || !url.searchParams.has('soignant_id')) return route.fallback();
+    expect(req.method()).toBe('GET');
+    expect(url.searchParams.get('soignant_id')).toBe(`eq.${ids.soignant}`);
+    expect(url.searchParams.get('limit')).toBe('20');
+    expect(req.headers().authorization).toBe('Bearer simulation-mission-SOIGNANT');
+    ledgerReads.push(phase);
+    // Le serveur antérieur rejette cette projection avant même de lire des
+    // lignes : conserver ce comportement reproduit l'erreur REST 42703.
+    if (phase === 'LEGACY' && url.searchParams.get('select')?.includes('standard_payout_state')) {
+      return route.fulfill({ status: 400, json: { code: '42703', message: 'column stripe_transfers.standard_payout_state does not exist' } });
+    }
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [{ id: '71000000-0000-4000-8000-000000000099', mission_id: ids.mission,
+      statut: phase === 'PAID' || phase === 'LEGACY' ? 'PAYE' : 'TRANSFERE', montant_soignant: 80,
+      ...(phase === 'LEGACY' ? {} : { standard_payout_state: phase }),
+      stripe_payout_id: phase === 'WAITING' ? null : 'po_simulation',
+      paye_le: phase === 'PAID' || phase === 'LEGACY' ? '2026-10-16T12:00:00Z' : null }] });
+  });
+  await page.goto('/soignant/stripe-connect');
+  await expect(page.getByText('Total réglé', { exact: true })).toBeVisible();
+  await expect(page.getByText('Total reçu', { exact: true })).toHaveCount(0);
+  const bank = page.getByRole('region', { name: 'Versements bancaires Stripe' });
+  const labels = { LEGACY: 'Versement bancaire à vérifier', WAITING: 'Transféré sur Stripe', SUBMITTED: 'Versement bancaire en cours', FAILED: 'Versement bancaire échoué', PAID: 'Versement bancaire confirmé' };
+  for (const next of ['LEGACY', 'WAITING', 'SUBMITTED', 'FAILED', 'PAID'] as const) {
+    phase = next;
+    if (next !== 'LEGACY') await page.reload();
+    await expect(bank.getByText(new RegExp('^' + labels[next]))).toContainText('80,00');
+    if (next !== 'PAID') await expect(bank.getByText(/^Versement bancaire confirmé/)).toHaveCount(0);
+    await bank.scrollIntoViewIfNeeded();
+    await expect(bank).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    if (next === 'LEGACY') {
+      await page.goto('/soignant/mes-gains');
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+      await page.reload();
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+      await expect(bank.getByText(/^Versement bancaire confirmé/)).toHaveCount(0);
+      await expect(page.getByText('Impossible de charger tous les revenus', { exact: true })).toHaveCount(0);
+      await page.screenshot({ path: test.info().outputPath('versement-ancien-schema.png'), fullPage: true });
+      await page.goto('/soignant/stripe-connect');
+      await expect(bank.getByText(/^Versement bancaire à vérifier/)).toBeVisible();
+    }
+  }
+  await page.goto('/soignant/mes-gains');
+  await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  await page.reload();
+  await expect(bank.getByText(/^Versement bancaire confirmé/)).toBeVisible();
+  await expect(page.getByText('Impossible de charger tous les revenus', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('versement-schema-actuel.png'), fullPage: true });
+  expect(globalCopiesReads).toBeGreaterThan(0);
+  expect(Array.from(new Set(ledgerReads))).toEqual(['LEGACY', 'WAITING', 'SUBMITTED', 'FAILED', 'PAID']);
+  expect(simulation.state.sms).toEqual([]);
+  expect(simulation.state.emails).toEqual([]);
+  expect(simulation.state.unknown).toEqual([]);
+  expect(simulation.state.errors).toEqual([]);
+});
+
+test('Établissement : miroir Stripe après recharge sans confirmation humaine inventée', async ({ page }) => {
+  const f = await fixture(page, true);
+  await page.route('**/rest/v1/paiements_soignant**', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    if (new URL(route.request().url()).searchParams.get('select') !== '*') return route.fallback();
+    expect(route.request().method()).toBe('GET');
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: [{ id: 'miroir-stripe', mission_id: ids.mission, facture_honoraire_id: remplacement,
+      montant_net: 60, statut: 'CONFIRME', stripe_transfer_id: 'tr_simulation', confirme_par_soignant: true,
+      confirme_par_soignant_le: '2026-10-16T12:00:00Z' }] });
+  });
+  await page.goto(`/etablissement/missions/${ids.mission}`);
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    await expect(page.getByText('Paiement Stripe confirmé', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Le versement bancaire est suivi séparément/)).toBeVisible();
+    await expect(page.getByText('Paiement confirmé par le soignant', { exact: true })).toHaveCount(0);
+  }
+  expect(f.mutations).toEqual([]); f.verifier();
 });

@@ -30,7 +30,9 @@ export const sha256 = value => createHash('sha256').update(value).digest('hex');
 function chargerHandler(fetchFictif, logs, pannePolice) {
   let handler;
   const env = Object.freeze({ SUPABASE_URL: origin, SUPABASE_SERVICE_ROLE_KEY: secretFictif,
-    SUPABASE_ANON_KEY: 'anon-recette-sans-acces', JOLENE_SIRET: '00000000000000' });
+    SUPABASE_ANON_KEY: 'anon-recette-sans-acces', JOLENE_SIRET: '00000000000000',
+    CRON_AUTOMATIONS_SECRET: undefined, CRON_SECRET: undefined, SUPABASE_SECRET_KEY: undefined,
+    SB_SECRET_KEY: undefined, SUPABASE_SECRET_KEYS: undefined });
   const modules = new Map();
   class DateFixe extends Date {
     constructor(...args) { super(...(args.length ? args : [instant])); }
@@ -46,6 +48,7 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
   };
   function charger(relative) {
     assert(['supabase/functions/generate-invoice/index.ts', 'supabase/functions/_shared/cors.ts',
+      'supabase/functions/_shared/cron-service-auth.ts',
       'supabase/functions/_shared/rate-limit.ts', 'supabase/functions/generate-invoice/fonts.ts',
       'supabase/functions/generate-invoice/fonts/noto-sans-data.ts'].includes(relative), `Unknown module: ${relative}`);
     if (modules.has(relative)) return modules.get(relative);
@@ -68,6 +71,7 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
         return createClient(url, key, { ...options, global: { ...options?.global, fetch: fetchFictif } });
       } };
       if (name === '../_shared/cors.ts') return charger('supabase/functions/_shared/cors.ts');
+      if (name === '../_shared/cron-service-auth.ts') return charger('supabase/functions/_shared/cron-service-auth.ts');
       if (name === '../_shared/rate-limit.ts') return charger('supabase/functions/_shared/rate-limit.ts');
       throw new Error(`Import forbidden: ${name}`);
     };
@@ -83,7 +87,7 @@ function chargerHandler(fetchFictif, logs, pannePolice) {
 }
 
 export function creerBanc({ bornesFacturation = null, erreurHistorique = false, panneXml = false, pagination = false, unicode = false, pannePolice = '', pannePrecedente = '', numeroFacture = 'F1-HONORAIRE-SEMAINE', apresReservation = null, reservationConcurrenteEmise = false, numeroAvoir = 'F1-AVOIR-PARTIEL', numeroRemplacement = 'F1-RECTIFICATIVE-SEMAINE' } = {}) {
-  const documents = new Map(), factures = [], versions = [], appels = [], inconnus = [], logs = [];
+  const documents = new Map(), factures = [], versions = [], appels = [], lecturesAuth = [], inconnus = [], logs = [];
   const baux = new Map(), emissions = [];
   const pannes = { xml: panneXml, perdreReponseFinale: false };
   const acquerir = f => { const b = { token: webcrypto.randomUUID(), actif: true, resultat: null }; baux.set(f.id, b); f.statut = 'EN_GENERATION'; return b; };
@@ -128,6 +132,15 @@ export function creerBanc({ bornesFacturation = null, erreurHistorique = false, 
       if (path.startsWith('/rest/v1/rpc/') && req.method === 'POST') {
         const name = path.split('/').at(-1);
         switch (name) {
+          case 'fn_lire_secret_cron_automations':
+          case 'fn_lire_secret_cron': {
+            assert.equal(path, `/rest/v1/rpc/${name}`); assert.equal(url.search, ''); assert.deepEqual(body, {});
+            // Keep the full auth-read trace separately from business IO. Only
+            // these two exact, validated read RPCs leave the business ledger;
+            // a wrong origin/header/path/body stays recorded and fails closed.
+            appels.splice(appels.indexOf(appel), 1); lecturesAuth.push(appel);
+            return json(null);
+          }
           case 'fn_verifier_pre_facturation': assert.equal(body.p_mission_id, ids.mission); return json({ success: true });
           case 'fn_reserver_facture_honoraires': {
             assert.equal(body.p_document.mission_id, ids.mission);
@@ -212,7 +225,7 @@ export function creerBanc({ bornesFacturation = null, erreurHistorique = false, 
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secretFictif}` },
     body: JSON.stringify({ ...body, service_role_reason: 'ops_test_octets_locaux' }),
   }));
-  return { documents, factures, versions, appels, inconnus, logs, mission, soignant, etablissement, invoquer, baux, emissions, pannes,
+  return { documents, factures, versions, appels, lecturesAuth, inconnus, logs, mission, soignant, etablissement, invoquer, baux, emissions, pannes,
     async genererFacture() { return invoquer({ mission_id: ids.mission, periode_debut: '2026-09-21', periode_fin: '2026-09-27', numero_semaine_iso: 39, annee_iso: 2026, est_facture_finale_mission: false }); },
     preparerRemplacement() {
       assert.equal(factures.length, 1);

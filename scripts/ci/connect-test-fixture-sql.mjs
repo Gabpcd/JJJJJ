@@ -60,6 +60,15 @@ export function transactionSql(manifest, expected, body) {
 }
 export function snapshotSql(v) {
   const s=literal(v.actors.soignant.id),e=literal(v.actors.etablissement.id),a=literal(v.sqlActors.admin.id),m=literal(v.ids.mission);
+  // Le témoin de seed s'exécute avant les migrations. PostgreSQL résoudrait
+  // une référence directe à la table même dans la branche CASE non retenue.
+  // Ce SELECT borné est donc compilé seulement si le registre existe. XMLTABLE
+  // restitue son JSON sans échappement XML ; toute erreur autre que l'absence
+  // de la relation remonte. Après émission, validateSnapshot exige 3 reçus.
+  const documentEmails=`SELECT coalesce(jsonb_agg(jsonb_build_object('family',l.famille,'document',l.document_id,
+    'recipient',l.destinataire_id,'type',q.type,'state',q.statut,'sent',q.envoye) ORDER BY l.email_id),'[]'::jsonb) AS receipts
+    FROM private.facturation_email_livraisons l JOIN public.email_queue q ON q.id=l.email_id
+    WHERE l.destinataire_id IN(${s}::uuid,${e}::uuid)`;
   return `SELECT jsonb_build_object(
     'auth',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'email',email,'email_confirmed_at',email_confirmed_at,'deleted_at',deleted_at,'banned_until',banned_until,'app_metadata',raw_app_meta_data) ORDER BY id),'[]') FROM auth.users WHERE id IN(${s}::uuid,${e}::uuid,${a}::uuid) OR email IN(${literal(v.actors.soignant.email)},${literal(v.actors.etablissement.email)},${literal(v.sqlActors.admin.email)})),
     'soignants',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'email',email,'test',est_compte_test,'source',source_acquisition,'account',stripe_account_id,'sms',sms_actif,'smsAlerts',sms_alertes_actives,'defacto',defacto_opt_in)),'[]') FROM public.soignants WHERE id IN(${s}::uuid,${e}::uuid,${a}::uuid) OR email=${literal(v.actors.soignant.email)} OR siret_liberal=${literal(v.identifiants.siretSoignant)}),
@@ -73,6 +82,11 @@ export function snapshotSql(v) {
     'payments',(SELECT count(*) FROM public.paiements_soignant WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.paiements_mission WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.paiements_escrow WHERE mission_id=${m}::uuid)+(SELECT count(*) FROM public.stripe_transfers WHERE mission_id=${m}::uuid),
     'paymentClaims',(SELECT count(*) FROM public.stripe_payment_flow_claims WHERE resource_key='MISSION:'||${m} OR resource_key IN(SELECT 'FACTURE:'||id::text FROM public.factures WHERE mission_id=${m}::uuid)),
     'emailQueue',(SELECT count(*) FROM public.email_queue WHERE destinataire_id IN(${s}::uuid,${e}::uuid)),
+    'emailsSent',(SELECT count(*) FROM public.emails_envoyes WHERE destinataire_id IN(${s}::uuid,${e}::uuid)),
+    'emailDocuments',CASE WHEN to_regclass('private.facturation_email_livraisons') IS NULL THEN '[]'::jsonb
+      ELSE (SELECT receipts::jsonb FROM XMLTABLE('/table/row'
+        PASSING query_to_xml(${literal(documentEmails)},false,false,'')
+        COLUMNS receipts text PATH 'receipts') AS document_email_snapshot) END,
     'emailRetries',(SELECT count(*) FROM public.invoice_audit_log WHERE invoice_id IN(SELECT id FROM public.factures_honoraires WHERE mission_id=${m}::uuid) AND action='EMAIL_EMISSION_A_REESSAYER'),
     'emailSkips',(SELECT count(*) FROM public.journaux_audit WHERE id_ressource IN(${s}::uuid,${e}::uuid) AND action='NOTIFICATION_SKIPPED' AND details->>'raison'='test_account' AND details->>'fonction' IS NULL)
   ) AS receipt;`;

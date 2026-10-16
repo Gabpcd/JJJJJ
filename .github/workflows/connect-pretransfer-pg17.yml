@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [pretransfer, staging-admission]
+        scenario: [pretransfer, staging-admission, staging-standard-v2]
     services:
       postgres:
         # Image officielle identique aux bancs paiements/numérotation relus.
@@ -69,3 +69,8 @@ jobs:
         # Chaque entrée de matrice a son propre service postgres et ses rôles.
         # Aucun reset d'une base existante ni partage des fixtures du premier banc.
         run: python3 scripts/ci/connect-staging-admission-pg17.py
+      - name: Transfert et versement TEST bornés, remboursement distinct, gate fermée
+        if: matrix.scenario == 'staging-standard-v2'
+        # Inclut d'abord le témoin V1, sur son propre service PostgreSQL neuf.
+        # Aucun fournisseur ni clé Stripe ; reçus SQL fictifs explicitement.
+        run: python3 scripts/ci/connect-staging-standard-v2-pg17.py

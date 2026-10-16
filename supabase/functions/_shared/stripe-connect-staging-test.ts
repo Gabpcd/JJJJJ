@@ -1,4 +1,5 @@
 import type { ConnectOperation } from "./stripe-connect-pretransfer.ts";
+import type { StandardPayoutWork } from "./stripe-standard-payout.ts";
 
 // Admission de la seule recette Connect explicitement allouée sur staging.
 // Ce module ne crée aucun objet Stripe ni capacité. Absent en configuration,
@@ -13,7 +14,9 @@ const obj = (v: unknown): Dict => v && typeof v==='object' && !Array.isArray(v) 
 export type StagingConnectConfig = { serverSha: string; uiSha: string; manifestSha256: string; platformAccountId: string; capabilityId: string; returnOrigin: string };
 export type StagingConnectCapacity = { id: string; missionId: string; etablissementId: string; soignantId: string;
   factureHonoraireId: string; factureCommissionId: string; customerId: string; destinationId: string;
-  soignantCents: number; commissionCents: number; totalCents: number; operationId: string | null; sessionId: string | null; traceId: string | null; claimReservedAt: string | null; expiresAt: number; active: boolean };
+  soignantCents: number; commissionCents: number; totalCents: number; operationId: string | null; sessionId: string | null; traceId: string | null; claimReservedAt: string | null; expiresAt: number; active: boolean;
+  transfersAllowed: boolean; payoutsAllowed: boolean; transferId: string | null; payoutId: string | null;
+  transferReservedAt: string | null; payoutReservedAt: string | null };
 export function stagingConnectConfig(getEnv: (name: string)=>string|undefined): StagingConnectConfig | null {
   const raw=getEnv('CONNECT_STAGING_TEST_RUN');
   if(!raw) return null;
@@ -41,12 +44,25 @@ export async function verifyStagingStripeIdentity(stripe: StripeIdentity,c: Stag
 }
 export function parseStagingConnectCapacity(value: unknown,c: StagingConnectConfig,now=Date.now()): StagingConnectCapacity {
   const r=obj(value);
-  if(r.id!==c.capabilityId || r.protocol!=='CONNECT_STAGING_TEST_V1' || r.project_ref!=='mejpriaetwgtcstbgfid'
+  const standard=r.protocol==='CONNECT_STAGING_STANDARD_TEST_V2';
+  if(r.id!==c.capabilityId || !standard && r.protocol!=='CONNECT_STAGING_TEST_V1' || r.project_ref!=='mejpriaetwgtcstbgfid'
     || r.server_sha!==c.serverSha || r.ui_sha!==c.uiSha || r.source_manifest_sha256!==c.manifestSha256
-    || r.platform_account_id!==c.platformAccountId || r.livemode!==false || r.transfers_allowed!==false
+    || r.platform_account_id!==c.platformAccountId || r.livemode!==false || r.transfers_allowed!==standard
     || r.max_checkouts!==1 || r.max_refunds!==1 || typeof r.enabled!=='boolean'
     || typeof r.expires_at!=='string' || !Number.isFinite(Date.parse(r.expires_at))
     || !Number.isSafeInteger(now)) fail();
+  if(standard) {
+    if(typeof r.run_id!=='string' || !/^f1-[A-Za-z0-9-]{1,80}$/.test(r.run_id)
+      || r.payouts_allowed!==true || r.max_transfers!==1 || r.max_payouts!==1)fail();
+    for(const key of ['transfer_reserved_at','payout_reserved_at'])
+      if(r[key]!==null && (typeof r[key]!=='string'||!Number.isFinite(Date.parse(r[key] as string))))fail();
+    for(const [key,prefix] of [['transfer_id','tr_'],['payout_id','po_']])
+      if(r[key]!==null && (typeof r[key]!=='string'||!new RegExp(`^${prefix}[A-Za-z0-9]+$`).test(r[key] as string)))fail();
+    if(r.transfer_id!==null && r.transfer_reserved_at===null || r.payout_reserved_at!==null && r.transfer_id===null
+      || r.payout_id!==null && r.payout_reserved_at===null)fail();
+  } else if(r.payouts_allowed!==undefined && r.payouts_allowed!==false
+    || r.max_transfers!==undefined && r.max_transfers!==0 || r.max_payouts!==undefined && r.max_payouts!==0
+    || ['transfer_id','payout_id','transfer_reserved_at','payout_reserved_at'].some(k=>r[k]!==undefined && r[k]!==null))fail();
   for(const k of ['id','mission_id','etablissement_id','soignant_id','facture_honoraire_id','facture_commission_id'])
     if(typeof r[k]!=='string'||!uuid.test(r[k] as string))fail();
   if(r.etablissement_id===r.soignant_id || r.facture_honoraire_id===r.facture_commission_id
@@ -63,7 +79,9 @@ export function parseStagingConnectCapacity(value: unknown,c: StagingConnectConf
     factureHonoraireId:r.facture_honoraire_id,factureCommissionId:r.facture_commission_id,
     customerId:r.customer_id,destinationId:r.destination_id,soignantCents:r.soignant_cents,commissionCents:r.commission_cents,
     totalCents:r.total_cents,operationId:r.operation_id,sessionId:r.session_id,traceId:r.trace_id,claimReservedAt:r.claim_reserved_at,
-    expiresAt:Date.parse(r.expires_at as string),active:r.enabled && r.revoked_at===null && Date.parse(r.expires_at as string)>now}) as StagingConnectCapacity;
+    expiresAt:Date.parse(r.expires_at as string),active:r.enabled && r.revoked_at===null && Date.parse(r.expires_at as string)>now,
+    transfersAllowed:standard,payoutsAllowed:standard,transferId:r.transfer_id??null,payoutId:r.payout_id??null,
+    transferReservedAt:r.transfer_reserved_at??null,payoutReservedAt:r.payout_reserved_at??null}) as StagingConnectCapacity;
 }
 export function stagingCheckoutExpiresAt(cap: StagingConnectCapacity,now=Date.now()): number {
   const expiresAt=Math.floor(cap.expiresAt/1000);
@@ -104,4 +122,49 @@ export async function requireStagingRefundEventScope(
     || cap.missionId!==op.mission_id || cap.etablissementId!==op.etablissement_id || cap.soignantId!==op.soignant_id
     || cap.factureCommissionId!==op.facture_commission_id || cap.customerId!==op.customer_id || cap.destinationId!==op.destination_id
     || cap.soignantCents!==op.soignant_cents || cap.commissionCents!==op.commission_cents || cap.totalCents!==op.total_cents)fail();
+}
+
+function exactOperation(cap: StagingConnectCapacity,op: ConnectOperation): void {
+  if(op.livemode!==false || !cap.claimReservedAt || cap.operationId!==op.id || cap.sessionId!==op.session_id
+    || cap.traceId!==op.trace_id || cap.missionId!==op.mission_id || cap.etablissementId!==op.etablissement_id
+    || cap.soignantId!==op.soignant_id || cap.factureHonoraireId!==op.facture_honoraire_id
+    || cap.factureCommissionId!==op.facture_commission_id || cap.customerId!==op.customer_id || cap.destinationId!==op.destination_id
+    || cap.soignantCents!==op.soignant_cents || cap.commissionCents!==op.commission_cents || cap.totalCents!==op.total_cents)fail();
+}
+export async function requireStagingTransferScope(sb: Client,stripe: StripeIdentity,c: StagingConnectConfig,op: ConnectOperation): Promise<void> {
+  const cap=await readStagingConnectCapacity(sb,c,op.facture_honoraire_id,true);
+  exactOperation(cap,op);
+  if(!cap.transfersAllowed || op.orientation!=='TRANSFER' || cap.transferId!==null)fail();
+  await verifyStagingStripeIdentity(stripe,c);
+  const {data,error}=await sb.rpc('fn_connect_test_transfer_autoriser',{
+    p_operation_id:op.id,p_server_sha:c.serverSha,p_manifest_sha256:c.manifestSha256});
+  if(error||obj(data).operation_id!==op.id||obj(data).allowed!==true)fail();
+}
+export async function requireStagingPayoutScope(sb: Client,stripe: StripeIdentity,c: StagingConnectConfig,w: StandardPayoutWork): Promise<void> {
+  const cap=await readStagingConnectCapacity(sb,c,w.factureHonoraireId,true);
+  if(!cap.payoutsAllowed || w.livemode!==false || w.attempt!==0 || w.id!==cap.traceId || w.missionId!==cap.missionId
+    || w.etablissementId!==cap.etablissementId || w.soignantId!==cap.soignantId || w.factureHonoraireId!==cap.factureHonoraireId
+    || w.accountId!==cap.destinationId || w.customerId!==cap.customerId || w.transferId!==cap.transferId
+    || w.amountCents!==cap.soignantCents || w.totalCents!==cap.totalCents || !cap.transferReservedAt || cap.payoutId!==null)fail();
+  await verifyStagingStripeIdentity(stripe,c);
+  const {data,error}=await sb.rpc('fn_connect_test_payout_autoriser',{
+    p_trace_id:w.id,p_transfer_id:w.transferId,p_attempt:w.attempt,p_server_sha:c.serverSha,p_manifest_sha256:c.manifestSha256});
+  if(error||obj(data).trace_id!==w.id||obj(data).allowed!==true)fail();
+}
+type PayoutStripe = StripeIdentity & {payouts:{retrieve(id:string,options:{stripeAccount:string}):PromiseLike<unknown>}};
+export async function requireStagingPayoutEventScope(sb:Client,stripe:PayoutStripe,c:StagingConnectConfig,accountId:string,payoutId:string):Promise<void> {
+  if(!/^acct_[A-Za-z0-9]+$/.test(accountId)||!/^po_[A-Za-z0-9]+$/.test(payoutId))fail();
+  await verifyStagingStripeIdentity(stripe,c);
+  const p=obj(await stripe.payouts.retrieve(payoutId,{stripeAccount:accountId})),m=obj(p.metadata);
+  if(typeof m.trace_id!=='string'||!uuid.test(m.trace_id))fail();
+  const {data,error}=await sb.rpc('fn_connect_test_capacite_par_trace',{p_trace_id:m.trace_id});
+  if(error)fail();
+  const cap=parseStagingConnectCapacity(data,c);
+  // Constat seul d'un objet déjà réservé : reste possible après expiration.
+  if(!cap.payoutsAllowed || !cap.payoutReservedAt || !cap.transferReservedAt || !cap.transferId
+    || accountId!==cap.destinationId || p.id!==payoutId || cap.payoutId!==null && cap.payoutId!==p.id
+    || p.amount!==cap.soignantCents || p.currency!=='eur' || p.livemode!==false || p.automatic!==false
+    || !['pending','in_transit','paid','failed','canceled'].includes(String(p.status))
+    || m.type!=='CONNECT_STANDARD_PAYOUT' || m.trace_id!==cap.traceId || m.transfer_id!==cap.transferId
+    || m.mission_id!==cap.missionId || m.soignant_id!==cap.soignantId || m.attempt!=='0')fail();
 }

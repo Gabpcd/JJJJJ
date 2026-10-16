@@ -10,8 +10,10 @@ import { newManifest, validateManifest, validateSnapshot, readOnlySql, PROJECT }
 import { catalogueSqlFixture, snapshotSql, literal } from './connect-test-fixture-sql.mjs';
 
 export const SEED_SHA256='57dd7f97e8cc7c0996a108abe51c62cbdf5a0218e775ddb14558c9badc4020ab';
-// Fresh read-only staging observation reviewed on 2026-10-02. No automatic repin.
-export const REVIEWED_CATALOGUE=Object.freeze({routines:'2d70a3530ef3547c9cb85d2775b66649',triggers:'9f6a900536c273864ff418df569511c1',columns:'a5b1a6c4464a545cc9256faba9e9596c'});
+// Read-only review 2026-10-16: docs/recettes/2026-10-16-catalogue-fixture-connect.md.
+// Exact deployed metadata after the seven reviewed migrations and closed V2.
+// The earlier SMS reconciliation remains recorded separately. No automatic repin.
+export const REVIEWED_CATALOGUE=Object.freeze({routines:'487105aa42c50a5127ad408d5b62a249',triggers:'3d6ef14ab83acb02a8ca0df3bc36231d',columns:'b715fc97721c97f9a788b8cdc45a5e09'});
 const ROOT=fileURLToPath(new URL('../../',import.meta.url));
 const ENDPOINT=`https://api.supabase.com/v1/projects/${PROJECT}/database/query`;
 const sha=value=>createHash('sha256').update(value).digest('hex');

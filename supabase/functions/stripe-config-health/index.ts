@@ -56,6 +56,8 @@ const REQUIRED_PLATFORM_WEBHOOK_EVENTS = [
   'invoice.payment_failed',
   'payment_intent.payment_failed',
   'payment_intent.succeeded',
+  'refund.updated',
+  'refund.failed',
   'transfer.created',
   'transfer.reversed',
   'transfer.updated',
@@ -90,6 +92,21 @@ function secretState() {
 
 function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders(req) });
+}
+
+async function checkConnectRelease(supabaseBase: string) {
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!supabaseBase || !serviceRoleKey) return { checked: false, open: false };
+  try {
+    const admin = createClient(supabaseBase, serviceRoleKey, { auth: { persistSession: false } });
+    const { data, error } = await admin.rpc('fn_diagnostic_disponibilite_connect');
+    if (error || data?.protocol !== 'CONNECT_PRETRANSFER_V1' || typeof data?.enabled !== 'boolean') {
+      return { checked: false, open: false };
+    }
+    return { checked: true, open: data.enabled === true };
+  } catch {
+    return { checked: false, open: false };
+  }
 }
 
 async function fetchWithTimeout(
@@ -305,7 +322,10 @@ Deno.serve(async (req) => {
     const webhookSecretConfigured = secrets.platformConfigured && secrets.connectConfigured;
     const webhookEndpointActive = platformEndpointActive && connectEndpointActive;
     const webhookEventsComplete = platformEventsComplete && connectEventsComplete;
-    const productionReady = livemode
+    const connectRelease = await checkConnectRelease(supabaseBase);
+    // Le déploiement peut conserver volontairement Connect fermé. Tous les
+    // prérequis techniques restent obligatoires, y compris la lecture du gate.
+    const deploymentReady = livemode
       && webhookSecretConfigured
       && secrets.distinct
       && webhookEndpointActive
@@ -313,7 +333,9 @@ Deno.serve(async (req) => {
       && platformApiVersionOk
       && connectApiVersionOk
       && customerLinks.checked
-      && customerLinks.all_valid;
+      && customerLinks.all_valid
+      && connectRelease.checked;
+    const productionReady = deploymentReady && connectRelease.open;
     return json(req, {
       configured: true,
       reachable: true,
@@ -339,7 +361,15 @@ Deno.serve(async (req) => {
       customer_tenant_links_indeterminate: customerLinks.indeterminate,
       customer_tenant_links_ok: customerLinks.all_valid,
       expected_webhook_api_version: WEBHOOK_API_VERSION,
+      connect_release_checked: connectRelease.checked,
+      connect_release_open: connectRelease.open,
+      deployment_ready: deploymentReady,
       production_ready: productionReady,
+      ...(!productionReady ? { error: !connectRelease.checked
+        ? 'Disponibilité du paiement Connect non vérifiée.'
+        : !deploymentReady
+          ? 'Configuration Stripe incomplète : vérifier les webhooks et les comptes liés.'
+          : 'Paiement groupé libéral indisponible : ouverture Connect non effectuée.' } : {}),
     }, productionReady ? 200 : 503);
   } catch (error) {
     console.error('[stripe-config-health] Stripe unreachable', error instanceof Error ? error.message : 'unknown');

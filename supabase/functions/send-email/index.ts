@@ -2,6 +2,7 @@ import { verifierPreferencesEvenementsEmail } from '../_shared/preferences-alert
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import { resolveFacturationEmailSource } from '../_shared/facturation-email-source.ts';
 import {
   resolveOperationalTestAccount,
   resolveOperationalTestSource,
@@ -189,6 +190,8 @@ const ALLOWED_TYPES = new Set([
 // legale ou au traitement d'un incident financier. Tous les autres types,
 // meme absents de l'enum fin des preferences, respectent au minimum canal_email.
 const ALWAYS_SEND_TRANSACTIONAL_TYPES = new Set([
+  // Copie documentaire d'une facture émise, distincte des rappels optionnels.
+  'FACTURE_EMISE',
   'INVITATION_EQUIPE_ETAB',
   'COMPTE_SUSPENDU', 'COMPTE_REACTIVE',
   'PUBLICATION_SUSPENDUE', 'PUBLICATION_REACTIVEE',
@@ -364,7 +367,9 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             `)}
             <p style="color:#334155;">
               Une copie est disponible dans votre espace. Vérifiez les heures, le taux et le montant
-              sous <strong>${data.delai_verification_heures || '48'} heures</strong>.
+              ${data.verification_echeance
+                ? `avant le <strong>${data.verification_echeance} (heure de Paris)</strong>`
+                : `sous <strong>${data.delai_verification_heures || '48'} heures</strong>`}.
             </p>
             ${INFO_BOX('Si une donnée est incorrecte, signalez-la depuis le document concerné : seule cette échéance sera suspendue, jamais vos autres factures.')}
             ${BUTTON('Vérifier le document →', `${APP_URL}/soignant/mes-gains?tab=factures`)}
@@ -373,18 +378,20 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         };
       }
       return {
-        subject: `Facture ${data.numero} — Jolene`,
+        subject: `${data.libelle_document || 'Facture'} ${data.numero} — Jolene`,
         html: WRAPPER(`
-          <h2 style="color:#0F172A;margin:0 0 12px;">Facture ${data.numero}</h2>
+          <h2 style="color:#0F172A;margin:0 0 12px;">${data.libelle_document || 'Facture'} ${data.numero}</h2>
           <p style="color:#334155;">Bonjour,</p>
           ${CARD_BOX(`
             <strong style="color:#0F172A;">Facture ${data.numero}</strong><br/>
             <span style="color:#334155;">Montant HT : ${data.montant_ht} €</span><br/>
             <span style="color:#334155;">TVA : ${data.montant_tva} €</span><br/>
             <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>
-            <span style="color:#334155;">Échéance : 30 jours</span>
+            ${data.date_echeance ? `<span style="color:#334155;">Échéance : ${data.date_echeance}</span>` : ''}
           `)}
-          ${BUTTON('💳 Consulter et payer →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
+          ${BUTTON('Consulter le document →', data.famille_document === 'HONORAIRES'
+            ? `${APP_URL}/etablissement/facturation`
+            : `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
           ${SECURITY_NOTE}
         `),
       };
@@ -1834,10 +1841,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const sourceAccount = await resolveOperationalTestSource(
-      supabaseService,
-      templateData,
-    );
+    const sourceAccount = type === 'FACTURE_EMISE'
+      ? await resolveFacturationEmailSource(supabaseService, templateData, destinataire_id)
+      : await resolveOperationalTestSource(supabaseService, templateData);
     if (!sourceAccount.ok) {
       console.error('[send-email] classification source test indisponible');
       return new Response(JSON.stringify({

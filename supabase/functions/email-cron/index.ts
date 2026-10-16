@@ -1,4 +1,5 @@
 import { TYPES_RAPPELS_QUOTIDIENS, traiterRappelQuotidien } from "../_shared/rappels-quotidiens-queue.ts";
+import { traiterEmailFacturation } from "../_shared/facturation-email-queue.ts";
 import { configurationDebitEmail, creerBudgetEnvoi, transportInterrompu, type BudgetEnvoi } from "../_shared/email-cron-budget.ts";
 import { TYPES_ALERTES_FILTRES, traiterAlerteFiltres, resultatEnvoiEmail } from "../_shared/alertes-filtres-queue.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -47,8 +48,9 @@ async function invokeIdempotentEmail(
   identity: unknown,
   body: Record<string, unknown>,
   budget?: BudgetEnvoi,
+  fixedIdempotencyKey?: string,
 ): Promise<"sent" | "skipped" | "pending"> {
-  const idempotencyKey = await emailIdempotencyKey(scope, identity, body);
+  const idempotencyKey = fixedIdempotencyKey ?? await emailIdempotencyKey(scope, identity, body);
   const timeout = budget ? await budget.reserver() : undefined;
   if (timeout === null) return "pending";
   const { data, error } = await sb.functions.invoke("send-email", {
@@ -310,6 +312,11 @@ Deno.serve(async (req) => {
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     if (runHourly) {
+    // Seuls les reçus de nouvelles émissions sont repris : aucun renvoi
+    // rétroactif de l'ancienne file ni des notifications d'un autre circuit.
+    const { data: facturesReprises, error: repriseFacturesError } = await sb.rpc('fn_reprendre_emails_facturation');
+    if (repriseFacturesError) throw new Error('Reprise des emails factures indisponible');
+    results.emails_facturation_repris = facturesReprises;
     let emailQueueCount = 0;
     let smsQueueCount = 0;
     let queueErrors = 0;
@@ -323,6 +330,18 @@ Deno.serve(async (req) => {
     if (pendingEmailsError) throw pendingEmailsError;
     for (const email of (pendingEmails || [])) {
       if (budget && !budget.peutCommencer()) break;
+      if (email.type === 'FACTURATION_DOCUMENT') {
+        try {
+          const outcome = await traiterEmailFacturation(sb, email.id, (body, cle) =>
+            invokeIdempotentEmail(sb, 'facturation', { email_id: email.id }, body, budget, cle));
+          if (outcome === 'envoye') emailQueueCount++;
+          if (outcome === 'erreur') queueErrors++;
+        } catch (error) {
+          queueErrors++;
+          console.error('[email-cron] Email facture à reprendre', email.id, error);
+        }
+        continue;
+      }
       if (TYPES_RAPPELS_QUOTIDIENS.includes(email.type)) {
         try {
           const outcome = await traiterRappelQuotidien(sb, email.id, async rappel =>

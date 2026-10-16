@@ -164,10 +164,12 @@ describe("inventaire explicite d'authentification des Edge Functions", () => {
     );
     expectGuardBeforeEffect(
       "generate-invoice",
-      /const\s+isServiceRole\s*=\s*token\s*===\s*serviceRoleKey/,
+      /await\s+verifyCronServiceAuth\s*\(\s*req\s*,\s*supabaseAdmin\s*\)/,
       /\.from\s*\(/,
       true,
     );
+    expect(invoiceHandler).toMatch(/const\s+isServiceRole\s*=\s*serviceAuth\.ok/);
+    expect(invoiceHandler).not.toMatch(/const\s+isServiceRole\s*=\s*token\s*===/);
   });
 
   it("impose le helper partagé aux sept crons Edge critiques", () => {

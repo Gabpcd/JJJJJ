@@ -341,8 +341,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             iconClass: 'text-success',
             borderClass: 'border-success/30',
             bgClass: 'bg-success/5',
-            titre: 'Paiement confirmé par le soignant',
-            sousTitre: p.confirme_par_soignant_le
+            titre: p.stripe_transfer_id ? 'Paiement Stripe confirmé' : 'Paiement confirmé par le soignant',
+            sousTitre: p.stripe_transfer_id
+              ? 'Honoraires transférés vers le solde Stripe du soignant. Le versement bancaire est suivi séparément.'
+              : p.confirme_par_soignant_le
               ? `Confirmé le ${fmtDate(p.confirme_par_soignant_le)}`
               : 'Le soignant a confirmé avoir reçu le paiement',
             badgeLabel: 'CONFIRMÉ',

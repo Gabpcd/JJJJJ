@@ -100,7 +100,9 @@ export function validateAccount(x,m) {
 export function validateSnapshot(r,m,phase) {
   requireThat(r&&Array.isArray(r.auth)&&Array.isArray(r.soignants)&&Array.isArray(r.etablissements)
     &&Array.isArray(r.onboarding)&&Array.isArray(r.invoices)&&Array.isArray(r.commissions),'SNAPSHOT_SHAPE');
-  requireThat(r.payments===0&&r.paymentClaims===0&&r.emailQueue===0&&r.emailRetries===0&&r.activeAdmin===0,'UNEXPECTED_EFFECTS');
+  requireThat(r.payments===0&&r.paymentClaims===0&&r.emailRetries===0&&r.activeAdmin===0&&r.emailsSent===0,'UNEXPECTED_EFFECTS');
+  requireThat(Array.isArray(r.emailDocuments)&&r.emailQueue===r.emailDocuments.length,'EMAIL_QUEUE_PROVENANCE');
+  if(phase!=='generated')requireThat(r.emailQueue===0,'UNEXPECTED_EFFECTS');
   for(const user of r.auth) {const member=m.members.find(x=>x.id===user.id);requireThat(member,'HISTORICAL_AUTH');validateAuth(user,member,m);}
   requireThat(new Set(r.auth.map(x=>x.id)).size===r.auth.length,'AUTH_DUPLICATES');
   if(phase==='empty') {
@@ -125,7 +127,12 @@ export function validateSnapshot(r,m,phase) {
     requireThat(r.invoices.length===1&&r.commissions.length===1,'DOCUMENT_COUNT');const f=r.invoices[0],c=r.commissions[0];
     requireThat(UUID.test(f.id)&&f.soignant===s.id&&f.etablissement===e.id&&f.status==='EMISE'&&f.kind==='FACTURE'&&f.nature==='ORIGINALE'
       &&f.total===80&&f.paid===false&&f.versions===1&&typeof f.pdf==='string'&&f.pdf.length>0&&typeof f.xml==='string'&&f.xml.length>0
-      &&UUID.test(c.id)&&c.honoraire===f.id&&c.kind==='FACTURE'&&c.status==='EMISE'&&c.total===14.4&&c.linked===false&&r.emailSkips===2,'DOCUMENT_RECONCILIATION');
+      &&UUID.test(c.id)&&c.honoraire===f.id&&c.kind==='FACTURE'&&c.status==='EMISE'&&c.total===14.4&&c.linked===false,'DOCUMENT_RECONCILIATION');
+    const expected=[['HONORAIRES',f.id,s.id],['HONORAIRES',f.id,e.id],['COMMISSION',c.id,e.id]];
+    requireThat(r.emailDocuments.length===3&&expected.every(([family,document,recipient])=>r.emailDocuments.filter(x=>
+      x.family===family&&x.document===document&&x.recipient===recipient).length===1)
+      &&r.emailDocuments.every(x=>x.type==='FACTURATION_DOCUMENT'&&['EN_ATTENTE','ANNULE'].includes(x.state)&&x.sent===false),
+    'DOCUMENT_EMAIL_RECEIPTS');
   } else requireThat(r.invoices.length===0&&r.commissions.length===0,'UNEXPECTED_INVOICE');
 }
 

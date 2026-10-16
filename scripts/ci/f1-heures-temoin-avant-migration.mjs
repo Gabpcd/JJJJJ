@@ -3,7 +3,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const SOURCE = 'tests/security/facturation-heures-ajustees-chainage-f1.test.sql';
+// Octets historiques du témoin rouge antérieur aux migrations : son empreinte
+// reste inchangée, indépendamment du scénario de non-régression courant.
+export const SOURCE = 'tests/fixtures/facturation-heures-ajustees-f1/avant-migration.sql';
 export const CATALOGUE = 'tests/fixtures/facturation-heures-ajustees-f1/catalogue.sql';
 export const HASH_SOURCE = '66beb3a107d9151d7a1fdd16183370e5cd1daef1bd56aa4c3786a3f3b22039d4';
 export const HASH_CATALOGUE = 'ea0c60bbfa4117d2ca5bd0e92dc9b765b90d191212e9cb6eb0b065765f9cb687';

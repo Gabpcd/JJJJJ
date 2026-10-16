@@ -212,8 +212,36 @@ BEGIN
         AND pdf_s3_key=v_documents->>'pdf_s3_key' AND facturx_xml_url=v_documents->>'facturx_xml_url'
         AND pdf_sha256=v_documents->>'pdf_sha256' AND xml_sha256=v_documents->>'xml_sha256')<>1
     THEN RAISE EXCEPTION 'F172 : émission/registre/rejeu non exacts'; END IF;
+    -- Avant la migration, zéro file reste exigé. Après installation, seules
+    -- les copies documentaires exactes sont admises, sans tentative ni envoi.
+    IF to_regclass('private.facturation_email_livraisons') IS NULL THEN
+      IF EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(v_soignant,v_etab))
+      THEN RAISE EXCEPTION 'F1 : email inattendu avant migration documentaire'; END IF;
+    ELSE
+      IF (SELECT count(*) FROM private.facturation_email_livraisons
+          WHERE destinataire_id IN(v_soignant,v_etab) OR document_id IN(v_honoraire))<>2
+        OR (SELECT count(*) FROM public.email_queue
+          WHERE destinataire_id IN(v_soignant,v_etab) OR data#>>'{data,facture_id}' IN(v_honoraire::text))<>2
+        OR EXISTS(SELECT 1 FROM (VALUES ('HONORAIRES',v_honoraire,v_soignant,'SOIGNANT'),('HONORAIRES',v_honoraire,v_etab,'ETABLISSEMENT')) attendu(famille,document_id,destinataire_id,role)
+          LEFT JOIN private.facturation_email_livraisons l ON l.famille=attendu.famille
+            AND l.document_id=attendu.document_id AND l.destinataire_id=attendu.destinataire_id
+          LEFT JOIN public.email_queue q ON q.id=l.email_id
+          WHERE l.email_id IS NULL OR q.id IS NULL OR q.type IS DISTINCT FROM 'FACTURATION_DOCUMENT'
+            OR q.destinataire_id IS DISTINCT FROM attendu.destinataire_id OR q.data IS DISTINCT FROM l.corps
+            OR q.statut IS DISTINCT FROM 'EN_ATTENTE' OR coalesce(q.envoye,false) OR q.envoye_le IS NOT NULL
+            OR l.tentatives<>0 OR l.premiere_tentative_le IS NOT NULL OR l.reservation IS NOT NULL
+            OR l.corps->>'type' IS DISTINCT FROM 'FACTURE_EMISE'
+            OR l.corps->>'destinataire_id' IS DISTINCT FROM attendu.destinataire_id::text
+            OR l.corps#>>'{data,facture_id}' IS DISTINCT FROM attendu.document_id::text
+            OR l.corps#>>'{data,famille_document}' IS DISTINCT FROM attendu.famille
+            OR l.corps#>>'{data,destinataire_role}' IS DISTINCT FROM attendu.role)
+      THEN RAISE EXCEPTION 'F1 : copies documentaires absentes, étrangères, dupliquées ou envoyées'; END IF;
+    END IF;
+    IF to_regclass('public.emails_envoyes') IS NOT NULL THEN
+      IF EXISTS(SELECT 1 FROM public.emails_envoyes WHERE destinataire_id IN(v_soignant,v_etab))
+      THEN RAISE EXCEPTION 'F1 : envoi externe inattendu'; END IF;
+    END IF;
     IF EXISTS(SELECT 1 FROM net.http_request_queue)
-      OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(v_soignant,v_etab))
       OR EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE avoir_id=v_honoraire)
       OR EXISTS(SELECT 1 FROM public.cessions_creance WHERE facture_honoraire_id=v_honoraire)
       OR EXISTS(SELECT 1 FROM public.paiements_escrow WHERE mission_id=v_mission)
@@ -224,6 +252,10 @@ BEGIN
     IF SQLERRM<>'F172_ANNULATION_ATTENDUE' THEN RAISE; END IF;
     v_annule:=true;
   END;
+  IF to_regclass('private.facturation_email_livraisons') IS NOT NULL THEN
+    IF EXISTS(SELECT 1 FROM private.facturation_email_livraisons WHERE destinataire_id IN(v_soignant,v_etab))
+    THEN RAISE EXCEPTION 'F1 : reçus email non annulés'; END IF;
+  END IF;
   IF NOT v_annule OR EXISTS(SELECT 1 FROM auth.users WHERE id IN(v_soignant,v_etab))
     OR EXISTS(SELECT 1 FROM public.soignants WHERE id=v_soignant)
     OR EXISTS(SELECT 1 FROM public.etablissements WHERE id=v_etab)
@@ -235,6 +267,7 @@ BEGIN
     OR EXISTS(SELECT 1 FROM public.factures WHERE facture_honoraire_id=v_honoraire)
     OR EXISTS(SELECT 1 FROM public.invoice_audit_log WHERE invoice_id=v_honoraire)
     OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id IN(v_soignant,v_etab))
+    OR EXISTS(SELECT 1 FROM public.email_queue WHERE destinataire_id IN(v_soignant,v_etab))
     OR EXISTS(SELECT 1 FROM public.preferences_notifications WHERE utilisateur_id IN(v_soignant,v_etab))
     OR EXISTS(SELECT 1 FROM public.conformite_travail WHERE mission_id=v_mission)
     OR EXISTS(SELECT 1 FROM public.suivi_conversion_3200h WHERE soignant_id=v_soignant)

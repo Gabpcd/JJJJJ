@@ -9,6 +9,7 @@ const missionForm = read('src/components/FormulaireMission.tsx');
 const missionRecap = read('src/components/mission/ModalRecapMission.tsx');
 const migration = read('supabase/migrations/20260808150856_aligner_mandat_facturation_tva_et_periodes.sql');
 const generateInvoice = read('supabase/functions/generate-invoice/index.ts');
+const emissionQueue = read('supabase/migrations/20261016125521_fiabiliser_emails_factures.sql');
 const sendEmail = read('supabase/functions/send-email/index.ts');
 const caregiverInvoices = read('src/pages/MesFacturesHonoraires.tsx');
 const submitToChorus = read('supabase/functions/submit-to-chorus/index.ts');
@@ -278,7 +279,13 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(migration).toContain('verification_echeance_le');
     expect(migration).toContain('fn_accepter_document_facturation_honoraires');
     expect(migration).toContain('COALESCE(f.emise_le, f.cree_le, f.date_emission::timestamptz)');
-    expect(generateInvoice).toContain('notifierEmissionDocument');
+    // L'émission et la remise sont désormais atomiques en base ; la génération
+    // ne doit pas doubler l'envoi assuré par la file durable.
+    expect(generateInvoice).toContain('fn_terminer_generation_honoraires');
+    expect(generateInvoice).not.toContain('notifierEmissionDocument');
+    expect(emissionQueue).toContain('trg_email_emission_honoraires AFTER INSERT OR UPDATE OF statut');
+    expect(emissionQueue).toContain("ARRAY[(to_jsonb(NEW)->>'soignant_id')::uuid, NEW.etablissement_id]");
+    expect(emissionQueue).toContain("'FACTURATION_DOCUMENT'");
     expect(sendEmail).toContain('Vérifier le document');
     expect(caregiverInvoices).toContain('Tout est correct');
     expect(caregiverInvoices).toContain('Signaler une erreur');

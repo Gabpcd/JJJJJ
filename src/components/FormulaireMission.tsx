@@ -1,3 +1,4 @@
+import { tauxCommissionEtablissement } from '@/lib/tauxCommissionEtablissement';
 import { IntroductionMission } from '@/components/mission/IntroductionMission';
 import { useRole } from '@/hooks/useRole';
 import { chargerParcours, enregistrerParcours } from '@/lib/inscriptionProgressive';
@@ -177,7 +178,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         const isPublic = data.est_secteur_public === true || typesPublics.includes(data.type);
         setRistPlafondActif(data.rist_plafond_actif === true && isPublic);
-        setTauxCommission(data.taux_commission_negocie ?? 15);
+        setTauxCommission(tauxCommissionEtablissement(data));
         setEtablissementType(data.type);
         if ((data as any).tolerance_gps_metres != null) setToleranceGpsMetres((data as any).tolerance_gps_metres);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);

@@ -6,7 +6,11 @@ test('vrai handler : facture hebdomadaire et avoir, PDF lisibles, XML cohérents
   const banc = await genererDocuments();
   assert.equal(banc.factures[0].montant_ttc, 80);
   assert.equal(banc.factures[1].montant_ttc, 20);
-  assert.equal(banc.appels.filter(a => a.path === '/functions/v1/send-email').length, 4);
+  // Le handler termine les documents ; le trigger SQL remet ensuite les
+  // copies dans la file durable (témoin PostgreSQL facturation-email-isolated).
+  // Un envoi direct ici doublerait celui du worker.
+  assert.equal(banc.appels.filter(a => a.path === '/functions/v1/send-email').length, 0);
+  assert.equal(banc.appels.filter(a => a.path === '/rest/v1/rpc/fn_terminer_generation_honoraires').length, 2);
   assert(!banc.logs.some(l => l.level === 'error'));
   // Capturés avant le correctif PDF sur la source byte-identique LIVE v676 :
   // la mise en page ne doit modifier aucun octet du XML facture/avoir.

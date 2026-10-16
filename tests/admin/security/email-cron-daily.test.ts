@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { FunctionsFetchError } from '@supabase/functions-js';
 import * as budgetHelpers from '../../../supabase/functions/_shared/email-cron-budget';
 import * as alertesHelpers from '../../../supabase/functions/_shared/alertes-filtres-queue';
+import * as facturationHelpers from '../../../supabase/functions/_shared/facturation-email-queue';
 import * as rappelsHelpers from '../../../supabase/functions/_shared/rappels-quotidiens-queue';
 
 const source=ts.transpileModule(readFileSync('supabase/functions/email-cron/index.ts','utf8'),{
@@ -56,7 +57,7 @@ function simulation(missions=30) {
     if(maintenance.includes(nom))return{data:7,error:null};
     if(nom==='fn_basculer_litiges_revue_admin_timeout')return{data:{count:3},error:null};
     if(nom==='fn_envoyer_rappels_notation_j1')return{data:{count_etab:4,count_soignant:5},error:null};
-    if(['fn_reprendre_alertes_filtres','fn_evaluer_alertes_filtres'].includes(nom))return{data:0,error:null};
+    if(['fn_reprendre_emails_facturation','fn_reprendre_alertes_filtres','fn_evaluer_alertes_filtres'].includes(nom))return{data:0,error:null};
     throw new Error(`RPC imprévue ${nom}`);
   },functions:{invoke:async(nom:string,options:any)=>{
     if(!['send-email','send-sms'].includes(nom))throw new Error(`Transport imprévu ${nom}`);
@@ -66,6 +67,7 @@ function simulation(missions=30) {
     'https://esm.sh/@supabase/supabase-js@2':{createClient:()=>sb},
     '../_shared/alertes-filtres-queue.ts':alertesHelpers,
     '../_shared/rappels-quotidiens-queue.ts':rappelsHelpers,
+    '../_shared/facturation-email-queue.ts':facturationHelpers,
     '../_shared/email-cron-budget.ts':{...budgetHelpers,creerBudgetEnvoi:(debut:number,ms:number)=>{
       now=debut;return budgetHelpers.creerBudgetEnvoi(debut,ms,()=>now,async delai=>{now+=delai;});}},
     '../_shared/cron-service-auth.ts':{verifyCronServiceAuth:async()=>({ok:true}),isCronAuthProbe:()=>false},
