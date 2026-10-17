@@ -109,8 +109,12 @@ function ContratsContent({ role }: { role: UserRole }) {
             key={f}
             onClick={() => {
               setFiltre(f);
-              if (f === 'Tous') setSearchParams({}, { replace: true });
-              else setSearchParams({ statut: f }, { replace: true });
+              setSearchParams(previous => {
+                const next = new URLSearchParams(previous);
+                if (f === 'Tous') next.delete('statut');
+                else next.set('statut', f);
+                return next;
+              }, { replace: true });
             }}
             className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
           >
