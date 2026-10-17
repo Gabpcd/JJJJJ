@@ -5,45 +5,63 @@ import { Html5Qrcode } from 'html5-qrcode';
 interface ScannerQRPointageProps {
   type: 'arrivee' | 'depart';
   onCodeScanne: (code: string) => Promise<{ success: boolean; message?: string }>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps) {
-  const [ouvert, setOuvert] = useState(false);
+export function ScannerQRPointage({ type, onCodeScanne, open, onOpenChange }: ScannerQRPointageProps) {
+  const [ouvertInterne, setOuvert] = useState(false);
+  const ouvert = open ?? ouvertInterne;
   const [scanning, setScanning] = useState(false);
   const [resultat, setResultat] = useState<{ success: boolean; message?: string } | null>(null);
   const [erreurCamera, setErreurCamera] = useState<string | null>(null);
+  const [erreurCode, setErreurCode] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const demarrageRef = useRef<Promise<unknown> | null>(null);
   const processingRef = useRef(false);
+  const onCodeScanneRef = useRef(onCodeScanne);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onCodeScanneRef.current = onCodeScanne;
+  onOpenChangeRef.current = onOpenChange;
   const reactId = useId();
-  const containerId = useMemo(() => `qr-reader-${type}-${reactId.replace(/[:]/g, '')}`, [reactId, type]);
+  // L'arrivée peut devenir un départ pendant la relecture après pointage.
+  // Garder le même lecteur et le même callback de scan pendant cette mutation.
+  const containerId = useMemo(() => `qr-reader-${reactId.replace(/[:]/g, '')}`, [reactId]);
 
   const stopScanner = useCallback(async () => {
-    if (!scannerRef.current) return;
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+    const demarrage = demarrageRef.current;
+    scannerRef.current = null;
+    demarrageRef.current = null;
     try {
-      if (scannerRef.current.getState() === 2) {
-        await scannerRef.current.stop();
+      await demarrage;
+      if (scanner.getState() === 2) {
+        await scanner.stop();
       }
-      await scannerRef.current.clear();
+      await scanner.clear();
     } catch {
       // ignore cleanup errors
-    } finally {
-      scannerRef.current = null;
     }
   }, []);
 
-  const fermer = useCallback(async () => {
-    await stopScanner();
+  const fermer = useCallback(() => {
+    processingRef.current = true;
     setOuvert(false);
+    onOpenChangeRef.current?.(false);
     setScanning(false);
     setErreurCamera(null);
+    setErreurCode(null);
     setResultat(null);
-    processingRef.current = false;
+    void stopScanner();
   }, [stopScanner]);
 
   useEffect(() => {
     if (!ouvert) return;
 
     let cancelled = false;
+    let fermetureTimer: number | undefined;
+    processingRef.current = false;
 
     const verifierAccesCamera = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -61,14 +79,16 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
       if (cancelled) return;
       setScanning(true);
       setErreurCamera(null);
+      setErreurCode(null);
       setResultat(null);
 
       try {
         await verifierAccesCamera();
+        if (cancelled) return;
         const scanner = new Html5Qrcode(containerId);
         scannerRef.current = scanner;
 
-        await scanner.start(
+        const demarrage = scanner.start(
           { facingMode: 'environment' },
           {
             fps: 10,
@@ -79,31 +99,37 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
             if (cancelled || processingRef.current) return;
 
             const code = decodedText.trim();
-            if (!/^\d{6}$/.test(code)) return;
-
-            processingRef.current = true;
-            setScanning(false);
-            await stopScanner();
-
-            const result = await onCodeScanne(code);
-            setResultat(result);
-
-            if (result.success) {
-              setTimeout(() => {
-                void fermer();
-              }, 1200);
+            if (!/^\d{6}$/.test(code)) {
+              setErreurCode('QR non reconnu. Saisissez le code à 6 chiffres.');
               return;
             }
 
-            processingRef.current = false;
+            processingRef.current = true;
+            setErreurCode(null);
+            setScanning(false);
+            await stopScanner();
+            if (cancelled) return;
+
+            const result = await onCodeScanneRef.current(code);
+            if (cancelled) return;
+            setResultat(result);
+
+            if (result.success) {
+              fermetureTimer = window.setTimeout(() => {
+                fermer();
+              }, 1200);
+              return;
+            }
           },
           () => {
             // ignore frame misses
           }
         );
+        demarrageRef.current = demarrage;
+        await demarrage;
       } catch (err: any) {
         if (!cancelled) {
-          const message = err?.message || '';
+          const message = `${err?.name || ''} ${err?.message || ''}`;
           setErreurCamera(
             message.includes('NotAllowedError')
               ? 'Accès à la caméra refusé. Autorisez l’accès à la caméra puis réessayez.'
@@ -123,13 +149,15 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      window.clearTimeout(fermetureTimer);
       void stopScanner();
     };
-  }, [containerId, fermer, onCodeScanne, ouvert, stopScanner]);
+  }, [containerId, fermer, ouvert, stopScanner]);
 
   const isArrivee = type === 'arrivee';
 
   if (!ouvert) {
+    if (open !== undefined) return null;
     return (
       <button
         onClick={() => setOuvert(true)}
@@ -151,7 +179,7 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
         <p className="text-xs font-semibold text-primary">
           {isArrivee ? '📷 Scanner QR arrivée' : '📷 Scanner QR départ'}
         </p>
-        <button onClick={() => void fermer()} className="p-1 text-muted-foreground hover:text-foreground">
+        <button onClick={fermer} aria-label="Annuler le scan QR" className="p-1 text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -169,12 +197,14 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
 
         {erreurCamera && (
           <div className="p-4 text-center">
-            <p className="text-sm text-destructive">{erreurCamera}</p>
-            <button onClick={() => void fermer()} className="mt-2 text-xs text-primary hover:underline">
+            <p role="alert" className="text-sm text-destructive">{erreurCamera}</p>
+            <button onClick={fermer} className="mt-2 text-xs text-primary hover:underline">
               Fermer
             </button>
           </div>
         )}
+
+        {erreurCode && <p role="alert" className="p-3 text-sm text-destructive">{erreurCode}</p>}
 
         {resultat && (
           <div className={`absolute inset-0 flex items-center justify-center backdrop-blur-sm ${resultat.success ? 'bg-success/20' : 'bg-destructive/20'}`}>
