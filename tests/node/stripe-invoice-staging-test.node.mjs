@@ -41,6 +41,12 @@ function fixture(){
  const event={type:'checkout.session.completed',livemode:false,data:{object:structuredClone(session)}};
  return {calls,users,rows,sb,identity,stripe,session,event};
 }
+function groupedFixture(s=fixture()) {
+ Object.assign(s.rows.factures[0],{mission_id:null,montant_ht:14.52,montant_tva:2.90});
+ Object.assign(s.rows.missions[0],{facture_id:F,commission_facturee:true,
+  montant_commission_ht:14.52,montant_commission_tva:2.90,montant_commission_ttc:17.42});
+ return s;
+}
 test('configuration absente : admission nulle sans transport',()=>assert.equal(parse({}),null));
 test('configuration TEST exacte et expiration bornée',()=>{assert.deepEqual(parse(),config);assert.equal(h.stagingInvoiceCheckoutExpiry(parse(),now),Math.floor(Date.parse(config.expiresAt)/1000));});
 for(const [key,value] of Object.entries({SUPABASE_URL:'https://flripxtsyegjshnhzjkz.supabase.co',STRIPE_SECRET_KEY:'sk_live_NeverAllowed',SUPABASE_ENV:'production',CONNECT_STAGING_TEST_RUN:'active'}))
@@ -61,6 +67,50 @@ for(const [name,change] of [
  ['Auth non TEST',s=>s.users[S].app_metadata.est_compte_test=false],['owner étranger',s=>s.users[E].app_metadata.jolene_connect_fixture_owner='FOREIGN'],
  ['Customer changé',s=>s.rows.etablissements[0].stripe_customer_id='cus_Other'],['profil supprimé',s=>s.rows.soignants[0].supprime_le='2026-10-16'],
 ]) test(`scope refuse ${name}`,async()=>{const s=fixture();change(s);await assert.rejects(()=>h.requireStagingInvoiceScope(s.sb,parse(),F));});
+test('facture groupée : seule mission liée, trois sommes canoniques et lectures seulement',async()=>{
+ const s=groupedFixture();await h.requireStagingInvoiceScope(s.sb,parse(),F);
+ assert.equal(s.calls.some(x=>/update|insert|rpc|create/.test(x)),false);
+});
+test('facture groupée : montants numériques PostgREST acceptés sans recalcul de taux',async()=>{
+ const s=groupedFixture();for(const key of ['montant_ht','montant_tva','montant_ttc'])s.rows.factures[0][key]=String(s.rows.factures[0][key]);
+ for(const key of ['montant_commission_ht','montant_commission_tva','montant_commission_ttc'])s.rows.missions[0][key]=String(s.rows.missions[0][key]);
+ await h.requireStagingInvoiceScope(s.sb,parse(),F);
+});
+test('facture directe : ancien lien nullable ou inverse inchangé',async()=>{
+ for(const link of [null,F]){const s=fixture();s.rows.missions[0].facture_id=link;await h.requireStagingInvoiceScope(s.sb,parse(),F);}
+});
+const groupedRefus = [
+ ['aucun lien inverse',s=>s.rows.missions[0].facture_id=null],
+ ['autre facture liée',s=>s.rows.missions[0].facture_id=M],
+ ['mission_id absent',s=>delete s.rows.factures[0].mission_id],
+ ['mission_id étranger',s=>s.rows.factures[0].mission_id=F],
+ ['commission non facturée',s=>s.rows.missions[0].commission_facturee=false],
+ ['plusieurs missions annoncées',s=>s.rows.factures[0].nombre_missions=2],
+ ['autre mission effectivement liée',s=>s.rows.missions.push({id:F,facture_id:F})],
+ ['HT mission différent',s=>s.rows.missions[0].montant_commission_ht=14.51],
+ ['TVA mission différente',s=>s.rows.missions[0].montant_commission_tva=2.91],
+ ['TTC mission différent',s=>s.rows.missions[0].montant_commission_ttc=17.43],
+ ['HT facture différent',s=>s.rows.factures[0].montant_ht=14.51],
+ ['TVA facture différente',s=>s.rows.factures[0].montant_tva=2.91],
+ ['TTC facture différent',s=>s.rows.factures[0].montant_ttc=17.43],
+ ['somme HT TVA incohérente',s=>{s.rows.factures[0].montant_ht=14.51;s.rows.missions[0].montant_commission_ht=14.51;}],
+ ['montants négatifs compensés',s=>{Object.assign(s.rows.factures[0],{montant_ht:18.42,montant_tva:-1});Object.assign(s.rows.missions[0],{montant_commission_ht:18.42,montant_commission_tva:-1});}],
+ ['trace Connect',s=>s.rows.stripe_transfers.push({id:F,mission_id:M})],
+ ...['montant_ht','montant_tva','montant_ttc'].map(key=>['facture '+key+' absent',s=>s.rows.factures[0][key]=null]),
+ ...['montant_commission_ht','montant_commission_tva','montant_commission_ttc'].map(key=>['mission '+key+' absent',s=>s.rows.missions[0][key]=null]),
+ ...[NaN,Infinity,'',true,'invalide'].map(value=>['valeur non monétaire '+String(value),s=>s.rows.missions[0].montant_commission_ht=value]),
+];
+for(const [name,change] of groupedRefus)test(`facture groupée refuse ${name}`,async()=>{
+ const s=groupedFixture();change(s);await assert.rejects(()=>h.requireStagingInvoiceScope(s.sb,parse(),F));
+});
+test('événements groupés : metadata facture réelles et deux claims exacts requis',async()=>{
+ const s=groupedFixture();assert.equal(s.event.data.object.metadata.mission_id,undefined);
+ assert.equal(await h.requireStagingInvoiceEvent(s.sb,s.stripe,parse(),'PLATFORM',s.event),true);
+ const intent={id:'pi_Synthetic',livemode:false,currency:'eur',customer:C,amount:1742,metadata:{facture_id:F,etablissement_id:E}};
+ assert.equal(await h.requireStagingInvoiceEvent(s.sb,s.stripe,parse(),'PLATFORM',{type:'payment_intent.succeeded',livemode:false,data:{object:intent}}),true);
+ s.rows.stripe_payment_flow_claims=s.rows.stripe_payment_flow_claims.filter(row=>row.resource_key===`FACTURE:${F}`);
+ await assert.rejects(()=>h.requireStagingInvoiceEvent(s.sb,s.stripe,parse(),'PLATFORM',s.event));
+});
 test('identité Stripe : lecture du Customer existant uniquement',async()=>{const s=fixture();assert.equal(await h.stagingInvoiceCustomer(s.stripe),C);assert.equal(s.calls.filter(x=>x.startsWith('stripe:')).length,3);});
 for(const [name,change] of [['LIVE',s=>s.identity.live=true],['plateforme étrangère',s=>s.identity.platform='acct_Foreign'],['Customer LIVE',s=>s.identity.customer.livemode=true],['tenant étranger',s=>s.identity.customer.metadata.etablissement_id=S]])
  test(`identité Stripe refuse ${name}`,async()=>{const s=fixture();change(s);await assert.rejects(()=>h.stagingInvoiceCustomer(s.stripe));});
@@ -93,8 +143,8 @@ test('reproduction locale du contrat Stripe : ancien descripteur carte rejeté, 
 
 // Vrais handlers et vrais helpers Auth/classification/claims/audit/charge.
 // Seuls SDK Auth/PostgREST/Stripe sont remplacés par des transports en mémoire.
-function handlers(){
- const s=fixture();s.rows.stripe_payment_flow_claims=[];
+function handlers({grouped=false}={}){
+ const s=grouped?groupedFixture():fixture();s.rows.stripe_payment_flow_claims=[];
  const f=s.rows.factures[0];Object.assign(f,{numero_facture:'SYNTHETIC',stripe_payment_intent_id:null,stripe_hosted_url:null,est_secteur_public:false,chorus_pro_statut:null,
   etablissements:{id:E,nom:'SYNTHETIC',email_contact:'synthetic@example.invalid',stripe_customer_id:C,mode_paiement_commission:'MANUEL',est_secteur_public:false,chorus_pro_actif:false}});
  const provider={sessions:[],intent:null,createCalls:0};const mutations=[],clientOptions=[];
@@ -156,3 +206,22 @@ test('vrais handlers : sans runtime TEST, ancienne interdiction préservée',asy
 test('vrais handlers : PROD refuse ce runtime avant création ou écriture',async()=>{const r=handlers();r.envRun.SUPABASE_URL='https://flripxtsyegjshnhzjkz.supabase.co';assert.notEqual((await r.create()).status,200);assert.notEqual((await r.confirm()).status,200);assert.deepEqual(r.mutations,[]);});
 test('vrais handlers : faux JWT et service_role ne contournent pas la session utilisateur',async()=>{for(const token of ['FORGED_USER','SYNTHETIC_SERVICE']){const r=handlers();assert.ok([401,403].includes((await r.create(token)).status));assert.ok([401,403].includes((await r.confirm(token)).status));assert.deepEqual(r.mutations,[]);}});
 test('vrai handler : Session expirée ne crée aucune nouvelle tentative TEST',async()=>{const r=handlers();assert.equal((await r.create()).status,200);r.provider.sessions[0].status='expired';const before=r.mutations.length;assert.notEqual((await r.create()).status,200);assert.equal(r.provider.createCalls,1);assert.equal(r.mutations.length,before);});
+
+test('vrais handlers groupés : Checkout unique, reprise et confirmation avec metadata facture',async()=>{
+ const r=handlers({grouped:true});let response=await r.create();assert.equal(response.status,200);
+ response=await r.create();assert.equal(response.status,200);assert.equal((await response.json()).resumed,true);assert.equal(r.provider.createCalls,1);
+ assert.equal(r.provider.sessions[0].metadata.mission_id,undefined);
+ assert.deepEqual(r.s.rows.stripe_payment_flow_claims.map(row=>row.resource_key).sort(),[`FACTURE:${F}`,`MISSION:${M}`].sort());
+ r.pay();response=await r.confirm();const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));assert.equal(body.confirmed,true);
+ assert.equal(r.s.rows.factures[0].statut,'PAYEE');assert.equal(r.s.rows.factures[0].mission_id,null);assert.equal(r.s.rows.missions[0].facture_id,F);
+ assert.equal(r.provider.createCalls,1);
+});
+for(const [name,change] of groupedRefus)test(`vrai handler groupé refuse avant claim ou Checkout : ${name}`,async()=>{
+ const r=handlers({grouped:true});change(r.s);assert.notEqual((await r.create()).status,200);
+ assert.deepEqual(r.mutations,[]);assert.equal(r.provider.createCalls,0);
+});
+test('vrai handler groupé : variation de commission après paiement bloque la confirmation',async()=>{
+ const r=handlers({grouped:true});assert.equal((await r.create()).status,200);r.pay();
+ r.s.rows.missions[0].montant_commission_ht=14.51;const before=r.mutations.length;
+ assert.notEqual((await r.confirm()).status,200);assert.equal(r.s.rows.factures[0].statut,'EMISE');assert.equal(r.mutations.length,before);
+});
