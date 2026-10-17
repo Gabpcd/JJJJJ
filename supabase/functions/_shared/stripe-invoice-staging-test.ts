@@ -58,14 +58,34 @@ export async function requireStagingInvoiceScope(sb: Client, c: StagingInvoiceCo
     must(!p.error && p.data?.id === id && p.data.est_compte_test === true
       && p.data.supprime_le === null && p.data[link] === value);
   }
-  const f = await sb.from('factures').select('id,etablissement_id,mission_id,facture_honoraire_id,type_document,statut,montant_ttc,nombre_missions').eq('id', c.factureId).single();
-  const m = await sb.from('missions').select('id,etablissement_id,soignant_assigne_id,type_contrat_applique,statut,facture_id').eq('id', c.missionId).single();
-  must(!f.error && f.data?.id === c.factureId && f.data.etablissement_id === E && f.data.mission_id === c.missionId
+  const f = await sb.from('factures').select('id,etablissement_id,mission_id,facture_honoraire_id,type_document,statut,montant_ht,montant_tva,montant_ttc,nombre_missions').eq('id', c.factureId).single();
+  const m = await sb.from('missions').select('id,etablissement_id,soignant_assigne_id,type_contrat_applique,statut,facture_id,commission_facturee,montant_commission_ht,montant_commission_tva,montant_commission_ttc').eq('id', c.missionId).single();
+  must(!f.error && f.data?.id === c.factureId && f.data.etablissement_id === E
     && f.data.facture_honoraire_id === null && f.data.type_document === 'FACTURE' && f.data.nombre_missions === 1
     && ['EMISE','EN_RETARD','PAYEE'].includes(f.data.statut) && Math.round(Number(f.data.montant_ttc) * 100) === c.amountCents
     && !m.error && m.data?.id === c.missionId && m.data.etablissement_id === E && m.data.soignant_assigne_id === S
-    && m.data.type_contrat_applique === 'SALARIE' && m.data.statut === 'TERMINEE'
-    && (m.data.facture_id === null || m.data.facture_id === c.factureId));
+    && m.data.type_contrat_applique === 'SALARIE' && m.data.statut === 'TERMINEE');
+  // Le générateur groupé lie la mission via missions.facture_id, sans mission_id
+  // sur la facture. Seul ce groupe d'une mission et ses sommes figées sont admis.
+  const directe = f.data.mission_id === c.missionId
+    && (m.data.facture_id === null || m.data.facture_id === c.factureId);
+  const groupee = f.data.mission_id === null && m.data.facture_id === c.factureId
+    && m.data.commission_facturee === true;
+  must(directe || groupee);
+  if (groupee) {
+    const cents = (value: unknown): number => {
+      must((typeof value === 'number' || typeof value === 'string' && value.trim() !== '')
+        && Number.isFinite(Number(value)) && Number(value) >= 0);
+      const amount = Math.round(Number(value) * 100);
+      must(Number.isSafeInteger(amount));
+      return amount;
+    };
+    const factureAmounts = [f.data.montant_ht, f.data.montant_tva, f.data.montant_ttc].map(cents);
+    const missionAmounts = [m.data.montant_commission_ht, m.data.montant_commission_tva, m.data.montant_commission_ttc].map(cents);
+    must(factureAmounts.every((amount, i) => amount === missionAmounts[i])
+      && factureAmounts[0] + factureAmounts[1] === factureAmounts[2]
+      && factureAmounts[2] === c.amountCents);
+  }
   const other = await sb.from('missions').select('id').eq('facture_id', c.factureId).neq('id', c.missionId).limit(1);
   const traces = await sb.from('stripe_transfers').select('id').eq('mission_id', c.missionId).limit(1);
   must(!other.error && Array.isArray(other.data) && other.data.length === 0
