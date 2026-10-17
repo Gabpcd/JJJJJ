@@ -12,8 +12,16 @@ const suppressionMigration = read('supabase/migrations/20261001131013_conserver_
 const suppressionSignature = 'fn_supprimer_mon_compte()';
 const suppressionAvant = '71254d2065c67c11ce0460368f20d01f';
 const suppressionApres = 'f3af23aeeb4e30aba07e422c0e819aeb';
-const replayEntries = entries.map(entry => entry.signature === suppressionSignature
-  ? { ...entry, old_md5: suppressionAvant, definition_md5: suppressionApres }
+const avoirsMigration = read('supabase/migrations/20261017191635_exclure_avoirs_des_impayes.sql');
+const suppressionEtablissementSignature = 'fn_supprimer_mon_compte_etablissement()';
+const suppressionEtablissementAvant = '8d1a6220cdc135d36d2d472fcde230ee';
+const suppressionEtablissementApres = '35b630a12ed0f755592fdc431031b8cc';
+const successors = new Map([
+  [suppressionSignature, { old_md5: suppressionAvant, definition_md5: suppressionApres }],
+  [suppressionEtablissementSignature, { old_md5: suppressionEtablissementAvant, definition_md5: suppressionEtablissementApres }],
+]);
+const replayEntries = entries.map(entry => successors.has(entry.signature)
+  ? { ...entry, ...successors.get(entry.signature) }
   : entry);
 const md5 = body => createHash('md5').update(body).digest('hex');
 
@@ -60,18 +68,38 @@ test('aucun DDL, GRANT, recapture globale ou écriture hors inventaire', () => {
   assert.ok(skeleton.indexOf('END LOOP;') < skeleton.indexOf('INSERT INTO'));
 });
 
-test('seul le successeur suppression vérifié remplace le corps historique après migration', () => {
+test('le successeur suppression soignant vérifié remplace le corps historique après migration', () => {
   const historical = entries.find(entry => entry.signature === suppressionSignature);
   assert.equal(historical.definition_md5, suppressionAvant);
   assert.equal(md5(sourceBody(read('supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql'), 'fn_supprimer_mon_compte')), suppressionAvant);
   assert.equal(md5(sourceBody(suppressionMigration, 'fn_supprimer_mon_compte')), suppressionApres);
   assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), 'fn_supprimer_mon_compte')), suppressionApres);
   assert.ok(suppressionMigration.includes(`('${suppressionSignature}', '${suppressionAvant}', '${suppressionApres}'`));
-  assert.deepEqual(replayEntries.filter(entry => entry.signature !== suppressionSignature), entries.filter(entry => entry.signature !== suppressionSignature));
   assert.equal(replayEntries.find(entry => entry.signature === suppressionSignature).definition_md5, suppressionApres);
 });
 
-test('le rejeu conserve exactement la logique historique et exige le seul corps courant', () => {
+test('le successeur avoirs lie exactement les corps suppression établissement avant et après', () => {
+  const historical = entries.find(entry => entry.signature === suppressionEtablissementSignature);
+  const source = sources.find(entry => entry.signature === suppressionEtablissementSignature);
+  assert.equal(historical.definition_md5, suppressionEtablissementAvant);
+  assert.equal(md5(sourceBody(read(source.sources[0].path), 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementAvant);
+  assert.equal(md5(sourceBody(avoirsMigration, 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementApres);
+  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementApres);
+  assert.ok(avoirsMigration.includes(`('${suppressionEtablissementSignature}', '${suppressionEtablissementAvant}', '${suppressionEtablissementApres}'`));
+  assert.equal(replayEntries.find(entry => entry.signature === suppressionEtablissementSignature).definition_md5, suppressionEtablissementApres);
+});
+
+test('seuls les deux successeurs explicites changent le manifeste historique', () => {
+  assert.deepEqual([...successors.keys()].sort(), [suppressionSignature, suppressionEtablissementSignature].sort());
+  assert.deepEqual(replayEntries.filter(entry => !successors.has(entry.signature)), entries.filter(entry => !successors.has(entry.signature)));
+  for (const entry of entries.filter(entry => successors.has(entry.signature))) {
+    assert.deepEqual(replayEntries.find(replayed => replayed.signature === entry.signature), {
+      ...entry, ...successors.get(entry.signature),
+    });
+  }
+});
+
+test('le rejeu conserve exactement la logique historique et exige chaque corps courant explicite', () => {
   const body = migration.split('DO $inventory$')[1].split('$inventory$;')[0];
   const replay = sqlTest.split('AS $replay$\n')[1].split('$replay$;')[0];
   const historiqueSansManifeste = body.replace(/\$entries\$[\s\S]*?\$entries\$/, '$entries$MANIFESTE$entries$');

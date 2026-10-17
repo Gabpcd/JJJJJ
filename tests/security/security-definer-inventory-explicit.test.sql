@@ -1,8 +1,9 @@
 -- Staging uniquement ; fixtures de métadonnées et rollback intégral.
--- Le rejeu conserve l’algorithme du 30/09. Son seul successeur explicite est
--- fn_supprimer_mon_compte(), installé avant les suites par la migration
--- 20261001131013 : corps courant f3af23ae… obligatoire, pas de repli vers 71254d….
--- Le test Node lie les deux empreintes à la migration et au snapshot actuels.
+-- Le rejeu conserve l’algorithme du 30/09 et exige deux successeurs explicites :
+-- fn_supprimer_mon_compte() : migration 20261001131013, corps f3af23ae… ;
+-- fn_supprimer_mon_compte_etablissement() : migration 20261017191635, corps 35b630a1….
+-- Aucun repli vers leurs anciens corps ; Node lie chaque transition aux sources,
+-- à sa migration et au snapshot actuels.
 BEGIN;
 CREATE TEMP TABLE inventory_before AS SELECT * FROM private.security_definer_inventory;
 CREATE TEMP TABLE functions_before AS SELECT oid, prosrc, proacl, proconfig, prosecdef, proowner FROM pg_proc;
@@ -122,8 +123,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "d99c5d3199ef860fdc71ba17b26ddbaf",
-    "definition_md5": "8d1a6220cdc135d36d2d472fcde230ee",
+    "old_md5": "8d1a6220cdc135d36d2d472fcde230ee",
+    "definition_md5": "35b630a12ed0f755592fdc431031b8cc",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"
@@ -305,8 +306,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "d99c5d3199ef860fdc71ba17b26ddbaf",
-    "definition_md5": "8d1a6220cdc135d36d2d472fcde230ee",
+    "old_md5": "8d1a6220cdc135d36d2d472fcde230ee",
+    "definition_md5": "35b630a12ed0f755592fdc431031b8cc",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"

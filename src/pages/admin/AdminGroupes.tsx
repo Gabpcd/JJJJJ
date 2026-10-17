@@ -125,7 +125,7 @@ export default function AdminGroupes() {
               .select('id, statut, soignant_assigne_id, montant_commission_ttc, etablissement_id')
               .in('etablissement_id', tousEtabsIds)),
             avecDelai(supabase.from('factures')
-              .select('montant_ttc, statut, etablissement_id')
+              .select('montant_ttc, statut, type_document, etablissement_id')
               .in('etablissement_id', tousEtabsIds)),
           ])
         : [{ data: [], error: null }, { data: [], error: null }];
@@ -151,7 +151,10 @@ export default function AdminGroupes() {
             .filter((mission) => mission.statut === 'TERMINEE')
             .reduce((somme, mission) => somme + (Number(mission.montant_commission_ttc) || 0), 0);
           const caPayees = factures.filter((facture) => facture.statut === 'PAYEE').reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
-          const caImpayees = factures.filter((facture) => ['EMISE', 'EN_RETARD'].includes(facture.statut)).reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
+          const caImpayees = factures.filter((facture) =>
+            ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
+            && ['EMISE', 'EN_RETARD'].includes(facture.statut)
+          ).reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
           const soignantIds = new Set(missions.map((mission) => mission.soignant_assigne_id).filter((id): id is string => Boolean(id)));
 
           cliniques.push({
