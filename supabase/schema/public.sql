@@ -1002,6 +1002,7 @@ BEGIN
     FROM public.factures
     WHERE etablissement_id = NEW.etablissement_id
       AND statut IN ('EMISE', 'EN_RETARD')
+      AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
       AND date_echeance < current_date;
 
     IF v_nb_impayees > 0 AND NOT public.est_admin() THEN
@@ -9981,6 +9982,7 @@ BEGIN
     ),
     'factures_impayees', (
       SELECT count(*) FROM factures_reelles WHERE statut IN ('EMISE', 'EN_RETARD')
+        AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
     ),
     'docs_en_attente', (
       SELECT count(*)
@@ -15716,6 +15718,7 @@ BEGIN
               SELECT 1 FROM public.factures f
               WHERE f.etablissement_id = e.id
                 AND f.statut IN ('EMISE', 'EN_RETARD')
+                AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
                 AND f.date_echeance < current_date
             )
           ),
@@ -17156,6 +17159,7 @@ BEGIN
         FROM public.factures f
         JOIN public.etablissements e ON e.id = f.etablissement_id
         WHERE f.statut IN ('EMISE', 'EN_RETARD')
+        AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
         AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
         AND (f.relance_1_le IS NULL OR f.relance_2_le IS NULL)
     LOOP
@@ -20594,6 +20598,7 @@ BEGIN
     SELECT 1 FROM public.factures
     WHERE etablissement_id = p_etab_id
       AND statut IN ('EMISE', 'EN_RETARD')
+      AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
       AND date_echeance < current_date
   ) THEN
     RETURN jsonb_build_object('error', 'FACTURES_IMPAYEES', 'message', 'Vous avez des factures impayées à régulariser.');
@@ -31630,6 +31635,7 @@ BEGIN
     FROM factures f
     JOIN etablissements e ON e.id = f.etablissement_id
     WHERE f.statut IN ('EMISE', 'EN_RETARD')
+    AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
       AND f.date_echeance < CURRENT_DATE
       AND e.email_contact IS NOT NULL
       AND NOT EXISTS (
@@ -37787,6 +37793,7 @@ BEGIN
         FROM public.factures f
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
+          AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
@@ -37854,6 +37861,7 @@ BEGIN
         FROM public.factures f
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
+          AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
@@ -45100,7 +45108,8 @@ BEGIN
   INTO v_total_commissions_du
   FROM public.factures f
   WHERE f.etablissement_id = v_etab_id
-    AND f.statut IN ('EMISE', 'EN_RETARD');
+    AND f.statut IN ('EMISE', 'EN_RETARD')
+    AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
 
   RETURN jsonb_build_object(
     'total_du', v_total_soignants_du + v_total_commissions_du,
@@ -45114,10 +45123,13 @@ BEGIN
     'nb_factures_impayees', (
       SELECT count(*) FROM public.factures
       WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
+        AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
     ),
     'nb_factures_commission_historique', (
       SELECT count(*) FROM public.factures
-      WHERE etablissement_id = v_etab_id AND statut IN ('PAYEE', 'ANNULEE')
+      WHERE etablissement_id = v_etab_id
+        AND (statut IN ('PAYEE', 'ANNULEE')
+          OR (type_document = 'AVOIR' AND statut IN ('EMISE', 'EN_RETARD')))
     ),
     'missions_non_payees', v_lignes,
     'paiements_soignants_en_attente', COALESCE((
@@ -45156,24 +45168,27 @@ BEGIN
       SELECT jsonb_agg(row_to_json(x)) FROM (
         SELECT f.id::text AS facture_id, f.numero_facture, f.montant_ht,
           f.montant_tva, f.montant_ttc, f.nombre_missions, f.date_echeance,
-          f.statut, f.stripe_hosted_url, f.est_secteur_public,
+          f.statut, f.type_document, f.stripe_hosted_url, f.est_secteur_public,
           f.chorus_pro_statut, f.chorus_pro_numero_flux
         FROM public.factures f
         WHERE f.etablissement_id = v_etab_id
           AND f.statut IN ('EMISE', 'EN_RETARD', 'VIREMENT_DECLARE')
+          AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
         ORDER BY f.date_echeance
       ) x
     ), '[]'::jsonb),
     'factures_commission_historique', COALESCE((
       SELECT jsonb_agg(row_to_json(x)) FROM (
-        SELECT f.id::text AS facture_id, f.numero_facture, f.statut,
+        SELECT f.id::text AS facture_id, f.numero_facture, f.statut, f.type_document,
           f.montant_ttc, f.nombre_missions, f.date_emission, f.date_paiement,
           f.mode_paiement, f.virement_reference, f.stripe_payment_intent_id,
           f.mission_id::text AS mission_id, f.facture_honoraire_id::text,
           f.est_secteur_public, f.chorus_pro_statut
         FROM public.factures f
-        WHERE f.etablissement_id = v_etab_id AND f.statut IN ('PAYEE', 'ANNULEE')
-        ORDER BY f.date_paiement DESC NULLS LAST, f.date_emission DESC LIMIT 10
+        WHERE f.etablissement_id = v_etab_id
+          AND (f.statut IN ('PAYEE', 'ANNULEE')
+            OR (f.type_document = 'AVOIR' AND f.statut IN ('EMISE', 'EN_RETARD')))
+        ORDER BY COALESCE(f.date_paiement, f.date_emission) DESC NULLS LAST, f.id DESC LIMIT 10
       ) x
     ), '[]'::jsonb),
     'missions_non_facturees', '[]'::jsonb
@@ -54517,6 +54532,7 @@ BEGIN
     FROM factures f
     WHERE f.etablissement_id = v_etab_id
       AND f.statut IN ('EMISE', 'EN_RETARD')
+      AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
       AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
@@ -57161,7 +57177,8 @@ BEGIN
     
     SELECT COALESCE(SUM(montant_ttc), 0), COUNT(*)
     INTO v_commissions_impayees, v_nb_factures_impayees
-    FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD');
+    FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
+      AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
     
     -- Litiges ouverts
     SELECT COUNT(*) INTO v_litiges_ouverts
@@ -59735,7 +59752,8 @@ BEGIN
 
   -- Garde-fou : factures impayées (la suppression n'efface pas une dette)
   SELECT count(*) INTO v_factures_impayees FROM factures
-   WHERE etablissement_id = v_etab_id AND statut IN ('EN_ATTENTE','EN_RETARD');
+   WHERE etablissement_id = v_etab_id AND statut IN ('EN_ATTENTE','EN_RETARD')
+     AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
   IF v_factures_impayees > 0 THEN
     RETURN jsonb_build_object('success', false, 'error',
       format('%s facture(s) impayée(s). Réglez-les avant suppression.', v_factures_impayees));

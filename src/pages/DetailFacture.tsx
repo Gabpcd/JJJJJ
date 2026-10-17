@@ -90,8 +90,20 @@ const valeurFigee = (valeur: unknown): number | null => (
   valeur != null && Number.isFinite(Number(valeur)) && Number(valeur) >= 0 ? Number(valeur) : null
 );
 
+// Les colonnes du document sont absolues ; un avoir se présente en négatif,
+// y compris lorsqu'il est annulé, sans modifier les montants enregistrés.
+function montantCommissionDocument(facture: { type_document?: string }, valeur: unknown): number {
+  const montant = Number(valeur ?? 0);
+  return facture.type_document === 'AVOIR' ? -Math.abs(montant) : montant;
+}
+
 function lignesDocumentFactureCommission(missions: any[], facture: any, honoraires: HonorairesCommission) {
-  if (!honoraires) return normaliserLignesFactureCommission(missions, facture);
+  if (!honoraires) return normaliserLignesFactureCommission(missions, facture).map(ligne => ({
+    ...ligne,
+    montant_commission_ht: montantCommissionDocument(facture, ligne.montant_commission_ht),
+    montant_commission_tva: montantCommissionDocument(facture, ligne.montant_commission_tva),
+    montant_commission_ttc: montantCommissionDocument(facture, ligne.montant_commission_ttc),
+  }));
   const mission = missions.find((ligne) => ligne.id === honoraires.mission_id);
   return [{
     id: honoraires.mission_id,
@@ -106,9 +118,9 @@ function lignesDocumentFactureCommission(missions: any[], facture: any, honorair
     montant_honoraires_ht: Number(honoraires.montant_ht),
     numero_honoraires: honoraires.numero_facture,
     piece_honoraires: true,
-    montant_commission_ht: Number(facture.montant_ht),
-    montant_commission_tva: Number(facture.montant_tva),
-    montant_commission_ttc: Number(facture.montant_ttc),
+    montant_commission_ht: montantCommissionDocument(facture, facture.montant_ht),
+    montant_commission_tva: montantCommissionDocument(facture, facture.montant_tva),
+    montant_commission_ttc: montantCommissionDocument(facture, facture.montant_ttc),
     ecart_avec_mission_courante: false,
   }];
 }
@@ -616,6 +628,13 @@ export default function DetailFacture() {
 
   const { lieeHonoraires, estSepaAutomatique, canPay, canPayCard, modeLibelle } =
     presentationPaiementCommission(facture, etab, canManagePayments, modalites?.virement_autorise === true);
+  const estAvoir = facture.type_document === 'AVOIR';
+  const statutLibelle = estAvoir
+    ? (facture.statut === 'ANNULEE' ? 'Avoir annulé' : 'Avoir')
+    : STATUT_LABELS[facture.statut] ?? facture.statut;
+  const statutCouleur = estAvoir
+    ? (facture.statut === 'ANNULEE' ? STATUT_COLORS.ANNULEE : STATUT_COLORS.BROUILLON)
+    : STATUT_COLORS[facture.statut] ?? STATUT_COLORS.BROUILLON;
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
@@ -644,17 +663,17 @@ export default function DetailFacture() {
         {/* Header facture */}
         <div className="flex flex-col sm:flex-row justify-between gap-4 mb-6 pb-4 border-b border-border">
           <div>
-            <h1 className="text-2xl font-black text-foreground">FACTURE</h1>
+            <h1 className="text-2xl font-black text-foreground">{estAvoir ? 'AVOIR' : 'FACTURE'}</h1>
             <p className="text-lg font-bold text-primary mt-1">{facture.numero_facture}</p>
             <p className="text-sm text-muted-foreground mt-2">
               Émise le {facture.date_emission ? format(new Date(facture.date_emission), 'dd MMMM yyyy', { locale: fr }) : '—'}
             </p>
-            {facture.date_echeance && (
+            {!estAvoir && facture.date_echeance && (
               <p className="text-sm text-muted-foreground">
                 Échéance : {format(new Date(facture.date_echeance), 'dd MMMM yyyy', { locale: fr })}
               </p>
             )}
-            {facture.mode_paiement && (
+            {!estAvoir && facture.mode_paiement && (
               <p className="text-xs text-muted-foreground mt-1">
                 Mode : {modeLibelle}
               </p>
@@ -674,12 +693,12 @@ export default function DetailFacture() {
         {/* Status */}
         <div className="mb-6 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Statut :</span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUT_COLORS[facture.statut] ?? STATUT_COLORS.BROUILLON}`}>
-            {STATUT_LABELS[facture.statut] ?? facture.statut}
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statutCouleur}`}>
+            {statutLibelle}
           </span>
         </div>
 
-        {facture.statut === 'VIREMENT_DECLARE' && (
+        {!estAvoir && facture.statut === 'VIREMENT_DECLARE' && (
           <div className="mb-6 flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 rounded-xl p-3">
             <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <div>
@@ -718,17 +737,17 @@ export default function DetailFacture() {
         <div className="border-t-2 border-border pt-4 space-y-2 max-w-xs ml-auto">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Total commissions HT</span>
-            <span className="font-medium text-foreground">{formatEur(facture.montant_ht ?? 0)}</span>
+            <span className="font-medium text-foreground">{formatEur(montantCommissionDocument(facture, facture.montant_ht))}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">TVA ({facture.taux_tva ?? 20}%)</span>
-            <span className="font-medium text-foreground">{formatEur(facture.montant_tva ?? 0)}</span>
+            <span className="font-medium text-foreground">{formatEur(montantCommissionDocument(facture, facture.montant_tva))}</span>
           </div>
           <div className="flex justify-between text-lg font-bold border-t border-border pt-2">
             <span className="text-foreground">Total TTC</span>
-            <span className="text-primary">{formatEur(facture.montant_ttc ?? 0)}</span>
+            <span className="text-primary">{formatEur(montantCommissionDocument(facture, facture.montant_ttc))}</span>
           </div>
-          {facture.mode_paiement && (
+          {!estAvoir && facture.mode_paiement && (
             <div className="flex justify-between text-xs pt-1">
               <span className="text-muted-foreground">Mode de paiement</span>
               <span className="text-foreground">{modeLibelle}</span>
@@ -737,7 +756,7 @@ export default function DetailFacture() {
         </div>
 
         {/* Payment info */}
-        {facture.statut === 'PAYEE' && facture.date_paiement && (
+        {!estAvoir && facture.statut === 'PAYEE' && facture.date_paiement && (
           <div className="mt-6 flex items-center gap-2 bg-success/10 border border-success/20 rounded-xl p-3">
             <CheckCircle className="h-4 w-4 text-success shrink-0" />
             <p className="text-sm text-success">
@@ -748,25 +767,25 @@ export default function DetailFacture() {
 
         {lieeHonoraires && honoraires && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-            <p>Cette commission est liée à la facture d’honoraires {honoraires.numero_facture}.</p>
-            {modalites?.virement_autorise ? (
+            <p>{estAvoir ? 'Cet avoir est lié' : 'Cette commission est liée'} à la facture d’honoraires {honoraires.numero_facture}.</p>
+            {!estAvoir && (modalites?.virement_autorise ? (
               <p className="mt-2">Un règlement direct des honoraires a été déclaré. La commission Jolene reste à régler séparément. Cette déclaration ne prouve pas la réception des fonds par le soignant.</p>
             ) : facture.statut !== 'PAYEE' && (
               <p className="mt-2">Le paiement groupé des honoraires inclut cette commission. Un règlement séparé est proposé seulement après déclaration du règlement direct des honoraires, si aucun paiement en ligne n’est engagé.</p>
-            )}
-            <button type="button" className="mt-3 min-h-[44px] btn-secondary text-sm no-print" onClick={() => navigate(
+            ))}
+            {!estAvoir && <button type="button" className="mt-3 min-h-[44px] btn-secondary text-sm no-print" onClick={() => navigate(
               facture.statut === 'PAYEE'
                 ? '/etablissement/facturation?tab=historique'
                 : `/etablissement/facturation?tab=missions-a-payer&mission=${encodeURIComponent(honoraires.mission_id!)}&facture_honoraire=${encodeURIComponent(honoraires.id)}`,
-            )}>{facture.statut === 'PAYEE' ? 'Consulter l’historique des paiements' : 'Consulter le règlement des honoraires'}</button>
+            )}>{facture.statut === 'PAYEE' ? 'Consulter l’historique des paiements' : 'Consulter le règlement des honoraires'}</button>}
           </div>
         )}
 
-        {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && modalites?.motif === 'PAIEMENT_EN_LIGNE_ENGAGE' && (
+        {!estAvoir && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && modalites?.motif === 'PAIEMENT_EN_LIGNE_ENGAGE' && (
           <p role="status" className="mt-4 text-sm text-muted-foreground">Un paiement en ligne est déjà engagé. Consultez son suivi avant de déclarer un autre règlement.</p>
         )}
 
-        {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (
+        {!estAvoir && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground no-print">
             Votre établissement utilise le prélèvement SEPA pour les commissions. Consultez le suivi des prélèvements dans la facturation.
           </div>
@@ -780,7 +799,7 @@ export default function DetailFacture() {
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
           <p>{ENTREPRISE.nom} — Plateforme de mise en relation soignants-établissements</p>
-          <p>Facture détaillée — Commission sur prestations facturées</p>
+          <p>{estAvoir ? 'Avoir détaillé' : 'Facture détaillée'} — Commission sur prestations facturées</p>
         </div>
       </div>
 

@@ -923,6 +923,7 @@ function FacturationEtablissementContent() {
   );
   const facturesCommissionHistorique = data?.factures_commission_historique || [];
   const nbFacturesHistorique = data?.nb_factures_commission_historique || 0;
+  const historiqueAvecAvoirs = facturesCommissionHistorique.some((f: any) => f.type_document === 'AVOIR');
   const missionsNonFactureesObligs = data?.missions_non_facturees || [];
   const contientMissionSalarieeNonPayee = missionsNonPayeesToutes.some(
     (mission: any) => mission.type_contrat_applique === 'SALARIE',
@@ -1483,7 +1484,9 @@ function FacturationEtablissementContent() {
                   >
                     <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-success" />
-                      Historique factures commission ({nbFacturesHistorique} payée{nbFacturesHistorique > 1 ? 's' : ''})
+                      {historiqueAvecAvoirs
+                        ? `Historique factures et avoirs (${nbFacturesHistorique} document${nbFacturesHistorique > 1 ? 's' : ''})`
+                        : `Historique factures commission (${nbFacturesHistorique} payée${nbFacturesHistorique > 1 ? 's' : ''})`}
                     </h3>
                     {historiqueOuvert ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                   </button>
@@ -1540,10 +1543,12 @@ function FacturationEtablissementContent() {
                                   <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
                                   <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                                   <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
-                                  <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
+                                  <td className="py-2 pr-3 font-medium">{fmt(f.type_document === 'AVOIR' ? -Math.abs(Number(f.montant_ttc)) : f.montant_ttc)}</td>
                                   <td className="py-2 pr-3 text-xs">{ModeIcone && <ModeIcone className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />}{modeLabel}</td>
                                   <td className="py-2 pr-3">
-                                    {f.statut === 'PAYEE' ? (
+                                    {f.type_document === 'AVOIR' ? (
+                                      <BadgeY2K variant="info">{f.statut === 'ANNULEE' ? 'Avoir annulé' : 'Avoir'}</BadgeY2K>
+                                    ) : f.statut === 'PAYEE' ? (
                                       <BadgeY2K variant="success">Payée</BadgeY2K>
                                     ) : (
                                       <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{f.statut}</BadgeY2K>
@@ -1555,7 +1560,7 @@ function FacturationEtablissementContent() {
                                         size="icon"
                                         variant="ghost"
                                         className="h-9 w-9"
-                                        title="Télécharger la facture PDF"
+                                        title={f.type_document === 'AVOIR' ? "Télécharger l’avoir PDF" : 'Télécharger la facture PDF'}
                                         onClick={() => telechargerFactureCommissionPDF(f.facture_id)}
                                       >
                                         <Download className="h-4 w-4 text-muted-foreground" />
@@ -1583,19 +1588,21 @@ function FacturationEtablissementContent() {
                               >
                                 {f.numero_facture}
                               </Link>
-                              {f.statut === 'PAYEE' ? (
+                              {f.type_document === 'AVOIR' ? (
+                                <BadgeY2K variant="info">{f.statut === 'ANNULEE' ? 'Avoir annulé' : 'Avoir'}</BadgeY2K>
+                              ) : f.statut === 'PAYEE' ? (
                                 <BadgeY2K variant="success">Payée</BadgeY2K>
                               ) : (
                                 <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{f.statut}</BadgeY2K>
                               )}
                             </div>
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-lg font-semibold">{fmt(f.montant_ttc)}</span>
+                              <span className="text-lg font-semibold">{fmt(f.type_document === 'AVOIR' ? -Math.abs(Number(f.montant_ttc)) : f.montant_ttc)}</span>
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 className="h-9 w-9"
-                                title="Télécharger la facture PDF"
+                                title={f.type_document === 'AVOIR' ? "Télécharger l’avoir PDF" : 'Télécharger la facture PDF'}
                                 onClick={() => telechargerFactureCommissionPDF(f.facture_id)}
                               >
                                 <Download className="h-4 w-4 text-muted-foreground" />
@@ -1609,7 +1616,9 @@ function FacturationEtablissementContent() {
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground mt-3">
-                        Affiche les 10 dernières factures payées.
+                        {historiqueAvecAvoirs
+                          ? 'Affiche les 10 dernières factures clôturées et avoirs émis.'
+                          : 'Affiche les 10 dernières factures payées.'}
                       </p>
                     </div>
                   )}
@@ -2056,7 +2065,7 @@ function FacturationEtablissementContent() {
                       variant="secondary"
                       className="h-auto py-3 justify-start gap-2"
                       onClick={() => {
-                        // Ouvre un onglet par facture commission PAYEE (historique)
+                        // Ouvre un onglet par document de commission de l’historique.
                         if (facturesCommissionHistorique.length === 0) {
                           toast.info('Aucune facture à télécharger.');
                           return;
@@ -2064,14 +2073,16 @@ function FacturationEtablissementContent() {
                         facturesCommissionHistorique.forEach((f: any, i: number) => {
                           setTimeout(() => telechargerFactureCommissionPDF(f.facture_id), i * 200);
                         });
-                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture${facturesCommissionHistorique.length > 1 ? 's' : ''}…`);
+                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} ${historiqueAvecAvoirs ? 'document' : 'facture'}${facturesCommissionHistorique.length > 1 ? 's' : ''}…`);
                       }}
                     >
                       <Download className="h-5 w-5 text-primary shrink-0" />
                       <div className="text-left">
-                        <p className="font-medium text-sm">Toutes les factures commission</p>
+                        <p className="font-medium text-sm">{historiqueAvecAvoirs ? 'Factures et avoirs de commission' : 'Toutes les factures commission'}</p>
                         <p className="text-xs text-muted-foreground">
-                          Télécharge les {facturesCommissionHistorique.length} dernières payées
+                          {historiqueAvecAvoirs
+                            ? `Télécharge les ${facturesCommissionHistorique.length} derniers documents`
+                            : `Télécharge les ${facturesCommissionHistorique.length} dernières payées`}
                         </p>
                       </div>
                     </BoutonY2K>

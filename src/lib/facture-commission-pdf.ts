@@ -176,11 +176,15 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     const doc = new jsPDF();
 
     const statut = (f as any).statut;
+    const estAvoir = (f as any).type_document === 'AVOIR';
+    // Le stockage conserve des montants positifs ; seul le document d'avoir
+    // porte le signe crédit, sans modifier l'assiette de la mission de référence.
+    const montantDocument = (montant: number) => estAvoir ? -Math.abs(montant) : montant;
     createHeader(doc, {
-      title: 'FACTURE COMMISSION',
+      title: estAvoir ? 'AVOIR COMMISSION' : 'FACTURE COMMISSION',
       subtitle: (f as any).numero_facture,
-      statusLabel: statut === 'PAYEE' ? 'PAYÉE' : statut === 'EMISE' ? 'ÉMISE' : statut,
-      statusColor: statut === 'PAYEE' ? 'success' : statut === 'EN_RETARD' ? 'warning' : 'muted',
+      statusLabel: estAvoir ? (statut === 'ANNULEE' ? 'AVOIR ANNULÉ' : 'AVOIR') : statut === 'PAYEE' ? 'PAYÉE' : statut === 'EMISE' ? 'ÉMISE' : statut,
+      statusColor: estAvoir ? 'muted' : statut === 'PAYEE' ? 'success' : statut === 'EN_RETARD' ? 'warning' : 'muted',
     });
 
     // Mention facturation unifiée
@@ -188,7 +192,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7);
     doc.text(
-      sanitizeForPdf(`Facture commission Jolene - mise en relation soignants & établissements de santé`),
+      sanitizeForPdf(`${estAvoir ? 'Avoir' : 'Facture'} commission Jolene - mise en relation soignants & établissements de santé`),
       PAGE.margin,
       36,
     );
@@ -214,7 +218,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       x: 115,
       width: PAGE.width - PAGE.margin - 115,
       y: blockY,
-      label: 'Facturé à',
+      label: estAvoir ? 'Destinataire' : 'Facturé à',
       name: etab?.nom || '(établissement)',
       lines: [
         etab?.adresse_rue,
@@ -231,10 +235,10 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     y += 6;
 
     addInfoRow(doc, PAGE.margin, y, 'Émission :', (f as any).date_emission ? formatParis((f as any).date_emission, 'dd/MM/yyyy') : '-');
-    if ((f as any).date_echeance) {
+    if (!estAvoir && (f as any).date_echeance) {
       addInfoRow(doc, 75, y, 'Échéance :', formaterDateCivile((f as any).date_echeance));
     }
-    if ((f as any).date_paiement) {
+    if (!estAvoir && (f as any).date_paiement) {
       addInfoRow(doc, 140, y, 'Payée le :', formatParis((f as any).date_paiement, 'dd/MM/yyyy'));
     }
     y += 6;
@@ -251,12 +255,14 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         : mode === 'CHORUS_PRO'
         ? 'Chorus Pro'
         : mode || '-';
-    addInfoRow(doc, PAGE.margin, y, 'Mode paiement :', modeLabel, 30);
-    y += 8;
+    if (!estAvoir) {
+      addInfoRow(doc, PAGE.margin, y, 'Mode paiement :', modeLabel, 30);
+      y += 8;
+    }
 
     // Section MISSIONS FACTURÉES — rendu riche
     if (missions.length > 0) {
-      y = createSectionTitle(doc, y, 'Missions facturées');
+      y = createSectionTitle(doc, y, estAvoir ? 'Missions concernées' : 'Missions facturées');
 
       for (const m of missions) {
         // ── PASSE 2 : Header mission enrichi ──
@@ -466,9 +472,9 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           assietteLabel = `${tauxCommission}% x ${fmtEur(assiette)} ${facturePartielle ? 'assiette facturée pour la période' : 'honoraires bruts'}`;
         }
 
-        decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(commissionHtFacturee)]);
-        decompoRows.push(['TVA 20%', '', fmtEur(commissionTvaFacturee)]);
-        decompoRows.push(['Commission TTC facturée', '', fmtEur(commissionTtcFacturee)]);
+        decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(montantDocument(commissionHtFacturee))]);
+        decompoRows.push(['TVA 20%', '', fmtEur(montantDocument(commissionTvaFacturee))]);
+        decompoRows.push([estAvoir ? "Commission TTC de l'avoir" : 'Commission TTC facturée', '', fmtEur(montantDocument(commissionTtcFacturee))]);
 
         autoTable(doc, {
           startY: y,
@@ -507,13 +513,13 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     y += 2;
     y = createTotalsBlock(doc, {
       y,
-      ht: Number((f as any).montant_ht),
-      tva: Number((f as any).montant_tva),
-      ttc: Number((f as any).montant_ttc),
+      ht: montantDocument(Number((f as any).montant_ht)),
+      tva: montantDocument(Number((f as any).montant_tva)),
+      ttc: montantDocument(Number((f as any).montant_ttc)),
       tauxTva: (f as any).taux_tva,
     });
 
-    if (statut === 'PAYEE') {
+    if (!estAvoir && statut === 'PAYEE') {
       createHighlightBox(doc, {
         x: PAGE.margin,
         y,
@@ -528,11 +534,11 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     createFooter(doc, {
       companyLine: `${ENTREPRISE.nom} - ${ENTREPRISE.forme_juridique} - Capital ${ENTREPRISE.capital_social} - SIRET ${ENTREPRISE.siret_formate} - ${ENTREPRISE.rcs}`,
       contactLine: `TVA intra : ${ENTREPRISE.tva_intra} - Siège : ${ENTREPRISE.adresse} - ${ENTREPRISE.email}`,
-      extraLine: `Facture générée le ${formatParis(new Date(), 'dd/MM/yyyy à HH:mm')}`,
+      extraLine: `${estAvoir ? 'Avoir généré' : 'Facture générée'} le ${formatParis(new Date(), 'dd/MM/yyyy à HH:mm')}`,
     });
 
     await telechargerOuPartagerPdf(doc, `${(f as any).numero_facture}.pdf`);
-    toast.success('Facture téléchargée');
+    toast.success(estAvoir ? 'Avoir téléchargé' : 'Facture téléchargée');
   } catch (err: any) {
     console.error('Erreur génération PDF facture commission:', err);
     toast.error(err?.message || 'Erreur génération PDF');

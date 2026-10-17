@@ -962,6 +962,13 @@ jobs:
           createdb pointage_rotation
           psql -X -v ON_ERROR_STOP=1 -d pointage_rotation -f tests/security/pointage-rotation-isolated.test.sql
 
+      - name: Avoirs — exclusion des impayés PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb avoirs_impayes
+          psql -X -v ON_ERROR_STOP=1 -d avoirs_impayes -f tests/security/avoirs-impayes-isolated.test.sql
+
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17
     runs-on: ubuntu-latest
