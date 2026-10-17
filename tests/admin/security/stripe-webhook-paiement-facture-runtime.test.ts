@@ -17,14 +17,15 @@ const H2='f1540000-0000-4000-8000-000000000006';
 const O='f1540000-0000-4000-8000-000000000008';
 const T='f1540000-0000-4000-8000-000000000009';
 function simulation(options: { fk?: string | null; pi?: string | null; charge?: string | null;
-  missing?: boolean; race?: string; pending?: boolean; invoice?: boolean; expiration?: 'INVOICE' | 'MISSION' }={}) {
+  missing?: boolean; race?: string; pending?: boolean; invoice?: boolean; expiration?: 'INVOICE' | 'MISSION';
+  standard?: 'checkout.session.completed' | 'payment_intent.succeeded'; alreadyPaid?: boolean }={}) {
   const metadata={type:'CONNECT_MISSION_PAYMENT',mission_id:M,soignant_id:S,etablissement_id:E,
     connected_account_id:'acct_f154',soignant_cents:'8000',commission_cents:'1440',
     connect_operation_id:O,facture_honoraires_id:H,facture_commission_id:F,payment_scope:options.expiration || (options.invoice?'INVOICE':'MISSION')};
   const session={id:'cs_f154',payment_intent:'pi_f154',customer:'cus_f154',client_reference_id:M,
     status:'complete',payment_method_types:['card'],livemode:false,payment_status:'paid',amount_total:9440,currency:'eur',metadata};
   const state={unknown:[] as string[],writes:[] as Row[],create:0,retrieve:0,processed:false,
-    logs:[] as string[],raced:false};
+    logs:[] as string[],raced:false,clientOptions:[] as Row[]};
   const st={id:T,mission_id:M,soignant_id:S,etablissement_id:E,facture_id:F,
     facture_honoraire_id:options.fk===undefined?null:options.fk,
     stripe_payment_intent_id:options.pi===undefined?null:options.pi,
@@ -49,6 +50,13 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
     stripe_payment_flow_claims:[{resource_key:options.expiration==='INVOICE'?`FACTURE:${F}`:`MISSION:${M}`,
       flow:options.expiration==='INVOICE'?'CONNECT_INVOICE':'CONNECT_MISSION',stripe_checkout_session_id:'cs_f154'}],
   };
+  if (options.standard) {
+    Object.assign(session, { client_reference_id: F, mode: 'payment',
+      metadata: { facture_id: F, etablissement_id: E } });
+    Object.assign(db.factures[0], { statut: options.alreadyPaid ? 'PAYEE' : 'EMISE',
+      facture_honoraire_id: null, montant_ttc: 94.4, stripe_payment_intent_id: options.alreadyPaid ? 'pi_f154' : null,
+      etablissements: { stripe_customer_id: 'cus_f154' } });
+  }
   const forbidden=(name:string):never=>{state.unknown.push(name);throw new Error(`IO imprévue ${name}`);};
   const sb={from(table:string) {
     if(!db[table]) return forbidden(`table ${table}`);
@@ -93,7 +101,7 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
     return q;
   },rpc:async(name:string,args:Row)=>{
     if(name.startsWith('fn_stripe_webhook_event_claim')){
-      expect(name).toBe(options.expiration?'fn_stripe_webhook_event_claim':'fn_stripe_webhook_event_claim_connect_v1');
+      expect(name).toBe(options.expiration || options.standard ? 'fn_stripe_webhook_event_claim' : 'fn_stripe_webhook_event_claim_connect_v1');
       return {data:state.processed?'PROCESSED':'CLAIMED',error:null};
     }
     if(name==='fn_connect_avant_transfert_lire')return {data:null,error:null};
@@ -105,11 +113,12 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
     return forbidden(`rpc ${name}`);
   }};
   const intent={id:'pi_f154',status:'succeeded',payment_method_types:['card'],amount_capturable:0,livemode:false,amount:9440,amount_received:9440,currency:'eur',customer:'cus_f154',latest_charge:'ch_f154',metadata};
+  if (options.standard) Object.assign(intent, { metadata: session.metadata });
   const transfer={id:'tr_f154',amount:8000,currency:'eur',destination:'acct_f154',source_transaction:'ch_f154',metadata:{mission_id:M,soignant_id:S}};
   class StripeStub {
     checkout={sessions:{retrieve:async(id:string)=>id===session.id?session:forbidden(`session ${id}`)}};
-    webhooks={constructEventAsync:async()=>({id:'evt_f154',type:options.expiration?'checkout.session.expired':'checkout.session.completed',
-      livemode:false,data:{object:session}})};
+    webhooks={constructEventAsync:async()=>({id:'evt_f154',type:options.standard || (options.expiration?'checkout.session.expired':'checkout.session.completed'),
+      livemode:false,data:{object:options.standard === 'payment_intent.succeeded' ? intent : session}})};
     paymentIntents={retrieve:async(id:string)=>id==='pi_f154'?intent:forbidden(`PI ${id}`)};
     customers={retrieve:async(id:string)=>id==='cus_f154'?{id,metadata:{etablissement_id:E}}:forbidden(`customer ${id}`)};
     charges={retrieve:async(id:string)=>id==='ch_f154'?{id,payment_method_details:{type:'card'},livemode:false,captured:true,created:1790000000,refunded:false,amount_refunded:0,disputed:false,paid:true,status:'succeeded',
@@ -127,7 +136,7 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
     runInNewContext(js,{exports,Request,Response,URL,Date,Error,Set,Map,structuredClone,crypto:globalThis.crypto,
       require:(name:string)=>{
         if(name==='npm:stripe@20.4.1')return {default:StripeStub};
-        if(name==='npm:@supabase/supabase-js@2')return {createClient:()=>sb};
+        if(name==='npm:@supabase/supabase-js@2')return {createClient:(_url: string, _key: string, config: Row)=>{state.clientOptions.push(config);return sb;}};
         if(name.startsWith('./'))return load(resolve(dirname(file),name));
         return forbidden(`import ${name}`);
       },Deno:{env:{get:(key:string)=>env[key]}},fetch:()=>forbidden('fetch'),
@@ -136,8 +145,26 @@ function simulation(options: { fk?: string | null; pi?: string | null; charge?: 
   }
   const handler=load('supabase/functions/_shared/stripe-webhook-handler.ts').handleStripeWebhook;
   return {state,db,run:()=>handler(new Request('https://simulation.invalid/webhook',
-    {method:'POST',headers:{'stripe-signature':'simulation'},body:'{}'}),'PLATFORM') as Promise<Response>};
+    {method:'POST',headers:{'stripe-signature':'simulation','x-jolene-paid-invoice-email':'injected-value'},body:'{}'}),'PLATFORM') as Promise<Response>};
 }
+
+describe('Confirmation facture : producteurs du reçu transactionnel', () => {
+  it.each(['checkout.session.completed', 'payment_intent.succeeded'] as const)('%s confirme sans envoi direct et fixe le protocole côté serveur', async standard => {
+    const s = simulation({ standard }); const r = await s.run();
+    expect(r.status, s.state.logs.join('\n')).toBe(200); expect(s.state.unknown).toEqual([]);
+    expect(s.db.factures[0]).toMatchObject({ statut: 'PAYEE', stripe_payment_intent_id: 'pi_f154' });
+    expect(s.state.clientOptions[0].global.headers).toEqual({ 'x-jolene-paid-invoice-email': 'durable-v1' });
+    expect(s.state.writes.filter(w => w.table === 'factures' && w.matched === 1)).toHaveLength(1);
+    await s.run();
+    expect(s.state.writes.filter(w => w.table === 'factures' && w.matched === 1)).toHaveLength(1);
+    expect(s.state.unknown).toEqual([]); // fetch fournisseur est strictement interdit dans ce banc
+  });
+  it.each(['checkout.session.completed', 'payment_intent.succeeded'] as const)('%s arrivé après un autre producteur ne réécrit ni ne renvoie', async standard => {
+    const s = simulation({ standard, alreadyPaid: true }); const r = await s.run();
+    expect(r.status, s.state.logs.join('\n')).toBe(200); expect(s.state.unknown).toEqual([]);
+    expect(s.state.writes.filter(w => w.table === 'factures' && w.matched === 1)).toEqual([]);
+  });
+});
 
 describe('Webhook réel : pièce explicite et reprise sans second transfert',()=>{
   it.each([

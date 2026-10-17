@@ -42,6 +42,40 @@ VALUES ('69510000-0000-4000-8000-000000000100','69510000-0000-4000-8000-00000000
 \quit 3
 \endif
 
+-- Le témoin fournit le même rôle de requête que PostgREST, sans Auth distant.
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $role$
+  SELECT nullif(current_setting('request.jwt.claim.role',true),'');
+$role$;
+CREATE TABLE public.stripe_payment_flow_claims(resource_key text PRIMARY KEY,flow text,owner_token text,
+  stripe_checkout_session_id text,stripe_payment_intent_id text);
+ALTER TABLE public.factures ADD COLUMN date_paiement timestamptz,
+  ADD COLUMN mode_paiement text DEFAULT 'STRIPE',ADD COLUMN stripe_payment_intent_id text;
+-- Une copie d'émission antérieure à l'extension garde exactement son reçu.
+INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+VALUES ('69510000-0000-4000-8000-000000000099','69510000-0000-4000-8000-000000000001','ANTERIEURE','EMISE',10,2,12);
+CREATE TEMP TABLE ancien_recu_email AS SELECT email_id,to_jsonb(l) AS snapshot
+  FROM private.facturation_email_livraisons l WHERE document_id='69510000-0000-4000-8000-000000000099';
+INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc,date_paiement,stripe_payment_intent_id)
+VALUES ('69510000-0000-4000-8000-000000000098','69510000-0000-4000-8000-000000000001','PAYEE-AVANT','PAYEE',10,2,12,now(),'pi_HISTORIQUE');
+
+-- L'INSERT antérieur a un FK différé reçu -> file : le valider avant le DDL,
+-- sans COMMIT. Puis rétablir son mode initial pour les inserts reçu puis file.
+SET CONSTRAINTS ALL IMMEDIATE;
+\ir ../../supabase/migrations/20261017064942_fiabiliser_confirmation_paiement_facture.sql
+SET CONSTRAINTS ALL DEFERRED;
+DO $migration_paiement$ BEGIN
+  IF (SELECT count(*) FROM ancien_recu_email)<>1 OR EXISTS (
+    SELECT 1 FROM ancien_recu_email a LEFT JOIN private.facturation_email_livraisons l USING(email_id)
+    WHERE l.email_id IS NULL OR l.evenement IS DISTINCT FROM 'EMISSION'
+      OR (to_jsonb(l)-'evenement') IS DISTINCT FROM a.snapshot
+  ) THEN RAISE EXCEPTION 'Ancien reçu/corps/clé réécrit'; END IF;
+  IF EXISTS(SELECT FROM private.facturation_email_livraisons WHERE evenement='PAIEMENT')
+    THEN RAISE EXCEPTION 'Backfill paiement interdit'; END IF;
+END $migration_paiement$;
+DELETE FROM public.email_queue WHERE id IN(SELECT email_id FROM ancien_recu_email);
+DELETE FROM public.factures WHERE id='69510000-0000-4000-8000-000000000099';
+
 DO $proof$
 DECLARE email uuid; r jsonb; cle text; corps jsonb; n integer; signature text;
 BEGIN
@@ -200,6 +234,136 @@ BEGIN
     THEN RAISE EXCEPTION 'Source groupée déduite d’une mission arbitraire'; END IF;
 END $sources$;
 
+-- Les trois producteurs utilisent le même UPDATE conditionnel. Le premier
+-- gagne la transition ; les deux rapprochements/replays suivants ne recopient
+-- ni reçu ni corps. Les deux ordres old/new sont exercés sans fournisseur.
+DO $paiement_durable$
+DECLARE fid uuid; email uuid; r jsonb; cle text; corps jsonb; n integer; variante integer;
+BEGIN
+  IF has_function_privilege('anon','private.mettre_paiement_facture_en_file()','EXECUTE')
+    OR has_function_privilege('authenticated','private.mettre_paiement_facture_en_file()','EXECUTE')
+    OR has_function_privilege('service_role','private.mettre_paiement_facture_en_file()','EXECUTE')
+    THEN RAISE EXCEPTION 'Trigger paiement exposé comme RPC'; END IF;
+  FOR n IN 401..404 LOOP
+    fid:=('69510000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+    INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc,date_echeance)
+    VALUES(fid,'69510000-0000-4000-8000-000000000001','PAY-'||n,'EMISE',14.52,2.90,17.42,'2026-11-30');
+    -- Le vrai schéma a STRIPE par défaut ; l'Edge Checkout ne filtre pas les
+    -- anciens modes NULL/VIREMENT. Le claim exact est la preuve du circuit.
+    UPDATE public.factures SET mode_paiement=CASE n WHEN 403 THEN NULL WHEN 404 THEN 'VIREMENT' ELSE 'STRIPE' END WHERE id=fid;
+    INSERT INTO public.stripe_payment_flow_claims VALUES('FACTURE:'||fid,'CHECKOUT_INVOICE','invoice:'||fid,'cs_test_EMAIL'||n,
+      CASE WHEN n=401 THEN NULL ELSE 'pi_EMAIL'||n END);
+    PERFORM set_config('request.jwt.claim.role','service_role',true);
+    PERFORM set_config('request.headers','{"x-jolene-paid-invoice-email":"durable-v1"}',true);
+    UPDATE public.factures SET statut='PAYEE',stripe_payment_intent_id='pi_EMAIL'||n,
+      date_paiement='2026-10-17 08:00:00+00' WHERE id=fid AND statut IN('EMISE','EN_RETARD');
+    IF (SELECT count(*) FROM private.facturation_email_livraisons WHERE document_id=fid)<>2
+      OR (SELECT count(*) FROM private.facturation_email_livraisons WHERE document_id=fid AND evenement='PAIEMENT')<>1
+      THEN RAISE EXCEPTION 'Émission et confirmation ne coexistent pas'; END IF;
+    SELECT email_id,idempotency_key,l.corps INTO email,cle,corps
+      FROM private.facturation_email_livraisons l WHERE document_id=fid AND evenement='PAIEMENT';
+    IF cle IS DISTINCT FROM 'facture-payee-commission:'||fid||':69510000-0000-4000-8000-000000000001'
+      OR corps->>'type' IS DISTINCT FROM 'FACTURE_PAYEE'
+      OR corps#>>'{data,date_paiement}' IS DISTINCT FROM '17/10/2026'
+      OR corps#>>'{data,montant_ttc}' IS DISTINCT FROM '17.42'
+      OR corps#>>'{data,stripe_payment_intent_id}' IS DISTINCT FROM 'pi_EMAIL'||n
+      OR corps#>>'{data,stripe_checkout_session_id}' IS DISTINCT FROM 'cs_test_EMAIL'||n
+      THEN RAISE EXCEPTION 'Confirmation non figée depuis la pièce/claim'; END IF;
+    -- Simule un perdant CAS puis un replay direct du même état.
+    UPDATE public.factures SET statut='PAYEE' WHERE id=fid AND statut IN('EMISE','EN_RETARD');
+    UPDATE public.factures SET statut='PAYEE' WHERE id=fid;
+    IF (SELECT count(*) FROM private.facturation_email_livraisons WHERE document_id=fid AND evenement='PAIEMENT')<>1
+      OR (SELECT l.corps FROM private.facturation_email_livraisons l WHERE email_id=email) IS DISTINCT FROM corps
+      THEN RAISE EXCEPTION 'Replay paiement duplique/réécrit le reçu'; END IF;
+    r:=public.fn_reserver_email_facturation(email);
+    IF r->>'statut' IS DISTINCT FROM 'RESERVE' OR r->>'idempotency_key' IS DISTINCT FROM cle
+      OR r->'corps' IS DISTINCT FROM corps THEN RAISE EXCEPTION 'Réservation confirmation refusée'; END IF;
+    IF public.fn_reserver_email_facturation(email)->>'statut' IS DISTINCT FROM 'ATTENDRE'
+      THEN RAISE EXCEPTION 'Deux réservations simultanées admises'; END IF;
+    PERFORM public.fn_acquitter_email_facturation(email,(r->>'reservation')::uuid,'ERREUR','503 fictif');
+    UPDATE private.facturation_email_livraisons SET prochaine_tentative_le=now()-interval '1 second' WHERE email_id=email;
+    PERFORM public.fn_reprendre_emails_facturation();
+    r:=public.fn_reserver_email_facturation(email);
+    IF r->>'statut' IS DISTINCT FROM 'RESERVE' OR r->>'idempotency_key' IS DISTINCT FROM cle
+      OR r->'corps' IS DISTINCT FROM corps THEN RAISE EXCEPTION 'Reprise confirmation change l’identité'; END IF;
+    -- Acceptation fournisseur connue, acquittement perdu : pas de deuxième POST.
+    INSERT INTO private.email_dispatch_idempotency VALUES(cle,'ENVOYE');
+    UPDATE private.facturation_email_livraisons SET prochaine_tentative_le=now()-interval '1 second' WHERE email_id=email;
+    r:=public.fn_reserver_email_facturation(email);
+    IF r->>'statut' IS DISTINCT FROM 'DEJA_ENVOYE'
+      OR (SELECT statut FROM public.email_queue WHERE id=email) IS DISTINCT FROM 'ENVOYE'
+      THEN RAISE EXCEPTION 'Acquittement perdu provoquerait une nouvelle livraison'; END IF;
+  END LOOP;
+
+  -- Chaque refus conserve l'UPDATE ancien mais ne crée aucune confirmation.
+  FOR variante IN 1..15 LOOP
+    n:=410+variante;fid:=('69510000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+    INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+    VALUES(fid,'69510000-0000-4000-8000-000000000001','REFUS-'||n,
+      CASE variante WHEN 13 THEN 'BROUILLON' ELSE 'EMISE' END,15,3,18);
+    IF variante<>7 THEN
+      INSERT INTO public.stripe_payment_flow_claims VALUES('FACTURE:'||fid,
+        CASE variante WHEN 8 THEN 'SEPA_INVOICE' WHEN 9 THEN 'CONNECT_INVOICE' ELSE 'CHECKOUT_INVOICE' END,
+        CASE variante WHEN 10 THEN 'invoice:autre' ELSE 'invoice:'||fid END,
+        CASE variante WHEN 11 THEN NULL ELSE 'cs_test_EMAIL'||n END,
+        CASE variante WHEN 12 THEN 'pi_CONTRAIRE' ELSE NULL END);
+    END IF;
+    PERFORM set_config('request.jwt.claim.role',CASE variante WHEN 5 THEN 'authenticated' ELSE 'service_role' END,true);
+    PERFORM set_config('request.headers',CASE variante
+      WHEN 1 THEN '' WHEN 2 THEN '{}' WHEN 3 THEN '{"x-jolene-paid-invoice-email":"ancienne"}'
+      WHEN 4 THEN '{invalide' WHEN 6 THEN '{"x-jolene-paid-invoice-email":"durable-v1 "}'
+      ELSE '{"x-jolene-paid-invoice-email":"durable-v1"}' END,true);
+    UPDATE public.factures SET statut='PAYEE',
+      mode_paiement=CASE variante WHEN 14 THEN 'VIREMENT' ELSE 'STRIPE' END,
+      stripe_payment_intent_id=CASE variante WHEN 15 THEN NULL ELSE 'pi_EMAIL'||n END,
+      date_paiement=CASE variante WHEN 14 THEN NULL ELSE '2026-10-17 08:00:00+00'::timestamptz END WHERE id=fid;
+    IF (SELECT statut FROM public.factures WHERE id=fid) IS DISTINCT FROM 'PAYEE'
+      OR EXISTS(SELECT FROM private.facturation_email_livraisons WHERE document_id=fid AND evenement='PAIEMENT')
+      THEN RAISE EXCEPTION 'Header/rôle/claim ancien élargit ou bloque le paiement : %',variante; END IF;
+    -- Même un nouveau client ne backfill pas un ancien gagnant déjà PAYEE.
+    PERFORM set_config('request.jwt.claim.role','service_role',true);
+    PERFORM set_config('request.headers','{"x-jolene-paid-invoice-email":"durable-v1"}',true);
+    UPDATE public.factures SET statut='PAYEE' WHERE id=fid;
+    IF EXISTS(SELECT FROM private.facturation_email_livraisons WHERE document_id=fid AND evenement='PAIEMENT')
+      THEN RAISE EXCEPTION 'Replay nouveau client backfill l’ancien paiement'; END IF;
+  END LOOP;
+  UPDATE public.factures SET statut='PAYEE' WHERE id='69510000-0000-4000-8000-000000000098';
+  IF EXISTS(SELECT FROM private.facturation_email_livraisons WHERE document_id='69510000-0000-4000-8000-000000000098')
+    THEN RAISE EXCEPTION 'Ancienne facture payée rattrapée'; END IF;
+
+  -- Les preuves du reçu sont revalidées avant tout transport. Les données
+  -- suivantes ne sont que des objets locaux, jamais des paiements fournisseur.
+  FOR variante IN 1..7 LOOP
+    n:=439+variante;fid:=('69510000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+    INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+    VALUES(fid,'69510000-0000-4000-8000-000000000001','REVALIDATION-'||n,'EMISE',15,3,18);
+    INSERT INTO public.stripe_payment_flow_claims VALUES('FACTURE:'||fid,'CHECKOUT_INVOICE','invoice:'||fid,'cs_test_EMAIL'||n,NULL);
+    UPDATE public.factures SET statut='PAYEE',stripe_payment_intent_id='pi_EMAIL'||n,date_paiement=now() WHERE id=fid;
+    SELECT email_id,idempotency_key,l.corps INTO email,cle,corps FROM private.facturation_email_livraisons l
+      WHERE document_id=fid AND evenement='PAIEMENT';
+    IF email IS NULL THEN RAISE EXCEPTION 'Reçu de revalidation absent'; END IF;
+    CASE variante
+      WHEN 1 THEN UPDATE public.stripe_payment_flow_claims SET stripe_checkout_session_id='cs_test_CONTRAIRE' WHERE resource_key='FACTURE:'||fid;
+      WHEN 2 THEN UPDATE public.factures SET stripe_payment_intent_id='pi_CONTRAIRE' WHERE id=fid;
+      WHEN 3 THEN UPDATE public.factures SET date_paiement=date_paiement+interval '1 day' WHERE id=fid;
+      WHEN 4 THEN UPDATE public.factures SET montant_ttc=montant_ttc+1 WHERE id=fid;
+      WHEN 5 THEN UPDATE public.factures SET etablissement_id='69510000-0000-4000-8000-000000000003' WHERE id=fid;
+      WHEN 6 THEN UPDATE public.stripe_payment_flow_claims SET owner_token='invoice:autre' WHERE resource_key='FACTURE:'||fid;
+      WHEN 7 THEN UPDATE public.factures SET statut='REMPLACEE' WHERE id=fid;
+    END CASE;
+    IF public.fn_reserver_email_facturation(email)->>'statut' IS DISTINCT FROM 'ANNULE'
+      OR (SELECT idempotency_key FROM private.facturation_email_livraisons WHERE email_id=email) IS DISTINCT FROM cle
+      OR (SELECT l.corps FROM private.facturation_email_livraisons l WHERE email_id=email) IS DISTINCT FROM corps
+      THEN RAISE EXCEPTION 'Preuve changée livrée ou reçu réécrit : %',variante; END IF;
+  END LOOP;
+
+  -- Préparer la preuve atomique avant d'armer le refus de file ci-dessous.
+  INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc)
+  VALUES('69510000-0000-4000-8000-000000000450','69510000-0000-4000-8000-000000000001','ATOMICITE-PAYEE','EMISE',15,3,18);
+  INSERT INTO public.stripe_payment_flow_claims VALUES('FACTURE:69510000-0000-4000-8000-000000000450','CHECKOUT_INVOICE',
+    'invoice:69510000-0000-4000-8000-000000000450','cs_test_EMAIL450',NULL);
+END $paiement_durable$;
+
 -- L'échec de file doit annuler aussi l'émission et son reçu, pas perdre la copie.
 CREATE FUNCTION pg_temp.refuser_facture_email() RETURNS trigger LANGUAGE plpgsql AS $fn$
 BEGIN RAISE EXCEPTION 'File indisponible fictive'; END $fn$;
@@ -215,5 +379,16 @@ DO $atomicite$ BEGIN
     OR EXISTS(SELECT FROM private.facturation_email_livraisons WHERE document_id='69510000-0000-4000-8000-000000000103')
     THEN RAISE EXCEPTION 'Émission ou reçu orphelin'; END IF;
 END $atomicite$;
+DO $atomicite_paiement$ BEGIN
+  BEGIN
+    UPDATE public.factures SET statut='PAYEE',stripe_payment_intent_id='pi_EMAIL450',date_paiement=now()
+      WHERE id='69510000-0000-4000-8000-000000000450' AND statut IN('EMISE','EN_RETARD');
+    RAISE EXCEPTION 'Échec attendu absent';
+  EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'File indisponible fictive' THEN RAISE; END IF; END;
+  IF (SELECT statut FROM public.factures WHERE id='69510000-0000-4000-8000-000000000450') IS DISTINCT FROM 'EMISE'
+    OR EXISTS(SELECT FROM private.facturation_email_livraisons
+      WHERE document_id='69510000-0000-4000-8000-000000000450' AND evenement='PAIEMENT')
+    THEN RAISE EXCEPTION 'Paiement ou confirmation orphelin après échec file'; END IF;
+END $atomicite_paiement$;
 SET CONSTRAINTS ALL IMMEDIATE;
 ROLLBACK;

@@ -93,7 +93,12 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(
       supabaseUrl,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } },
+      {
+        auth: { persistSession: false },
+        // Le reçu email est créé atomiquement avec PAYEE, y compris quand le
+        // retour utilisateur précède le webhook. Marqueur fixé côté serveur.
+        global: { headers: { "x-jolene-paid-invoice-email": "durable-v1" } },
+      },
     );
 
     const { data: facture, error: factureError } = await supabaseAdmin

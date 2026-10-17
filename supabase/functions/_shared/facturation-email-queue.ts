@@ -1,4 +1,4 @@
-/** Factures : reçu créé à l'émission, réservation serveur, reprises bornées. */
+/** Factures : reçu transactionnel, réservation serveur, reprises bornées. */
 export async function traiterEmailFacturation(
   sb: any, emailId: string,
   envoyer: (corps: Record<string, unknown>, cle: string) => Promise<'sent' | 'skipped' | 'pending'>,
