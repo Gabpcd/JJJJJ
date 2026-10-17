@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Loader2, Clock, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { SheetNotationRapide } from '@/components/NotationRapide';
+import { ScannerQRPointage } from '@/components/ScannerQRPointage';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
-import { obtenirPosition } from '@/lib/platform';
+import { isNative, obtenirPosition } from '@/lib/platform';
 import { genererIdTerminal } from '@/lib/terminal';
 import { scannerQr } from '@/lib/camera';
 import { toast } from 'sonner';
@@ -53,6 +55,8 @@ function PointageMission({
     return () => { actif.current = false; };
   }, []);
   const [scanning, setScanning] = useState(false);
+  const [scannerWebOuvert, setScannerWebOuvert] = useState(false);
+  const boutonQrRef = useRef<HTMLButtonElement | null>(null);
   // F4 (Lot 7b) : notation au check-out — proposée UNE fois, au dernier départ
   // (fin prévue atteinte). Skippable : le bandeau évaluations rattrape.
   const [notationOpen, setNotationOpen] = useState(false);
@@ -107,9 +111,9 @@ function PointageMission({
     data.segments.map((segment) => cleJourParis(segment.debut)),
   ).size > 1;
 
-  const envoyer = async (codeSaisi: string) => {
+  const envoyer = async (codeSaisi: string): Promise<{ success: boolean; message?: string }> => {
     const c = codeSaisi.trim();
-    if (c.length !== 6 || envoiEnCours.current || !actif.current) return;
+    if (c.length !== 6 || envoiEnCours.current || !actif.current) return { success: false };
     envoiEnCours.current = true;
     setSubmitting(true);
     try {
@@ -123,15 +127,16 @@ function PointageMission({
         } catch { /* GPS indisponible — le scan reste valable, validation étab possible */ }
       }
 
-      if (!actif.current) return;
+      if (!actif.current) return { success: false };
 
       const { data: res, error } = await supabase.rpc('fn_scanner_code_pointage' as any, { p_code: c, p_metadata: meta });
-      if (!actif.current) return;
+      if (!actif.current) return { success: false };
       if (error) {
-        toast.error(error.message === 'Code de pointage invalide ou expiré.'
+        const message = error.message === 'Code de pointage invalide ou expiré.'
           ? 'Code de pointage invalide ou expiré. Demande le code actuel à l’établissement.'
-          : extraireMessageErreur(error));
-        return;
+          : extraireMessageErreur(error);
+        toast.error(message);
+        return { success: false, message };
       }
       const type = (res as any)?.type_scan_effectue;
       if ('vibrate' in navigator) navigator.vibrate(type === 'OUVERTURE' ? 200 : [200, 100, 200]);
@@ -142,23 +147,26 @@ function PointageMission({
         queryClient.invalidateQueries({ queryKey: ['presences-soignant'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] }),
       ]);
-      if (!actif.current) return;
+      if (!actif.current) return { success: false };
 
       // F4 : au check-out FINAL (fermeture alors que la fin prévue est atteinte),
       // proposer la note 1-tap — une seule fois par mission.
       if (type === 'FERMETURE' && !localStorage.getItem(CLE_PROMPT_NOTE(missionId))) {
         try {
           const { data: m } = await supabase.from('missions').select('fin_le').eq('id', missionId).maybeSingle();
-          if (!actif.current) return;
+          if (!actif.current) return { success: false };
           if (m?.fin_le && Date.now() >= new Date(m.fin_le).getTime() - 30 * 60_000) {
             localStorage.setItem(CLE_PROMPT_NOTE(missionId), '1');
             setNotationOpen(true);
           }
         } catch { /* le prompt de note ne doit jamais gêner le pointage */ }
       }
+      return { success: true, message: type === 'OUVERTURE' ? 'Pointage enregistré — segment ouvert' : 'Pointage enregistré — segment fermé' };
     } catch (error) {
-      if (!actif.current) return;
-      toast.error(extraireMessageErreur(error));
+      if (!actif.current) return { success: false };
+      const message = extraireMessageErreur(error);
+      toast.error(message);
+      return { success: false, message };
     } finally {
       envoiEnCours.current = false;
       if (actif.current) setSubmitting(false);
@@ -166,6 +174,10 @@ function PointageMission({
   };
 
   const scanner = async () => {
+    if (!isNative()) {
+      setScannerWebOuvert(true);
+      return;
+    }
     setScanning(true);
     try {
       const r = await scannerQr();
@@ -211,10 +223,25 @@ function PointageMission({
           placeholder="123 456"
           className="input-base flex-1 text-center text-xl font-mono tracking-[0.3em]"
         />
-        <BoutonY2K size="sm" variant="secondary" onClick={scanner} disabled={scanning || submitting} iconeGauche={scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}>
+        <BoutonY2K ref={boutonQrRef} size="sm" variant="secondary" onClick={scanner} disabled={scanning || submitting} iconeGauche={scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}>
           QR
         </BoutonY2K>
       </div>
+
+      <Dialog open={scannerWebOuvert} onOpenChange={setScannerWebOuvert}>
+        <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); boutonQrRef.current?.focus(); }}>
+          <DialogTitle>Scanner le QR de pointage</DialogTitle>
+          <DialogDescription>
+            Placez le QR de l’établissement dans le cadre. Vous pouvez aussi fermer le scanner et saisir le code à 6 chiffres.
+          </DialogDescription>
+          <ScannerQRPointage
+            type={ouvert ? 'depart' : 'arrivee'}
+            open={scannerWebOuvert}
+            onOpenChange={setScannerWebOuvert}
+            onCodeScanne={envoyer}
+          />
+        </DialogContent>
+      </Dialog>
 
       <BoutonY2K
         variant="primary"
