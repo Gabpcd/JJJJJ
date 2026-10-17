@@ -59,7 +59,11 @@ CREATE TEMP TABLE ancien_recu_email AS SELECT email_id,to_jsonb(l) AS snapshot
 INSERT INTO public.factures(id,etablissement_id,numero_facture,statut,montant_ht,montant_tva,montant_ttc,date_paiement,stripe_payment_intent_id)
 VALUES ('69510000-0000-4000-8000-000000000098','69510000-0000-4000-8000-000000000001','PAYEE-AVANT','PAYEE',10,2,12,now(),'pi_HISTORIQUE');
 
+-- L'INSERT antérieur a un FK différé reçu -> file : le valider avant le DDL,
+-- sans COMMIT. Puis rétablir son mode initial pour les inserts reçu puis file.
+SET CONSTRAINTS ALL IMMEDIATE;
 \ir ../../supabase/migrations/20261017064942_fiabiliser_confirmation_paiement_facture.sql
+SET CONSTRAINTS ALL DEFERRED;
 DO $migration_paiement$ BEGIN
   IF (SELECT count(*) FROM ancien_recu_email)<>1 OR EXISTS (
     SELECT 1 FROM ancien_recu_email a LEFT JOIN private.facturation_email_livraisons l USING(email_id)
