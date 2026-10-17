@@ -1841,7 +1841,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const sourceAccount = type === 'FACTURE_EMISE'
+    const sourceAccount = type === 'FACTURE_EMISE' || type === 'FACTURE_PAYEE'
       ? await resolveFacturationEmailSource(supabaseService, templateData, destinataire_id)
       : await resolveOperationalTestSource(supabaseService, templateData);
     if (!sourceAccount.ok) {

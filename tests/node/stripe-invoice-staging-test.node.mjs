@@ -97,7 +97,7 @@ function handlers(){
  const s=fixture();s.rows.stripe_payment_flow_claims=[];
  const f=s.rows.factures[0];Object.assign(f,{numero_facture:'SYNTHETIC',stripe_payment_intent_id:null,stripe_hosted_url:null,est_secteur_public:false,chorus_pro_statut:null,
   etablissements:{id:E,nom:'SYNTHETIC',email_contact:'synthetic@example.invalid',stripe_customer_id:C,mode_paiement_commission:'MANUEL',est_secteur_public:false,chorus_pro_actif:false}});
- const provider={sessions:[],intent:null,createCalls:0};const mutations=[];
+ const provider={sessions:[],intent:null,createCalls:0};const mutations=[],clientOptions=[];
  const envRun={...env,INVOICE_STAGING_TEST_RUN:JSON.stringify(config),SUPABASE_ANON_KEY:'SYNTHETIC_ANON',SUPABASE_SERVICE_ROLE_KEY:'SYNTHETIC_SERVICE'};
  s.sb.auth.getUser=async token=>({data:{user:token==='SYNTHETIC_USER'?s.users[E]:null},error:token==='SYNTHETIC_USER'?null:{message:'invalid'}});
  s.sb.from=table=>{
@@ -135,20 +135,22 @@ function handlers(){
   const sourceFile=existsSync(file)?file:resolve(base,file.slice(ROOT.length+1));
   const output=ts.transpileModule(readFileSync(sourceFile,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});assert.deepEqual(output.diagnostics,[]);
   runInNewContext(output.outputText,{exports,Request,Response,Headers,URL,Date,Error,Map,Set,Promise,structuredClone,
-   require:name=>name==='npm:stripe@20.4.1'?{default:StripeTransport}:name.startsWith('npm:@supabase/supabase-js@')?{createClient:()=>s.sb}:name.startsWith('.')?load(resolve(dirname(file),name)):forbid('import:'+name),
+   require:name=>name==='npm:stripe@20.4.1'?{default:StripeTransport}:name.startsWith('npm:@supabase/supabase-js@')?{createClient:(_url,key,options)=>{clientOptions.push({key,options});return s.sb;}}:name.startsWith('.')?load(resolve(dirname(file),name)):forbid('import:'+name),
    Deno:{env:{get:key=>envRun[key]},serve:fn=>{registered[file]=fn;}},fetch:()=>forbid('fetch'),console:{log(){},warn(){},error(){},info(){}}});
   return exports;
  }
  const createFile=resolve(ROOT,'supabase/functions/create-invoice-payment/index.ts');load(createFile);
  const confirmFile=resolve(ROOT,'supabase/functions/confirm-invoice-payment/index.ts');load(confirmFile);
- const run=(file,token='SYNTHETIC_USER')=>registered[file](new Request('https://simulation.invalid',{method:'POST',headers:{Authorization:'Bearer '+token,Origin:config.returnOrigin},body:JSON.stringify({facture_id:F,embedded:true})}));
+ const run=(file,token='SYNTHETIC_USER')=>registered[file](new Request('https://simulation.invalid',{method:'POST',headers:{Authorization:'Bearer '+token,Origin:config.returnOrigin,'x-jolene-paid-invoice-email':'injected-value'},body:JSON.stringify({facture_id:F,embedded:true})}));
  const pay=()=>{const session=provider.sessions[0];session.status='complete';session.payment_status='paid';session.payment_intent='pi_Synthetic';provider.intent={id:'pi_Synthetic',status:'succeeded',livemode:false,currency:'eur',amount:1742,amount_received:1742,customer:C,metadata:{facture_id:F,etablissement_id:E},created:Math.floor(now/1000),latest_charge:'ch_Synthetic'};};
- return {s,provider,mutations,envRun,pay,create:(token)=>run(createFile,token),confirm:(token)=>run(confirmFile,token)};
+ return {s,provider,mutations,clientOptions,envRun,pay,create:(token)=>run(createFile,token),confirm:(token)=>run(confirmFile,token)};
 }
 test('vrais handlers : un Checkout puis reprise sans nouvelle création, paiement exact confirmé',async()=>{
  const r=handlers();let response=await r.create();assert.equal(response.status,200);assert.equal((await response.json()).client_secret,'SYNTHETIC_CLIENT_SECRET');
  response=await r.create();assert.equal(response.status,200);assert.equal((await response.json()).resumed,true);assert.equal(r.provider.createCalls,1);
  r.pay();response=await r.confirm();const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));assert.equal(body.confirmed,true);assert.equal(r.s.rows.factures[0].statut,'PAYEE');assert.equal(r.provider.createCalls,1);
+ const admin = r.clientOptions.filter(c=>c.key==='SYNTHETIC_SERVICE').at(-1);
+ assert.equal(admin.options.global.headers['x-jolene-paid-invoice-email'],'durable-v1');
 });
 test('vrais handlers : sans runtime TEST, ancienne interdiction préservée',async()=>{const r=handlers();delete r.envRun.INVOICE_STAGING_TEST_RUN;assert.equal((await r.create()).status,403);assert.equal((await r.confirm()).status,403);assert.deepEqual(r.mutations,[]);});
 test('vrais handlers : PROD refuse ce runtime avant création ou écriture',async()=>{const r=handlers();r.envRun.SUPABASE_URL='https://flripxtsyegjshnhzjkz.supabase.co';assert.notEqual((await r.create()).status,200);assert.notEqual((await r.confirm()).status,200);assert.deepEqual(r.mutations,[]);});

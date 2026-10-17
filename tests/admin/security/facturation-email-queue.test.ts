@@ -9,9 +9,9 @@ import { resolveFacturationEmailSource } from '../../../supabase/functions/_shar
 
 const corps = { type: 'FACTURE_EMISE', destinataire_id: 'etab', data: { numero: 'F-1' } };
 const cle = 'facture-emise-commission:facture:etab';
-function client(statut = 'RESERVE') {
+function client(statut = 'RESERVE', body = corps, key = cle) {
   const rpc = vi.fn().mockImplementation(async (nom: string) => nom === 'fn_reserver_email_facturation'
-    ? { data: { statut, reservation: 'reservation-1', corps, idempotency_key: cle }, error: null }
+    ? { data: { statut, reservation: 'reservation-1', corps: body, idempotency_key: key }, error: null }
     : { data: null, error: null });
   return { rpc };
 }
@@ -57,6 +57,20 @@ describe('file durable des émissions de factures', () => {
     const sb = client();
     expect(await traiterEmailFacturation(sb, 'email-1', async () => 'skipped')).toBe('annule');
     expect(sb.rpc.mock.calls[1][1].p_resultat).toBe('ANNULE');
+  });
+});
+
+describe('confirmation de paiement : transport indisponible puis reprise', () => {
+  it('reprend le même reçu FACTURE_PAYEE après HTTP 503 sans annoncer un envoi réussi', async () => {
+    const body = { type: 'FACTURE_PAYEE', destinataire_id: 'etab', data: { numero: 'C-1' } };
+    const key = 'facture-payee-commission:facture:etab';
+    const sb = client('RESERVE', body, key);
+    const envoyer = vi.fn().mockRejectedValueOnce(new Error('HTTP 503')).mockResolvedValueOnce('sent');
+    expect(await traiterEmailFacturation(sb, 'paiement-1', envoyer)).toBe('erreur');
+    expect(sb.rpc).toHaveBeenLastCalledWith('fn_acquitter_email_facturation', expect.objectContaining({ p_resultat: 'ERREUR' }));
+    expect(await traiterEmailFacturation(sb, 'paiement-1', envoyer)).toBe('envoye');
+    expect(envoyer.mock.calls).toEqual([[body, key], [body, key]]);
+    expect(sb.rpc).toHaveBeenLastCalledWith('fn_acquitter_email_facturation', expect.objectContaining({ p_resultat: 'ENVOYE' }));
   });
 });
 
@@ -109,7 +123,7 @@ type SourceCanonique = {
   assigneChange?: boolean; assigneAbsent?: boolean; autreSoignantTest?: boolean; groupeCount?: number; documentAmbigu?: boolean;
 };
 function simulationEnvoi(sourceCanonique?: SourceCanonique) {
-  const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferences: 0, envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[] };
+  const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferenceActive: false, preferences: 0, evenementsPreferences: [] as string[], envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[] };
   let handler!: (req: Request) => Promise<Response>;
   const client = { rpc: async (nom: string, args: Record<string, unknown>) => {
     expect(nom).toBe('fn_reserver_envoi_email_idempotent');
@@ -162,7 +176,9 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
   } };
   const modules: Record<string, unknown> = {
     'npm:@supabase/supabase-js@2.99.2': { createClient: () => client },
-    '../_shared/preferences-alertes-email.ts': { verifierPreferencesEvenementsEmail: async () => { etat.preferences++; return false; } },
+    '../_shared/preferences-alertes-email.ts': { verifierPreferencesEvenementsEmail: async (_sb: unknown, _id: string, _type: string, evenement: string) => {
+      etat.preferences++; etat.evenementsPreferences.push(evenement); return etat.preferenceActive;
+    } },
     '../_shared/rate-limit.ts': { applyRateLimit: () => false, getClientIp: () => '127.0.0.1' },
     '../_shared/admin-auth.ts': { verifyAdminOrServiceRole: async () => ({ ok: true }) },
     '../_shared/facturation-email-source.ts': { resolveFacturationEmailSource: sourceCanonique ? resolveFacturationEmailSource : async () => ({ ok: true, isTest: etat.testSource }) },
@@ -197,7 +213,7 @@ describe('vrai transport email : copie documentaire obligatoire, fournisseur sim
     expect(s.etat.preferences).toBe(0); expect(s.etat.envois).toHaveLength(1);
     expect(s.etat.envois[0].to).toEqual(['facture@example.invalid']);
   });
-  it.each(['RAPPEL_FACTURE', 'AVOIR_EMIS'])('%s conserve le traitement de préférence existant', async type => {
+  it.each(['RAPPEL_FACTURE', 'AVOIR_EMIS', 'FACTURE_PAYEE'])('%s conserve le traitement de préférence existant', async type => {
     const s = simulationEnvoi(); const response = await s.lancer(type);
     expect(await response.json()).toMatchObject({ success: true, skipped: true, reason: 'preference_user_off' });
     expect(s.etat.preferences).toBe(1); expect(s.etat.envois).toHaveLength(0);
@@ -206,6 +222,38 @@ describe('vrai transport email : copie documentaire obligatoire, fournisseur sim
     const s = simulationEnvoi(); s.etat[garde] = true; const response = await s.lancer('FACTURE_EMISE');
     expect(await response.json()).toMatchObject({ success: true, skipped: true });
     expect(s.etat.envois).toHaveLength(0);
+  });
+});
+
+describe('FACTURE_PAYEE : vrai handler, document canonique et préférences', () => {
+  it('envoie la confirmation réelle autorisée en respectant PAIEMENT_RECU', async () => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false });
+    s.etat.preferenceActive = true;
+    const response = await s.lancer('FACTURE_PAYEE', undefined, { facture_id: sourceCommission });
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ success: true });
+    expect(s.etat.evenementsPreferences).toEqual(['PAIEMENT_RECU']);
+    expect(s.etat.envois).toHaveLength(1);
+    expect(s.etat.envois[0].subject).toBe('Paiement confirmé — Facture C-1');
+    expect(s.etat.lecturesSources).toContain('factures:id:' + sourceCommission);
+  });
+  it.each([
+    { soignantTest: true },
+    { groupee: true, autreSoignantTest: true },
+    { soignantTest: true, liee: true, assigneChange: true },
+  ])('aucun fournisseur pour une source documentaire TEST %j', async scenario => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false, ...scenario });
+    s.etat.preferenceActive = true;
+    const response = await s.lancer('FACTURE_PAYEE', undefined, {
+      facture_id: sourceCommission, soignant_id: autreSoignant,
+    });
+    expect(await response.json()).toMatchObject({ skipped: true, reason: 'test_source' });
+    expect(s.etat.envois).toEqual([]); expect(s.etat.preferences).toBe(0);
+  });
+  it('garde une source documentaire indisponible en erreur reprenable', async () => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false, missionAbsente: true });
+    s.etat.preferenceActive = true;
+    expect((await s.lancer('FACTURE_PAYEE', undefined, { facture_id: sourceCommission })).status).toBe(503);
+    expect(s.etat.envois).toEqual([]);
   });
 });
 

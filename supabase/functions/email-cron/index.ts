@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     if (runHourly) {
-    // Seuls les reçus de nouvelles émissions sont repris : aucun renvoi
+    // Seuls les reçus documentaires créés en transaction sont repris : aucun renvoi
     // rétroactif de l'ancienne file ni des notifications d'un autre circuit.
     const { data: facturesReprises, error: repriseFacturesError } = await sb.rpc('fn_reprendre_emails_facturation');
     if (repriseFacturesError) throw new Error('Reprise des emails factures indisponible');

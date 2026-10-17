@@ -496,7 +496,12 @@ export async function handleStripeWebhook(
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } }
+    {
+      auth: { persistSession: false },
+      // Version du producteur : le trigger crée le reçu email dans la même
+      // transaction PAYEE. Ne jamais reprendre ce marqueur depuis la requête.
+      global: { headers: { "x-jolene-paid-invoice-email": "durable-v1" } },
+    }
   );
 
   let claimedEventId: string | null = null;
@@ -2039,7 +2044,7 @@ export async function handleStripeWebhook(
         );
       }
 
-      // Alias pour la suite du bloc (audit + email) — factureUpdated tient déjà
+      // Alias pour la suite du bloc (audit) — factureUpdated tient déjà
       // numero_facture, etablissement_id, montant_ttc grâce au .select() ci-dessus.
       const facture = factureUpdated;
 
@@ -2062,28 +2067,9 @@ export async function handleStripeWebhook(
           p_navigateur: "stripe-webhook",
         }, "Paid invoice audit failed");
 
-        // M6: Send FACTURE_PAYEE email
-        {
-          const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${serviceRoleKey}`,
-            },
-            body: JSON.stringify({
-              type: "FACTURE_PAYEE",
-              destinataire_id: facture.etablissement_id,
-              data: {
-                numero: facture.numero_facture,
-                montant_ttc: (facture.montant_ttc ?? 0).toFixed(2),
-                date_paiement: new Date().toLocaleDateString("fr-FR"),
-                facture_id: factureId,
-              },
-            }),
-          }).catch((err: unknown) => console.error("Email FACTURE_PAYEE error:", err));
-        }
+        // FACTURE_PAYEE est déjà dans la file durable depuis la transition SQL.
+        // Aucun envoi direct ici : confirm-invoice-payment ou l'événement PI
+        // peuvent avoir gagné la course, sans perdre ni doubler la confirmation.
       }
     }
 
