@@ -53426,6 +53426,29 @@ BEGIN
   ELSE
     SELECT to_jsonb(f) INTO document FROM public.factures_honoraires f WHERE id = l.document_id;
   END IF;
+  -- Une confirmation n'est pas une deuxième émission. Ses preuves figées
+  -- doivent encore désigner le même paiement Checkout, sans réécrire le reçu.
+  IF l.evenement = 'PAIEMENT' AND (
+    l.famille IS DISTINCT FROM 'COMMISSION'
+    OR l.corps->>'type' IS DISTINCT FROM 'FACTURE_PAYEE'
+    OR document->>'statut' IS DISTINCT FROM 'PAYEE'
+    OR document->>'type_document' IS DISTINCT FROM 'FACTURE'
+    OR document->>'stripe_payment_intent_id' IS DISTINCT FROM l.corps#>>'{data,stripe_payment_intent_id}'
+    OR to_char((document->>'date_paiement')::timestamptz AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY')
+      IS DISTINCT FROM l.corps#>>'{data,date_paiement}'
+    OR NOT EXISTS (
+      SELECT 1 FROM public.stripe_payment_flow_claims c
+      WHERE c.resource_key='FACTURE:'||l.document_id::text AND c.flow='CHECKOUT_INVOICE'
+        AND c.owner_token='invoice:'||l.document_id::text
+        AND c.stripe_checkout_session_id=l.corps#>>'{data,stripe_checkout_session_id}'
+        AND (c.stripe_payment_intent_id IS NULL
+          OR c.stripe_payment_intent_id=document->>'stripe_payment_intent_id')
+    )
+  ) THEN
+    UPDATE public.email_queue SET statut='ANNULE', erreur='Confirmation de paiement devenue incohérente'
+      WHERE id=p_email_id;
+    RETURN jsonb_build_object('statut','ANNULE');
+  END IF;
   IF document IS NULL OR document->>'statut' IS NULL OR document->>'statut' IN ('BROUILLON','EN_GENERATION','ERREUR_GENERATION','ANNULEE','REMPLACEE')
     OR q.type <> 'FACTURATION_DOCUMENT' OR q.destinataire_id IS DISTINCT FROM l.destinataire_id OR q.data IS DISTINCT FROM l.corps
     OR document->>'numero_facture' IS DISTINCT FROM l.corps#>>'{data,numero}'
@@ -75328,6 +75351,14 @@ CREATE OR REPLACE TRIGGER "trg_email_invitation_equipe_etab" AFTER INSERT ON "pu
 
 
 CREATE OR REPLACE TRIGGER "trg_email_mission_terminee" AFTER UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_email_mission_terminee"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_email_paiement_commission" AFTER UPDATE OF "statut" ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."mettre_paiement_facture_en_file"();
+
+
+
+COMMENT ON TRIGGER "trg_email_paiement_commission" ON "public"."factures" IS 'Nouveaux producteurs service_role durable-v1 seulement ; première transition Checkout acquise vers PAYEE, jamais replay historique ni autres flux.';
 
 
 
