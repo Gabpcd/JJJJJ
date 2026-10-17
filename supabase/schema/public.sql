@@ -55397,13 +55397,20 @@ BEGIN
   END IF;
 
   v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
-  WHILE EXISTS (
-    SELECT 1
-    FROM missions
-    WHERE code_pointage_actif = v_new_code
-      AND id != v_mission.id
-      AND statut IN ('ASSIGNEE', 'EN_COURS')
-  ) LOOP
+  WHILE v_new_code = v_mission.code_pointage_actif
+    OR EXISTS (
+      SELECT 1
+      FROM scans_pointage sp
+      WHERE sp.mission_id = v_mission.id
+        AND sp.code_saisi = v_new_code
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM missions
+      WHERE code_pointage_actif = v_new_code
+        AND id != v_mission.id
+        AND statut IN ('ASSIGNEE', 'EN_COURS')
+    ) LOOP
     v_new_code := lpad(floor(random() * 1000000)::text, 6, '0');
   END LOOP;
 

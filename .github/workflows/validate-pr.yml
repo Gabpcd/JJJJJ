@@ -955,6 +955,12 @@ jobs:
         run: |
           createdb connect_standard_payouts
           PGDATABASE=connect_standard_payouts python3 scripts/ci/connect-standard-payout-pg17.py
+      - name: Pointage — rotation stricte PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb pointage_rotation
+          psql -X -v ON_ERROR_STOP=1 -d pointage_rotation -f tests/security/pointage-rotation-isolated.test.sql
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17
