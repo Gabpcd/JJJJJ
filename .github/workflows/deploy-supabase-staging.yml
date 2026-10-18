@@ -476,6 +476,7 @@ jobs:
                  'escrow-release',
                  'jolene_process_externalisations',
                  'weekly-invoicing-cron',
+                 'honoraires-emission-demandes',
                  'jolene-monitor-crons-edge-critiques'
                );
             ")
@@ -576,8 +577,8 @@ jobs:
             echo "::error::$ACTIVE_CRITICAL cron(s) critique(s) actifs sur staging avant sondes."
             exit 1
           fi
-          if [ "$CRITICAL_COUNT" != '9' ]; then
-            echo "::error::Crons critiques staging incomplets ($CRITICAL_COUNT/9)."
+          if [ "$CRITICAL_COUNT" != '10' ]; then
+            echo "::error::Crons critiques staging incomplets ($CRITICAL_COUNT/10)."
             exit 1
           fi
           if [ "$STORAGE_POLICIES" != '8' ] \
@@ -599,7 +600,7 @@ jobs:
           echo "Matrice des modes d'exercice : $EXERCISE_MATRIX_RULES/43"
           echo "Accès service_role/private : OK"
           echo "Dépendances gérées : 8 policies, 4 buckets, 5 tables Realtime, trigger Auth et vue OK"
-          echo "Crons critiques : $CRITICAL_COUNT/9 présents, $ACTIVE_CRITICAL actif"
+          echo "Crons critiques : $CRITICAL_COUNT/10 présents, $ACTIVE_CRITICAL actif"
           echo "Migrations fantômes : $GHOST_MIGRATIONS/21"
 
       # ─── 3. Seed comptes test Playwright (auth schema pas dans le dump) ─
@@ -758,7 +759,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
-      - name: Sonder les huit crons Edge sans les activer
+      - name: Sonder les neuf crons Edge sans les activer
         run: |
           set -euo pipefail
           URL="${{ steps.staging-db.outputs.url }}"
@@ -766,10 +767,10 @@ jobs:
             -c "SELECT private.fn_sonder_crons_edge_critiques();")"
           if ! jq -e '
             type == "object"
-            and length == 8
+            and length == 9
             and all(.[]; type == "number")
           ' <<<"$probes" >/dev/null; then
-            echo "::error::La sonde staging n'a pas retourné huit request_id."
+            echo "::error::La sonde staging n'a pas retourné neuf request_id."
             exit 1
           fi
 
@@ -784,7 +785,7 @@ jobs:
             if jq -e '.ready == true' <<<"$status" >/dev/null; then
               if ! jq -e '
                 .success == true
-                and .ok == 8
+                and .ok == 9
                 and .echecs == 0
                 and .en_attente == 0
               ' <<<"$status" >/dev/null; then
@@ -826,15 +827,16 @@ jobs:
                  'escrow-release',
                  'jolene_process_externalisations',
                  'weekly-invoicing-cron',
+                 'honoraires-emission-demandes',
                  'jolene-monitor-crons-edge-critiques'
                );
             "
           )
-          if [ "$cron_count" != '9' ] || [ "$active_count" != '0' ]; then
-            echo "::error::Les sondes staging ont altéré les crons ($cron_count/9, $active_count actif)."
+          if [ "$cron_count" != '10' ] || [ "$active_count" != '0' ]; then
+            echo "::error::Les sondes staging ont altéré les crons ($cron_count/10, $active_count actif)."
             exit 1
           fi
-          echo "Sondes auth-only : 8/8 HTTP 2xx ; crons staging laissés inactifs."
+          echo "Sondes auth-only : 9/9 HTTP 2xx ; crons staging laissés inactifs."
 
       - name: Summary
         run: |

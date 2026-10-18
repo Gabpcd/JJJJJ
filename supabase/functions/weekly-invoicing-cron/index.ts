@@ -1,7 +1,8 @@
 /**
  * weekly-invoicing-cron — Facturation hebdomadaire libérale automatique
  *
- * Déclenchée quotidiennement à 6h Europe/Paris par pg_cron.
+ * Déclenchée toutes les 5 min pour les seules demandes de clôture.
+ * Le passage global reste quotidien à 6h Europe/Paris (dispatcher SQL).
  * Appelle fn_lister_missions_a_facturer() pour obtenir la liste des missions
  * à facturer (finales + hebdo), puis invoque generate-invoice pour chacune
  * avec les périodes appropriées. 3 retries max par mission en cas d'échec.
@@ -23,6 +24,8 @@ import {
   isCronAuthProbe,
   verifyCronServiceAuth,
 } from '../_shared/cron-service-auth.ts';
+
+import { traiterDemandesHonoraires } from '../_shared/demandes-facturation-honoraires.ts';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
@@ -46,6 +49,26 @@ Deno.serve(async (req: Request) => {
     if (!auth.ok) return cronAuthErrorResponse(auth, corsHeaders);
     if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
+    if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Méthode invalide' }), { status: 405, headers: corsHeaders });
+    let body: any;
+    try {
+      const raw = await req.text();
+      body = raw.trim() === '' ? {} : JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({ error: 'Corps invalide' }), { status: 400, headers: corsHeaders });
+    }
+    const modeDemandes = body?.mode === 'demandes';
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+      || (Object.keys(body).length !== 0 && !(modeDemandes && Object.keys(body).length === 1))) {
+      return new Response(JSON.stringify({ error: 'Mode invalide' }), { status: 400, headers: corsHeaders });
+    }
+    const demandes = await traiterDemandesHonoraires(supabase);
+    if (modeDemandes) {
+      return new Response(JSON.stringify({ success: demandes.failed === 0, mode: 'demandes', ...demandes }), {
+        status: demandes.failed === 0 ? 200 : 500, headers: corsHeaders,
+      });
+    }
+
     // 1. Obtenir la liste des missions à facturer
     const { data: liste, error: listeErr } = await supabase.rpc('fn_lister_missions_a_facturer');
     if (listeErr) {
@@ -55,12 +78,13 @@ Deno.serve(async (req: Request) => {
 
     const finales: any[] = (liste as any)?.finales || [];
     const hebdo: any[] = (liste as any)?.hebdo || [];
-    const all = [...finales, ...hebdo];
+    const prises = new Set(demandes.details.map(r => r.mission_id));
+    const all = [...finales, ...hebdo].filter(entry => !prises.has(entry.mission_id));
 
     console.log(`[weekly-invoicing-cron] ${all.length} missions à facturer (${finales.length} finales, ${hebdo.length} hebdo)`);
 
     if (all.length === 0) {
-      return new Response(JSON.stringify({ success: true, total: 0, message: 'Rien à facturer' }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ success: demandes.failed === 0, total: demandes.total, demandes }), { status: demandes.failed === 0 ? 200 : 500, headers: corsHeaders });
     }
 
     // 2. Itérer et invoquer generate-invoice pour chaque entrée
@@ -178,10 +202,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const failed = results.filter(r => !r.success && !r.skipped).length;
+    const failed = results.filter(r => !r.success && !r.skipped).length + demandes.failed;
     const summary = {
       success: failed === 0,
-      total: all.length,
+      total: all.length + demandes.total,
+      demandes,
       ok: results.filter(r => r.success).length,
       skipped: results.filter(r => r.skipped).length,
       failed,

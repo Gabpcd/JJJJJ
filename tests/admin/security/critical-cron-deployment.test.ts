@@ -80,6 +80,20 @@ describe("déploiement fail-closed des crons critiques", () => {
     );
   });
 
+  it("inclut le passage demandes-only dans les barrières de déploiement sans accélérer le passage global", () => {
+    const addition = readFileSync(`${root}/supabase/migrations/20261018180050_emettre_honoraires_par_generation_canonique.sql`, 'utf8');
+    expect(addition).toContain("'honoraires-emission-demandes'");
+    expect(addition).toContain("active:=false");
+    expect(addition).toContain("(''weekly-invoicing-cron'', ''0 4,5 * * *'')");
+    for (const primitive of ['fn_sonder_crons_edge_critiques','fn_etat_sondes_crons_edge_critiques','fn_activer_crons_edge_critiques','fn_etat_activation_crons_edge_critiques','fn_desactiver_crons_edge_critiques','fn_reconcilier_crons_edge_critiques_inactifs']) {
+      expect(addition).toContain(`private.${primitive}(`);
+    }
+    expect(stagingWorkflow.match(/'honoraires-emission-demandes'/g)).toHaveLength(2);
+    expect(stagingWorkflow).toContain('Sondes auth-only : 9/9 HTTP 2xx');
+    expect(productionWorkflow).toContain('and length == 9');
+    expect(productionWorkflow).toContain('(.jobs_actives | length) == 10');
+  });
+
   it("sonde réellement après les Edge puis active et vérifie l'état en prod", () => {
     const disableIndex = productionWorkflow.indexOf(
       "fn_ops_desactiver_crons_edge_critiques",
@@ -103,12 +117,12 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(activateIndex).toBeGreaterThan(probeIndex);
     expect(finalStateIndex).toBeGreaterThan(activateIndex);
     expect(productionWorkflow).toContain("for attempt in $(seq 1 18)");
-    expect(productionWorkflow).toContain(".ok == 8");
+    expect(productionWorkflow).toContain(".ok == 9");
     expect(productionWorkflow).toContain("p_confirmation: \"AUTH_PROBES_OK\"");
-    expect(productionWorkflow).toContain("(.critiques_actifs | length) == 9");
+    expect(productionWorkflow).toContain("(.critiques_actifs | length) == 10");
     expect(productionWorkflow).toContain("(.acquisition_active | length) == 0");
     expect(productionWorkflow).toContain(
-      "(.critiques_desactives | length) == 9",
+      "(.critiques_desactives | length) == 10",
     );
   });
 
@@ -139,7 +153,7 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain(
       "private.fn_sonder_crons_edge_critiques()",
     );
-    expect(stagingWorkflow).toContain(".ok == 8");
+    expect(stagingWorkflow).toContain(".ok == 9");
     expect(stagingWorkflow).toContain("active_count");
     expect(stagingWorkflow).not.toContain(
       "fn_ops_activer_crons_edge_critiques",

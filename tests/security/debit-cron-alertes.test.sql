@@ -6,7 +6,7 @@ SET LOCAL statement_timeout='90s';
 DO $bootstrap$
 DECLARE resultat jsonb; identifiant bigint;
 BEGIN
- FOR identifiant IN SELECT jobid FROM cron.job WHERE jobname IN('litige-escalation-cron','email-cron-hourly-immediate','email-cron-daily','process-stripe-refunds-15min','escrow-debit-echeance','escrow-release','jolene_process_externalisations','weekly-invoicing-cron','jolene-monitor-crons-edge-critiques') LOOP
+ FOR identifiant IN SELECT jobid FROM cron.job WHERE jobname IN('litige-escalation-cron','email-cron-hourly-immediate','email-cron-daily','process-stripe-refunds-15min','escrow-debit-echeance','escrow-release','jolene_process_externalisations','weekly-invoicing-cron','honoraires-emission-demandes','jolene-monitor-crons-edge-critiques') LOOP
   PERFORM cron.unschedule(identifiant);
  END LOOP;
  resultat:=private.fn_reconcilier_crons_edge_critiques_inactifs();
@@ -15,8 +15,8 @@ BEGIN
  resultat:=private.fn_reconcilier_crons_edge_critiques_inactifs();
  IF resultat->>'success' IS DISTINCT FROM 'true' OR (SELECT count(*) FROM cron.job WHERE jobname='email-cron-hourly-immediate' AND schedule='* * * * *' AND active=false)<>1
  THEN RAISE EXCEPTION 'Réconciliation rétablit cadence horaire, doublon ou activation'; END IF;
- IF (SELECT count(*) FROM cron.job WHERE jobname IN('litige-escalation-cron','email-cron-hourly-immediate','email-cron-daily','process-stripe-refunds-15min','escrow-debit-echeance','escrow-release','jolene_process_externalisations','weekly-invoicing-cron','jolene-monitor-crons-edge-critiques') AND active=false)<>9
- THEN RAISE EXCEPTION 'Les neuf jobs doivent rester inactifs avant les sondes'; END IF;
+ IF (SELECT count(*) FROM cron.job WHERE jobname IN('litige-escalation-cron','email-cron-hourly-immediate','email-cron-daily','process-stripe-refunds-15min','escrow-debit-echeance','escrow-release','jolene_process_externalisations','weekly-invoicing-cron','honoraires-emission-demandes','jolene-monitor-crons-edge-critiques') AND active=false)<>10
+ THEN RAISE EXCEPTION 'Les dix jobs doivent rester inactifs avant les sondes'; END IF;
  IF has_function_privilege('authenticated','private.fn_reconcilier_crons_edge_critiques_inactifs()','execute') OR has_function_privilege('anon','private.fn_reconcilier_crons_edge_critiques_inactifs()','execute')
  THEN RAISE EXCEPTION 'Réconciliation de crons exposée aux clients'; END IF;
 END $bootstrap$;

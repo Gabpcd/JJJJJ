@@ -25359,6 +25359,48 @@ $$;
 ALTER FUNCTION "public"."fn_consentir_gps"("p_accepte" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE demande private.demandes_facturation_honoraires%ROWTYPE; fh_id uuid; fc_id uuid; n integer;
+BEGIN
+ IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+  RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+ SELECT * INTO demande FROM private.demandes_facturation_honoraires d WHERE d.mission_id=p_mission_id FOR UPDATE;
+ IF NOT FOUND OR p_token IS NULL OR demande.token IS DISTINCT FROM p_token THEN
+  RAISE EXCEPTION 'DEMANDE_FACTURATION_TOKEN_INVALIDE' USING ERRCODE='23514'; END IF;
+ IF demande.terminee_le IS NOT NULL THEN RETURN jsonb_build_object('success',true,'facture_id',demande.facture_id,'facture_commission_id',demande.facture_commission_id); END IF;
+ IF demande.expire_le<=clock_timestamp() THEN
+  RAISE EXCEPTION 'DEMANDE_FACTURATION_BAIL_EXPIRE' USING ERRCODE='23514'; END IF;
+ -- Le résultat HTTP ne suffit jamais : constater les pièces canoniques émises,
+ -- snapshots, version PDF/XML et FC liée. Une erreur FC reste reprenable.
+ SELECT count(*),(array_agg(f.id))[1],(array_agg(c.id))[1] INTO n,fh_id,fc_id
+ FROM public.factures_honoraires f JOIN public.missions m ON m.id=f.mission_id
+ JOIN public.factures c ON c.facture_honoraire_id=f.id AND c.mission_id=f.mission_id
+   AND c.etablissement_id=f.etablissement_id AND c.type_document='FACTURE'
+ WHERE f.mission_id=p_mission_id AND f.soignant_id=m.soignant_assigne_id AND f.etablissement_id=m.etablissement_id
+   AND f.type_document='FACTURE' AND f.nature_correction='ORIGINALE' AND f.est_facture_finale_mission IS TRUE
+   AND f.statut IN('EMISE','PAYEE','EN_RETARD') AND c.statut IN('EMISE','PAYEE','EN_RETARD','VIREMENT_DECLARE')
+   AND f.template_version='v2_facturx' AND f.regime_tva_snapshot IS NOT NULL
+   AND f.emise_le IS NOT NULL AND f.pdf_s3_key IS NOT NULL AND f.facturx_xml_url IS NOT NULL
+   AND EXISTS(SELECT FROM public.factures_honoraires_documents v WHERE v.facture_honoraire_id=f.id
+     AND v.pdf_s3_key=f.pdf_s3_key AND v.facturx_xml_url=f.facturx_xml_url
+     AND v.pdf_sha256 ~ '^[a-f0-9]{64}$' AND v.xml_sha256 ~ '^[a-f0-9]{64}$');
+ IF n=1 THEN
+  UPDATE private.demandes_facturation_honoraires SET terminee_le=now(),facture_id=fh_id,
+    facture_commission_id=fc_id,dernier_echec=NULL WHERE mission_id=p_mission_id;
+  RETURN jsonb_build_object('success',true,'facture_id',fh_id,'facture_commission_id',fc_id);
+ END IF;
+ UPDATE private.demandes_facturation_honoraires SET token=NULL,expire_le=NULL,
+   prochain_essai_le=now()+interval '5 minutes',dernier_echec='GENERATION_NON_TERMINEE' WHERE mission_id=p_mission_id;
+ RETURN jsonb_build_object('success',false,'reason','GENERATION_NON_TERMINEE');
+END $$;
+
+
+ALTER FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_consulter_mon_iban"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -37445,6 +37487,19 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'facture_id', v_existing_id, 'message', 'Facture déjà existante');
     END IF;
 
+    -- Aucune pièce prématurée sans documents. La finale unique utilise sa
+    -- demande durable ; HEBDO conserve le listeur quotidien et ses périodes.
+    -- Le retour facture existante ci-dessus et la rétrocession sont inchangés.
+    IF v_mission.type_contrat_applique = 'LIBERAL'
+       AND v_mission.mode_remuneration = 'TAUX_HORAIRE'
+       AND v_mission.strategie_facturation IN ('FINALE_UNIQUE', 'HEBDO_ET_FINALE') THEN
+        IF v_mission.strategie_facturation = 'FINALE_UNIQUE' THEN
+            INSERT INTO private.demandes_facturation_honoraires(mission_id)
+            VALUES(p_mission_id) ON CONFLICT(mission_id) DO NOTHING;
+        END IF;
+        RETURN jsonb_build_object('success',true,'emission_en_attente',true,'mission_id',p_mission_id);
+    END IF;
+
     v_numero := 'FH-' || to_char(now(), 'YYYY-MM') || '-' || lpad(
         (COALESCE((SELECT COUNT(*) FROM factures_honoraires WHERE date_emission >= date_trunc('month', now())), 0) + 1)::TEXT,
         4, '0'
@@ -39863,6 +39918,25 @@ BEGIN
       AND fh.est_facture_finale_mission IS FALSE
       AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
   )
+    -- Ne pas reproposer une semaine déjà couverte par une pièce active,
+    -- même si cette pièce est finale ou ne porte pas le même numéro ISO.
+    AND NOT EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
+      WHERE fh.mission_id = sa.mission_id
+        AND fh.type_document = 'FACTURE'
+        AND fh.nature_correction <> 'COMPLEMENT'
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+        AND daterange(fh.periode_debut, fh.periode_fin, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
+    -- Le worker traite les finales avant les semaines. Une finale de CE lot
+    -- doit déjà exclure ses semaines, avant même que son document soit créé.
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_finales) finale
+      WHERE (finale->>'mission_id')::uuid = sa.mission_id
+        AND daterange((finale->>'periode_debut')::date, (finale->>'periode_fin')::date, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
     AND EXISTS (
       SELECT 1 FROM public.mission_creneaux mc
       WHERE mc.mission_id = sa.mission_id
@@ -47797,6 +47871,41 @@ ALTER FUNCTION "public"."fn_pre_request_compte_actif"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."fn_pre_request_compte_actif"() IS 'SECURITY DEFINER anonyme revue : hook PostgREST pre-request, aucun résultat métier exposé.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_prendre_demandes_facturation_honoraires"("p_limit" integer DEFAULT 3) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "TimeZone" TO 'UTC'
+    AS $$
+DECLARE r record; token_bail uuid; resultat jsonb:='[]'::jsonb;
+BEGIN
+ IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
+  RAISE EXCEPTION 'Réservé au service de facturation' USING ERRCODE='42501'; END IF;
+ FOR r IN SELECT d.mission_id
+  FROM private.demandes_facturation_honoraires d JOIN public.missions m ON m.id=d.mission_id
+  WHERE d.terminee_le IS NULL AND d.prochain_essai_le<=now()
+   AND (d.expire_le IS NULL OR d.expire_le<=clock_timestamp())
+   AND m.statut='TERMINEE' AND m.type_contrat_applique='LIBERAL'
+   AND private.fn_mission_est_reelle(m.id) IS TRUE
+   AND m.mode_remuneration='TAUX_HORAIRE' AND m.strategie_facturation='FINALE_UNIQUE'
+   AND NOT EXISTS(SELECT FROM public.presences p WHERE p.mission_id=m.id
+     AND COALESCE(p.valide_par_etablissement,false) IS FALSE
+     AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL))
+  ORDER BY d.prochain_essai_le,d.mission_id
+  LIMIT greatest(1,least(COALESCE(p_limit,3),3)) FOR UPDATE OF d SKIP LOCKED
+ LOOP
+  token_bail:=gen_random_uuid();
+  UPDATE private.demandes_facturation_honoraires d SET token=token_bail,
+   expire_le=clock_timestamp()+interval '10 minutes',tentatives=d.tentatives+1
+   WHERE d.mission_id=r.mission_id;
+  resultat:=resultat||jsonb_build_array(jsonb_build_object('mission_id',r.mission_id,'token',token_bail,'body',jsonb_build_object('mission_id',r.mission_id)));
+ END LOOP;
+ RETURN resultat;
+END $$;
+
+
+ALTER FUNCTION "public"."fn_prendre_demandes_facturation_honoraires"("p_limit" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p_avoir_honoraires_id" "uuid") RETURNS "jsonb"
@@ -69341,6 +69450,7 @@ COMMENT ON COLUMN "public"."factures"."montant_a_payer" IS 'Montant externe conv
 COMMENT ON COLUMN "public"."factures"."rapprochement_paiement_requis" IS 'Anomalie financière à rapprocher : suspend les nouvelles demandes de règlement sans réécrire dette, paiement ou allocations.';
 
 
+
 CREATE TABLE IF NOT EXISTS "public"."factures_honoraires" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "numero_facture" "text" NOT NULL,
@@ -74875,7 +74985,7 @@ CREATE UNIQUE INDEX "uq_sourcing_imports_source_en_cours" ON "public"."sourcing_
 
 
 
-CREATE OR REPLACE TRIGGER "aa_garder_facture_imputation" BEFORE INSERT OR UPDATE OR DELETE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_facture_imputation"();
+CREATE OR REPLACE TRIGGER "aa_garder_facture_imputation" BEFORE INSERT OR DELETE OR UPDATE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_facture_imputation"();
 
 
 
@@ -81675,6 +81785,11 @@ GRANT ALL ON FUNCTION "public"."fn_consentir_gps"("p_accepte" boolean) TO "servi
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_consulter_mon_iban"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_consulter_mon_iban"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_consulter_mon_iban"() TO "service_role";
@@ -83558,6 +83673,11 @@ REVOKE ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_prendre_demandes_facturation_honoraires"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_prendre_demandes_facturation_honoraires"("p_limit" integer) TO "service_role";
 
 
 

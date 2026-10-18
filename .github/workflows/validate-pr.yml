@@ -62,7 +62,7 @@ jobs:
         run: node --test tests/node/recette-escrow-safety.node.mjs
 
       - name: Documents facturation réels avec IO fictives
-        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs tests/node/detail-facture-document.node.mjs
+        run: node --test tests/node/facturation-documents.node.mjs tests/node/facturation-numerotation.node.mjs tests/node/numerotation-catalogue.node.mjs tests/node/numerotation-verrous.node.mjs tests/node/detail-facture-document.node.mjs tests/node/demandes-facturation-honoraires.node.mjs tests/node/honoraires-emission-canonique.node.mjs
 
       - name: Commission salariée TEST — handlers réels avec IO fictives
         run: node --test tests/node/stripe-invoice-staging-test.node.mjs
@@ -956,6 +956,12 @@ jobs:
         run: |
           createdb connect_standard_payouts
           PGDATABASE=connect_standard_payouts python3 scripts/ci/connect-standard-payout-pg17.py
+      - name: Honoraires — émission canonique à la clôture PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb honoraires_emission
+          psql -X -v ON_ERROR_STOP=1 -d honoraires_emission -f tests/security/honoraires-emission-canonique-isolated.test.sql
       - name: Pointage — rotation stricte PostgreSQL 17 isolé
         env:
           PGOPTIONS: '-c jolene.isolated_sql_test=on'
