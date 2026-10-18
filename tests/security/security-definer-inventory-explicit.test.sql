@@ -1,9 +1,8 @@
 -- Staging uniquement ; fixtures de métadonnées et rollback intégral.
--- Le rejeu conserve l’algorithme du 30/09 et exige deux successeurs explicites :
--- fn_supprimer_mon_compte() : migration 20261001131013, corps f3af23ae… ;
--- fn_supprimer_mon_compte_etablissement() : migration 20261017191635, corps 35b630a1….
--- Aucun repli vers leurs anciens corps ; Node lie chaque transition aux sources,
--- à sa migration et au snapshot actuels.
+-- Algorithme du 30/09 conservé ; successeurs explicitement liés aux migrations :
+-- suppression soignant 20261001131013, suppression établissement 20261017191635
+-- puis imputation 20261018140952, résolution salariée 20261018140952.
+-- Aucun repli vers les anciens corps. Node vérifie les corps, migrations et snapshot.
 BEGIN;
 CREATE TEMP TABLE inventory_before AS SELECT * FROM private.security_definer_inventory;
 CREATE TEMP TABLE functions_before AS SELECT oid, prosrc, proacl, proconfig, prosecdef, proowner FROM pg_proc;
@@ -24,8 +23,8 @@ DECLARE
   },
   {
     "signature": "fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)",
-    "old_md5": null,
-    "definition_md5": "139ca12a3fcbff5bd5f65074d3242b53",
+    "old_md5": "139ca12a3fcbff5bd5f65074d3242b53",
+    "definition_md5": "f07f34e05904c5f7c233a9477b6cdd1c",
     "categorie": "ADMIN_EST_ADMIN_VALIDE",
     "proconfig": [
       "search_path=public"
@@ -123,8 +122,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "8d1a6220cdc135d36d2d472fcde230ee",
-    "definition_md5": "35b630a12ed0f755592fdc431031b8cc",
+    "old_md5": "35b630a12ed0f755592fdc431031b8cc",
+    "definition_md5": "a43978aee09ef1ae4a157dbee9911b2f",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"
@@ -207,8 +206,8 @@ DECLARE
   },
   {
     "signature": "fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)",
-    "old_md5": null,
-    "definition_md5": "139ca12a3fcbff5bd5f65074d3242b53",
+    "old_md5": "139ca12a3fcbff5bd5f65074d3242b53",
+    "definition_md5": "f07f34e05904c5f7c233a9477b6cdd1c",
     "categorie": "ADMIN_EST_ADMIN_VALIDE",
     "proconfig": [
       "search_path=public"
@@ -306,8 +305,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "8d1a6220cdc135d36d2d472fcde230ee",
-    "definition_md5": "35b630a12ed0f755592fdc431031b8cc",
+    "old_md5": "35b630a12ed0f755592fdc431031b8cc",
+    "definition_md5": "a43978aee09ef1ae4a157dbee9911b2f",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"

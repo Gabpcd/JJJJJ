@@ -675,7 +675,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 61 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 62 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -742,6 +742,7 @@ jobs:
             tests/security/diagnostic-financier-documentaire.test.sql
             tests/security/notification-remboursement-manuel.test.sql
             tests/security/factures-relances-echeance.test.sql
+            tests/security/avoirs-imputation-staging.test.sql
             tests/security/stripe-disponibilite-connect.test.sql
             tests/security/connect-onboarding-payout-acl.test.sql
           )
@@ -968,6 +969,16 @@ jobs:
         run: |
           createdb avoirs_impayes
           psql -X -v ON_ERROR_STOP=1 -d avoirs_impayes -f tests/security/avoirs-impayes-isolated.test.sql
+
+      - name: Avoirs — imputation et règlement net PostgreSQL 17 isolé
+        env:
+          PGOPTIONS: '-c jolene.isolated_sql_test=on'
+        run: |
+          createdb avoirs_imputation
+          psql -X -v ON_ERROR_STOP=1 -d avoirs_imputation -f tests/security/avoirs-imputation-isolated.test.sql
+          createdb avoirs_imputation_concurrence
+          psql -X -v ON_ERROR_STOP=1 -d avoirs_imputation_concurrence -f tests/security/fixtures/avoirs-imputation-concurrency-setup.sql
+          psql -X -v ON_ERROR_STOP=1 -d avoirs_imputation_concurrence -f tests/security/avoirs-imputation-concurrency.test.sql
 
   numerotation-concurrence:
     name: Numérotation — réservations et reprises PostgreSQL 17

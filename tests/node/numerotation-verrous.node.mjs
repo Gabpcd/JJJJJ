@@ -9,6 +9,7 @@ import { join, dirname } from 'node:path';
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const md5 = s => createHash('md5').update(s).digest('hex');
 const migration = read('supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql');
+const imputation = read('supabase/migrations/20261018140952_imputer_avoirs_commission.sql');
 const history = read('tests/fixtures/numerotation-commissions-historique.sql');
 const snapshot = read('supabase/schema/public.sql');
 const bodies = s => new Map([...s.matchAll(/CREATE OR REPLACE FUNCTION "public"\."(fn_preparer_\w+)"\("(\w+)" "uuid"\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/g)].map(m => [m[1], { argument: m[2], body: m[3] }]));
@@ -29,7 +30,21 @@ for (const [name, oldBody, oldDefinition] of expected) test(`${name} : seul l’
   assert.equal(next.body.split(prefix).length, 2);
   const restored = next.body.replace('  v_mission_verrou uuid;\n', '').replace(prefix, '').replace('    AND mission_id IS NOT DISTINCT FROM v_mission_verrou\n', '');
   assert.equal(restored, previous.body, 'calculs, conditions, écritures et retours historiques byte-identiques');
-  assert.equal(next.body, snapshots.get(name).body);
+  if (name === 'fn_preparer_avoir_commission_honoraires') {
+    // Un seul successeur explicite : inscription de provenance au 18/10.
+    // Le retirer doit reconstruire le corps verrous historique à l'octet près.
+    const current = imputation.match(/CREATE OR REPLACE FUNCTION public\.fn_preparer_avoir_commission_honoraires\(p_avoir_honoraires_id uuid\)[\s\S]*?AS \$function\$([\s\S]*?)\$function\$\n/);
+    assert(current, 'successeur imputation exact présent dans la migration');
+    const registration = "  PERFORM private.fn_inscrire_avoir_commission(v_avoir_c_id,v_avoir_h.mission_id,'LITIGE_HONORAIRES');\n";
+    assert.equal(current[1].split(registration).length, 2, 'une seule inscription de provenance');
+    assert.equal(current[1].replace(registration, ''), next.body);
+    assert.equal(current[1], snapshots.get(name).body);
+    assert.equal(md5(current[1]), '78993e08045e2c062fa32d0cddecbfdb');
+    assert.equal(md5(current[0]), '9958b37f1f1b008cec2baf1dabd4c47d');
+    assert(imputation.includes("'public.fn_preparer_avoir_commission_honoraires(uuid)','972bff7ed6b0beedc598d2cb815f2130','78993e08045e2c062fa32d0cddecbfdb'"));
+  } else {
+    assert.equal(next.body, snapshots.get(name).body);
+  }
   assert(migration.includes(`'${md5(next.body)}','${md5(canonical(name, next))}'`));
   const firstLock = next.body.indexOf('FOR UPDATE');
   assert(next.body.slice(0, firstLock).endsWith('public.missions WHERE id=v_mission_verrou '));
@@ -49,6 +64,10 @@ test('le rejeu inventaire annule quatre anciens corps avant la matrice métier',
     assert(wrapper.includes(md5(canonical(name, originals.get(name)))));
   }
   assert(wrapper.includes('md5(v_previous) IS DISTINCT FROM r.ancien_corps'));
+  assert(wrapper.includes('78993e08045e2c062fa32d0cddecbfdb'));
+  assert(wrapper.includes('9958b37f1f1b008cec2baf1dabd4c47d'));
+  assert(wrapper.includes('md5(v_previous) IS DISTINCT FROM r.verrous_corps'));
+  assert(wrapper.includes('IS DISTINCT FROM r.verrous_definition'));
   assert(wrapper.includes('md5(pg_get_functiondef(v_proc.oid)) IS DISTINCT FROM r.ancienne_definition'));
   assert(wrapper.includes('r record; v_proc record;'));
   assert(!wrapper.includes('r record; p record;'));

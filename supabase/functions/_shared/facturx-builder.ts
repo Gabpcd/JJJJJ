@@ -32,6 +32,10 @@ export interface FacturXInvoice {
   amountHt: number;
   amountTva: number;
   amountTtc: number;
+  /** BT-113 : avoirs imputés, sans modifier le total documentaire BT-112. */
+  amountPrepaid?: number;
+  /** BT-115 : montant externe après imputation, stable après règlement. */
+  amountDue?: number;
   vatRate: number;
   vatExempt?: boolean;
   vatExemptionReason?: string;
@@ -52,6 +56,16 @@ export function escapeXml(s: string | undefined | null): string {
 export function generateCiiXml(inv: FacturXInvoice): string {
   const fmtDate = (d: string) => d.replace(/-/g, '');
   const fmtAmt = (n: number) => n.toFixed(2);
+  const amountPrepaid = inv.amountPrepaid ?? 0;
+  const amountDue = inv.amountDue ?? inv.amountTtc;
+  // EN16931-CII BR-CO-16 : BT-115 = BT-112 - BT-113 (sans arrondi).
+  // https://github.com/ConnectingEurope/eInvoicing-EN16931/blob/master/cii/schematron/preprocessed/EN16931-CII-validation-preprocessed.sch
+  if (![inv.amountTtc, amountPrepaid, amountDue].every(n => Number.isFinite(n) && n >= 0
+    && Number.isSafeInteger(Math.round(n * 100)) && Math.abs(n * 100 - Math.round(n * 100)) < 1e-7)
+    || Math.round(amountDue * 100) !== Math.round(inv.amountTtc * 100) - Math.round(amountPrepaid * 100)
+    || (inv.isAvoir && amountPrepaid !== 0)) {
+    throw new Error('FACTURX_SOLDE_INCOHERENT');
+  }
   const typeCode = inv.isAvoir ? '381' : '380';
   const currency = inv.currencyCode ?? 'EUR';
   const sellerSiret = String(inv.sellerSiret || '').replace(/\D/g, '');
@@ -194,7 +208,8 @@ export function generateCiiXml(inv: FacturXInvoice): string {
         <ram:TaxBasisTotalAmount>${fmtAmt(inv.amountHt)}</ram:TaxBasisTotalAmount>
         <ram:TaxTotalAmount currencyID="${currency}">${fmtAmt(inv.amountTva)}</ram:TaxTotalAmount>
         <ram:GrandTotalAmount>${fmtAmt(inv.amountTtc)}</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>${fmtAmt(inv.amountTtc)}</ram:DuePayableAmount>
+        ${amountPrepaid > 0 ? `<ram:TotalPrepaidAmount>${fmtAmt(amountPrepaid)}</ram:TotalPrepaidAmount>` : ''}
+        <ram:DuePayableAmount>${fmtAmt(amountDue)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
       ${precedingRef}
     </ram:ApplicableHeaderTradeSettlement>

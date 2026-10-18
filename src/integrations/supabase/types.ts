@@ -2902,6 +2902,9 @@ export type Database = {
           mission_id: string | null
           mode_paiement: string | null
           modifie_le: string | null
+          montant_a_payer: number
+          montant_avoirs_imputes: number
+          rapprochement_paiement_requis: boolean
           montant_ht: number
           montant_signe: number | null
           montant_ttc: number
@@ -2942,6 +2945,9 @@ export type Database = {
           mission_id?: string | null
           mode_paiement?: string | null
           modifie_le?: string | null
+          montant_a_payer?: never
+          montant_avoirs_imputes?: number
+          rapprochement_paiement_requis?: boolean
           montant_ht: number
           montant_signe?: number | null
           montant_ttc: number
@@ -2982,6 +2988,9 @@ export type Database = {
           mission_id?: string | null
           mode_paiement?: string | null
           modifie_le?: string | null
+          montant_a_payer?: never
+          montant_avoirs_imputes?: number
+          rapprochement_paiement_requis?: boolean
           montant_ht?: number
           montant_signe?: number | null
           montant_ttc?: number

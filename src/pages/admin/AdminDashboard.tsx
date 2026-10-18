@@ -21,7 +21,8 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { BandeauAlertesAntiTricheAdmin } from '@/components/admin/BandeauAlertesAntiTricheAdmin';
 import { formatEuroAdmin } from '@/lib/adminPresentation';
-import { jourCivilParis } from '@/lib/adminInvoiceAccounting';
+import { estFactureRelancable, jourCivilParis } from '@/lib/adminInvoiceAccounting';
+import { lireSoldeCommission } from '@/lib/soldeCommission';
 
 const formatEur = (v: number) => formatEuroAdmin(v, { decimales: 0 });
 const formatEurPrecis = (v: number) => formatEuroAdmin(v, { decimales: 2 });
@@ -78,6 +79,7 @@ export default function AdminDashboard() {
   const [derniersEtabs, setDerniersEtabs] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<any[]>([]);
   const [facturesImpayees, setFacturesImpayees] = useState<any[]>([]);
+  const [erreurImpayes, setErreurImpayes] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stripeMoisNb, setStripeMoisNb] = useState(0);
   const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
@@ -101,11 +103,13 @@ export default function AdminDashboard() {
         supabase.from('litiges').select('id, motif, statut, cree_le, soignant_id, etablissement_id').in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE']).order('cree_le', { ascending: false }).limit(10),
         supabase
           .from('factures')
-          .select('id, numero_facture, montant_ttc, statut, date_echeance, etablissement_id, type_document, etablissements!inner(nom, est_compte_test)')
+          .select('id, numero_facture, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, statut, date_echeance, etablissement_id, type_document, etablissements!inner(nom, est_compte_test)')
           .eq('type_document', 'FACTURE')
           .in('statut', ['EMISE', 'EN_RETARD'])
           .lt('date_echeance', aujourdhuiIso)
           .eq('etablissements.est_compte_test', false)
+          .eq('rapprochement_paiement_requis', false)
+          .gt('montant_a_payer', 0)
           .order('date_echeance', { ascending: true })
           .limit(10),
       ]);
@@ -119,7 +123,16 @@ export default function AdminDashboard() {
       if (resSoignants.data) setDerniersSoignants(resSoignants.data);
       if (resEtabs.data) setDerniersEtabs(resEtabs.data);
       if (resLitiges.data) setLitiges(resLitiges.data);
-      if (resFactures.data) setFacturesImpayees(resFactures.data);
+      try {
+        if (resFactures.error || !resFactures.data) throw new Error('IMPAYES_INDISPONIBLES');
+        setFacturesImpayees(resFactures.data.map(f => ({ ...f, soldeCommission: lireSoldeCommission(f) }))
+          .filter(f => f.etablissements?.est_compte_test === false && estFactureRelancable(f)
+            && !f.soldeCommission.rapprochementRequis && f.soldeCommission.resteDuCents > 0));
+        setErreurImpayes(false);
+      } catch {
+        setFacturesImpayees([]);
+        setErreurImpayes(true);
+      }
 
       // Stripe paiements ce mois (rail paiements_mission — vue opérationnelle brute TTC,
       // distincte de « Encaissé commission » qui vient de la source unique).
@@ -293,7 +306,8 @@ export default function AdminDashboard() {
               <p className="text-xs text-muted-foreground">En retard de paiement →</p>
             </button>
           )}
-          {nbEtabsAVerifier === 0 && litiges.length === 0 && facturesImpayees.length === 0 && (
+          {erreurImpayes && <p role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm text-destructive">Suivi des impayés indisponible. Vérifiez la facturation avant toute relance.</p>}
+          {!erreurImpayes && nbEtabsAVerifier === 0 && litiges.length === 0 && facturesImpayees.length === 0 && (
             <div className="rounded-xl border border-success/30 bg-success/5 p-4">
               <div className="mb-2 flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-success" aria-hidden="true" />
@@ -676,12 +690,13 @@ export default function AdminDashboard() {
                 <button type="button" key={f.id} className="block w-full text-left text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
                   <div className="flex justify-between">
                     <span className="font-medium text-foreground">{f.numero_facture}</span>
-                    <span className="font-semibold text-destructive">{formatEur(f.montant_ttc)} TTC</span>
+                    <span className="font-semibold text-destructive">{formatEurPrecis(f.soldeCommission.resteDuCents / 100)} net dû</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{(f.etablissements as any)?.nom ?? '—'} · Échue le {formatDate(f.date_echeance)}</p>
                 </button>
               ))}
-              {facturesImpayees.length === 0 && <p className="text-sm text-muted-foreground">Aucune</p>}
+              {erreurImpayes ? <p className="text-sm text-destructive">Données indisponibles</p>
+                : facturesImpayees.length === 0 && <p className="text-sm text-muted-foreground">Aucune</p>}
             </CardY2KContent>
           </CardY2K>
         </div>

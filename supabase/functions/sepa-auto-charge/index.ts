@@ -1,3 +1,4 @@
+import { lireSoldeCommission } from "../_shared/commission-balance.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
@@ -94,10 +95,11 @@ Deno.serve(async (req) => {
     const { data: factures, error: fetchErr } = await supabaseAdmin
       .from("factures")
       .select(
-        "id, numero_facture, type_document, mission_id, montant_ttc, etablissement_id, stripe_payment_intent_id, etablissements(nom, stripe_customer_id, stripe_sepa_payment_method_id, mode_paiement_commission)",
+        "id, numero_facture, statut, type_document, mission_id, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, mode_paiement, etablissement_id, stripe_payment_intent_id, etablissements(nom, stripe_customer_id, stripe_sepa_payment_method_id, mode_paiement_commission)",
       )
       .eq("statut", "EMISE")
       .eq("type_document", "FACTURE")
+      .eq("rapprochement_paiement_requis", false)
       .is("stripe_payment_intent_id", null);
 
     if (fetchErr) {
@@ -144,10 +146,21 @@ Deno.serve(async (req) => {
       }
 
       const etab = (f as any).etablissements;
-      const amountCents = Math.round((f.montant_ttc ?? 0) * 100);
+      if (f.rapprochement_paiement_requis) {
+        results.push({ facture: f.numero_facture, error: "RAPPROCHEMENT_PAIEMENT_REQUIS" });
+        continue;
+      }
+      const amountCents = lireSoldeCommission(f).montantExterneCents;
       if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
         failed++;
         results.push({ facture: f.numero_facture, error: "INVALID_AMOUNT" });
+        continue;
+      }
+      // Minimum EUR Stripe ; conserver chaque centime et orienter vers le virement.
+      if (amountCents < 50) {
+        failed++;
+        results.push({ facture: f.numero_facture, error: "SEPA_AMOUNT_TOO_SMALL",
+          message: "Le solde est inférieur à 0,50 €. Réglez le montant exact par virement." });
         continue;
       }
       let knownIntent: Stripe.PaymentIntent | null = null;
@@ -229,6 +242,9 @@ Deno.serve(async (req) => {
             .eq("id", f.id)
             .eq("statut", "EMISE")
             .eq("montant_ttc", f.montant_ttc)
+            .eq("montant_avoirs_imputes", f.montant_avoirs_imputes)
+            .eq("montant_a_payer", f.montant_a_payer)
+            .eq("rapprochement_paiement_requis", false)
             .or(
               `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${claimedIntent.id}`,
             )
@@ -317,6 +333,9 @@ Deno.serve(async (req) => {
           .eq("id", f.id)
           .eq("statut", "EMISE")
           .eq("montant_ttc", f.montant_ttc)
+          .eq("montant_avoirs_imputes", f.montant_avoirs_imputes)
+          .eq("montant_a_payer", f.montant_a_payer)
+          .eq("rapprochement_paiement_requis", false)
           .is("stripe_payment_intent_id", null)
           .select("id")
           .maybeSingle();
@@ -343,6 +362,9 @@ Deno.serve(async (req) => {
               .eq("id", f.id)
               .eq("statut", "EMISE")
               .eq("montant_ttc", f.montant_ttc)
+              .eq("montant_avoirs_imputes", f.montant_avoirs_imputes)
+              .eq("montant_a_payer", f.montant_a_payer)
+              .eq("rapprochement_paiement_requis", false)
               .eq("stripe_payment_intent_id", paymentIntent.id)
               .select("id")
               .maybeSingle();
@@ -368,6 +390,9 @@ Deno.serve(async (req) => {
             .eq("id", f.id)
             .eq("statut", "EMISE")
             .eq("montant_ttc", f.montant_ttc)
+            .eq("montant_avoirs_imputes", f.montant_avoirs_imputes)
+            .eq("montant_a_payer", f.montant_a_payer)
+            .eq("rapprochement_paiement_requis", false)
             .eq("stripe_payment_intent_id", paymentIntent.id)
             .select("id")
             .maybeSingle();
@@ -523,6 +548,9 @@ Deno.serve(async (req) => {
             .eq("id", f.id)
             .eq("statut", "EMISE")
             .eq("montant_ttc", f.montant_ttc)
+            .eq("montant_avoirs_imputes", f.montant_avoirs_imputes)
+            .eq("montant_a_payer", f.montant_a_payer)
+            .eq("rapprochement_paiement_requis", false)
             .is("stripe_payment_intent_id", null)
             .select("id")
             .maybeSingle();

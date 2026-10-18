@@ -16,9 +16,15 @@ const avoirsMigration = read('supabase/migrations/20261017191635_exclure_avoirs_
 const suppressionEtablissementSignature = 'fn_supprimer_mon_compte_etablissement()';
 const suppressionEtablissementAvant = '8d1a6220cdc135d36d2d472fcde230ee';
 const suppressionEtablissementApres = '35b630a12ed0f755592fdc431031b8cc';
+const imputationMigration = read('supabase/migrations/20261018140952_imputer_avoirs_commission.sql');
+const suppressionEtablissementImputation = 'a43978aee09ef1ae4a157dbee9911b2f';
+const litigeSalarieSignature = 'fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)';
+const litigeSalarieAvant = '139ca12a3fcbff5bd5f65074d3242b53';
+const litigeSalarieApres = 'f07f34e05904c5f7c233a9477b6cdd1c';
 const successors = new Map([
   [suppressionSignature, { old_md5: suppressionAvant, definition_md5: suppressionApres }],
-  [suppressionEtablissementSignature, { old_md5: suppressionEtablissementAvant, definition_md5: suppressionEtablissementApres }],
+  [suppressionEtablissementSignature, { old_md5: suppressionEtablissementApres, definition_md5: suppressionEtablissementImputation }],
+  [litigeSalarieSignature, { old_md5: litigeSalarieAvant, definition_md5: litigeSalarieApres }],
 ]);
 const replayEntries = entries.map(entry => successors.has(entry.signature)
   ? { ...entry, ...successors.get(entry.signature) }
@@ -84,13 +90,33 @@ test('le successeur avoirs lie exactement les corps suppression établissement a
   assert.equal(historical.definition_md5, suppressionEtablissementAvant);
   assert.equal(md5(sourceBody(read(source.sources[0].path), 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementAvant);
   assert.equal(md5(sourceBody(avoirsMigration, 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementApres);
-  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), 'fn_supprimer_mon_compte_etablissement')), suppressionEtablissementApres);
   assert.ok(avoirsMigration.includes(`('${suppressionEtablissementSignature}', '${suppressionEtablissementAvant}', '${suppressionEtablissementApres}'`));
-  assert.equal(replayEntries.find(entry => entry.signature === suppressionEtablissementSignature).definition_md5, suppressionEtablissementApres);
 });
 
-test('seuls les deux successeurs explicites changent le manifeste historique', () => {
-  assert.deepEqual([...successors.keys()].sort(), [suppressionSignature, suppressionEtablissementSignature].sort());
+test('imputation : la chaîne suppression établissement conserve le prédécesseur PR1071', () => {
+  const name = 'fn_supprimer_mon_compte_etablissement';
+  assert.equal(md5(sourceBody(avoirsMigration, name)), suppressionEtablissementApres);
+  assert.ok(imputationMigration.includes(`('public.${suppressionEtablissementSignature}','${suppressionEtablissementApres}','${suppressionEtablissementImputation}'`));
+  assert.equal(md5(sourceBody(imputationMigration, name)), suppressionEtablissementImputation);
+  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), name)), suppressionEtablissementImputation);
+  assert.deepEqual(successors.get(suppressionEtablissementSignature), {
+    old_md5: suppressionEtablissementApres, definition_md5: suppressionEtablissementImputation,
+  });
+});
+
+test('imputation : le successeur litige salarié reste lié à sa preuve historique', () => {
+  const historical = entries.find(entry => entry.signature === litigeSalarieSignature);
+  const source = sources.find(entry => entry.signature === litigeSalarieSignature);
+  const name = 'fn_admin_resoudre_litige_salarie';
+  assert.equal(historical.definition_md5, litigeSalarieAvant);
+  assert.equal(md5(sourceBody(read(source.sources[0].path), name)), litigeSalarieAvant);
+  assert.ok(imputationMigration.includes(`('public.${litigeSalarieSignature}','${litigeSalarieAvant}','${litigeSalarieApres}'`));
+  assert.equal(md5(sourceBody(imputationMigration, name)), litigeSalarieApres);
+  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), name)), litigeSalarieApres);
+});
+
+test('seuls les trois successeurs explicites changent le manifeste historique', () => {
+  assert.deepEqual([...successors.keys()].sort(), [suppressionSignature, suppressionEtablissementSignature, litigeSalarieSignature].sort());
   assert.deepEqual(replayEntries.filter(entry => !successors.has(entry.signature)), entries.filter(entry => !successors.has(entry.signature)));
   for (const entry of entries.filter(entry => successors.has(entry.signature))) {
     assert.deepEqual(replayEntries.find(replayed => replayed.signature === entry.signature), {

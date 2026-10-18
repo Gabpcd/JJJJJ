@@ -4,6 +4,7 @@ import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { ajouterJoursCivilsParis, formatParis, instantDepuisSaisieParis, instantJolene } from '@/lib/date-heure-paris';
 import { toast } from 'sonner';
 import { ENTREPRISE } from '@/constantes/entreprise';
+import { lireSoldeCommission } from '@/lib/soldeCommission';
 import {
   JOLENE_COLORS,
   PAGE,
@@ -177,6 +178,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
 
     const statut = (f as any).statut;
     const estAvoir = (f as any).type_document === 'AVOIR';
+    const solde = estAvoir ? null : lireSoldeCommission(f);
     // Le stockage conserve des montants positifs ; seul le document d'avoir
     // porte le signe crédit, sans modifier l'assiette de la mission de référence.
     const montantDocument = (montant: number) => estAvoir ? -Math.abs(montant) : montant;
@@ -246,15 +248,15 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
     // Mode de paiement
     const mode = (f as any).mode_paiement;
     const modeLabel =
-      mode === 'STRIPE' && (f as any).stripe_payment_intent_id
+      mode === 'STRIPE' && (f as any).stripe_payment_intent_id && (f as any).facture_honoraire_id
         ? 'Stripe Connect (capturée à la source)'
         : mode === 'STRIPE'
-        ? 'Stripe'
+        ? 'Stripe — paiement en ligne'
         : mode === 'VIREMENT'
         ? `Virement${(f as any).virement_reference ? ' - réf. ' + (f as any).virement_reference : ''}`
         : mode === 'CHORUS_PRO'
         ? 'Chorus Pro'
-        : mode || '-';
+        : mode === 'AVOIR' ? 'Soldée par avoir' : mode || '-';
     if (!estAvoir) {
       addInfoRow(doc, PAGE.margin, y, 'Mode paiement :', modeLabel, 30);
       y += 8;
@@ -519,13 +521,32 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       tauxTva: (f as any).taux_tva,
     });
 
-    if (!estAvoir && statut === 'PAYEE') {
+    if (solde && solde.avoirsImputesCents > 0 && !solde.rapprochementRequis
+      && ['EMISE','EN_RETARD','VIREMENT_DECLARE','PAYEE'].includes(statut)) {
+      if (y > 238) { doc.addPage(); y = 20; }
+      addInfoRow(doc, PAGE.margin, y, 'Avoirs déduits :', fmtEur(-solde.avoirsImputesCents / 100), 58);
+      y += 7;
+      addInfoRow(doc, PAGE.margin, y, statut === 'PAYEE' ? 'Montant réglé hors avoirs :' : 'Montant à régler :', fmtEur(solde.montantExterneCents / 100), 58);
+      y += 7;
+      if (statut === 'PAYEE') {
+        addInfoRow(doc, PAGE.margin, y, 'Restant à payer :', fmtEur(0), 58);
+        y += 7;
+      }
+    }
+    if (solde?.rapprochementRequis) {
+      if (y > 250) { doc.addPage(); y = 20; }
+      createHighlightBox(doc, { x: PAGE.margin, y, width: PAGE.contentWidth,
+        text: 'Règlement à rapprocher après remboursement. Aucun nouveau paiement demandé.', variant: 'warning' });
+      y += 20;
+    }
+
+    if (!estAvoir && statut === 'PAYEE' && !solde?.rapprochementRequis) {
       createHighlightBox(doc, {
         x: PAGE.margin,
         y,
         width: PAGE.contentWidth,
         text: (f as any).date_paiement
-          ? `FACTURE PAYÉE le ${formatParis((f as any).date_paiement, 'dd/MM/yyyy')} - ${modeLabel}`
+          ? `${mode === 'AVOIR' ? 'FACTURE SOLDÉE PAR AVOIR' : 'FACTURE PAYÉE'} le ${formatParis((f as any).date_paiement, 'dd/MM/yyyy')} - ${modeLabel}`
           : `FACTURE PAYÉE - ${modeLabel}`,
         variant: 'success',
       });

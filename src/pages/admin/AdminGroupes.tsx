@@ -16,6 +16,7 @@ import { envoyerEmailConfirme } from '@/lib/envoiEmailConfirme';
 import { creerUuidV4 } from '@/lib/uuid';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
+import { lireSoldeCommission } from '@/lib/soldeCommission';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
@@ -125,7 +126,7 @@ export default function AdminGroupes() {
               .select('id, statut, soignant_assigne_id, montant_commission_ttc, etablissement_id')
               .in('etablissement_id', tousEtabsIds)),
             avecDelai(supabase.from('factures')
-              .select('montant_ttc, statut, type_document, etablissement_id')
+              .select('montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, statut, type_document, etablissement_id')
               .in('etablissement_id', tousEtabsIds)),
           ])
         : [{ data: [], error: null }, { data: [], error: null }];
@@ -154,7 +155,8 @@ export default function AdminGroupes() {
           const caImpayees = factures.filter((facture) =>
             ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
             && ['EMISE', 'EN_RETARD'].includes(facture.statut)
-          ).reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
+            && !facture.rapprochement_paiement_requis
+          ).reduce((somme, facture) => somme + lireSoldeCommission(facture).resteDuCents / 100, 0);
           const soignantIds = new Set(missions.map((mission) => mission.soignant_assigne_id).filter((id): id is string => Boolean(id)));
 
           cliniques.push({

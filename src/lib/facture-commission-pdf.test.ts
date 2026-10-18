@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  from: vi.fn(), download: vi.fn(), error: vi.fn(), success: vi.fn(), table: vi.fn(), text: vi.fn(),
+  from: vi.fn(), download: vi.fn(), error: vi.fn(), success: vi.fn(), table: vi.fn(), text: vi.fn(), totals: vi.fn(), highlight: vi.fn(), info: vi.fn(),
 }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: mocks.from } }));
 vi.mock('./telechargement', () => ({ telechargerOuPartagerPdf: mocks.download }));
@@ -17,8 +17,8 @@ vi.mock('./pdf-design-system', () => ({
   JOLENE_COLORS: { textMuted: [1, 2, 3], text: [1, 2, 3], border: [1, 2, 3], primary: [1, 2, 3], primaryDark: [1, 2, 3], roseLight: [1, 2, 3], teal: [1, 2, 3] },
   PAGE: { margin: 15, width: 210, contentWidth: 180 },
   sanitizeForPdf: (s: string) => s, fmtEur: (n: number) => `${n} €`,
-  createHeader: vi.fn(), createInfoBlock: () => 75, addInfoRow: vi.fn(),
-  createTotalsBlock: () => 200, createFooter: vi.fn(), createHighlightBox: vi.fn(),
+  createHeader: vi.fn(), createInfoBlock: () => 75, addInfoRow: mocks.info,
+  createTotalsBlock: (...args: unknown[]) => { mocks.totals(...args); return 200; }, createFooter: vi.fn(), createHighlightBox: mocks.highlight,
   createSectionTitle: (_doc: unknown, y: number) => y + 10,
 }));
 
@@ -80,7 +80,8 @@ beforeEach(() => {
   failures = {}; countAvailable = true; cap = 2; selections = [];
   rows = {
     factures: [{ id: factureId, mission_id: missionId, etablissement_id: etablissementId,
-      numero_facture: 'COMMISSION-TEST', statut: 'EMISE', montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4,
+      numero_facture: 'COMMISSION-TEST', statut: 'EMISE', type_document: 'FACTURE', montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4,
+      montant_avoirs_imputes: 0, montant_a_payer: 14.4, rapprochement_paiement_requis: false,
       periode_debut: '2026-09-21', periode_fin: '2026-09-27', mode_paiement: 'STRIPE' }],
     etablissements: [{ id: etablissementId, nom: 'Établissement synthétique' }],
     missions: [{ id: missionId, intitule: 'Mission synthétique', debut_le: '2026-09-21T08:00:00Z', fin_le: '2026-09-22T10:00:00Z',
@@ -173,6 +174,67 @@ describe('PDF commission : dates civiles de facturation', () => {
     await telechargerFactureCommissionPDF(factureId);
     expect(mocks.text.mock.calls.some(([texte]) => typeof texte === 'string' && texte.includes('()'))).toBe(false);
     expect(mocks.download).toHaveBeenCalledOnce();
+  });
+});
+
+describe('PDF commission : imputation et règlement sans réécriture du TTC', () => {
+  function imputer() {
+    Object.assign(rows.factures[0], { montant_ht: 100, montant_tva: 20, montant_ttc: 120,
+      montant_avoirs_imputes: 40, montant_a_payer: 80, rapprochement_paiement_requis: false });
+  }
+  function ligne(libelle: string, valeur: string) {
+    expect(mocks.info.mock.calls.some(call => call[3] === libelle && call[4] === valeur)).toBe(true);
+  }
+  it('conserve les totaux100/20/120 et distingue40euros d’avoirs du net80', async () => {
+    imputer(); const initiale = structuredClone(rows.factures[0]);
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(mocks.totals).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ht: 100, tva: 20, ttc: 120 }));
+    ligne('Avoirs déduits :', '-40 €'); ligne('Montant à régler :', '80 €');
+    expect(rows.factures[0]).toEqual(initiale);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('PAYEE conserve80réglés hors avoirs et un reste nul', async () => {
+    imputer(); Object.assign(rows.factures[0], { statut: 'PAYEE', date_paiement: '2026-10-18T10:00:00Z' });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    ligne('Avoirs déduits :', '-40 €'); ligne('Montant réglé hors avoirs :', '80 €'); ligne('Restant à payer :', '0 €');
+    expect(mocks.info.mock.calls.some(call => call[3] === 'Montant à régler :')).toBe(false);
+    expect(mocks.totals.mock.calls.at(-1)?.[1]).toEqual(expect.objectContaining({ ttc: 120 }));
+    expect(rows.factures[0].montant_a_payer).toBe(80);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('modeAVOIR net0 annonce la compensation sans attribuer un débit externe', async () => {
+    imputer(); Object.assign(rows.factures[0], { statut: 'PAYEE', mode_paiement: 'AVOIR',
+      montant_avoirs_imputes: 120, montant_a_payer: 0, stripe_payment_intent_id: null,
+      date_paiement: '2026-10-18T10:00:00Z' });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    ligne('Avoirs déduits :', '-120 €'); ligne('Montant réglé hors avoirs :', '0 €'); ligne('Restant à payer :', '0 €');
+    const encadres = mocks.highlight.mock.calls.map(call => call[1].text).join('\n');
+    expect(encadres).toContain('FACTURE SOLDÉE PAR AVOIR');
+    expect(encadres).not.toContain('FACTURE PAYÉE');
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('un rapprochement reste visible sans nouvelle demande de paiement', async () => {
+    imputer(); rows.factures[0].rapprochement_paiement_requis = true;
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(mocks.highlight.mock.calls.some(call => call[1].text.includes('Règlement à rapprocher après remboursement. Aucun nouveau paiement demandé.'))).toBe(true);
+    expect(mocks.info.mock.calls.some(call => call[3] === 'Montant à régler :')).toBe(false);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ['net absent', { montant_a_payer: undefined }],
+    ['avoirs absents', { montant_avoirs_imputes: undefined }],
+    ['flag absent', { rapprochement_paiement_requis: undefined }],
+    ['net incohérent', { montant_a_payer: 120 }],
+  ] as const)('refuse le PDF si %s sans substituer le TTC comme montant à régler', async (_nom, projection) => {
+    imputer(); Object.assign(rows.factures[0], projection);
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).toHaveBeenCalledOnce();
+    expect(mocks.download).not.toHaveBeenCalled();
+    expect(mocks.info.mock.calls.some(call => call[3] === 'Montant à régler :')).toBe(false);
   });
 });
 

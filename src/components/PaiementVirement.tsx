@@ -4,6 +4,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { formatMontantCommission, soldeCommissionPourAffichage } from '@/lib/soldeCommission';
 
 interface Props {
   facture: any;
@@ -17,8 +18,11 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
   const [reference, setReference] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const solde = soldeCommissionPourAffichage(facture);
+  const payable = solde !== null && solde.resteDuCents > 0 && !solde.rapprochementRequis;
+
   const confirmer = async () => {
-    if (!user || loading || reference.trim().length < 3) return;
+    if (!user || loading || !payable || reference.trim().length < 3) return;
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_virement' as any, {
@@ -39,6 +43,8 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
     }
   };
 
+  if (!payable || !solde) return null;
+
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
@@ -53,6 +59,7 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
         <Banknote className="h-4 w-4 text-primary" /> Paiement par virement
       </p>
       <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 rounded-lg p-3">
+        <p><strong>Montant à virer :</strong> {formatMontantCommission(solde.resteDuCents)}</p>
         <p><strong>Bénéficiaire :</strong> {ENTREPRISE.nom}</p>
         <p><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
         <p><strong>BIC :</strong> {ENTREPRISE.bic}</p>

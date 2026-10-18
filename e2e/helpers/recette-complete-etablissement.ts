@@ -113,7 +113,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    // Le détail de commission lit aussi son contexte, même lorsque le RPC ne trouve aucune facture.
    else if(nom==='factures'&&req.method()==='GET'&&object&&etat.mode==='complet'
     &&url.searchParams.get('id')===`eq.${ids.facture}`&&url.searchParams.get('etablissement_id')===`eq.${ids.etab}`
-    &&url.searchParams.get('select')==='id,etablissement_id,mission_id,facture_honoraire_id,type_document,mode_paiement')data=null;
+    &&url.searchParams.get('select')==='id,etablissement_id,mission_id,facture_honoraire_id,type_document,mode_paiement,montant_ttc,montant_avoirs_imputes,montant_a_payer,rapprochement_paiement_requis')data=null;
    else if(nom==='fn_compte_auth_actif')data=true;
    else if(nom==='fn_capacite_alertes_recherches')data=false;
    else if(nom==='fn_messages_non_lus')data=0;

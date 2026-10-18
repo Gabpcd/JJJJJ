@@ -10,7 +10,9 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const source=readFileSync(`${ROOT}/supabase/functions/_shared/stripe-invoice-staging-test.ts`,'utf8');
-const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
+const balanceJs=ts.transpileModule(readFileSync(`${ROOT}/supabase/functions/_shared/commission-balance.ts`,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const balanceUrl=`data:text/javascript;base64,${Buffer.from(balanceJs).toString('base64')}`;
+const compiled=ts.transpileModule(source.replace('./commission-balance.ts',balanceUrl),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
 assert.deepEqual(compiled.diagnostics,[]);
 const h=await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
 const E='fcaa6c97-46c1-4da9-8f74-1395aed616c5',S='abba3c93-5408-47bf-96e3-0864c7de3cb7';
@@ -26,7 +28,7 @@ function fixture(){
  const calls=[];
  const users=Object.fromEntries([[E,'ADMIN_ETABLISSEMENT'],[S,'SOIGNANT']].map(([id,role])=>[id,{id,email_confirmed_at:'2026-10-16T00:00:00Z',app_metadata:{role,est_compte_test:true,jolene_connect_fixture_owner:OWNER,...(id===E?{etablissement_id:E}:{})}}]));
  const rows={etablissements:[{id:E,est_compte_test:true,supprime_le:null,stripe_customer_id:C}],soignants:[{id:S,est_compte_test:true,supprime_le:null,stripe_account_id:A}],
-  factures:[{id:F,etablissement_id:E,mission_id:M,facture_honoraire_id:null,type_document:'FACTURE',statut:'EMISE',nombre_missions:1,montant_ttc:17.42}],
+  factures:[{id:F,etablissement_id:E,mission_id:M,facture_honoraire_id:null,type_document:'FACTURE',statut:'EMISE',nombre_missions:1,montant_ttc:17.42,montant_avoirs_imputes:0,montant_a_payer:17.42,rapprochement_paiement_requis:false,mode_paiement:null}],
   missions:[{id:M,etablissement_id:E,soignant_assigne_id:S,type_contrat_applique:'SALARIE',statut:'TERMINEE',facture_id:null}],stripe_transfers:[],
   stripe_payment_flow_claims:[`FACTURE:${F}`,`MISSION:${M}`].map(resource_key=>({resource_key,flow:'CHECKOUT_INVOICE',owner_token:`invoice:${F}`,stripe_checkout_session_id:'cs_test_Synthetic',stripe_payment_intent_id:null}))};
  const sb={auth:{admin:{async getUserById(id){calls.push(`auth:${id}`);return {data:{user:structuredClone(users[id])},error:null};}}},from(table){
@@ -61,7 +63,7 @@ test('cohorte et facture salariée exactes : lectures seulement',async()=>{const
 for(const [name,change] of [
  ['autre facture',s=>s.rows.factures[0].id=M],['autre assigné',s=>s.rows.missions[0].soignant_assigne_id=E],
  ['mission libérale',s=>s.rows.missions[0].type_contrat_applique='LIBERAL'],['mission inachevée',s=>s.rows.missions[0].statut='EN_COURS'],
- ['montant changé',s=>s.rows.factures[0].montant_ttc=17.43],['complément',s=>s.rows.factures[0].type_document='FACTURE_COMPLEMENTAIRE'],
+ ['montant changé',s=>s.rows.factures[0].montant_ttc=17.43],['net changé par avoir',s=>Object.assign(s.rows.factures[0],{montant_avoirs_imputes:1,montant_a_payer:16.42})],['solde absent',s=>delete s.rows.factures[0].montant_a_payer],['incident',s=>s.rows.factures[0].rapprochement_paiement_requis=true],['complément',s=>s.rows.factures[0].type_document='FACTURE_COMPLEMENTAIRE'],
  ['FH liée',s=>s.rows.factures[0].facture_honoraire_id=M],['facture groupée',s=>s.rows.factures[0].nombre_missions=2],
  ['autre mission groupée',s=>s.rows.missions.push({id:F,facture_id:F})],['Connect engagé',s=>s.rows.stripe_transfers.push({id:F,mission_id:M})],
  ['Auth non TEST',s=>s.users[S].app_metadata.est_compte_test=false],['owner étranger',s=>s.users[E].app_metadata.jolene_connect_fixture_owner='FOREIGN'],
@@ -143,25 +145,33 @@ test('reproduction locale du contrat Stripe : ancien descripteur carte rejeté, 
 
 // Vrais handlers et vrais helpers Auth/classification/claims/audit/charge.
 // Seuls SDK Auth/PostgREST/Stripe sont remplacés par des transports en mémoire.
-function handlers({grouped=false}={}){
+function handlers({grouped=false,nonTest=false,sepa=false}={}){
  const s=grouped?groupedFixture():fixture();s.rows.stripe_payment_flow_claims=[];
  const f=s.rows.factures[0];Object.assign(f,{numero_facture:'SYNTHETIC',stripe_payment_intent_id:null,stripe_hosted_url:null,est_secteur_public:false,chorus_pro_statut:null,
   etablissements:{id:E,nom:'SYNTHETIC',email_contact:'synthetic@example.invalid',stripe_customer_id:C,mode_paiement_commission:'MANUEL',est_secteur_public:false,chorus_pro_actif:false}});
- const provider={sessions:[],intent:null,createCalls:0};const mutations=[],clientOptions=[];
+ // Le chemin standard valide aussi le profil Customer existant. La fixture
+ // Stripe doit le fournir, sinon le vrai helper tente une synchronisation
+ // nom/email, interdite dans ce banc limité aux montants de paiement.
+ Object.assign(s.identity.customer,{name:'SYNTHETIC',email:'synthetic@example.invalid'});
+ // Non-TEST ne désigne ici que des objets en mémoire, jamais un fournisseur.
+ if(nonTest){for(const user of Object.values(s.users))user.app_metadata.est_compte_test=false;for(const t of ['etablissements','soignants'])s.rows[t][0].est_compte_test=false;}
+ if(sepa){f.mission_id=null;Object.assign(f.etablissements,{mode_paiement_commission:'SEPA_DEBIT',stripe_sepa_payment_method_id:'pm_Synthetic'});}
+ const provider={sessions:[],intent:null,createCalls:0,intentCreates:[],checkoutBodies:[]};const mutations=[],clientOptions=[];
  const envRun={...env,INVOICE_STAGING_TEST_RUN:JSON.stringify(config),SUPABASE_ANON_KEY:'SYNTHETIC_ANON',SUPABASE_SERVICE_ROLE_KEY:'SYNTHETIC_SERVICE'};
+ if(nonTest)delete envRun.INVOICE_STAGING_TEST_RUN;
  s.sb.auth.getUser=async token=>({data:{user:token==='SYNTHETIC_USER'?s.users[E]:null},error:token==='SYNTHETIC_USER'?null:{message:'invalid'}});
  s.sb.from=table=>{
   assert.ok(s.rows[table],`unknown table ${table}`);s.calls.push(`read:${table}`);
   const filters=[];let limit=Infinity,update=null;
-  const result=()=>{let rows=s.rows[table].filter(r=>filters.every(fn=>fn(r))).slice(0,limit);if(update){mutations.push('update:'+table);rows.forEach(r=>Object.assign(r,structuredClone(update)));}return {data:structuredClone(rows),error:null};};
+  const result=()=>{if(table==='factures' && update && provider.beforeFactureWrite){const before=provider.beforeFactureWrite;delete provider.beforeFactureWrite;before();}let rows=s.rows[table].filter(r=>filters.every(fn=>fn(r))).slice(0,limit);if(update){mutations.push('update:'+table);rows.forEach(r=>Object.assign(r,structuredClone(update)));}return {data:structuredClone(rows),error:null};};
   const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},neq(k,v){filters.push(r=>r[k]!==v);return q;},is(k,v){filters.push(r=>r[k]===v);return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},not(k,op,v){assert.equal(op,'in');const vals=v.slice(1,-1).split(',');filters.push(r=>!vals.includes(r[k]));return q;},order(){return q;},limit(n){limit=n;return q;},update(v){update=v;return q;},async maybeSingle(){const r=result();assert.ok(r.data.length<=1);return {...r,data:r.data[0]??null};},single(){return q.maybeSingle();},then(yes,no){return Promise.resolve(result()).then(yes,no);}};return q;
  };
  s.sb.rpc=async(name,args)=>{
   s.calls.push('rpc:'+name);
   if(name==='fn_a_permission_etablissement')return {data:true,error:null};
-  if(name==='fn_ecrire_audit_safe')return {data:true,error:null};
+  if(name==='fn_ecrire_audit_safe')return {data:{success:true},error:null};
   assert.equal(name,'fn_stripe_payment_flow_claim');
-  assert.equal(args.p_flow,'CHECKOUT_INVOICE');assert.equal(args.p_facture_id,F);assert.equal(args.p_mission_id,null);
+  assert.equal(args.p_flow,sepa?'SEPA_INVOICE':'CHECKOUT_INVOICE');assert.equal(args.p_facture_id,F);assert.equal(args.p_mission_id,null);
   if(!s.rows.stripe_payment_flow_claims.length){mutations.push('rpc:claim');s.rows.stripe_payment_flow_claims=[`FACTURE:${F}`,`MISSION:${M}`].map(resource_key=>({resource_key,flow:args.p_flow,owner_token:args.p_owner_token,stripe_checkout_session_id:null,stripe_payment_intent_id:null}));}
   const first=s.rows.stripe_payment_flow_claims[0];return {data:{acquired:true,resources:s.rows.stripe_payment_flow_claims.map(r=>r.resource_key),stripe_checkout_session_id:first.stripe_checkout_session_id,stripe_payment_intent_id:first.stripe_payment_intent_id},error:null};
  };
@@ -169,13 +179,14 @@ function handlers({grouped=false}={}){
  class StripeTransport{
   static errors=new Proxy({},{get:()=>class StripeTestError extends Error{}});
   accounts=s.stripe.accounts;balance=s.stripe.balance;customers={...s.stripe.customers,create:()=>forbid('customer.create'),update:()=>forbid('customer.update')};
-  paymentIntents={search:async()=>({data:provider.intent?[provider.intent]:[],has_more:false}),list:async()=>({data:provider.intent?[provider.intent]:[],has_more:false}),retrieve:async id=>{assert.equal(id,provider.intent?.id);return structuredClone(provider.intent);}};
-  charges={retrieve:async id=>{assert.equal(id,'ch_Synthetic');return {id,paid:true,captured:true,status:'succeeded',amount:1742,amount_refunded:0,refunded:false,disputed:false,currency:'eur',customer:C,payment_intent:'pi_Synthetic'};}};
+  paymentMethods={retrieve:async id=>({id,type:'sepa_debit',customer:C})};
+  paymentIntents={create:async(body,opts)=>{assert.equal(opts.idempotencyKey,`jolene-sepa-facture-${F}`);provider.intentCreates.push(body);provider.intent={id:'pi_Synthetic',status:'processing',amount:body.amount,amount_received:0,currency:'eur',customer:C,metadata:body.metadata};return structuredClone(provider.intent);},search:async()=>({data:provider.intent?[provider.intent]:[],has_more:false}),list:async()=>({data:provider.intent?[provider.intent]:[],has_more:false}),retrieve:async id=>{assert.equal(id,provider.intent?.id);return structuredClone(provider.intent);}};
+  charges={retrieve:async id=>{assert.equal(id,'ch_Synthetic');return {id,paid:true,captured:true,status:'succeeded',amount:Math.round(Number(f.montant_a_payer)*100),amount_refunded:0,refunded:false,disputed:false,currency:'eur',customer:C,payment_intent:'pi_Synthetic'};}};
   checkout={sessions:{list:async()=>({data:structuredClone(provider.sessions),has_more:false}),retrieve:async id=>{assert.equal(id,provider.sessions[0]?.id);return structuredClone(provider.sessions[0]);},create:async(body,options)=>{
-   assert.equal(body.payment_intent_data.statement_descriptor,undefined);assert.equal(body.expires_at,Math.floor(Date.parse(config.expiresAt)/1000));assert.equal(options.idempotencyKey,`invoice_checkout_${F}`);
-   assert.equal(body.return_url,`${config.returnOrigin}/etablissement/facturation?paiement=succes&session_id={CHECKOUT_SESSION_ID}`);
+   assert.equal(body.payment_intent_data.statement_descriptor,undefined);assert.equal(body.expires_at,nonTest?undefined:Math.floor(Date.parse(config.expiresAt)/1000));assert.equal(options.idempotencyKey,`invoice_checkout_${F}`);
+   if(!nonTest)assert.equal(body.return_url,`${config.returnOrigin}/etablissement/facturation?paiement=succes&session_id={CHECKOUT_SESSION_ID}`);
    assert.deepEqual(JSON.parse(JSON.stringify(body.metadata)),{facture_id:F,etablissement_id:E});
-   provider.createCalls++;mutations.push('stripe:checkout:create');const session={...structuredClone(s.session),status:'open',payment_status:'unpaid',payment_intent:null,url:null,client_secret:'SYNTHETIC_CLIENT_SECRET'};provider.sessions.push(session);return structuredClone(session);
+   provider.checkoutBodies.push(body);provider.createCalls++;mutations.push('stripe:checkout:create');const session={...structuredClone(s.session),status:'open',payment_status:'unpaid',payment_intent:null,amount_total:body.line_items[0].price_data.unit_amount,url:null,client_secret:'SYNTHETIC_CLIENT_SECRET'};provider.sessions.push(session);return structuredClone(session);
   },expire:()=>forbid('session.expire')}};
  }
  const cache=new Map();const registered={};
@@ -191,9 +202,10 @@ function handlers({grouped=false}={}){
  }
  const createFile=resolve(ROOT,'supabase/functions/create-invoice-payment/index.ts');load(createFile);
  const confirmFile=resolve(ROOT,'supabase/functions/confirm-invoice-payment/index.ts');load(confirmFile);
+ const sepaFile=resolve(ROOT,'supabase/functions/sepa-auto-charge/index.ts');load(sepaFile);
  const run=(file,token='SYNTHETIC_USER')=>registered[file](new Request('https://simulation.invalid',{method:'POST',headers:{Authorization:'Bearer '+token,Origin:config.returnOrigin,'x-jolene-paid-invoice-email':'injected-value'},body:JSON.stringify({facture_id:F,embedded:true})}));
- const pay=()=>{const session=provider.sessions[0];session.status='complete';session.payment_status='paid';session.payment_intent='pi_Synthetic';provider.intent={id:'pi_Synthetic',status:'succeeded',livemode:false,currency:'eur',amount:1742,amount_received:1742,customer:C,metadata:{facture_id:F,etablissement_id:E},created:Math.floor(now/1000),latest_charge:'ch_Synthetic'};};
- return {s,provider,mutations,clientOptions,envRun,pay,create:(token)=>run(createFile,token),confirm:(token)=>run(confirmFile,token)};
+ const pay=()=>{const session=provider.sessions[0];session.status='complete';session.payment_status='paid';session.payment_intent='pi_Synthetic';provider.intent={id:'pi_Synthetic',status:'succeeded',livemode:false,currency:'eur',amount:session.amount_total,amount_received:session.amount_total,customer:C,metadata:{facture_id:F,etablissement_id:E},created:Math.floor(now/1000),latest_charge:'ch_Synthetic'};};
+ return {s,provider,mutations,clientOptions,envRun,pay,create:(token)=>run(createFile,token),confirm:(token)=>run(confirmFile,token),sepa:()=>run(sepaFile,'SYNTHETIC_SERVICE')};
 }
 test('vrais handlers : un Checkout puis reprise sans nouvelle création, paiement exact confirmé',async()=>{
  const r=handlers();let response=await r.create();assert.equal(response.status,200);assert.equal((await response.json()).client_secret,'SYNTHETIC_CLIENT_SECRET');
@@ -224,4 +236,65 @@ test('vrai handler groupé : variation de commission après paiement bloque la c
  const r=handlers({grouped:true});assert.equal((await r.create()).status,200);r.pay();
  r.s.rows.missions[0].montant_commission_ht=14.51;const before=r.mutations.length;
  assert.notEqual((await r.confirm()).status,200);assert.equal(r.s.rows.factures[0].statut,'EMISE');assert.equal(r.mutations.length,before);
+});
+
+// Recettes des handlers avec SDK en mémoire : aucune admission TEST fournisseur ajoutée.
+test('avoir partiel : Checkout débite le net et confirmation conserve les trois montants',async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:5,montant_a_payer:12.42});
+ let response=await r.create();assert.equal(response.status,200,JSON.stringify(await response.json()));
+ assert.equal(r.provider.checkoutBodies[0].line_items[0].price_data.unit_amount,1242);
+ r.pay();response=await r.confirm();assert.equal(response.status,200,JSON.stringify(await response.json()));
+ assert.equal(r.s.rows.factures[0].statut,'PAYEE');assert.equal(r.s.rows.factures[0].montant_ttc,17.42);assert.equal(r.s.rows.factures[0].montant_a_payer,12.42);
+ response=await r.confirm();assert.equal(response.status,200);assert.equal(r.provider.createCalls,1);
+});
+test('avoir total déjà soldé : création et confirmation retournent PAYEE sans aucun objet Stripe',async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:17.42,montant_a_payer:0,statut:'PAYEE',mode_paiement:'AVOIR'});
+ delete r.envRun.STRIPE_SECRET_KEY;
+ for(const response of [await r.create(),await r.confirm()]){assert.equal(response.status,200);assert.equal((await response.json()).status,'PAYEE');}
+ assert.equal(r.provider.createCalls,0);assert.deepEqual(r.mutations,[]);assert.equal(r.s.calls.some(x=>x.startsWith('stripe:')),false);
+});
+for(const [label,patch] of [['solde manquant',{montant_a_payer:undefined}],['net incohérent',{montant_a_payer:1}],['rapprochement requis',{rapprochement_paiement_requis:true}]])test(`handlers refusent ${label} avant transport`,async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],patch);
+ assert.notEqual((await r.create()).status,200);assert.notEqual((await r.confirm()).status,200);assert.deepEqual(r.mutations,[]);assert.equal(r.provider.createCalls,0);
+});
+test('confirmation refuse un PI au TTC après imputation partielle',async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:5,montant_a_payer:12.42});
+ assert.equal((await r.create()).status,200);r.pay();r.provider.intent.amount=1742;r.provider.intent.amount_received=1742;
+ assert.notEqual((await r.confirm()).status,200);assert.equal(r.s.rows.factures[0].statut,'EMISE');
+});
+test('SEPA : débit du seul net, puis exclusion après liaison du PI',async()=>{
+ const r=handlers({nonTest:true,sepa:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:5,montant_a_payer:12.42});
+ let response=await r.sepa();assert.equal(response.status,200,JSON.stringify(await response.json()));
+ assert.equal(r.provider.intentCreates.length,1);assert.equal(r.provider.intentCreates[0].amount,1242);
+ assert.equal(r.s.rows.factures[0].stripe_payment_intent_id,'pi_Synthetic');
+ response=await r.sepa();assert.equal(response.status,200);assert.equal(r.provider.intentCreates.length,1);
+});
+test('SEPA : facture soldée par avoir ou incident exclu avant le débit',async()=>{
+ for(const patch of [{statut:'PAYEE',mode_paiement:'AVOIR',montant_avoirs_imputes:17.42,montant_a_payer:0},{rapprochement_paiement_requis:true}]){
+  const r=handlers({nonTest:true,sepa:true});Object.assign(r.s.rows.factures[0],patch);assert.equal((await r.sepa()).status,200);assert.deepEqual(r.provider.intentCreates,[]);assert.deepEqual(r.mutations,[]);
+ }
+});
+
+for(const cents of [1,49])test(`carte : net ${cents} centime(s) conservé, virement proposé sans création`,async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:(1742-cents)/100,montant_a_payer:cents/100});
+ const response=await r.create();assert.equal(response.status,409);const body=await response.json();assert.equal(body.error,'CARD_AMOUNT_TOO_SMALL');assert.match(body.message,/virement/);
+ assert.equal(r.provider.createCalls,0);assert.deepEqual(r.mutations,[]);assert.equal(r.s.rows.factures[0].montant_a_payer,cents/100);
+});
+
+for(const cents of [1,49])test(`SEPA : net ${cents} centime(s) sans tentative ni arrondi`,async()=>{
+ const r=handlers({nonTest:true,sepa:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:(1742-cents)/100,montant_a_payer:cents/100});
+ const response=await r.sepa();assert.equal(response.status,200);const body=await response.json();assert.equal(body.results[0].error,'SEPA_AMOUNT_TOO_SMALL');
+ assert.deepEqual(r.provider.intentCreates,[]);assert.deepEqual(r.mutations,[]);assert.equal(r.s.rows.factures[0].montant_a_payer,cents/100);
+});
+test('frontière EUR : 50 centimes admis sans majoration, carte et SEPA',async()=>{
+ for(const sepa of [false,true]){const r=handlers({nonTest:true,sepa});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:16.92,montant_a_payer:0.50});
+ const response=sepa?await r.sepa():await r.create();assert.equal(response.status,200,JSON.stringify(await response.json()));
+ assert.equal(sepa?r.provider.intentCreates[0].amount:r.provider.checkoutBodies[0].line_items[0].price_data.unit_amount,50);}
+});
+
+test('confirmation : incident concurrent fait perdre le CAS, aucun faux PAYEE',async()=>{
+ const r=handlers({nonTest:true});Object.assign(r.s.rows.factures[0],{montant_avoirs_imputes:5,montant_a_payer:12.42});
+ assert.equal((await r.create()).status,200);r.pay();r.provider.beforeFactureWrite=()=>{r.s.rows.factures[0].rapprochement_paiement_requis=true;};
+ const response=await r.confirm();assert.equal(response.status,409,JSON.stringify(await response.json()));
+ assert.equal(r.s.rows.factures[0].statut,'EMISE');assert.equal(r.s.rows.factures[0].rapprochement_paiement_requis,true);
 });

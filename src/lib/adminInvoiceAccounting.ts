@@ -6,6 +6,8 @@ export interface AdminInvoiceAccountingRow {
   montant_ht?: number | null;
   montant_tva?: number | null;
   montant_ttc?: number | null;
+  montant_a_payer?: number | null;
+  rapprochement_paiement_requis?: boolean | null;
 }
 
 export type InvoiceAmountField = 'ht' | 'tva' | 'ttc';
@@ -49,6 +51,7 @@ export function estFactureRelancable(
   maintenant: Date = new Date(),
 ): boolean {
   if (facture.type_document !== 'FACTURE') return false;
+  if (facture.rapprochement_paiement_requis === true || facture.montant_a_payer === 0) return false;
   if (facture.statut !== 'EMISE' && facture.statut !== 'EN_RETARD') return false;
 
   if (!facture.date_echeance) return facture.statut === 'EN_RETARD';

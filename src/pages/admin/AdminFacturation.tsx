@@ -23,6 +23,8 @@ import { estDocumentComptabilise, montantDocumentComptable } from '@/lib/adminIn
 import { estFactureProduction, perimetreFacture, type FactureAvecPerimetre } from '@/lib/adminInvoiceScope';
 import { RevuesTvaMissions } from '@/components/admin/RevuesTvaMissions';
 import { normaliserLignesFactureCommission } from '@/lib/factureCommissionUi';
+import { ResumeReglementCommission } from '@/components/ResumeReglementCommission';
+import { formatMontantCommission, soldeCommissionPourAffichage } from '@/lib/soldeCommission';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -332,7 +334,7 @@ export default function AdminFacturation() {
       const taillePage = 1000;
       for (let offset = 0; ; offset += taillePage) {
         const { data, error } = await supabase.from('factures')
-          .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom, est_compte_test)')
+          .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, mode_paiement, montant_signe, type_document, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom, est_compte_test)')
           .order('date_emission', { ascending: false })
           .order('id', { ascending: false })
           .range(offset, offset + taillePage - 1);
@@ -360,7 +362,7 @@ export default function AdminFacturation() {
     const ts = (f: any) => (f.date_emission ? new Date(f.date_emission).getTime() : 0);
     return factures
       .filter((f: any) => (
-        STATUTS_A_TRAITER.includes(f.statut)
+        (STATUTS_A_TRAITER.includes(f.statut) || f.rapprochement_paiement_requis === true)
         && (
           estFactureProduction(f)
           || (inclureTestsDansFile && perimetreFacture(f) === 'TEST')
@@ -386,7 +388,7 @@ export default function AdminFacturation() {
 
   const historique = useMemo(
     () => filtered.filter((f: any) => !(
-      STATUTS_A_TRAITER.includes(f.statut)
+      (STATUTS_A_TRAITER.includes(f.statut) || f.rapprochement_paiement_requis === true)
       && (
         estFactureProduction(f)
         || (inclureTestsDansFile && perimetreFacture(f) === 'TEST')
@@ -749,8 +751,9 @@ export default function AdminFacturation() {
                       )}
                     </div>
 
+                    <div className="pl-7"><ResumeReglementCommission facture={f} /></div>
                     <div className="flex flex-wrap items-center gap-2 pl-7">
-                      {f.statut === 'VIREMENT_DECLARE' && (
+                      {f.statut === 'VIREMENT_DECLARE' && !f.rapprochement_paiement_requis && (soldeCommissionPourAffichage(f)?.resteDuCents ?? 0) > 0 && (
                         <>
                           <BoutonY2K
                             variant="primary"
@@ -908,7 +911,7 @@ export default function AdminFacturation() {
                               </button>
                             </TableCell>
                             <TableCell>{formatEur(montantDocumentComptable(f, 'ht'))}</TableCell>
-                            <TableCell className="font-medium">{formatEur(montantDocumentComptable(f, 'ttc'))}</TableCell>
+                            <TableCell className="font-medium">{formatEur(montantDocumentComptable(f, 'ttc'))}<ResumeReglementCommission facture={f} /></TableCell>
                             <TableCell>{f.nombre_missions}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
                             <TableCell>
@@ -1013,6 +1016,7 @@ export default function AdminFacturation() {
                             <div>
                               <p className="text-muted-foreground">TTC</p>
                               <p className="font-semibold">{formatEur(montantDocumentComptable(f, 'ttc'))}</p>
+                              <ResumeReglementCommission facture={f} />
                             </div>
                             <div>
                               <p className="text-muted-foreground">Missions</p>
@@ -1065,7 +1069,7 @@ export default function AdminFacturation() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Facture {confirmationFacture?.facture?.numero_facture ?? '—'} ·{' '}
-              {formatEur(montantDocumentComptable(confirmationFacture?.facture ?? {}, 'ttc'))}
+              {(() => { const solde = soldeCommissionPourAffichage(confirmationFacture?.facture ?? {}); return solde ? formatMontantCommission(solde.montantExterneCents) : 'Solde indisponible'; })()}
               {confirmationFacture?.facture?.virement_reference
                 ? ` · Référence ${confirmationFacture.facture.virement_reference}`
                 : ''}.

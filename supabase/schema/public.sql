@@ -976,7 +976,7 @@ CREATE OR REPLACE FUNCTION "public"."dec_bloquer_paiement_manuel_facture"() RETU
     AS $$
 BEGIN
     -- Si quelqu'un essaie de passer une facture en PAYEE
-    IF NEW.statut = 'PAYEE' AND OLD.statut != 'PAYEE' THEN
+    IF NEW.statut = 'PAYEE' AND OLD.statut != 'PAYEE' AND NEW.mode_paiement IS DISTINCT FROM 'AVOIR' THEN
         -- Seul l'admin OU le service_role (webhook Stripe) peut faire ça
         IF NOT est_admin() AND auth.uid() IS NOT NULL THEN
             RAISE EXCEPTION 'Le paiement des factures passe exclusivement par Stripe ou virement bancaire.';
@@ -1003,6 +1003,7 @@ BEGIN
     WHERE etablissement_id = NEW.etablissement_id
       AND statut IN ('EMISE', 'EN_RETARD')
       AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis
       AND date_echeance < current_date;
 
     IF v_nb_impayees > 0 AND NOT public.est_admin() THEN
@@ -1999,7 +2000,8 @@ CREATE OR REPLACE FUNCTION "public"."dec_idempotence_facture_payee"() RETURNS "t
     AS $$
 BEGIN
     -- Si la facture est DÉJÀ payée, ne rien faire
-    IF OLD.statut = 'PAYEE' AND NEW.statut = 'PAYEE' THEN
+    IF OLD.statut = 'PAYEE' AND NEW.statut = 'PAYEE'
+      AND NEW.rapprochement_paiement_requis IS NOT DISTINCT FROM OLD.rapprochement_paiement_requis THEN
         RETURN OLD; -- Pas de modification
     END IF;
     RETURN NEW;
@@ -9983,6 +9985,7 @@ BEGIN
     'factures_impayees', (
       SELECT count(*) FROM factures_reelles WHERE statut IN ('EMISE', 'EN_RETARD')
         AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis
     ),
     'docs_en_attente', (
       SELECT count(*)
@@ -14783,6 +14786,9 @@ BEGIN
         v_commission_delta_ttc, 1, 'EMISE', now(), current_date + 30,
         v_mission.debut_le::date, v_mission.fin_le::date
       ) RETURNING id INTO v_document_commission_id;
+      IF v_document_commission_type='AVOIR' THEN
+        PERFORM private.fn_inscrire_avoir_commission(v_document_commission_id,v_mission.id,'LITIGE_SALARIE');
+      END IF;
     END IF;
   ELSE
     v_mission_apres := v_mission;
@@ -15719,6 +15725,7 @@ BEGIN
               WHERE f.etablissement_id = e.id
                 AND f.statut IN ('EMISE', 'EN_RETARD')
                 AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
                 AND f.date_echeance < current_date
             )
           ),
@@ -17152,7 +17159,7 @@ BEGIN
     END LOOP;
 
     FOR v_facture IN
-        SELECT f.id, f.numero_facture, f.montant_ttc, f.date_emission,
+        SELECT f.id, f.numero_facture, f.montant_ttc, f.montant_a_payer, f.montant_avoirs_imputes, f.mode_paiement, f.date_emission,
                COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) AS date_echeance,
                f.relance_1_le, f.relance_2_le, f.etablissement_id,
                e.nom AS etab_nom, e.email_contact AS etab_email
@@ -17160,6 +17167,7 @@ BEGIN
         JOIN public.etablissements e ON e.id = f.etablissement_id
         WHERE f.statut IN ('EMISE', 'EN_RETARD')
         AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
         AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
         AND (f.relance_1_le IS NULL OR f.relance_2_le IS NULL)
     LOOP
@@ -17173,6 +17181,8 @@ BEGIN
                         'type_obligation', 'FACTURE_COMMISSION',
                         'numero_facture', v_facture.numero_facture,
                         'montant_ttc', ROUND(v_facture.montant_ttc, 2),
+                        'montant_avoirs_imputes',v_facture.montant_avoirs_imputes,
+                        'montant_a_payer',v_facture.montant_a_payer,'mode_paiement',v_facture.mode_paiement,
                         'date_emission', TO_CHAR(v_facture.date_emission AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'),
                         'date_echeance', TO_CHAR(v_facture.date_echeance, 'DD/MM/YYYY'),
                         'etablissement_nom', v_facture.etab_nom
@@ -17183,7 +17193,7 @@ BEGIN
             INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
             VALUES (v_facture.etablissement_id, 'SYSTEM',
                 'Rappel facture commission',
-                'Rappel : facture ' || COALESCE(v_facture.numero_facture, '-') || ' de ' || v_facture.montant_ttc || ' EUR en attente de reglement.',
+                'Rappel : facture ' || COALESCE(v_facture.numero_facture, '-') || ' de ' || v_facture.montant_a_payer || ' EUR en attente de reglement.',
                 '/etablissement/facturation', 'ETABLISSEMENT', 'facture', v_facture.id);
 
             UPDATE public.factures SET relance_1_le = NOW() WHERE id = v_facture.id;
@@ -17200,6 +17210,8 @@ BEGIN
                         'type_obligation', 'FACTURE_COMMISSION',
                         'numero_facture', v_facture.numero_facture,
                         'montant_ttc', ROUND(v_facture.montant_ttc, 2),
+                        'montant_avoirs_imputes',v_facture.montant_avoirs_imputes,
+                        'montant_a_payer',v_facture.montant_a_payer,'mode_paiement',v_facture.mode_paiement,
                         'date_emission', TO_CHAR(v_facture.date_emission AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'),
                         'date_echeance', TO_CHAR(v_facture.date_echeance, 'DD/MM/YYYY'),
                         'etablissement_nom', v_facture.etab_nom,
@@ -17212,7 +17224,7 @@ BEGIN
             INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
             VALUES (v_facture.etablissement_id, 'SYSTEM',
                 'Facture en retard (21 jours)',
-                'Facture ' || COALESCE(v_facture.numero_facture, '-') || ' de ' || v_facture.montant_ttc || ' EUR toujours impayee. Sans regularisation sous 24 jours la publication de nouvelles missions sera suspendue.',
+                'Facture ' || COALESCE(v_facture.numero_facture, '-') || ' de ' || v_facture.montant_a_payer || ' EUR toujours impayee. Sans regularisation sous 24 jours la publication de nouvelles missions sera suspendue.',
                 '/etablissement/facturation', 'ETABLISSEMENT', 'facture', v_facture.id);
 
             UPDATE public.factures SET relance_2_le = NOW() WHERE id = v_facture.id;
@@ -20000,7 +20012,7 @@ BEGIN
         INSERT INTO factures (etablissement_id, numero_facture, montant_ht, montant_tva, montant_ttc,
             nombre_missions, statut, date_emission, date_echeance, periode_debut, periode_fin)
         VALUES (v_etab.etablissement_id, v_num, v_etab.sum_ht, v_etab.sum_tva, v_etab.sum_ttc,
-            v_etab.nb, 'EMISE', now(), v_echeance,
+            v_etab.nb, 'BROUILLON', now(), v_echeance,
             date_trunc('month', now())::date,
             (date_trunc('month', now()) + INTERVAL '1 month' - INTERVAL '1 day')::date)
         RETURNING id INTO v_facture_id;
@@ -20008,6 +20020,7 @@ BEGIN
         WHERE etablissement_id = v_etab.etablissement_id AND statut = 'TERMINEE'
           AND commission_facturee = false AND facture_id IS NULL
           AND NOT EXISTS (SELECT 1 FROM factures f WHERE f.mission_id = missions.id);
+        PERFORM private.fn_emettre_facture_mensuelle_avec_avoirs(v_facture_id);
     END LOOP;
 
     RETURN jsonb_build_object('success', true, 'factures_generees', v_compteur, 'recalc_post_litige', v_recalc_info);
@@ -20599,6 +20612,7 @@ BEGIN
     WHERE etablissement_id = p_etab_id
       AND statut IN ('EMISE', 'EN_RETARD')
       AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis
       AND date_echeance < current_date
   ) THEN
     RETURN jsonb_build_object('error', 'FACTURES_IMPAYEES', 'message', 'Vous avez des factures impayées à régulariser.');
@@ -24578,12 +24592,15 @@ BEGIN
     RETURN json_build_object('error', 'Réservé aux administrateurs');
   END IF;
 
-  SELECT id, statut INTO v_facture FROM factures WHERE id = p_facture_id;
+  SELECT id, statut, rapprochement_paiement_requis, montant_a_payer INTO v_facture FROM factures WHERE id = p_facture_id;
 
   IF NOT FOUND THEN
     RETURN json_build_object('error', 'Facture introuvable');
   END IF;
 
+  IF v_facture.rapprochement_paiement_requis OR v_facture.montant_a_payer<=0 THEN
+    RETURN json_build_object('error','Facture soldée ou paiement à rapprocher.');
+  END IF;
   IF v_facture.statut != 'VIREMENT_DECLARE' THEN
     RETURN json_build_object('error', 'Cette facture n''est pas en attente de vérification de virement');
   END IF;
@@ -29885,6 +29902,9 @@ BEGIN
         RETURN '{"error":"Accès refusé"}'::JSONB;
     END IF;
 
+    IF v_facture.rapprochement_paiement_requis OR v_facture.montant_a_payer<=0
+      OR v_facture.statut NOT IN ('EMISE','EN_RETARD') THEN
+      RETURN jsonb_build_object('error','Facture soldée ou paiement à rapprocher.'); END IF;
     UPDATE factures SET
         chorus_pro_statut = 'DEPOSEE',
         chorus_pro_deposee_le = NOW(),
@@ -30184,7 +30204,10 @@ BEGIN
             'id', v_facture.id, 'numero_facture', v_facture.numero_facture,
             'statut', v_facture.statut, 'montant_ht', v_facture.montant_ht,
             'taux_tva', v_facture.taux_tva, 'montant_tva', v_facture.montant_tva,
-            'montant_ttc', v_facture.montant_ttc, 'nombre_missions', v_facture.nombre_missions,
+            'montant_ttc', v_facture.montant_ttc,
+            'montant_avoirs_imputes',v_facture.montant_avoirs_imputes,'montant_a_payer',v_facture.montant_a_payer,
+            'rapprochement_paiement_requis',v_facture.rapprochement_paiement_requis,'type_document',v_facture.type_document,
+            'avoirs',private.fn_avoirs_commission_detail(v_facture.id), 'nombre_missions', v_facture.nombre_missions,
             'mode_paiement', v_facture.mode_paiement,
             'periode_debut', v_facture.periode_debut, 'periode_fin', v_facture.periode_fin,
             'date_emission', v_facture.date_emission, 'date_echeance', v_facture.date_echeance,
@@ -31630,12 +31653,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_email_factures_impayees"() RETURNS TABLE
 BEGIN
     RETURN QUERY
     SELECT e.email_contact, e.nom, f.numero_facture,
-        ROUND(f.montant_ttc, 2)::TEXT,
+        ROUND(f.montant_a_payer, 2)::TEXT,
         (CURRENT_DATE - f.date_echeance)::INTEGER, e.id
     FROM factures f
     JOIN etablissements e ON e.id = f.etablissement_id
     WHERE f.statut IN ('EMISE', 'EN_RETARD')
     AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
       AND f.date_echeance < CURRENT_DATE
       AND e.email_contact IS NOT NULL
       AND NOT EXISTS (
@@ -37504,12 +37528,13 @@ BEGIN
     v_numero := fn_generer_numero_facture();
     INSERT INTO factures (etablissement_id, numero_facture, statut, montant_ht, taux_tva, montant_tva, montant_ttc,
         nombre_missions, date_emission, date_echeance, periode_debut, periode_fin)
-    VALUES (p_etablissement_id, v_numero, 'EMISE', v_total_ht, 20, v_total_tva, v_total_ttc,
+    VALUES (p_etablissement_id, v_numero, 'BROUILLON', v_total_ht, 20, v_total_tva, v_total_ttc,
         v_nb, NOW(), (NOW() + INTERVAL '30 days')::DATE,
         DATE_TRUNC('month', NOW())::DATE, (DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day')::DATE)
     RETURNING id INTO v_facture_id;
     UPDATE missions SET commission_facturee = TRUE, facture_id = v_facture_id
     WHERE etablissement_id = p_etablissement_id AND statut = 'TERMINEE' AND commission_facturee = FALSE;
+    PERFORM private.fn_emettre_facture_mensuelle_avec_avoirs(v_facture_id);
     RETURN jsonb_build_object('success', true, 'facture_id', v_facture_id, 'numero', v_numero, 'montant_ttc', v_total_ttc, 'nb_missions', v_nb);
 END;
 $$;
@@ -37788,12 +37813,13 @@ BEGIN
               AND ps.statut IN ('DECLARE', 'CONFIRME')
           );
 
-        SELECT COUNT(*), COALESCE(SUM(f.montant_ttc), 0)
+        SELECT COUNT(*), COALESCE(SUM(f.montant_a_payer), 0)
         INTO v_factures_retard_nb, v_factures_retard_montant
         FROM public.factures f
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
           AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30) IS NOT NULL
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
@@ -37862,6 +37888,7 @@ BEGIN
         WHERE f.etablissement_id = v_etab.id
           AND f.statut IN ('EMISE', 'EN_RETARD')
           AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
           AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
@@ -41486,6 +41513,8 @@ BEGIN
         SELECT 
             id, numero_facture, statut, 
             montant_ht, taux_tva, montant_tva, montant_ttc,
+            montant_avoirs_imputes,montant_a_payer,rapprochement_paiement_requis,type_document,
+            private.fn_avoirs_commission_detail(id) AS avoirs,
             nombre_missions, mode_paiement,
             periode_debut, periode_fin,
             date_emission, date_echeance, date_paiement,
@@ -45104,12 +45133,13 @@ BEGIN
   INTO v_total_soignants_du, v_lignes
   FROM obligations o;
 
-  SELECT COALESCE(sum(f.montant_ttc), 0)
+  SELECT COALESCE(sum(f.montant_a_payer), 0)
   INTO v_total_commissions_du
   FROM public.factures f
   WHERE f.etablissement_id = v_etab_id
     AND f.statut IN ('EMISE', 'EN_RETARD')
-    AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
+    AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis;
 
   RETURN jsonb_build_object(
     'total_du', v_total_soignants_du + v_total_commissions_du,
@@ -45124,6 +45154,7 @@ BEGIN
       SELECT count(*) FROM public.factures
       WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
         AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis
     ),
     'nb_factures_commission_historique', (
       SELECT count(*) FROM public.factures
@@ -45167,7 +45198,7 @@ BEGIN
     'factures_impayees', COALESCE((
       SELECT jsonb_agg(row_to_json(x)) FROM (
         SELECT f.id::text AS facture_id, f.numero_facture, f.montant_ht,
-          f.montant_tva, f.montant_ttc, f.nombre_missions, f.date_echeance,
+          f.montant_tva, f.montant_ttc, f.montant_avoirs_imputes, f.montant_a_payer, f.rapprochement_paiement_requis, f.nombre_missions, f.date_echeance,
           f.statut, f.type_document, f.stripe_hosted_url, f.est_secteur_public,
           f.chorus_pro_statut, f.chorus_pro_numero_flux
         FROM public.factures f
@@ -45180,7 +45211,7 @@ BEGIN
     'factures_commission_historique', COALESCE((
       SELECT jsonb_agg(row_to_json(x)) FROM (
         SELECT f.id::text AS facture_id, f.numero_facture, f.statut, f.type_document,
-          f.montant_ttc, f.nombre_missions, f.date_emission, f.date_paiement,
+          f.montant_ttc, f.montant_avoirs_imputes, f.montant_a_payer, f.rapprochement_paiement_requis, f.nombre_missions, f.date_emission, f.date_paiement,
           f.mode_paiement, f.virement_reference, f.stripe_payment_intent_id,
           f.mission_id::text AS mission_id, f.facture_honoraire_id::text,
           f.est_secteur_public, f.chorus_pro_statut
@@ -47866,6 +47897,7 @@ BEGIN
     v_origine_c.periode_debut, v_origine_c.periode_fin,
     v_origine_c.est_secteur_public, v_origine_c.mode_paiement
   ) RETURNING id INTO v_avoir_c_id;
+  PERFORM private.fn_inscrire_avoir_commission(v_avoir_c_id,v_avoir_h.mission_id,'LITIGE_HONORAIRES');
 
   UPDATE public.missions
   SET total_brut = GREATEST(0, COALESCE(total_brut, 0) - v_avoir_h.montant_ht),
@@ -51308,12 +51340,16 @@ DECLARE
   v_notifs_envoyees    INT := 0;
   v_mission_intitule   TEXT;
   v_litige_id          UUID;
+  v_avoir_id uuid;
+  v_imputation jsonb;
 BEGIN
   FOR v_mission IN
     SELECT id, taux_commission, facture_id, commission_facturee,
            montant_commission_ht, etablissement_id, intitule
       FROM public.missions
      WHERE commission_a_recalculer = TRUE
+     ORDER BY id
+     FOR UPDATE SKIP LOCKED
   LOOP
     SELECT COALESCE(SUM(fh.montant_signe), 0) INTO v_new_brut
       FROM public.factures_honoraires fh
@@ -51363,6 +51399,8 @@ BEGIN
         date_trunc('month', now())::date,
         (date_trunc('month', now()) + INTERVAL '1 month' - INTERVAL '1 day')::date
       );
+      SELECT id INTO STRICT v_avoir_id FROM public.factures WHERE numero_facture=v_doc_number;
+      v_imputation:=private.fn_inscrire_avoir_commission(v_avoir_id,v_mission.id,'RECALCUL_COMMISSION');
       v_avoirs_emis := v_avoirs_emis + 1;
     ELSE
       v_doc_number := public.next_facture_complementaire_number(v_mission.etablissement_id);
@@ -51407,7 +51445,7 @@ BEGIN
         ELSE 'Facture complémentaire ' || v_doc_number || ' émise'
       END,
       CASE WHEN v_doc_type = 'AVOIR'
-        THEN 'Un avoir de ' || v_delta_ttc || ' € a été émis sur la commission de la mission "' || v_mission_intitule || '". Déduit de votre prochaine facture mensuelle.'
+        THEN 'Un avoir de ' || v_delta_ttc || ' € a été émis sur la commission de la mission "' || v_mission_intitule || '". ' || (v_imputation->>'message')
         ELSE 'Une facture complémentaire de ' || v_delta_ttc || ' € a été émise sur la commission de la mission "' || v_mission_intitule || '". Due aux conditions habituelles.'
       END,
       v_litige_id,
@@ -53441,6 +53479,21 @@ BEGIN
   ELSE
     SELECT to_jsonb(f) INTO document FROM public.factures_honoraires f WHERE id = l.document_id;
   END IF;
+  -- Ancien corps immuable : admis uniquement sans aucune allocation. Ne jamais
+  -- enrichir une livraison existante ni modifier sa clé d'idempotence.
+  IF l.famille='COMMISSION' AND (
+    (NOT (l.corps->'data' ? 'montant_a_payer') AND (
+      (document->>'montant_avoirs_imputes')::numeric IS DISTINCT FROM 0::numeric
+      OR EXISTS(SELECT 1 FROM private.avoirs_commission_mouvements j WHERE j.facture_id=l.document_id)))
+    OR ((l.corps->'data' ? 'montant_a_payer') AND (
+      round((document->>'montant_a_payer')::numeric,2)::text IS DISTINCT FROM l.corps#>>'{data,montant_a_payer}'
+      OR round((document->>'montant_avoirs_imputes')::numeric,2)::text IS DISTINCT FROM l.corps#>>'{data,montant_avoirs_imputes}'
+      OR document->>'mode_paiement' IS DISTINCT FROM l.corps#>>'{data,mode_paiement}'))
+    OR (document->>'rapprochement_paiement_requis')::boolean IS TRUE
+  ) THEN
+    UPDATE public.email_queue SET statut='ANNULE',erreur='Montant externe à rapprocher' WHERE id=p_email_id;
+    RETURN jsonb_build_object('statut','ANNULE');
+  END IF;
   -- Une confirmation n'est pas une deuxième émission. Ses preuves figées
   -- doivent encore désigner le même paiement Checkout, sans réécrire le reçu.
   IF l.evenement = 'PAIEMENT' AND (
@@ -54533,6 +54586,7 @@ BEGIN
     WHERE f.etablissement_id = v_etab_id
       AND f.statut IN ('EMISE', 'EN_RETARD')
       AND f.type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND f.montant_a_payer > 0 AND NOT f.rapprochement_paiement_requis
       AND COALESCE(f.date_echeance, (f.date_emission AT TIME ZONE 'Europe/Paris')::date + 30)
           < (NOW() AT TIME ZONE 'Europe/Paris')::date - v_seuil_j;
 
@@ -57175,10 +57229,11 @@ BEGIN
     FROM missions WHERE etablissement_id = v_etab_id AND soignant_assigne_id IS NOT NULL
     AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE') AND debut_le >= v_debut_mois;
     
-    SELECT COALESCE(SUM(montant_ttc), 0), COUNT(*)
+    SELECT COALESCE(SUM(montant_a_payer), 0), COUNT(*)
     INTO v_commissions_impayees, v_nb_factures_impayees
     FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
-      AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
+      AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis;
     
     -- Litiges ouverts
     SELECT COUNT(*) INTO v_litiges_ouverts
@@ -59753,7 +59808,8 @@ BEGIN
   -- Garde-fou : factures impayées (la suppression n'efface pas une dette)
   SELECT count(*) INTO v_factures_impayees FROM factures
    WHERE etablissement_id = v_etab_id AND statut IN ('EN_ATTENTE','EN_RETARD')
-     AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE');
+     AND type_document IN ('FACTURE', 'FACTURE_COMPLEMENTAIRE')
+      AND montant_a_payer > 0 AND NOT rapprochement_paiement_requis;
   IF v_factures_impayees > 0 THEN
     RETURN jsonb_build_object('success', false, 'error',
       format('%s facture(s) impayée(s). Réglez-les avant suppression.', v_factures_impayees));
@@ -63083,7 +63139,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_parrainage_commission_encaissee"() R
     AS $$
 DECLARE v_mission RECORD; v_parrainage RECORD; v_commission NUMERIC;
 BEGIN
-  IF NEW.statut <> 'PAYEE' THEN RETURN NEW; END IF;
+  IF NEW.statut <> 'PAYEE' OR NEW.mode_paiement='AVOIR' THEN RETURN NEW; END IF;
   IF TG_OP = 'UPDATE' AND COALESCE(OLD.statut, '') = 'PAYEE' THEN RETURN NEW; END IF;
   IF NEW.mission_id IS NULL THEN RETURN NEW; END IF;
   SELECT id, soignant_assigne_id INTO v_mission FROM missions WHERE id = NEW.mission_id;
@@ -63508,7 +63564,7 @@ DECLARE
   v_p2_eur INTEGER := public.fn_param_num('parrainage_etab_palier2_recompense_eur', 150)::int;
   v_nb_validations_mois INT;
 BEGIN
-  IF NEW.statut <> 'PAYEE' THEN RETURN NEW; END IF;
+  IF NEW.statut <> 'PAYEE' OR NEW.mode_paiement='AVOIR' THEN RETURN NEW; END IF;
   IF TG_OP = 'UPDATE' AND COALESCE(OLD.statut, '') = 'PAYEE' THEN RETURN NEW; END IF;
   IF NEW.etablissement_id IS NULL THEN RETURN NEW; END IF;
 
@@ -63526,7 +63582,7 @@ BEGIN
   FROM missions m
   JOIN factures f ON f.id = m.facture_id
   WHERE m.etablissement_id = NEW.etablissement_id
-    AND f.statut = 'PAYEE';
+    AND f.statut = 'PAYEE' AND f.mode_paiement IS DISTINCT FROM 'AVOIR';
 
   -- Palier 1 : valide le parrainage + crédite (une seule fois).
   IF v_gmv_cents >= v_p1_gmv AND v_parrainage.palier1_atteint_le IS NULL THEN
@@ -69245,8 +69301,13 @@ END) STORED,
     "relance_2_le" timestamp with time zone,
     "bloque_le" timestamp with time zone,
     "facture_honoraire_id" "uuid",
+    "montant_avoirs_imputes" numeric(10,2) DEFAULT 0 NOT NULL,
+    "montant_a_payer" numeric(10,2) GENERATED ALWAYS AS (("montant_ttc" - "montant_avoirs_imputes")) STORED,
+    "rapprochement_paiement_requis" boolean DEFAULT false NOT NULL,
     CONSTRAINT "factures_chorus_pro_statut_check" CHECK (("chorus_pro_statut" = ANY (ARRAY['NON_APPLICABLE'::"text", 'A_DEPOSER'::"text", 'DEPOSEE'::"text", 'RECUE'::"text", 'MANDATEE'::"text", 'PAYEE'::"text", 'REJETEE'::"text"]))),
-    CONSTRAINT "factures_mode_paiement_check" CHECK (("mode_paiement" = ANY (ARRAY['STRIPE'::"text", 'VIREMENT'::"text", 'CHORUS_PRO'::"text"]))),
+    CONSTRAINT "factures_imputation_bornes" CHECK ((("montant_avoirs_imputes" >= (0)::numeric) AND ("montant_avoirs_imputes" <= "montant_ttc") AND (("montant_avoirs_imputes" = (0)::numeric) OR ("type_document" = 'FACTURE'::"text")))),
+    CONSTRAINT "factures_mode_paiement_check" CHECK (("mode_paiement" = ANY (ARRAY['STRIPE'::"text", 'VIREMENT'::"text", 'CHORUS_PRO'::"text", 'AVOIR'::"text"]))),
+    CONSTRAINT "factures_reglement_avoir_coherent" CHECK ((("mode_paiement" IS DISTINCT FROM 'AVOIR'::"text") OR (("type_document" = 'FACTURE'::"text") AND (NOT ("statut" IS DISTINCT FROM 'PAYEE'::"text")) AND ("date_paiement" IS NOT NULL) AND ("montant_ttc" > (0)::numeric) AND ("montant_avoirs_imputes" = "montant_ttc") AND ("stripe_invoice_id" IS NULL) AND ("stripe_payment_intent_id" IS NULL) AND ("stripe_hosted_url" IS NULL) AND ("virement_reference" IS NULL)))),
     CONSTRAINT "factures_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EMISE'::"text", 'VIREMENT_DECLARE'::"text", 'PAYEE'::"text", 'EN_RETARD'::"text", 'ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"]))),
     CONSTRAINT "factures_type_document_check" CHECK (("type_document" = ANY (ARRAY['FACTURE'::"text", 'AVOIR'::"text", 'FACTURE_COMPLEMENTAIRE'::"text"])))
 );
@@ -69271,6 +69332,13 @@ COMMENT ON COLUMN "public"."factures"."bloque_le" IS 'CP-C-3 : J+45 blocage auto
 
 COMMENT ON COLUMN "public"."factures"."facture_honoraire_id" IS 'Facture de commission Jolene correspondant exactement à cette facture d''honoraires (hebdomadaire ou finale).';
 
+
+
+COMMENT ON COLUMN "public"."factures"."montant_a_payer" IS 'Montant externe convenu : TTC moins avoirs imputés. Ne devient pas zéro après paiement ; le solde à payer UI vaut zéro pour PAYEE.';
+
+
+
+COMMENT ON COLUMN "public"."factures"."rapprochement_paiement_requis" IS 'Anomalie financière à rapprocher : suspend les nouvelles demandes de règlement sans réécrire dette, paiement ou allocations.';
 
 
 CREATE TABLE IF NOT EXISTS "public"."factures_honoraires" (
@@ -74807,6 +74875,10 @@ CREATE UNIQUE INDEX "uq_sourcing_imports_source_en_cours" ON "public"."sourcing_
 
 
 
+CREATE OR REPLACE TRIGGER "aa_garder_facture_imputation" BEFORE INSERT OR UPDATE OR DELETE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_facture_imputation"();
+
+
+
 CREATE OR REPLACE TRIGGER "dec_00_guard_empechement" BEFORE INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_guard_contexte_empechement_mission"();
 
 
@@ -75188,6 +75260,18 @@ CREATE OR REPLACE TRIGGER "trg_auto_publier_evaluation" BEFORE INSERT ON "public
 
 
 CREATE OR REPLACE TRIGGER "trg_auto_valider_etablissement" BEFORE UPDATE ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "public"."fn_auto_valider_etablissement_siret"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_avoirs_claim" BEFORE INSERT ON "public"."stripe_payment_flow_claims" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_claim_facture_imputation"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_avoirs_rapprochement" AFTER UPDATE OF "rapprochement_paiement_requis" ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_propager_rapprochement_avoir"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_avoirs_restitution" AFTER UPDATE OF "statut" ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_restituer_avoirs_facture_annulee"();
 
 
 

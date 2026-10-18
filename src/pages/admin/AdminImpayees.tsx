@@ -13,6 +13,7 @@ import { format, differenceInCalendarDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getEmailDeliveryStatus, type EmailDeliveryStatus } from '@/lib/adminEmailDelivery';
 import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
+import { lireSoldeCommission, formatMontantCommission } from '@/lib/soldeCommission';
 import {
   AlertTriangle, ChevronDown, ChevronUp, Mail, Phone, Send, Clock,
   Building2,
@@ -28,6 +29,10 @@ interface FactureImpayee {
   montant_ht: number;
   montant_tva: number;
   montant_ttc: number;
+  montant_avoirs_imputes: number;
+  montant_a_payer: number;
+  rapprochement_paiement_requis: boolean;
+  soldeCommission: ReturnType<typeof lireSoldeCommission>;
   statut: string;
   date_emission: string | null;
   date_echeance: string | null;
@@ -83,7 +88,7 @@ export default function AdminImpayees() {
     try {
       const { data: rawFactures, error: facturesError } = await supabase
         .from('factures')
-        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, periode_debut, periode_fin, type_document')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, statut, date_emission, date_echeance, nombre_missions, etablissement_id, periode_debut, periode_fin, type_document')
         .eq('type_document', 'FACTURE')
         .in('statut', ['EMISE', 'EN_RETARD'])
         .order('date_echeance', { ascending: true });
@@ -168,6 +173,7 @@ export default function AdminImpayees() {
         const joursRetard = echeance ? differenceInCalendarDays(new Date(), echeance) : 0;
         return {
           ...f,
+          soldeCommission: lireSoldeCommission(f),
           etablissement: etabMap[f.etablissement_id] || null,
           missions: missionsByFacture[f.id] || [],
           joursRetard: Math.max(0, joursRetard),
@@ -176,6 +182,8 @@ export default function AdminImpayees() {
       }).filter(f => (
         f.etablissement?.est_compte_test === false
         && estFactureRelancable(f)
+        && !f.soldeCommission.rapprochementRequis
+        && f.soldeCommission.resteDuCents > 0
       ));
 
       enriched.sort((a, b) => b.joursRetard - a.joursRetard);
@@ -194,13 +202,21 @@ export default function AdminImpayees() {
   const effectuerRelance = async (facture: FactureImpayee): Promise<RelanceOutcome> => {
     if (!estFactureRelancable(facture) || !facture.etablissement?.email_contact) return 'failed';
     try {
+      const solde = lireSoldeCommission(facture);
+      if (solde.rapprochementRequis || solde.resteDuCents <= 0) return 'failed';
       const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           type: 'RAPPEL_FACTURE',
           data: {
             numero: facture.numero_facture,
             facture_id: facture.id,
-            montant_ttc: facture.montant_ttc.toFixed(2),
+            famille_document: 'COMMISSION',
+            type_document: facture.type_document,
+            statut: facture.statut,
+            montant_ttc: (solde.montantDocumentCents / 100).toFixed(2),
+            montant_avoirs_imputes: (solde.avoirsImputesCents / 100).toFixed(2),
+            montant_a_payer: (solde.montantExterneCents / 100).toFixed(2),
+            rapprochement_paiement_requis: solde.rapprochementRequis,
             date_echeance: fmtDate(facture.date_echeance),
             jours_retard: facture.joursRetard,
             etablissement_nom: facture.etablissement.nom,
@@ -216,7 +232,7 @@ export default function AdminImpayees() {
         type: 'MESSAGE_ADMIN',
         type_destinataire: 'ETABLISSEMENT',
         titre: `Relance facture ${facture.numero_facture}`,
-        corps: `Rappel : facture ${facture.numero_facture} de ${fmt(facture.montant_ttc)} en retard de ${facture.joursRetard} jour(s).`,
+        corps: `Rappel : facture ${facture.numero_facture}, net dû ${formatMontantCommission(solde.resteDuCents)}, en retard de ${facture.joursRetard} jour(s).`,
         lien: '/etablissement/facturation',
         type_ressource: 'facture',
         id_ressource: facture.id,
@@ -308,7 +324,7 @@ export default function AdminImpayees() {
     );
   }
 
-  const totalImpaye = factures.reduce((s, f) => s + f.montant_ttc, 0);
+  const totalImpayeCents = factures.reduce((s, f) => s + f.soldeCommission.resteDuCents, 0);
   const nbEnRetard = factures.filter(f => f.joursRetard > 0).length;
   const retardMoyen = factures.length > 0
     ? Math.round(factures.reduce((s, f) => s + f.joursRetard, 0) / factures.length)
@@ -333,7 +349,7 @@ export default function AdminImpayees() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="p-4 rounded-xl border-2 border-destructive/30 bg-destructive/5">
-            <p className="text-2xl font-bold text-destructive">{fmt(totalImpaye)}</p>
+            <p className="text-2xl font-bold text-destructive">{formatMontantCommission(totalImpayeCents)}</p>
             <p className="text-xs text-muted-foreground">Total impayé</p>
           </div>
           <div className="p-4 rounded-xl border border-border bg-card">
@@ -397,7 +413,8 @@ export default function AdminImpayees() {
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-right">
-                            <p className="text-xl font-bold text-destructive">{fmt(f.montant_ttc)}</p>
+                            <p className="text-xl font-bold text-destructive">{formatMontantCommission(f.soldeCommission.resteDuCents)} net dû</p>
+                            <p className="text-xs text-muted-foreground">TTC du document : {formatMontantCommission(f.soldeCommission.montantDocumentCents)} · Avoirs imputés : {formatMontantCommission(f.soldeCommission.avoirsImputesCents)}</p>
                             <p className="text-[10px] text-muted-foreground">
                               HT: {fmt(f.montant_ht)} · TVA: {fmt(f.montant_tva)}
                             </p>

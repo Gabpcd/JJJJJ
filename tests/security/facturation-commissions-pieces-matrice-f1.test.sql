@@ -164,9 +164,9 @@ BEGIN
 END;
 $inventory_test$;
 
--- Le successeur change seulement les verrous. Rejouer les blocs d'inventaire
--- historiques sur leurs corps exacts dans une sous-transaction annulée, puis
--- prouver le retour intégral aux quatre candidats AVANT les neuf cas métier.
+-- Chaîne exacte : historique → verrous du 01/10 → inscription d'avoir du 18/10.
+-- Rejouer les blocs d'inventaire historiques sur leurs corps exacts dans une
+-- sous-transaction annulée, puis restaurer les quatre corps actuels avant métier.
 DO $inventory_successor$
 DECLARE
   r record; v_proc record; v_param text; v_previous text; v_definition text;
@@ -188,11 +188,11 @@ BEGIN
     WHERE i.signature=ANY(v_signatures);
   BEGIN
     FOR r IN SELECT * FROM (VALUES
-    ('fn_preparer_facture_commission_periode(uuid)','8030a296741d5bfe6dad70edd4d8f20d','fe01d207db4766c4246f641ba171a3e7','57a21cb459d2a7eaedddf3d560f37425','59bfad8aa55638236e6aae5d4bc674c9'),
-    ('fn_preparer_commission_complement_honoraires(uuid)','4f8b01ff648de99644464ba700e11d00','b4e7b07193aa270a24a66a10709a87d8','2e285170947e879524316f0252347313','b61aefda7ac13ff6006a588acaacdce9'),
-    ('fn_preparer_commission_remplacement_honoraires(uuid)','c8b2603eda031d12d75a294ffb87d522','c793ac81eaef0fe18fb5920c9264c675','3a15006bb68a7a44801e429aa1fb3e58','c736c66d76001b64ba425484f77c6ea2'),
-    ('fn_preparer_avoir_commission_honoraires(uuid)','9af2c8bd25c4db563c2d935ba99effd8','a65bb72885271a63de5b2dbcdbb7a6be','972bff7ed6b0beedc598d2cb815f2130','4afd9dca4fea1d23414a797342cd1180')
-    ) AS attendu(signature,ancien_corps,ancienne_definition,nouveau_corps,nouvelle_definition) LOOP
+    ('fn_preparer_facture_commission_periode(uuid)','8030a296741d5bfe6dad70edd4d8f20d','fe01d207db4766c4246f641ba171a3e7','57a21cb459d2a7eaedddf3d560f37425','59bfad8aa55638236e6aae5d4bc674c9','57a21cb459d2a7eaedddf3d560f37425','59bfad8aa55638236e6aae5d4bc674c9'),
+    ('fn_preparer_commission_complement_honoraires(uuid)','4f8b01ff648de99644464ba700e11d00','b4e7b07193aa270a24a66a10709a87d8','2e285170947e879524316f0252347313','b61aefda7ac13ff6006a588acaacdce9','2e285170947e879524316f0252347313','b61aefda7ac13ff6006a588acaacdce9'),
+    ('fn_preparer_commission_remplacement_honoraires(uuid)','c8b2603eda031d12d75a294ffb87d522','c793ac81eaef0fe18fb5920c9264c675','3a15006bb68a7a44801e429aa1fb3e58','c736c66d76001b64ba425484f77c6ea2','3a15006bb68a7a44801e429aa1fb3e58','c736c66d76001b64ba425484f77c6ea2'),
+    ('fn_preparer_avoir_commission_honoraires(uuid)','9af2c8bd25c4db563c2d935ba99effd8','a65bb72885271a63de5b2dbcdbb7a6be','972bff7ed6b0beedc598d2cb815f2130','4afd9dca4fea1d23414a797342cd1180','78993e08045e2c062fa32d0cddecbfdb','9958b37f1f1b008cec2baf1dabd4c47d')
+    ) AS attendu(signature,ancien_corps,ancienne_definition,verrous_corps,verrous_definition,nouveau_corps,nouvelle_definition) LOOP
       SELECT * INTO v_proc FROM pg_proc WHERE oid=('public.'||r.signature)::regprocedure;
       IF md5(v_proc.prosrc) IS DISTINCT FROM r.nouveau_corps
         OR md5(pg_get_functiondef(v_proc.oid)) IS DISTINCT FROM r.nouvelle_definition
@@ -205,7 +205,15 @@ BEGIN
       THEN RAISE EXCEPTION 'F1 inventaire : successeur exact requis (%)',r.signature; END IF;
       v_param:=CASE WHEN r.signature='fn_preparer_avoir_commission_honoraires(uuid)'
         THEN 'p_avoir_honoraires_id' ELSE 'p_facture_honoraire_id' END;
-      v_previous:=replace(v_proc.prosrc,E'  v_mission_verrou uuid;\n','');
+      v_previous:=v_proc.prosrc;
+      IF r.signature='fn_preparer_avoir_commission_honoraires(uuid)' THEN
+        v_previous:=replace(v_previous,
+          E'  PERFORM private.fn_inscrire_avoir_commission(v_avoir_c_id,v_avoir_h.mission_id,\'LITIGE_HONORAIRES\');\n','');
+      END IF;
+      IF md5(v_previous) IS DISTINCT FROM r.verrous_corps
+        OR md5(replace(pg_get_functiondef(v_proc.oid),v_proc.prosrc,v_previous)) IS DISTINCT FROM r.verrous_definition
+      THEN RAISE EXCEPTION 'F1 inventaire : prédécesseur verrous exact non reconstruit (%)',r.signature; END IF;
+      v_previous:=replace(v_previous,E'  v_mission_verrou uuid;\n','');
       v_previous:=replace(v_previous,
         E'  -- Même ordre que réservation, acquisition et résolution : mission avant pièce.\n'
         ||E'  -- La seconde lecture refuse une réaffectation concurrente, sans réécrire la pièce.\n'
@@ -335,7 +343,7 @@ BEGIN
   IF md5(pg_get_functiondef('public.fn_preparer_commission_complement_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM 'b61aefda7ac13ff6006a588acaacdce9'
     OR md5(pg_get_functiondef('public.fn_admin_resoudre_litige_complement_honoraires(uuid,text,text,numeric,numeric)'::regprocedure)) IS DISTINCT FROM '0f8d3a480b3dd60e8081e53a97b30cc9'
     OR md5(pg_get_functiondef('public.fn_solde_correction_facture_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM '668023f4f4e42102dbc9f6faa95a8cd9'
-    OR md5(pg_get_functiondef('public.fn_preparer_avoir_commission_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM '4afd9dca4fea1d23414a797342cd1180'
+    OR md5(pg_get_functiondef('public.fn_preparer_avoir_commission_honoraires(uuid)'::regprocedure)) IS DISTINCT FROM '9958b37f1f1b008cec2baf1dabd4c47d'
   THEN RAISE EXCEPTION 'F1 matrice : dépendances LIVE des corrections modifiées'; END IF;
 
   -- Matrice complémentaire, distincte du témoin rouge byte-identique.

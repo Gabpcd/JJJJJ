@@ -84,6 +84,7 @@ const avoir = {
   id: '79000000-0000-4000-8000-000000000981', numero_facture: 'COM-RECETTE-AVOIR-001',
   type_document: 'AVOIR', statut: 'EMISE', montant_ht: 12, montant_tva: 2.4,
   montant_ttc: 14.4, montant_signe: -12, nombre_missions: 0,
+  montant_avoirs_imputes: 0, montant_a_payer: 14.4, rapprochement_paiement_requis: false,
   date_emission: '2026-10-16', date_echeance: '2026-10-16', date_paiement: null,
   etablissement_id: ids.etab, mission_id: null, facture_honoraire_id: null,
   mode_paiement: null, est_secteur_public: false, stripe_payment_intent_id: null,
@@ -91,13 +92,94 @@ const avoir = {
 const facture = {
   ...avoir, id: '79000000-0000-4000-8000-000000000982', numero_facture: 'COM-RECETTE-FACTURE-001',
   type_document: 'FACTURE', statut: 'EN_RETARD', montant_ht: 100, montant_tva: 20,
-  montant_ttc: 120, montant_signe: 100, date_echeance: '2026-10-15',
+  montant_ttc: 120, montant_a_payer: 120, montant_signe: 100, date_echeance: '2026-10-15',
 };
 const complement = {
   ...avoir, id: '79000000-0000-4000-8000-000000000983', numero_facture: 'COM-RECETTE-COMPLEMENT-001',
   type_document: 'FACTURE_COMPLEMENTAIRE', statut: 'EMISE', montant_ht: 10, montant_tva: 2,
-  montant_ttc: 12, montant_signe: 10, date_echeance: '2026-11-16',
+  montant_ttc: 12, montant_a_payer: 12, montant_signe: 10, date_echeance: '2026-11-16',
 };
+
+test('Imputation commission : TTC120, avoir40, net80 puis paiement, compensation et refus après recharge', async ({ page }, info) => {
+  const banc = await preparer(page, 'ADMIN_ETABLISSEMENT');
+  const baseDocument = { ...facture, statut: 'EMISE', mode_paiement: 'STRIPE',
+    montant_avoirs_imputes: 40, montant_a_payer: 80, rapprochement_paiement_requis: false };
+  const absent: Record<string, unknown> = { ...baseDocument };
+  delete absent.montant_a_payer;
+  const cas = [
+    { nom: 'net80', document: baseDocument, payable: true, regle: false, zero: false, avertissement: null },
+    { nom: 'payee80', document: { ...baseDocument, statut: 'PAYEE', date_paiement: '2026-10-18T10:00:00Z' },
+      payable: false, regle: true, zero: false, avertissement: null },
+    { nom: 'soldee-par-avoir', document: { ...baseDocument, statut: 'PAYEE', mode_paiement: 'AVOIR',
+      montant_avoirs_imputes: 120, montant_a_payer: 0, stripe_payment_intent_id: null, date_paiement: '2026-10-18T10:00:00Z' },
+      payable: false, regle: true, zero: true, avertissement: null },
+    { nom: 'rapprochement', document: { ...baseDocument, rapprochement_paiement_requis: true },
+      payable: false, regle: false, zero: false, avertissement: 'Règlement à rapprocher après remboursement.' },
+    { nom: 'projection-absente', document: absent,
+      payable: false, regle: false, zero: false, avertissement: 'Solde indisponible.' },
+    { nom: 'projection-incoherente', document: { ...baseDocument, montant_a_payer: 120 },
+      payable: false, regle: false, zero: false, avertissement: 'Solde indisponible.' },
+  ];
+  try {
+    for (const scenario of cas) {
+      const document = scenario.document;
+      banc.etat.overrides.set('fn_detail_facture', { facture: document, missions: [] });
+      banc.etat.overrides.set('factures', document);
+      // Une ancienne admission positive ne doit pas outrepasser le solde affiché.
+      banc.etat.overrides.set('fn_modalites_reglement_commission', {
+        facture_id: facture.id, virement_autorise: !scenario.regle, motif: scenario.regle ? 'FACTURE_NON_PAYABLE' : null,
+      });
+      await allerA(page, `/etablissement/facturation/${facture.id}`);
+      for (const recharge of [false, true]) {
+        const avant = banc.lectures.filter(l => l.nom === 'fn_detail_facture').length;
+        if (recharge) { await stabiliserLectures(page); await page.reload(); }
+        await expect(page.getByRole('heading', { name: 'FACTURE', exact: true, level: 1 })).toBeVisible();
+        if (recharge) await expect.poll(() => banc.lectures.filter(l => l.nom === 'fn_detail_facture').length).toBeGreaterThan(avant);
+        const totalTtc = page.getByText('Total TTC', { exact: true });
+        const totaux = totalTtc.locator('..').locator('..');
+        await expect(totalTtc.locator('..').locator('span').last()).toHaveText(/^120,00\s*€$/);
+        if (scenario.avertissement) {
+          await expect(totaux.getByRole('status')).toContainText(scenario.avertissement);
+          await expect(totaux.getByText('Montant à régler', { exact: true })).toHaveCount(0);
+          await expect(totaux.locator('dl')).toHaveCount(0);
+        } else {
+          await expect(totaux.getByText('Avoirs déduits', { exact: true }).locator('..').locator('dd'))
+            .toHaveText(scenario.zero ? /^−120,00\s*€$/ : /^−40,00\s*€$/);
+          await expect(totaux.getByText(scenario.regle ? 'Montant réglé hors avoirs' : 'Montant à régler', { exact: true }).locator('..').locator('dd'))
+            .toHaveText(scenario.zero ? /^0,00\s*€$/ : /^80,00\s*€$/);
+          if (scenario.regle) {
+            await expect(totaux.getByText('Restant à payer', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/);
+            await expect(totaux.getByText('Montant à régler', { exact: true })).toHaveCount(0);
+          }
+          if (scenario.zero) await expect(totaux.getByText('Soldée par avoir. Aucun débit bancaire.', { exact: true })).toBeVisible();
+        }
+        if (scenario.payable) {
+          await expect(page.getByRole('button', { name: 'Payer', exact: true })).toBeVisible();
+          await activer(page, page.getByRole('button', { name: 'Virement', exact: true }), info);
+          await expect(page.getByText('Montant à virer :', { exact: true }).locator('..')).toContainText(/80,00\s*€/);
+          await expect(page.getByText('Montant à virer :', { exact: true }).locator('..')).not.toContainText(/120,00\s*€/);
+          await activer(page, page.getByRole('button', { name: 'Annuler', exact: true }), info);
+        } else {
+          await expect(page.getByRole('button', { name: 'Payer', exact: true })).toHaveCount(0);
+          await expect(page.getByRole('button', { name: 'Virement', exact: true })).toHaveCount(0);
+        }
+        await dump(page, info, `imputation-${scenario.nom}-${recharge ? 'recharge' : 'initial'}`);
+        if (scenario.nom === 'net80' && !recharge) {
+          await info.attach('imputation-net80-ecran', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+        }
+      }
+    }
+    expect(baseDocument.montant_ttc).toBe(120);
+    expect(baseDocument.montant_a_payer).toBe(80);
+    await stabiliserLectures(page); banc.verifier();
+  } finally {
+    await info.attach('imputation-commission-reponses-simulees', { body: JSON.stringify({
+      simulation: true, backendVerified: false, providerVerified: false, realPaymentOrRefundExecuted: false,
+      cas, lectures: banc.lectures, interdits: banc.interdits, consoleErrors: banc.consoleErrors,
+      inconnues: banc.etat.inconnues, erreurs: banc.etat.erreurs,
+    }, null, 2), contentType: 'application/json' });
+  }
+});
 
 function obligations(mixte: boolean) {
   const dues = mixte ? [facture, complement] : [];
@@ -279,6 +361,65 @@ for (const mixte of [false, true]) {
     }
   });
 }
+
+test('Admin impayés imputés : net80, document120, rapprochement et net0 exclus après recharge', async ({ page }, info) => {
+  const banc = await preparer(page, 'ADMIN_PLATEFORME');
+  const partielle = { ...facture, montant_avoirs_imputes: 40, montant_a_payer: 80 };
+  const gelee = { ...partielle, id: '79000000-0000-4000-8000-000000000987',
+    numero_facture: 'COM-RECETTE-RAPPROCHEMENT-001', rapprochement_paiement_requis: true };
+  const zero = { ...facture, id: '79000000-0000-4000-8000-000000000988',
+    numero_facture: 'COM-RECETTE-NET-ZERO-001', montant_avoirs_imputes: 120, montant_a_payer: 0 };
+  const documents = [partielle, gelee, zero];
+  // Le marqueur « hors compte test » est une donnée simulée du lecteur admin,
+  // sans lecture de production ni changement de la cohorte réelle.
+  banc.etat.overrides.set('etablissements', [{ ...etablissement, est_compte_test: false }]);
+  banc.etat.overrides.set('missions', []);
+  banc.etat.overrides.set('notifications', []);
+  let lecturesSoldes = 0;
+  await page.route('**/rest/v1/factures?*', async route => {
+    const req = route.request(), url = new URL(req.url());
+    expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+    expect(req.method()).toBe('GET');
+    expect(url.searchParams.get('select')).toBe('id,numero_facture,montant_ht,montant_tva,montant_ttc,montant_avoirs_imputes,montant_a_payer,rapprochement_paiement_requis,statut,date_emission,date_echeance,nombre_missions,etablissement_id,periode_debut,periode_fin,type_document');
+    expect(url.searchParams.get('type_document')).toBe('eq.FACTURE');
+    expect(url.searchParams.get('statut')).toBe('in.(EMISE,EN_RETARD)');
+    expect(url.searchParams.get('order')).toBe('date_echeance.asc');
+    expect([...url.searchParams.keys()].sort()).toEqual(['order', 'select', 'statut', 'type_document']);
+    lecturesSoldes++;
+    banc.lectures.push({ nom: 'factures', methode: req.method() });
+    return route.fulfill({ json: documents, headers: { 'access-control-allow-origin': '*' } });
+  });
+  try {
+    await page.goto('/admin/impayees');
+    for (const recharge of [false, true]) {
+      const avant = lecturesSoldes;
+      if (recharge) { await stabiliserLectures(page); await page.reload(); }
+      await expect(page.getByRole('heading', { name: 'Factures impayées', exact: true })).toBeVisible();
+      if (recharge) await expect.poll(() => lecturesSoldes).toBeGreaterThan(avant);
+      await expect(page.getByText('1 facture en attente de paiement', { exact: true })).toBeVisible();
+      await expect(page.getByText('Total impayé', { exact: true }).locator('..').locator('p').first()).toHaveText(/^80,00\s*€$/);
+      const carte = page.getByRole('button', { name: new RegExp(`^${partielle.numero_facture}`) });
+      await expect(carte).toContainText(/80,00\s*€ net dû/);
+      await expect(carte).toContainText(/TTC du document : 120,00\s*€ · Avoirs imputés : 40,00\s*€/);
+      await expect(page.getByText(gelee.numero_facture, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(zero.numero_facture, { exact: true })).toHaveCount(0);
+      await activer(page, carte, info);
+      await expect(page.getByRole('button', { name: 'Envoyer une relance', exact: true })).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Envoyer une relance', exact: true })).toBeVisible();
+      await dump(page, info, `admin-impayes-net80-${recharge ? 'recharge' : 'initial'}`);
+      if (!recharge) await info.attach('admin-impayes-net80-ecran', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    }
+    expect(partielle.montant_ttc).toBe(120); expect(partielle.montant_a_payer).toBe(80);
+    expect(lecturesSoldes).toBeGreaterThanOrEqual(2);
+    await stabiliserLectures(page); banc.verifier();
+  } finally {
+    await info.attach('admin-impayes-imputes-reponses-simulees', { body: JSON.stringify({
+      simulation: true, backendVerified: false, providerVerified: false, emailSent: false,
+      documents, lecturesSoldes, lectures: banc.lectures, interdits: banc.interdits,
+      consoleErrors: banc.consoleErrors, inconnues: banc.etat.inconnues, erreurs: banc.etat.erreurs,
+    }, null, 2), contentType: 'application/json' });
+  }
+});
 
 test('Admin : avoir conservé en négatif dans l’historique, seule la vraie facture en retard reste à traiter après recharge', async ({ page }, info) => {
   const banc = await preparer(page, 'ADMIN_PLATEFORME');
