@@ -69341,6 +69341,7 @@ COMMENT ON COLUMN "public"."factures"."montant_a_payer" IS 'Montant externe conv
 COMMENT ON COLUMN "public"."factures"."rapprochement_paiement_requis" IS 'Anomalie financière à rapprocher : suspend les nouvelles demandes de règlement sans réécrire dette, paiement ou allocations.';
 
 
+
 CREATE TABLE IF NOT EXISTS "public"."factures_honoraires" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "numero_facture" "text" NOT NULL,
@@ -74875,7 +74876,7 @@ CREATE UNIQUE INDEX "uq_sourcing_imports_source_en_cours" ON "public"."sourcing_
 
 
 
-CREATE OR REPLACE TRIGGER "aa_garder_facture_imputation" BEFORE INSERT OR UPDATE OR DELETE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_facture_imputation"();
+CREATE OR REPLACE TRIGGER "aa_garder_facture_imputation" BEFORE INSERT OR DELETE OR UPDATE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_garder_facture_imputation"();
 
 
 
