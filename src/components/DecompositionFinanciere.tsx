@@ -62,7 +62,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
     estSecteurPublic,
   );
   const resolutionMatriceEnAttente = doitResoudreParMatrice
-    && !estSecteurPublic
+    && (!estSecteurPublic || m.type_contrat_recherche === 'LIBERAL')
     && !modeExercice
     && !modeExerciceError;
   const typeContrat = typeContratApplique ?? (
@@ -72,6 +72,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
           typeContratRecherche: m.type_contrat_recherche,
           modeExercice,
           estSecteurPublic,
+          professionRequise,
         })
       : null
   );
@@ -81,8 +82,11 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
   const duree = m.duree_heures ?? 0;
   const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
   const heuresNormales = Math.max(0, duree - (m.heures_nuit || 0) - (m.heures_dimanche || 0) - (m.heures_ferie || 0));
-  const brutBase = tauxEffectif * duree;
-  const totalMajorations = (m.montant_majoration_nuit || 0) + (m.montant_majoration_dimanche || 0) + (m.montant_majoration_ferie || 0);
+  const totalMajorations = Number(m.montant_majoration_nuit || 0) + Number(m.montant_majoration_dimanche || 0) + Number(m.montant_majoration_ferie || 0);
+  // La durée stockée est arrondie ; le total serveur conserve les centimes exacts.
+  const brutBase = m.total_brut != null
+    ? Number(m.total_brut) - totalMajorations
+    : tauxEffectif * duree;
   const totalBrut = m.total_brut ?? (brutBase + totalMajorations);
   const ifm = m.montant_ifm || 0;
   const icp = m.montant_icp || 0;
@@ -285,7 +289,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
           <div className="border-t border-border pt-3 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Calcul</p>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Brut de base ({duree.toFixed(1)}h × {tauxEffectif?.toFixed(2)}€)</span>
+              <span className="text-muted-foreground">Base hors majorations</span>
               <span className="font-medium">{fmt(brutBase)}</span>
             </div>
             {totalMajorations > 0 && (
@@ -386,7 +390,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
               <div className="border-t border-border pt-3 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Calcul</p>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Brut de base ({duree.toFixed(1)}h × {tauxEffectif?.toFixed(2)}€)</span>
+                  <span className="text-muted-foreground">Base hors majorations</span>
                   <span className="font-medium">{fmt(brutBase)}</span>
                 </div>
                 {totalMajorations > 0 && (

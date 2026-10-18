@@ -93,7 +93,7 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     soignant_date_naissance: escapeHtml(formatDateOnly(soignant?.date_naissance)),
     soignant_adresse: escapeHtml(adresseSoignant),
     soignant_rpps: escapeHtml(soignant?.numero_rpps),
-    soignant_siret: escapeHtml(soignant?.siret),
+    soignant_siret: escapeHtml(soignant?.siret_liberal),
     intitule_mission: escapeHtml(mission?.intitule),
     profession: escapeHtml(soignant?.profession),
     debut_le: escapeHtml(formatDate(mission?.debut_le)),

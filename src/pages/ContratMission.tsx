@@ -99,6 +99,7 @@ function buildFallbackContractHtml({
     soignant_prenom: escapeContractValue(soignant?.prenom ?? '—'),
     soignant_profession: escapeContractValue(soignant?.profession ?? '—'),
     soignant_rpps: escapeContractValue(soignant?.numero_rpps ?? '—'),
+    soignant_siret: escapeContractValue(soignant?.siret_liberal ?? '—'),
     soignant_date_naissance: escapeContractValue(formatContractBirthDate(soignant?.date_naissance)),
     soignant_adresse: escapeContractValue([
       soignant?.adresse_rue,
@@ -204,7 +205,7 @@ export default function ContratMission() {
             .maybeSingle(),
           supabase
             .from('soignants')
-            .select('prenom, nom, profession, numero_rpps, est_compte_test, date_naissance, adresse_rue, adresse_code_postal, adresse_ville')
+            .select('prenom, nom, profession, numero_rpps, siret_liberal, est_compte_test, date_naissance, adresse_rue, adresse_code_postal, adresse_ville')
             .eq('id', data.soignant_id)
             .maybeSingle(),
           supabase.rpc('fn_etablissement_pour_mission' as any, { p_etablissement_id: data.etablissement_id }).then(({ data: d, error: e }) => ({

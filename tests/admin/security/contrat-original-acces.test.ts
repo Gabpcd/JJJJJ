@@ -13,8 +13,12 @@ const original = { storage_path: 'original/signe.html', hash_document: 'a'.repea
   contenu_html: '<article>Original signé</article>', contenu_html_rendu_le: '2026-09-20T00:00:00Z' };
 function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean; denied?: boolean; rpcError?: boolean;
   rpcData?: unknown; uploadError?: boolean; updateError?: boolean; urlError?: boolean; authorization?: string;
+  soignant?: Record<string, unknown>; etablissement?: Record<string, unknown>; templateHtml?: string;
   afterUpload?: (s: any) => void; afterUrl?: (s: any) => void } = {}) {
   const state = { denied: options.denied || false, calls: [] as string[], urls: [] as string[], uploads: [] as { path: string; bytes: Blob; config: any }[],
+    soignant: { nom: '<Synthetic>', prenom: 'Test', ...options.soignant } as Record<string, unknown>,
+    etablissement: { nom: 'Simulation', ...options.etablissement } as Record<string, unknown>,
+    templateHtml: options.templateHtml ?? '<article>Contrat {{numero_contrat}} — {{soignant_nom}}</article>',
     contrat: { id, mission_id: 'mission', etablissement_id: 'etab', soignant_id: 'soignant', numero_contrat: 'SYNTHETIQUE-1', type_contrat: 'CDD',
       statut: 'EN_ATTENTE_SIGNATURES', signature_soignant: false, signature_etablissement: false,
       signature_soignant_le: null, signature_etablissement_le: null, storage_path: null, hash_document: null,
@@ -34,8 +38,8 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
           Object.assign(state.contrat, patch); return { data: { ...state.contrat }, error: null };
         }
         const data = table === 'contrats_mission' ? { ...state.contrat }
-          : table === 'templates_contrat' ? { contenu_html: '<article>Contrat {{numero_contrat}} — {{soignant_nom}}</article>', nom: 'Test', version: 1 }
-          : table === 'soignants' ? { nom: '<Synthetic>', prenom: 'Test' } : table === 'etablissements' ? { nom: 'Simulation' }
+          : table === 'templates_contrat' ? { contenu_html: state.templateHtml, nom: 'Test', version: 1 }
+          : table === 'soignants' ? { ...state.soignant } : table === 'etablissements' ? { ...state.etablissement }
           : table === 'missions' ? { intitule: 'Simulation', debut_le: '2035-01-01', fin_le: '2035-01-02' } : null;
         if (!data) throw new Error(`Table inattendue ${table}`);
         return { data, error: null };
@@ -112,6 +116,49 @@ describe('Edge contrats : autorisation canonique et preuve originale', () => {
     expect(s.state.contrat.hash_document).toBe(hash); expect(s.state.contrat.contenu_html).toBe(bytes);
     expect(s.state.calls.slice(-6)).toEqual(['guard', 'read:contrats_mission', 'update', 'guard', 'url', 'guard']);
     expect((await s.lancer()).status).toBe(200); expect(s.state.uploads).toHaveLength(1);
+  });
+  it('fige le SIRET libéral du soignant et préserve cet original après changement du profil et du modèle', async () => {
+    const s = simulation({ contrat: { type_contrat: 'LIBERAL' },
+      soignant: { siret_liberal: '11111111111111', siret: '99999999999999' },
+      etablissement: { siret: '22222222222222' },
+      templateHtml: '<article><p>Soignant : {{soignant_siret}}</p><p>Établissement : {{etablissement_siret}}</p></article>' });
+    expect(await s.lancer()).toMatchObject({ status: 200, body: { success: true } });
+    expect(s.state.uploads).toHaveLength(1);
+    const bytes = await s.state.uploads[0].bytes.text();
+    expect(bytes).toContain('<p>Soignant : 11111111111111</p>');
+    expect(bytes).toContain('<p>Établissement : 22222222222222</p>');
+    expect(bytes).not.toContain('99999999999999');
+    expect(bytes).not.toContain('{{');
+    expect(s.state.contrat.hash_document).toBe(Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(bytes))).toString('hex'));
+    expect(s.state.contrat.contenu_html).toBe(bytes);
+    const frozen = { ...s.state.contrat };
+    s.state.soignant.siret_liberal = '33333333333333';
+    s.state.etablissement.siret = '44444444444444';
+    s.state.templateHtml = '<article>Modèle modifié : {{soignant_siret}}</article>';
+    s.state.calls.length = 0;
+    expect(await s.lancer()).toMatchObject({ status: 200, body: { storage_path: frozen.storage_path, hash_document: frozen.hash_document } });
+    expect(s.state.contrat).toEqual(frozen);
+    expect(s.state.uploads).toHaveLength(1);
+    expect(s.state.calls).toEqual(['auth', 'guard', 'read:contrats_mission', 'guard', 'url', 'guard']);
+  });
+  it.each([null, ''])('n’utilise pas une propriété siret non canonique si siret_liberal vaut %j', async siretLiberal => {
+    const s = simulation({ contrat: { type_contrat: 'LIBERAL' },
+      soignant: { siret_liberal: siretLiberal, siret: '99999999999999' },
+      templateHtml: '<article><p>Soignant : {{soignant_siret}}</p></article>' });
+    expect((await s.lancer()).status).toBe(200);
+    expect(await s.state.uploads[0].bytes.text()).toContain('<p>Soignant : </p>');
+    expect(s.state.contrat.contenu_html).not.toContain('99999999999999');
+  });
+  it('ne réécrit pas le SIRET manquant d’un original déjà signé avec le profil actuel', async () => {
+    const historical = { ...original, contenu_html: '<article>Original signé — SIRET : </article>' };
+    const s = simulation({ contrat: { ...historical, type_contrat: 'LIBERAL', statut: 'SIGNE_COMPLET', signature_soignant: true },
+      soignant: { siret_liberal: '11111111111111' } });
+    const before = { ...s.state.contrat };
+    expect(await s.lancer()).toMatchObject({ status: 200, body: { hash_document: historical.hash_document } });
+    expect(s.state.contrat).toEqual(before);
+    expect(s.state.uploads).toEqual([]);
+    expect(s.state.calls).not.toContain('read:soignants');
+    expect(s.state.calls).not.toContain('read:templates_contrat');
   });
   it.each([{ signature_soignant: true, statut: 'SIGNE_SOIGNANT' }, { ...original }, { etablissement_id: 'autre-etab' }])('ne remplace pas une signature/rendu/affectation concurrente : %j', async concurrent => {
     const s = simulation({ afterUpload: st => Object.assign(st.contrat, concurrent) });
