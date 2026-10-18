@@ -25362,7 +25362,7 @@ ALTER FUNCTION "public"."fn_consentir_gps"("p_accepte" boolean) OWNER TO "postgr
 CREATE OR REPLACE FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $$
+    AS $_$
 DECLARE demande private.demandes_facturation_honoraires%ROWTYPE; fh_id uuid; fc_id uuid; n integer;
 BEGIN
  IF COALESCE(auth.jwt()->>'role',current_setting('request.jwt.claim.role',true),'')<>'service_role' THEN
@@ -25395,7 +25395,7 @@ BEGIN
  UPDATE private.demandes_facturation_honoraires SET token=NULL,expire_le=NULL,
    prochain_essai_le=now()+interval '5 minutes',dernier_echec='GENERATION_NON_TERMINEE' WHERE mission_id=p_mission_id;
  RETURN jsonb_build_object('success',false,'reason','GENERATION_NON_TERMINEE');
-END $$;
+END $_$;
 
 
 ALTER FUNCTION "public"."fn_constater_demande_facturation_honoraires"("p_mission_id" "uuid", "p_token" "uuid") OWNER TO "postgres";
