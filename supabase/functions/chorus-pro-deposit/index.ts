@@ -1,3 +1,4 @@
+import { lireSoldeCommission } from "../_shared/commission-balance.ts";
 /**
  * chorus-pro-deposit — Dépôt facture commission Jolene sur Chorus Pro
  *
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
 
     const { data: facture, error: factError } = await supabaseAdmin
       .from('factures')
-      .select('id, numero_facture, montant_ht, montant_ttc, montant_tva, taux_tva, statut, type_document, facture_precedente_id, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance')
+      .select('id, numero_facture, montant_ht, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, montant_tva, taux_tva, statut, type_document, facture_precedente_id, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance')
       .eq('id', facture_id).single();
     if (factError || !facture) return jsonResponse(req, { error: 'Facture introuvable' }, 404);
     if (!facture.est_secteur_public) {
@@ -108,6 +109,11 @@ Deno.serve(async (req) => {
         test_skipped: true,
         message: 'Chorus Pro neutralisé pour les données de test.',
       }, 200);
+    }
+
+    const soldeCommission = lireSoldeCommission(facture);
+    if (action === 'deposer' && soldeCommission.rapprochementRequis) {
+      return jsonResponse(req, { error: 'RAPPROCHEMENT_PAIEMENT_REQUIS' }, 409);
     }
 
     const { data: chorusConfig } = await supabaseAdmin
@@ -194,7 +200,9 @@ Deno.serve(async (req) => {
         description: `${isAvoir ? 'Avoir de commission Jolene' : 'Commission Jolene'} — ${facture.numero_facture}`,
         amountHt: Number(facture.montant_ht) || Number(facture.montant_ttc) || 0,
         amountTva: Number(facture.montant_tva) || 0,
-        amountTtc: Number(facture.montant_ttc) || 0,
+        amountTtc: soldeCommission.montantDocumentCents / 100,
+        amountPrepaid: soldeCommission.avoirsImputesCents / 100,
+        amountDue: soldeCommission.montantExterneCents / 100,
         vatRate: Number(facture.taux_tva) || 20,
         vatExempt: false,
         isAvoir,

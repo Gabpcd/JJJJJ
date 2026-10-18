@@ -22,6 +22,7 @@ vi.mock('@/lib/facture-commission-pdf',()=>({telechargerFactureCommissionPDF:moc
 let mode='CARTE';
 let commission:Record<string,unknown>;
 let lignes:Record<string,unknown>[];
+let totalCommissions=14.4;
 function Localisation(){const l=useLocation();return <output data-testid="destination">{l.pathname}{l.search}</output>;}
 function ouvrir(){return render(<MemoryRouter initialEntries={['/etablissement/facturation?tab=commissions']}><Localisation/><FacturationEtablissement/></MemoryRouter>);}
 function sansPaiementDirect(){
@@ -33,13 +34,13 @@ function sansPaiementDirect(){
 }
 describe('Commissions — le détail vérifie les modalités de règlement',()=>{
  beforeEach(()=>{
-  vi.resetAllMocks();mode='CARTE';mocks.permissions.permissions.paiement=true;
+  vi.resetAllMocks();mode='CARTE';totalCommissions=14.4;mocks.permissions.permissions.paiement=true;
   Element.prototype.scrollIntoView=vi.fn();
-  commission={facture_id:'commission-cible',numero_facture:'COM-CIBLE',statut:'EMISE',montant_ht:12,montant_tva:2.4,montant_ttc:14.4,nombre_missions:1,est_secteur_public:false};
+  commission={facture_id:'commission-cible',numero_facture:'COM-CIBLE',type_document:'FACTURE',statut:'EMISE',montant_ht:12,montant_tva:2.4,montant_ttc:14.4,montant_avoirs_imputes:0,montant_a_payer:14.4,rapprochement_paiement_requis:false,nombre_missions:1,est_secteur_public:false};
   lignes=[commission];
   mocks.rpc.mockImplementation((name:string)=>{
    if(name==='fn_mon_etablissement_complet')return Promise.resolve({data:{id:'etab',mode_paiement_commission:mode},error:null});
-   if(name==='fn_obligations_financieres')return Promise.resolve({data:{total_du:14.4,total_soignants_du:0,total_commissions_du:14.4,missions_non_payees:[],factures_impayees:lignes,paiements_soignants_en_attente:[],paiements_soignants_confirmes:[],factures_commission_historique:[],missions_non_facturees:[]},error:null});
+   if(name==='fn_obligations_financieres')return Promise.resolve({data:{total_du:totalCommissions,total_soignants_du:0,total_commissions_du:totalCommissions,missions_non_payees:[],factures_impayees:lignes,paiements_soignants_en_attente:[],paiements_soignants_confirmes:[],factures_commission_historique:[],missions_non_facturees:[]},error:null});
    if(name==='fn_mes_factures')return Promise.resolve({data:[],error:null});
    if(name==='fn_paiements_etablissement')return Promise.resolve({data:{paiements:[]},error:null});
    throw new Error(`RPC inattendue ${name}`);
@@ -78,5 +79,16 @@ describe('Commissions — le détail vérifie les modalités de règlement',()=>
   commission.est_secteur_public=true;ouvrir();await screen.findByRole('button',{name:'Consulter les modalités de règlement'});
   fireEvent.click(screen.getByRole('button',{name:'PDF'}));
   expect(mocks.pdf).toHaveBeenCalledWith('commission-cible');sansPaiementDirect();
+ });
+ it('affiche le net80 sur une facture120 diminuée de40 sans paiement direct depuis le résumé',async()=>{
+  totalCommissions=80;Object.assign(commission,{montant_ht:100,montant_tva:20,montant_ttc:120,montant_avoirs_imputes:40,montant_a_payer:80});
+  const vue=ouvrir();await screen.findByRole('button',{name:'Consulter les modalités de règlement'});
+  for(const libelle of screen.getAllByText('Montant à régler',{exact:true}))expect(libelle.parentElement).toHaveTextContent(/80,00\s*€/);
+  for(const libelle of screen.getAllByText('Avoirs déduits',{exact:true}))expect(libelle.parentElement).toHaveTextContent(/−40,00\s*€/);
+  expect(screen.getByText('Total à régler',{exact:true}).parentElement).toHaveTextContent(/80,00\s*€/);
+  sansPaiementDirect();vue.unmount();ouvrir();
+  await screen.findByRole('button',{name:'Consulter les modalités de règlement'});
+  for(const libelle of screen.getAllByText('Montant à régler',{exact:true}))expect(libelle.parentElement).toHaveTextContent(/80,00\s*€/);
+  expect(commission.montant_ttc).toBe(120);expect(commission.montant_a_payer).toBe(80);sansPaiementDirect();
  });
 });

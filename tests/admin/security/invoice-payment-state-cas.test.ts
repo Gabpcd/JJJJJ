@@ -126,7 +126,9 @@ describe('Confirmation facture — identité Stripe stricte', () => {
   it('valide facture_id, devise EUR, montant reçu et customer avant tout succès', () => {
     const validationStart = confirmPayment.indexOf('findInvoicePaymentIntentInconsistencies(paymentIntent');
     const validationEnd = confirmPayment.indexOf('if (paymentIntent.status !== "succeeded")');
-    const firstConfirmed = confirmPayment.indexOf('confirmed: true');
+    const firstConfirmed = confirmPayment.indexOf('confirmed: true', validationEnd);
+    const creditOnly = confirmPayment.slice(confirmPayment.indexOf('if (estSoldeeParAvoir(facture))'), confirmPayment.indexOf('const stripeKey ='));
+    expect(creditOnly).toContain('mode_paiement: "AVOIR"');
 
     expect(validationStart).toBeGreaterThan(-1);
     expect(validationStart).toBeLessThan(validationEnd);

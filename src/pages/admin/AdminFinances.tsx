@@ -28,6 +28,7 @@ import {
   estFactureRelancable,
   montantDocumentComptable,
 } from '@/lib/adminInvoiceAccounting';
+import { lireSoldeCommission } from '@/lib/soldeCommission';
 
 import {
   ERREUR_DIAGNOSTIC_FINANCIER,
@@ -59,12 +60,18 @@ async function chargerToutesFactures() {
   const lignes: any[] = [];
   for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
     const { data, error } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, etablissement_id, etablissements(nom, type, est_compte_test)')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, montant_signe, type_document, statut, date_emission, date_echeance, etablissement_id, etablissements(nom, type, est_compte_test)')
       .order('date_emission', { ascending: false })
       .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
     if (error) throw error;
     const page = data || [];
-    lignes.push(...page);
+    lignes.push(...page.map(f => ({
+      ...f,
+      // Le CA et les exports gardent les montants documentaires ; seul le suivi
+      // des factures encore exigibles utilise ce solde canonique.
+      soldeCommission: f.type_document === 'FACTURE' && ['EMISE', 'EN_RETARD'].includes(f.statut)
+        ? lireSoldeCommission(f) : null,
+    })));
     if (page.length < TAILLE_PAGE_SUPABASE) return lignes;
   }
 }
@@ -214,9 +221,10 @@ export default function AdminFinances() {
   const variationPct = commHTMoisPrec > 0 ? ((commHTMois - commHTMoisPrec) / commHTMoisPrec) * 100 : 0;
   const variationPositive = variationPct >= 0;
 
-  const impayees = facturesFiltrees.filter(facture => estFactureRelancable(facture));
+  const impayees = facturesFiltrees.filter(facture => estFactureRelancable(facture))
+    .filter(f => f.soldeCommission?.resteDuCents > 0 && !f.soldeCommission.rapprochementRequis);
   const nbImpayees = impayees.length;
-  const montantImpayees = impayees.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
+  const montantImpayees = impayees.reduce((s, f) => s + f.soldeCommission.resteDuCents, 0) / 100;
 
   // Recap « sur la période » (rewiré sur les données filtrées par période)
   const totalHT = facturesFiltrees.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0);
@@ -304,8 +312,8 @@ export default function AdminFinances() {
       const etablissement = map.get(eid)!;
       etablissement.commissions_ht += montantDocumentComptable(f, 'ht');
       etablissement.commissions_ttc += montantDocumentComptable(f, 'ttc');
-      if (estFactureRelancable(f)) {
-        etablissement.impayes += montantDocumentComptable(f, 'ttc');
+      if (estFactureRelancable(f) && f.soldeCommission?.resteDuCents > 0 && !f.soldeCommission.rapprochementRequis) {
+        etablissement.impayes += f.soldeCommission.resteDuCents / 100;
       }
     });
     return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));

@@ -54,6 +54,8 @@ import { relancerLectureReseau } from '@/lib/relancerLectureReseau';
 import { estFactureRelancable, jourCivilParis } from '@/lib/adminInvoiceAccounting';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
+import { ResumeReglementCommission } from '@/components/ResumeReglementCommission';
+import { soldeCommissionPourAffichage } from '@/lib/soldeCommission';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -916,7 +918,9 @@ function FacturationEtablissementContent() {
   // chaque état individuellement, sans appeler une facture future « impayée ».
   const facturesCommissionOuvertes = data?.factures_impayees || [];
   const facturesCommissionARegler = facturesCommissionOuvertes.filter(
-    (facture: any) => facture.statut === 'EMISE' || facture.statut === 'EN_RETARD',
+    (facture: any) => (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
+      && (soldeCommissionPourAffichage(facture)?.resteDuCents ?? 0) > 0
+      && !facture.rapprochement_paiement_requis,
   );
   const detailsFacturesCommission = new Map<string, any>(
     factures.map((facture: any) => [facture.id, facture]),
@@ -1445,6 +1449,7 @@ function FacturationEtablissementContent() {
                             <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
                           </div>
                         </div>
+                        <ResumeReglementCommission facture={f} />
                         {f.est_secteur_public && (
                           <p className="text-[10px] text-primary flex items-center gap-1">
                             <Landmark className="h-3 w-3" />
@@ -1543,7 +1548,7 @@ function FacturationEtablissementContent() {
                                   <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
                                   <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                                   <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
-                                  <td className="py-2 pr-3 font-medium">{fmt(f.type_document === 'AVOIR' ? -Math.abs(Number(f.montant_ttc)) : f.montant_ttc)}</td>
+                                  <td className="py-2 pr-3 font-medium">{fmt(f.type_document === 'AVOIR' ? -Math.abs(Number(f.montant_ttc)) : f.montant_ttc)}<ResumeReglementCommission facture={f} /></td>
                                   <td className="py-2 pr-3 text-xs">{ModeIcone && <ModeIcone className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />}{modeLabel}</td>
                                   <td className="py-2 pr-3">
                                     {f.type_document === 'AVOIR' ? (
@@ -1598,6 +1603,7 @@ function FacturationEtablissementContent() {
                             </div>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-lg font-semibold">{fmt(f.type_document === 'AVOIR' ? -Math.abs(Number(f.montant_ttc)) : f.montant_ttc)}</span>
+                              <ResumeReglementCommission facture={f} />
                               <Button
                                 size="icon"
                                 variant="ghost"

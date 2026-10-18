@@ -1,3 +1,4 @@
+import { lireSoldeCommission, estSoldeeParAvoir } from "../_shared/commission-balance.ts";
 import { stagingInvoiceConfig, requireStagingInvoiceScope, stagingInvoiceCustomer, requireStagingInvoiceEvent } from "../_shared/stripe-invoice-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
 
     const { data: facture, error: factureError } = await supabaseAdmin
       .from("factures")
-      .select("id, numero_facture, statut, type_document, date_paiement, etablissement_id, montant_ttc, stripe_payment_intent_id, etablissements(stripe_customer_id)")
+      .select("id, numero_facture, statut, type_document, date_paiement, etablissement_id, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, mode_paiement, stripe_payment_intent_id, etablissements(stripe_customer_id)")
       .eq("id", facture_id)
       .single();
 
@@ -177,6 +178,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    const soldeCommission = lireSoldeCommission(facture);
+    if (facture.rapprochement_paiement_requis) {
+      return new Response(JSON.stringify({ confirmed: false, error: "RAPPROCHEMENT_PAIEMENT_REQUIS", status: facture.statut }), {
+        status: 409, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (estSoldeeParAvoir(facture)) {
+      return new Response(JSON.stringify({ confirmed: true, status: "PAYEE", mode_paiement: "AVOIR" }), {
+        status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
       return new Response(JSON.stringify({ error: "Configuration Stripe manquante" }), {
@@ -217,7 +229,7 @@ Deno.serve(async (req) => {
       type: 'payment_intent.succeeded', livemode: false, data: { object: paymentIntent },
     })) throw new Error('INVOICE_STAGING_TEST_REFUSED');
 
-    const montantAttenduCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+    const montantAttenduCents = soldeCommission.montantExterneCents;
     if (!Number.isSafeInteger(montantAttenduCents) || montantAttenduCents <= 0) {
       return new Response(JSON.stringify({
         confirmed: false,
@@ -325,6 +337,9 @@ Deno.serve(async (req) => {
       })
       .eq("id", facture.id)
       .eq("montant_ttc", facture.montant_ttc)
+      .eq("montant_avoirs_imputes", facture.montant_avoirs_imputes)
+      .eq("montant_a_payer", facture.montant_a_payer)
+      .eq("rapprochement_paiement_requis", false)
       .in("statut", ["EMISE", "EN_RETARD"]);
     confirmationQuery = facture.stripe_payment_intent_id
       ? confirmationQuery.eq("stripe_payment_intent_id", facture.stripe_payment_intent_id)

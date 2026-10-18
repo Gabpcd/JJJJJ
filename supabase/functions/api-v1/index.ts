@@ -427,7 +427,7 @@ Deno.serve(async (req) => {
       }
       const { data, error } = await supabase
         .from('factures')
-        .select('id, numero_facture, statut, montant_ht, montant_tva, montant_ttc, cree_le')
+        .select('id, numero_facture, statut, type_document, mode_paiement, montant_ht, montant_tva, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, cree_le')
         .eq('etablissement_id', etabId)
         .order('cree_le', { ascending: false })
         .limit(Math.min(limit, 50));

@@ -17,6 +17,8 @@ import { logger } from '@/lib/logger';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 import { normaliserLignesFactureCommission } from '@/lib/factureCommissionUi';
+import { soldeCommissionPourAffichage } from '@/lib/soldeCommission';
+import { ResumeReglementCommission } from '@/components/ResumeReglementCommission';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -42,12 +44,13 @@ const MODE_LABELS: Record<string, string> = {
   SEPA: 'Prélèvement SEPA',
   SEPA_DEBIT: 'Prélèvement SEPA',
   CHORUS_PRO: 'Chorus Pro',
+  AVOIR: 'Soldée par avoir',
 };
 
 /** Le RPC historique ne retourne pas la liaison avec la pièce d'honoraires. */
 async function chargerContexteFactureCommission(client: typeof supabase, id: string, etablissementId: string) {
   const { data: facture, error } = await client.from('factures')
-    .select('id, etablissement_id, mission_id, facture_honoraire_id, type_document, mode_paiement')
+    .select('id, etablissement_id, mission_id, facture_honoraire_id, type_document, mode_paiement, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis')
     .eq('id', id).eq('etablissement_id', etablissementId).single();
   if (error) throw error;
   if (!facture || facture.id !== id || facture.etablissement_id !== etablissementId
@@ -128,14 +131,19 @@ function lignesDocumentFactureCommission(missions: any[], facture: any, honorair
 function presentationPaiementCommission(facture: any, etab: any, canManagePayments: boolean, virementAutorise: boolean) {
   const lieeHonoraires = Boolean(facture.facture_honoraire_id);
   const estSepaAutomatique = !lieeHonoraires && etab?.mode_paiement_commission === 'SEPA_DEBIT';
-  const aRegler = facture.statut === 'EMISE' || facture.statut === 'EN_RETARD';
+  const solde = soldeCommissionPourAffichage(facture);
+  const aRegler = (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
+    && solde !== null && solde.resteDuCents > 0 && !solde.rapprochementRequis;
+  const petitSoldeSepa = estSepaAutomatique && solde !== null
+    && solde.avoirsImputesCents > 0 && solde.resteDuCents > 0 && solde.resteDuCents < 50;
   const peutRegler = canManagePayments && aRegler && ['FACTURE', 'FACTURE_COMPLEMENTAIRE'].includes(facture.type_document)
-    && !facture.est_secteur_public && !estSepaAutomatique;
+    && !facture.est_secteur_public;
   return {
     lieeHonoraires,
     estSepaAutomatique,
-    canPay: peutRegler && virementAutorise,
-    canPayCard: peutRegler && !lieeHonoraires && facture.type_document === 'FACTURE',
+    petitSoldeSepa,
+    canPay: peutRegler && (!estSepaAutomatique || petitSoldeSepa) && virementAutorise,
+    canPayCard: peutRegler && !estSepaAutomatique && solde!.resteDuCents >= 50 && !lieeHonoraires && facture.type_document === 'FACTURE',
     modeLibelle: lieeHonoraires && facture.mode_paiement === 'STRIPE'
       ? 'Paiement avec les honoraires'
       : MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement,
@@ -626,7 +634,7 @@ export default function DetailFacture() {
     </LayoutApp>
   );
 
-  const { lieeHonoraires, estSepaAutomatique, canPay, canPayCard, modeLibelle } =
+  const { lieeHonoraires, estSepaAutomatique, petitSoldeSepa, canPay, canPayCard, modeLibelle } =
     presentationPaiementCommission(facture, etab, canManagePayments, modalites?.virement_autorise === true);
   const estAvoir = facture.type_document === 'AVOIR';
   const statutLibelle = estAvoir
@@ -673,7 +681,8 @@ export default function DetailFacture() {
                 Échéance : {format(new Date(facture.date_echeance), 'dd MMMM yyyy', { locale: fr })}
               </p>
             )}
-            {!estAvoir && facture.mode_paiement && (
+            <ResumeReglementCommission facture={facture} />
+          {!estAvoir && facture.mode_paiement && (
               <p className="text-xs text-muted-foreground mt-1">
                 Mode : {modeLibelle}
               </p>
@@ -747,6 +756,7 @@ export default function DetailFacture() {
             <span className="text-foreground">Total TTC</span>
             <span className="text-primary">{formatEur(montantCommissionDocument(facture, facture.montant_ttc))}</span>
           </div>
+          <ResumeReglementCommission facture={facture} />
           {!estAvoir && facture.mode_paiement && (
             <div className="flex justify-between text-xs pt-1">
               <span className="text-muted-foreground">Mode de paiement</span>
@@ -760,7 +770,7 @@ export default function DetailFacture() {
           <div className="mt-6 flex items-center gap-2 bg-success/10 border border-success/20 rounded-xl p-3">
             <CheckCircle className="h-4 w-4 text-success shrink-0" />
             <p className="text-sm text-success">
-              Payée le {format(new Date(facture.date_paiement), 'dd MMMM yyyy', { locale: fr })}
+              {facture.mode_paiement === 'AVOIR' ? 'Soldée par avoir le' : 'Payée le'} {format(new Date(facture.date_paiement), 'dd MMMM yyyy', { locale: fr })}
             </p>
           </div>
         )}
@@ -785,7 +795,7 @@ export default function DetailFacture() {
           <p role="status" className="mt-4 text-sm text-muted-foreground">Un paiement en ligne est déjà engagé. Consultez son suivi avant de déclarer un autre règlement.</p>
         )}
 
-        {!estAvoir && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (
+        {!estAvoir && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !petitSoldeSepa && !facture.est_secteur_public && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground no-print">
             Votre établissement utilise le prélèvement SEPA pour les commissions. Consultez le suivi des prélèvements dans la facturation.
           </div>
@@ -793,6 +803,7 @@ export default function DetailFacture() {
 
         {canPay && (
           <div className="mt-6 no-print">
+            {petitSoldeSepa && <p role="status" className="mb-3 text-sm text-muted-foreground">Après déduction des avoirs, le solde est inférieur au minimum du prélèvement SEPA. Réglez le montant exact par virement.</p>}
             <PaiementVirement facture={facture} onUpdate={charger} />
           </div>
         )}

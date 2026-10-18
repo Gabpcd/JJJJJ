@@ -1,3 +1,4 @@
+import { lireSoldeCommission, estSoldeeParAvoir } from "../_shared/commission-balance.ts";
 import { stagingInvoiceConfig, stagingInvoiceCheckoutExpiry, requireStagingInvoiceScope, stagingInvoiceCustomer, assertStagingInvoiceObject, requireStagingInvoiceEvent } from "../_shared/stripe-invoice-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -214,7 +215,7 @@ Deno.serve(async (req) => {
     const { data: facture, error: errF } = await supabaseAdmin
       .from("factures")
       .select(
-        "id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, mission_id, type_document, est_secteur_public, chorus_pro_statut, stripe_payment_intent_id, stripe_hosted_url, etablissements(id, nom, email_contact, stripe_customer_id, mode_paiement_commission, est_secteur_public, chorus_pro_actif)",
+        "id, numero_facture, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, mode_paiement, nombre_missions, statut, etablissement_id, mission_id, type_document, est_secteur_public, chorus_pro_statut, stripe_payment_intent_id, stripe_hosted_url, etablissements(id, nom, email_contact, stripe_customer_id, mode_paiement_commission, est_secteur_public, chorus_pro_actif)",
       )
       .eq("id", facture_id)
       .single();
@@ -281,6 +282,17 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+    const soldeCommission = lireSoldeCommission(facture);
+    if (facture.rapprochement_paiement_requis) {
+      return new Response(JSON.stringify({ error: "RAPPROCHEMENT_PAIEMENT_REQUIS", status: facture.statut }), {
+        status: 409, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (estSoldeeParAvoir(facture)) {
+      return new Response(JSON.stringify({ status: "PAYEE", mode_paiement: "AVOIR", montant_a_payer: 0 }), {
+        status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     if (!statutsPayables.includes(facture.statut)) {
       const dejaPayee = facture.statut === "PAYEE";
       return new Response(JSON.stringify({
@@ -341,6 +353,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Minimum EUR carte Stripe : aucun arrondi ni création d'un débit gonflé.
+    // https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts
+    if (soldeCommission.montantExterneCents > 0 && soldeCommission.montantExterneCents < 50) {
+      return new Response(JSON.stringify({
+        error: "CARD_AMOUNT_TOO_SMALL",
+        message: "Le solde est inférieur à 0,50 €. Réglez le montant exact par virement.",
+        montant_a_payer: soldeCommission.montantExterneCents / 100,
+      }), { status: 409, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+    }
+
     step = '6_stripe_init';
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
@@ -356,7 +378,7 @@ Deno.serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2026-02-25.clover" });
 
     step = '7_customer';
-    const montantCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+    const montantCents = soldeCommission.montantExterneCents;
     if (!Number.isSafeInteger(montantCents) || montantCents <= 0) {
       return new Response(JSON.stringify({ error: "Montant de la facture invalide" }), {
         status: 400,
@@ -687,6 +709,9 @@ Deno.serve(async (req) => {
         })
         .eq("id", facture.id)
         .eq("montant_ttc", facture.montant_ttc)
+        .eq("montant_avoirs_imputes", facture.montant_avoirs_imputes)
+        .eq("montant_a_payer", facture.montant_a_payer)
+        .eq("rapprochement_paiement_requis", false)
         .in("statut", ["EMISE", "EN_RETARD"]);
       syncQuery = facture.stripe_payment_intent_id
         ? syncQuery.eq("stripe_payment_intent_id", facture.stripe_payment_intent_id)
@@ -925,7 +950,7 @@ Deno.serve(async (req) => {
     step = '9_checkout';
     const appUrl = stagingInvoice?.returnOrigin ?? getApplicationReturnOrigin(req);
 
-    console.log(`[create-invoice-payment] step=9 creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
+    console.log(`[create-invoice-payment] step=9 creating checkout, amount_cents=${montantCents}, customer=${customerId}, embedded=${!!embedded}`);
 
     const sessionParams: any = {
       customer: customerId,
@@ -1004,6 +1029,9 @@ Deno.serve(async (req) => {
       })
       .eq("id", facture_id)
       .eq("montant_ttc", facture.montant_ttc)
+      .eq("montant_avoirs_imputes", facture.montant_avoirs_imputes)
+      .eq("montant_a_payer", facture.montant_a_payer)
+      .eq("rapprochement_paiement_requis", false)
       .in("statut", ["EMISE", "EN_RETARD"]);
     factureLieeQuery = facture.stripe_payment_intent_id
       ? factureLieeQuery.eq("stripe_payment_intent_id", facture.stripe_payment_intent_id)

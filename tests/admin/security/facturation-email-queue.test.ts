@@ -1,3 +1,4 @@
+import * as commissionEmail from '../../../supabase/functions/_shared/commission-email';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
@@ -79,7 +80,7 @@ const fichier = readFileSync('supabase/functions/send-email/index.ts', 'utf8');
 const code = ts.transpileModule(fichier.slice(0, fichier.indexOf('Deno.serve(')) + '\nglobalThis.modeleFacture = renderTemplate;', {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const contexte: any = { exports: {}, require: () => ({}), Deno: { env: { get: () => undefined } } };
+const contexte: any = { exports: {}, require: (name: string) => name.endsWith('commission-email.ts') ? commissionEmail : ({}), Deno: { env: { get: () => undefined } } };
 runInNewContext(code, contexte);
 describe('emails factures : accès et échéances', () => {
   it('pointe une facture d’honoraires vers la liste qui peut réellement l’ouvrir', () => {
@@ -123,7 +124,11 @@ type SourceCanonique = {
   assigneChange?: boolean; assigneAbsent?: boolean; autreSoignantTest?: boolean; groupeCount?: number; documentAmbigu?: boolean;
 };
 function simulationEnvoi(sourceCanonique?: SourceCanonique) {
-  const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferenceActive: false, preferences: 0, evenementsPreferences: [] as string[], envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[] };
+  const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferenceActive: false, preferences: 0, evenementsPreferences: [] as string[], envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[], lecturesSoldes: 0,
+    soldeCommission: { montant_ttc: 120, montant_avoirs_imputes: 0, montant_a_payer: 120, rapprochement_paiement_requis: false } as Record<string, unknown> };
+  let typeCourant = 'FACTURE_EMISE';
+  const projectionCommission = () => ({ type_document: 'FACTURE', statut: typeCourant === 'FACTURE_PAYEE' ? 'PAYEE' : 'EMISE',
+    mode_paiement: 'STRIPE', ...etat.soldeCommission });
   let handler!: (req: Request) => Promise<Response>;
   const client = { rpc: async (nom: string, args: Record<string, unknown>) => {
     expect(nom).toBe('fn_reserver_envoi_email_idempotent');
@@ -136,11 +141,14 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
   }, from: (table: string) => {
     let id: unknown; let filtre: string;
     const resultat = () => {
-      if (!sourceCanonique) return { data: table === 'etablissements' ? { email_contact: 'facture@example.invalid' } : null, error: null };
+      if (!sourceCanonique) return { data: table === 'factures' && id === 'commission-1'
+        ? { id, etablissement_id: sourceEtablissement, ...projectionCommission() }
+        : table === 'etablissements' ? { email_contact: 'facture@example.invalid' } : null, error: null };
       etat.lecturesSources.push(table + ':' + filtre + ':' + String(id));
       if (table === 'factures') return { data: id === sourceCommission && (!sourceCanonique.honoraire || sourceCanonique.documentAmbigu)
         ? { id, etablissement_id: sourceEtablissement, mission_id: sourceCanonique.groupee ? null : sourceMission,
-          facture_honoraire_id: sourceCanonique.liee ? sourceHonoraires : null, nombre_missions: sourceCanonique.groupee ? 2 : 1 } : null, error: null };
+          facture_honoraire_id: sourceCanonique.liee ? sourceHonoraires : null, nombre_missions: sourceCanonique.groupee ? 2 : 1,
+          ...projectionCommission() } : null, error: null };
       if (table === 'factures_honoraires') return { data: (id === sourceHonoraires && (sourceCanonique.honoraire || sourceCanonique.liee)) || (id === sourceCommission && sourceCanonique.documentAmbigu)
         ? { id, etablissement_id: sourceEtablissement, soignant_id: sourceSoignant, mission_id: sourceMission } : null, error: null };
       if (table === 'missions' && filtre === 'facture_id') {
@@ -162,8 +170,12 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
       throw new Error('Lecture source inattendue : ' + table);
     };
     const query = {
-      select: () => query, eq: (colonne: string, valeur: unknown) => {
-        if (sourceCanonique) { expect(['id', 'facture_id']).toContain(colonne); filtre = colonne; id = valeur; }
+      select: (colonnes: string) => {
+        if (table === 'factures' && colonnes.includes('montant_a_payer')) etat.lecturesSoldes++;
+        return query;
+      }, eq: (colonne: string, valeur: unknown) => {
+        if (sourceCanonique) expect(['id', 'facture_id']).toContain(colonne);
+        filtre = colonne; id = valeur;
         return query;
       },
       limit: (n: number) => { expect(n).toBe(1000); return query; },
@@ -171,7 +183,7 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
       then: (resolve: (value: unknown) => unknown, reject: (cause: unknown) => unknown) => Promise.resolve().then(resultat).then(resolve, reject),
       insert: async (data: unknown) => { etat.audits.push({ table, data }); return { error: null }; },
     };
-    if (!['soignants', 'etablissements', 'journaux_audit', 'emails_envoyes', ...(sourceCanonique ? ['missions', 'factures', 'factures_honoraires'] : [])].includes(table)) throw new Error(`Table inattendue ${table}`);
+    if (!['soignants', 'etablissements', 'journaux_audit', 'emails_envoyes', 'factures', ...(sourceCanonique ? ['missions', 'factures_honoraires'] : [])].includes(table)) throw new Error(`Table inattendue ${table}`);
     return query;
   } };
   const modules: Record<string, unknown> = {
@@ -181,6 +193,7 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
     } },
     '../_shared/rate-limit.ts': { applyRateLimit: () => false, getClientIp: () => '127.0.0.1' },
     '../_shared/admin-auth.ts': { verifyAdminOrServiceRole: async () => ({ ok: true }) },
+    '../_shared/commission-email.ts': commissionEmail,
     '../_shared/facturation-email-source.ts': { resolveFacturationEmailSource: sourceCanonique ? resolveFacturationEmailSource : async () => ({ ok: true, isTest: etat.testSource }) },
     '../_shared/test-account.ts': sourceCanonique ? { resolveOperationalTestAccount, resolveOperationalTestSource } : {
       resolveOperationalTestAccount: async () => ({ ok: true, isTest: etat.testAccount }),
@@ -199,11 +212,15 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
       return Response.json({ id: 'envoi-simule' });
     },
   });
-  return { etat, lancer: (type: string, idempotencyKey?: string, sourceData?: Record<string, unknown>) => handler(new Request('https://example.invalid/send-email', {
+  return { etat, lancer: (type: string, idempotencyKey?: string, sourceData?: Record<string, unknown>) => {
+    typeCourant = type;
+    return handler(new Request('https://example.invalid/send-email', {
     method: 'POST', headers: { Authorization: 'Bearer simulation-service', 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}), destinataire_id: '69510000-0000-4000-8000-000000000001',
-      data: { numero: 'C-1', destinataire_role: 'ETABLISSEMENT', famille_document: 'COMMISSION', facture_id: 'commission-1', ...sourceData } }),
-  })) };
+      data: { numero: 'C-1', destinataire_role: 'ETABLISSEMENT', famille_document: 'COMMISSION', facture_id: 'commission-1',
+        montant_ht: '100', montant_tva: '20', montant_ttc: '120', ...sourceData } }),
+    }));
+  } };
 }
 
 describe('vrai transport email : copie documentaire obligatoire, fournisseur simulé', () => {
@@ -276,6 +293,58 @@ describe('déploiement mixte : ancien résultat indéterminé et payload différ
       p_email_id: 'email-1', p_reservation: 'reservation-1', p_resultat: 'ERREUR',
       p_erreur: '409 idempotency_key déjà utilisée pour une autre requête',
     });
+  });
+});
+
+describe('vrai handler : contrôle canonique du solde commission', () => {
+  const payload = { facture_id: sourceCommission, montant_ttc: '120.00', montant_avoirs_imputes: '40.00', montant_a_payer: '80.00' };
+  it.each(['FACTURE_EMISE', 'FACTURE_PAYEE'])('%s rend120/40/80 avec les vrais helpers et la lecture DB', async type => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false });
+    s.etat.preferenceActive = true;
+    Object.assign(s.etat.soldeCommission, { montant_avoirs_imputes: 40, montant_a_payer: 80 });
+    const response = await s.lancer(type, undefined, payload);
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ success: true });
+    expect(s.etat.lecturesSoldes).toBe(1);
+    expect(s.etat.envois).toHaveLength(1);
+    const html = s.etat.envois[0].html;
+    expect(html).toContain('Montant TTC du document : <strong>120.00 €</strong>');
+    expect(html).toContain('Avoirs imputés : <strong>−40.00 €</strong>');
+    expect(html).toContain(`${type === 'FACTURE_PAYEE' ? 'Montant réglé hors avoir' : 'Net à payer'} : <strong>80.00 €</strong>`);
+  });
+  it('une confirmation net0 par AVOIR ne prétend pas confirmer un débit bancaire', async () => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false });
+    s.etat.preferenceActive = true;
+    Object.assign(s.etat.soldeCommission, { mode_paiement: 'AVOIR', montant_avoirs_imputes: 120, montant_a_payer: 0 });
+    const response = await s.lancer('FACTURE_PAYEE', undefined, { ...payload, mode_paiement: 'AVOIR', montant_avoirs_imputes: '120.00', montant_a_payer: '0.00' });
+    expect(response.status).toBe(200);
+    expect(s.etat.envois).toHaveLength(1);
+    expect(s.etat.envois[0].subject).toBe('Facture soldée par avoir — Facture C-1');
+    expect(s.etat.envois[0].html).toContain('Montant réglé hors avoir : <strong>0.00 €</strong>');
+    expect(s.etat.envois[0].html).not.toContain('💳 Paiement confirmé');
+  });
+  it('l’ancien corps sans champs de solde reste compatible seulement avec0avoir/netTTC', async () => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false });
+    const response = await s.lancer('FACTURE_EMISE', undefined, { facture_id: sourceCommission });
+    expect(response.status).toBe(200);
+    expect(s.etat.lecturesSoldes).toBe(1);
+    expect(s.etat.envois).toHaveLength(1);
+    expect(s.etat.envois[0].html).toContain('Montant TTC : <strong>120 €</strong>');
+    expect(s.etat.envois[0].html).not.toContain('Avoirs imputés');
+  });
+  it.each([
+    ['ancien corps après imputation', { montant_avoirs_imputes: 40, montant_a_payer: 80 }, { facture_id: sourceCommission }],
+    ['net du corps incohérent', { montant_avoirs_imputes: 40, montant_a_payer: 80 }, { ...payload, montant_a_payer: '120.00' }],
+    ['projection DB absente', { montant_a_payer: undefined }, { facture_id: sourceCommission }],
+    ['rapprochement requis', { rapprochement_paiement_requis: true }, { facture_id: sourceCommission }],
+  ] as const)('%s refuse avant fournisseur sans modifier le corps pour le faire passer', async (_nom, db, body) => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: false });
+    Object.assign(s.etat.soldeCommission, db);
+    const avant = JSON.stringify(body);
+    const response = await s.lancer('FACTURE_EMISE', undefined, body);
+    expect(response.status).toBe(500); expect(await response.json()).toEqual({ success: false, error: 'Erreur interne' });
+    expect(s.etat.lecturesSoldes).toBe(1);
+    expect(s.etat.envois).toEqual([]);
+    expect(JSON.stringify(body)).toBe(avant);
   });
 });
 

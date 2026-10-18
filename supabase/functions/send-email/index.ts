@@ -1,3 +1,4 @@
+import { montantsCommissionEmail, aSoldeCommissionEmail, verifierSoldeCommissionEmail } from "../_shared/commission-email.ts";
 import { verifierPreferencesEvenementsEmail } from '../_shared/preferences-alertes-email.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
@@ -378,15 +379,15 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         };
       }
       return {
-        subject: `${data.libelle_document || 'Facture'} ${data.numero} — Jolene`,
+        subject: `${data.mode_paiement === 'AVOIR' ? 'Facture soldée par avoir' : data.libelle_document || 'Facture'} ${data.numero} — Jolene`,
         html: WRAPPER(`
-          <h2 style="color:#0F172A;margin:0 0 12px;">${data.libelle_document || 'Facture'} ${data.numero}</h2>
+          <h2 style="color:#0F172A;margin:0 0 12px;">${data.mode_paiement === 'AVOIR' ? 'Facture soldée par avoir' : data.libelle_document || 'Facture'} ${data.numero}</h2>
           <p style="color:#334155;">Bonjour,</p>
           ${CARD_BOX(`
             <strong style="color:#0F172A;">Facture ${data.numero}</strong><br/>
             <span style="color:#334155;">Montant HT : ${data.montant_ht} €</span><br/>
             <span style="color:#334155;">TVA : ${data.montant_tva} €</span><br/>
-            <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>
+            ${!aSoldeCommissionEmail(data) || data.famille_document === 'HONORAIRES' ? `<span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>` : montantsCommissionEmail(data)}
             ${data.date_echeance ? `<span style="color:#334155;">Échéance : ${data.date_echeance}</span>` : ''}
           `)}
           ${BUTTON('Consulter le document →', data.famille_document === 'HONORAIRES'
@@ -398,16 +399,16 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'FACTURE_PAYEE':
       return {
-        subject: `Paiement confirmé — Facture ${data.numero}`,
+        subject: `${data.mode_paiement === 'AVOIR' ? 'Facture soldée par avoir' : 'Paiement confirmé'} — Facture ${data.numero}`,
         html: WRAPPER(`
-          <h2 style="color:#0F172A;margin:0 0 12px;">💳 Paiement confirmé</h2>
+          <h2 style="color:#0F172A;margin:0 0 12px;">${data.mode_paiement === 'AVOIR' ? 'Facture soldée par avoir' : '💳 Paiement confirmé'}</h2>
           <p style="color:#334155;">Bonjour,</p>
           ${CARD_BOX(`
             <strong style="color:#0F172A;">Facture ${data.numero}</strong><br/>
-            <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>
+            ${aSoldeCommissionEmail(data) ? montantsCommissionEmail(data, true) : `<span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>`}
             <span style="color:#334155;">Date de paiement : ${data.date_paiement}</span>
           `)}
-          <p style="color:#334155;">Merci pour votre règlement. Votre facture est disponible dans l'app.</p>
+          <p style="color:#334155;">${data.mode_paiement === 'AVOIR' ? 'Votre facture a été soldée intégralement par imputation d’avoirs, sans débit bancaire.' : 'Merci pour votre règlement.'} Votre facture est disponible dans l'app.</p>
           ${BUTTON('Voir la facture →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
           ${SECURITY_NOTE}
         `),
@@ -450,7 +451,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">💳 Rappel de paiement</h2>
           <p style="color:#334155;">Bonjour,</p>
-          <p style="color:#334155;">La facture <strong>${data.numero}</strong> d'un montant de <strong>${data.montant_ttc} € TTC</strong> est toujours en attente de paiement.</p>
+          ${aSoldeCommissionEmail(data) ? `<p style="color:#334155;">La facture <strong>${data.numero}</strong> est toujours en attente de paiement.</p>${CARD_BOX(montantsCommissionEmail(data))}` : `<p style="color:#334155;">La facture <strong>${data.numero}</strong> d'un montant de <strong>${data.montant_ttc} € TTC</strong> est toujours en attente de paiement.</p>`}
           ${INFO_BOX(`Échéance : <strong>${data.date_echeance}</strong>`)}
           ${BUTTON('Consulter et payer →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
           ${SECURITY_NOTE}
@@ -883,7 +884,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <p style="color:#334155;">Le paiement de votre facture Jolene a échoué :</p>
           ${CARD_BOX(`
             <strong style="color:#0F172A;">Facture :</strong> ${data.numero_facture || '—'}<br/>
-            <strong style="color:#0F172A;">Montant :</strong> ${data.montant_ttc || '—'} € TTC<br/>
+            ${aSoldeCommissionEmail(data) ? montantsCommissionEmail(data) : `<strong style="color:#0F172A;">Montant :</strong> ${data.montant_ttc || '—'} € TTC<br/>`}
             <strong style="color:#0F172A;">Raison :</strong> ${data.failure_message || 'Erreur carte'}
           `)}
           ${INFO_BOX('Merci de relancer le paiement depuis votre espace facturation. Si le problème persiste, vérifiez votre moyen de paiement ou contactez votre banque.')}
@@ -1060,7 +1061,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${CARD_BOX(isFacture ? `
             <strong style="color:#0F172A;">Type :</strong> Facture de commission Jolene<br/>
             <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_facture || '—'}<br/>
-            <strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>
+            ${aSoldeCommissionEmail(data) ? montantsCommissionEmail(data) : `<strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>`}
             <strong style="color:#0F172A;">Émise le :</strong> ${data.date_emission || '—'}
           ` : `
             <strong style="color:#0F172A;">Type :</strong> Paiement soignant à déclarer<br/>
@@ -1098,7 +1099,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${CARD_BOX(isFacture ? `
             <strong style="color:#0F172A;">Type :</strong> Facture de commission Jolene<br/>
             <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_facture || '—'}<br/>
-            <strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>
+            ${aSoldeCommissionEmail(data) ? montantsCommissionEmail(data) : `<strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>`}
             <strong style="color:#0F172A;">Émise le :</strong> ${data.date_emission || '—'}
           ` : `
             <strong style="color:#0F172A;">Type :</strong> Paiement soignant à déclarer<br/>
@@ -2005,6 +2006,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    await verifierSoldeCommissionEmail(supabaseService, type, templateData || {}, destinataire_id);
     const rendered = renderTemplate(type, templateData || {});
     if (!rendered) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {

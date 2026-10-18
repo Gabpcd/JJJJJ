@@ -1,3 +1,4 @@
+import { lireSoldeCommission } from "./commission-balance.ts";
 import { stagingInvoiceConfig, requireStagingInvoiceEvent } from "./stripe-invoice-staging-test.ts";
 import { stagingConnectConfig, readStagingConnectCapacity, verifyStagingStripeIdentity, requireStagingRefundScope, requireStagingRefundEventScope, requireStagingTransferScope, requireStagingPayoutEventScope } from "./stripe-connect-staging-test.ts";
 import Stripe from "npm:stripe@20.4.1";
@@ -732,7 +733,7 @@ export async function handleStripeWebhook(
       const { data: facture, error: factureError } = await supabaseAdmin
         .from("factures")
         .select(
-          "id, statut, type_document, numero_facture, montant_ttc, etablissement_id, stripe_payment_intent_id, etablissements(stripe_customer_id)",
+          "id, statut, type_document, numero_facture, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, etablissement_id, stripe_payment_intent_id, etablissements(stripe_customer_id)",
         )
         .eq("id", factureId)
         .maybeSingle();
@@ -749,8 +750,9 @@ export async function handleStripeWebhook(
       const customerId = (Array.isArray(relation)
         ? relation[0]?.stripe_customer_id
         : relation?.stripe_customer_id) || "";
-      const amountCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+      const amountCents = lireSoldeCommission(facture).montantExterneCents;
       const incoherences: string[] = [];
+      if (facture.rapprochement_paiement_requis) incoherences.push("invoice.reconciliation_required");
       if (facture.type_document !== "FACTURE") {
         incoherences.push("invoice.type_document");
       }
@@ -1996,11 +1998,14 @@ export async function handleStripeWebhook(
         })
         .eq("id", factureId)
         .eq("montant_ttc", existingFacture.montant_ttc)
+        .eq("montant_avoirs_imputes", existingFacture.montant_avoirs_imputes)
+        .eq("montant_a_payer", existingFacture.montant_a_payer)
+        .eq("rapprochement_paiement_requis", false)
         .or(
           `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${checkoutPaymentIntent.id}`,
         )
         .in("statut", ["EMISE", "EN_RETARD"])
-        .select("id, numero_facture, etablissement_id, montant_ttc")
+        .select("id, numero_facture, etablissement_id, montant_ttc, montant_avoirs_imputes, montant_a_payer")
         .maybeSingle();
 
       if (updateErr) {
@@ -2060,6 +2065,8 @@ export async function handleStripeWebhook(
           p_details: {
             numero_facture: facture.numero_facture,
             montant_ttc: facture.montant_ttc,
+            montant_avoirs_imputes: facture.montant_avoirs_imputes,
+            montant_a_payer: facture.montant_a_payer,
             stripe_session_id: session.id,
             stripe_payment_intent: session.payment_intent,
           },
@@ -2201,6 +2208,9 @@ export async function handleStripeWebhook(
           })
           .eq("id", factureId)
           .eq("montant_ttc", validatedPaymentIntentFacture.montant_ttc)
+          .eq("montant_avoirs_imputes", validatedPaymentIntentFacture.montant_avoirs_imputes)
+          .eq("montant_a_payer", validatedPaymentIntentFacture.montant_a_payer)
+          .eq("rapprochement_paiement_requis", false)
           .or(
             `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${paymentIntent.id}`,
           )
@@ -2371,6 +2381,7 @@ export async function handleStripeWebhook(
           modifie_le: new Date().toISOString(),
         })
         .eq("stripe_invoice_id", stripeInvoiceId)
+        .eq("rapprochement_paiement_requis", false)
         .in("statut", ["EMISE", "EN_RETARD"]);
 
       if (failErr) {
@@ -2488,7 +2499,7 @@ export async function handleStripeWebhook(
           const { data: facture, error: failedChargeLookupError } = await supabaseAdmin
             .from("factures")
             .select(
-              "id, numero_facture, type_document, etablissement_id, montant_ttc, statut, stripe_payment_intent_id, etablissements(stripe_customer_id)",
+              "id, numero_facture, type_document, etablissement_id, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, statut, stripe_payment_intent_id, etablissements(stripe_customer_id)",
             )
             .eq("id", factureId)
             .maybeSingle();
@@ -2507,7 +2518,7 @@ export async function handleStripeWebhook(
           const customerId = (Array.isArray(relation)
             ? relation[0]?.stripe_customer_id
             : relation?.stripe_customer_id) || "";
-          const amountCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+          const amountCents = lireSoldeCommission(facture).montantExterneCents;
           const chargeCustomerId = typeof charge.customer === "string"
             ? charge.customer
             : charge.customer?.id || null;
@@ -2547,7 +2558,7 @@ export async function handleStripeWebhook(
           const isCurrentAttempt = !facture.stripe_payment_intent_id
             || facture.stripe_payment_intent_id === paymentIntentId;
           let failedChargeUpdated: { id: string } | null = null;
-          if (isCurrentAttempt && ["EMISE", "EN_RETARD"].includes(facture.statut)) {
+          if (isCurrentAttempt && !facture.rapprochement_paiement_requis && ["EMISE", "EN_RETARD"].includes(facture.statut)) {
             let failedChargeUpdateQuery = supabaseAdmin
               .from("factures")
               .update({
@@ -2557,6 +2568,9 @@ export async function handleStripeWebhook(
               })
               .eq("id", facture.id)
               .eq("montant_ttc", facture.montant_ttc)
+              .eq("montant_avoirs_imputes", facture.montant_avoirs_imputes)
+              .eq("montant_a_payer", facture.montant_a_payer)
+              .eq("rapprochement_paiement_requis", false)
               .in("statut", ["EMISE", "EN_RETARD"]);
             failedChargeUpdateQuery = facture.stripe_payment_intent_id
               ? failedChargeUpdateQuery.eq(
@@ -2609,8 +2623,11 @@ export async function handleStripeWebhook(
                 type: "CHARGE_FAILED_ETAB",
                 destinataire_id: facture.etablissement_id,
                 data: {
+                  facture_id: facture.id,
                   numero_facture: facture.numero_facture,
-                  montant_ttc: Number(facture.montant_ttc || 0).toFixed(2),
+                  montant_ttc: Number(facture.montant_ttc).toFixed(2),
+                  montant_avoirs_imputes: facture.montant_avoirs_imputes,
+                  montant_a_payer: facture.montant_a_payer,
                   failure_message: charge.failure_message || "Erreur carte",
                   failure_code: charge.failure_code || "",
                 },
@@ -3258,7 +3275,7 @@ export async function handleStripeWebhook(
 
         const { data: invoice, error: invoiceError } = await supabaseAdmin
           .from("factures")
-          .select("id, statut, montant_ttc, etablissement_id, etablissements(stripe_customer_id)")
+          .select("id, statut, type_document, montant_ttc, montant_avoirs_imputes, montant_a_payer, rapprochement_paiement_requis, etablissement_id, etablissements(stripe_customer_id)")
           .eq("stripe_payment_intent_id", paymentIntentId)
           .maybeSingle();
         if (invoiceError) {
@@ -3272,29 +3289,64 @@ export async function handleStripeWebhook(
           const expectedCustomerId = (Array.isArray(relation)
             ? relation[0]?.stripe_customer_id
             : relation?.stripe_customer_id) || null;
+          const soldeInvoice = lireSoldeCommission(invoice);
           if (
-            Math.round(Number(invoice.montant_ttc) * 100) !== paymentIntent.amount
+            soldeInvoice.montantExterneCents !== paymentIntent.amount
             || paymentIntent.metadata?.facture_id !== invoice.id
             || paymentIntent.metadata?.etablissement_id !== invoice.etablissement_id
             || stripeObjectId(paymentIntent.customer) !== expectedCustomerId
           ) {
             throw new Error(`Unmanaged invoice refund ${refund.id} identity mismatch`);
           }
+          // Un remboursement fournisseur ne libère aucun avoir et ne recrée
+          // aucune dette : l'opérateur doit rapprocher le règlement composite.
+          const { data: avoirsOrigine, error: avoirsOrigineError } = await supabaseAdmin
+            .from("factures")
+            .select("id")
+            .eq("type_document", "AVOIR")
+            .eq("facture_precedente_id", invoice.id)
+            .neq("statut", "ANNULEE")
+            .limit(1);
+          if (avoirsOrigineError || !Array.isArray(avoirsOrigine)) {
+            throw new Error("Unmanaged invoice refund credit-note lookup failed");
+          }
+          // L'origine d'un avoir futur peut avoir agrégat0 : la rembourser
+          // exige aussi un gel pour éviter crédit futur + remboursement cash.
+          const rapprochementRequis = soldeInvoice.avoirsImputesCents > 0 || avoirsOrigine.length > 0;
           const { data: invoiceRecovery, error: invoiceRecoveryError } = await supabaseAdmin
             .from("factures")
-            .update({ statut: "EN_RETARD", modifie_le: new Date().toISOString() })
+            .update(rapprochementRequis
+              ? { rapprochement_paiement_requis: true, modifie_le: new Date().toISOString() }
+              : { statut: "EN_RETARD", modifie_le: new Date().toISOString() })
             .eq("id", invoice.id)
+            .eq("montant_ttc", invoice.montant_ttc)
+            .eq("montant_avoirs_imputes", invoice.montant_avoirs_imputes)
+            .eq("montant_a_payer", invoice.montant_a_payer)
             .eq("statut", "PAYEE")
             .eq("stripe_payment_intent_id", paymentIntentId)
             .select("id")
             .maybeSingle();
           if (
             invoiceRecoveryError
-            || (!invoiceRecovery && invoice.statut !== "EN_RETARD")
+            || (!invoiceRecovery && (rapprochementRequis
+              ? !(invoice.statut === "PAYEE" && invoice.rapprochement_paiement_requis === true)
+              : invoice.statut !== "EN_RETARD"))
           ) {
             throw new Error(
               `Unmanaged invoice refund recovery failed: ${invoiceRecoveryError?.message || "state conflict"}`,
             );
+          }
+          if (rapprochementRequis) {
+            await writeRequiredFinancialAudit(supabaseAdmin, {
+              p_acteur_id: "00000000-0000-0000-0000-000000000000", p_type_acteur: "SYSTEME",
+              p_action: "ADMIN_ACTION", p_type_ressource: "facture", p_id_ressource: invoice.id,
+              p_cle_s3: null, p_ip: null, p_navigateur: "stripe-webhook",
+              p_details: { evenement: "FACTURE_AVOIR_REMBOURSEMENT_A_RAPPROCHER",
+                stripe_event_id: event.id, stripe_refund_id: refund.id,
+                stripe_payment_intent_id: paymentIntentId, montant_rembourse_cts: refund.amount,
+                montant_externe_cts: soldeInvoice.montantExterneCents,
+                avoirs_imputes_cts: soldeInvoice.avoirsImputesCents, avoir_origine_actif: avoirsOrigine.length > 0 },
+            }, "Credited invoice refund reconciliation audit failed");
           }
           anomalyRefundIds.push(refund.id);
           continue;

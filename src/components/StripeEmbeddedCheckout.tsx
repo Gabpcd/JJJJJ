@@ -21,7 +21,11 @@ interface FunctionPayload {
   status?: string;
 }
 
-const messageErreurPaiement = (code?: string) => code === 'TEST_ACCOUNT_PAYMENT_DISABLED'
+const messageErreurPaiement = (code?: string) => code === 'CARD_AMOUNT_TOO_SMALL'
+  ? 'Le solde est inférieur au minimum du paiement par carte. Consultez les modalités de virement de cette facture.'
+  : code === 'RAPPROCHEMENT_PAIEMENT_REQUIS'
+  ? 'Ce règlement doit être rapproché après remboursement. Aucun nouveau paiement n’est demandé pendant la vérification.'
+  : code === 'TEST_ACCOUNT_PAYMENT_DISABLED'
   ? 'Compte de test : les paiements réels sont désactivés. Aucun débit n’a été effectué.'
   : code || 'Erreur lors de la création de la session de paiement';
 
