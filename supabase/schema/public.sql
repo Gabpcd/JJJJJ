@@ -69305,9 +69305,9 @@ END) STORED,
     "montant_a_payer" numeric(10,2) GENERATED ALWAYS AS (("montant_ttc" - "montant_avoirs_imputes")) STORED,
     "rapprochement_paiement_requis" boolean DEFAULT false NOT NULL,
     CONSTRAINT "factures_chorus_pro_statut_check" CHECK (("chorus_pro_statut" = ANY (ARRAY['NON_APPLICABLE'::"text", 'A_DEPOSER'::"text", 'DEPOSEE'::"text", 'RECUE'::"text", 'MANDATEE'::"text", 'PAYEE'::"text", 'REJETEE'::"text"]))),
-    CONSTRAINT "factures_imputation_bornes" CHECK (montant_avoirs_imputes >= 0 AND montant_avoirs_imputes <= montant_ttc AND (montant_avoirs_imputes = 0 OR type_document = 'FACTURE')),
-    CONSTRAINT "factures_mode_paiement_check" CHECK (mode_paiement IN ('STRIPE','VIREMENT','CHORUS_PRO','AVOIR')),
-    CONSTRAINT "factures_reglement_avoir_coherent" CHECK (mode_paiement IS DISTINCT FROM 'AVOIR' OR ( type_document = 'FACTURE' AND statut IS NOT DISTINCT FROM 'PAYEE' AND date_paiement IS NOT NULL AND montant_ttc > 0 AND montant_avoirs_imputes = montant_ttc AND stripe_invoice_id IS NULL AND stripe_payment_intent_id IS NULL AND stripe_hosted_url IS NULL AND virement_reference IS NULL)),
+    CONSTRAINT "factures_imputation_bornes" CHECK ((("montant_avoirs_imputes" >= (0)::numeric) AND ("montant_avoirs_imputes" <= "montant_ttc") AND (("montant_avoirs_imputes" = (0)::numeric) OR ("type_document" = 'FACTURE'::"text")))),
+    CONSTRAINT "factures_mode_paiement_check" CHECK (("mode_paiement" = ANY (ARRAY['STRIPE'::"text", 'VIREMENT'::"text", 'CHORUS_PRO'::"text", 'AVOIR'::"text"]))),
+    CONSTRAINT "factures_reglement_avoir_coherent" CHECK ((("mode_paiement" IS DISTINCT FROM 'AVOIR'::"text") OR (("type_document" = 'FACTURE'::"text") AND (NOT ("statut" IS DISTINCT FROM 'PAYEE'::"text")) AND ("date_paiement" IS NOT NULL) AND ("montant_ttc" > (0)::numeric) AND ("montant_avoirs_imputes" = "montant_ttc") AND ("stripe_invoice_id" IS NULL) AND ("stripe_payment_intent_id" IS NULL) AND ("stripe_hosted_url" IS NULL) AND ("virement_reference" IS NULL)))),
     CONSTRAINT "factures_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EMISE'::"text", 'VIREMENT_DECLARE'::"text", 'PAYEE'::"text", 'EN_RETARD'::"text", 'ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"]))),
     CONSTRAINT "factures_type_document_check" CHECK (("type_document" = ANY (ARRAY['FACTURE'::"text", 'AVOIR'::"text", 'FACTURE_COMPLEMENTAIRE'::"text"])))
 );

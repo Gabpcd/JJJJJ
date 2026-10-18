@@ -113,14 +113,15 @@ test('PROD, fork, mauvais SHA ou contexte non CI refusés ; transport uniquement
   await assert.rejects(inspect({ ...args, fetcher: async () => ({ ok: false }) }), /READ_FAILED/);
   await assert.rejects(inspect({ ...args, fetcher: async () => ({ ok: true, redirected: true }) }), /READ_FAILED/);
 });
-test('workflow conserve les 61 suites, le bootstrap normal et la relecture même après échec', () => {
+test('workflow conserve les 62 suites, le bootstrap normal et la relecture même après échec', () => {
   const workflow = parse(readFileSync(new URL('../../.github/workflows/validate-pr.yml', import.meta.url), 'utf8'));
   const steps = workflow.jobs['sql-transaction'].steps;
   const bootstrap = steps.find(s => s.name === 'Synchroniser le schéma main vers le staging');
   assert.match(bootstrap.if, /paiements_installation.outputs.mode != 'installed'/);
   assert.match(bootstrap.run, /check-staging-migration-base\.mjs/);
   const rollback = steps.find(s => s.name === 'Exécuter les migrations ajoutées et les régressions SQL sans persister');
-  assert.equal([...rollback.run.matchAll(/^\s+tests\/[^\s]+\.sql$/gm)].length, 61);
+  assert.equal([...rollback.run.matchAll(/^\s+tests\/[^\s]+\.sql$/gm)].length, 62);
+  assert.match(rollback.run, /^\s+tests\/security\/avoirs-imputation-staging\.test\.sql$/m);
   assert.match(rollback.run, /paiements-staging-installed\.mjs verify\n\s+MIGRATIONS=\(\)/);
   assert.match(rollback.run, /SAVEPOINT %s/); assert.match(rollback.run, /ROLLBACK TO SAVEPOINT/);
   const post = steps.find(s => s.name === 'Paiements — relecture indépendante de l’installation après succès ou échec SQL');
