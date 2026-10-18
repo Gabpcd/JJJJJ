@@ -78,11 +78,16 @@ async function fixture(page: Page, connect = false, commission = false, commissi
     facture_honoraire_id: commissionScenario.startsWith('liee-') ? seconde : null,
     mode_paiement: complementSalarie ? 'VIREMENT' : 'STRIPE',
     montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 0,
+    // Projection canonique sans avoir : le montant externe reste 14,40 €, même PAYEE.
+    montant_avoirs_imputes: 0, montant_a_payer: 14.4, rapprochement_paiement_requis: false,
     date_emission: '2026-09-30', date_echeance: '2026-10-30', periode_debut: '2026-09-01', periode_fin: '2026-09-30',
     ...(complementApresCarte ? { facture_precedente_id: commissionInitialeId, stripe_payment_intent_id: null } : {}) };
   const initialeCarte = complementApresCarte ? { ...factureCommission, id: commissionInitialeId, facture_id: commissionInitialeId,
     numero_facture: 'COMMISSION-INITIALE-CARTE-PAYEE', type_document: 'FACTURE', statut: 'PAYEE', mode_paiement: 'STRIPE',
     facture_precedente_id: null, stripe_payment_intent_id: 'pi_test_initiale_salariee_simulation', date_paiement: '2026-09-30' } : null;
+  const facturesCommission = () => initialeCarte ? [factureCommission, initialeCarte] : [factureCommission];
+  const projectionRpcCommission = (piece: typeof factureCommission | NonNullable<typeof initialeCarte>) => ({ ...piece,
+    avoirs: { imputations: [], avoir_eligible: false, avoir_reliquat: null } });
   const admissions: { facture_id: string; virement_autorise: boolean }[] = [];
   await page.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url()), name = url.pathname.split('/').at(-1)!;
@@ -137,22 +142,31 @@ async function fixture(page: Page, connect = false, commission = false, commissi
       if (commission && name === 'fn_modalites_reglement_commission') {
         const piece = initialeCarte && body.p_facture_id === commissionInitialeId ? initialeCarte : factureCommission;
         expect(body).toEqual({ p_facture_id: piece.id });
-        const autorise = ['EMISE','EN_RETARD'].includes(piece.statut) && commissionScenario !== 'liee-connect';
+        const motif = piece.rapprochement_paiement_requis ? 'RAPPROCHEMENT_PAIEMENT_REQUIS'
+          : piece.montant_a_payer <= 0 ? 'FACTURE_SOLDEE'
+          : !['EMISE','EN_RETARD'].includes(piece.statut) ? 'FACTURE_NON_PAYABLE'
+          : commissionScenario === 'liee-connect' ? 'PAIEMENT_EN_LIGNE_ENGAGE' : null;
+        const autorise = motif === null;
         admissions.push({ facture_id: piece.id, virement_autorise: autorise });
-        return json({ facture_id: piece.id, virement_autorise: autorise,
-          motif: autorise ? null : commissionScenario === 'liee-connect' ? 'PAIEMENT_EN_LIGNE_ENGAGE' : 'FACTURE_NON_PAYABLE' });
+        return json({ facture_id: piece.id, virement_autorise: autorise, motif });
       }
-      if (commission && name === 'fn_mes_factures') return json(initialeCarte ? [factureCommission, initialeCarte] : [factureCommission]);
+      if (commission && name === 'fn_mes_factures') return json(facturesCommission().map(projectionRpcCommission));
       if (commission && name === 'fn_detail_facture') {
         const piece = initialeCarte && body.p_facture_id === commissionInitialeId ? initialeCarte : factureCommission;
         expect(body).toEqual({ p_facture_id: piece.id });
-        return json({ facture: piece, missions: [] });
+        return json({ facture: projectionRpcCommission(piece), missions: [] });
       }
-      if (commission && name === 'fn_obligations_financieres') return json({ total_du: commissionScenario === 'liee-payee' ? 0 : 14.4,
-        total_soignants_du: 0, total_commissions_du: commissionScenario === 'liee-payee' ? 0 : 14.4, missions_non_payees: [],
-        factures_impayees: commissionScenario === 'liee-payee' ? [] : [factureCommission], paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
-        factures_commission_historique: commissionScenario === 'liee-payee' ? [factureCommission] : [],
-        nb_factures_commission_historique: commissionScenario === 'liee-payee' ? 1 : 0, missions_non_facturees: [] });
+      if (commission && name === 'fn_obligations_financieres') {
+        const pieces = facturesCommission();
+        const dues = pieces.filter(f => ['EMISE','EN_RETARD'].includes(f.statut)
+          && f.montant_a_payer > 0 && !f.rapprochement_paiement_requis);
+        const totalDu = dues.reduce((total, f) => total + f.montant_a_payer, 0);
+        const historique = pieces.filter(f => ['PAYEE','ANNULEE'].includes(f.statut));
+        return json({ total_du: totalDu, total_soignants_du: 0, total_commissions_du: totalDu, missions_non_payees: [],
+          factures_impayees: pieces.filter(f => ['EMISE','EN_RETARD','VIREMENT_DECLARE'].includes(f.statut)),
+          nb_factures_impayees: dues.length, paiements_soignants_en_attente: [], paiements_soignants_confirmes: [],
+          factures_commission_historique: historique, nb_factures_commission_historique: historique.length, missions_non_facturees: [] });
+      }
       if (name === 'fn_mode_paiement_mission') return json(controle.modeInvalide ? {} : { type_contrat_applique: controle.salarie ? 'SALARIE' : 'LIBERAL', mode_recommande: controle.salarie ? 'VIREMENT_PAIE' : connect ? 'STRIPE_CONNECT' : 'VIREMENT_NOTE_HONORAIRES', montant_soignant: 160, commission_ttc: 24, total: 184 });
       if (name === 'fn_obligations_financieres') return json({ total_du: 230, total_soignants_du: 230, total_commissions_du: 0, nb_missions_non_payees: 2,
         missions_non_payees: [obligation(remplacement,60),obligation(seconde,80),obligation(autreFacture,90,autreMission)],

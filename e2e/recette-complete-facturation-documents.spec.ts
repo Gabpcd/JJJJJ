@@ -217,6 +217,7 @@ test('Documents F1 établissement : commission réelle de période téléchargé
   const commission = { id: ids.commission, facture_id: ids.commission, facture_honoraire_id: ids.facture, mission_id: ids.mission,
     etablissement_id: idsEtab.etab, numero_facture: 'F1-COMMISSION-SEMAINE', statut: 'EMISE', type_document: 'FACTURE',
     montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, nombre_missions: 1, periode_debut: '2026-09-21', periode_fin: '2026-09-27',
+    montant_avoirs_imputes: 0, montant_a_payer: 14.4, rapprochement_paiement_requis: false,
     date_emission: '2026-09-30', date_echeance: '2026-10-30', est_secteur_public: false, chorus_pro_statut: 'NON_APPLICABLE' };
   etat.overrides.set('fn_mon_etablissement_complet', { ...etablissement, type: 'CLINIQUE_PRIVEE', est_compte_test: true });
   etat.overrides.set('fn_obligations_financieres', { total_du: 14.4, missions_a_payer: [], factures_impayees: [commission] });
