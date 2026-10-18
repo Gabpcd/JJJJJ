@@ -142,7 +142,7 @@ jobs:
           echo '{}' > /tmp/cron-disable.json
 
           # La migration n'est appliquée qu'une fois. Cette RPC remet donc les
-          # 8 jobs + le monitor en pause à chaque redéploiement, avant que les
+          # 9 jobs + le monitor en pause à chaque redéploiement, avant que les
           # fonctions soient remplacées une par une.
           for attempt in 1 2 3; do
             if ! code=$(curl -sS --connect-timeout 10 --max-time 45 \
@@ -159,7 +159,7 @@ jobs:
             if [ "$code" = '200' ] \
               && jq -e '
                 .success == true
-                and (.critiques_desactives | length) == 9
+                and (.critiques_desactives | length) == 10
               ' /tmp/cron-disable.json >/dev/null 2>&1; then
               ready=true
               break
@@ -405,10 +405,10 @@ jobs:
           rpc fn_ops_sonder_crons_edge_critiques '{}' /tmp/cron-probes.json
           if ! jq -e '
             type == "object"
-            and length == 8
+            and length == 9
             and all(.[]; type == "number")
           ' /tmp/cron-probes.json >/dev/null; then
-            echo "::error::La sonde n'a pas retourné exactement 8 request_id."
+            echo "::error::La sonde n'a pas retourné exactement 9 request_id."
             jq . /tmp/cron-probes.json 2>/dev/null || true
             exit 1
           fi
@@ -427,11 +427,11 @@ jobs:
             if jq -e '.ready == true' /tmp/cron-probe-status.json >/dev/null; then
               if ! jq -e '
                 .success == true
-                and .ok == 8
+                and .ok == 9
                 and .echecs == 0
                 and .en_attente == 0
               ' /tmp/cron-probe-status.json >/dev/null; then
-                echo "::error::Au moins une des 8 sondes Edge n'est pas HTTP 2xx."
+                echo "::error::Au moins une des 9 sondes Edge n'est pas HTTP 2xx."
                 jq . /tmp/cron-probe-status.json
                 exit 1
               fi
@@ -444,7 +444,7 @@ jobs:
           done
 
           if [ "$probes_ready" != 'true' ]; then
-            echo "::error::Délai dépassé pour les 8 sondes Edge. Les crons restent inactifs."
+            echo "::error::Délai dépassé pour les 9 sondes Edge. Les crons restent inactifs."
             jq . /tmp/cron-probe-status.json 2>/dev/null || true
             exit 1
           fi
@@ -472,7 +472,7 @@ jobs:
             "$activation_payload" /tmp/cron-activation.json
           if ! jq -e '
             .success == true
-            and (.jobs_actives | length) == 9
+            and (.jobs_actives | length) == 10
           ' /tmp/cron-activation.json >/dev/null; then
             echo "::error::Activation atomique des crons critiques refusée."
             jq . /tmp/cron-activation.json
@@ -483,11 +483,11 @@ jobs:
             '{}' /tmp/cron-final-state.json
           if ! jq -e '
             .success == true
-            and (.critiques_actifs | length) == 9
+            and (.critiques_actifs | length) == 10
             and (.critiques_manquants | length) == 0
             and (.acquisition_active | length) == 0
           ' /tmp/cron-final-state.json >/dev/null; then
-            echo "::error::État final invalide : 8 jobs + monitor doivent être actifs et l'acquisition inactive."
+            echo "::error::État final invalide : 9 jobs + monitor doivent être actifs et l'acquisition inactive."
             jq . /tmp/cron-final-state.json
             exit 1
           fi
@@ -554,7 +554,7 @@ jobs:
           echo "- Migrations SQL appliquées (ou already-applied skip)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
           echo "- Configuration Stripe live et webhooks vérifiée" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 8 crons Edge critiques + monitor activés après sondes HTTP 2xx ; acquisition inactive" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 9 crons Edge critiques + monitor activés après sondes HTTP 2xx ; acquisition inactive" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
 
