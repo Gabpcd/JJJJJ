@@ -129,6 +129,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [publicationEnCours, setPublicationEnCours] = useState(false);
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
+  const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
   const [blocageVerification, setBlocageVerification] = useState<string | null>(null);
   const [toleranceGpsMetres, setToleranceGpsMetres] = useState<number | null>(null);
@@ -180,6 +181,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         setRistPlafondActif(data.rist_plafond_actif === true && isPublic);
         setTauxCommission(tauxCommissionEtablissement(data));
         setEtablissementType(data.type);
+        setEtablissementId(data.id);
         if ((data as any).tolerance_gps_metres != null) setToleranceGpsMetres((data as any).tolerance_gps_metres);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
         // SIRET check: must exist and not be empty
@@ -575,6 +577,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     toleranceGpsMetres,
     qrAutoGenere: true, // Sprint 4.5 PR 4 : trigger auto à la signature du contrat
     etablissementType,
+    etablissementId,
     liberalRestreint,
     modeExerciceMission,
   };
@@ -978,7 +981,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between">
                   <span className="text-muted-foreground">{contratPreference === 'LIBERAL'
-                    ? 'Honoraires estimés HT'
+                    ? 'Base des honoraires HT, hors majorations'
                     : contratPreference === 'SALARIE'
                       ? 'Base brute estimée'
                       : 'Base proposée (brut ou honoraires HT)'}</span>
@@ -995,6 +998,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             netEstime={taux * dureeEstimee}
             tauxActuel={tauxCommission}
             palierNom={palierNom}
+            horsMajorations={contratPreference === 'LIBERAL'}
           />
         )}
 

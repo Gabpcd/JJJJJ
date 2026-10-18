@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { estimerCommissionEnCentimes } from '@/lib/commissionEstimee';
 import { Loader2 } from 'lucide-react';
 import {
   liensSourcesModeExercice,
@@ -45,6 +47,7 @@ export interface RecapMissionData {
   toleranceGpsMetres: number | null;
   qrAutoGenere: boolean;
   etablissementType: string | null;
+  etablissementId?: string | null;
   liberalRestreint: boolean;
   modeExerciceMission: ModeExerciceMission | null;
 }
@@ -88,18 +91,82 @@ export function ModalRecapMission({
     estUrgente,
     niveauUrgence,
     tauxCommission,
+    etablissementId,
     toleranceGpsMetres,
     qrAutoGenere,
     liberalRestreint,
     modeExerciceMission,
   } = data;
 
-  const remunerationEstimee = tauxHoraire * dureeHeures;
-  const commissionMontantHt = remunerationEstimee * (tauxCommission / 100);
-  const commissionTva = commissionMontantHt * 0.20;
-  const totalAvecTvaJolene = remunerationEstimee + commissionMontantHt + commissionTva;
   const estLiberalUniquement = contratPreference === 'LIBERAL';
   const estSalarieUniquement = contratPreference === 'SALARIE';
+  const demandeHonoraires = JSON.stringify({
+    etablissementId,
+    tauxHoraire,
+    tauxCommission,
+    creneaux: (creneaux.length > 0 ? creneaux : [{ debut: debutLe, fin: finLe }])
+      .map(({ debut, fin }) => ({ debut, fin })),
+  });
+  const [estimationHonoraires, setEstimationHonoraires] = useState<{
+    demande: string;
+    montant: number | null;
+    frais: { ht: number; tva: number } | null;
+    erreur: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!ouvert || !estLiberalUniquement) return;
+    let active = true;
+    const demande = JSON.parse(demandeHonoraires) as {
+      etablissementId?: string | null;
+      tauxHoraire: number;
+      tauxCommission: number;
+      creneaux: Array<{ debut: string; fin: string }>;
+    };
+    setEstimationHonoraires(null);
+    (async () => {
+      try {
+        if (!demande.etablissementId || !demande.creneaux.length) throw new Error('Paramètres incomplets');
+        // Même calcul par créneau que dec_calculer_finance_mission. Seul total_brut
+        // constitue les honoraires LIBERAL ; aucun IFM/ICP issu du défaut CDD.
+        const montants = await Promise.all(demande.creneaux.map(async ({ debut, fin }) => {
+          const { data: calcul, error } = await supabase.rpc('fn_calculer_remuneration_mission', {
+            p_debut: debut,
+            p_fin: fin,
+            p_taux_base: demande.tauxHoraire,
+            p_etablissement_id: demande.etablissementId!,
+          });
+          const montant = calcul && typeof calcul === 'object' && !Array.isArray(calcul)
+            ? calcul.total_brut : null;
+          if (error || typeof montant !== 'number' || !Number.isFinite(montant) || montant < 0) {
+            throw new Error('Calcul indisponible');
+          }
+          return Math.round(montant * 100);
+        }));
+        const totalCents = montants.reduce((somme, montant) => somme + montant, 0);
+        const fraisCents = estimerCommissionEnCentimes(totalCents, demande.tauxCommission);
+        if (!fraisCents) throw new Error('Montants indisponibles');
+        if (active) setEstimationHonoraires({
+          demande: demandeHonoraires, montant: totalCents / 100,
+          frais: { ht: fraisCents.ht / 100, tva: fraisCents.tva / 100 }, erreur: null,
+        });
+      } catch {
+        if (active) setEstimationHonoraires({
+          demande: demandeHonoraires, montant: null, frais: null,
+          erreur: 'Le coût avec majorations ne peut pas être calculé. Revenez au formulaire puis réessayez.',
+        });
+      }
+    })();
+    return () => { active = false; };
+  }, [ouvert, estLiberalUniquement, demandeHonoraires]);
+
+  const estimationCourante = estimationHonoraires?.demande === demandeHonoraires ? estimationHonoraires : null;
+  const honorairesDisponibles = estimationCourante?.montant != null && estimationCourante.frais != null;
+  const remunerationEstimee = estLiberalUniquement ? (estimationCourante?.montant ?? 0) : tauxHoraire * dureeHeures;
+  const commissionMontantHt = estLiberalUniquement
+    ? (estimationCourante?.frais?.ht ?? 0) : remunerationEstimee * (tauxCommission / 100);
+  const commissionTva = estLiberalUniquement ? (estimationCourante?.frais?.tva ?? 0) : commissionMontantHt * 0.20;
+  const totalAvecTvaJolene = remunerationEstimee + commissionMontantHt + commissionTva;
   const sourcesModeExerciceMission = modeExerciceMission
     ? liensSourcesModeExercice(modeExerciceMission)
     : [];
@@ -242,13 +309,18 @@ export function ModalRecapMission({
               2. Coût estimé
             </h3>
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-xl p-4 space-y-2 text-sm">
+              {estLiberalUniquement && !honorairesDisponibles ? (
+                <p role={estimationCourante?.erreur ? 'alert' : 'status'}>
+                  {estimationCourante?.erreur || 'Calcul des honoraires et majorations…'}
+                </p>
+              ) : (<>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
                   {estLiberalUniquement
-                    ? 'Honoraires estimés HT'
+                    ? 'Honoraires estimés HT, majorations incluses'
                     : estSalarieUniquement
                       ? 'Base brute estimée'
-                      : 'Base proposée — brut salarié ou honoraires HT'} ({tauxHoraire.toFixed(2)} €/h × {dureeHeures.toFixed(1)}h)
+                      : 'Base proposée — brut salarié ou honoraires HT'}{!estLiberalUniquement && <> ({tauxHoraire.toFixed(2)} €/h × {dureeHeures.toFixed(1)}h)</>}
                 </span>
                 <span className="font-medium text-foreground">{remunerationEstimee.toFixed(2)} €</span>
               </div>
@@ -274,6 +346,7 @@ export function ModalRecapMission({
                 </span>
                 <span className="font-bold text-primary text-base">{totalAvecTvaJolene.toFixed(2)} €</span>
               </div>
+              </>)}
               {estLiberalUniquement ? (
                 <div className="space-y-1 pt-1 text-[10px] text-muted-foreground">
                   <p>
@@ -374,7 +447,7 @@ export function ModalRecapMission({
           <button
             type="button"
             onClick={onConfirmer}
-            disabled={loading}
+            disabled={loading || (estLiberalUniquement && !honorairesDisponibles)}
             className="btn-primary flex-1 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -5,6 +5,7 @@ interface EncartCommissionDegressifProps {
   tauxActuel: number;
   /** Conservé pour compatibilité d'appel — n'est plus affiché (modèle par paliers abandonné). */
   palierNom?: string;
+  horsMajorations?: boolean;
 }
 
 /**
@@ -12,7 +13,7 @@ interface EncartCommissionDegressifProps {
  * Le modèle « paliers dégressifs par volume » a été abandonné (décision
  * produit 12/06/2026) — cascade établissement, groupe, puis 15 % HT.
  */
-export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommissionDegressifProps) {
+export function EncartCommissionDegressif({ netEstime, tauxActuel, horsMajorations = false }: EncartCommissionDegressifProps) {
   if (netEstime <= 0) return null;
 
   const commissionHT = netEstime * (tauxActuel / 100);
@@ -32,6 +33,11 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommi
         {tauxActuel !== 15 && <span className="text-xs"> (taux négocié)</span>}
       </p>
 
+      {horsMajorations && (
+        <p className="text-xs text-muted-foreground mb-3">
+          Simulation sur la base hors majorations. Le récapitulatif les inclura avant publication.
+        </p>
+      )}
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Base de rémunération estimée</span>
