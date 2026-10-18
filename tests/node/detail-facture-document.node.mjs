@@ -18,6 +18,18 @@ const compiled = compile(`${source}\nexport { chargerContexteFactureCommission, 
 assert.equal(compiled.diagnostics?.length || 0, 0, 'Syntaxe TSX valide');
 const normalizer = { exports: {} };
 runInNewContext(compile(readFileSync('src/lib/factureCommissionUi.ts', 'utf8')).outputText, normalizer);
+// Exécuter le vrai contrat de solde et son wrapper : le proxy UI générique ne
+// doit pas les remplacer par un noop qui refuserait aussi les fixtures valides.
+const balance = { exports: {} };
+runInNewContext(compile(readFileSync('supabase/functions/_shared/commission-balance.ts', 'utf8')).outputText, balance);
+const solde = { exports: {} };
+runInNewContext(compile(readFileSync('src/lib/soldeCommission.ts', 'utf8')).outputText, {
+  exports: solde.exports, Intl,
+  require(name) {
+    assert.equal(name, '../../supabase/functions/_shared/commission-balance');
+    return balance.exports;
+  },
+});
 const noop = () => null;
 let states = [];
 let stateIndex = 0;
@@ -33,6 +45,7 @@ runInNewContext(compiled.outputText, {
     if (name === 'lucide-react') return new Proxy({}, { get: () => noop });
     if (name === 'date-fns' || name === 'date-fns/locale') return require(name);
     if (name === '@/lib/factureCommissionUi') return normalizer.exports;
+    if (name === '@/lib/soldeCommission') return solde.exports;
     if (name === '@/hooks/useEtablissementScope') return { useEtablissementScope: () => ({ user: { id: 'user' }, etablissementId: 'etab', loading: false, resolved: true, error: null, retry: noop }) };
     if (name === '@/hooks/useEtabPermissions') return { useEtabPermissions: () => ({ loading: false, permissions: { lecture_paiement: true, paiement: permission }, error: null, recharger: noop }) };
     if (name === '@/contexts/NotificationContext') return { useNotification: () => ({ afficherNotification: noop }) };
@@ -44,7 +57,7 @@ runInNewContext(compiled.outputText, {
   },
 });
 
-const facture = { id: 'commission', etablissement_id: 'etab', mission_id: 'mission', facture_honoraire_id: 'fh', type_document: 'FACTURE', statut: 'EMISE', mode_paiement: 'STRIPE', montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, numero_facture: 'COM-TEST' };
+const facture = { id: 'commission', etablissement_id: 'etab', mission_id: 'mission', facture_honoraire_id: 'fh', type_document: 'FACTURE', statut: 'EMISE', mode_paiement: 'STRIPE', montant_ht: 12, montant_tva: 2.4, montant_ttc: 14.4, montant_avoirs_imputes: 0, montant_a_payer: 14.4, rapprochement_paiement_requis: false, numero_facture: 'COM-TEST' };
 const honoraires = { id: 'fh', etablissement_id: 'etab', mission_id: 'mission', numero_facture: 'FH-TEST', periode_debut: '2026-09-21', periode_fin: '2026-09-27', quantite_heures_snapshot: 4, taux_horaire_snapshot: 20, montant_ht: 80, description_prestation_snapshot: 'Prestations de soins facturées' };
 const mission = { id: 'mission', intitule: 'Mission entière', debut_le: '2026-09-21', fin_le: '2026-10-05', duree_heures: 8, taux_horaire_base: 99, total_brut: 160, montant_commission_ht: 24, montant_commission_tva: 4.8, montant_commission_ttc: 28.8, presences: [{ id: 'presence-hors-periode' }], segments_effectifs: [{ id: 'segment-hors-periode' }] };
 const plain = (x) => JSON.parse(JSON.stringify(x));
@@ -158,6 +171,34 @@ test('les commissions mensuelles distinctes conservent leurs modes et permission
   assert.match(html, /utilise le prélèvement SEPA/); assert.ok(!html.includes('programmé'));
 });
 
+test('le solde réel après avoir reste distinct du TTC sans accorder de droit supplémentaire', () => {
+  const invoice = { ...facture, facture_honoraire_id: null, mission_id: null,
+    montant_avoirs_imputes: 4.4, montant_a_payer: 10 };
+  const result = exports.presentationPaiementCommission(invoice, {}, true, true);
+  assert.equal(result.canPay, true); assert.equal(result.canPayCard, true);
+  const limited = exports.presentationPaiementCommission(invoice, {}, false, true);
+  assert.equal(limited.canPay, false); assert.equal(limited.canPayCard, false);
+  assert.equal(invoice.montant_ttc, 14.4); assert.equal(invoice.montant_a_payer, 10);
+});
+
+test('une projection absente ou incohérente refuse les deux paiements sans repli sur le TTC', () => {
+  const monthly = { ...facture, facture_honoraire_id: null, mission_id: null };
+  const absent = ['montant_avoirs_imputes', 'montant_a_payer', 'rapprochement_paiement_requis'].map(champ => {
+    const invoice = { ...monthly }; delete invoice[champ]; return invoice;
+  });
+  for (const invoice of [...absent,
+    { ...monthly, montant_avoirs_imputes: 4.4, montant_a_payer: 14.4 },
+    { ...monthly, montant_a_payer: -1 },
+    { ...monthly, rapprochement_paiement_requis: true },
+    { ...monthly, montant_avoirs_imputes: 14.4, montant_a_payer: 0 },
+  ]) {
+    const result = exports.presentationPaiementCommission(invoice, {}, true, true);
+    assert.equal(result.canPay, false); assert.equal(result.canPayCard, false);
+    const html = renderPage({ invoice, fees: null, etab: {} });
+    assert.ok(!html.includes('AUTONOMOUS_CHECKOUT')); assert.ok(!html.includes('AUTONOMOUS_TRANSFER'));
+  }
+});
+
 test('un virement déclaré ne propose aucun nouveau paiement de commission', () => {
   for (const type_document of ['FACTURE', 'FACTURE_COMPLEMENTAIRE']) {
     const invoice = { ...facture, facture_honoraire_id: null, mission_id: null, type_document, statut: 'VIREMENT_DECLARE' };
@@ -226,7 +267,8 @@ test('les vrais hooks affichent l’erreur initiale puis permettent une reprise 
   let scope = { user, etablissementId: 'etab', loading: false, resolved: false, error: new Error('scope refusé') };
   let releaseDetail;
   let invoiceNumber = 'COM-INITIAL';
-  const contextFacture = Object.fromEntries(['id', 'etablissement_id', 'mission_id', 'facture_honoraire_id', 'type_document', 'mode_paiement'].map((key) => [key, facture[key]]));
+  const contextFacture = Object.fromEntries(['id', 'etablissement_id', 'mission_id', 'facture_honoraire_id', 'type_document', 'mode_paiement',
+    'montant_ttc', 'montant_avoirs_imputes', 'montant_a_payer', 'rapprochement_paiement_requis'].map((key) => [key, facture[key]]));
   const client = clientWith({ factures: { data: contextFacture }, factures_honoraires: { data: honoraires } });
   client.rpc = async (name, args) => {
     if (name === 'fn_detail_facture') {
@@ -250,6 +292,7 @@ test('les vrais hooks affichent l’erreur initiale puis permettent une reprise 
       if (name === 'lucide-react') return new Proxy({}, { get: () => noop });
       if (name === 'date-fns' || name === 'date-fns/locale') return require(name);
       if (name === '@/lib/factureCommissionUi') return normalizer.exports;
+      if (name === '@/lib/soldeCommission') return solde.exports;
       if (name === '@/hooks/useEtablissementScope') return { useEtablissementScope: () => ({ ...scope, retry: retryScope }) };
       if (name === '@/hooks/useEtabPermissions') return { useEtabPermissions: () => ({ loading: false, permissions, error: null, recharger: noop }) };
       if (name === '@/contexts/NotificationContext') return { useNotification: () => ({ afficherNotification: noop }) };

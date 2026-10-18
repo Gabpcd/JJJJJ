@@ -413,4 +413,32 @@ BEGIN
  PERFORM pg_temp.exiger((SELECT count(*)=nb FROM journaux_audit WHERE details->>'evenement'='AVOIR_ORIGINE_A_RAPPROCHER'),
    'rejeu sans récursion ni nouvel audit');
 END $propagation$;
+-- Preuve de catalogue produite par PG17 après application de la vraie migration.
+-- Les expressions décompilées servent à aligner le snapshot sur pg_dump ; aucun
+-- corps de contrainte ou de colonne n'est reconstruit à partir du SQL source.
+SET LOCAL quote_all_identifiers = on;
+SELECT jsonb_build_object(
+  'preuve','AVOIRS_IMPUTATION_CATALOGUE_CANONIQUE',
+  'postgres_version_num',current_setting('server_version_num')::integer,
+  'table','public.factures',
+  'contraintes',(
+    SELECT jsonb_agg(jsonb_build_object(
+      'nom',c.conname,'definition',pg_get_constraintdef(c.oid)
+    ) ORDER BY c.conname)
+    FROM pg_catalog.pg_constraint c
+    WHERE c.conrelid='public.factures'::regclass AND c.conname IN
+      ('factures_imputation_bornes','factures_mode_paiement_check','factures_reglement_avoir_coherent')
+  ),
+  'colonnes',(
+    SELECT jsonb_agg(jsonb_build_object(
+      'nom',a.attname,'type',format_type(a.atttypid,a.atttypmod),
+      'not_null',a.attnotnull,'generated',a.attgenerated,
+      'expression',pg_get_expr(d.adbin,d.adrelid)
+    ) ORDER BY a.attnum)
+    FROM pg_catalog.pg_attribute a
+    LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    WHERE a.attrelid='public.factures'::regclass AND NOT a.attisdropped
+      AND a.attname IN ('montant_avoirs_imputes','montant_a_payer','rapprochement_paiement_requis')
+  )
+) AS preuve_catalogue;
 ROLLBACK;

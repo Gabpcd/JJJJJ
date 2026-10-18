@@ -105,8 +105,9 @@ for signature in ['auth.uid()','public.est_admin_valide()','public.est_admin()',
         sql("INSERT INTO private.security_definer_inventory VALUES("+','.join(literal(inv[k]) for k in ['signature','category','body_md5'])+",'Registre constaté RO, sans contenu métier',now());")
     print(json.dumps({'auth_dependency':signature,'definition_sha256':hashlib.sha256(row['definition'].encode()).hexdigest()}),flush=True)
 
-# Corps et ACL du snapshot de l'union, jamais synthétisés depuis les attendus
-# du préflight testé. Un ancien snapshot est refusé par la vraie migration.
+# Dépendances du témoin historique, jamais synthétisées depuis les attendus
+# du préflight testé. Les claims et l'avoir ont depuis reçu des successeurs :
+# leurs corps pré-Connect sont extraits des sources versionnées correspondantes.
 dependencies = ['fn_ecrire_audit_safe','fn_protect_stripe_transfer','fn_stripe_payment_flow_claim',
     'fn_stripe_refunds_reels_a_traiter','fn_stripe_webhook_event_claim','fn_propage_stripe_payment_intent_trg',
     'fn_preparer_facture_commission_periode','fn_preparer_commission_complement_honoraires',
@@ -114,9 +115,21 @@ dependencies = ['fn_ecrire_audit_safe','fn_protect_stripe_transfer','fn_stripe_p
     'fn_stripe_connect_rapprocher_local','fn_mirror_teleportation_alerte_systeme']
 claims_before=(ROOT/'tests/fixtures/connect-pretransfer-claims-before.sql').read_text()
 assert hashlib.sha256(claims_before.encode()).hexdigest()=='23bb972d520144643c2658b0225112adc2386e2f507c733a5a26a84638ffbb39'
+locks_path=ROOT/'supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql'
+locks=locks_path.read_text()
 for name in dependencies:
     routine_source=claims_before if name in ['fn_stripe_payment_flow_claim','fn_stripe_webhook_event_claim'] else snapshot
-    definition=exact(r'CREATE OR REPLACE FUNCTION "public"\."'+name+r'"\(.*?\nALTER FUNCTION "public"\."'+name+r'"[^;]+;',routine_source)
+    if name=='fn_preparer_avoir_commission_honoraires':
+        # L'imputation actuelle remplace ce corps ; rejouer la migration Connect
+        # exige son prédécesseur exact, sans rejouer les autres corps de verrous.
+        # Propriétaire et ACL restent les sources du snapshot, vérifiées ensuite
+        # par le préflight complet de la vraie migration Connect.
+        definition=exact(r'CREATE OR REPLACE FUNCTION "public"\."'+name+r'"\(.*?\n\$\$;',locks)
+        definition+='\n'+exact(r'ALTER FUNCTION "public"\."'+name+r'"[^;]+;',snapshot)
+        print(json.dumps({'historical_dependency':name,'source':str(locks_path.relative_to(ROOT)),
+            'source_sha256':hashlib.sha256(locks.encode()).hexdigest()}),flush=True)
+    else:
+        definition=exact(r'CREATE OR REPLACE FUNCTION "public"\."'+name+r'"\(.*?\nALTER FUNCTION "public"\."'+name+r'"[^;]+;',routine_source)
     acl=re.findall(r'(?:REVOKE|GRANT) [^\n]* ON FUNCTION "public"\."'+name+r'"[^\n]*;',routine_source)
     assert len(acl)>=2,(name,'ACL_SOURCE_MISSING')
     sql(definition+'\n'+'\n'.join(acl))
@@ -132,7 +145,6 @@ for name in ['trg_propage_stripe_payment_intent','trg_protect_stripe_transfer','
 # Le registre de ces six dépendances est la projection du postflight des deux
 # migrations préalables, distinctes de celle testée. Aucun droit dérivé de sa
 # liste d'attendus : les GRANT précédents viennent du snapshot versionné.
-locks=(ROOT/'supabase/migrations/20261001160404_ordonner_verrous_commissions_honoraires.sql').read_text()
 registered=dependencies[6:10]+['fn_propage_stripe_payment_intent_trg','fn_stripe_connect_rapprocher_local']
 for name in registered:
     prior_source=locks if name in dependencies[6:10] else payment
@@ -150,6 +162,7 @@ assert migration.count('\nBEGIN;\n')==1 and migration.endswith('COMMIT;\n')
 transaction_body=migration.replace('\nBEGIN;\n','\n',1).removesuffix('COMMIT;\n')
 for label,mutation,code in [
     ('corps',"CREATE OR REPLACE FUNCTION public.fn_protect_stripe_transfer() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN RETURN NEW; END $$;",'CONNECT_MIGRATION_DEPENDENCY'),
+    ('corps-avoir',"CREATE OR REPLACE FUNCTION public.fn_preparer_avoir_commission_honoraires(p_avoir_honoraires_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$ BEGIN RETURN '{}'::jsonb; END $$;",'CONNECT_MIGRATION_DEPENDENCY'),
     ('acl',"GRANT EXECUTE ON FUNCTION public.fn_protect_stripe_transfer() TO authenticated;",'CONNECT_MIGRATION_DEPENDENCY'),
     ('auth-corps',"CREATE OR REPLACE FUNCTION public.est_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,auth AS $$ SELECT false $$;",'SUIVI_DEPENDANCE_INATTENDUE'),
     ('auth-acl',"GRANT EXECUTE ON FUNCTION public.fn_compte_auth_actif() TO anon;",'SUIVI_DEPENDANCE_INATTENDUE'),
