@@ -58,6 +58,8 @@ DECLARE
   v_initial_net numeric;
   v_duree_mission numeric;
   v_statut public.statut_mission;
+  v_diag_reference jsonb;
+  v_historique_md5 text;
   v_diag_avant jsonb;
   v_diag jsonb;
   v_diag_suivant jsonb;
@@ -131,6 +133,39 @@ BEGIN
   v_commission_remplacement:=NULL;
   v_commission_suivante:=NULL;
   BEGIN
+    -- Troisième identité de recette SQL uniquement : aucun mot de passe/token.
+    INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
+    VALUES(v_admin,'00000000-0000-0000-0000-000000000000','f1-rectif-admin@example.invalid',
+      'authenticated','authenticated','{"role":"ADMIN_PLATEFORME","est_compte_test":true,"is_test_playwright":true}',now());
+    INSERT INTO public.equipe_admin(id,user_id,nom,prenom,email,poste,actif,acces_groupes)
+    VALUES(v_equipe,v_admin,'SYNTHETIQUE','F1','f1-rectif-admin@example.invalid','RECETTE SQL ANNULEE',true,
+      ARRAY['Dashboard','Utilisateurs','Missions','Litiges & contrats','Finances','Messagerie','Conformité & Technique','Fondateur']);
+    PERFORM set_config('request.jwt.claim.sub',v_admin::text,true);
+    PERFORM set_config('request.jwt.claim.role','authenticated',true);
+    PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_admin,'role','authenticated','aal','aal2')::text,true);
+    IF public.est_admin() IS NOT TRUE THEN RAISE EXCEPTION 'F1 rectification : administrateur synthétique non reconnu'; END IF;
+    -- Référence globale AVANT toute pièce de cette histoire. Les preuves TEST
+    -- historiques restent visibles ; seuls les deltas F171 doivent être exacts.
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    v_diag_reference:=public.fn_diagnostic_coherence_financiere();
+    EXECUTE 'RESET ROLE';
+    IF v_diag_reference->'success' IS DISTINCT FROM 'true'::jsonb
+      OR (v_diag_reference->>'controle_documentaire_version')::int IS DISTINCT FROM 2
+      OR ((v_diag_reference->>'factures_verifiees')::int>=0) IS NOT TRUE
+      OR ((v_diag_reference#>>'{factures_ecart_mission,count}')::int BETWEEN 0 AND 9) IS NOT TRUE
+      OR ((v_diag_reference#>>'{factures_non_verifiables,count}')::int BETWEEN 0 AND 9) IS NOT TRUE
+    THEN RAISE EXCEPTION 'Diagnostic F171 : référence indisponible ou échantillons de 10 saturés'; END IF;
+    -- Avec moins de dix anomalies initiales, chaque unique anomalie ajoutée
+    -- doit apparaître dans l'échantillon réel ; aucun test ciblé n'est masqué.
+    SELECT md5(jsonb_build_object(
+      'honoraires',coalesce((SELECT jsonb_agg(to_jsonb(h) ORDER BY h.id) FROM public.factures_honoraires h
+        WHERE h.soignant_id IS DISTINCT FROM v_soignant OR h.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb),
+      'commissions',coalesce((SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.factures f
+        WHERE f.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb))::text) INTO v_historique_md5;
+    PERFORM set_config('request.jwt.claim.sub','',true);
+    PERFORM set_config('request.jwt.claim.role','service_role',true);
+    PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+
     -- INSERT SQL Auth seulement : pas de session/token/SMTP/hook Auth HTTP.
     INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
     VALUES (v_soignant,'00000000-0000-0000-0000-000000000000','f1-soignant@example.invalid','authenticated','authenticated',
@@ -321,25 +356,18 @@ BEGIN
     -- établissement : ne déclenche ni conformité de pointage ni escrow.
     INSERT INTO public.presences(id,mission_id,soignant_id,heures_reelles)
     VALUES(v_presence,v_mission,v_soignant,4);
-    -- Troisième identité de recette SQL uniquement : aucun mot de passe/token.
-    INSERT INTO auth.users(id,instance_id,email,role,aud,raw_app_meta_data,email_confirmed_at)
-    VALUES(v_admin,'00000000-0000-0000-0000-000000000000','f1-rectif-admin@example.invalid',
-      'authenticated','authenticated','{"role":"ADMIN_PLATEFORME","est_compte_test":true,"is_test_playwright":true}',now());
-    INSERT INTO public.equipe_admin(id,user_id,nom,prenom,email,poste,actif,acces_groupes)
-    VALUES(v_equipe,v_admin,'SYNTHETIQUE','F1','f1-rectif-admin@example.invalid','RECETTE SQL ANNULEE',true,
-      ARRAY['Dashboard','Utilisateurs','Missions','Litiges & contrats','Finances','Messagerie','Conformité & Technique','Fondateur']);
     PERFORM set_config('request.jwt.claim.sub',v_admin::text,true);
     PERFORM set_config('request.jwt.claim.role','authenticated',true);
     PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',v_admin,'role','authenticated','aal','aal2')::text,true);
-    IF public.est_admin() IS NOT TRUE THEN RAISE EXCEPTION 'F1 rectification : administrateur synthétique non reconnu'; END IF;
     EXECUTE 'SET LOCAL ROLE authenticated';
     v_diag_avant:=public.fn_diagnostic_coherence_financiere();
     EXECUTE 'RESET ROLE';
     IF v_diag_avant->'success' IS DISTINCT FROM 'true'::jsonb
       OR (v_diag_avant->>'controle_documentaire_version')::int IS DISTINCT FROM 2
-      OR (v_diag_avant#>>'{factures_ecart_mission,count}')::int <> 0
-      OR (v_diag_avant#>>'{factures_non_verifiables,count}')::int <> 0
-    THEN RAISE EXCEPTION 'Diagnostic F171 : diagnostic initial indisponible ou environnement non neutre'; END IF;
+      OR (v_diag_avant->>'factures_verifiees')::int IS DISTINCT FROM (v_diag_reference->>'factures_verifiees')::int+1
+      OR (v_diag_avant#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_ecart_mission,count}')::int
+      OR (v_diag_avant#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_non_verifiables,count}')::int
+    THEN RAISE EXCEPTION 'Diagnostic F171 : diagnostic initial ou delta documentaire incorrect'; END IF;
     INSERT INTO public.litiges(id,mission_id,soignant_id,etablissement_id,initie_par,motif,
       statut,type_litige,facture_id,gel_facture_scope,periode_debut,periode_fin)
     VALUES(v_litige,v_mission,v_soignant,v_etab,'SOIGNANT','RECETTE SYNTHETIQUE ANNULEE : heures erronées sur première période',
@@ -488,8 +516,8 @@ BEGIN
     IF v_diag->'success' IS DISTINCT FROM 'true'::jsonb
       OR (v_diag->>'controle_documentaire_version')::int IS DISTINCT FROM 2
       OR (v_diag->>'factures_verifiees')::int IS DISTINCT FROM (v_diag_avant->>'factures_verifiees')::int+1
-      OR (v_diag#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM 0
-      OR (v_diag#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM 0
+      OR (v_diag#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_ecart_mission,count}')::int
+      OR (v_diag#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_non_verifiables,count}')::int
     THEN RAISE EXCEPTION 'Diagnostic F171 : 60 + 80 classés à tort en écart, cas %',v_cas.nom; END IF;
 
     -- Refus maintenus pour un compte soignant et pour anon.
@@ -543,12 +571,21 @@ BEGIN
       EXECUTE 'SET LOCAL ROLE authenticated';
       v_diag_suivant:=public.fn_diagnostic_coherence_financiere();
       EXECUTE 'RESET ROLE';
-      IF (v_diag_suivant#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM 0
-        OR (v_diag_suivant#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM 1
+      IF v_diag_suivant->'success' IS DISTINCT FROM 'true'::jsonb
+        OR (v_diag_suivant->>'controle_documentaire_version')::int IS DISTINCT FROM 2
+        OR (v_diag_suivant->>'factures_verifiees')::int IS DISTINCT FROM (v_diag->>'factures_verifiees')::int
+        OR (v_diag_suivant#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_ecart_mission,count}')::int
+        OR (v_diag_suivant#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_non_verifiables,count}')::int+1
         OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_diag_suivant#>'{factures_non_verifiables,echantillon}') e
           WHERE e->>'facture_id'=v_avoir::text AND e->>'motif'='CORRECTION_MONETAIRE')
         OR EXISTS(SELECT 1 FROM public.stripe_refunds_queue WHERE avoir_id=v_avoir)
       THEN RAISE EXCEPTION 'Diagnostic F171 : avoir non distingué ou effet fournisseur inattendu'; END IF;
+      IF v_historique_md5 IS DISTINCT FROM (SELECT md5(jsonb_build_object(
+        'honoraires',coalesce((SELECT jsonb_agg(to_jsonb(h) ORDER BY h.id) FROM public.factures_honoraires h
+          WHERE h.soignant_id IS DISTINCT FROM v_soignant OR h.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb),
+        'commissions',coalesce((SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.factures f
+          WHERE f.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb))::text))
+      THEN RAISE EXCEPTION 'Diagnostic F171 : pièces hors fixture modifiées'; END IF;
       RAISE EXCEPTION USING ERRCODE='JD172',MESSAGE='DIAGNOSTIC_VARIANTE_ANNULEE';
     EXCEPTION WHEN SQLSTATE 'JD172' THEN
       IF SQLERRM<>'DIAGNOSTIC_VARIANTE_ANNULEE' THEN RAISE; END IF;
@@ -587,17 +624,32 @@ BEGIN
       EXECUTE 'SET LOCAL ROLE authenticated';
       v_diag_suivant:=public.fn_diagnostic_coherence_financiere();
       EXECUTE 'RESET ROLE';
-      IF (v_diag_suivant#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM 1
-        OR (v_diag_suivant#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM 0
+      IF v_diag_suivant->'success' IS DISTINCT FROM 'true'::jsonb
+        OR (v_diag_suivant->>'controle_documentaire_version')::int IS DISTINCT FROM 2
+        OR (v_diag_suivant->>'factures_verifiees')::int IS DISTINCT FROM (v_diag->>'factures_verifiees')::int+1
+        OR (v_diag_suivant#>>'{factures_ecart_mission,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_ecart_mission,count}')::int+1
+        OR (v_diag_suivant#>>'{factures_non_verifiables,count}')::int IS DISTINCT FROM (v_diag_reference#>>'{factures_non_verifiables,count}')::int
         OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_diag_suivant#>'{factures_ecart_mission,echantillon}') e
           WHERE e->>'facture_id'=v_fh_anomalie::text AND (e->>'montant_ht')::numeric=90
             AND (e->>'attendu_ht')::numeric=80 AND (e->>'ecart')::numeric=10)
       THEN RAISE EXCEPTION 'Diagnostic F171 : écart documentaire 90 / 80 non détecté'; END IF;
+      IF v_historique_md5 IS DISTINCT FROM (SELECT md5(jsonb_build_object(
+        'honoraires',coalesce((SELECT jsonb_agg(to_jsonb(h) ORDER BY h.id) FROM public.factures_honoraires h
+          WHERE h.soignant_id IS DISTINCT FROM v_soignant OR h.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb),
+        'commissions',coalesce((SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.factures f
+          WHERE f.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb))::text))
+      THEN RAISE EXCEPTION 'Diagnostic F171 : pièces hors fixture modifiées'; END IF;
       RAISE EXCEPTION USING ERRCODE='JD172',MESSAGE='DIAGNOSTIC_VARIANTE_ANNULEE';
     EXCEPTION WHEN SQLSTATE 'JD172' THEN
       IF SQLERRM<>'DIAGNOSTIC_VARIANTE_ANNULEE' THEN RAISE; END IF;
     END;
 
+    IF v_historique_md5 IS DISTINCT FROM (SELECT md5(jsonb_build_object(
+      'honoraires',coalesce((SELECT jsonb_agg(to_jsonb(h) ORDER BY h.id) FROM public.factures_honoraires h
+        WHERE h.soignant_id IS DISTINCT FROM v_soignant OR h.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb),
+      'commissions',coalesce((SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.factures f
+        WHERE f.etablissement_id IS DISTINCT FROM v_etab),'[]'::jsonb))::text))
+    THEN RAISE EXCEPTION 'Diagnostic F171 : pièces hors fixture modifiées'; END IF;
     RAISE EXCEPTION USING ERRCODE='JD171',MESSAGE='F1_ANNULATION_ATTENDUE';
   EXCEPTION WHEN SQLSTATE 'JD171' THEN
     IF SQLERRM<>'F1_ANNULATION_ATTENDUE' THEN RAISE; END IF;

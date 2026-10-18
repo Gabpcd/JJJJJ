@@ -9,6 +9,10 @@ BEGIN
       IS DISTINCT FROM '0e12272c819f28526ca58978a90adbd7' THEN
   RAISE EXCEPTION 'HONORAIRES_PRODUCTEUR_SOURCE_INATTENDUE';
  END IF;
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.fn_lister_missions_a_facturer(date)'::regprocedure)
+      IS DISTINCT FROM '84c3ac8a260d3b978d7fadd34efce3e7' THEN
+  RAISE EXCEPTION 'HONORAIRES_LISTEUR_SOURCE_INATTENDUE';
+ END IF;
 END $guard$;
 
 CREATE TABLE private.demandes_facturation_honoraires (
@@ -75,13 +79,16 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'facture_id', v_existing_id, 'message', 'Facture déjà existante');
     END IF;
 
-    -- Périmètre observé uniquement. Les autres stratégies et la rétrocession
-    -- conservent ci-dessous leur corps historique, sans changement de calendrier.
+    -- Aucune pièce prématurée sans documents. La finale unique utilise sa
+    -- demande durable ; HEBDO conserve le listeur quotidien et ses périodes.
+    -- Le retour facture existante ci-dessus et la rétrocession sont inchangés.
     IF v_mission.type_contrat_applique = 'LIBERAL'
        AND v_mission.mode_remuneration = 'TAUX_HORAIRE'
-       AND v_mission.strategie_facturation = 'FINALE_UNIQUE' THEN
-        INSERT INTO private.demandes_facturation_honoraires(mission_id)
-        VALUES(p_mission_id) ON CONFLICT(mission_id) DO NOTHING;
+       AND v_mission.strategie_facturation IN ('FINALE_UNIQUE', 'HEBDO_ET_FINALE') THEN
+        IF v_mission.strategie_facturation = 'FINALE_UNIQUE' THEN
+            INSERT INTO private.demandes_facturation_honoraires(mission_id)
+            VALUES(p_mission_id) ON CONFLICT(mission_id) DO NOTHING;
+        END IF;
         RETURN jsonb_build_object('success',true,'emission_en_attente',true,'mission_id',p_mission_id);
     END IF;
 
@@ -125,6 +132,213 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.fn_generer_facture_honoraires_mission(uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_generer_facture_honoraires_mission(uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION "public"."fn_lister_missions_a_facturer"("p_today" "date" DEFAULT CURRENT_DATE) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+DECLARE
+  v_finales jsonb;
+  v_hebdo jsonb;
+BEGIN
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'mode', 'FINALE',
+    'mission_id', m.id,
+    'soignant_id', m.soignant_assigne_id,
+    'etablissement_id', m.etablissement_id,
+    'periode_debut', CASE
+      WHEN m.strategie_facturation = 'HEBDO_ET_FINALE'
+        THEN COALESCE(derniere_periode.prochain_debut, bornes.debut_le::date)
+      ELSE bornes.debut_le::date
+    END,
+    'periode_fin', bornes.fin_le::date,
+    'numero_semaine_iso', NULL,
+    'annee_iso', NULL,
+    'strategie_facturation', m.strategie_facturation::text,
+    'est_facture_finale_mission', true
+  )), '[]'::jsonb)
+  INTO v_finales
+  FROM public.missions m
+  CROSS JOIN LATERAL (
+    SELECT LEAST(m.debut_le,min(mc.debut)) AS debut_le,
+           GREATEST(m.fin_le,max(mc.fin)) AS fin_le
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id=m.id AND NOT mc.est_pause AND mc.fin > mc.debut
+      AND mc.type_creneau IN ('PREVISIONNEL','EFFECTIF')
+  ) bornes
+  JOIN public.soignants s ON s.id = m.soignant_assigne_id
+  LEFT JOIN LATERAL (
+    SELECT (max(fh.periode_fin) + 1)::date AS prochain_debut
+    FROM public.factures_honoraires fh
+    WHERE fh.mission_id = m.id
+      AND fh.type_document = 'FACTURE'
+      AND fh.est_facture_finale_mission IS FALSE
+      AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  ) derniere_periode ON true
+  WHERE m.statut = 'TERMINEE'
+    AND COALESCE(m.est_arret_maladie, false) IS FALSE
+    AND bornes.fin_le::date < p_today
+    AND m.type_contrat_applique = 'LIBERAL'
+    AND m.mode_remuneration = 'TAUX_HORAIRE'
+    AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
+    AND s.mandat_facturation_version = '1.4'
+    AND s.statut_tva_honoraires IN ('FRANCHISE_EN_BASE', 'REDEVABLE_TVA')
+    AND m.statut_validation_tva = 'CONFIRMEE'
+    AND m.nature_tva_prestation IN (
+      'SOIN_THERAPEUTIQUE_EXONERE', 'PRESTATION_TAXABLE'
+    )
+    AND m.nature_tva_confirmee_soignant = m.nature_tva_prestation
+    AND m.nature_tva_confirmee_par = m.soignant_assigne_id
+    AND NOT EXISTS (
+      SELECT 1 FROM public.missions r
+      WHERE r.remplacement_de_mission_id = m.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
+      WHERE fh.mission_id = m.id
+        AND fh.est_facture_finale_mission IS TRUE
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+    )
+    AND (
+      m.strategie_facturation = 'FINALE_UNIQUE'
+      OR COALESCE(derniere_periode.prochain_debut, bornes.debut_le::date) <= bornes.fin_le::date
+    )
+    AND EXISTS (
+      SELECT 1 FROM public.mission_creneaux mc
+      WHERE mc.mission_id = m.id
+        AND (
+          (mc.type_creneau = 'EFFECTIF' AND mc.fin IS NOT NULL)
+          OR mc.type_creneau = 'PREVISIONNEL'
+        )
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.presences p
+      WHERE p.mission_id = m.id
+        AND COALESCE(p.valide_par_etablissement, false) IS FALSE
+        AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+    );
+
+  WITH semaines AS (
+    SELECT
+      m.id AS mission_id,
+      m.soignant_assigne_id,
+      m.etablissement_id,
+      bornes.debut_le,
+      bornes.fin_le,
+      m.strategie_facturation,
+      gs.lundi_semaine
+    FROM public.missions m
+  CROSS JOIN LATERAL (
+    SELECT LEAST(m.debut_le,min(mc.debut)) AS debut_le,
+           GREATEST(m.fin_le,max(mc.fin)) AS fin_le
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id=m.id AND NOT mc.est_pause AND mc.fin > mc.debut
+      AND mc.type_creneau IN ('PREVISIONNEL','EFFECTIF')
+  ) bornes
+    JOIN public.soignants s ON s.id = m.soignant_assigne_id
+    CROSS JOIN LATERAL generate_series(
+      date_trunc('week', bornes.debut_le)::date,
+      least(bornes.fin_le::date, p_today - interval '1 day')::date,
+      '7 days'::interval
+    ) AS gs(lundi_semaine)
+    WHERE m.statut IN ('EN_COURS', 'TERMINEE')
+      AND COALESCE(m.est_arret_maladie, false) IS FALSE
+      AND m.strategie_facturation = 'HEBDO_ET_FINALE'
+      AND m.type_contrat_applique = 'LIBERAL'
+      AND m.mode_remuneration = 'TAUX_HORAIRE'
+      AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
+      AND s.mandat_facturation_version = '1.4'
+      AND s.statut_tva_honoraires IN ('FRANCHISE_EN_BASE', 'REDEVABLE_TVA')
+      AND m.statut_validation_tva = 'CONFIRMEE'
+      AND m.nature_tva_prestation IN (
+        'SOIN_THERAPEUTIQUE_EXONERE', 'PRESTATION_TAXABLE'
+      )
+      AND m.nature_tva_confirmee_soignant = m.nature_tva_prestation
+      AND m.nature_tva_confirmee_par = m.soignant_assigne_id
+      AND NOT EXISTS (
+        SELECT 1 FROM public.missions r
+        WHERE r.remplacement_de_mission_id = m.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.presences p
+        WHERE p.mission_id = m.id
+          AND COALESCE(p.valide_par_etablissement, false) IS FALSE
+          AND p.motif_litige IS NOT NULL
+      )
+  ),
+  semaines_closes AS (
+    SELECT
+      sm.*,
+      (sm.lundi_semaine + interval '6 days')::date AS dimanche_semaine,
+      extract(week FROM sm.lundi_semaine)::smallint AS num_sem,
+      extract(isoyear FROM sm.lundi_semaine)::smallint AS ann_iso,
+      greatest(sm.lundi_semaine::date, sm.debut_le::date) AS periode_d,
+      least((sm.lundi_semaine + interval '6 days')::date, sm.fin_le::date) AS periode_f
+    FROM semaines sm
+    WHERE (sm.lundi_semaine + interval '6 days')::date < p_today
+  )
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'mode', 'HEBDO',
+    'mission_id', sa.mission_id,
+    'soignant_id', sa.soignant_assigne_id,
+    'etablissement_id', sa.etablissement_id,
+    'periode_debut', sa.periode_d,
+    'periode_fin', sa.periode_f,
+    'numero_semaine_iso', sa.num_sem,
+    'annee_iso', sa.ann_iso,
+    'strategie_facturation', sa.strategie_facturation::text,
+    'est_facture_finale_mission', false
+  )), '[]'::jsonb)
+  INTO v_hebdo
+  FROM semaines_closes sa
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.factures_honoraires fh
+    WHERE fh.mission_id = sa.mission_id
+      AND fh.annee_iso = sa.ann_iso
+      AND fh.numero_semaine_iso = sa.num_sem
+      AND fh.est_facture_finale_mission IS FALSE
+      AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  )
+    -- Ne pas reproposer une semaine déjà couverte par une pièce active,
+    -- même si cette pièce est finale ou ne porte pas le même numéro ISO.
+    AND NOT EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
+      WHERE fh.mission_id = sa.mission_id
+        AND fh.type_document = 'FACTURE'
+        AND fh.nature_correction <> 'COMPLEMENT'
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+        AND daterange(fh.periode_debut, fh.periode_fin, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
+    -- Le worker traite les finales avant les semaines. Une finale de CE lot
+    -- doit déjà exclure ses semaines, avant même que son document soit créé.
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_finales) finale
+      WHERE (finale->>'mission_id')::uuid = sa.mission_id
+        AND daterange((finale->>'periode_debut')::date, (finale->>'periode_fin')::date, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
+    AND EXISTS (
+      SELECT 1 FROM public.mission_creneaux mc
+      WHERE mc.mission_id = sa.mission_id
+        AND (
+          (mc.type_creneau = 'EFFECTIF' AND mc.fin IS NOT NULL)
+          OR mc.type_creneau = 'PREVISIONNEL'
+        )
+        AND NOT mc.est_pause
+        AND mc.debut < (sa.periode_f+1)::timestamp AT TIME ZONE 'UTC'
+        AND mc.fin > sa.periode_d::timestamp AT TIME ZONE 'UTC'
+    );
+
+  RETURN jsonb_build_object(
+    'today', p_today,
+    'finales', v_finales,
+    'hebdo', v_hebdo,
+    'total', jsonb_array_length(v_finales) + jsonb_array_length(v_hebdo)
+  );
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.fn_prendre_demandes_facturation_honoraires(p_limit integer DEFAULT 3)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' SET timezone TO 'UTC' AS $fn$
@@ -244,6 +458,7 @@ ON CONFLICT(signature) DO UPDATE SET categorie=excluded.categorie,definition_md5
 UPDATE private.security_definer_inventory i SET definition_md5=md5(p.prosrc),recense_le=now()
 FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace
 WHERE p.oid IN('public.fn_generer_facture_honoraires_mission(uuid)'::regprocedure,
+ 'public.fn_lister_missions_a_facturer(date)'::regprocedure,
  'private.fn_appeler_edge_critique(text,boolean)'::regprocedure,
 
  'private.fn_sonder_crons_edge_critiques()'::regprocedure,

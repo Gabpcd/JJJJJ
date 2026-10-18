@@ -37487,13 +37487,16 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'facture_id', v_existing_id, 'message', 'Facture déjà existante');
     END IF;
 
-    -- Périmètre observé uniquement. Les autres stratégies et la rétrocession
-    -- conservent ci-dessous leur corps historique, sans changement de calendrier.
+    -- Aucune pièce prématurée sans documents. La finale unique utilise sa
+    -- demande durable ; HEBDO conserve le listeur quotidien et ses périodes.
+    -- Le retour facture existante ci-dessus et la rétrocession sont inchangés.
     IF v_mission.type_contrat_applique = 'LIBERAL'
        AND v_mission.mode_remuneration = 'TAUX_HORAIRE'
-       AND v_mission.strategie_facturation = 'FINALE_UNIQUE' THEN
-        INSERT INTO private.demandes_facturation_honoraires(mission_id)
-        VALUES(p_mission_id) ON CONFLICT(mission_id) DO NOTHING;
+       AND v_mission.strategie_facturation IN ('FINALE_UNIQUE', 'HEBDO_ET_FINALE') THEN
+        IF v_mission.strategie_facturation = 'FINALE_UNIQUE' THEN
+            INSERT INTO private.demandes_facturation_honoraires(mission_id)
+            VALUES(p_mission_id) ON CONFLICT(mission_id) DO NOTHING;
+        END IF;
         RETURN jsonb_build_object('success',true,'emission_en_attente',true,'mission_id',p_mission_id);
     END IF;
 
@@ -39915,6 +39918,25 @@ BEGIN
       AND fh.est_facture_finale_mission IS FALSE
       AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
   )
+    -- Ne pas reproposer une semaine déjà couverte par une pièce active,
+    -- même si cette pièce est finale ou ne porte pas le même numéro ISO.
+    AND NOT EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
+      WHERE fh.mission_id = sa.mission_id
+        AND fh.type_document = 'FACTURE'
+        AND fh.nature_correction <> 'COMPLEMENT'
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+        AND daterange(fh.periode_debut, fh.periode_fin, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
+    -- Le worker traite les finales avant les semaines. Une finale de CE lot
+    -- doit déjà exclure ses semaines, avant même que son document soit créé.
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_finales) finale
+      WHERE (finale->>'mission_id')::uuid = sa.mission_id
+        AND daterange((finale->>'periode_debut')::date, (finale->>'periode_fin')::date, '[]')
+            && daterange(sa.periode_d, sa.periode_f, '[]')
+    )
     AND EXISTS (
       SELECT 1 FROM public.mission_creneaux mc
       WHERE mc.mission_id = sa.mission_id

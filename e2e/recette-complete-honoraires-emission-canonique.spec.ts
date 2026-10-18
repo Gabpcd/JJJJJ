@@ -17,14 +17,25 @@ function attendreLectures(page: Page) {
 
 // Frontend à réponses simulées uniquement, à exécuter sur les cinq formats
 // usuels. Ni worker, Storage, paiement ni email réels dans ce témoin.
+for (const strategie of ['FINALE_UNIQUE','HEBDO_ET_FINALE'] as const) {
 for (const role of ['ADMIN_ETABLISSEMENT','SOIGNANT'] as const) {
- test(`honoraires ${role} : absence de pièce prématurée puis finale émise et PDF après recharge`,async({context,page},info)=>{
+ test(`honoraires ${strategie} ${role} : absence de pièce prématurée puis finale émise et PDF après recharge`,async({context,page},info)=>{
   const stabiliser=attendreLectures(page);
   const simulation=creerMissionSimulee(),{state}=simulation;
   Object.assign(state.mission,{statut:role==='ADMIN_ETABLISSEMENT'?'EN_COURS':'TERMINEE',
-   type_contrat_applique:'LIBERAL',soignant_assigne_id:ids.soignant,strategie_facturation:'FINALE_UNIQUE'});
+   type_contrat_applique:'LIBERAL',soignant_assigne_id:ids.soignant,strategie_facturation:strategie});
+  // Même total de 8 h/640 €, sur deux vacations lorsque la mission est longue.
+  if(strategie==='HEBDO_ET_FINALE'){
+   Object.assign(state.mission,{debut_le:'2026-09-14T07:00:00.000Z',fin_le:'2026-09-24T11:00:00.000Z',nb_creneaux:2});
+   state.creneaux[0].fin=state.mission.fin_le;
+   const premier={id:'71000000-0000-4000-8000-000000000022',mission_id:ids.mission,
+    debut:state.mission.debut_le,fin:'2026-09-14T11:00:00.000Z',ordre:1,type_creneau:'EFFECTIF',est_pause:false};
+   state.creneaux.push({...premier,id:'71000000-0000-4000-8000-000000000023',type_creneau:'PREVISIONNEL'},premier);
+   state.segments.push(premier);
+  }
   const segment={id:'71000000-0000-4000-8000-000000000021',mission_id:ids.mission,
-   debut:state.mission.debut_le,fin:state.mission.fin_le,ordre:1,type_creneau:'EFFECTIF',est_pause:false};
+   debut:strategie==='HEBDO_ET_FINALE'?'2026-09-24T07:00:00.000Z':state.mission.debut_le,
+   fin:state.mission.fin_le,ordre:2,type_creneau:'EFFECTIF',est_pause:false};
   state.creneaux.push(segment);state.segments.push(segment);
   state.presence={id:ids.presence,mission_id:ids.mission,soignant_id:ids.soignant,
    pointage_arrivee_le:segment.debut,pointage_depart_le:segment.fin,valide_par_etablissement:true};
@@ -70,7 +81,7 @@ for (const role of ['ADMIN_ETABLISSEMENT','SOIGNANT'] as const) {
    numero_facture:'FH-RECETTE-FINALE',statut:'EMISE',type_document:'FACTURE',nature_correction:'ORIGINALE',
    template_version:'v2_facturx',regime_tva_snapshot:'EXONERE_ART_261_4_1',montant_ht:640,montant_ttc:640,montant_tva:0,montant_signe:640,
    taux_tva:0,exoneration_tva:true,date_emission:'2026-09-24',date_echeance:'2026-10-24',cree_le:'2026-09-24T15:31:00Z',
-   periode_debut:'2026-09-24',periode_fin:'2026-09-24',est_facture_finale_mission:true,pdf_s3_key:'invoices/recette-finale.pdf',facturx_xml_url:'invoices/recette-finale.xml'};
+   periode_debut:state.mission.debut_le.slice(0,10),periode_fin:state.mission.fin_le.slice(0,10),est_facture_finale_mission:true,pdf_s3_key:'invoices/recette-finale.pdf',facturx_xml_url:'invoices/recette-finale.xml'};
   await page.reload();await expect(page.getByText('FH-RECETTE-FINALE',{exact:true})).toBeVisible();
   if(role==='ADMIN_ETABLISSEMENT'){
    await expect(page.getByRole('heading',{name:'Mission terminée 🎉',exact:true})).toBeVisible();
@@ -89,4 +100,5 @@ for (const role of ['ADMIN_ETABLISSEMENT','SOIGNANT'] as const) {
   expect(state.calls.filter(c=>c.name==='fn_terminer_mission')).toHaveLength(role==='ADMIN_ETABLISSEMENT'?1:0);
   expect(state.errors).toEqual([]);expect(state.unknown).toEqual([]);expect(state.external).toEqual([]);
  });
+}
 }
