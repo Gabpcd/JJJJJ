@@ -92,7 +92,7 @@ BEGIN
     ('public.dec_push_contrat_a_signer()','3d2227081bec9d55d34d2a232a703b43'),
     ('public.dec_push_contrat_signe_complet()','5900565c77313d0ca019c5b933c1b9d0'),
     ('private.fn_contrat_lie_compte_test(uuid,uuid,uuid)','0d4dc700821172a61e4a95c44ac9568d'),
-    ('public.fn_documents_ok_pour_mission(uuid,text)','f9bcf056e9172fefba1797ab5ad4f448'),
+    ('public.fn_documents_ok_pour_mission(uuid,text)','813fe0eb1f1276b6d0595ffc4ad3e131'),
     ('public.fn_type_document_preuve_compatible(public.type_document,public.type_document)','78567117b6c8c13f35342c7fb7cbfd0f'),
     ('public.dec_auto_generer_qr_mission()','1b2076185abc0af8abad4c15d7a16e76'),
     ('public.trg_exiger_conformite_code_pointage()','bb1dd3b63e484abe3b478be0355b041d'),
@@ -103,7 +103,7 @@ BEGIN
     ('public.dec_check_coherence_apres_doc_identite()','a7b63c1a57635ece14e593d448d35797'),
     ('public.fn_verifier_coherence_identite(uuid)','c743094421c90c375c2d34e875fa2792'),
     ('public.fn_recalculer_tous_documents_valides()','a032034a6ee0096e722e38abad2a3ee3'),
-    ('public.fn_calculer_tous_documents_valides(uuid)','524f4ef09befb069b6590388e34c3f8e'),
+    ('public.fn_calculer_tous_documents_valides(uuid)','07ca4f4ed74acc2bbfaaf62454043d9e'),
     ('public.fn_trg_bloquer_documents_sante()','89ddba57700bd5566ecca29a260010d3'),
     ('public.fn_trg_recalculer_preuves_etudiant_document()','c078f7408c883a9e414078c717f84b4f')
   ) x(signature,expected_md5) LOOP

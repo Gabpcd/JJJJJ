@@ -25,7 +25,8 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
+import { TYPES_DOCUMENTS_EXCLUS_UPLOAD, rppsDispenseDiplome, diplomeCompatibleProfession } from '@/lib/documents';
+import { professionMissionExigeSpecialisationExacte } from '@/lib/profession-hierarchy';
 import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -72,31 +73,48 @@ interface UseActivationParams {
   hasStripeConnect: boolean;
   /** Un RIB non rejeté est téléversé. */
   aRib: boolean;
+  /** Dernier succès du dashboard : relire la qualification après une revue distante. */
+  actualisationDocuments?: number;
 }
 
-export function useActivationSoignant({ soignant, documents, hasStripeConnect, aRib }: UseActivationParams): ActivationState {
+export function useActivationSoignant({ soignant, documents, hasStripeConnect, aRib, actualisationDocuments = 0 }: UseActivationParams): ActivationState {
   const { user } = useAuth();
 
-  const docsFaits = !!soignant?.tous_documents_valides;
+  const diplomeSpecialiseRequis = professionMissionExigeSpecialisationExacte(soignant?.profession);
   const besoinFetch = !!soignant && !!user;
 
   const { data: extra } = useQuery({
-    queryKey: ['activation-soignant', user?.id],
+    queryKey: ['activation-soignant', user?.id, soignant?.profession, diplomeSpecialiseRequis ? actualisationDocuments : 0],
     queryFn: async () => {
-      const [drRes, sgRes] = await Promise.all([
+      // Même frontière locale que DocumentsSoignant pour l'alias JSON scalaire.
+      const projectionDiplome: string = 'statut_verification, valide_jusqua, profession_certifiee:resultat_ia->>profession_certifiee';
+      const [drRes, sgRes, diplomesRes] = await Promise.all([
         supabase
           .from('documents_requis_par_profession')
           .select('profession, type_document, est_critique, type_exercice_requis'),
         supabase.from('soignants').select('adeli_verifie').eq('id', user!.id).maybeSingle(),
+        diplomeSpecialiseRequis
+          ? supabase.from('documents_soignants')
+            .select(projectionDiplome)
+            .eq('soignant_id', user!.id).eq('type_document', 'DIPLOME')
+            .is('supprime_le', null).is('revoque_le', null)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       return {
         docsRequisRows: (drRes.data ?? []) as any[],
         adeliVerifie: !!(sgRes.data as any)?.adeli_verifie,
+        diplomeSpecialiseValide: !diplomesRes.error && (diplomesRes.data ?? []).some((doc: any) =>
+          doc.statut_verification === 'VERIFIE'
+          && diplomeCompatibleProfession(soignant?.profession, doc.profession_certifiee)
+          && (!doc.valide_jusqua || new Date(doc.valide_jusqua) > new Date())),
       };
     },
     enabled: besoinFetch,
     staleTime: 60_000,
   });
+
+  const docsFaits = !!soignant?.tous_documents_valides
+    && (!diplomeSpecialiseRequis || extra?.diplomeSpecialiseValide === true);
 
   // Nombre de documents critiques encore manquants (même filtrage que DocumentsSoignant).
   const docsRestants = useMemo<number | null>(() => {
@@ -111,9 +129,9 @@ export function useActivationSoignant({ soignant, documents, hasStripeConnect, a
       if (!d.est_critique) return false;
       if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
       if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
-      // Un RPPS validé par l'API atteste déjà le diplôme enregistré pour les
-      // professions concernées. Un ADELI seul ne dispense pas du diplôme.
-      if (rppsVerifie && d.type_document === 'DIPLOME') return false;
+      // Le RPPS ne dispense pas du diplôme spécialisé IADE/IBODE.
+      // Un ADELI seul ne dispense pas du diplôme.
+      if (rppsDispenseDiplome(soignant.profession, soignant.rpps_verifie) && d.type_document === 'DIPLOME') return false;
       const exReq = d.type_exercice_requis || 'TOUS';
       if (exReq === 'LIBERAL_ONLY') return estLiberal;
       if (exReq === 'SALARIE_ONLY') return estSalarie;
@@ -121,15 +139,17 @@ export function useActivationSoignant({ soignant, documents, hasStripeConnect, a
     });
     const manquants = requis.filter(
       (r: any) =>
-        !documents.some(
-          (doc) =>
-            doc.type_document === r.type_document &&
-            doc.statut_verification === 'VERIFIE' &&
-            (!doc.valide_jusqua || new Date(doc.valide_jusqua) > new Date()),
-        ),
+        !(r.type_document === 'DIPLOME' && diplomeSpecialiseRequis
+          ? extra.diplomeSpecialiseValide
+          : documents.some(
+            (doc) =>
+              doc.type_document === r.type_document &&
+              doc.statut_verification === 'VERIFIE' &&
+              (!doc.valide_jusqua || new Date(doc.valide_jusqua) > new Date()),
+          )),
     );
     return manquants.length;
-  }, [soignant, documents, extra, docsFaits]);
+  }, [soignant, documents, extra, docsFaits, diplomeSpecialiseRequis]);
 
   return useMemo<ActivationState>(() => {
     const estLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';

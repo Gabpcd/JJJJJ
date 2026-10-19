@@ -15,7 +15,7 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
+import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION, rppsDispenseDiplome, diplomeCompatibleProfession } from '@/lib/documents';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
@@ -192,9 +192,13 @@ export function DocumentsSoignantContent() {
         return;
       }
 
+      // Frontière locale : la projection JSON scalaire provoque une récursion
+      // excessive dans le parseur de types PostgREST avec cette longue liste.
+      // Garder la projection explicite à l'exécution, sans élargir le client.
+      const projectionDocuments: string = 'id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle, profession_certifiee:resultat_ia->>profession_certifiee';
       const [reglesResultat, documentsResultat] = await Promise.all([
         supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
-        supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', userId).is('supprime_le', null).order('televerse_le', { ascending: false }),
+        supabase.from('documents_soignants').select(projectionDocuments).eq('soignant_id', userId).is('supprime_le', null).is('revoque_le', null).order('televerse_le', { ascending: false }),
       ]);
 
       if (reglesResultat.error || documentsResultat.error) {
@@ -217,9 +221,9 @@ export function DocumentsSoignantContent() {
         (dr || []).filter((d: any) => {
           if (d.profession !== (sg as any).profession) return false;
           if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
-          // Le RPPS validé par l'API atteste le diplôme enregistré pour les
-          // professions concernées. Un ADELI seul ne donne pas cette dispense.
-          if (rppsVerifie && d.type_document === 'DIPLOME') return false;
+          // Le RPPS ne dispense pas du diplôme spécialisé IADE/IBODE.
+          // Un ADELI seul ne donne pas de dispense de diplôme.
+          if (rppsDispenseDiplome(sg.profession, sg.rpps_verifie) && d.type_document === 'DIPLOME') return false;
           if (registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI') return false;
           // Une autorisation d'exercice reste une preuve distincte du diplôme.
           // Elle n'est masquée que lorsque le registre officiel est déjà validé.
@@ -241,6 +245,7 @@ export function DocumentsSoignantContent() {
         // ce parcours. Explorer doit relire les droits avant de la réutiliser.
         void queryClient.invalidateQueries({ queryKey: ['explorer-profil', userId], exact: true });
         void queryClient.invalidateQueries({ queryKey: ['explorer-rcp', userId], exact: true });
+        void queryClient.invalidateQueries({ queryKey: ['activation-soignant', userId] });
       }
       setLoading(false);
     }
@@ -256,9 +261,10 @@ export function DocumentsSoignantContent() {
     mesDocuments.some(d =>
       d.type_document === r.type_document &&
       d.statut_verification === 'VERIFIE' &&
+      (r.type_document !== 'DIPLOME' || diplomeCompatibleProfession(soignant?.profession, d.profession_certifiee)) &&
       (!d.valide_jusqua || new Date(d.valide_jusqua) > new Date())
     )
-  ), [docsRequis, mesDocuments]);
+  ), [docsRequis, mesDocuments, soignant?.profession]);
 
   const docsManquants = docsRequis.length - docsValides.length;
   // Prochaine étape de la checklist : premier document obligatoire sans version valide
@@ -287,6 +293,7 @@ export function DocumentsSoignantContent() {
       const prochain = docsRequis.find(r => !mesDocuments.some(d =>
         d.type_document === r.type_document &&
         d.statut_verification === 'VERIFIE' &&
+        (r.type_document !== 'DIPLOME' || diplomeCompatibleProfession(soignant?.profession, d.profession_certifiee)) &&
         (!d.valide_jusqua || new Date(d.valide_jusqua) > new Date())
       ));
       if (!prochain) {
@@ -298,7 +305,7 @@ export function DocumentsSoignantContent() {
         setTeleversementType(prev => prev ?? prochain.type_document);
       }
     }
-  }, [mesDocuments, docsEnVerification, docsRequis]);
+  }, [mesDocuments, docsEnVerification, docsRequis, soignant?.profession]);
 
   const documentsExpirantBientot = useMemo(() => mesDocuments.filter(d =>
     d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
@@ -678,6 +685,9 @@ export function DocumentsSoignantContent() {
         {typesOrdonnes.map((requis, idx) => {
           const isCritique = requis.est_critique;
           const doc = mesDocuments.find(d => d.type_document === requis.type_document);
+          const diplomeSpecialiseAConfirmer = !!doc && requis.type_document === 'DIPLOME'
+            && doc.statut_verification === 'VERIFIE'
+            && !diplomeCompatibleProfession(soignant?.profession, doc.profession_certifiee);
           const estRejete = doc?.statut_verification === 'REJETE';
           // REJETE prime sur EXPIRE : un document rejeté reste rejeté même si
           // l'IA a extrait une date_expiration passée du mauvais fichier.
@@ -713,10 +723,15 @@ export function DocumentsSoignantContent() {
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground">📎 {doc.nom_fichier} (téléversé le {format(new Date(doc.televerse_le), 'd MMM yyyy', { locale: fr })})</p>
                     {/* Enhanced status badge */}
-                    {doc.statut_verification === 'VERIFIE' && (
+                    {doc.statut_verification === 'VERIFIE' && !diplomeSpecialiseAConfirmer && (
                       <span className="inline-flex items-center gap-1 badge-base bg-emerald-100 text-emerald-700 text-[10px] mt-1">
                         <CheckCircle2 className="h-3 w-3" /> Vérifié ✅
                       </span>
+                    )}
+                    {diplomeSpecialiseAConfirmer && (
+                      <p className="text-xs text-amber-700 mt-1" role="status">
+                        La qualification {soignant?.profession} n’est pas confirmée par ce diplôme. Tu peux le remplacer ou demander une nouvelle vérification.
+                      </p>
                     )}
                     {doc.statut_verification === 'EN_ATTENTE' && (
                       <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px] mt-1">
@@ -742,7 +757,7 @@ export function DocumentsSoignantContent() {
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <button onClick={() => voirDocument(doc)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline">Voir le document</button>
-                      {doc.statut_verification !== 'VERIFIE' && (
+                      {(doc.statut_verification !== 'VERIFIE' || diplomeSpecialiseAConfirmer) && (
                         <button
                           onClick={() => reverifier(doc.id)}
                           disabled={reverifyingId === doc.id}

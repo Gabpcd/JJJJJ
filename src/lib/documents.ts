@@ -1,3 +1,6 @@
+import { PROFESSIONS_SANS_RPPS } from './constantes';
+import { professionMissionExigeSpecialisationExacte } from './profession-hierarchy';
+
 export const TYPES_DOCUMENTS: Record<string, string> = {
   'CARTE_IDENTITE': 'Pièce d\'identité',
   'PASSEPORT': 'Passeport',
@@ -29,3 +32,16 @@ export const STATUTS_VERIFICATION: Record<string, { label: string; couleur: stri
   'REVUE_MANUELLE_REQUISE': { label: 'En cours de vérification', couleur: 'bg-blue-100 text-blue-700' },
   'API_INDISPONIBLE': { label: 'Vérification temporairement indisponible', couleur: 'bg-gray-100 text-gray-600' },
 };
+
+/** Miroir de la dispense DIPLOME dans fn_documents_ok_pour_mission. */
+export function rppsDispenseDiplome(profession: string | null | undefined, rppsVerifie: boolean | null | undefined): boolean {
+  return rppsVerifie === true && !!profession
+    && !PROFESSIONS_SANS_RPPS.includes(profession)
+    && !professionMissionExigeSpecialisationExacte(profession);
+}
+
+/** Même correspondance exacte que profession_certifiee dans le contrôle SQL. */
+export function diplomeCompatibleProfession(profession: string | null | undefined, professionCertifiee: unknown): boolean {
+  return !professionMissionExigeSpecialisationExacte(profession)
+    || (typeof professionCertifiee === 'string' && professionCertifiee.toUpperCase() === profession);
+}
