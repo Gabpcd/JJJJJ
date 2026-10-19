@@ -82,3 +82,27 @@ END;
 $_$;
 
 COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense RPPS_ADELI et DIPLOME hors IADE/IBODE ; les diplômes spécialisés exigent profession_certifiee correspondante. ADELI seul : dispense RPPS_ADELI uniquement.';
+
+-- Corriger uniquement le cache dérivé devenu inexact par l'ancienne dispense.
+-- Le calcul canonique ne modifie que tous_documents_valides et modifie_le ;
+-- aucun verdict RPPS, document, statut de compte ou attribution n'est révoqué.
+DO $cache_specialise$
+DECLARE
+  v_soignant_id uuid;
+BEGIN
+  FOR v_soignant_id IN
+    SELECT s.id
+    FROM public.soignants s
+    WHERE s.supprime_le IS NULL
+      AND s.profession IN ('IADE', 'IBODE')
+      AND s.rpps_verifie IS TRUE
+      AND s.tous_documents_valides IS TRUE
+      AND public.fn_documents_ok_pour_mission(s.id,
+        CASE WHEN upper(COALESCE(s.type_exercice, 'SALARIE')) IN ('LIBERAL', 'MIXTE')
+          THEN 'LIBERAL' ELSE 'SALARIE' END) IS FALSE
+    ORDER BY s.id
+  LOOP
+    PERFORM public.fn_calculer_tous_documents_valides(v_soignant_id);
+  END LOOP;
+END;
+$cache_specialise$;

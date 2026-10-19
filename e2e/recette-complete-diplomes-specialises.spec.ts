@@ -16,6 +16,15 @@ for (const profession of ['IADE', 'IBODE']) {
     })));
     const documents: Record<string, any>[] = [];
     state.tables.set('documents_soignants', documents);
+    // Asset unique déclaré dans index.html : simulation CSS vide, aucun appel
+    // Google et aucune erreur requestfailed artificiellement ignorée.
+    await page.route(url => url.href === 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap', async route => {
+      if (route.request().method() !== 'GET') {
+        state.unknown.push('Méthode police de simulation inattendue');
+        return route.abort();
+      }
+      return route.fulfill({ contentType: 'text/css', body: '' });
+    });
     const consoleErrors: string[] = [];
     const failedRequests: string[] = [];
     page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
@@ -26,6 +35,7 @@ for (const profession of ['IADE', 'IBODE']) {
       const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
       if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
       const expected = request.method() === 'POST'
+        && ['127.0.0.1', 'localhost'].includes(new URL(request.url()).hostname)
         && request.headers().authorization === 'Bearer fixture-auth'
         && request.postData() === JSON.stringify({ document_id: 'diplome-specialise-simule' })
         && verifications === 0 && documents.length === 1;
@@ -102,10 +112,86 @@ for (const profession of ['IADE', 'IBODE']) {
     etat.overrides.set('fn_soignant_pour_etablissement', { id: idsEtablissement.soignant, prenom: 'Camille', nom: 'Spécialité fictive', profession, score_fiabilite: null, total_missions_terminees: 0 });
     let contrat: Record<string, unknown> | null = null;
     let lecturesContrat = 0;
+    let lecturesPlanningContrat = 0;
+    let lecturesSuiviContrat = 0;
+    const conversationId = '79000000-0000-4000-8000-000000000078';
+    const appelsContexte: { nom: string; payload: unknown }[] = [];
+    const lecturesPermissions: string[] = [];
     const consoleErrors: string[] = [];
     const failedRequests: string[] = [];
     page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
     page.on('requestfailed', request => failedRequests.push(`${request.method()} ${new URL(request.url()).pathname}`));
+    await page.route('**/rest/v1/rpc/fn_mes_permissions_etab', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const scope = request.postData() === JSON.stringify({ p_etablissement_id: idsEtablissement.etab });
+      // useEtabPermissions accepte aussi le scope initial NULL (résolution du
+      // compte courant). Garder cet appel, son ledger et la même matrice.
+      const initial = request.postData() === JSON.stringify({ p_etablissement_id: null });
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.search !== '' || (!scope && !initial)) {
+        etat.inconnues.push('Permissions hors établissement de simulation');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      etat.appels.push('POST fn_mes_permissions_etab');
+      lecturesPermissions.push(scope ? 'scope' : 'initial');
+      return route.fulfill({ headers, json: { success: true, etablissement_id: idsEtablissement.etab,
+        role: etat.permissions,
+        permissions: Object.fromEntries(['gerer_equipe', 'supprimer_compte', 'profil_etab', 'paiement', 'lecture_paiement',
+          'missions', 'candidatures', 'contrats', 'pointage', 'rh', 'lecture'].map(key => [key, etat.permissions === 'PROPRIETAIRE'])),
+      } });
+    });
+    // Contrats exacts des composants montés après attribution : état pointage,
+    // conversation vide et affichage de l'interlocuteur. Aucune saisie, message,
+    // signature ou scan ; les POST de contexte sont tracés, jamais effacés.
+    const rpcsContexte = {
+      fn_etat_pointage_mission: { payload: { p_mission_id: idsEtablissement.mission }, reponse: () => ({
+        statut: mission.statut, intitule: mission.intitule, prochain_type_scan: 'ARRIVEE', nb_scans: 0,
+        segment_ouvert: false, segments: [], code_pointage_actif: null, est_etab: true,
+      }) },
+      fn_obtenir_conversation: { payload: { p_autre_id: idsEtablissement.soignant, p_mission_id: idsEtablissement.mission }, reponse: () => conversationId },
+      fn_interlocuteurs_conversations: { payload: { p_conversation_ids: [conversationId] }, reponse: () => [{
+        conversation_id: conversationId, participant_id: idsEtablissement.soignant,
+        prenom: 'Camille', nom: 'Spécialité fictive', avatar_url: null, est_jolene: false,
+      }] },
+      fn_marquer_messages_lus: { payload: { p_conversation_id: conversationId }, reponse: () => null },
+      fn_est_bloque: { payload: { p_cible_id: idsEtablissement.soignant }, reponse: () => false },
+    };
+    await page.route(url => url.pathname.startsWith('/rest/v1/rpc/')
+      && Object.hasOwn(rpcsContexte, url.pathname.split('/').pop()!), async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const nom = url.pathname.split('/').pop()! as keyof typeof rpcsContexte;
+      const attendu = rpcsContexte[nom];
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname)
+        || url.search !== '' || mission.statut !== 'ASSIGNEE'
+        || request.postData() !== JSON.stringify(attendu.payload)) {
+        etat.inconnues.push(`Contexte de mission hors contrat : ${nom}`);
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      appelsContexte.push({ nom, payload: request.postDataJSON() });
+      return route.fulfill({ headers, json: attendu.reponse() });
+    });
+    await page.route('**/rest/v1/conversations?**', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,OPTIONS' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (request.method() !== 'GET' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname)
+        || mission.statut !== 'ASSIGNEE' || [...url.searchParams].length !== 2
+        || url.searchParams.get('select') !== 'archived_at,soignant_id'
+        || url.searchParams.get('id') !== `eq.${conversationId}`) {
+        etat.inconnues.push('Conversation hors mission de simulation');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      return route.fulfill({ headers, json: [{ archived_at: null, soignant_id: idsEtablissement.soignant }] });
+    });
     await page.route('**/rest/v1/contrats_mission?**', async route => {
       const request = route.request();
       const url = new URL(request.url());
@@ -117,11 +203,29 @@ for (const profession of ['IADE', 'IBODE']) {
         statut: 'in.(BROUILLON,EN_ATTENTE_SIGNATURES,SIGNE_SOIGNANT,SIGNE_ETABLISSEMENT,SIGNE_COMPLET)',
         order: 'cree_le.desc', limit: '1',
       };
+      const lectureCarte = [...url.searchParams].length === Object.keys(attendu).length
+        && Object.entries(attendu).every(([key, value]) => url.searchParams.get(key) === value);
+      const lecturePlanning = mission.statut === 'ASSIGNEE' && [...url.searchParams].length === 2
+        && url.searchParams.get('select') === 'id,mission_id,statut,cree_le'
+        && url.searchParams.get('mission_id') === `eq.${idsEtablissement.mission}`;
+      // SuiviMission.tsx : projection distincte de la carte et du planning.
+      const lectureSuivi = mission.statut === 'ASSIGNEE' && [...url.searchParams].length === 4
+        && url.searchParams.get('select') === 'id,statut,signature_soignant,signature_etablissement'
+        && url.searchParams.get('mission_id') === `eq.${idsEtablissement.mission}`
+        && url.searchParams.get('order') === 'cree_le.desc' && url.searchParams.get('limit') === '1';
       if (request.method() !== 'GET' || request.headers().authorization !== 'Bearer fixture-auth'
-        || [...url.searchParams].length !== Object.keys(attendu).length
-        || !Object.entries(attendu).every(([key, value]) => url.searchParams.get(key) === value)) {
+        || !['127.0.0.1', 'localhost'].includes(url.hostname)
+        || (!lectureCarte && !lecturePlanning && !lectureSuivi)) {
         etat.inconnues.push('Lecture contrat hors mission de simulation');
         return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      if (lecturePlanning) {
+        lecturesPlanningContrat++;
+        return route.fulfill({ headers, json: contrat ? [{ ...contrat, mission_id: idsEtablissement.mission, cree_le: '2026-10-01T12:00:00Z' }] : [] });
+      }
+      if (lectureSuivi) {
+        lecturesSuiviContrat++;
+        return route.fulfill({ headers, json: contrat ? [contrat] : [] });
       }
       lecturesContrat++;
       return route.fulfill({ headers, json: contrat });
@@ -156,12 +260,20 @@ for (const profession of ['IADE', 'IBODE']) {
     await expect(page.getByText('Contrat électronique Jolene', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ouvrir et signer le contrat', exact: true })).toBeVisible();
     await stabiliserLectures(page);
+    await expect(page.getByTestId('suivi-resume')).not.toContainText('Vérification du suivi en cours…');
+    await expect(page.getByRole('alert').filter({ hasText: 'Une partie du suivi n’a pas pu être chargée' })).toHaveCount(0);
     await preuveEtablissement(page, `${profession}-etab-attribution-contrat-simules-recharge`, info);
     expect(lecturesContrat).toBe(2);
+    expect(lecturesPlanningContrat).toBe(1);
+    expect(lecturesSuiviContrat).toBe(1);
+    expect(appelsContexte.filter(appel => appel.nom === 'fn_obtenir_conversation')).toHaveLength(1);
+    expect(appelsContexte.some(appel => appel.nom === 'fn_etat_pointage_mission')).toBe(true);
+    expect(lecturesPermissions).toContain('scope');
     expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
     expect(etat.erreurs).toEqual([]); expect(etat.inconnues).toEqual([]);
     expect(consoleErrors).toEqual([]); expect(failedRequests).toEqual([]);
     await info.attach('etats-attribution-simules', { body: JSON.stringify({ profession, modeAttribution: 'FIRST_COME',
-      refusalExecutedInBrowser: false, realAssignmentVerified: false, contractSigned: false, lecturesContrat }), contentType: 'application/json' });
+      refusalExecutedInBrowser: false, realAssignmentVerified: false, contractSigned: false,
+      lecturesContrat, lecturesPlanningContrat, lecturesSuiviContrat, appelsContexte, lecturesPermissions }), contentType: 'application/json' });
   });
 }

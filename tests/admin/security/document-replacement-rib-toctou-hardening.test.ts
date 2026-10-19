@@ -101,6 +101,17 @@ describe('dispense documentaire RPPS et spécialité exacte', () => {
     expect(gate).toContain('= v_profession::text');
     expect(verifier).toContain('diplomaMatchesDeclaredProfession(');
   });
+
+  it('rejoue le bloc de migration exact sur les caches historiques sous rollback', () => {
+    const backfill = specializedDiplomaMigration.slice(specializedDiplomaMigration.indexOf('DO $cache_specialise$')).trim();
+    const temoin = readFileSync('tests/admin/security/rpps-diploma-exemption.test.sql', 'utf8');
+    expect(backfill).toContain("s.profession IN ('IADE', 'IBODE')");
+    expect(backfill).toContain('s.rpps_verifie IS TRUE');
+    expect(backfill).toContain('s.tous_documents_valides IS TRUE');
+    expect(backfill).toContain('PERFORM public.fn_calculer_tous_documents_valides(v_soignant_id)');
+    expect(temoin).toContain(backfill);
+    expect(temoin).toContain('RPPS-CACHE: transport/notification produit par le recalcul');
+  });
 });
 
 describe('RIB prouvé et décaissement fail-closed', () => {

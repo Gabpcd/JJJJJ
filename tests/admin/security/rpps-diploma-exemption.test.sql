@@ -242,4 +242,104 @@ BEGIN
 END;
 $rpps_diploma$;
 
+-- Cache historique : reproduire l'ancien résultat dérivé sans révoquer le
+-- RPPS ni aucune pièce. Même bloc que la migration, avec témoins de non-impact.
+CREATE TEMP TABLE rpps_cache_cas(id uuid PRIMARY KEY, attendu boolean NOT NULL, avant jsonb NOT NULL, pieces_md5 text NOT NULL) ON COMMIT DROP;
+CREATE TEMP TABLE rpps_cache_transports(avant jsonb NOT NULL) ON COMMIT DROP;
+DO $cache_fixture$
+DECLARE
+  cas record;
+  sid uuid;
+  q bigint := 0;
+BEGIN
+  FOR cas IN SELECT * FROM (VALUES
+    ('IADE',NULL::text,false), ('IBODE','IDE',false),
+    ('IADE','IADE',true), ('IBODE','IBODE',true), ('IDE',NULL::text,true)
+  ) c(profession,certificat,attendu) LOOP
+    sid := gen_random_uuid();
+    INSERT INTO public.soignants(id,prenom,nom,email,date_naissance,profession,type_exercice,rpps_verifie,est_compte_test)
+    VALUES(sid,'Fixture','CacheSpecialite',sid::text||'@test.local',DATE '1990-01-01',cas.profession::public.type_profession,'SALARIE',false,true);
+    INSERT INTO public.documents_soignants(soignant_id,type_document,s3_cle,nom_fichier,statut_verification,
+      valide_depuis,valide_jusqua,verifie_le,resultat_ia,nom_extrait_ia,prenom_extrait_ia,coherence_nom)
+    SELECT sid,drp.type_document,sid::text||'/documents/fixture.pdf','FIXTURE-CACHE-SYNTHETIQUE.pdf','VERIFIE',
+      current_date,CASE WHEN drp.a_expiration THEN current_date+365 ELSE NULL END,now(),
+      CASE WHEN drp.type_document='CARTE_IDENTITE' THEN jsonb_build_object('date_naissance_extraite','1990-01-01') ELSE '{}'::jsonb END,
+      'CACHESPECIALITE','Fixture',true
+    FROM public.documents_requis_par_profession drp WHERE drp.profession::text=cas.profession AND drp.est_critique IS TRUE
+      AND drp.type_exercice_requis IN ('TOUS','SALARIE_ONLY') AND drp.type_document NOT IN ('DIPLOME','RPPS_ADELI');
+    IF cas.certificat IS NOT NULL THEN
+      INSERT INTO public.documents_soignants(soignant_id,type_document,s3_cle,nom_fichier,statut_verification,
+        valide_depuis,verifie_le,resultat_ia,nom_extrait_ia,prenom_extrait_ia,coherence_nom)
+      VALUES(sid,'DIPLOME',sid::text||'/documents/diplome.pdf','DIPLOME-CACHE-FICTIF.pdf','VERIFIE',
+        current_date,now(),jsonb_build_object('profession_certifiee',cas.certificat),'CACHESPECIALITE','Fixture',true);
+    END IF;
+    UPDATE public.soignants SET rpps_verifie=true,rpps_verifie_le=now(),rpps_nom_api='CACHESPECIALITE',
+      rpps_prenom_api='Fixture',rpps_profession_api='Infirmier' WHERE id=sid;
+    IF public.fn_documents_ok_pour_mission(sid,'SALARIE') IS DISTINCT FROM cas.attendu THEN
+      RAISE EXCEPTION 'RPPS-CACHE: précondition documentaire du témoin incorrecte';
+    END IF;
+    -- Simulation explicite du seul cache obsolète, pas d'identité officielle.
+    UPDATE public.soignants SET tous_documents_valides=true,modifie_le=TIMESTAMPTZ '2001-01-01 00:00:00+00' WHERE id=sid;
+    INSERT INTO rpps_cache_cas
+    SELECT sid,cas.attendu,to_jsonb(s),(SELECT md5(COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id)::text,'[]'))
+      FROM public.documents_soignants d WHERE d.soignant_id=sid)
+    FROM public.soignants s WHERE s.id=sid;
+  END LOOP;
+  IF to_regclass('net.http_request_queue') IS NOT NULL THEN
+    EXECUTE 'SELECT count(*) FROM net.http_request_queue' INTO q;
+  END IF;
+  INSERT INTO rpps_cache_transports SELECT jsonb_build_object('net',q,
+    'email',(SELECT count(*) FROM public.email_queue),'sms',(SELECT count(*) FROM public.sms_envoyes),
+    'notifications',(SELECT count(*) FROM public.notifications));
+END;
+$cache_fixture$;
+
+-- Bloc réel de migration reproduit octet pour octet ; égalité gardée par le
+-- test de source document-replacement-rib-toctou-hardening.test.ts.
+DO $cache_specialise$
+DECLARE
+  v_soignant_id uuid;
+BEGIN
+  FOR v_soignant_id IN
+    SELECT s.id
+    FROM public.soignants s
+    WHERE s.supprime_le IS NULL
+      AND s.profession IN ('IADE', 'IBODE')
+      AND s.rpps_verifie IS TRUE
+      AND s.tous_documents_valides IS TRUE
+      AND public.fn_documents_ok_pour_mission(s.id,
+        CASE WHEN upper(COALESCE(s.type_exercice, 'SALARIE')) IN ('LIBERAL', 'MIXTE')
+          THEN 'LIBERAL' ELSE 'SALARIE' END) IS FALSE
+    ORDER BY s.id
+  LOOP
+    PERFORM public.fn_calculer_tous_documents_valides(v_soignant_id);
+  END LOOP;
+END;
+$cache_specialise$;
+
+DO $cache_assertions$
+DECLARE
+  q bigint := 0;
+  apres jsonb;
+BEGIN
+  IF (SELECT count(*) FROM rpps_cache_cas) <> 5 THEN RAISE EXCEPTION 'RPPS-CACHE: cinq témoins requis'; END IF;
+  IF EXISTS(SELECT 1 FROM rpps_cache_cas c JOIN public.soignants s ON s.id=c.id
+    WHERE s.tous_documents_valides IS DISTINCT FROM c.attendu OR s.rpps_verifie IS NOT TRUE
+      OR (to_jsonb(s)-'tous_documents_valides'-'modifie_le') IS DISTINCT FROM (c.avant-'tous_documents_valides'-'modifie_le')
+      OR (c.attendu AND to_jsonb(s) IS DISTINCT FROM c.avant)
+      OR c.pieces_md5 IS DISTINCT FROM (SELECT md5(COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id)::text,'[]'))
+        FROM public.documents_soignants d WHERE d.soignant_id=c.id)) THEN
+    RAISE EXCEPTION 'RPPS-CACHE: cache inexact ou preuve/profil hors cache modifié';
+  END IF;
+  IF to_regclass('net.http_request_queue') IS NOT NULL THEN
+    EXECUTE 'SELECT count(*) FROM net.http_request_queue' INTO q;
+  END IF;
+  apres := jsonb_build_object('net',q,'email',(SELECT count(*) FROM public.email_queue),
+    'sms',(SELECT count(*) FROM public.sms_envoyes),'notifications',(SELECT count(*) FROM public.notifications));
+  IF apres IS DISTINCT FROM (SELECT avant FROM rpps_cache_transports) THEN
+    RAISE EXCEPTION 'RPPS-CACHE: transport/notification produit par le recalcul';
+  END IF;
+END;
+$cache_assertions$;
+
 ROLLBACK;
