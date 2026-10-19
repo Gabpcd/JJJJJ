@@ -403,25 +403,23 @@ export default function ContratMission() {
   const handleSigner = async () => {
     if (!contrat || !user || !accepte || !signatureData) return;
     setSigning(true);
+    let messageErreur = 'Erreur lors de la signature';
     try {
       const isSoignant = contrat.soignant_id === user.id;
-
-      if (isSoignant) {
-        // Soignant signe via RPC sécurisée
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_signer_contrat_soignant' as any, {
-          p_contrat_id: contrat.id,
-          p_signature_image: signatureData,
-        });
-        if (rpcError) throw rpcError;
-        if (rpcResult?.error) throw new Error(rpcResult.error);
-      } else {
-        // Établissement signe via RPC sécurisée
-        const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_signer_contrat_etablissement' as any, {
-          p_contrat_id: contrat.id,
-          p_signature_image: signatureData,
-        });
-        if (rpcError) throw rpcError;
-        if (rpcResult?.error) throw new Error(rpcResult.error);
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        (isSoignant ? 'fn_signer_contrat_soignant' : 'fn_signer_contrat_etablissement') as any,
+        { p_contrat_id: contrat.id, p_signature_image: signatureData },
+      );
+      if (rpcError) throw rpcError;
+      if (rpcResult?.error) {
+        const refusConnus: Record<string, string> = {
+          CONTRAT_INACTIF: 'Ce contrat ne peut plus être signé. Rechargez la page pour afficher son état.',
+          NON_AUTORISE: 'Vous n’avez pas l’autorisation de signer ce contrat.',
+          NON_AUTHENTIFIE: 'Votre session ou votre compte ne permet pas cette signature. Vérifiez votre connexion.',
+          HASH_DOCUMENT_CHANGE: 'La preuve du document est indisponible ou a changé. Rechargez la page ; si le problème persiste, contactez le support.',
+        };
+        messageErreur = refusConnus[rpcResult.error_code] || messageErreur;
+        throw new Error(rpcResult.error);
       }
 
       await supabase.rpc('fn_ecrire_audit_safe', {
@@ -475,7 +473,7 @@ export default function ContratMission() {
       }
     } catch (err) {
       capturerErreurSentry(err, 'ContratMission', 'signature_contrat');
-      afficherNotification({ type: 'erreur', message: 'Erreur lors de la signature' });
+      afficherNotification({ type: 'erreur', message: messageErreur });
     } finally {
       setSigning(false);
     }

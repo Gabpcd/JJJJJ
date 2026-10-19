@@ -675,7 +675,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 62 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 63 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -723,6 +723,7 @@ jobs:
             tests/security/monitoring-chorus-plage-nocturne.test.sql
             tests/security/monitoring-crons-etats-transitoires.test.sql
             tests/security/contrat-storage-acces.test.sql
+            tests/security/signature-canvas-controles.test.sql
             tests/security/stripe-webhook-jwt-role.test.sql
             tests/security/suivi-escrow-mission.test.sql
             tests/security/financial-audit-jwt-role.test.sql
