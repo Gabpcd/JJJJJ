@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { readFileSync, mkdtempSync, rmSync, realpathSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import * as cleanupStorage from '../../../e2e/helpers/contrat-fixture-storage';
@@ -136,12 +136,15 @@ describe('préparation canonique du contrat E2E', () => {
 });
 
 function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; otherReference?: boolean;
-  badPath?: boolean; storageError?: boolean; nonTechnical?: boolean; quarantine?: boolean; readError?: boolean } = {}) {
+  badPath?: boolean; storageError?: boolean; nonTechnical?: boolean; quarantine?: boolean; readError?: boolean; captureReadError?: boolean; registryWriteError?: boolean } = {}) {
   const calls: string[] = [];
   const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'jolene-contrat-cleanup-test-'))); temporaryDirectories.push(directory);
+  if (options.registryWriteError) writeFileSync(path.join(directory, 'abcdefghijklmnopqrst'), 'obstacle synthétique');
   const registry = () => cleanupStorage.registreOriginauxFixture('https://abcdefghijklmnopqrst.supabase.co', directory);
   const originalPath = `${C}/44444444-4444-4444-8444-444444444444.html`;
   let present = true;
+  let assigned = true;
+  const profile = { email: fixture.email, est_compte_test: true, rpps_verifie: true };
   let contractsPresent = true;
   let removeError = options.storageError;
   const allowedDeletes = new Set(['stripe_transfers', 'paiements_escrow', 'partages_rib', 'notifications', 'email_queue',
@@ -158,7 +161,8 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
         in(key: string, value: unknown) { filters[key] = value; return chain; },
         contains(key: string, value: unknown) { filters[key] = value; return chain; },
         limit(n: number) { expect(n).toBe(1); return chain; },
-        delete() { expect(allowedDeletes.has(table)).toBe(true); deleting = true; return chain; },
+        delete() { calls.push(`delete-attempt:${table}`); expect(allowedDeletes.has(table)).toBe(true); deleting = true; return chain; },
+        update() { calls.push(`update-attempt:${table}`); throw new Error('Update imprévu'); },
         maybeSingle: read,
         then(resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) { return read().then(resolve, reject); },
       };
@@ -170,6 +174,22 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
           if (table === 'contrats_mission') contractsPresent = false;
           return { data: null, error: null };
         }
+        if (table === 'soignants') {
+          expect(filters).toEqual({ id: S }); expect(projection).toBe('email, est_compte_test');
+          calls.push('read:caregiver'); return { data: { ...profile }, error: null };
+        }
+        if (table === 'candidatures') {
+          expect(filters).toEqual({ soignant_id: S }); expect(projection).toBe('mission_id');
+          return { data: [], error: null };
+        }
+        if (table === 'missions' && Object.hasOwn(filters, 'soignant_assigne_id')) {
+          expect(filters).toEqual({ soignant_assigne_id: S }); expect(projection).toBe('id');
+          calls.push('read:assigned-missions'); return { data: assigned ? [{ id: M }] : [], error: null };
+        }
+        if (table === 'contrats_mission' && projection === 'mission_id') {
+          expect(filters).toEqual({ soignant_id: S }); calls.push('read:contract-missions');
+          return { data: contractsPresent ? [{ mission_id: M }] : [], error: null };
+        }
         if (table === 'missions') {
           expect(filters).toEqual({ id: M }); calls.push('read:mission');
           if (projection === 'id' && options.readError) return { data: null, error: { code: 'READ_FAILED' } };
@@ -179,6 +199,7 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
         if (table === 'contrats_mission' && projection === 'id, mission_id, storage_path') {
           expect(filters).toEqual({ mission_id: M }); expect(calls).toContain('validate:test-scope');
           calls.push('capture:original');
+          if (options.captureReadError) return { data: null, error: { code: 'CAPTURE_READ_FAILED' } };
           return { data: [{ id: C, mission_id: M, storage_path: options.badPath ? 'autre-contrat/original.html' : originalPath }], error: null };
         }
         if (table === 'contrats_mission') {
@@ -205,6 +226,7 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
       } };
     } },
   };
+  Object.assign(admin, { auth: { admin: { async deleteUser() { calls.push('auth:delete'); throw new Error('Auth delete imprévu'); } } } });
   const exports: any = {};
   runInNewContext(compiled.outputText, { exports, Buffer, Date, console,
     require(name: string) {
@@ -220,7 +242,7 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
         estQuarantainePurgeAutorisee: () => true,
         estBlocagePurgeTechniqueAttendu: (error: any) => error.code === '23514',
         async preparerMissionTechniquePourPurge(client: unknown, mission: any) {
-          expect(client).toBe(admin); expect(mission.id).toBe(M); calls.push('validate:test-scope'); return options.quarantine ? 'QUARANTAINEE' : 'PREPAREE';
+          expect(client).toBe(admin); expect(mission.id).toBe(M); calls.push('validate:test-scope'); assigned = false; return options.quarantine ? 'QUARANTAINEE' : 'PREPAREE';
         },
         async purgerMissionTechniqueAvecTimeout(client: unknown, id: string) {
           expect(client).toBe(admin); expect(id).toBe(M); calls.push('purge:rpc');
@@ -233,11 +255,24 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
     },
     fetch() { throw new Error('Réseau interdit'); },
   });
-  return { calls, directory, registry, run: () => exports.cleanupMissionCascade(M),
+  return { calls, directory, registry, profile, run: () => exports.cleanupMissionCascade(M),
+    runCaregiver: () => exports.cleanupEphemeralVerifiedCaregiver(fixture),
     resume: () => cleanupStorage.reprendreOriginauxContratsFixture(admin as any, 'https://abcdefghijklmnopqrst.supabase.co', registry()) };
 }
 
 describe('retrait borné des originaux de contrats TEST', () => {
+  it.each([
+    ['lecture des références', { captureReadError: true }, 'références des originaux indisponibles'],
+    ['écriture durable du registre', { registryWriteError: true }, 'dossier refusé'],
+  ] as const)('arrête le cleanup soignant après échec de %s, même au nouvel essai détaché', async (_name, options, message) => {
+    const b = bancNettoyage(options);
+    for (let attempt = 0; attempt < 2; attempt++) await expect(b.runCaregiver()).rejects.toThrow(message);
+    expect(b.calls.filter(call => call === 'capture:original')).toHaveLength(2);
+    expect(b.calls.filter(call => call === 'read:contract-missions')).toHaveLength(2);
+    expect(b.calls.filter(call => /^(delete|update)-attempt:|^auth:|^storage:/.test(call))).toEqual([]);
+    expect(b.calls).not.toContain('purge:rpc');
+    expect(b.profile).toEqual({ email: fixture.email, est_compte_test: true, rpps_verifie: true });
+  });
   it('capture l’original même non signé et le retire seulement après la purge confirmée', async () => {
     const b = bancNettoyage(); await b.run();
     expect(b.calls.indexOf('capture:original')).toBeLessThan(b.calls.indexOf('delete:contrats_mission'));

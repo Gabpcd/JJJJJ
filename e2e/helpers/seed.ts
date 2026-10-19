@@ -393,6 +393,18 @@ export async function cleanupEphemeralVerifiedCaregiver(
     missionIds.add(candidature.mission_id);
   }
 
+  // Une préparation précédente peut avoir détaché l'assignation avant un
+  // échec de capture du registre. Le contrat conserve alors le lien durable
+  // à retrouver avant toute seconde passe de suppression du soignant.
+  const { data: contrats, error: contratsError } = await admin
+    .from('contrats_mission' as any)
+    .select('mission_id')
+    .eq('soignant_id', fixture.id);
+  if (contratsError) erreurs.push(`lecture contrats: ${contratsError.message}`);
+  for (const contrat of (contrats ?? []) as Array<{ mission_id: string }>) {
+    missionIds.add(contrat.mission_id);
+  }
+
   for (const missionId of missionIds) {
     try {
       await cleanupMissionCascade(missionId);
@@ -401,6 +413,12 @@ export async function cleanupEphemeralVerifiedCaregiver(
         `purge mission ${missionId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // Ne pas effacer les seules références durables d'un original dont la
+  // capture ou la purge vient d'échouer, ni son profil/compte Auth.
+  if (erreurs.length > 0) {
+    throw new Error(`[cleanup caregiver] ${erreurs.join(' | ')}`);
   }
 
   // Une mission gelée peut rester en quarantaine sur le backend pré-
