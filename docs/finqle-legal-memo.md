@@ -8,6 +8,8 @@
 **Date:** April 8, 2026
 **Version:** 1.0
 
+**Company information correction — October 19, 2026:** The previously listed VAT identifier was not a verified VAT number. It has been withdrawn. The confirmed SIREN remains unchanged; this correction does not establish a VAT regime or change any tax rate.
+
 ---
 
 ## 1. Company Information
@@ -19,7 +21,7 @@
 | **SIREN** | 103 305 744 |
 | **SIRET (HQ)** | 103 305 744 00015 |
 | **RCS** | Paris — 103 305 744 R.C.S. Paris |
-| **Intra-EU VAT** | FR75 01103305744 |
+| **Intra-EU VAT** | Not provided — official VAT number awaiting confirmation |
 | **Share Capital** | €1,000 |
 | **APE Code** | 6201Z — Computer Programming |
 | **Registered Office** | 103 rue de Vaugirard, 75006 Paris, France |

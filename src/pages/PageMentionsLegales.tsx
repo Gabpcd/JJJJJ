@@ -1,6 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import LayoutLegal from '@/components/LayoutLegal';
+import { ENTREPRISE } from '@/constantes/entreprise';
 
 const TOC = [
   { id: 'editeur', label: '1. Éditeur du site' },
@@ -30,7 +31,7 @@ export default function PageMentionsLegales() {
           <p><strong className="text-foreground">RCS :</strong> 103 305 744 R.C.S. Paris</p>
           <p><strong className="text-foreground">SIREN :</strong> 103 305 744</p>
           <p><strong className="text-foreground">Capital social :</strong> 1 000 €</p>
-          <p><strong className="text-foreground">Numéro TVA intracommunautaire :</strong> FR75 01103305744</p>
+          <p><strong className="text-foreground">Numéro TVA intracommunautaire :</strong> {ENTREPRISE.tva_intra ?? 'Non renseigné'}</p>
           <p><strong className="text-foreground">Date d'immatriculation :</strong> 7 avril 2026</p>
           <p><strong className="text-foreground">Directrice de la publication :</strong> Gabrielle Picard</p>
         </div>

@@ -27,7 +27,7 @@ function banc(options: {
   firstSignatureRefused?: boolean; changedAfterSignatures?: boolean;
 } = {}) {
   const calls: string[] = [];
-  const contract: any = { id: C, mission_id: M, soignant_id: S, statut: 'EN_ATTENTE_SIGNATURES',
+  const contract: any = { id: C, mission_id: M, soignant_id: S, type_contrat: 'CDD', statut: 'EN_ATTENTE_SIGNATURES',
     signature_soignant: false, signature_etablissement: false, contenu_html: null,
     hash_document: null, storage_path: null, contenu_html_rendu_le: null };
   let stored = '';
@@ -63,19 +63,6 @@ function banc(options: {
     } },
   };
   const soignant = {
-    functions: { async invoke(name: string, args: unknown) {
-      expect(name).toBe('generate-contrat-mission-pdf');
-      expect(args).toEqual({ body: { contrat_id: C } }); calls.push('render:soignant');
-      if (options.renderError) return { data: null, error: { message: 'Refus fictif' } };
-      stored = '<!doctype html><html lang="fr"><body>Original fictif éphémère</body></html>';
-      contract.contenu_html = options.placeholder ? '<p>{{nom}}</p>' : stored;
-      contract.hash_document = createHash('sha256').update(contract.contenu_html).digest('hex');
-      if (options.badHash) contract.hash_document = '0'.repeat(64);
-      contract.storage_path = `${C}/44444444-4444-4444-8444-444444444444.html`;
-      contract.contenu_html_rendu_le = '2026-10-19T10:00:00.000Z';
-      if (options.responseLost) throw new Error('Réponse perdue simulée');
-      return { data: { success: true, contrat_id: C, hash_document: contract.hash_document, storage_path: contract.storage_path }, error: null };
-    } },
     async rpc(name: string, args: any) {
       expect(name).toBe('fn_signer_contrat_soignant'); expect(args.p_contrat_id).toBe(C);
       expect(Object.keys(args).sort()).toEqual(['p_contrat_id', 'p_signature_image']);
@@ -87,13 +74,36 @@ function banc(options: {
       return { data: { success: true }, error: null };
     },
   };
-  const etablissement = { async rpc(name: string, args: any) {
-    expect(name).toBe('fn_signer_contrat_etablissement'); expect(args.p_contrat_id).toBe(C);
-    expect(contract.signature_soignant).toBe(true); calls.push('sign:etablissement');
-    contract.signature_etablissement = true; contract.statut = 'SIGNE_COMPLET';
-    if (options.changedAfterSignatures) contract.contenu_html += '<p>altération</p>';
-    return { data: { success: true }, error: null };
-  } };
+  const etablissement = {
+    functions: { async invoke(name: string, args: any) {
+      expect(name).toBe('generate-contrat-mission-pdf');
+      expect(Object.keys(args)).toEqual(['body']);
+      expect(Object.keys(args.body).sort()).toEqual(['contrat_id', 'donnees_cdd']);
+      expect(args.body.contrat_id).toBe(C);
+      expect(Object.keys(args.body.donnees_cdd).sort()).toEqual(['cadre', 'cadre_declare', 'confirme', 'representant_nom', 'representant_qualite', 'texte_employeur']);
+      expect(args.body.donnees_cdd).toMatchObject({ cadre: 'TEXTE_EMPLOYEUR', confirme: true,
+        cadre_declare: 'RECETTE SYNTHÉTIQUE TEST — aucune portée juridique' });
+      expect(args.body.donnees_cdd.texte_employeur).toContain(M);
+      expect(args.body.donnees_cdd.texte_employeur).toContain(S);
+      calls.push('render:etablissement');
+      if (options.renderError) return { data: null, error: { message: 'Refus fictif' } };
+      stored = '<!doctype html><html lang="fr"><body>Original fictif éphémère</body></html>';
+      contract.contenu_html = options.placeholder ? '<p>{{nom}}</p>' : stored;
+      contract.hash_document = createHash('sha256').update(contract.contenu_html).digest('hex');
+      if (options.badHash) contract.hash_document = '0'.repeat(64);
+      contract.storage_path = `${C}/44444444-4444-4444-8444-444444444444.html`;
+      contract.contenu_html_rendu_le = '2026-10-19T10:00:00.000Z';
+      if (options.responseLost) throw new Error('Réponse perdue simulée');
+      return { data: { success: true, contrat_id: C, hash_document: contract.hash_document, storage_path: contract.storage_path }, error: null };
+    } },
+    async rpc(name: string, args: any) {
+      expect(name).toBe('fn_signer_contrat_etablissement'); expect(args.p_contrat_id).toBe(C);
+      expect(contract.signature_soignant).toBe(true); calls.push('sign:etablissement');
+      contract.signature_etablissement = true; contract.statut = 'SIGNE_COMPLET';
+      if (options.changedAfterSignatures) contract.contenu_html += '<p>altération</p>';
+      return { data: { success: true }, error: null };
+    },
+  };
   const exports: any = {};
   runInNewContext(compiled.outputText, { exports, Buffer, Date, console,
     require(name: string) {
@@ -109,10 +119,10 @@ function banc(options: {
 }
 
 describe('préparation canonique du contrat E2E', () => {
-  it('rend sous le soignant, relit HTML/Storage, signe S puis E et vérifie le même original', async () => {
+  it('prépare le CDD sous l’employeur, relit HTML/Storage, signe S puis E et vérifie le même original', async () => {
     expect(compiled.diagnostics).toEqual([]);
     const b = banc(); expect(await b.run()).toBe(C);
-    expect(b.calls).toEqual(['read:soignants', 'read:contrats_mission', 'render:soignant',
+    expect(b.calls).toEqual(['read:soignants', 'read:contrats_mission', 'render:etablissement',
       'read:contrats_mission', 'download:original', 'sign:soignant', 'sign:etablissement', 'read:contrats_mission']);
     expect(b.contract.statut).toBe('SIGNE_COMPLET');
   });

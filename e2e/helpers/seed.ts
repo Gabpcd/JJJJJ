@@ -630,7 +630,7 @@ export async function createEphemeralVerifiedCaregiver(
 }
 
 /**
- * Prépare le véritable original via l'Edge sous la session du soignant TEST,
+ * Prépare le véritable original via l'Edge (employeur pour un nouveau CDD),
  * vérifie ses octets/empreinte/Storage, puis signe par les deux vraies RPC.
  * Aucun champ de rendu ou de signature n'est écrit directement par la fixture.
  */
@@ -650,7 +650,7 @@ export async function seedContratMissionSigne(
     || profil?.est_compte_test !== true) {
     throw new Error('[seed contrat] profil TEST éphémère non confirmé');
   }
-  const projectionContrat = 'id, mission_id, soignant_id, statut, signature_soignant, signature_etablissement, contenu_html, hash_document, storage_path, contenu_html_rendu_le';
+  const projectionContrat = 'id, mission_id, soignant_id, type_contrat, statut, signature_soignant, signature_etablissement, contenu_html, hash_document, storage_path, contenu_html_rendu_le';
   const { data: contrat, error: lectureError } = await admin
     .from('contrats_mission' as any)
     .select(projectionContrat)
@@ -671,10 +671,23 @@ export async function seedContratMissionSigne(
   const contratId = contrat.id as string;
   const caregiverClient = clients.caregiver
     ?? await userClient(caregiver.email, caregiver.password);
+  let etablissementClient = clients.etablissement;
+  if (contrat.type_contrat === 'CDD') etablissementClient ??=
+    await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
+  // Données de fixture uniquement, jamais des valeurs supplétives de production.
+  const donneesCdd = contrat.type_contrat === 'CDD' ? {
+    cadre: 'TEXTE_EMPLOYEUR', confirme: true,
+    representant_nom: 'Représentant synthétique Playwright', representant_qualite: 'Fixture technique TEST',
+    cadre_declare: 'RECETTE SYNTHÉTIQUE TEST — aucune portée juridique',
+    texte_employeur: `Contrat de fixture automatisée TEST pour la mission ${missionId} et le soignant éphémère ${caregiver.id}.
+Document synthétique destiné uniquement à exercer le rendu canonique, les permissions et les signatures techniques.
+Il ne prouve ni l’identité, ni une validation juridique, ni une signature d’une personne réelle.`,
+  } : undefined;
   // Même entrée que l'ouverture du contrat dans l'interface. Un refus ou une
   // réponse ambiguë arrête la préparation : aucun retry ni rendu factice.
-  const { data: generation, error: generationError } = await caregiverClient.functions.invoke(
-    'generate-contrat-mission-pdf', { body: { contrat_id: contratId } },
+  const preparateur = contrat.type_contrat === 'CDD' ? etablissementClient! : caregiverClient;
+  const { data: generation, error: generationError } = await preparateur.functions.invoke(
+    'generate-contrat-mission-pdf', { body: { contrat_id: contratId, ...(donneesCdd ? { donnees_cdd: donneesCdd } : {}) } },
   );
   if (generationError || generation?.success !== true || generation.contrat_id !== contratId) {
     throw new Error('[seed contrat] rendu canonique non confirmé');
@@ -710,8 +723,7 @@ export async function seedContratMissionSigne(
     );
   }
 
-  const etablissementClient = clients.etablissement
-    ?? await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
+  etablissementClient ??= await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
   const { data: signatureEtab, error: signatureEtabError } = await etablissementClient.rpc(
     'fn_signer_contrat_etablissement' as any,
     { p_contrat_id: contratId, p_signature_image: signature },

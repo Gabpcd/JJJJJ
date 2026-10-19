@@ -8,6 +8,7 @@ interface Props {
   typeContrat: string | null | undefined;
   /** Numéro DPAE déjà enregistré (si oui, masque le bouton de préparation). */
   dpaeNumero?: string | null;
+  cadreDeclareParEmployeur?: boolean;
 }
 
 /**
@@ -23,7 +24,7 @@ interface Props {
  * Pour les contrats LIBERAL : le composant ne s'affiche pas (DPAE non
  * requise — relation B2B).
  */
-export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
+export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclareParEmployeur = false }: Props) {
   const { afficherNotification } = useNotification();
   const [payload, setPayload] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -113,10 +114,13 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="flex-1">
-          <p className="font-semibold text-amber-900 dark:text-amber-200">DPAE obligatoire — Mission salariée</p>
+          <p className="font-semibold text-amber-900 dark:text-amber-200">{cadreDeclareParEmployeur
+            ? 'DPAE — formalité à vérifier selon le cadre déclaré'
+            : 'DPAE obligatoire — Mission salariée'}</p>
           <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-            La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF
-            avant la prise de poste (art. R1221-2 Code travail).
+            {cadreDeclareParEmployeur
+              ? 'L’employeur vérifie les formalités applicables à cet engagement. Si une DPAE est requise, effectuez-la avant la prise de poste et renseignez son numéro ici.'
+              : "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail)."}
           </p>
         </div>
       </div>

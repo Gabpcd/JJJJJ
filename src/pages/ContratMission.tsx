@@ -27,6 +27,8 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { sha256Hex } from '@/lib/crypto-hash';
+import { PreparationCddEmployeur } from '@/components/PreparationCddEmployeur';
+import type { DonneesCdd } from '../../supabase/functions/_shared/cdd-employeur';
 import {
   choisirContenuContratAffiche,
   contratNecessiteRenduServeur,
@@ -57,6 +59,12 @@ function replaceTemplateVariables(template: string, values: Record<string, strin
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? '');
 }
 
+function cddSansOriginal(contrat: any): boolean {
+  return contrat?.type_contrat === 'CDD' && !contratPossedeSignature(contrat)
+    && !contrat.storage_path && !contrat.hash_document && !contrat.contenu_html_rendu_le
+    && !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut);
+}
+
 function buildFallbackContractHtml({
   contrat,
   mission,
@@ -70,6 +78,8 @@ function buildFallbackContractHtml({
   etablissement?: any;
   templateHtml?: string | null;
 }) {
+  // Un aperçu CDD ne doit jamais inventer les conditions de l'employeur.
+  if (contrat?.type_contrat === 'CDD') return '';
   const valeurs: Record<string, string> = {
     numero_contrat: escapeContractValue(contrat?.numero_contrat ?? '—'),
     type_contrat: escapeContractValue(contrat?.type_contrat ?? '—'),
@@ -106,12 +116,13 @@ function buildFallbackContractHtml({
       soignant?.adresse_code_postal,
       soignant?.adresse_ville,
     ].filter(Boolean).join(', ') || 'non renseignée'),
-    motif_cdd: escapeContractValue(contrat?.motif_cdd || "remplacement / surcroît temporaire d'activité"),
-    convention_collective: escapeContractValue(etablissement?.convention_collective || "CCN applicable à l'établissement"),
-    periode_essai_libelle: escapeContractValue(`${Number(contrat?.periode_essai_jours || 1)} ${Number(contrat?.periode_essai_jours || 1) === 1 ? 'jour' : 'jours'}`),
-    periode_essai_jours: escapeContractValue(contrat?.periode_essai_jours || 1),
-    caisse_retraite: escapeContractValue(etablissement?.caisse_retraite || 'AGIRC-ARRCO'),
-    regime_prevoyance: escapeContractValue(etablissement?.regime_prevoyance || "celui de l'employeur"),
+    motif_cdd: escapeContractValue(contrat?.motif_cdd ?? ''),
+    convention_collective: escapeContractValue(etablissement?.convention_collective ?? ''),
+    periode_essai_libelle: contrat?.periode_essai_jours == null ? ''
+      : escapeContractValue(`${Number(contrat.periode_essai_jours)} ${Number(contrat.periode_essai_jours) === 1 ? 'jour' : 'jours'}`),
+    periode_essai_jours: escapeContractValue(contrat?.periode_essai_jours ?? ''),
+    caisse_retraite: escapeContractValue(etablissement?.caisse_retraite ?? ''),
+    regime_prevoyance: escapeContractValue(etablissement?.regime_prevoyance ?? ''),
     date_signature: escapeContractValue(new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })),
   };
 
@@ -167,6 +178,9 @@ export default function ContratMission() {
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
   const [renduContratEnCours, setRenduContratEnCours] = useState(false);
   const [erreurRenduContrat, setErreurRenduContrat] = useState<string | null>(null);
+  const [peutPreparerCdd, setPeutPreparerCdd] = useState(false);
+  const idCourant = useRef(id);
+  idCourant.current = id;
   const smsRecetteScope = JSON.stringify([id, contrat?.id, contrat?.hash_document, hashContratAffiche, user?.id]);
   const smsOtpDesactive = smsExterneDesactive && !(signatureCompteTest
     && smsRecetteAdmission?.scope === smsRecetteScope && smsRecetteAdmission.expiresAt > Date.now());
@@ -187,6 +201,9 @@ export default function ContratMission() {
     setSignatureData(null);
     setShowConfirmSign(false);
     setHashContratAffiche(null);
+    setPeutPreparerCdd(false);
+    setErreurRenduContrat(null);
+    setRenduContratEnCours(false);
     const load = async () => {
       const { data: dataRaw } = await supabase
         .from('contrats_mission')
@@ -197,7 +214,7 @@ export default function ContratMission() {
       const data = dataRaw as any;
 
       if (data) {
-        const [missionRes, soignantRes, etabRes, etabCompteRes, templateRes] = await Promise.all([
+        const [missionRes, soignantRes, etabRes, etabCompteRes, templateRes, permissionCdd] = await Promise.all([
           supabase
             .from('missions')
             .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base')
@@ -223,9 +240,13 @@ export default function ContratMission() {
             .eq('type_contrat', data.type_contrat)
             .eq('est_actif', true)
             .maybeSingle(),
+          cddSansOriginal(data) && data.soignant_id !== user?.id
+            ? supabase.rpc('fn_a_permission_etablissement' as any, { p_permission: 'contrats', p_etablissement_id: data.etablissement_id })
+            : Promise.resolve({ data: false, error: null }),
         ]);
 
         if (!actif) return;
+        setPeutPreparerCdd(!permissionCdd.error && permissionCdd.data === true);
         setFallbackHtml(buildFallbackContractHtml({
           contrat: data,
           mission: missionRes.data,
@@ -313,6 +334,7 @@ export default function ContratMission() {
   // (rendu via generate-contrat-mission-pdf), on l'utilise. Sinon fallback
   // sur un hash calculé localement.
   useEffect(() => {
+    if (cddSansOriginal(contrat)) { setHashContratAffiche(null); return; }
     const contenuServeurIncomplet = contientVariablesContratNonRendues(contrat?.contenu_html);
     if (contrat?.hash_document && (contratPossedeSignature(contrat) || !contenuServeurIncomplet)) {
       setHashContratAffiche(contrat.hash_document);
@@ -336,6 +358,7 @@ export default function ContratMission() {
   // appelle l’Edge pour le rendre. Les signatures et rendus existants sont préservés.
   useEffect(() => {
     if (!contrat?.id) return;
+    if (cddSansOriginal(contrat)) return;
     if (contrat.statut === 'ANNULE' || contrat.statut === 'EXPIRE' || contrat.statut === 'REFUSE') return;
     const renduNecessaire = contratNecessiteRenduServeur(contrat.contenu_html, contrat.storage_path, contrat);
     if (!renduNecessaire) return;
@@ -375,8 +398,32 @@ export default function ContratMission() {
     return () => { cancelled = true; };
   }, [contrat]);
 
+  const preparerCdd = async (donnees: DonneesCdd) => {
+    if (!contrat?.id || !cddSansOriginal(contrat) || !peutPreparerCdd || renduContratEnCours) return;
+    const contratId = contrat.id;
+    setRenduContratEnCours(true);
+    setErreurRenduContrat(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-contrat-mission-pdf', {
+        body: { contrat_id: contratId, donnees_cdd: donnees },
+      });
+      if (idCourant.current !== contratId) return;
+      if (error || data?.success !== true) throw new Error('PREPARATION_REFUSEE');
+      const { data: updated, error: lectureError } = await supabase.from('contrats_mission')
+        .select('*' as any).eq('id', contratId).single();
+      if (idCourant.current !== contratId) return;
+      if (lectureError || !updated || !(updated as any).storage_path || !(updated as any).hash_document
+        || contientVariablesContratNonRendues((updated as any).contenu_html)) throw new Error('ORIGINAL_INDISPONIBLE');
+      setContrat((courant: any) => courant?.id === contratId ? updated : courant);
+    } catch {
+      if (idCourant.current === contratId) setErreurRenduContrat('Le document n’a pas été confirmé. Vos informations restent dans cette page. Réessayez après avoir vérifié le contrat.');
+    } finally {
+      if (idCourant.current === contratId) setRenduContratEnCours(false);
+    }
+  };
+
   const handleDownloadContract = async () => {
-    const contractHtml = choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat?.storage_path);
+    const contractHtml = cddSansOriginal(contrat) ? '' : choisirContenuContratAffiche(contrat?.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat?.storage_path);
     if (!contractHtml) {
       afficherNotification({ type: 'erreur', message: 'Aucun contrat téléchargeable pour le moment.' });
       return;
@@ -484,7 +531,11 @@ export default function ContratMission() {
 
   const isSoignant = contrat.soignant_id === user?.id;
   const dejaSigneParMoi = isSoignant ? contrat.signature_soignant : contrat.signature_etablissement;
-  const contractHtml = choisirContenuContratAffiche(contrat.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat.storage_path);
+  const cddAPreparer = cddSansOriginal(contrat);
+  const texteEmployeur = contrat.type_contrat === 'CDD'
+    && /data-jolene-cdd=["']employeur-v1["']/.test(contrat.contenu_html || '')
+    && /data-cadre=["']TEXTE_EMPLOYEUR["']/.test(contrat.contenu_html || '');
+  const contractHtml = cddAPreparer ? '' : choisirContenuContratAffiche(contrat.contenu_html, fallbackHtml, contratPossedeSignature(contrat) || !!contrat.storage_path);
   const contratServeurPret = !!contrat.storage_path
     && !!contrat.hash_document
     && !contientVariablesContratNonRendues(contrat.contenu_html)
@@ -547,6 +598,10 @@ export default function ContratMission() {
           </div>
         </div>
 
+        {cddAPreparer && (peutPreparerCdd
+          ? <PreparationCddEmployeur key={contrat.id} enCours={renduContratEnCours} erreur={erreurRenduContrat} onPreparer={preparerCdd} />
+          : <p role="status" className="card-base mb-4 text-sm">Le contrat doit être préparé et confirmé par un représentant autorisé de l’employeur avant les signatures.</p>)}
+
         <div className="flex flex-wrap gap-3 mb-4">
           <button
             onClick={handleDownloadContract}
@@ -592,6 +647,7 @@ export default function ContratMission() {
               contratId={contrat.id}
               typeContrat={contrat.type_contrat}
               dpaeNumero={(contrat as any).dpae_numero}
+              cadreDeclareParEmployeur={texteEmployeur}
             />
           </div>
         )}
@@ -650,7 +706,7 @@ export default function ContratMission() {
         </div>
 
         {/* Signing section */}
-        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && (
+        {!cddAPreparer && !dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && (
           <div className="card-base space-y-4">
             <h3 className="font-bold text-foreground">Votre signature</h3>
 
@@ -767,16 +823,17 @@ export default function ContratMission() {
             </div>
             {/* Rappel DPAE — indépendant de l'ordre des signatures. */}
             {!isSoignant && !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut) && (
-              <BandeauRappelDPAE contratId={contrat.id} dpaeEffectuee={contrat.dpae_effectuee} dpaeEffectueeLe={contrat.dpae_effectuee_le} typeContrat={contrat.type_contrat} />
+              <BandeauRappelDPAE contratId={contrat.id} dpaeEffectuee={contrat.dpae_effectuee} dpaeEffectueeLe={contrat.dpae_effectuee_le} typeContrat={contrat.type_contrat} cadreDeclareParEmployeur={texteEmployeur} />
             )}
           </div>
         )}
 
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
-          {['CDD', 'SALARIE'].includes(contrat.type_contrat || '')
+          {texteEmployeur ? 'Contrat salarié préparé selon le cadre déclaré par l’employeur. '
+            : ['CDD', 'SALARIE'].includes(contrat.type_contrat || '')
             ? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '
             : 'Contrat de prestation entre l’établissement et le professionnel libéral. '}
-          Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.
+          Signature électronique simple. {!texteEmployeur && 'Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.'}
         </p>
       </div>
     </LayoutApp>

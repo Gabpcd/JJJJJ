@@ -8,12 +8,26 @@ import { describe, expect, it } from 'vitest';
 const source = ts.transpileModule(readFileSync('supabase/functions/generate-contrat-mission-pdf/index.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
+const cddSource = ts.transpileModule(readFileSync('supabase/functions/_shared/cdd-employeur.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const cddExports: Record<string, unknown> = {};
+runInNewContext(cddSource, { exports: cddExports });
+const donneesCddTest = {
+  cadre: 'PRIVE_TERME_PRECIS', confirme: true, representant_nom: 'Représentant fictif', representant_qualite: 'Responsable TEST',
+  motif_type: 'REMPLACEMENT', motif_precis: 'Remplacement synthétique du banc fermé', remplace_nom: 'Personne fictive',
+  remplace_qualification: 'Qualification fictive', poste: 'Poste TEST', qualification: 'Qualification TEST', lieu_travail: 'Adresse fictive TEST',
+  risques: 'NON', convention_collective: 'Convention fictive du banc, non applicable en production', renouvellement: 'Non prévu',
+  essai: 'AUCUN', remuneration_accessoires: 'Salaire et accessoires fictifs du banc', temps_partiel: 'NON',
+  retraite_nom: 'Organisme fictif TEST', retraite_adresse: 'Adresse fictive TEST', prevoyance: 'NON',
+};
 const id = '88900000-0000-4000-8000-000000000011';
 const original = { storage_path: 'original/signe.html', hash_document: 'a'.repeat(64),
   contenu_html: '<article>Original signé</article>', contenu_html_rendu_le: '2026-09-20T00:00:00Z' };
 function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean; denied?: boolean; rpcError?: boolean;
   rpcData?: unknown; uploadError?: boolean; updateError?: boolean; urlError?: boolean; authorization?: string;
   soignant?: Record<string, unknown>; etablissement?: Record<string, unknown>; templateHtml?: string;
+  donneesCdd?: unknown; permissionCdd?: boolean;
   afterUpload?: (s: any) => void; afterUrl?: (s: any) => void } = {}) {
   const state = { denied: options.denied || false, calls: [] as string[], urls: [] as string[], uploads: [] as { path: string; bytes: Blob; config: any }[],
     soignant: { nom: '<Synthetic>', prenom: 'Test', ...options.soignant } as Record<string, unknown>,
@@ -23,6 +37,7 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
       statut: 'EN_ATTENTE_SIGNATURES', signature_soignant: false, signature_etablissement: false,
       signature_soignant_le: null, signature_etablissement_le: null, storage_path: null, hash_document: null,
       contenu_html: null, contenu_html_rendu_le: null, ...options.contrat } as Record<string, any> };
+  const etablissementInitial = state.contrat.etablissement_id;
   let handler!: (r: Request) => Promise<Response>;
   const admin = { from(table: string) {
     state.calls.push(`read:${table}`); const conditions: [string, any][] = []; let patch: any;
@@ -59,6 +74,10 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
   } } };
   const user = { auth: { async getUser() { state.calls.push('auth'); return { data: { user: options.auth === false ? null : { id: 'user' } }, error: null }; } },
     async rpc(name: string, params: any) {
+      if (name === 'fn_a_permission_etablissement') {
+        expect(params).toEqual({ p_permission: 'contrats', p_etablissement_id: etablissementInitial });
+        state.calls.push('permission'); return { data: options.permissionCdd !== false, error: null };
+      }
       expect(name).toBe('fn_contrat_storage_path'); expect(params).toEqual({ p_contrat_id: id }); state.calls.push('guard');
       return { error: options.rpcError ? {} : null, data: 'rpcData' in options ? options.rpcData : state.denied ? { success: false, error: 'Non autorisé' }
         : { success: true, storage_path: state.contrat.storage_path, hash_document: state.contrat.hash_document } };
@@ -66,17 +85,50 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
   runInNewContext(source, { exports: {}, require(name: string) {
     if (name === 'npm:@supabase/supabase-js@2.99.2') return { createClient: (_url: string, key: string) => key === 'service' ? admin : user };
     if (name === '../_shared/cors.ts') return { corsHeaders: () => ({}) };
+    if (name === '../_shared/cdd-employeur.ts') return cddExports;
     throw new Error(`Import inattendu ${name}`);
   }, Deno: { env: { get: (key: string) => ({ SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon' }[key]) },
     serve: (h: typeof handler) => { handler = h; } }, Date, Request, Response, Blob, TextEncoder, crypto: webcrypto,
     fetch: () => { throw new Error('Réseau interdit'); } });
   return { state, async lancer() {
     const response = await handler(new Request('https://example.invalid/generate-contrat-mission-pdf', {
-      method: 'POST', headers: { Authorization: options.authorization || 'Bearer synthetic-user' }, body: JSON.stringify({ contrat_id: id }),
+      method: 'POST', headers: { Authorization: options.authorization || 'Bearer synthetic-user' }, body: JSON.stringify({
+        contrat_id: id, donnees_cdd: 'donneesCdd' in options ? options.donneesCdd : donneesCddTest,
+      }),
     })); return { status: response.status, body: await response.json() };
   } };
 }
 describe('Edge contrats : autorisation canonique et preuve originale', () => {
+  it('ne prépare aucun CDD sans données confirmées ni permission employeur', async () => {
+    for (const options of [{ donneesCdd: null }, { donneesCdd: { ...donneesCddTest, confirme: false } }, { permissionCdd: false }]) {
+      const s = simulation(options);
+      expect((await s.lancer()).status).toBe('permissionCdd' in options ? 403 : 422);
+      expect(s.state.uploads).toEqual([]);
+      expect(s.state.calls).not.toContain('update');
+    }
+  });
+  it('fige le motif et le remplacé fournis sans ajouter un jour d’essai', async () => {
+    const s = simulation();
+    expect((await s.lancer()).status).toBe(200);
+    const html = await s.state.uploads[0].bytes.text();
+    expect(html).toContain('Remplacement synthétique du banc fermé');
+    expect(html).toContain('Personne fictive');
+    expect(html).toContain('Qualification fictive');
+    expect(html).toContain('Aucune période d’essai n’est convenue.');
+    expect(html).not.toContain('surcroît temporaire');
+  });
+  it('conserve un texte employeur échappé sans lui ajouter les clauses privées', async () => {
+    const s = simulation({ donneesCdd: { cadre: 'TEXTE_EMPLOYEUR', confirme: true,
+      representant_nom: 'Employeur fictif', representant_qualite: 'Recette',
+      cadre_declare: 'Cadre synthétique', texte_employeur: 'Texte employeur fictif <script>interdit</script> Référence data:exemple et javascript:exemple' } });
+    expect((await s.lancer()).status).toBe(200);
+    const html = await s.state.uploads[0].bytes.text();
+    expect(html).toContain('Texte employeur fictif &lt;script&gt;interdit&lt;/script&gt;');
+    expect(html).toContain('data&#58;exemple et javascript&#58;exemple');
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('Période d’essai');
+    expect(html).not.toContain('Convention collective');
+  });
   it.each(['soignant fermé', 'établissement suspendu', 'membre sans lecture_contrats', 'tenant tiers', 'profil admin fermé'])('refuse %s malgré Auth valide', async () => {
     const s = simulation({ denied: true, contrat: original }); expect(await s.lancer()).toMatchObject({ status: 403 });
     expect(s.state.calls).toEqual(['auth', 'guard']); expect(s.state.urls).toEqual([]);
@@ -114,7 +166,7 @@ describe('Edge contrats : autorisation canonique et preuve originale', () => {
     const bytes = await upload.bytes.text(); expect(bytes).toContain('&lt;Synthetic&gt;');
     const hash = Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(bytes))).toString('hex');
     expect(s.state.contrat.hash_document).toBe(hash); expect(s.state.contrat.contenu_html).toBe(bytes);
-    expect(s.state.calls.slice(-6)).toEqual(['guard', 'read:contrats_mission', 'update', 'guard', 'url', 'guard']);
+    expect(s.state.calls.slice(-7)).toEqual(['guard', 'permission', 'read:contrats_mission', 'update', 'guard', 'url', 'guard']);
     expect((await s.lancer()).status).toBe(200); expect(s.state.uploads).toHaveLength(1);
   });
   it('fige le SIRET libéral du soignant et préserve cet original après changement du profil et du modèle', async () => {

@@ -18,6 +18,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { rendreCddEmployeur, validerDonneesCdd } from '../_shared/cdd-employeur.ts';
 
 const BUSINESS_TIME_ZONE = 'Europe/Paris';
 
@@ -77,8 +78,9 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     .filter(Boolean).join(', ');
   const adresseSoignant = [soignant?.adresse_rue, soignant?.adresse_code_postal, soignant?.adresse_ville]
     .filter(Boolean).join(', ');
-  const periodeEssaiJours = Number(contrat?.periode_essai_jours || 1);
-  const periodeEssaiLibelle = `${periodeEssaiJours} ${periodeEssaiJours === 1 ? 'jour' : 'jours'}`;
+  const periodeEssaiJours = Number(contrat?.periode_essai_jours);
+  const periodeEssaiLibelle = Number.isFinite(periodeEssaiJours) && periodeEssaiJours > 0
+    ? `${periodeEssaiJours} ${periodeEssaiJours === 1 ? 'jour' : 'jours'}` : '';
 
   return {
     numero_contrat: escapeHtml(contrat?.numero_contrat),
@@ -99,13 +101,13 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     debut_le: escapeHtml(formatDate(mission?.debut_le)),
     fin_le: escapeHtml(formatDate(mission?.fin_le)),
     duree_heures: escapeHtml(mission?.duree_heures),
-    motif_cdd: escapeHtml(contrat?.motif_cdd || 'remplacement / surcroît temporaire d\'activité'),
-    convention_collective: escapeHtml(etab?.convention_collective || 'CCN applicable à l\'établissement'),
-    periode_essai_jours: escapeHtml(contrat?.periode_essai_jours || '1'),
+    motif_cdd: escapeHtml(contrat?.motif_cdd ?? ''),
+    convention_collective: escapeHtml(etab?.convention_collective ?? ''),
+    periode_essai_jours: escapeHtml(contrat?.periode_essai_jours ?? ''),
     periode_essai_libelle: escapeHtml(periodeEssaiLibelle),
     taux_horaire: mission?.taux_horaire_base != null ? Number(mission.taux_horaire_base).toFixed(2) : '—',
-    caisse_retraite: escapeHtml(etab?.caisse_retraite || 'AGIRC-ARRCO'),
-    regime_prevoyance: escapeHtml(etab?.regime_prevoyance || 'celui de l\'employeur'),
+    caisse_retraite: escapeHtml(etab?.caisse_retraite ?? ''),
+    regime_prevoyance: escapeHtml(etab?.regime_prevoyance ?? ''),
     date_signature: escapeHtml(new Date().toLocaleDateString('fr-FR', {
       timeZone: BUSINESS_TIME_ZONE,
     })),
@@ -162,9 +164,11 @@ Deno.serve(async (req: Request) => {
     });
     // L'appel système existant reste distinct ; un fragment de clé n'est jamais une preuve.
     const isService = authHeader === `Bearer ${serviceKey}`;
+    let auteur = 'SERVICE_TECHNIQUE';
     if (!isService) {
       const { data, error } = await userClient.auth.getUser();
       if (error || !data.user) return repondre(401, { error: 'Non authentifié' });
+      auteur = data.user.id;
     }
     const autoriser = async () => {
       if (isService) return null;
@@ -206,29 +210,50 @@ Deno.serve(async (req: Request) => {
     if (['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut)) {
       return repondre(409, { error: 'Ce contrat ne peut plus être préparé.' });
     }
+    // Le CDD n'est plus rendu automatiquement avec un motif ou un essai inventé.
+    // Son original existant a déjà été retourné ci-dessus sans aucune réécriture.
+    const estCdd = contrat.type_contrat === 'CDD';
+    const autoriserPreparation = async () => {
+      await autoriser();
+      if (estCdd && !isService) {
+        const { data, error } = await userClient.rpc('fn_a_permission_etablissement', {
+          p_permission: 'contrats', p_etablissement_id: contrat.etablissement_id,
+        });
+        if (error || data !== true) throw new Error('CONTRAT_ACCES_REFUSE');
+      }
+    };
+    await autoriserPreparation();
+    const cdd = estCdd ? validerDonneesCdd(body?.donnees_cdd) : null;
+    if (cdd && !cdd.donnees) return repondre(422, {
+      error: 'Informations contractuelles à compléter et confirmer par l’employeur.',
+      code: 'CDD_DONNEES_EMPLOYEUR_REQUISES', champs: cdd.champs,
+    });
     const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
       admin.from('missions').select('*').eq('id', contrat.mission_id).maybeSingle(),
       admin.from('soignants').select('*').eq('id', contrat.soignant_id).maybeSingle(),
       admin.from('etablissements').select('*').eq('id', contrat.etablissement_id).maybeSingle(),
-      admin.from('templates_contrat').select('contenu_html, nom, version')
+      estCdd ? Promise.resolve({ data: null, error: null }) : admin.from('templates_contrat').select('contenu_html, nom, version')
         .eq('type_contrat', contrat.type_contrat).eq('est_actif', true)
         .order('version', { ascending: false }).limit(1).maybeSingle(),
     ]);
     if ([missionRes, soignantRes, etabRes, templateRes].some(r => r.error)) {
       return repondre(503, { error: 'La préparation du contrat a échoué. Réessayez.' });
     }
-    if (!missionRes.data || !soignantRes.data || !etabRes.data || !templateRes.data?.contenu_html) {
+    if (!missionRes.data || !soignantRes.data || !etabRes.data || (!estCdd && !templateRes.data?.contenu_html)) {
       return repondre(422, { error: 'Les données nécessaires au contrat ne sont pas disponibles.' });
     }
     const vars = buildVariables(contrat, missionRes.data, soignantRes.data, etabRes.data);
-    const documentComplet = wrapInDocument(replaceTemplate(templateRes.data.contenu_html, vars), contrat.numero_contrat || contrat.id);
+    const html = cdd?.donnees
+      ? rendreCddEmployeur(vars, cdd.donnees, auteur, new Date().toISOString())
+      : replaceTemplate(templateRes.data!.contenu_html, vars);
+    const documentComplet = wrapInDocument(html, contrat.numero_contrat || contrat.id);
     const hash = await sha256Hex(documentComplet);
-    await autoriser();
+    await autoriserPreparation();
     const path = `${contratId}/${crypto.randomUUID()}.html`;
     const { error: uploadErr } = await admin.storage.from('contrats-signes')
       .upload(path, new Blob([documentComplet], { type: 'text/html' }), { contentType: 'text/html', upsert: false });
     if (uploadErr) return repondre(503, { error: 'Le document n’a pas pu être enregistré. Réessayez.' });
-    await autoriser();
+    await autoriserPreparation();
     // Compare-and-set atomique : une signature, un autre rendu ou une réaffectation
     // arrivés pendant Storage empêchent l'écrasement. Aucun cleanup d'objet incertain.
     let update = admin.from('contrats_mission').update({
