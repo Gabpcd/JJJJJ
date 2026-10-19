@@ -81,6 +81,7 @@ export default function DashboardSoignant() {
 
   const {
     data: dashboard,
+    dataUpdatedAt: dashboardActualiseLe,
     isLoading,
     isError,
     error: erreurDashboard,
@@ -365,6 +366,7 @@ export default function DashboardSoignant() {
     documents: (dashboard?.documents ?? []) as DocumentActivation[],
     hasStripeConnect,
     aRib,
+    actualisationDocuments: dashboardActualiseLe,
   });
 
   if (isLoading) {

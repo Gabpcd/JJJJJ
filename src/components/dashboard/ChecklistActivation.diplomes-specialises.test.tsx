@@ -34,11 +34,12 @@ afterEach(cleanup);
 function afficher() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return renderHook(() => useActivationSoignant({
+  return renderHook(({ actualisationDocuments }) => useActivationSoignant({
     soignant: { profession: mocks.profession, type_exercice: 'SALARIE', rpps_verifie: true, tous_documents_valides: true },
     documents: [{ type_document: 'DIPLOME', statut_verification: 'VERIFIE', valide_jusqua: null }],
     hasStripeConnect: false, aRib: true,
-  }), { wrapper });
+    actualisationDocuments,
+  }), { wrapper, initialProps: { actualisationDocuments: 1 } });
 }
 
 describe('Activation — diplôme spécialisé malgré cache historique et RPPS valide', () => {
@@ -68,5 +69,22 @@ describe('Activation — diplôme spécialisé malgré cache historique et RPPS 
     const { result } = afficher();
     await waitFor(() => expect(result.current.etapes.find(e => e.id === 'documents')?.faite).toBe(true));
     expect(mocks.from).not.toHaveBeenCalledWith('documents_soignants');
+  });
+  it('relit une validation distante au prochain succès dashboard, sans navigation ni nouveau polling', async () => {
+    mocks.diplomes = [{ statut_verification: 'VERIFIE', profession_certifiee: 'IDE', valide_jusqua: null }];
+    const { result, rerender } = afficher();
+    await waitFor(() => expect(result.current.etapes.find(e => e.id === 'documents')?.detail).toContain('Il te reste 1 document'));
+    const lectures = () => mocks.from.mock.calls.filter(([table]) => table === 'documents_soignants').length;
+    expect(lectures()).toBe(1);
+    // Le backend évolue tandis que le cache documentaire du dashboard reste
+    // true : seule sa nouvelle date de succès doit relancer cette lecture.
+    mocks.diplomes = [{ statut_verification: 'VERIFIE', profession_certifiee: 'IADE', valide_jusqua: null }];
+    rerender({ actualisationDocuments: 1 });
+    expect(lectures()).toBe(1);
+    expect(result.current.etapes.find(e => e.id === 'documents')?.faite).toBe(false);
+    rerender({ actualisationDocuments: 2 });
+    await waitFor(() => expect(result.current.etapes.find(e => e.id === 'documents')?.faite).toBe(true));
+    expect(lectures()).toBe(2);
+    expect(result.current.etapes.find(e => e.id === 'rpps')?.faite).toBe(true);
   });
 });

@@ -73,16 +73,18 @@ interface UseActivationParams {
   hasStripeConnect: boolean;
   /** Un RIB non rejeté est téléversé. */
   aRib: boolean;
+  /** Dernier succès du dashboard : relire la qualification après une revue distante. */
+  actualisationDocuments?: number;
 }
 
-export function useActivationSoignant({ soignant, documents, hasStripeConnect, aRib }: UseActivationParams): ActivationState {
+export function useActivationSoignant({ soignant, documents, hasStripeConnect, aRib, actualisationDocuments = 0 }: UseActivationParams): ActivationState {
   const { user } = useAuth();
 
   const diplomeSpecialiseRequis = professionMissionExigeSpecialisationExacte(soignant?.profession);
   const besoinFetch = !!soignant && !!user;
 
   const { data: extra } = useQuery({
-    queryKey: ['activation-soignant', user?.id, soignant?.profession],
+    queryKey: ['activation-soignant', user?.id, soignant?.profession, diplomeSpecialiseRequis ? actualisationDocuments : 0],
     queryFn: async () => {
       // Même frontière locale que DocumentsSoignant pour l'alias JSON scalaire.
       const projectionDiplome: string = 'statut_verification, valide_jusqua, profession_certifiee:resultat_ia->>profession_certifiee';

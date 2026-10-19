@@ -99,6 +99,165 @@ for (const profession of ['IADE', 'IBODE']) {
 }
 
 for (const profession of ['IADE', 'IBODE']) {
+  test(`SOIGNANT ${profession} — validation distante sans navigation puis remplacement invalide`, async ({ page }, info) => {
+    const state = await simulerSoignant(page);
+    Object.assign(state.profile, { profession, rpps_verifie: true, tous_documents_valides: true });
+    state.tables.set('documents_requis_par_profession', [{ id: `${profession}-DIPLOME`, profession,
+      type_document: 'DIPLOME', type_exercice_requis: 'TOUS', est_critique: true }]);
+    const documents: Record<string, any>[] = [{ id: 'diplome-valide-distant', soignant_id: ids.user,
+      type_document: 'DIPLOME', nom_fichier: 'DIPLOME-FICTIF.pdf', statut_verification: 'VERIFIE',
+      profession_certifiee: 'IDE', televerse_le: '2026-10-01T12:00:00Z', valide_jusqua: null,
+      supprime_le: null, revoque_le: null }];
+    state.tables.set('documents_soignants', documents);
+    const consoleErrors: string[] = [], failedRequests: string[] = [];
+    page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+    page.on('requestfailed', request => failedRequests.push(`${request.method()} ${new URL(request.url()).pathname}`));
+    await page.route(url => url.href === 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap', async route => {
+      if (route.request().method() !== 'GET') { state.unknown.push('Méthode police de simulation inattendue'); return route.abort(); }
+      return route.fulfill({ contentType: 'text/css', body: '' });
+    });
+    const fichier = { name: 'REMPLACEMENT-FICTIF.pdf', mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF') };
+    let uploads = 0, remplacements = 0, verifications = 0, cleStockage = '';
+    let fichierSelectionneVerifie = false;
+    let formeCorpsStockage: 'complet' | 'fichier-non-expose-webkit' | null = null;
+    const moteur = page.context().browser()?.browserType().name();
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
+    await page.route('**/storage/v1/object/jolene-documents/**', async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const cle = decodeURIComponent(url.pathname.slice('/storage/v1/object/jolene-documents/'.length));
+      const prefixe = `${ids.user}/documents/DIPLOME/`;
+      const boundary = request.headers()['content-type']?.match(/^multipart\/form-data; boundary=([A-Za-z0-9_-]{1,100})$/)?.[1];
+      const corps = request.postDataBuffer();
+      const debut = boundary ? Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="cacheControl"\r\n\r\n3600\r\n--${boundary}\r\nContent-Disposition: form-data; name=""; filename="${fichier.name}"\r\nContent-Type: application/pdf\r\n\r\n`) : null;
+      const fin = boundary ? Buffer.from(`\r\n--${boundary}--\r\n`) : null;
+      const complet = !!(corps && debut && fin && corps.equals(Buffer.concat([debut, fichier.buffer, fin])));
+      // La trace WebKit expose l'enveloppe exacte mais omet les octets du File.
+      // Ceux du PDF synthétique sélectionné sont vérifiés dans le navigateur
+      // AVANT le clic. Aucun corps arbitraire n'est accepté par ce transport.
+      const fichierNonExpose = moteur === 'webkit' && !!(corps && debut && fin && corps.equals(Buffer.concat([debut, fin])));
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.search !== '' || uploads !== 0
+        || !cle.startsWith(prefixe) || !/^\d+-REMPLACEMENT-FICTIF\.pdf$/.test(cle.slice(prefixe.length))
+        || request.headers()['x-upsert'] !== 'false' || (corps?.length ?? 0) > 2_000
+        || !fichierSelectionneVerifie || (!complet && !fichierNonExpose)) {
+        state.unknown.push('Stockage hors document de remplacement simulé');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      uploads++; cleStockage = cle; formeCorpsStockage = complet ? 'complet' : 'fichier-non-expose-webkit';
+      return route.fulfill({ headers, json: { Key: `jolene-documents/${cle}` } });
+    });
+    await page.route('**/rest/v1/rpc/fn_remplacer_document_soignant', async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const attendu = { p_type_document: 'DIPLOME', p_libelle: '', p_s3_cle: cleStockage,
+        p_nom_fichier: fichier.name, p_type_mime: fichier.mimeType, p_taille_octets: fichier.buffer.length };
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.search !== ''
+        || uploads !== 1 || remplacements !== 0 || request.postData() !== JSON.stringify(attendu)) {
+        state.unknown.push('Remplacement hors contrat de simulation');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      remplacements++;
+      documents[0].revoque_le = new Date().toISOString();
+      documents[0].remplace_par_document_id = 'diplome-remplace-en-attente';
+      documents.push({ ...documents[0], id: 'diplome-remplace-en-attente', nom_fichier: fichier.name,
+        statut_verification: 'EN_ATTENTE', profession_certifiee: null, s3_cle: cleStockage,
+        televerse_le: new Date().toISOString(), revoque_le: null, remplace_par_document_id: null });
+      // Conséquence serveur simulée, vérifiée réellement dans le SQL comparatif.
+      state.profile.tous_documents_valides = false;
+      return route.fulfill({ headers, json: { success: true, document_id: 'diplome-remplace-en-attente', idempotent: false } });
+    });
+    await page.route('**/functions/v1/verify-document', async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.search !== '' || remplacements !== 1 || verifications !== 0
+        || request.postData() !== JSON.stringify({ document_id: 'diplome-remplace-en-attente' })) {
+        state.unknown.push('Vérification hors remplacement de simulation');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      verifications++;
+      return route.fulfill({ headers, json: { verdict: 'EN_ATTENTE' } });
+    });
+
+    await page.clock.install();
+    await entrer(page, 'connexion');
+    const checklist = page.getByRole('button', { name: /prochaine étape : Tes documents$/ });
+    await expect(checklist).toContainText('Il te reste 1 document');
+    const urlDashboard = page.url();
+    let navigations = 0;
+    page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++; });
+    const lecturesAvant = state.calls.filter(call => call.name === 'fn_dashboard_soignant_complet').length;
+    // Le cache profil reste true et ses objets inchangés. Seule la preuve
+    // distante évolue : le succès du polling existant doit rafraîchir la checklist.
+    documents[0].profession_certifiee = profession;
+    await page.clock.fastForward(60_001);
+    await expect.poll(() => state.calls.filter(call => call.name === 'fn_dashboard_soignant_complet').length).toBeGreaterThan(lecturesAvant);
+    await expect(checklist).toHaveCount(0);
+    await expect(page.getByText('RPPS Vérifié', { exact: true })).toBeVisible();
+    expect(page.url()).toBe(urlDashboard); expect(navigations).toBe(0);
+    expect(state.profile.tous_documents_valides).toBe(true);
+    await preuve(page, `${profession}-dashboard-validation-distante-sans-navigation`, info, true);
+
+    await aller(page, '/soignant/mes-documents');
+    await expect(page.getByText(/Tous tes documents obligatoires sont à jour/)).toBeVisible();
+    await page.getByRole('button', { name: 'Remplacer', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '📤 Téléverser', exact: true });
+    const choixFichier = dialog.locator('input[type=file][accept^="application/pdf"]');
+    // Le composant vide input.value après onChange. Capturer notre seul File
+    // avant son handler, sans global window ni interception de l'API produit.
+    await choixFichier.evaluate((input: HTMLInputElement) => {
+      const cible = input as HTMLInputElement & {
+        preuveFichierFictif?: Promise<{ name: string; type: string; size: number; bytes: number[] } | null>;
+      };
+      input.addEventListener('change', () => {
+        const selection = input.files?.[0];
+        cible.preuveFichierFictif = selection
+          ? selection.arrayBuffer().then(buffer => ({ name: selection.name, type: selection.type,
+            size: selection.size, bytes: Array.from(new Uint8Array(buffer)) }))
+          : Promise.resolve(null);
+      }, { capture: true, once: true });
+    });
+    await choixFichier.setInputFiles(fichier);
+    await expect(dialog).toContainText(fichier.name);
+    // Lecture de notre unique File entièrement fictif, jamais d'un document
+    // personnel : ne déplacer aucune assertion d'octets vers une simple taille.
+    const fichierSelectionne = await choixFichier.evaluate(async (input: HTMLInputElement) => {
+      const cible = input as HTMLInputElement & {
+        preuveFichierFictif?: Promise<{ name: string; type: string; size: number; bytes: number[] } | null>;
+      };
+      if (!cible.preuveFichierFictif) throw new Error('La sélection fictive attendue n’a pas été capturée.');
+      try { return await cible.preuveFichierFictif; }
+      finally { delete cible.preuveFichierFictif; }
+    });
+    expect(fichierSelectionne).toEqual({ name: fichier.name, type: fichier.mimeType,
+      size: fichier.buffer.length, bytes: Array.from(fichier.buffer) });
+    fichierSelectionneVerifie = true;
+    await dialog.getByRole('button', { name: 'Téléverser', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText(/Tous tes documents obligatoires sont à jour/)).toHaveCount(0);
+    await expect(page.getByText(fichier.name, { exact: false })).toBeVisible();
+    await attendreAPI(page);
+    expect(uploads).toBe(1); expect(remplacements).toBe(1); expect(verifications).toBe(1);
+    expect(state.profile).toMatchObject({ tous_documents_valides: false, rpps_verifie: true });
+    await aller(page, '/soignant/tableau-de-bord');
+    await expect(checklist).toContainText('Il te reste 1 document');
+    await expect(page.getByText('RPPS Vérifié', { exact: true })).toBeVisible();
+    await recharger(page);
+    await expect(checklist).toContainText('Il te reste 1 document');
+    await preuve(page, `${profession}-remplacement-cache-invalide-recharge-simulation`, info, true);
+    expect(state.calls.filter(call => /generate-invoice|accepter_mission|signer_contrat/.test(call.name))).toEqual([]);
+    expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
+    expect(consoleErrors).toEqual([]); expect(failedRequests).toEqual([]);
+    await info.attach('rafraichissement-et-remplacement-simules', { body: JSON.stringify({ profession,
+      refreshWithoutNavigation: true, uploads, remplacements, verifications, moteur, formeCorpsStockage, fichierSelectionneVerifie,
+      cacheInvalidationSimulated: true, realSqlCacheVerifiedHere: false, officialQualificationVerified: false }), contentType: 'application/json' });
+  });
+}
+
+for (const profession of ['IADE', 'IBODE']) {
   test(`ETABLISSEMENT ${profession} — états FIRST_COME sans attribution puis contrat, réponses simulées`, async ({ page }, info) => {
     const { etat } = await simulerEtablissement(page);
     etat.donnees = true;
@@ -109,7 +268,9 @@ for (const profession of ['IADE', 'IBODE']) {
     // maybeSingle transforme normalement une réponse vide [] en null ; ne pas
     // fabriquer un HTTP406 dans ce scénario où aucun contrat employeur n'existe.
     etat.overrides.set('contrats_travail_missions', []);
-    etat.overrides.set('fn_soignant_pour_etablissement', { id: idsEtablissement.soignant, prenom: 'Camille', nom: 'Spécialité fictive', profession, score_fiabilite: null, total_missions_terminees: 0 });
+    const profilSoignant = { id: idsEtablissement.soignant, prenom: 'Camille', nom: 'Spécialité fictive', profession,
+      score_fiabilite: null, total_missions_terminees: 0, rpps_verifie: true, tous_documents_valides: true };
+    let lecturesProfil = 0;
     let contrat: Record<string, unknown> | null = null;
     let lecturesContrat = 0;
     let lecturesPlanningContrat = 0;
@@ -121,6 +282,19 @@ for (const profession of ['IADE', 'IBODE']) {
     const failedRequests: string[] = [];
     page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
     page.on('requestfailed', request => failedRequests.push(`${request.method()} ${new URL(request.url()).pathname}`));
+    await page.route('**/rest/v1/rpc/fn_soignant_pour_etablissement', async route => {
+      const request = route.request(), url = new URL(request.url());
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (request.method() !== 'POST' || request.headers().authorization !== 'Bearer fixture-auth'
+        || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.search !== ''
+        || request.postData() !== JSON.stringify({ p_soignant_id: idsEtablissement.soignant })) {
+        etat.inconnues.push('Lecture du profil hors soignant de simulation');
+        return route.fulfill({ status: 501, headers, json: { error: 'Hors simulation' } });
+      }
+      lecturesProfil++; etat.appels.push('POST fn_soignant_pour_etablissement');
+      return route.fulfill({ headers, json: profilSoignant });
+    });
     await page.route('**/rest/v1/rpc/fn_mes_permissions_etab', async route => {
       const request = route.request();
       const url = new URL(request.url());
@@ -269,11 +443,29 @@ for (const profession of ['IADE', 'IBODE']) {
     expect(appelsContexte.filter(appel => appel.nom === 'fn_obtenir_conversation')).toHaveLength(1);
     expect(appelsContexte.some(appel => appel.nom === 'fn_etat_pointage_mission')).toBe(true);
     expect(lecturesPermissions).toContain('scope');
+    // L'employeur ne remplace pas les documents du soignant. Sa lecture du
+    // profil doit refléter le cache serveur invalidé par un remplacement,
+    // simulé ici et prouvé séparément avec la vraie RPC sous rollback.
+    etat.overrides.set('missions', [mission]);
+    await page.getByRole('link', { name: 'Camille Spécialité fictive', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/etablissement/soignants/${idsEtablissement.soignant}$`));
+    await expect(page.getByRole('heading', { name: 'Conformité', exact: true })).toBeVisible();
+    await expect(page.getByText('Complets', { exact: true })).toBeVisible();
+    const lecturesProfilAvant = lecturesProfil;
+    profilSoignant.tous_documents_valides = false;
+    await stabiliserLectures(page); await page.reload();
+    await expect(page.getByRole('heading', { name: 'Conformité', exact: true })).toBeVisible();
+    await expect(page.getByText('À compléter', { exact: true })).toBeVisible();
+    await expect(page.getByText('Complets', { exact: true })).toHaveCount(0);
+    expect(lecturesProfil).toBeGreaterThan(lecturesProfilAvant);
+    expect(profilSoignant.rpps_verifie).toBe(true);
+    await preuveEtablissement(page, `${profession}-etab-cache-invalide-apres-remplacement-simule`, info);
     expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
     expect(etat.erreurs).toEqual([]); expect(etat.inconnues).toEqual([]);
     expect(consoleErrors).toEqual([]); expect(failedRequests).toEqual([]);
     await info.attach('etats-attribution-simules', { body: JSON.stringify({ profession, modeAttribution: 'FIRST_COME',
       refusalExecutedInBrowser: false, realAssignmentVerified: false, contractSigned: false,
-      lecturesContrat, lecturesPlanningContrat, lecturesSuiviContrat, appelsContexte, lecturesPermissions }), contentType: 'application/json' });
+      replacementCacheInvalidationSimulated: true, realReplacementExecutedHere: false,
+      lecturesContrat, lecturesPlanningContrat, lecturesSuiviContrat, lecturesProfil, appelsContexte, lecturesPermissions }), contentType: 'application/json' });
   });
 }

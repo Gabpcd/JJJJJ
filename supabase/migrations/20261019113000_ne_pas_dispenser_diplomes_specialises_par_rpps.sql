@@ -83,6 +83,64 @@ $_$;
 
 COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense RPPS_ADELI et DIPLOME hors IADE/IBODE ; les diplômes spécialisés exigent profession_certifiee correspondante. ADELI seul : dispense RPPS_ADELI uniquement.';
 
+-- Départ LIVE STAGE/PROD MD5 prosrc524f4ef09befb069b6590388e34c3f8e.
+-- Aucun changement de propriétaire, ACL, configuration ou catégorie d'inventaire.
+DO $cache_recalcul_preflight$
+BEGIN
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.fn_calculer_tous_documents_valides(uuid)'::regprocedure)
+       IS DISTINCT FROM '524f4ef09befb069b6590388e34c3f8e'
+    OR has_function_privilege('authenticated','public.fn_calculer_tous_documents_valides(uuid)','EXECUTE')
+    OR has_function_privilege('anon','public.fn_calculer_tous_documents_valides(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'CACHE_RECALCUL_SOURCE_OR_ACL_CHANGED'; END IF;
+  -- Si l'inventaire connaît cette primitive, ne modifier que son empreinte.
+  IF EXISTS (SELECT 1 FROM private.security_definer_inventory
+      WHERE signature IN ('fn_calculer_tous_documents_valides(uuid)','public.fn_calculer_tous_documents_valides(uuid)')
+        AND definition_md5 IS DISTINCT FROM '524f4ef09befb069b6590388e34c3f8e') THEN
+    RAISE EXCEPTION 'CACHE_RECALCUL_INVENTORY_CHANGED'; END IF;
+END;
+$cache_recalcul_preflight$;
+CREATE OR REPLACE FUNCTION public.fn_calculer_tous_documents_valides(p_soignant_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  v_type_exercice text;
+  v_regime text;
+  v_system_update_precedent text;
+BEGIN
+  IF p_soignant_id IS NULL THEN RETURN; END IF;
+  SELECT type_exercice INTO v_type_exercice
+  FROM public.soignants
+  WHERE id = p_soignant_id AND supprime_le IS NULL;
+  IF NOT FOUND THEN RETURN; END IF;
+
+  -- Un profil MIXTE doit être prêt pour son régime le plus exigeant. La règle
+  -- mission continuera de relire le régime réel au moment de l'affectation.
+  v_regime := CASE WHEN upper(COALESCE(v_type_exercice, 'SALARIE')) IN ('LIBERAL', 'MIXTE')
+    THEN 'LIBERAL' ELSE 'SALARIE' END;
+  -- Contexte limité à cette seule écriture calculée, jamais laissé au JWT.
+  v_system_update_precedent := COALESCE(current_setting('jolene.system_update', true), '');
+  PERFORM set_config('jolene.system_update', 'true', true);
+  BEGIN
+    UPDATE public.soignants
+      SET tous_documents_valides = public.fn_documents_ok_pour_mission(p_soignant_id, v_regime),
+          modifie_le = now()
+      WHERE id = p_soignant_id;
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('jolene.system_update', v_system_update_precedent, true);
+    RAISE;
+  END;
+  PERFORM set_config('jolene.system_update', v_system_update_precedent, true);
+END;
+$function$;
+UPDATE private.security_definer_inventory
+SET definition_md5 = (SELECT md5(prosrc) FROM pg_proc
+    WHERE oid='public.fn_calculer_tous_documents_valides(uuid)'::regprocedure), recense_le=now()
+WHERE signature IN ('fn_calculer_tous_documents_valides(uuid)','public.fn_calculer_tous_documents_valides(uuid)')
+  AND definition_md5='524f4ef09befb069b6590388e34c3f8e';
+
 -- Corriger uniquement le cache dérivé devenu inexact par l'ancienne dispense.
 -- Le calcul canonique ne modifie que tous_documents_valides et modifie_le ;
 -- aucun verdict RPPS, document, statut de compte ou attribution n'est révoqué.
