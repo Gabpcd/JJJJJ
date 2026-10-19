@@ -59,7 +59,13 @@ async function fixture() {
     stripe_payment_flow_claims: [{ resource_key: `FACTURE:${F}`, flow: 'CHECKOUT_INVOICE', owner_token: `invoice:${F}`,
       stripe_checkout_session_id: 'cs_test_Synthetic', stripe_payment_intent_id: null }],
     email_queue: bodies.map((body, i) => ({ id: Q[i], type: 'FACTURATION_DOCUMENT', destinataire_id: E, data: structuredClone(body), statut: 'EN_ATTENTE' })),
-    journaux_audit: [], emails_envoyes: [], preferences_notifications: [],
+    journaux_audit: [], preferences_notifications: [],
+    // Ancre créée explicitement par l'opérateur après preuve privée vierge.
+    // Aucun provider ID ni succès n'est déclaré à ce stade.
+    emails_envoyes: bodies.map((body, i) => ({ type: body.type, destinataire_id: E, destinataire_email: 'gabrielle@jolene.app',
+      idempotency_key: `${i ? 'facture-payee' : 'facture-emise'}-commission:${F}:${E}`,
+      sujet: '[TEST] Ancre de tentative de transport', statut: 'ERREUR', provider_id: null,
+      cree_le: new Date(now - 1000).toISOString() })),
   };
   const state = { preference: true, loseProviderResponse: false, classificationError: false };
   const sb = {
@@ -72,7 +78,15 @@ async function fixture() {
       const q = { select() { return q; }, eq(k, v) { filters.push(row => row[k] === v); return q; },
         neq(k, v) { filters.push(row => row[k] !== v); return q; }, limit(n) { limit = n; return q; },
         insert(value) { write = value; mutations.push(`insert:${table}`); return q; },
-        upsert(value) { write = value; mutations.push(`upsert:${table}`); return q; },
+        upsert(value) {
+          write = value; mutations.push(`upsert:${table}`);
+          if (table === 'emails_envoyes') {
+            const old = rows[table].find(row => row.idempotency_key === value.idempotency_key);
+            if (old) Object.assign(old, structuredClone(value));
+            else rows[table].push({ ...structuredClone(value), cree_le: new Date().toISOString() });
+          }
+          return q;
+        },
         async single() { const r = result(); return { data: r.data.length === 1 ? r.data[0] : null, error: r.data.length === 1 ? null : { message: 'synthetic missing' } }; },
         maybeSingle() { return q.single(); },
         then(yes, no) { return Promise.resolve(write ? { data: null, error: null } : result()).then(yes, no); } };
@@ -85,6 +99,7 @@ async function fixture() {
         const old = ledger.get(args.p_idempotency_key);
         if (old?.fingerprint !== undefined && old.fingerprint !== args.p_request_fingerprint) return { data: { statut: 'CONFLIT' }, error: null };
         if (old?.statut === 'ENVOYE') return { data: { statut: 'DEJA_ENVOYE' }, error: null };
+        if (old?.statut === 'EN_COURS') return { data: { statut: 'EN_COURS' }, error: null };
         ledger.set(args.p_idempotency_key, { fingerprint: args.p_request_fingerprint, statut: 'EN_COURS' });
         state.afterReservation?.();
         return { data: { statut: 'RESERVE' }, error: null };
@@ -181,6 +196,15 @@ for (const [label, change] of [
   ['plusieurs missions', s => { s.rows.factures[0].nombre_missions = 2; }],
   ['avoir imputé', s => { s.rows.factures[0].montant_avoirs_imputes = 1; }],
   ['trace Connect', s => { s.rows.stripe_transfers.push({ id: F, mission_id: M }); }],
+  ['ancre absente', s => { s.rows.emails_envoyes = []; }],
+  ['autre clé ancre', s => { s.rows.emails_envoyes[0].idempotency_key += ':foreign'; }],
+  ['autre destinataire ancre', s => { s.rows.emails_envoyes[0].destinataire_id = S; }],
+  ['autre email ancre', s => { s.rows.emails_envoyes[0].destinataire_email = 'foreign@example.invalid'; }],
+  ['autre type ancre', s => { s.rows.emails_envoyes[0].type = 'FACTURE_PAYEE'; }],
+  ['date ancre absente', s => { s.rows.emails_envoyes[0].cree_le = null; }],
+  ['date ancre invalide', s => { s.rows.emails_envoyes[0].cree_le = 'invalid'; }],
+  ['ancre future', s => { s.rows.emails_envoyes[0].cree_le = new Date(Date.now() + 60_000).toISOString(); }],
+  ['ancre expirée', s => { s.rows.emails_envoyes[0].cree_le = new Date(Date.now() - 20 * 3600_000).toISOString(); }],
 ]) test(`ferme ${label}`, async () => { const s = await fixture(); change(s); await assert.rejects(() => s.admit()); assert.equal(s.posts.length, 0); });
 
 for (const [label, change] of [
@@ -225,7 +249,62 @@ test('vrai handler : refus du conflit de fingerprint avant tout fournisseur', as
 });
 test('vrai handler : résultat fournisseur interrompu, reprise même clé/corps sans deuxième livraison simulée', async () => {
   const s = await fixture(), invoke = handler(s); s.state.loseProviderResponse = true;
+  const created = s.rows.emails_envoyes[0].cree_le;
   assert.equal((await invoke()).status, 502); assert.equal((await invoke()).status, 200);
   assert.equal(s.posts.length, 2); assert.equal(s.provider.size, 1);
   assert.equal(s.posts[0].key, s.posts[1].key); assert.deepEqual(s.posts[0].body, s.posts[1].body);
+  assert.equal(s.rows.emails_envoyes[0].cree_le, created);
+});
+test('contrôles de source sans ancre : aucune admission ni création implicite', async () => {
+  const s = await fixture(); s.rows.emails_envoyes = [];
+  const scope = await h.stagingInvoiceEmailScope(s.sb, s.requestBody(), true, key => s.env[key]);
+  assert.equal(scope.emailId, Q[0]); assert.equal(scope.key, s.requestBody().idempotency_key);
+  await assert.rejects(() => s.admit()); assert.deepEqual(s.mutations, []);
+  assert.equal(s.rows.emails_envoyes.length, 0);
+});
+test('admission concurrente et double relecture : ancre serveur conservée, aucune mutation', async () => {
+  const s = await fixture(), before = structuredClone(s.rows.emails_envoyes);
+  await Promise.all([s.admit(), s.admit()]);
+  await s.admit(); assert.deepEqual(s.rows.emails_envoyes, before); assert.deepEqual(s.mutations, []);
+});
+test('nouvelle capacité : reprise ambiguë à 19 h, même clé et origine temporelle conservées', async () => {
+  const s = await fixture(), invoke = handler(s); s.state.loseProviderResponse = true;
+  assert.equal((await invoke()).status, 502);
+  // Passage du temps simulé côté base ; aucune date ne vient du payload client.
+  const first = new Date(Date.now() - 19 * 3600_000).toISOString(); s.rows.emails_envoyes[0].cree_le = first;
+  s.configure(c => { c.createdAt = new Date(Date.now() - 100).toISOString(); c.expiresAt = new Date(Date.now() + 59 * 60_000).toISOString(); c.manifestSha256 = 'c'.repeat(64); });
+  assert.equal((await invoke()).status, 200);
+  assert.equal(s.provider.size, 1); assert.equal(s.posts.length, 2);
+  assert.equal(s.posts[0].key, s.posts[1].key); assert.deepEqual(s.posts[0].body, s.posts[1].body);
+  assert.equal(s.rows.emails_envoyes[0].cree_le, first);
+});
+test('régression P2 : réponse Resend perdue, nouvelle capacité après 21 h refusée avant réservation', async () => {
+  const s = await fixture(), invoke = handler(s); s.state.loseProviderResponse = true;
+  assert.equal((await invoke()).status, 502);
+  assert.equal(s.ledger.get(s.requestBody().idempotency_key).statut, 'ERREUR');
+  assert.equal(s.rows.email_queue[0].statut, 'EN_ATTENTE');
+  const first = new Date(Date.now() - 21 * 3600_000).toISOString(); s.rows.emails_envoyes[0].cree_le = first;
+  s.configure(c => { c.createdAt = new Date(Date.now() - 100).toISOString(); c.expiresAt = new Date(Date.now() + 59 * 60_000).toISOString(); c.manifestSha256 = 'd'.repeat(64); });
+  const reserved = s.calls.filter(x => x === 'rpc:fn_reserver_envoi_email_idempotent').length;
+  assert.equal((await invoke()).status, 500);
+  assert.equal(s.calls.filter(x => x === 'rpc:fn_reserver_envoi_email_idempotent').length, reserved);
+  assert.equal(s.posts.length, 1); assert.equal(s.provider.size, 1);
+  assert.equal(s.rows.emails_envoyes[0].cree_le, first);
+  assert.equal(s.ledger.get(s.requestBody().idempotency_key).statut, 'ERREUR');
+});
+test('ambiguïté historique sans ancre : capacité renouvelée ne recrée aucune origine', async () => {
+  const s = await fixture(), invoke = handler(s); s.state.loseProviderResponse = true;
+  assert.equal((await invoke()).status, 502); s.rows.emails_envoyes = [];
+  s.configure(c => { c.createdAt = new Date(Date.now() - 100).toISOString(); c.manifestSha256 = 'e'.repeat(64); });
+  const calls = s.calls.length; assert.equal((await invoke()).status, 500);
+  assert.equal(s.posts.length, 1); assert.equal(s.rows.emails_envoyes.length, 0);
+  assert.equal(s.calls.slice(calls).includes('rpc:fn_reserver_envoi_email_idempotent'), false);
+});
+test('vrai handler concurrent : même ancre et ledger, au plus une livraison simulée', async () => {
+  const s = await fixture(), invoke = handler(s), first = s.rows.emails_envoyes[0].cree_le;
+  const results = await Promise.all([invoke(), invoke()]);
+  assert.ok(results.every(result => [200, 202].includes(result.status)));
+  assert.equal(s.posts.length, 1); assert.equal(s.provider.size, 1);
+  assert.equal(s.rows.emails_envoyes.filter(row => row.type === 'FACTURE_EMISE').length, 1);
+  assert.equal(s.rows.emails_envoyes[0].cree_le, first);
 });

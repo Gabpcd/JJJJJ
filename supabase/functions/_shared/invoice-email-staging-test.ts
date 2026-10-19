@@ -63,10 +63,10 @@ export async function invoiceEmailBodySha256(value: unknown): Promise<string> {
   return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
 }
 
-/** Aucune mutation, aucun fournisseur ; la réservation reste celle de send-email. */
-export async function admitStagingInvoiceEmail(
+/** Contrôles complets de source, sans création d'ancre ni droit de transport. */
+export async function stagingInvoiceEmailScope(
   sb: Client, body: Row, isServiceRole: boolean, get: (key: string) => string | undefined, now = Date.now(),
-): Promise<{ recipient: string } | null> {
+): Promise<{ recipient: string; emailId: string; key: string; type: string } | null> {
   if (!isServiceRole || !TYPES.includes(body.type) || !get('INVOICE_EMAIL_STAGING_TEST_RUN')) return null;
   const config = invoiceEmailStagingConfig(get, now)!;
   must(exactKeys(body, ['type', 'destinataire_id', 'data', 'idempotency_key'])
@@ -108,5 +108,30 @@ export async function admitStagingInvoiceEmail(
         || claim.data.stripe_payment_intent_id === invoice.data.stripe_payment_intent_id));
   }
   must(Date.now() < Date.parse(config.expiresAt));
-  return { recipient: RECIPIENT };
+  return { recipient: RECIPIENT, emailId: event.emailId, key, type: body.type };
+}
+
+/**
+ * Lecture seule : l'opérateur crée l'ancre TEST après un préflight privé vierge.
+ * Son cree_le serveur est conservé par les upserts du transport ; une capacité
+ * renouvelée ne peut donc pas rouvrir une tentative ambiguë hors des 20 heures.
+ * Une ancienne ambiguïté sans ancre reste refusée, jamais réinitialisée ici.
+ */
+export async function admitStagingInvoiceEmail(
+  sb: Client, body: Row, isServiceRole: boolean, get: (key: string) => string | undefined, now = Date.now(),
+): Promise<{ recipient: string } | null> {
+  const scope = await stagingInvoiceEmailScope(sb, body, isServiceRole, get, now);
+  if (!scope) return null;
+  const anchor = await sb.from('emails_envoyes')
+    .select('idempotency_key,destinataire_id,destinataire_email,type,cree_le,statut,provider_id')
+    .eq('idempotency_key', scope.key).single();
+  must(!anchor.error && anchor.data?.idempotency_key === scope.key
+    && anchor.data.destinataire_id === ETABLISSEMENT && anchor.data.destinataire_email === RECIPIENT
+    && anchor.data.type === scope.type && ['ERREUR', 'ENVOYE', 'DELIVRE', 'OUVERT'].includes(anchor.data.statut)
+    && (anchor.data.provider_id === null || typeof anchor.data.provider_id === 'string')
+    && typeof anchor.data.cree_le === 'string');
+  const firstAttempt = Date.parse(anchor.data.cree_le);
+  must(Number.isFinite(firstAttempt) && firstAttempt <= Date.now() + 30_000
+    && Date.now() - firstAttempt < 20 * 3600_000);
+  return { recipient: scope.recipient };
 }
