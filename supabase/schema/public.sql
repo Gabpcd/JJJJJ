@@ -56165,7 +56165,7 @@ ALTER FUNCTION "public"."fn_signer_cession_creance"("p_facture_honoraire_id" "uu
 CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_etablissement"("p_contrat_id" "uuid", "p_signature_image" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth', 'extensions'
-    AS $$
+    AS $_$
 DECLARE
   v_uid uuid := auth.uid();
   v_contrat public.contrats_mission%ROWTYPE;
@@ -56222,7 +56222,7 @@ BEGIN
   WHERE id=p_contrat_id;
   RETURN jsonb_build_object('success',true);
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_signer_contrat_etablissement"("p_contrat_id" "uuid", "p_signature_image" "text") OWNER TO "postgres";
@@ -56482,7 +56482,7 @@ ALTER FUNCTION "public"."fn_signer_contrat_service"("p_version" "text", "p_ip" "
 CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_soignant"("p_contrat_id" "uuid", "p_signature_image" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth', 'extensions'
-    AS $$
+    AS $_$
 DECLARE
   v_uid uuid := auth.uid();
   v_contrat public.contrats_mission%ROWTYPE;
@@ -56532,7 +56532,7 @@ BEGIN
   WHERE id=p_contrat_id;
   RETURN jsonb_build_object('success',true);
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_signer_contrat_soignant"("p_contrat_id" "uuid", "p_signature_image" "text") OWNER TO "postgres";
