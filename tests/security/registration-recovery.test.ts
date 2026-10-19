@@ -35,6 +35,8 @@ const endpoints = [
  */
 function harness(endpoint: typeof endpoints[number], options: {
   progressive?: boolean;
+  missingCgu?: boolean;
+  missingCgv?: boolean;
   draftReadErrors?: number;
   finalization?: 'success' | 'committed_response_lost' | 'first_attempt_unavailable' | 'unavailable';
   existingRole?: BusinessRole;
@@ -42,6 +44,8 @@ function harness(endpoint: typeof endpoints[number], options: {
   const roleType = (role: BusinessRole): AccountType => role === 'SOIGNANT'
     ? 'SOIGNANT' : role === 'ADMIN_PLATEFORME' ? 'ADMIN' : 'ETABLISSEMENT';
   const userId = '69000000-0000-4000-8000-000000000003';
+  const audits: Record<string, any>[] = [];
+  const profiles: Record<string, any>[] = [];
   const state = {
     authExists: true,
     draftExists: options.progressive !== false,
@@ -122,7 +126,7 @@ function harness(endpoint: typeof endpoints[number], options: {
         const read = async (): Promise<Result> => {
           if (table === 'parcours_inscription') {
             if (draftReadErrors-- > 0) return failure();
-            return ok(state.draftExists ? { user_id: userId } : null);
+            return ok(state.draftExists ? { user_id: userId, consentement_cgu_le: options.missingCgu ? null : '2026-10-19T10:00:00Z', consentement_cgv_le: options.missingCgv ? null : '2026-10-19T10:00:00Z' } : null);
           }
           if (table === 'types_comptes_auth') return ok({
             user_id: userId,
@@ -140,8 +144,9 @@ function harness(endpoint: typeof endpoints[number], options: {
         };
         return query;
       },
-      insert: async () => {
-        if (table === endpoint.profileTable) state.profileExists = true;
+      insert: async (row: Record<string, any>) => {
+        if (table === endpoint.profileTable) { state.profileExists = true; profiles.push(row); }
+        else if (table === 'journaux_audit') audits.push(row);
         else if (table !== 'journaux_audit') throw new Error(`Unexpected INSERT: ${table}`);
         return ok();
       },
@@ -195,7 +200,7 @@ function harness(endpoint: typeof endpoints[number], options: {
   if (!handler) throw new Error('The Edge Function did not register a handler');
   const invoke = handler;
   return {
-    state, rpc, deleteAuth, deleteProfile,
+    state, rpc, deleteAuth, deleteProfile, audits, profiles,
     request: (body: unknown = endpoint.validBody) => invoke(new Request(`https://registration.test.invalid/${endpoint.name}`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-session', 'Content-Type': 'application/json' },
@@ -265,5 +270,38 @@ describe.each(endpoints)('$name — reprise de l’inscription', (endpoint) => {
     expect(h.state).toMatchObject({ authExists: true, profileExists: true, role: existingRole });
     expect(h.deleteAuth).not.toHaveBeenCalled();
     expect(h.deleteProfile).not.toHaveBeenCalled();
+  });
+});
+
+
+describe.each(endpoints)('$name — provenance consentement, compatibilité conservée', (endpoint) => {
+  it.each([undefined, false, true])('sans parcours, conserve le client classique sans attester les booléens du POST (%s)', async (claim) => {
+    const h = harness(endpoint, { progressive: false });
+    const body = { ...endpoint.validBody, ...(claim === undefined ? {} : { cgu: claim, cgv: claim }) };
+    expect((await h.request(body)).status).toBe(200);
+    expect(h.state).toMatchObject({ draftExists: false, profileExists: true, role: endpoint.role });
+    expect(h.profiles).toHaveLength(1);
+    expect(h.audits.filter(a => a.action === 'RGPD_CONSENTEMENT_DONNE')).toEqual([]);
+    expect(h.audits.find(a => a.action === 'INSCRIPTION')?.details.consentement_atteste).toBe(false);
+  });
+  it('conserve les dates du consentement durable progressif sans inventer de version', async () => {
+    const h = harness(endpoint);
+    expect((await h.request()).status).toBe(200);
+    const rows = h.audits.filter(a => a.action === 'RGPD_CONSENTEMENT_DONNE');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].details).toMatchObject({ cgu: true, source: 'parcours_inscription', consentement_cgu_le: '2026-10-19T10:00:00Z' });
+    if (endpoint.accountType === 'ETABLISSEMENT') expect(rows[0].details).toMatchObject({ cgv: true, consentement_cgv_le: '2026-10-19T10:00:00Z' });
+    expect(rows[0].details).not.toHaveProperty('version');
+    expect(h.audits.find(a => a.action === 'INSCRIPTION')?.details.consentement_atteste).toBe(true);
+  });
+  it('une date CGU absente ne devient pas une acceptation', async () => {
+    const h = harness(endpoint, { missingCgu: true });
+    expect((await h.request()).status).toBe(200);
+    expect(h.audits.filter(a => a.action === 'RGPD_CONSENTEMENT_DONNE')).toEqual([]);
+  });
+  it('CGV absent : requis pour attester E, pas pour attester S', async () => {
+    const h = harness(endpoint, { missingCgv: true });
+    expect((await h.request()).status).toBe(200);
+    expect(h.audits.filter(a => a.action === 'RGPD_CONSENTEMENT_DONNE')).toHaveLength(endpoint.accountType === 'ETABLISSEMENT' ? 0 : 1);
   });
 });

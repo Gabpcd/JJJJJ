@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     }
     suppressionAuthAutorisee = reservationResult.fresh === true;
     const { data: parcours, error: parcoursError } = await supabaseAdmin
-      .from('parcours_inscription').select('user_id').eq('user_id', user.id).maybeSingle();
+      .from('parcours_inscription').select('user_id, consentement_cgu_le, consentement_cgv_le').eq('user_id', user.id).maybeSingle();
     if (parcoursError) {
       await supabaseAdmin.rpc('fn_liberer_inscription_progressive', {
         p_user_id: user.id, p_claim_token: claimToken,
@@ -221,6 +221,9 @@ Deno.serve(async (req) => {
       return errorResponse(cors, 503, 'ACCOUNT_RESERVATION_UNAVAILABLE', 'Votre inscription est conservée. Réessayez dans quelques instants.');
     }
     parcoursProgressif = !!parcours;
+    // Les clients classiques ne transmettaient pas de preuve serveur. Leur
+    // inscription reste compatible, sans fabriquer une acceptation en audit.
+    const consentementInscriptionAtteste = !!parcours?.consentement_cgu_le;
 
 
     const body = await req.json();
@@ -367,15 +370,21 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'INSCRIPTION',
       type_ressource: 'soignant', id_ressource: user.id,
-      details: { evenement: 'inscription', profession, rpps_verifie: !!rpps && rppsServerVerifie },
+      details: { evenement: 'inscription', profession, rpps_verifie: !!rpps && rppsServerVerifie, consentement_atteste: consentementInscriptionAtteste },
       navigateur_acteur: body.navigateur || null,
     });
-    await supabaseAdmin.from('journaux_audit').insert({
-      acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'RGPD_CONSENTEMENT_DONNE',
-      type_ressource: 'soignant', id_ressource: user.id,
-      details: { type: 'inscription', cgu: true, confidentialite: true },
-      navigateur_acteur: body.navigateur || null,
-    });
+    if (consentementInscriptionAtteste) {
+      await supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'RGPD_CONSENTEMENT_DONNE',
+        type_ressource: 'soignant', id_ressource: user.id,
+        details: {
+          type: 'inscription', cgu: true, confidentialite: true,
+          source: 'parcours_inscription',
+          consentement_cgu_le: parcours.consentement_cgu_le,
+        },
+        navigateur_acteur: body.navigateur || null,
+      });
+    }
     try {
       await supabaseAdmin.functions.invoke('send-email', {
         body: { type: 'BIENVENUE_SOIGNANT', destinataire_id: user.id,
