@@ -406,3 +406,22 @@ Ajouter un nouveau test régression : commit fix de référence en commentaire.
 ### Identifiants des fixtures techniques
 
 Les deux comptes fixes utilisent exclusivement le secret privé GitHub `PLAYWRIGHT_FIXTURE_PASSWORD`, injecté dans `PLAYWRIGHT_TEST_PASSWORD`. Aucun repli public. Générer 32 octets aléatoires, encodés en 64 caractères hexadécimaux ; ne jamais les copier dans un ticket, un rapport ou le dépôt. La rotation manuelle est décrite dans `docs/rotation-fixtures-playwright.md`. Les secrets administrateur, App Review et load-tests staging restent distincts et inchangés.
+
+### Originaux des contrats de fixtures
+
+Le helper rend les contrats par l’Edge réelle, puis vérifie HTML, empreinte et
+octets Storage avant les signatures. La signature dessinée reste synthétique.
+Avant de purger une mission technique dont les acteurs TEST ont été vérifiés,
+le cleanup écrit ses seuls chemins canoniques dans
+`playwright-public/fixture-contract-cleanup/<projectRef>/*.json` (écriture
+atomique et synchronisée). Ces reçus contiennent uniquement les identifiants
+TEST, le chemin, l’heure et, en CI, le SHA source ; aucun HTML ni jeton.
+
+Storage est retiré seulement après confirmation de l’absence de la mission,
+de ses contrats et de toute référence aux chemins. Une erreur ou une
+quarantaine conserve le registre. Le setup suivant du même checkout reprend
+les entrées du même projet. Les résumés CI archivent aussi ce sous-dossier,
+y compris après échec/annulation si le runner peut encore exécuter l’étape.
+Un runner neuf ne télécharge pas automatiquement un ancien artefact : sa
+restauration ciblée dans ce même sous-dossier reste explicite. Une machine
+perdue avant l’archivage ne constitue pas une preuve de nettoyage accompli.

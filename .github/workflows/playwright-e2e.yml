@@ -362,11 +362,13 @@ jobs:
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Résumé public sans sessions ni contenu de page
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
           name: playwright-summary-chromium
-          path: playwright-public/*.json
+          path: |
+            playwright-public/*.json
+            playwright-public/fixture-contract-cleanup/**/*.json
           retention-days: 7
 
   # push main — matrix complète (cross-browser + mobile)
@@ -494,9 +496,11 @@ jobs:
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Résumé public sans sessions ni contenu de page
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
           name: playwright-summary-${{ matrix.project }}
-          path: playwright-public/*.json
+          path: |
+            playwright-public/*.json
+            playwright-public/fixture-contract-cleanup/**/*.json
           retention-days: 7

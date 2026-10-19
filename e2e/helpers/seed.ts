@@ -12,6 +12,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createHash } from 'node:crypto';
+import { memoriserOriginauxContratsFixture, supprimerOriginauxFixtureApresPurge } from './contrat-fixture-storage';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
 import { isPgrst202EligibilityFallbackAllowed } from './liberal-eligibility-policy';
@@ -391,6 +393,18 @@ export async function cleanupEphemeralVerifiedCaregiver(
     missionIds.add(candidature.mission_id);
   }
 
+  // Une préparation précédente peut avoir détaché l'assignation avant un
+  // échec de capture du registre. Le contrat conserve alors le lien durable
+  // à retrouver avant toute seconde passe de suppression du soignant.
+  const { data: contrats, error: contratsError } = await admin
+    .from('contrats_mission' as any)
+    .select('mission_id')
+    .eq('soignant_id', fixture.id);
+  if (contratsError) erreurs.push(`lecture contrats: ${contratsError.message}`);
+  for (const contrat of (contrats ?? []) as Array<{ mission_id: string }>) {
+    missionIds.add(contrat.mission_id);
+  }
+
   for (const missionId of missionIds) {
     try {
       await cleanupMissionCascade(missionId);
@@ -399,6 +413,12 @@ export async function cleanupEphemeralVerifiedCaregiver(
         `purge mission ${missionId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // Ne pas effacer les seules références durables d'un original dont la
+  // capture ou la purge vient d'échouer, ni son profil/compte Auth.
+  if (erreurs.length > 0) {
+    throw new Error(`[cleanup caregiver] ${erreurs.join(' | ')}`);
   }
 
   // Une mission gelée peut rester en quarantaine sur le backend pré-
@@ -610,41 +630,83 @@ export async function createEphemeralVerifiedCaregiver(
 }
 
 /**
- * Signe le contrat par les deux vraies RPC, dans l'ordre métier obligatoire
- * soignant puis établissement, puis confirme l'état final en service_role.
+ * Prépare le véritable original via l'Edge sous la session du soignant TEST,
+ * vérifie ses octets/empreinte/Storage, puis signe par les deux vraies RPC.
+ * Aucun champ de rendu ou de signature n'est écrit directement par la fixture.
  */
 export async function seedContratMissionSigne(
   missionId: string,
   caregiver: Pick<EphemeralVerifiedCaregiver, 'id' | 'email' | 'password'>,
   clients: { caregiver?: SupabaseClient; etablissement?: SupabaseClient } = {},
 ): Promise<string> {
+  if (!caregiver.email.startsWith(EPHEMERAL_CAREGIVER_EMAIL_PREFIX)) {
+    throw new Error('[seed contrat] rendu réservé au soignant Playwright éphémère');
+  }
   const admin = adminClient();
+  const { data: profil, error: profilError } = await admin
+    .from('soignants' as any).select('id, email, est_compte_test')
+    .eq('id', caregiver.id).single();
+  if (profilError || profil?.id !== caregiver.id || profil?.email !== caregiver.email
+    || profil?.est_compte_test !== true) {
+    throw new Error('[seed contrat] profil TEST éphémère non confirmé');
+  }
+  const projectionContrat = 'id, mission_id, soignant_id, statut, signature_soignant, signature_etablissement, contenu_html, hash_document, storage_path, contenu_html_rendu_le';
   const { data: contrat, error: lectureError } = await admin
     .from('contrats_mission' as any)
-    .select('id')
+    .select(projectionContrat)
     .eq('mission_id', missionId)
     .eq('soignant_id', caregiver.id)
     .neq('statut', 'ANNULE')
     .order('cree_le', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (lectureError || !contrat) {
-    throw new Error(
-      `[seed contrat] contrat introuvable: ${lectureError?.message || `${missionId}/${caregiver.id}`}`,
-    );
+  if (lectureError || !contrat || contrat.mission_id !== missionId || contrat.soignant_id !== caregiver.id) {
+    throw new Error('[seed contrat] contrat exact introuvable');
+  }
+  if (contrat.signature_soignant || contrat.signature_etablissement
+    || ['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut)) {
+    throw new Error('[seed contrat] préparation refusée sur un contrat signé ou inactif');
   }
 
-  const contratId = (contrat as { id: string }).id;
-  const signature = 'data:image/png;base64,cGxheXdyaWdodA==';
+  const contratId = contrat.id as string;
   const caregiverClient = clients.caregiver
     ?? await userClient(caregiver.email, caregiver.password);
+  // Même entrée que l'ouverture du contrat dans l'interface. Un refus ou une
+  // réponse ambiguë arrête la préparation : aucun retry ni rendu factice.
+  const { data: generation, error: generationError } = await caregiverClient.functions.invoke(
+    'generate-contrat-mission-pdf', { body: { contrat_id: contratId } },
+  );
+  if (generationError || generation?.success !== true || generation.contrat_id !== contratId) {
+    throw new Error('[seed contrat] rendu canonique non confirmé');
+  }
+  const { data: rendu, error: renduError } = await admin.from('contrats_mission' as any)
+    .select(projectionContrat).eq('id', contratId).single();
+  if (renduError || !rendu || rendu.id !== contratId
+    || rendu.mission_id !== missionId || rendu.soignant_id !== caregiver.id
+    || typeof rendu.contenu_html !== 'string' || !rendu.contenu_html.trim()
+    || /\{\{\s*[^}]+\s*\}\}/.test(rendu.contenu_html)
+    || !/^[a-f0-9]{64}$/.test(rendu.hash_document ?? '')
+    || typeof rendu.storage_path !== 'string' || !rendu.storage_path.startsWith(`${contratId}/`)
+    || !rendu.storage_path.endsWith('.html') || rendu.storage_path.split('/').includes('..')
+    || !rendu.contenu_html_rendu_le || !Number.isFinite(Date.parse(rendu.contenu_html_rendu_le))
+    || generation.hash_document !== rendu.hash_document || generation.storage_path !== rendu.storage_path
+    || createHash('sha256').update(rendu.contenu_html, 'utf8').digest('hex') !== rendu.hash_document) {
+    throw new Error('[seed contrat] preuve du rendu canonique incohérente');
+  }
+  const { data: original, error: originalError } = await admin.storage.from('contrats-signes').download(rendu.storage_path);
+  if (originalError || !original
+    || !Buffer.from(await original.arrayBuffer()).equals(Buffer.from(rendu.contenu_html, 'utf8'))) {
+    throw new Error('[seed contrat] original Storage différent du HTML signé');
+  }
+  // PNG synthétique valide : cette préparation n'atteste aucun geste humain.
+  const signature = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAHUlEQVR4nGP4//8/Az4MAv+hDOw0Xkkgjdd4EAYApPhPsYzjpfQAAAAASUVORK5CYII=';
   const { data: signatureSoignant, error: signatureSoignantError } = await caregiverClient.rpc(
     'fn_signer_contrat_soignant' as any,
     { p_contrat_id: contratId, p_signature_image: signature },
   );
   if (signatureSoignantError || (signatureSoignant as any)?.success !== true) {
     throw new Error(
-      `[seed contrat] signature soignant impossible: ${signatureSoignantError?.message || (signatureSoignant as any)?.error || JSON.stringify(signatureSoignant)}`,
+      `[seed contrat] signature soignant impossible: ${signatureSoignantError?.code || (signatureSoignant as any)?.error_code || 'REPONSE_INVALIDE'}`,
     );
   }
 
@@ -656,13 +718,13 @@ export async function seedContratMissionSigne(
   );
   if (signatureEtabError || (signatureEtab as any)?.success !== true) {
     throw new Error(
-      `[seed contrat] signature établissement impossible: ${signatureEtabError?.message || (signatureEtab as any)?.error || JSON.stringify(signatureEtab)}`,
+      `[seed contrat] signature établissement impossible: ${signatureEtabError?.code || (signatureEtab as any)?.error_code || 'REPONSE_INVALIDE'}`,
     );
   }
 
   const { data: signe, error: signatureError } = await admin
     .from('contrats_mission' as any)
-    .select('id, statut, signature_soignant, signature_etablissement')
+    .select(projectionContrat)
     .eq('id', contratId)
     .single();
   if (
@@ -671,8 +733,11 @@ export async function seedContratMissionSigne(
     || (signe as { statut?: string }).statut !== 'SIGNE_COMPLET'
     || (signe as { signature_soignant?: boolean }).signature_soignant !== true
     || (signe as { signature_etablissement?: boolean }).signature_etablissement !== true
+    || signe.hash_document !== rendu.hash_document || signe.storage_path !== rendu.storage_path
+    || signe.contenu_html !== rendu.contenu_html || signe.contenu_html_rendu_le !== rendu.contenu_html_rendu_le
+    || signe.mission_id !== missionId || signe.soignant_id !== caregiver.id
   ) {
-    throw new Error(`[seed contrat] état final incohérent: ${signatureError?.message || 'signatures incomplètes'}`);
+    throw new Error(`[seed contrat] état final incohérent: ${signatureError?.code || 'signatures ou original incohérents'}`);
   }
   return (signe as { id: string }).id;
 }
@@ -795,7 +860,10 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   if (missionReadError) {
     throw new Error(`[cleanup mission] lecture ${missionId}: ${missionReadError.message}`);
   }
-  if (!mission) return;
+  if (!mission) {
+    await supprimerOriginauxFixtureApresPurge(admin, missionId);
+    return;
+  }
   const intitule = String(mission.intitule ?? '');
   if (!intitule.startsWith('[pw-test:') && !intitule.startsWith('[playwright-test]')) {
     throw new Error(
@@ -803,6 +871,10 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
     );
   }
   const preparation = await preparerMissionTechniquePourPurge(admin, mission);
+
+  // Registre durable avant le premier DELETE, y compris après perte de la
+  // réponse du générateur. Une panne/quarantaine ne perd plus le chemin.
+  await memoriserOriginauxContratsFixture(admin, missionId);
 
   // La descendance financière a deux niveaux de FK : les trois files ci-dessous
   // doivent précéder paiements_escrow, lui-même enfant de la mission.
@@ -953,6 +1025,7 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
     }
     throw new Error(`[cleanup mission] ${missionId}: ${error.message}`);
   }
+  await supprimerOriginauxFixtureApresPurge(admin, missionId);
 }
 
 /** Supprime toutes les données seedées par les helpers (cleanup test) */
