@@ -22768,6 +22768,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_calculer_tous_documents_valides"("p_soig
 DECLARE
   v_type_exercice text;
   v_regime text;
+  v_system_update_precedent text;
 BEGIN
   IF p_soignant_id IS NULL THEN RETURN; END IF;
   SELECT type_exercice INTO v_type_exercice
@@ -22779,10 +22780,19 @@ BEGIN
   -- mission continuera de relire le régime réel au moment de l'affectation.
   v_regime := CASE WHEN upper(COALESCE(v_type_exercice, 'SALARIE')) IN ('LIBERAL', 'MIXTE')
     THEN 'LIBERAL' ELSE 'SALARIE' END;
-  UPDATE public.soignants
-  SET tous_documents_valides = public.fn_documents_ok_pour_mission(p_soignant_id, v_regime),
-      modifie_le = now()
-  WHERE id = p_soignant_id;
+  -- Contexte limité à cette seule écriture calculée, jamais laissé au JWT.
+  v_system_update_precedent := COALESCE(current_setting('jolene.system_update', true), '');
+  PERFORM set_config('jolene.system_update', 'true', true);
+  BEGIN
+    UPDATE public.soignants
+      SET tous_documents_valides = public.fn_documents_ok_pour_mission(p_soignant_id, v_regime),
+          modifie_le = now()
+      WHERE id = p_soignant_id;
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('jolene.system_update', v_system_update_precedent, true);
+    RAISE;
+  END;
+  PERFORM set_config('jolene.system_update', v_system_update_precedent, true);
 END;
 $$;
 
@@ -31409,7 +31419,7 @@ BEGIN
 
   SELECT profession,
          COALESCE(rpps_verifie, false)
-           AND profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE'),
+           AND profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE', 'IADE', 'IBODE'),
          COALESCE(rpps_verifie, false) OR COALESCE(adeli_verifie, false),
          COALESCE(statut_compte::text, 'ACTIF') = 'ACTIF'
            AND COALESCE(type_exercice, 'SALARIE') IN ('LIBERAL', 'MIXTE')
@@ -31472,7 +31482,7 @@ $_$;
 ALTER FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense DIPLOME et RPPS_ADELI ; ADELI seul : dispense RPPS_ADELI uniquement.';
+COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense RPPS_ADELI et DIPLOME hors IADE/IBODE ; les diplômes spécialisés exigent profession_certifiee correspondante. ADELI seul : dispense RPPS_ADELI uniquement.';
 
 
 
