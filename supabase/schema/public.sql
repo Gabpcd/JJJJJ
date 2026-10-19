@@ -31409,7 +31409,7 @@ BEGIN
 
   SELECT profession,
          COALESCE(rpps_verifie, false)
-           AND profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE'),
+           AND profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE', 'IADE', 'IBODE'),
          COALESCE(rpps_verifie, false) OR COALESCE(adeli_verifie, false),
          COALESCE(statut_compte::text, 'ACTIF') = 'ACTIF'
            AND COALESCE(type_exercice, 'SALARIE') IN ('LIBERAL', 'MIXTE')
@@ -31472,7 +31472,7 @@ $_$;
 ALTER FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense DIPLOME et RPPS_ADELI ; ADELI seul : dispense RPPS_ADELI uniquement.';
+COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense RPPS_ADELI et DIPLOME hors IADE/IBODE ; les diplômes spécialisés exigent profession_certifiee correspondante. ADELI seul : dispense RPPS_ADELI uniquement.';
 
 
 

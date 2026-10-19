@@ -115,6 +115,32 @@ describe('DocumentsSoignant — compte incomplet et vrais incidents', () => {
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_verifier_coherence_documents'));
   });
 
+  it.each(['IADE', 'IBODE'])('%s conserve le diplôme requis malgré un RPPS vérifié et permet le téléversement', async profession => {
+    mocks.results.soignants.data = { profession, type_exercice: 'SALARIE', rpps_verifie: true };
+    mocks.results.documents_requis_par_profession.data = [regle('DIPLOME', 'TOUS', profession), regle('RPPS_ADELI', 'TOUS', profession)];
+    afficher();
+    expect(await screen.findByRole('heading', { name: "Diplôme d'État" })).toBeInTheDocument();
+    expect(screen.queryByText(/Tous tes documents obligatoires sont à jour/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Attestation RPPS / ADELI' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Téléverser — Diplôme/ }));
+    expect(screen.getByRole('dialog', { name: 'Téléverser un document' })).toBeInTheDocument();
+  });
+
+  it.each(['IADE', 'IBODE'])('%s distingue une ancienne preuve IDE de sa qualification spécialisée', async profession => {
+    mocks.results.soignants.data = { profession, type_exercice: 'SALARIE', rpps_verifie: true };
+    mocks.results.documents_requis_par_profession.data = [regle('DIPLOME', 'TOUS', profession)];
+    mocks.results.documents_soignants.data = [{ id: 'diplome', type_document: 'DIPLOME', statut_verification: 'VERIFIE', profession_certifiee: 'IDE', nom_fichier: 'diplome-fictif.pdf', televerse_le: '2026-09-01T09:00:00Z', valide_jusqua: null }];
+    const view = afficher();
+    expect(await screen.findByText(`La qualification ${profession} n’est pas confirmée par ce diplôme. Tu peux le remplacer ou demander une nouvelle vérification.`)).toBeInTheDocument();
+    expect(screen.queryByText(/Tous tes documents obligatoires sont à jour/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remplacer' })).toBeInTheDocument();
+    view.unmount();
+    mocks.results.documents_soignants.data[0].profession_certifiee = profession;
+    afficher();
+    expect(await screen.findByText(/Tous tes documents obligatoires sont à jour/)).toBeInTheDocument();
+    expect(screen.queryByText(/n’est pas confirmée par ce diplôme/)).not.toBeInTheDocument();
+  });
+
   it('n’annonce pas un dossier validé quand aucune règle n’est reçue', async () => {
     mocks.results.soignants.data = { profession: 'AS', type_exercice: 'SALARIE' };
     afficher();
@@ -135,7 +161,7 @@ describe('DocumentsSoignant — compte incomplet et vrais incidents', () => {
     expect(mocks.from.mock.calls.length).toBe(lectures);
   });
 
-  it('invalide les seules données Explorer du compte après suppression d’une RCP', async () => {
+  it('invalide les données Explorer et activation du seul compte après suppression d’une RCP', async () => {
     mocks.results.soignants.data = { profession: 'IDE', type_exercice: 'LIBERAL' };
     mocks.results.documents_requis_par_profession.data = [regle('RCP_ASSURANCE', 'LIBERAL_ONLY')];
     mocks.results.documents_soignants.data = [{ id: 'rcp', type_document: 'RCP_ASSURANCE', nom_fichier: 'rcp.pdf', statut_verification: 'VERIFIE', televerse_le: '2026-09-01T09:00:00Z', valide_jusqua: null }];
@@ -143,14 +169,18 @@ describe('DocumentsSoignant — compte incomplet et vrais incidents', () => {
     await screen.findByText(/rcp.pdf/);
     const profil = ['explorer-profil', 'soignant-test'];
     const rcp = ['explorer-rcp', 'soignant-test'];
+    const activation = ['activation-soignant', 'soignant-test', 'IDE'];
     const autre = ['explorer-rcp', 'autre-compte'];
-    for (const key of [profil, rcp, autre]) queryClient.setQueryData(key, { valide: true });
+    const autreActivation = ['activation-soignant', 'autre-compte', 'IDE'];
+    for (const key of [profil, rcp, activation, autre, autreActivation]) queryClient.setQueryData(key, { valide: true });
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
     await waitFor(() => expect(screen.queryByText(/rcp.pdf/)).not.toBeInTheDocument());
     expect(queryClient.getQueryState(profil)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(rcp)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(activation)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(autre)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(autreActivation)?.isInvalidated).toBe(false);
   });
 
 

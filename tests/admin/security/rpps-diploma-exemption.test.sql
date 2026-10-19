@@ -7,6 +7,9 @@ BEGIN;
 DO $rpps_diploma$
 DECLARE
   v_ide uuid := gen_random_uuid();
+  v_specialiste uuid;
+  v_diplome uuid;
+  v_profession text;
   v_adeli uuid := gen_random_uuid();
   v_as uuid := gen_random_uuid();
   v_rpps text := '1' || right(
@@ -192,6 +195,50 @@ BEGIN
   IF public.fn_documents_ok_pour_mission(v_as, 'SALARIE') IS NOT FALSE THEN
     RAISE EXCEPTION 'RPPS-DIPLOME-T7: une profession sans RPPS a été dispensée du diplôme';
   END IF;
+  -- IADE/IBODE : ne jamais confondre le contrôle RPPS de profession infirmière
+  -- avec la qualification du diplôme spécialisé déjà exigée par la fonction.
+  PERFORM set_config('jolene.admin_seed_override_reason', 'TEST DIPLOMES SPECIALISES SYNTHETIQUES SOUS ROLLBACK', true);
+  FOREACH v_profession IN ARRAY ARRAY['IADE', 'IBODE'] LOOP
+    v_specialiste := gen_random_uuid();
+    INSERT INTO public.soignants(id,prenom,nom,email,date_naissance,profession,type_exercice,rpps_verifie,adeli_verifie,est_compte_test)
+    VALUES(v_specialiste,'Fixture','Specialite',v_specialiste::text || '@test.local',DATE '1990-01-01',v_profession::public.type_profession,'SALARIE',false,false,true);
+    IF NOT EXISTS(SELECT 1 FROM public.documents_requis_par_profession WHERE profession::text=v_profession
+      AND type_document='DIPLOME' AND est_critique IS TRUE AND type_exercice_requis IN ('TOUS','SALARIE_ONLY')) THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: règle diplôme critique absente pour %',v_profession;
+    END IF;
+    INSERT INTO public.documents_soignants(soignant_id,type_document,s3_cle,nom_fichier,statut_verification,
+      valide_depuis,valide_jusqua,verifie_le,resultat_ia,nom_extrait_ia,prenom_extrait_ia,coherence_nom)
+    SELECT v_specialiste,drp.type_document,v_specialiste::text||'/documents/fixture.pdf','FIXTURE-SYNTHETIQUE.pdf','VERIFIE',
+      current_date,CASE WHEN drp.a_expiration THEN current_date+365 ELSE NULL END,now(),
+      CASE WHEN drp.type_document='CARTE_IDENTITE' THEN jsonb_build_object('date_naissance_extraite','1990-01-01') ELSE '{}'::jsonb END,
+      'SPECIALITE','Fixture',true
+    FROM public.documents_requis_par_profession drp WHERE drp.profession::text=v_profession AND drp.est_critique IS TRUE
+      AND drp.type_exercice_requis IN ('TOUS','SALARIE_ONLY') AND drp.type_document NOT IN ('DIPLOME','RPPS_ADELI');
+    UPDATE public.soignants SET rpps_verifie=true,rpps_verifie_le=now(),rpps_nom_api='SPECIALITE',
+      rpps_prenom_api='Fixture',rpps_profession_api='Infirmier' WHERE id=v_specialiste;
+    IF public.fn_documents_ok_pour_mission(v_specialiste,'SALARIE') IS NOT FALSE THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: RPPS générique a dispensé du diplôme %',v_profession;
+    END IF;
+    INSERT INTO public.documents_soignants(soignant_id,type_document,s3_cle,nom_fichier,statut_verification,
+      valide_depuis,verifie_le,resultat_ia,nom_extrait_ia,prenom_extrait_ia,coherence_nom)
+    VALUES(v_specialiste,'DIPLOME',v_specialiste::text||'/documents/diplome.pdf','DIPLOME-FICTIF.pdf','VERIFIE',
+      current_date,now(),jsonb_build_object('profession_certifiee','IDE'),'SPECIALITE','Fixture',true)
+    RETURNING id INTO v_diplome;
+    IF public.fn_documents_ok_pour_mission(v_specialiste,'SALARIE') IS NOT FALSE THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: diplôme IDE a remplacé le diplôme %',v_profession;
+    END IF;
+    UPDATE public.documents_soignants SET resultat_ia=jsonb_build_object('profession_certifiee',v_profession),modifie_le=now() WHERE id=v_diplome;
+    IF public.fn_documents_ok_pour_mission(v_specialiste,'SALARIE') IS NOT TRUE THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: diplôme spécialisé % exact refusé',v_profession;
+    END IF;
+    UPDATE public.documents_soignants SET resultat_ia='{}'::jsonb,modifie_le=now() WHERE id=v_diplome;
+    IF public.fn_documents_ok_pour_mission(v_specialiste,'SALARIE') IS NOT FALSE THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: qualification absente acceptée pour %',v_profession;
+    END IF;
+    IF (SELECT rpps_verifie FROM public.soignants WHERE id=v_specialiste) IS NOT TRUE THEN
+      RAISE EXCEPTION 'RPPS-SPECIALITE: le verdict RPPS a été révoqué';
+    END IF;
+  END LOOP;
 END;
 $rpps_diploma$;
 

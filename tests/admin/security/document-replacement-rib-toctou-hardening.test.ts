@@ -13,6 +13,10 @@ const rppsDiplomaMigration = readFileSync(
   'supabase/migrations/20260802055000_aligner_dispense_diplome_rpps.sql',
   'utf8',
 );
+const specializedDiplomaMigration = readFileSync(
+  'supabase/migrations/20261019113000_ne_pas_dispenser_diplomes_specialises_par_rpps.sql',
+  'utf8',
+);
 const documentsPage = readFileSync('src/pages/DocumentsSoignant.tsx', 'utf8');
 const activationChecklist = readFileSync(
   'src/components/dashboard/ChecklistActivation.tsx',
@@ -55,7 +59,7 @@ describe('remplacement de preuve sans effacer les données existantes', () => {
 
 describe('dispense documentaire RPPS et spécialité exacte', () => {
   it('dispense du diplôme uniquement quand le RPPS est validé par l’API', () => {
-    expect(documentsPage).toContain("rppsVerifie && d.type_document === 'DIPLOME'");
+    expect(documentsPage).toContain("rppsDispenseDiplome(sg.profession, sg.rpps_verifie) && d.type_document === 'DIPLOME'");
     expect(documentsPage).toContain('PROFESSIONS_SANS_RPPS.includes');
     expect(documentsPage).toContain("registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI'");
     expect(documentsPage).not.toMatch(
@@ -65,7 +69,7 @@ describe('dispense documentaire RPPS et spécialité exacte', () => {
       "identiteVerifiee && d.type_document === 'RPPS_ADELI'",
     );
     expect(activationChecklist).toContain(
-      "rppsVerifie && d.type_document === 'DIPLOME'",
+      "rppsDispenseDiplome(soignant.profession, soignant.rpps_verifie) && d.type_document === 'DIPLOME'",
     );
     expect(rppsDiplomaMigration).toContain(
       "drp.type_document = 'DIPLOME' AND v_rpps_verifie",
@@ -90,9 +94,8 @@ describe('dispense documentaire RPPS et spécialité exacte', () => {
   });
 
   it('refuse un diplôme IDE pour un profil IADE ou IBODE', () => {
-    const gate = rppsDiplomaMigration.match(
-      /CREATE OR REPLACE FUNCTION public\.fn_documents_ok_pour_mission[\s\S]*?\$function\$;/,
-    )?.[0] ?? '';
+    const gate = specializedDiplomaMigration;
+    expect(gate).toContain("profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE', 'IADE', 'IBODE')");
     expect(gate).toContain("v_profession NOT IN ('IADE', 'IBODE')");
     expect(gate).toContain("ds.resultat_ia->>'profession_certifiee'");
     expect(gate).toContain('= v_profession::text');
