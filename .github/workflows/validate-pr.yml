@@ -675,7 +675,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 62 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 63 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
