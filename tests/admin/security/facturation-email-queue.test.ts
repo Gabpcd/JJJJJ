@@ -1,4 +1,5 @@
 import * as commissionEmail from '../../../supabase/functions/_shared/commission-email';
+import * as invoiceEmailStaging from '../../../supabase/functions/_shared/invoice-email-staging-test';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
@@ -80,7 +81,22 @@ const fichier = readFileSync('supabase/functions/send-email/index.ts', 'utf8');
 const code = ts.transpileModule(fichier.slice(0, fichier.indexOf('Deno.serve(')) + '\nglobalThis.modeleFacture = renderTemplate;', {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const contexte: any = { exports: {}, require: (name: string) => name.endsWith('commission-email.ts') ? commissionEmail : ({}), Deno: { env: { get: () => undefined } } };
+// Ce fragment s'arrête avant Deno.serve : seuls les modèles sont exécutés.
+// Les imports restent explicites, y compris le véritable helper d'admission.
+const modulesModeles: Record<string, unknown> = {
+  '../_shared/commission-email.ts': commissionEmail,
+  '../_shared/invoice-email-staging-test.ts': invoiceEmailStaging,
+  '../_shared/facturation-email-source.ts': { resolveFacturationEmailSource },
+  '../_shared/test-account.ts': { resolveOperationalTestAccount, resolveOperationalTestSource },
+  '../_shared/preferences-alertes-email.ts': {},
+  '../_shared/rate-limit.ts': {},
+  '../_shared/admin-auth.ts': {},
+  'npm:@supabase/supabase-js@2.99.2': {},
+};
+const contexte: any = { exports: {}, require: (name: string) => {
+  if (!(name in modulesModeles)) throw new Error(`Import modèle imprévu ${name}`);
+  return modulesModeles[name];
+}, Deno: { env: { get: () => undefined } } };
 runInNewContext(code, contexte);
 describe('emails factures : accès et échéances', () => {
   it('pointe une facture d’honoraires vers la liste qui peut réellement l’ouvrir', () => {
@@ -123,7 +139,7 @@ type SourceCanonique = {
   missionAbsente?: boolean; honoraire?: boolean; groupee?: boolean; liee?: boolean;
   assigneChange?: boolean; assigneAbsent?: boolean; autreSoignantTest?: boolean; groupeCount?: number; documentAmbigu?: boolean;
 };
-function simulationEnvoi(sourceCanonique?: SourceCanonique) {
+function simulationEnvoi(sourceCanonique?: SourceCanonique, envOverrides: Record<string, string> = {}) {
   const etat = { legacyStatus: null as 'ERREUR' | 'EN_COURS' | null, testAccount: false, testSource: false, preferenceActive: false, preferences: 0, evenementsPreferences: [] as string[], envois: [] as any[], audits: [] as any[], lecturesSources: [] as string[], lecturesSoldes: 0,
     soldeCommission: { montant_ttc: 120, montant_avoirs_imputes: 0, montant_a_payer: 120, rapprochement_paiement_requis: false } as Record<string, unknown> };
   let typeCourant = 'FACTURE_EMISE';
@@ -194,13 +210,14 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
     '../_shared/rate-limit.ts': { applyRateLimit: () => false, getClientIp: () => '127.0.0.1' },
     '../_shared/admin-auth.ts': { verifyAdminOrServiceRole: async () => ({ ok: true }) },
     '../_shared/commission-email.ts': commissionEmail,
+    '../_shared/invoice-email-staging-test.ts': invoiceEmailStaging,
     '../_shared/facturation-email-source.ts': { resolveFacturationEmailSource: sourceCanonique ? resolveFacturationEmailSource : async () => ({ ok: true, isTest: etat.testSource }) },
     '../_shared/test-account.ts': sourceCanonique ? { resolveOperationalTestAccount, resolveOperationalTestSource } : {
       resolveOperationalTestAccount: async () => ({ ok: true, isTest: etat.testAccount }),
       resolveOperationalTestSource: async () => ({ ok: true, isTest: etat.testSource }),
     },
   };
-  const env: Record<string, string> = { SUPABASE_SERVICE_ROLE_KEY: 'simulation-service', SUPABASE_URL: 'https://example.invalid', RESEND_API_KEY: 'simulation-provider' };
+  const env: Record<string, string> = { SUPABASE_SERVICE_ROLE_KEY: 'simulation-service', SUPABASE_URL: 'https://example.invalid', RESEND_API_KEY: 'simulation-provider', ...envOverrides };
   const code = ts.transpileModule(fichier, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   runInNewContext(code, { exports: {}, Request, Response, TextEncoder, crypto: webcrypto,
     console: { log() {}, warn() {}, error() {} },
@@ -239,6 +256,40 @@ describe('vrai transport email : copie documentaire obligatoire, fournisseur sim
     const s = simulationEnvoi(); s.etat[garde] = true; const response = await s.lancer('FACTURE_EMISE');
     expect(await response.json()).toMatchObject({ success: true, skipped: true });
     expect(s.etat.envois).toHaveLength(0);
+  });
+});
+
+describe('vrai helper admission TEST dans le handler de facturation', () => {
+  const stage = { SUPABASE_URL: 'https://mejpriaetwgtcstbgfid.supabase.co', APP_URL: 'http://127.0.0.1:8085' };
+  it('sans capacité, conserve la suppression du destinataire TEST sans aucune réservation transport', async () => {
+    const s = simulationEnvoi(undefined, stage); s.etat.testAccount = true;
+    const response = await s.lancer('FACTURE_EMISE');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, skipped: true, reason: 'test_account' });
+    expect(s.etat.envois).toHaveLength(0); expect(s.etat.preferences).toBe(0);
+    expect(s.etat.lecturesSoldes).toBe(0);
+  });
+  it.each(['{', '{}'])('une capacité invalide %s ferme avant fournisseur et classification documentaire', async raw => {
+    const s = simulationEnvoi({ etablissementTest: false, soignantTest: true }, { ...stage, INVOICE_EMAIL_STAGING_TEST_RUN: raw });
+    const response = await s.lancer('FACTURE_EMISE');
+    expect(response.status).toBe(500); expect(await response.json()).toMatchObject({ success: false });
+    expect(s.etat.envois).toHaveLength(0); expect(s.etat.audits).toHaveLength(0);
+    expect(s.etat.preferences).toBe(0); expect(s.etat.lecturesSources).toHaveLength(0);
+    expect(s.etat.lecturesSoldes).toBe(0);
+  });
+  it('une capacité expirée reste fermée malgré des préférences actives', async () => {
+    const now = Date.now();
+    const runtime = { serverSha: 'a'.repeat(40), manifestSha256: 'b'.repeat(64), missionId: sourceMission,
+      factureId: sourceCommission, createdAt: new Date(now - 3600_000).toISOString(), expiresAt: new Date(now - 1000).toISOString(),
+      events: [
+        { type: 'FACTURE_EMISE', emailId: sourceHonoraires, bodySha256: 'c'.repeat(64) },
+        { type: 'FACTURE_PAYEE', emailId: autreMission, bodySha256: 'd'.repeat(64) },
+      ] };
+    const s = simulationEnvoi(undefined, { ...stage, INVOICE_EMAIL_STAGING_TEST_RUN: JSON.stringify(runtime) });
+    s.etat.preferenceActive = true;
+    const response = await s.lancer('FACTURE_PAYEE');
+    expect(response.status).toBe(500); expect(await response.json()).toMatchObject({ success: false });
+    expect(s.etat.envois).toHaveLength(0); expect(s.etat.preferences).toBe(0); expect(s.etat.audits).toHaveLength(0);
   });
 });
 
