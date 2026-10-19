@@ -14,6 +14,7 @@ import { requireFixturePassword } from '../scripts/lib/playwright-fixtures.mjs';
  * setup se contente d'un avertissement : les tests qui en dépendent géreront.
  */
 import { createClient } from '@supabase/supabase-js';
+import { memoriserOriginauxContratsFixture, reprendreOriginauxContratsFixture, registreOriginauxFixture } from './helpers/contrat-fixture-storage';
 import {
   nettoyerSessionsPlaywright,
   reactiverSoignantPlaywright,
@@ -64,6 +65,8 @@ export default async function globalSetup() {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const registreOriginaux = registreOriginauxFixture(url);
+  await reprendreOriginauxContratsFixture(admin, url, registreOriginaux);
 
   // Le test de suspension admin bannit volontairement le compte technique. Si
   // GitHub interrompt le worker avant son finally, le run suivant doit réparer
@@ -100,6 +103,7 @@ export default async function globalSetup() {
       mission,
       etablissementPlaywrightId,
     );
+    await memoriserOriginauxContratsFixture(admin, mission.id, registreOriginaux);
     ids.push(mission.id);
     preparations.set(mission.id, preparation);
   }
@@ -240,6 +244,8 @@ export default async function globalSetup() {
   if (nbQuarantainesRestantes > 0) {
     console.warn(`[global-setup] ${nbQuarantainesRestantes} mission(s) gelée(s) mise(s) en quarantaine.`);
   }
+
+  await reprendreOriginauxContratsFixture(admin, url, registreOriginaux);
 
   // Fixtures établissement sans compte Auth utilisées uniquement pour vérifier
   // la contrainte de tolérance GPS. Un worker tué avant son finally ne doit pas
