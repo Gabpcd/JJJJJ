@@ -218,11 +218,17 @@ export function BadgeNotification() {
 function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
   const location = useLocation();
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const bounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const [bouncing, setBouncing] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     try { return localStorage.getItem('notif_sound') !== 'off'; } catch { return true; }
   });
+
+  useEffect(() => () => {
+    if (bounceTimer.current !== null) clearTimeout(bounceTimer.current);
+    bounceTimer.current = null;
+  }, []);
 
   // Persist sound preference
   useEffect(() => {
@@ -232,8 +238,12 @@ function BadgeNotificationCompte({ userId }: { userId: string | undefined }) {
   const flux = useFluxNotifications(userId, n => {
     // Les en-têtes mobile et desktop sont montés ensemble ; seul le visible alerte.
     if (!buttonRef.current?.getClientRects().length) return;
+    if (bounceTimer.current !== null) clearTimeout(bounceTimer.current);
     setBouncing(true);
-    setTimeout(() => setBouncing(false), 350);
+    bounceTimer.current = setTimeout(() => {
+      bounceTimer.current = null;
+      setBouncing(false);
+    }, 350);
     if (document.visibilityState === 'visible' && soundEnabled) playNotifSound();
     toast.info(n.titre, { description: n.corps?.substring(0, 80) });
     // Ce type est livré par le relais serveur et ses préférences, même page fermée.

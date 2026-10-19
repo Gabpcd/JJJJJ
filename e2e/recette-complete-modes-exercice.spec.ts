@@ -87,6 +87,15 @@ test('modes : PSC facultatif, préférences restaurées, référentiel indisponi
   state.failures.delete('soignants');
   await page.getByRole('button', { name: 'Découvrir les missions', exact: true }).click();
   await expect(page).toHaveURL(/\/soignant\/recherche-missions$/);
+  // L'URL précède le montage lazy du deck : attendre l'écran et ses lectures
+  // avant le goto suivant évite d'interrompre son bootstrap dans WebKit.
+  const questionnaire = page.getByRole('dialog', { name: '5 questions pour un deck qui te ressemble', exact: true });
+  await expect(questionnaire).toBeVisible();
+  await questionnaire.getByRole('button', { name: 'Plus tard', exact: true }).click();
+  await expect(questionnaire).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aucune nouvelle mission à parcourir', exact: true })).toBeVisible();
+  await attendreAPI(page);
+  await page.waitForLoadState('networkidle');
   expect(state.profile.types_contrat_acceptes).toBe('VACATION,LIBERAL');
   await aller(page, '/inscription/soignant/completion');
   await page.getByRole('button', { name: 'Personnaliser mes préférences (facultatif)', exact: true }).click();
@@ -98,6 +107,10 @@ test('modes : PSC facultatif, préférences restaurées, référentiel indisponi
   const ecritures = state.calls.filter(c => c.name === 'soignants' && c.method === 'PATCH').length;
   await page.getByRole('button', { name: 'Découvrir les missions', exact: true }).click();
   await expect(page).toHaveURL(/\/soignant\/recherche-missions$/);
+  await expect(questionnaire).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aucune nouvelle mission à parcourir', exact: true })).toBeVisible();
+  await attendreAPI(page);
+  await page.waitForLoadState('networkidle');
   expect(state.calls.filter(c => c.name === 'soignants' && c.method === 'PATCH')).toHaveLength(ecritures);
   expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]);
 });
