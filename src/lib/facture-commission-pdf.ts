@@ -212,7 +212,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         ENTREPRISE.adresse_ligne1,
         `${ENTREPRISE.adresse_code_postal} ${ENTREPRISE.adresse_ville}`,
         `SIRET : ${ENTREPRISE.siret_formate}`,
-        `TVA intra : ${ENTREPRISE.tva_intra}`,
+        ...(ENTREPRISE.tva_intra ? [`TVA intra : ${ENTREPRISE.tva_intra}`] : []),
         ENTREPRISE.email,
       ],
     });
@@ -554,7 +554,11 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
 
     createFooter(doc, {
       companyLine: `${ENTREPRISE.nom} - ${ENTREPRISE.forme_juridique} - Capital ${ENTREPRISE.capital_social} - SIRET ${ENTREPRISE.siret_formate} - ${ENTREPRISE.rcs}`,
-      contactLine: `TVA intra : ${ENTREPRISE.tva_intra} - Siège : ${ENTREPRISE.adresse} - ${ENTREPRISE.email}`,
+      contactLine: [
+        ...(ENTREPRISE.tva_intra ? [`TVA intra : ${ENTREPRISE.tva_intra}`] : []),
+        `Siège : ${ENTREPRISE.adresse}`,
+        ENTREPRISE.email,
+      ].join(' - '),
       extraLine: `${estAvoir ? 'Avoir généré' : 'Facture générée'} le ${formatParis(new Date(), 'dd/MM/yyyy à HH:mm')}`,
     });
 

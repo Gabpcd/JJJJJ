@@ -7,9 +7,10 @@ interface BandeauRappelDPAEProps {
   dpaeEffectuee?: boolean;
   dpaeEffectueeLe?: string | null;
   typeContrat?: string;
+  cadreDeclareParEmployeur?: boolean;
 }
 
-export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
+export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat, cadreDeclareParEmployeur = false }: BandeauRappelDPAEProps) {
   // Le modèle historique utilise tantôt CDD, tantôt SALARIE pour le même
   // parcours employeur. Les deux doivent donc déclencher le rappel DPAE.
   if (!typeContrat || !['CDD', 'SALARIE'].includes(typeContrat)) return null;
@@ -35,10 +36,14 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat 
       <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-semibold text-warning">
-          ⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission.
+          {cadreDeclareParEmployeur
+            ? 'Formalités employeur : vérifiez les démarches applicables au cadre déclaré pour cet engagement.'
+            : "⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission."}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          La DPAE est obligatoire pour ce contrat salarié. Pour une mission libérale directe, elle n'est pas requise.
+          {cadreDeclareParEmployeur
+            ? 'Si une DPAE est requise, effectuez-la avant la prise de poste. Le texte fourni par l’employeur ne dispense pas des formalités applicables.'
+            : "La DPAE est obligatoire pour ce contrat salarié. Pour une mission libérale directe, elle n'est pas requise."}
         </p>
         <p className="text-xs text-muted-foreground mt-2">
           Une fois la DPAE transmise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> du contrat afin d'en conserver la traçabilité interne.
