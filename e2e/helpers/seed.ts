@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
+import { memoriserOriginauxContratsFixture, supprimerOriginauxFixtureApresPurge } from './contrat-fixture-storage';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
 import { isPgrst202EligibilityFallbackAllowed } from './liberal-eligibility-policy';
@@ -41,9 +42,6 @@ export interface EphemeralVerifiedCaregiver {
 }
 
 const EPHEMERAL_CAREGIVER_EMAIL_PREFIX = 'playwright-test-caregiver-';
-// Chemins constatés en DB après validation du périmètre TEST, conservés tant
-// que Storage n'a pas confirmé leur retrait (y compris si le cleanup échoue).
-const originauxContratsFixtureAPurger = new Map<string, Set<string>>();
 
 /**
  * Repli strictement E2E pour la PR qui tourne encore contre l'ancien purgeur
@@ -828,24 +826,6 @@ export async function markMissionTerminee(missionId: string): Promise<boolean> {
  * Toute erreur remonte : un cleanup silencieusement incomplet polluerait la
  * base partagée et ferait échouer les suites suivantes.
  */
-async function supprimerOriginauxFixtureApresPurge(admin: SupabaseClient, missionId: string): Promise<void> {
-  const chemins = [...(originauxContratsFixtureAPurger.get(missionId) ?? [])];
-  if (chemins.length === 0) return;
-  const [mission, contrats, references] = await Promise.all([
-    admin.from('missions' as any).select('id').eq('id', missionId).maybeSingle(),
-    admin.from('contrats_mission' as any).select('id').eq('mission_id', missionId).limit(1),
-    admin.from('contrats_mission' as any).select('id').in('storage_path', chemins).limit(1),
-  ]);
-  if (mission.error || contrats.error || references.error || mission.data !== null
-    || !Array.isArray(contrats.data) || contrats.data.length !== 0
-    || !Array.isArray(references.data) || references.data.length !== 0) {
-    throw new Error('[cleanup mission] purge non confirmée, originaux Storage conservés');
-  }
-  const { error } = await admin.storage.from('contrats-signes').remove(chemins);
-  if (error) throw new Error('[cleanup mission] retrait des originaux Storage non confirmé');
-  originauxContratsFixtureAPurger.delete(missionId);
-}
-
 export async function cleanupMissionCascade(missionId?: string | null): Promise<void> {
   if (!missionId) return;
   // fn_test_purge_mission supprime dynamiquement TOUS les enfants FK (y compris
@@ -874,26 +854,9 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   }
   const preparation = await preparerMissionTechniquePourPurge(admin, mission);
 
-  // Capturer les références AVANT la purge des lignes ; cela couvre aussi un
-  // rendu enregistré dont la réponse s'est perdue avant la première signature.
-  // Aucun listing de bucket, chemin inventé ou objet d'une autre mission.
-  const { data: contratsRendus, error: contratsRendusError } = await admin
-    .from('contrats_mission' as any).select('id, mission_id, storage_path').eq('mission_id', missionId);
-  if (contratsRendusError || !Array.isArray(contratsRendus)) {
-    throw new Error('[cleanup mission] références des originaux indisponibles');
-  }
-  const chemins = new Set(originauxContratsFixtureAPurger.get(missionId) ?? []);
-  for (const contrat of contratsRendus) {
-    if (contrat.mission_id !== missionId) throw new Error('[cleanup mission] contrat hors mission technique');
-    if (contrat.storage_path == null) continue;
-    if (typeof contrat.storage_path !== 'string'
-      || !contrat.storage_path.startsWith(`${contrat.id}/`)
-      || !/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.html$/i.test(contrat.storage_path)) {
-      throw new Error('[cleanup mission] chemin original hors rendu canonique, conservation');
-    }
-    chemins.add(contrat.storage_path);
-  }
-  if (chemins.size > 0) originauxContratsFixtureAPurger.set(missionId, chemins);
+  // Registre durable avant le premier DELETE, y compris après perte de la
+  // réponse du générateur. Une panne/quarantaine ne perd plus le chemin.
+  await memoriserOriginauxContratsFixture(admin, missionId);
 
   // La descendance financière a deux niveaux de FK : les trois files ci-dessous
   // doivent précéder paiements_escrow, lui-même enfant de la mission.

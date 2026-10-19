@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync, mkdtempSync, rmSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import * as cleanupStorage from '../../../e2e/helpers/contrat-fixture-storage';
+const temporaryDirectories: string[] = [];
+afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 import { createHash } from 'node:crypto';
+import { Blob } from 'node:buffer';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
@@ -94,7 +100,7 @@ function banc(options: {
       if (name === 'node:crypto') return { createHash };
       if (name === './auth') return { TEST_ACCOUNTS: { etab: { email: 'fixture-etab@jolene.invalid', password: 'synthetique' } } };
       if (name === './db') return { adminClient: () => admin, userClient: () => { throw new Error('Session inattendue'); } };
-      if (name === './liberal-eligibility-policy' || name === './cleanup-mission-test') return {};
+      if (name === './liberal-eligibility-policy' || name === './cleanup-mission-test' || name === './contrat-fixture-storage') return {};
       throw new Error(`Import interdit: ${name}`);
     },
     fetch() { throw new Error('Réseau interdit'); },
@@ -130,9 +136,11 @@ describe('préparation canonique du contrat E2E', () => {
 });
 
 function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; otherReference?: boolean;
-  badPath?: boolean; storageError?: boolean; nonTechnical?: boolean } = {}) {
+  badPath?: boolean; storageError?: boolean; nonTechnical?: boolean; quarantine?: boolean; readError?: boolean } = {}) {
   const calls: string[] = [];
-  const path = `${C}/44444444-4444-4444-8444-444444444444.html`;
+  const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'jolene-contrat-cleanup-test-'))); temporaryDirectories.push(directory);
+  const registry = () => cleanupStorage.registreOriginauxFixture('https://abcdefghijklmnopqrst.supabase.co', directory);
+  const originalPath = `${C}/44444444-4444-4444-8444-444444444444.html`;
   let present = true;
   let contractsPresent = true;
   let removeError = options.storageError;
@@ -157,24 +165,26 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
       async function read() {
         if (deleting) {
           expect(calls).toContain('capture:original');
+          expect(registry().lire(M).map(entry => entry.storagePath)).toEqual([originalPath]);
           calls.push(`delete:${table}`);
           if (table === 'contrats_mission') contractsPresent = false;
           return { data: null, error: null };
         }
         if (table === 'missions') {
           expect(filters).toEqual({ id: M }); calls.push('read:mission');
+          if (projection === 'id' && options.readError) return { data: null, error: { code: 'READ_FAILED' } };
           return { data: present ? { id: M, intitule: options.nonTechnical ? 'Mission réelle' : '[pw-test:canvas] Contrat',
             etablissement_id: '55555555-5555-4555-8555-555555555555', soignant_assigne_id: S, statut: 'ASSIGNEE' } : null, error: null };
         }
         if (table === 'contrats_mission' && projection === 'id, mission_id, storage_path') {
           expect(filters).toEqual({ mission_id: M }); expect(calls).toContain('validate:test-scope');
           calls.push('capture:original');
-          return { data: [{ id: C, mission_id: M, storage_path: options.badPath ? 'autre-contrat/original.html' : path }], error: null };
+          return { data: [{ id: C, mission_id: M, storage_path: options.badPath ? 'autre-contrat/original.html' : originalPath }], error: null };
         }
         if (table === 'contrats_mission') {
           expect(projection).toBe('id');
           const referenced = Object.hasOwn(filters, 'storage_path');
-          expect(filters).toEqual(referenced ? { storage_path: [path] } : { mission_id: M });
+          expect(filters).toEqual(referenced ? { storage_path: [originalPath] } : { mission_id: M });
           calls.push(referenced ? 'read:references' : 'read:contracts');
           return { data: (referenced ? options.otherReference : contractsPresent) ? [{ id: C }] : [], error: null };
         }
@@ -188,7 +198,7 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
     storage: { from(bucket: string) {
       expect(bucket).toBe('contrats-signes');
       return { async remove(paths: string[]) {
-        expect(paths).toEqual([path]); expect(present).toBe(false); expect(contractsPresent).toBe(false);
+        expect(paths).toEqual([originalPath]); expect(present).toBe(false); expect(contractsPresent).toBe(false);
         expect(calls).toContain('read:references'); calls.push('storage:remove-exact');
         const error = removeError ? { message: 'Indisponible fictif' } : null; removeError = false;
         return { data: error ? null : [{ name: path }], error };
@@ -202,12 +212,19 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
       if (name === './auth') return { TEST_ACCOUNTS: {} };
       if (name === './db') return { adminClient: () => admin };
       if (name === './liberal-eligibility-policy') return {};
+      if (name === './contrat-fixture-storage') return {
+        memoriserOriginauxContratsFixture: (client: any, id: string) => cleanupStorage.memoriserOriginauxContratsFixture(client, id, registry()),
+        supprimerOriginauxFixtureApresPurge: (client: any, id: string) => cleanupStorage.supprimerOriginauxFixtureApresPurge(client, id, registry()),
+      };
       if (name === './cleanup-mission-test') return {
+        estQuarantainePurgeAutorisee: () => true,
+        estBlocagePurgeTechniqueAttendu: (error: any) => error.code === '23514',
         async preparerMissionTechniquePourPurge(client: unknown, mission: any) {
-          expect(client).toBe(admin); expect(mission.id).toBe(M); calls.push('validate:test-scope'); return 'PREPAREE';
+          expect(client).toBe(admin); expect(mission.id).toBe(M); calls.push('validate:test-scope'); return options.quarantine ? 'QUARANTAINEE' : 'PREPAREE';
         },
         async purgerMissionTechniqueAvecTimeout(client: unknown, id: string) {
           expect(client).toBe(admin); expect(id).toBe(M); calls.push('purge:rpc');
+          if (options.quarantine) return { code: '23514', message: 'Créneaux PREVISIONNEL immutables après gel' };
           if (options.purgeError) return { code: 'NETWORK_UNKNOWN', message: 'Purge ambiguë fictive' };
           present = !!options.stillPresent; return null;
         },
@@ -216,7 +233,8 @@ function bancNettoyage(options: { purgeError?: boolean; stillPresent?: boolean; 
     },
     fetch() { throw new Error('Réseau interdit'); },
   });
-  return { calls, run: () => exports.cleanupMissionCascade(M) };
+  return { calls, directory, registry, run: () => exports.cleanupMissionCascade(M),
+    resume: () => cleanupStorage.reprendreOriginauxContratsFixture(admin as any, 'https://abcdefghijklmnopqrst.supabase.co', registry()) };
 }
 
 describe('retrait borné des originaux de contrats TEST', () => {
@@ -228,16 +246,34 @@ describe('retrait borné des originaux de contrats TEST', () => {
     await b.run(); expect(b.calls.filter(c => c === 'storage:remove-exact')).toHaveLength(1);
   });
   it.each([
-    ['purge ambiguë', { purgeError: true }], ['mission persistante', { stillPresent: true }],
-    ['référence restante', { otherReference: true }], ['chemin hors contrat', { badPath: true }],
-    ['mission non technique', { nonTechnical: true }],
-  ] as const)('conserve Storage en cas de %s', async (_name, options) => {
-    const b = bancNettoyage(options); await expect(b.run()).rejects.toThrow();
+    ['purge ambiguë', { purgeError: true }, 'Purge ambiguë'], ['mission persistante', { stillPresent: true }, 'purge non confirmée'],
+    ['référence restante', { otherReference: true }, 'purge non confirmée'], ['chemin hors contrat', { badPath: true }, 'référence refusée'],
+    ['mission non technique', { nonTechnical: true }, 'non technique'],
+    ['lecture postpurge indisponible', { readError: true }, 'purge non confirmée'],
+  ] as const)('conserve Storage en cas de %s', async (_name, options, message) => {
+    const b = bancNettoyage(options); await expect(b.run()).rejects.toThrow(message);
     expect(b.calls).not.toContain('storage:remove-exact');
+  });
+  it('conserve le registre et Storage en quarantaine, y compris dans un nouveau lecteur', async () => {
+    const b = bancNettoyage({ quarantine: true }); await b.run();
+    expect(b.registry().lire(M)).toHaveLength(1);
+    await b.resume(); expect(b.calls).not.toContain('storage:remove-exact');
+    expect(b.registry().lire(M)).toHaveLength(1);
+  });
+  it('ne reprend pas un registre d’un autre projet et conserve le reçu immuable', async () => {
+    const b = bancNettoyage({ storageError: true }); await expect(b.run()).rejects.toThrow('Storage non confirmé');
+    const before = b.registry().lire(M);
+    expect(cleanupStorage.registreOriginauxFixture('https://tsrqponmlkjihgfedcba.supabase.co', b.directory).lire()).toEqual([]);
+    b.registry().enregistrer(M, C, before[0].storagePath);
+    expect(b.registry().lire(M)).toEqual(before);
+    expect(Object.keys(before[0]).sort()).toEqual(['contratId','missionId','projectRef','recordedAt','schema','sourceSha','storagePath']);
   });
   it('remonte l’échec Storage et garde le chemin exact pour un cleanup ultérieur', async () => {
     const b = bancNettoyage({ storageError: true }); await expect(b.run()).rejects.toThrow('Storage non confirmé');
-    await b.run(); expect(b.calls.filter(c => c === 'storage:remove-exact')).toHaveLength(2);
+    // Une nouvelle instance relit le disque, sans Map ni ancien worker.
+    expect(b.registry().lire(M)).toHaveLength(1);
+    await b.resume(); expect(b.calls.filter(c => c === 'storage:remove-exact')).toHaveLength(2);
+    expect(b.registry().lire(M)).toEqual([]);
     expect(b.calls.filter(c => c === 'purge:rpc')).toHaveLength(1);
   });
 });
