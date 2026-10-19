@@ -59,6 +59,45 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
+it.each(['démontage', 'changement de compte'])('annule le rappel du badge au %s, même après deux notifications rapprochées', async sortie => {
+  vi.useFakeTimers();
+  const view = render(app());
+  await status('SUBSCRIBED');
+  expect(bell(1)).toBeInTheDocument();
+  expect(vi.getTimerCount()).toBe(0);
+
+  for (const id of ['première-animation', 'deuxième-animation']) {
+    const nouvelle = row(id); m.rows.push(nouvelle);
+    await act(async () => m.channels[0].insert({ new: nouvelle }));
+  }
+  expect(bell(3).querySelector('.animate-bounce-badge')).not.toBeNull();
+  expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+  if (sortie === 'démontage') view.unmount();
+  else {
+    m.user = { id: 'compte-b' };
+    await act(async () => view.rerender(app()));
+    expect(bell(0)).toBeInTheDocument();
+  }
+  // L'absence immédiate du timer prouve l'annulation, sans attendre que son rappel s'exécute.
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('termine le rebond 350 ms après la dernière notification et libère sa minuterie', async () => {
+  vi.useFakeTimers();
+  render(app()); await status('SUBSCRIBED');
+  const première = row('première'); m.rows.push(première);
+  await act(async () => m.channels[0].insert({ new: première }));
+  await act(async () => vi.advanceTimersByTime(200));
+  const seconde = row('seconde'); m.rows.push(seconde);
+  await act(async () => m.channels[0].insert({ new: seconde }));
+  await act(async () => vi.advanceTimersByTime(349));
+  expect(bell(3).querySelector('.animate-bounce-badge')).not.toBeNull();
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(bell(3).querySelector('.animate-bounce-badge')).toBeNull();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 it('rattrape liste et compteur après coupure, sans toast rétroactif ni doublon, puis reçoit le flux suivant', async () => {
   render(app()); await screen.findByRole('button', { name: 'Notifications, 1 non lue' });
   await status('SUBSCRIBED'); await open();
