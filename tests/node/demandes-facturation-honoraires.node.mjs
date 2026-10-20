@@ -41,14 +41,15 @@ function banc({entries=[entry()], observed=true, invokeStatus=200, loseResponse=
  const context={Request,Response,Headers,TextEncoder,crypto:webcrypto,console:{log(){},warn(){},error(){}},setTimeout,
   Deno:{env:{get(k){assert(Object.hasOwn(env,k),'unknown env '+k);return env[k];}},serve(fn){assert.equal(handler,undefined);handler=fn;}},
   fetch(){throw new Error('Network forbidden');}};
- const allowed=['supabase/functions/weekly-invoicing-cron/index.ts','supabase/functions/_shared/demandes-facturation-honoraires.ts','supabase/functions/_shared/cron-service-auth.ts'];
+ const allowed=['supabase/functions/weekly-invoicing-cron/index.ts','supabase/functions/_shared/demandes-facturation-honoraires.ts','supabase/functions/_shared/cron-service-auth.ts','supabase/functions/_shared/honoraires-staging-test.ts'];
  function load(path){
   assert(allowed.includes(path),path);if(modules.has(path))return modules.get(path);
   const module={exports:{}};modules.set(path,module.exports);
   const js=ts.transpileModule(readFileSync(new URL(path,root),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const require=(name)=>{
    if(name==='npm:@supabase/supabase-js@2')return {createClient:(url,key,opts)=>{assert.equal(url,env.SUPABASE_URL);assert.equal(key,env.SUPABASE_SERVICE_ROLE_KEY);return createClient(url,key,{...opts,global:{fetch:transport}});}};
-   if(name==='../_shared/cron-service-auth.ts')return load(allowed[2]);
+   if(name==='../_shared/cron-service-auth.ts'||name==='./cron-service-auth.ts')return load(allowed[2]);
+   if(name==='../_shared/honoraires-staging-test.ts')return load(allowed[3]);
    if(name==='../_shared/demandes-facturation-honoraires.ts')return load(allowed[1]);
    throw new Error('Import forbidden '+name);
   };

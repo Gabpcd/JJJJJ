@@ -19,6 +19,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { rendreCddEmployeur, validerDonneesCdd } from '../_shared/cdd-employeur.ts';
+import { rendreContratLiberal } from '../_shared/contrat-liberal.ts';
 
 const BUSINESS_TIME_ZONE = 'Europe/Paris';
 
@@ -243,9 +244,16 @@ Deno.serve(async (req: Request) => {
       return repondre(422, { error: 'Les données nécessaires au contrat ne sont pas disponibles.' });
     }
     const vars = buildVariables(contrat, missionRes.data, soignantRes.data, etabRes.data);
+    const liberal = ['REMPLACEMENT_LIBERAL', 'LIBERAL'].includes(contrat.type_contrat)
+      ? rendreContratLiberal(templateRes.data!.contenu_html, vars, missionRes.data, etabRes.data)
+      : null;
+    if (liberal && liberal.html === null) return repondre(422, {
+      error: 'Les informations du contrat libéral sont incomplètes. Complétez-les avant de signer.',
+      code: 'CONTRAT_LIBERAL_DONNEES_REQUISES', champs: liberal.champs,
+    });
     const html = cdd?.donnees
       ? rendreCddEmployeur(vars, cdd.donnees, auteur, new Date().toISOString())
-      : replaceTemplate(templateRes.data!.contenu_html, vars);
+      : liberal?.html ?? replaceTemplate(templateRes.data!.contenu_html, vars);
     const documentComplet = wrapInDocument(html, contrat.numero_contrat || contrat.id);
     const hash = await sha256Hex(documentComplet);
     await autoriserPreparation();

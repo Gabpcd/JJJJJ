@@ -26,6 +26,7 @@ import {
 } from '../_shared/cron-service-auth.ts';
 
 import { traiterDemandesHonoraires } from '../_shared/demandes-facturation-honoraires.ts';
+import { traiterHonorairesStagingTest } from '../_shared/honoraires-staging-test.ts';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
@@ -39,6 +40,17 @@ Deno.serve(async (req: Request) => {
     'Content-Type': 'application/json',
   };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  // Explicit recipe only: its project/service checks precede even Vault reads.
+  // The existing cron bodies never enter this branch or load its configuration.
+  if (req.method === 'POST') {
+    let recipeBody: any;
+    try { recipeBody = await req.clone().json(); } catch { /* Existing parser below. */ }
+    if (recipeBody?.mode === 'demandes-test') {
+      return traiterHonorairesStagingTest(req, recipeBody, key => Deno.env.get(key),
+        (url, key) => createClient(url, key, { auth: { persistSession: false } }));
+    }
+  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
