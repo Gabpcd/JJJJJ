@@ -13,6 +13,14 @@ const cddSource = ts.transpileModule(readFileSync('supabase/functions/_shared/cd
 }).outputText;
 const cddExports: Record<string, unknown> = {};
 runInNewContext(cddSource, { exports: cddExports });
+const liberalSource = ts.transpileModule(readFileSync('supabase/functions/_shared/contrat-liberal.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const liberalExports: Record<string, unknown> = {};
+runInNewContext(liberalSource, { exports: liberalExports });
+// Copie exacte du master actif v3, lu en production le 20 octobre 2026.
+// Aucun profil ni contrat utilisateur n'est contenu dans cette fixture.
+const masterLiberal = readFileSync('tests/admin/security/fixtures/contrat-liberal-master-v3.html', 'utf8');
 const donneesCddTest = {
   cadre: 'PRIVE_TERME_PRECIS', confirme: true, representant_nom: 'Représentant fictif', representant_qualite: 'Responsable TEST',
   motif_type: 'REMPLACEMENT', motif_precis: 'Remplacement synthétique du banc fermé', remplace_nom: 'Personne fictive',
@@ -26,12 +34,15 @@ const original = { storage_path: 'original/signe.html', hash_document: 'a'.repea
   contenu_html: '<article>Original signé</article>', contenu_html_rendu_le: '2026-09-20T00:00:00Z' };
 function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean; denied?: boolean; rpcError?: boolean;
   rpcData?: unknown; uploadError?: boolean; updateError?: boolean; urlError?: boolean; authorization?: string;
-  soignant?: Record<string, unknown>; etablissement?: Record<string, unknown>; templateHtml?: string;
+  soignant?: Record<string, unknown>; etablissement?: Record<string, unknown>; mission?: Record<string, unknown>; templateHtml?: string;
   donneesCdd?: unknown; permissionCdd?: boolean;
   afterUpload?: (s: any) => void; afterUrl?: (s: any) => void } = {}) {
   const state = { denied: options.denied || false, calls: [] as string[], urls: [] as string[], uploads: [] as { path: string; bytes: Blob; config: any }[],
     soignant: { nom: '<Synthetic>', prenom: 'Test', ...options.soignant } as Record<string, unknown>,
-    etablissement: { nom: 'Simulation', ...options.etablissement } as Record<string, unknown>,
+    etablissement: { nom: 'Simulation', adresse_ville: 'Ville TEST', ...options.etablissement } as Record<string, unknown>,
+    mission: { intitule: 'Simulation', debut_le: '2035-01-01T07:00:00Z', fin_le: '2035-01-01T15:00:00Z',
+      duree_heures: 8, mode_remuneration: 'TAUX_HORAIRE', taux_horaire_base: 40, retrocession_pct: null,
+      ...options.mission } as Record<string, unknown>,
     templateHtml: options.templateHtml ?? '<article>Contrat {{numero_contrat}} — {{soignant_nom}}</article>',
     contrat: { id, mission_id: 'mission', etablissement_id: 'etab', soignant_id: 'soignant', numero_contrat: 'SYNTHETIQUE-1', type_contrat: 'CDD',
       statut: 'EN_ATTENTE_SIGNATURES', signature_soignant: false, signature_etablissement: false,
@@ -55,7 +66,7 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
         const data = table === 'contrats_mission' ? { ...state.contrat }
           : table === 'templates_contrat' ? { contenu_html: state.templateHtml, nom: 'Test', version: 1 }
           : table === 'soignants' ? { ...state.soignant } : table === 'etablissements' ? { ...state.etablissement }
-          : table === 'missions' ? { intitule: 'Simulation', debut_le: '2035-01-01', fin_le: '2035-01-02' } : null;
+          : table === 'missions' ? { ...state.mission } : null;
         if (!data) throw new Error(`Table inattendue ${table}`);
         return { data, error: null };
       },
@@ -86,6 +97,7 @@ function simulation(options: { contrat?: Record<string, unknown>; auth?: boolean
     if (name === 'npm:@supabase/supabase-js@2.99.2') return { createClient: (_url: string, key: string) => key === 'service' ? admin : user };
     if (name === '../_shared/cors.ts') return { corsHeaders: () => ({}) };
     if (name === '../_shared/cdd-employeur.ts') return cddExports;
+    if (name === '../_shared/contrat-liberal.ts') return liberalExports;
     throw new Error(`Import inattendu ${name}`);
   }, Deno: { env: { get: (key: string) => ({ SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon' }[key]) },
     serve: (h: typeof handler) => { handler = h; } }, Date, Request, Response, Blob, TextEncoder, crypto: webcrypto,
@@ -193,13 +205,15 @@ describe('Edge contrats : autorisation canonique et preuve originale', () => {
     expect(s.state.uploads).toHaveLength(1);
     expect(s.state.calls).toEqual(['auth', 'guard', 'read:contrats_mission', 'guard', 'url', 'guard']);
   });
-  it.each([null, ''])('n’utilise pas une propriété siret non canonique si siret_liberal vaut %j', async siretLiberal => {
+  it.each([null, ''])('refuse le nouveau modèle demandant un SIRET absent sans utiliser une propriété non canonique : %j', async siretLiberal => {
     const s = simulation({ contrat: { type_contrat: 'LIBERAL' },
       soignant: { siret_liberal: siretLiberal, siret: '99999999999999' },
       templateHtml: '<article><p>Soignant : {{soignant_siret}}</p></article>' });
-    expect((await s.lancer()).status).toBe(200);
-    expect(await s.state.uploads[0].bytes.text()).toContain('<p>Soignant : </p>');
-    expect(s.state.contrat.contenu_html).not.toContain('99999999999999');
+    expect(await s.lancer()).toMatchObject({ status: 422, body: {
+      code: 'CONTRAT_LIBERAL_DONNEES_REQUISES', champs: ['soignant_siret'],
+    } });
+    expect(s.state.uploads).toEqual([]);
+    expect(s.state.calls).not.toContain('update');
   });
   it('ne réécrit pas le SIRET manquant d’un original déjà signé avec le profil actuel', async () => {
     const historical = { ...original, contenu_html: '<article>Original signé — SIRET : </article>' };
@@ -231,5 +245,94 @@ describe('Edge contrats : autorisation canonique et preuve originale', () => {
   it('conserve l’appel système exact tout en préservant le signé', async () => {
     const s = simulation({ authorization: 'Bearer service', contrat: { ...original, statut: 'SIGNE_COMPLET' } });
     expect((await s.lancer()).status).toBe(200); expect(s.state.uploads).toEqual([]); expect(s.state.calls).not.toContain('auth');
+  });
+});
+
+const liberalOptions = {
+  contrat: { type_contrat: 'REMPLACEMENT_LIBERAL' },
+  templateHtml: masterLiberal,
+  soignant: { prenom: 'Camille', nom: 'Fictif', profession: 'IDE', numero_rpps: '11111111111' },
+  etablissement: { nom: 'Structure fictive', siret: '22222222222222',
+    adresse_rue: '1 rue TEST', adresse_code_postal: '75000', adresse_ville: 'Paris' },
+};
+describe('Original libéral : master production v3 et données métier complètes', () => {
+  it.each([
+    ['hiver', '2026-01-15T07:00:00Z', '2026-01-15T15:00:00Z', '15/01/2026', '08:00', '16:00'],
+    ['été', '2026-07-15T07:00:00Z', '2026-07-15T15:00:00Z', '15/07/2026', '09:00', '17:00'],
+  ])('fige le modèle réel au taux horaire en heure de Paris (%s), sans rétrocession inventée', async (_, debut, fin, date, heureDebut, heureFin) => {
+    const s = simulation({ ...liberalOptions, mission: { debut_le: debut, fin_le: fin,
+      mode_remuneration: 'TAUX_HORAIRE', taux_horaire_base: 42.5, retrocession_pct: 80 } });
+    expect(await s.lancer()).toMatchObject({ status: 200 });
+    const html = await s.state.uploads[0].bytes.text();
+    expect(html).toContain(`<strong>${date} à ${heureDebut}</strong> au <strong>${date} à ${heureFin}</strong> (8 heures)`);
+    expect(html).toContain('Mode de rémunération : <strong>Taux horaire</strong>');
+    expect(html).toContain('<strong>42.50 € par heure</strong>');
+    expect(html).not.toContain('Si rétrocession');
+    expect(html).not.toContain('80 %');
+    expect(html).toContain('Fait à Paris, le ');
+    expect(html).toContain('Le Remplaçant déclare être régulièrement inscrit');
+    expect(html).not.toContain('{{');
+    expect(s.state.contrat.hash_document).toBe(Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(html))).toString('hex'));
+    expect(s.state.contrat.contenu_html).toBe(html);
+  });
+  it('fige la rétrocession applicable sans taux horaire requis ni clause horaire concurrente', async () => {
+    const s = simulation({ ...liberalOptions, mission: {
+      mode_remuneration: 'RETROCESSION', retrocession_pct: '75.5', taux_horaire_base: null,
+    } });
+    expect(await s.lancer()).toMatchObject({ status: 200 });
+    const html = await s.state.uploads[0].bytes.text();
+    expect(html).toContain('Mode de rémunération : <strong>Rétrocession d’honoraires</strong>');
+    expect(html).toContain('<strong>75.5 %</strong>');
+    expect(html).not.toContain('Si taux horaire');
+    expect(html).not.toContain('€ par heure');
+    expect(html).not.toContain('{{');
+  });
+  it('ne crée pas de prérequis SIRET soignant quand le master ne le demande pas', async () => {
+    const s = simulation({ ...liberalOptions, soignant: { ...liberalOptions.soignant, siret_liberal: null } });
+    expect((await s.lancer()).status).toBe(200);
+  });
+  it.each([
+    [{ debut_le: null }, 'debut_le'],
+    [{ debut_le: 'invalide' }, 'debut_le'],
+    [{ debut_le: '2035-01-01T07:00:00' }, 'debut_le'],
+    [{ fin_le: '2035-01-01T06:00:00Z' }, 'fin_le'],
+    [{ duree_heures: null }, 'duree_heures'],
+    [{ duree_heures: 0 }, 'duree_heures'],
+    [{ mode_remuneration: null }, 'mode_remuneration'],
+    [{ mode_remuneration: 'taux_horaire' }, 'mode_remuneration'],
+    [{ taux_horaire_base: null }, 'taux_horaire_base'],
+    [{ taux_horaire_base: 'NaN' }, 'taux_horaire_base'],
+    [{ mode_remuneration: 'RETROCESSION', retrocession_pct: null }, 'retrocession_pct'],
+    [{ mode_remuneration: 'RETROCESSION', retrocession_pct: 101 }, 'retrocession_pct'],
+  ])('refuse %j avant upload, sans effacer la donnée manquante', async (mission, champ) => {
+    const s = simulation({ ...liberalOptions, mission: mission as Record<string, unknown> });
+    expect(await s.lancer()).toMatchObject({ status: 422, body: {
+      code: 'CONTRAT_LIBERAL_DONNEES_REQUISES', champs: expect.arrayContaining([champ]),
+    } });
+    expect(s.state.uploads).toEqual([]);
+    expect(s.state.calls).not.toContain('update');
+    expect(s.state.contrat.hash_document).toBeNull();
+  });
+  it.each([
+    { etablissement: { ...liberalOptions.etablissement, adresse_ville: '' } },
+    { soignant: { ...liberalOptions.soignant, nom: '' } },
+    { templateHtml: masterLiberal + '<p>Condition {{inconnue}}</p>' },
+    { templateHtml: masterLiberal.replace('Si rétrocession :', 'Autre clause de rétrocession :') },
+  ])('refuse un modèle incomplet ou une clause conditionnelle inconnue : %j', async (options) => {
+    const s = simulation({ ...liberalOptions, ...options });
+    expect((await s.lancer()).status).toBe(422);
+    expect(s.state.uploads).toEqual([]);
+    expect(s.state.calls).not.toContain('update');
+  });
+  it('conserve intégralement un original libéral déjà signé, même incomplet selon les nouvelles gardes', async () => {
+    const s = simulation({ ...liberalOptions, contrat: { ...liberalOptions.contrat, ...original,
+      statut: 'SIGNE_COMPLET', signature_soignant: true, signature_etablissement: true },
+      mission: { debut_le: null, mode_remuneration: null }, templateHtml: '{{inconnue}}' });
+    const avant = { ...s.state.contrat };
+    expect((await s.lancer()).status).toBe(200);
+    expect(s.state.contrat).toEqual(avant);
+    expect(s.state.uploads).toEqual([]);
+    expect(s.state.calls).not.toContain('read:missions');
+    expect(s.state.calls).not.toContain('read:templates_contrat');
   });
 });

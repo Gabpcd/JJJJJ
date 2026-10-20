@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { traiterEmailFacturation } from '../../../supabase/functions/_shared/facturation-email-queue';
 import { resolveOperationalTestAccount, resolveOperationalTestSource } from '../../../supabase/functions/_shared/test-account';
 import { resolveFacturationEmailSource } from '../../../supabase/functions/_shared/facturation-email-source';
+import { admitStagingInvoiceEmail } from '../../../supabase/functions/_shared/invoice-email-staging-test';
 
 const corps = { type: 'FACTURE_EMISE', destinataire_id: 'etab', data: { numero: 'F-1' } };
 const cle = 'facture-emise-commission:facture:etab';
@@ -194,6 +195,7 @@ function simulationEnvoi(sourceCanonique?: SourceCanonique) {
     '../_shared/rate-limit.ts': { applyRateLimit: () => false, getClientIp: () => '127.0.0.1' },
     '../_shared/admin-auth.ts': { verifyAdminOrServiceRole: async () => ({ ok: true }) },
     '../_shared/commission-email.ts': commissionEmail,
+    '../_shared/invoice-email-staging-test.ts': { admitStagingInvoiceEmail },
     '../_shared/facturation-email-source.ts': { resolveFacturationEmailSource: sourceCanonique ? resolveFacturationEmailSource : async () => ({ ok: true, isTest: etat.testSource }) },
     '../_shared/test-account.ts': sourceCanonique ? { resolveOperationalTestAccount, resolveOperationalTestSource } : {
       resolveOperationalTestAccount: async () => ({ ok: true, isTest: etat.testAccount }),

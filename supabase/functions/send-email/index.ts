@@ -4,6 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
 import { resolveFacturationEmailSource } from '../_shared/facturation-email-source.ts';
+import { admitStagingInvoiceEmail } from '../_shared/invoice-email-staging-test.ts';
 import {
   resolveOperationalTestAccount,
   resolveOperationalTestSource,
@@ -1805,6 +1806,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    const stagingInvoiceEmail = await admitStagingInvoiceEmail(
+      supabaseService, body, isServiceRole, key => Deno.env.get(key),
+    );
+
     // Les fixtures conservent leurs notifications in-app mais ne déclenchent
     // jamais un fournisseur email réel. Une erreur de classification bloque
     // également l'envoi (fail-closed).
@@ -1822,7 +1827,7 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
-      if (testAccount.isTest) {
+      if (testAccount.isTest && !stagingInvoiceEmail) {
         await Promise.resolve(supabaseService.from('journaux_audit').insert({
           acteur_id: null,
           type_acteur: 'SYSTEME',
@@ -1854,7 +1859,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
-    if (sourceAccount.isTest) {
+    if (sourceAccount.isTest && !stagingInvoiceEmail) {
       await Promise.resolve(supabaseService.from('journaux_audit').insert({
         acteur_id: null,
         type_acteur: 'SYSTEME',
@@ -1976,7 +1981,9 @@ Deno.serve(async (req) => {
     //   3. auth.users.email (via SQL direct, plus auth.admin)
     let resolvedEmail: string | null = null;
 
-    if (isExternalInviteFlow) {
+    if (stagingInvoiceEmail) {
+      resolvedEmail = stagingInvoiceEmail.recipient;
+    } else if (isExternalInviteFlow) {
       // Flow externe : destinataire_email fourni directement (invité non-user)
       resolvedEmail = bodyEmail;
     } else {
@@ -2015,7 +2022,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { subject, html } = rendered;
+    const subject = stagingInvoiceEmail ? `[TEST] ${rendered.subject}` : rendered.subject;
+    const html = stagingInvoiceEmail
+      ? rendered.html.replace(/(<body[^>]*>)/i, '$1<p>RECETTE TEST — Aucun mouvement d’argent réel.</p>')
+      : rendered.html;
 
     // CP-LITIGES-7a FIX 16 : attachment PDF pour AVOIR_EMIS
     const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -2168,6 +2178,19 @@ Deno.serve(async (req) => {
     };
     if (idempotencyKey) {
       resendHeaders['Idempotency-Key'] = idempotencyKey;
+    }
+
+    // Révocation/expiration et modification de source ferment aussi un appel
+    // déjà commencé, avant qu'il ne contacte le fournisseur.
+    if (stagingInvoiceEmail) {
+      const current = await admitStagingInvoiceEmail(
+        supabaseService, body, isServiceRole, key => Deno.env.get(key),
+      );
+      if (!current || current.recipient !== resolvedEmail) {
+        return new Response(JSON.stringify({ error: 'INVOICE_EMAIL_STAGING_REFUSED' }), {
+          status: 503, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     let response: Response;
