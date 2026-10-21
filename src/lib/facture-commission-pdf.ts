@@ -72,7 +72,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       'montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, ' +
       'heures_nuit, heures_dimanche, heures_ferie, ' +
       'taux_majoration_nuit_fige, taux_majoration_dimanche_fige, taux_majoration_ferie_fige, ' +
-      'type_contrat_applique, taux_commission_fige, ' +
+      'type_contrat_applique, taux_commission_fige, taux_commission, ' +
       'montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id';
     let missions: any[] = [];
     if ((f as any).mission_id) {
@@ -89,6 +89,29 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         .eq('facture_id', (f as any).id);
       if (missionError) throw new Error('Impossible de charger les missions facturées. Réessayez.');
       missions = m || [];
+    }
+
+    // Une commission hebdomadaire se rattache à une pièce d'honoraires figée.
+    // Son assiette ne se reconstitue pas en divisant une commission déjà arrondie.
+    let assietteHonoraires: number | null = null;
+    if ((f as any).facture_honoraire_id) {
+      const { data: honoraires, error: honorairesError } = await supabase
+        .from('factures_honoraires')
+        .select('id, mission_id, etablissement_id, type_document, montant_ht')
+        .eq('id', (f as any).facture_honoraire_id)
+        .eq('etablissement_id', (f as any).etablissement_id)
+        .maybeSingle();
+      if (honorairesError || !honoraires
+        || honoraires.id !== (f as any).facture_honoraire_id
+        || honoraires.etablissement_id !== (f as any).etablissement_id
+        || !honoraires.mission_id || honoraires.mission_id !== (f as any).mission_id
+        || missions.length !== 1 || missions[0].id !== honoraires.mission_id
+        || honoraires.type_document !== ((f as any).type_document === 'AVOIR' ? 'AVOIR' : 'FACTURE')
+        || honoraires.montant_ht == null || !Number.isFinite(Number(honoraires.montant_ht))
+        || Number(honoraires.montant_ht) < 0) {
+        throw new Error('Impossible de vérifier la facture d’honoraires liée. Réessayez.');
+      }
+      assietteHonoraires = Number(honoraires.montant_ht);
     }
 
     // Enrichir avec soignant (nom + profession + spécialités) + pointages +
@@ -409,7 +432,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           Number(m.montant_majoration_nuit || 0) +
           Number(m.montant_majoration_dimanche || 0) +
           Number(m.montant_majoration_ferie || 0);
-        const tauxCommission = Number(m.taux_commission_fige || 15);
+        const tauxCommission = Number(m.taux_commission_fige ?? m.taux_commission ?? 15);
         const ifmMission = Number(m.montant_ifm || 0);
         const icpMission = Number(m.montant_icp || 0);
         const assietteMission = m.type_contrat_applique === 'SALARIE'
@@ -418,12 +441,18 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         const commissionHtFacturee = factureMonoMission ? Number((f as any).montant_ht || 0) : Number(m.montant_commission_ht || 0);
         const commissionTvaFacturee = factureMonoMission ? Number((f as any).montant_tva || 0) : Number(m.montant_commission_tva || 0);
         const commissionTtcFacturee = factureMonoMission ? Number((f as any).montant_ttc || 0) : Number(m.montant_commission_ttc || 0);
-        const assietteFacturee = tauxCommission > 0 ? commissionHtFacturee * 100 / tauxCommission : assietteMission;
-        const facturePartielle = factureMonoMission && Math.abs(assietteFacturee - assietteMission) > 0.01;
-        const totalBrut = facturePartielle ? assietteFacturee : totalBrutMission;
-        const decompoRows: (string | number)[][] = facturePartielle ? [
-          ['Assiette facturée pour la période', 'Base de calcul de cette facture uniquement', fmtEur(assietteFacturee)],
-        ] : [
+        const commissionMissionCorrespond = Math.round(assietteMission * tauxCommission)
+          === Math.round(commissionHtFacturee * 100);
+        const assietteFacturee = assietteHonoraires
+          ?? (commissionMissionCorrespond ? assietteMission : null);
+        const facturePartielle = factureMonoMission && (assietteHonoraires !== null || !commissionMissionCorrespond);
+        const totalBrut = totalBrutMission;
+        // Une ancienne pièce sans lien ni assiette vérifiable garde ses montants
+        // figés, sans présenter comme exacte une base inversée depuis l'arrondi.
+        const decompoRows: (string | number)[][] = facturePartielle
+          ? (assietteFacturee === null ? [] : [
+            ['Assiette facturée pour la période', 'Base de calcul de cette facture uniquement', fmtEur(assietteFacturee)],
+          ]) : [
           ['Brut de base', `${m.duree_heures || 0} h x ${tauxHoraire.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
         ];
         if (!facturePartielle && m.heures_nuit && Number(m.heures_nuit) > 0) {
@@ -453,7 +482,6 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         // ── PASSE 5 : décompo SALARIE complète + assiette commission explicite ──
         if (!facturePartielle) decompoRows.push(['Brut soignant', '', fmtEur(totalBrut)]);
 
-        let assiette: number;
         let assietteLabel: string;
         if (m.type_contrat_applique === 'SALARIE' && !facturePartielle) {
           const ifm = ifmMission;
@@ -466,12 +494,12 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           decompoRows.push(['Super brut', '', fmtEur(superBrut)]);
           decompoRows.push(['Net salarié et cotisations', 'Déterminés par le bulletin de paie de l\'employeur', '—']);
           decompoRows.push(['', '', '']);
-          assiette = superBrut;
-          assietteLabel = `${tauxCommission}% x ${fmtEur(assiette)} super brut (base + IFM + ICP)`;
+          assietteLabel = `${tauxCommission}% x ${fmtEur(superBrut)} super brut (base + IFM + ICP)`;
         } else {
           decompoRows.push(['', '', '']);
-          assiette = facturePartielle ? assietteFacturee : totalBrut;
-          assietteLabel = `${tauxCommission}% x ${fmtEur(assiette)} ${facturePartielle ? 'assiette facturée pour la période' : 'honoraires bruts'}`;
+          const assiette = facturePartielle ? assietteFacturee : totalBrut;
+          assietteLabel = assiette === null ? 'Montant figé pour la période facturée'
+            : `${tauxCommission}% x ${fmtEur(assiette)} ${facturePartielle ? 'assiette facturée pour la période' : 'honoraires bruts'}`;
         }
 
         decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(montantDocument(commissionHtFacturee))]);

@@ -292,3 +292,102 @@ describe('PDF commission : créneaux effectifs canoniques', () => {
     expect(mocks.download).not.toHaveBeenCalled();
   });
 });
+
+
+describe('PDF commission : assiette figée sans inversion de l’arrondi', () => {
+  const honorairesId = '00000000-0000-4000-8000-000000000005';
+  function lierHonoraires(montant = 2.25) {
+    Object.assign(rows.factures[0], { facture_honoraire_id: honorairesId,
+      montant_ht: 0.34, montant_tva: 0.07, montant_ttc: 0.41, montant_a_payer: 0.41 });
+    rows.factures_honoraires = [{ id: honorairesId, mission_id: missionId,
+      etablissement_id: etablissementId, type_document: 'FACTURE', montant_ht: montant }];
+  }
+  function lignes() {
+    return mocks.table.mock.calls.flatMap(([, options]) => options.body ?? []);
+  }
+  it('affiche 2,25 euros d’honoraires malgré la commission arrondie à 0,34 euro', async () => {
+    lierHonoraires(); const avant = structuredClone(rows);
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Assiette facturée pour la période', 'Base de calcul de cette facture uniquement', '2.25 €']);
+    expect(lignes()).toContainEqual(['Commission Jolene', '15% x 2.25 € assiette facturée pour la période', '0.34 €']);
+    expect(mocks.totals).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ht: 0.34, tva: 0.07, ttc: 0.41 }));
+    expect(rows).toEqual(avant); expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('conserve le taux historique quand le taux figé est absent', async () => {
+    lierHonoraires(100);
+    Object.assign(rows.missions[0], { taux_commission_fige: null, taux_commission: 10 });
+    Object.assign(rows.factures[0], { montant_ht: 10, montant_tva: 2, montant_ttc: 12, montant_a_payer: 12 });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', '10% x 100 € assiette facturée pour la période', '10 €']);
+    expect(selections.find(selection => selection.table === 'missions')?.select).toMatch(/\btaux_commission\b/);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it.each([
+    { taux_commission_fige: 0, taux_commission: 10 },
+    { taux_commission_fige: null, taux_commission: 0 },
+  ])('un taux zéro explicite ne devient pas 15 %% (%j)', async taux => {
+    lierHonoraires(100); Object.assign(rows.missions[0], taux);
+    Object.assign(rows.factures[0], { montant_ht: 0, montant_tva: 0, montant_ttc: 0, montant_a_payer: 0 });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', '0% x 100 € assiette facturée pour la période', '0 €']);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('une facture partielle conserve son assiette de période même si la mission a changé', async () => {
+    lierHonoraires(33.33);
+    Object.assign(rows.factures[0], { montant_ht: 5, montant_tva: 1, montant_ttc: 6, montant_a_payer: 6 });
+    rows.missions[0].total_brut = 999;
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Assiette facturée pour la période', 'Base de calcul de cette facture uniquement', '33.33 €']);
+    expect(lignes().some(row => row[0] === 'Brut soignant')).toBe(false);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('un avoir lié utilise sa propre assiette et conserve les montants en crédit', async () => {
+    lierHonoraires(); rows.factures[0].type_document = 'AVOIR'; rows.factures_honoraires[0].type_document = 'AVOIR';
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', '15% x 2.25 € assiette facturée pour la période', '-0.34 €']);
+    expect(mocks.totals).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ht: -0.34, tva: -0.07, ttc: -0.41 }));
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ['absente', () => { rows.factures_honoraires = []; }],
+    ['lecture refusée', () => { failures.factures_honoraires = 'READ_REFUSED'; }],
+    ['autre établissement', () => { rows.factures_honoraires[0].etablissement_id = soignantId; }],
+    ['autre mission', () => { rows.factures_honoraires[0].mission_id = soignantId; }],
+    ['type incohérent', () => { rows.factures_honoraires[0].type_document = 'AVOIR'; }],
+    ['montant absent', () => { rows.factures_honoraires[0].montant_ht = null; }],
+    ['montant invalide', () => { rows.factures_honoraires[0].montant_ht = 'invalid'; }],
+  ])('refuse une pièce liée %s sans reconstruire une assiette', async (_label, changer) => {
+    lierHonoraires(); changer(); await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).toHaveBeenCalledWith('Impossible de vérifier la facture d’honoraires liée. Réessayez.');
+    expect(mocks.download).not.toHaveBeenCalled();
+  });
+  it('une pièce ancienne sans lien ne reconstruit pas sa base depuis une commission différente', async () => {
+    Object.assign(rows.factures[0], { montant_ht: 0.34, montant_tva: 0.07, montant_ttc: 0.41, montant_a_payer: 0.41 });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', 'Montant figé pour la période facturée', '0.34 €']);
+    expect(lignes().some(row => row[0] === 'Assiette facturée pour la période')).toBe(false);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('sans lien, un arrondi de centime compatible conserve la vraie base de mission', async () => {
+    Object.assign(rows.factures[0], { montant_ht: 0.34, montant_tva: 0.07, montant_ttc: 0.41, montant_a_payer: 0.41 });
+    rows.missions[0].total_brut = 2.25;
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', '15% x 2.25 € honoraires bruts', '0.34 €']);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+  it('le salarié conserve sa base complète avec IFM et ICP', async () => {
+    Object.assign(rows.missions[0], { type_contrat_applique: 'SALARIE', total_brut: 80, montant_ifm: 8, montant_icp: 8.8 });
+    Object.assign(rows.factures[0], { montant_ht: 14.52, montant_tva: 2.9, montant_ttc: 17.42, montant_a_payer: 17.42 });
+    await telechargerFactureCommissionPDF(factureId);
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(lignes()).toContainEqual(['Commission Jolene', '15% x 96.8 € super brut (base + IFM + ICP)', '14.52 €']);
+    expect(mocks.download).toHaveBeenCalledOnce();
+  });
+});

@@ -3,6 +3,13 @@
 const STAGE = 'https://mejpriaetwgtcstbgfid.supabase.co';
 const ETABLISSEMENT = 'fcaa6c97-46c1-4da9-8f74-1395aed616c5';
 const SOIGNANT = 'abba3c93-5408-47bf-96e3-0864c7de3cb7';
+// Cohorte TEST fixe et temporaire ; aucun paramètre ne peut fournir un autre acteur.
+const ISOLATED_TEST = Object.freeze({
+  soignantId: '1de96e4c-9be8-4897-a5bb-7640c05d5706', missionId: '6bf15d0e-e2a0-4fd7-a903-767679b280bb',
+  notBefore: '2026-10-21T00:00:00.000Z', expiresBefore: '2026-10-21T23:59:59.000Z',
+});
+const soignantForMission = (missionId: string): string =>
+  missionId === ISOLATED_TEST.missionId ? ISOLATED_TEST.soignantId : SOIGNANT;
 const OWNER = 'connect-test-ci-36975875132-1:c3e2db2cb986c81a58e4c39010c33b487dc14915';
 const RECIPIENT = 'gabrielle@jolene.app';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -17,8 +24,8 @@ export type InvoiceEmailStagingConfig = {
   honorairesId: string; commissionId: string; createdAt: string; expiresAt: string;
   events: [Event, Event, Event];
 };
-const SCOPES = [
-  ['HONORAIRES', 'SOIGNANT', SOIGNANT],
+const scopesForMission = (missionId: string) => [
+  ['HONORAIRES', 'SOIGNANT', soignantForMission(missionId)],
   ['HONORAIRES', 'ETABLISSEMENT', ETABLISSEMENT],
   ['COMMISSION', 'ETABLISSEMENT', ETABLISSEMENT],
 ] as const;
@@ -51,6 +58,12 @@ export function invoiceEmailStagingConfig(
   const created = Date.parse(config.createdAt), expires = Date.parse(config.expiresAt);
   must(Number.isFinite(created) && Number.isFinite(expires) && created <= now && now < expires
     && expires > created && expires - created <= 60 * 60_000);
+  if (config.missionId === ISOLATED_TEST.missionId) {
+    must(created >= Date.parse(ISOLATED_TEST.notBefore)
+      && now >= Date.parse(ISOLATED_TEST.notBefore)
+      && expires <= Date.parse(ISOLATED_TEST.expiresBefore));
+  }
+  const SCOPES = scopesForMission(config.missionId);
   must(Array.isArray(config.events) && config.events.length === SCOPES.length);
   for (const [index, event] of config.events.entries()) {
     must(exactKeys(event, ['family', 'recipientRole', 'emailId', 'bodySha256'])
@@ -77,8 +90,9 @@ export async function invoiceEmailBodySha256(value: unknown): Promise<string> {
 }
 
 async function requireLiberalDocuments(sb: Client, config: InvoiceEmailStagingConfig): Promise<void> {
+  const soignant = soignantForMission(config.missionId);
   for (const [id, role, table] of [
-    [ETABLISSEMENT, 'ADMIN_ETABLISSEMENT', 'etablissements'], [SOIGNANT, 'SOIGNANT', 'soignants'],
+    [ETABLISSEMENT, 'ADMIN_ETABLISSEMENT', 'etablissements'], [soignant, 'SOIGNANT', 'soignants'],
   ]) {
     const auth = await sb.auth.admin.getUserById(id);
     const user = auth.data?.user, metadata = user?.app_metadata;
@@ -93,14 +107,14 @@ async function requireLiberalDocuments(sb: Client, config: InvoiceEmailStagingCo
     .select('id,etablissement_id,soignant_assigne_id,type_contrat_applique,statut')
     .eq('id', config.missionId).single();
   must(!mission.error && mission.data?.id === config.missionId
-    && mission.data.etablissement_id === ETABLISSEMENT && mission.data.soignant_assigne_id === SOIGNANT
+    && mission.data.etablissement_id === ETABLISSEMENT && mission.data.soignant_assigne_id === soignant
     && mission.data.type_contrat_applique === 'LIBERAL' && mission.data.statut === 'TERMINEE');
   const honoraires = await sb.from('factures_honoraires')
     .select('id,mission_id,etablissement_id,soignant_id,type_document,nature_correction,statut,est_facture_finale_mission,pdf_s3_key,facturx_xml_url,emise_le,stripe_payment_intent_id,date_paiement')
     .eq('id', config.honorairesId).single();
   must(!honoraires.error && honoraires.data?.id === config.honorairesId
     && honoraires.data.mission_id === config.missionId && honoraires.data.etablissement_id === ETABLISSEMENT
-    && honoraires.data.soignant_id === SOIGNANT && honoraires.data.type_document === 'FACTURE'
+    && honoraires.data.soignant_id === soignant && honoraires.data.type_document === 'FACTURE'
     && honoraires.data.nature_correction === 'ORIGINALE' && honoraires.data.statut === 'EMISE'
     && honoraires.data.est_facture_finale_mission === true && !!honoraires.data.pdf_s3_key
     && !!honoraires.data.facturx_xml_url && !!honoraires.data.emise_le
@@ -121,6 +135,8 @@ export async function stagingInvoiceEmailScope(
 ): Promise<{ recipient: string; recipientId: string; emailId: string; key: string; type: string } | null> {
   if (!isServiceRole || body.type !== 'FACTURE_EMISE' || !get('INVOICE_EMAIL_STAGING_TEST_RUN')) return null;
   const config = invoiceEmailStagingConfig(get, now)!;
+  const SCOPES = scopesForMission(config.missionId);
+  const soignant = soignantForMission(config.missionId);
   must(exactKeys(body, ['type', 'destinataire_id', 'data', 'idempotency_key'])
     && body.data && typeof body.data === 'object' && !Array.isArray(body.data));
   const index = SCOPES.findIndex(([family, role, id]) => body.data.famille_document === family
@@ -129,7 +145,7 @@ export async function stagingInvoiceEmailScope(
   const [family, role, recipientId] = SCOPES[index];
   const documentId = family === 'HONORAIRES' ? config.honorairesId : config.commissionId;
   must(body.data.facture_id === documentId && body.data.mission_id === config.missionId
-    && body.data.etablissement_id === ETABLISSEMENT && body.data.soignant_id === SOIGNANT);
+    && body.data.etablissement_id === ETABLISSEMENT && body.data.soignant_id === soignant);
   const key = family === 'HONORAIRES' ? `facture-emise-${role.toLowerCase()}:${documentId}`
     : `facture-emise-commission:${documentId}:${ETABLISSEMENT}`;
   must(body.idempotency_key === key);

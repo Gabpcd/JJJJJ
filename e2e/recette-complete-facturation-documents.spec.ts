@@ -230,6 +230,26 @@ test('Documents F1 établissement : commission réelle de période téléchargé
     return route.fulfill({ json: [{ ...banc.mission, etablissement_id: idsEtab.etab, taux_commission_fige: 15 }], headers: { 'access-control-allow-origin': '*' } });
   });
   etat.overrides.set('soignants', [banc.soignant]);
+  const honorairesLies = { ...banc.factures.find(f => f.id === commission.facture_honoraire_id),
+    etablissement_id: idsEtab.etab };
+  expect(honorairesLies).toMatchObject({ id: ids.facture, mission_id: ids.mission,
+    etablissement_id: commission.etablissement_id, type_document: 'FACTURE', montant_ht: 80 });
+  let lecturesAssietteCommission = 0;
+  await page.route('**/rest/v1/factures_honoraires?*', async route => {
+    const req = route.request(), url = new URL(req.url());
+    if (url.searchParams.get('select') !== 'id,mission_id,etablissement_id,type_document,montant_ht') return route.fallback();
+    expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
+    expect(req.method()).toBe('GET');
+    expect(url.searchParams.get('id')).toBe(`eq.${honorairesLies.id}`);
+    expect(url.searchParams.get('etablissement_id')).toBe(`eq.${commission.etablissement_id}`);
+    expect(url.searchParams.has('statut')).toBe(false);
+    expect(url.searchParams.has('type_document')).toBe(false);
+    lecturesAssietteCommission += 1;
+    // Même rattachement à l'établissement fictif que la mission ci-dessus.
+    // La projection canonique est bornée à cette pièce, sans changer le banc partagé.
+    return route.fulfill({ json: req.headers().accept?.includes('object') ? honorairesLies : [honorairesLies],
+      headers: { 'access-control-allow-origin': '*' } });
+  });
   let lecturesPlanningCommission = 0;
   await page.route('**/rest/v1/mission_creneaux?*', async route => {
     const req = route.request(), url = new URL(req.url());
@@ -261,6 +281,7 @@ test('Documents F1 établissement : commission réelle de période téléchargé
   }
   await aria(page, info, 'apres-commission-et-recharge');
   await page.screenshot({ path: info.outputPath('etablissement-commission.png'), fullPage: false, scale: 'css' });
+  expect(lecturesAssietteCommission).toBe(2);
   expect(lecturesPlanningCommission).toBe(2);
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]); expect(etat.operations).toEqual([]);
   reseau.verifier();
