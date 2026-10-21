@@ -134,11 +134,19 @@ function readOnlySelect(body) {
   assert.doesNotMatch(body.query, /\b(?:BEGIN|ROLLBACK|COMMIT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i);
   assert.equal((body.query.match(/;/g) || []).length, 1);
 }
+function readOnlyVaultTransaction(body) {
+  assert.equal(body.read_only, false);
+  assert.match(body.query, /^BEGIN READ ONLY;\s*SELECT\s/i);
+  assert.match(body.query, /AS evidence;\s*ROLLBACK;$/);
+  assert.doesNotMatch(body.query, /\b(?:COMMIT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|GRANT|REVOKE|READ WRITE)\b/i);
+  assert.equal((body.query.match(/;/g) || []).length, 3);
+  assert.match(body.query, /current_setting\('transaction_read_only'\)='on'/);
+}
 const vaultEvidence = () => ({ readOnly: true, urlCount: 1, url: STAGE, keyCount: 1, key: SYNTHETIC_KEY });
 test('runner : clé Vault correspondant exactement au runtime, lecture seule et réponse effacée', async () => {
   const rows = [{ evidence: vaultEvidence() }], calls = [];
   const key = await boundary.loadRuntimeServiceKey(async (path, body) => {
-    calls.push(path); assert.equal(path, '/database/query'); readOnlySelect(body);
+    calls.push(path); assert.equal(path, '/database/query'); readOnlyVaultTransaction(body);
     assert.match(body.query, /vault\.decrypted_secrets/); return rows;
   }, KEY_DIGEST);
   assert.equal(key, SYNTHETIC_KEY); assert.deepEqual(calls, ['/database/query']);
@@ -158,7 +166,7 @@ for (const [label, change] of [
 ]) test(`runner ferme Vault : ${label}, aucune suite ni fuite de clé`, async () => {
   const rows = [{ evidence: vaultEvidence() }]; change(rows); let calls = 0;
   await assert.rejects(() => boundary.loadRuntimeServiceKey(async (path, body) => {
-    calls++; assert.equal(path, '/database/query'); readOnlySelect(body); return rows;
+    calls++; assert.equal(path, '/database/query'); readOnlyVaultTransaction(body); return rows;
   }, KEY_DIGEST), { code: 'EXACT_RUNTIME_SERVICE_KEY_REQUIRED' });
   assert.equal(calls, 1);
   for (const row of rows) assert.equal(row.evidence.key, '');

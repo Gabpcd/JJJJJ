@@ -59,13 +59,16 @@ function runtimeServiceDigest(secrets, previousDigest, serviceKey) {
 }
 
 async function loadRuntimeServiceKey(mgmt, expectedDigest) {
-  // Management API ouvre la transaction read-only ; aucun BEGIN/ROLLBACK dans le SELECT.
-  const rows = await mgmt('/database/query', { read_only: true, query: `SELECT jsonb_build_object(
+  // Le rôle read_only de Management ne peut pas déchiffrer Vault ; PostgreSQL
+  // impose ici la lecture seule dans une transaction explicitement annulée.
+  const rows = await mgmt('/database/query', { read_only: false, query: `BEGIN READ ONLY;
+SELECT jsonb_build_object(
  'readOnly',current_setting('transaction_read_only')='on',
  'urlCount',(SELECT count(*) FROM vault.decrypted_secrets WHERE name='supabase_url'),
  'url',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='supabase_url' LIMIT 1),
  'keyCount',(SELECT count(*) FROM vault.decrypted_secrets WHERE name='service_role_key'),
- 'key',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='service_role_key' LIMIT 1)) AS evidence;` });
+ 'key',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='service_role_key' LIMIT 1)) AS evidence;
+ROLLBACK;` });
   const evidence = rows?.length === 1 ? rows[0]?.evidence : null;
   try {
     must(digest(expectedDigest) && evidence?.readOnly === true && evidence.urlCount === 1
