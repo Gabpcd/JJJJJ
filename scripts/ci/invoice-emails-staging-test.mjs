@@ -8,7 +8,10 @@ import { resolve, dirname, isAbsolute } from 'node:path';
 const PROJECT = 'mejpriaetwgtcstbgfid';
 const STAGE = `https://${PROJECT}.supabase.co`, API = `https://api.supabase.com/v1/projects/${PROJECT}`;
 const APP = 'http://127.0.0.1:8085';
-const E = 'fcaa6c97-46c1-4da9-8f74-1395aed616c5', S = 'abba3c93-5408-47bf-96e3-0864c7de3cb7';
+const E = 'fcaa6c97-46c1-4da9-8f74-1395aed616c5', S = '1de96e4c-9be8-4897-a5bb-7640c05d5706';
+const ISOLATED_MISSION = '6bf15d0e-e2a0-4fd7-a903-767679b280bb';
+const ISOLATED_CAPACITY = '41c85ec5-0aa9-4450-a958-a2b5e58e4205';
+const ISOLATED_NOT_BEFORE = '2026-10-21T00:00:00.000Z', ISOLATED_EXPIRES_BEFORE = '2026-10-21T23:59:59.000Z';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const QUEUE_HELPER = 'supabase/functions/_shared/facturation-email-queue.ts';
 const ADMISSION_HELPER = 'supabase/functions/_shared/invoice-email-staging-test.ts';
@@ -25,8 +28,7 @@ const file = path => { must(isAbsolute(path), 'ABSOLUTE_PATH_REQUIRED'); return 
 const publicJson = path => JSON.parse(file(path));
 const git = (cwd, args) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 10_000, maxBuffer: 4 * 1024 * 1024 });
 
-const readbackSql = (F, H, M, EVENTS) => `BEGIN READ ONLY;
-SELECT jsonb_build_object(
+const readbackSql = (F, H, M, EVENTS) => `SELECT jsonb_build_object(
  'read_only',current_setting('transaction_read_only')='on',
  'recorded_at',clock_timestamp(),
  'active_crons',(SELECT count(*) FROM cron.job WHERE active),
@@ -44,8 +46,51 @@ SELECT jsonb_build_object(
    'traces',(SELECT coalesce(jsonb_agg(jsonb_build_object('provider_id',x.provider_id,'status',x.statut,'recipient_id',x.destinataire_id,'recipient_email',x.destinataire_email,'type',x.type,'key',x.idempotency_key,'created_at',x.cree_le,'subject',x.sujet)),'[]'::jsonb) FROM public.emails_envoyes x WHERE x.idempotency_key=l.idempotency_key)
  ) ORDER BY l.evenement) FROM private.facturation_email_livraisons l JOIN public.email_queue q ON q.id=l.email_id
  WHERE l.email_id IN (${EVENTS.map(event => `'${event.id}'::uuid`).join(',')}))
-) AS evidence;
-ROLLBACK;`;
+) AS evidence;`;
+
+
+// Métadonnées uniquement : aucune clé ni empreinte de clé n'est journalisée.
+function runtimeServiceDigest(secrets, previousDigest, serviceKey) {
+  const rows = secrets.filter(row => row.name === 'SUPABASE_SERVICE_ROLE_KEY');
+  const observed = rows.length === 1 ? (rows[0].digest ?? rows[0].value) : null;
+  must(digest(observed) && (!previousDigest || observed === previousDigest), 'SERVICE_KEY_METADATA_DRIFT');
+  if (serviceKey) must(sha(serviceKey) === observed, 'SERVICE_KEY_RUNTIME_MISMATCH');
+  return observed;
+}
+
+async function loadRuntimeServiceKey(mgmt, expectedDigest) {
+  // Management API ouvre la transaction read-only ; aucun BEGIN/ROLLBACK dans le SELECT.
+  const rows = await mgmt('/database/query', { read_only: true, query: `SELECT jsonb_build_object(
+ 'readOnly',current_setting('transaction_read_only')='on',
+ 'urlCount',(SELECT count(*) FROM vault.decrypted_secrets WHERE name='supabase_url'),
+ 'url',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='supabase_url' LIMIT 1),
+ 'keyCount',(SELECT count(*) FROM vault.decrypted_secrets WHERE name='service_role_key'),
+ 'key',(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='service_role_key' LIMIT 1)) AS evidence;` });
+  const evidence = rows?.length === 1 ? rows[0]?.evidence : null;
+  try {
+    must(digest(expectedDigest) && evidence?.readOnly === true && evidence.urlCount === 1
+      && evidence.url === STAGE && evidence.keyCount === 1 && typeof evidence.key === 'string'
+      && evidence.key.length > 20 && !/\s/.test(evidence.key)
+      && sha(evidence.key) === expectedDigest, 'EXACT_RUNTIME_SERVICE_KEY_REQUIRED');
+    return evidence.key;
+  } finally {
+    // Effacer aussi une réponse refusée avant qu'elle ne sorte de cette portée.
+    if (Array.isArray(rows)) for (const row of rows) {
+      if (row?.evidence && typeof row.evidence === 'object') row.evidence.key = '';
+    }
+  }
+}
+
+async function requireGenerationClosed(mgmt) {
+  const rows = await mgmt('/database/query', { read_only: true, query: `SELECT jsonb_build_object(
+ 'readOnly',current_setting('transaction_read_only')='on',
+ 'closed',(SELECT count(*)=1 FROM private.honoraires_test_capacities WHERE id='${ISOLATED_CAPACITY}'::uuid
+   AND mission_id='${ISOLATED_MISSION}'::uuid AND soignant_id='${S}'::uuid AND etablissement_id='${E}'::uuid
+   AND NOT enabled AND revoked_at IS NOT NULL AND invocation_started_at IS NOT NULL),
+ 'allClosed',NOT EXISTS(SELECT FROM private.honoraires_test_capacities WHERE enabled)) AS evidence;` });
+  must(rows?.length === 1 && rows[0]?.evidence?.readOnly === true
+    && rows[0].evidence.closed === true && rows[0].evidence.allClosed === true, 'GENERATION_NOT_CLOSED');
+}
 
 function sourceClosure(checkout, name, pins = {}) {
   if (pins[name]) return pins;
@@ -86,8 +131,11 @@ async function main(contractPath) {
     && [runtime.missionId, runtime.honorairesId, runtime.commissionId].every(id => typeof id === 'string' && UUID.test(id))
     && new Set([runtime.missionId, runtime.honorairesId, runtime.commissionId]).size === 3
     && Date.now() - Date.parse(runtime.createdAt) >= 0 && Date.now() - Date.parse(runtime.createdAt) <= 5 * 60_000
-    && Date.parse(runtime.expiresAt) - Date.now() >= 5 * 60_000, 'FRESH_RUNTIME_REQUIRED');
+    && Date.parse(runtime.expiresAt) - Date.now() >= 5 * 60_000
+    && Date.parse(runtime.expiresAt) - Date.parse(runtime.createdAt) <= 60 * 60_000, 'FRESH_RUNTIME_REQUIRED');
   const F = runtime.commissionId, H = runtime.honorairesId, M = runtime.missionId;
+  must(M === ISOLATED_MISSION && Date.parse(runtime.createdAt) >= Date.parse(ISOLATED_NOT_BEFORE)
+    && Date.parse(runtime.expiresAt) <= Date.parse(ISOLATED_EXPIRES_BEFORE), 'EXACT_ISOLATED_TUPLE_REQUIRED');
   must(Array.isArray(runtime.events) && runtime.events.length === 3, 'EXACT_EVENTS_REQUIRED');
   const scopes = [['HONORAIRES', 'SOIGNANT', S, H], ['HONORAIRES', 'ETABLISSEMENT', E, H], ['COMMISSION', 'ETABLISSEMENT', E, F]];
   const EVENTS = scopes.map(([family, role, recipientId, documentId], i) => {
@@ -143,6 +191,7 @@ async function main(contractPath) {
     headers: { Authorization: `Bearer ${managementToken}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const project = await mgmt('');
   must(project.id === PROJECT && project.status === 'ACTIVE_HEALTHY' && project.database?.host === `db.${PROJECT}.supabase.co`, 'STAGING_PROJECT_REQUIRED');
+  let expectedServiceDigest;
   const verifyDeployment = async () => {
     const functions = await mgmt('/functions');
     const matches = functions.filter(row => row.slug === 'send-email');
@@ -155,18 +204,19 @@ async function main(contractPath) {
     must(!secrets.some(row => ['HONORAIRES_STAGING_TEST_RUN', 'INVOICE_STAGING_TEST_RUN', 'CONNECT_STAGING_TEST_RUN', 'SIGNATURE_SMS_STAGING_TEST_RUN'].includes(row.name)), 'OTHER_CAPACITY_STILL_OPEN');
     const publicValueMatches = (name, value) => {
       const rows = secrets.filter(row => row.name === name); if (rows.length !== 1) return false;
-      // Only these two PUBLIC values are compared/hashed; no key digest is emitted.
+      // Ces valeurs publiques sont comparées ; aucune valeur de configuration n’est émise.
       return rows[0].digest === sha(value) || rows[0].value === sha(value) || rows[0].value === value;
     };
     must(publicValueMatches('APP_URL', APP) && publicValueMatches('INVOICE_EMAIL_STAGING_TEST_RUN', runtimeRaw)
       && secrets.filter(row => row.name === 'RESEND_API_KEY').length === 1, 'STAGING_RUNTIME_NOT_CONFIRMED');
+    expectedServiceDigest = runtimeServiceDigest(secrets, expectedServiceDigest, serviceKey);
+    await requireGenerationClosed(mgmt);
     must(invoiceEmailStagingConfig(get), 'CAPACITY_NOT_ACTIVE');
   };
   await verifyDeployment();
-  const keys = await mgmt('/api-keys');
-  const matches = keys.filter(row => row.name === 'service_role');
-  must(matches.length === 1 && typeof matches[0].api_key === 'string' && matches[0].api_key.length > 20, 'STAGING_SERVICE_KEY_REQUIRED');
-  serviceKey = matches[0].api_key; for (const row of keys) if ('api_key' in row) row.api_key = '';
+  // La clé Vault existante reste en mémoire et doit correspondre au runtime déployé.
+  serviceKey = await loadRuntimeServiceKey(mgmt, expectedServiceDigest);
+  await verifyDeployment();
   const snapshot = async () => {
     const result = await mgmt('/database/query', { query: readbackSql(F, H, M, EVENTS), read_only: true });
     must(Array.isArray(result) && result.length === 1 && result[0]?.evidence, 'READBACK_SHAPE_REFUSED');

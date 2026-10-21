@@ -27,7 +27,10 @@ const SCOPES = [['HONORAIRES', 'SOIGNANT', S, H], ['HONORAIRES', 'ETABLISSEMENT'
 const KEYS = [`facture-emise-soignant:${H}`, `facture-emise-etablissement:${H}`, `facture-emise-commission:${F}:${E}`];
 const STAGE = 'https://mejpriaetwgtcstbgfid.supabase.co';
 
-async function fixture() {
+async function fixture(isolated = false) {
+  const S = isolated ? '1de96e4c-9be8-4897-a5bb-7640c05d5706' : 'abba3c93-5408-47bf-96e3-0864c7de3cb7';
+  const M = isolated ? '6bf15d0e-e2a0-4fd7-a903-767679b280bb' : 'f1660000-0000-4000-8000-000000000001';
+  const SCOPES = [['HONORAIRES', 'SOIGNANT', S, H], ['HONORAIRES', 'ETABLISSEMENT', E, H], ['COMMISSION', 'ETABLISSEMENT', E, F]];
   const calls = [], mutations = [], ledger = new Map(), provider = new Map(), posts = [];
   const users = Object.fromEntries([[E, 'ADMIN_ETABLISSEMENT'], [S, 'SOIGNANT']].map(([id, role]) => [id, {
     id, email_confirmed_at: '2026-10-16T00:00:00Z', app_metadata: { role, est_compte_test: true,
@@ -321,4 +324,65 @@ test('vrai handler concurrent : même ancre et ledger, au plus une livraison sim
   assert.equal(s.posts.length, 1); assert.equal(s.provider.size, 1);
   assert.equal(s.rows.emails_envoyes.filter(row => row.idempotency_key === KEYS[0]).length, 1);
   assert.equal(s.rows.emails_envoyes[0].cree_le, first);
+});
+
+// Cohorte isolée : transport synthétique uniquement, aucun appel externe.
+const ISOLATED_S = '1de96e4c-9be8-4897-a5bb-7640c05d5706', ISOLATED_M = '6bf15d0e-e2a0-4fd7-a903-767679b280bb';
+const isolatedClock = t => t.mock.method(Date, 'now', () => Date.parse('2026-10-21T12:00:00.000Z'));
+test('tuple TEST isolé exact : les trois émissions et le destinataire restent bornés', async t => {
+  isolatedClock(t); const s = await fixture(true), invoke = handler(s);
+  for (let i = 0; i < 3; i++) assert.equal((await invoke(i)).status, 200);
+  assert.equal(s.posts.length, 3); assert.equal(s.provider.size, 3);
+  for (const post of s.posts) assert.deepEqual(post.body.to, ['gabrielle@jolene.app']);
+});
+for (const [label, change] of [
+  ['échéance absolue dépassée', s => s.configure(c => { c.createdAt = '2026-10-21T23:45:00.000Z'; c.expiresAt = '2026-10-22T00:15:00.000Z'; })],
+  ['ancien soignant substitué', s => { s.rows.missions[0].soignant_assigne_id = S; }],
+  ['autre mission avec le nouvel acteur', s => { s.rows.missions[0].id = M; }],
+  ['owner étranger sur nouvel acteur', s => { s.users[ISOLATED_S].app_metadata.jolene_connect_fixture_owner = 'FOREIGN'; }],
+  ['capacité de génération encore ouverte', s => { s.env.HONORAIRES_STAGING_TEST_RUN = '{}'; }],
+  ['PROD avec tuple isolé', s => { s.env.SUPABASE_URL = 'https://flripxtsyegjshnhzjkz.supabase.co'; }],
+]) test(`tuple isolé fermé : ${label}`, async t => {
+  isolatedClock(t); const s = await fixture(true); change(s);
+  await assert.rejects(() => s.admit()); assert.equal(s.posts.length, 0);
+});
+test('tuple isolé : borne absolue testée sans ambiguïté avec une capacité de moins de 60 min', async t => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-21T23:50:00.000Z'));
+  const s = await fixture(true); s.configure(c => { c.createdAt = '2026-10-21T23:45:00.000Z'; c.expiresAt = '2026-10-22T00:15:00.000Z'; });
+  assert.throws(() => h.invoiceEmailStagingConfig(key => s.env[key])); assert.deepEqual(s.calls, []);
+});
+test('tuple isolé : actor et mission ne sont pas des paramètres de runtime extensibles', async t => {
+  isolatedClock(t); const s = await fixture(true); s.configure(c => { c.soignantId = ISOLATED_S; });
+  assert.throws(() => h.invoiceEmailStagingConfig(key => s.env[key])); assert.deepEqual(s.calls, []);
+});
+
+for (const [label, change, token] of [
+  ['credential incorrect', () => {}, 'SYNTHETIC_WRONG_CREDENTIAL'],
+  ['projet PROD', s => { s.env.SUPABASE_URL = 'https://flripxtsyegjshnhzjkz.supabase.co'; }],
+  ['expiration atteinte', s => s.configure(c => { c.expiresAt = new Date(Date.now()).toISOString(); })],
+  ['profil non TEST', s => { s.rows.soignants[0].est_compte_test = false; }],
+  ['ancien soignant dans la mission', s => { s.rows.missions[0].soignant_assigne_id = S; }],
+  ['autre adresse dans l’ancre', s => { s.rows.emails_envoyes[0].destinataire_email = 'foreign@example.invalid'; }],
+]) test(`handler isolé fermé avant réservation/fournisseur : ${label}`, async t => {
+  isolatedClock(t); const s = await fixture(true); change(s);
+  await handler(s)(0, token); assert.equal(s.posts.length, 0); assert.equal(s.ledger.size, 0);
+});
+for (const [label, change] of [
+  ['ancien soignant destinataire', b => { b.destinataire_id = S; }],
+  ['autre mission', b => { b.data.mission_id = M; }],
+  ['autre soignant dans le corps', b => { b.data.soignant_id = S; }],
+  ['adresse arbitraire', b => { b.destinataire_email = 'foreign@example.invalid'; }],
+  ['autre facture', b => { b.data.facture_id = M; }],
+]) test(`handler isolé refuse la substitution : ${label}`, async t => {
+  isolatedClock(t); const s = await fixture(true), body = s.requestBody(); change(body);
+  await handler(s)(0, 'SYNTHETIC_SERVICE', body);
+  assert.equal(s.posts.length, 0); assert.equal(s.ledger.size, 0);
+});
+test('tuple isolé : borne de fin de journée exacte, puis expiration refusée sans lecture', async t => {
+  const now = Date.parse('2026-10-21T23:50:00.000Z'); t.mock.method(Date, 'now', () => now);
+  const s = await fixture(true);
+  s.configure(c => { c.createdAt = '2026-10-21T23:49:59.000Z'; c.expiresAt = '2026-10-21T23:59:59.000Z'; });
+  assert.ok(h.invoiceEmailStagingConfig(key => s.env[key]));
+  s.configure(c => { c.expiresAt = '2026-10-21T23:59:59.001Z'; });
+  assert.throws(() => h.invoiceEmailStagingConfig(key => s.env[key])); assert.deepEqual(s.calls, []);
 });
