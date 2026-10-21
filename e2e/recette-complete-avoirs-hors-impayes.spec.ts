@@ -615,14 +615,19 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
     quantite_heures_snapshot: 4, taux_horaire_snapshot: 20, montant_ht: 80,
     description_prestation_snapshot: mission.intitule,
   };
+  const avoirHonoraires = { ...honoraires, id: '79000000-0000-4000-8000-000000000987',
+    type_document: 'AVOIR', statut: 'EMISE', numero_facture: 'HON-RECETTE-PDF-AVOIR-001',
+    facture_precedente_id: honoraires.id };
   const document = { ...avoir, statut: 'EN_RETARD', mission_id: mission.id, nombre_missions: 1,
-    facture_honoraire_id: honoraires.id, periode_debut: honoraires.periode_debut, periode_fin: honoraires.periode_fin,
+    facture_honoraire_id: avoirHonoraires.id, periode_debut: honoraires.periode_debut, periode_fin: honoraires.periode_fin,
     mode_paiement: 'STRIPE', stripe_payment_intent_id: 'pi_simulation_pdf_sans_paiement',
     date_paiement: '2026-10-16T10:00:00Z', taux_tva: 20 };
   const annule = { ...document, statut: 'ANNULEE' };
   const temoin = { ...document, id: facture.id, type_document: 'FACTURE', statut: 'PAYEE',
-    numero_facture: 'COM-RECETTE-FACTURE-PDF-001' };
+    facture_honoraire_id: honoraires.id, numero_facture: 'COM-RECETTE-FACTURE-PDF-001' };
+  let pieceSelectionnee = document;
   const choisir = (piece: typeof document) => {
+    pieceSelectionnee = piece;
     banc.etat.overrides.set('factures', piece);
     banc.etat.overrides.set('fn_detail_facture', { facture: piece, missions: [] });
     banc.etat.overrides.set('fn_modalites_reglement_commission', {
@@ -634,6 +639,7 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
     factures_commission_historique: [{ ...document, facture_id: document.id }] });
   banc.etat.overrides.set('fn_mes_factures', [document]);
   banc.etat.overrides.set('missions', [mission]);
+  const lecturesAssiettes: string[] = [];
   await page.route('**/rest/v1/factures_honoraires?*', async route => {
     const req = route.request(), url = new URL(req.url());
     expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
@@ -641,17 +647,27 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
     expect(url.searchParams.get('etablissement_id')).toBe(`eq.${ids.etab}`);
     banc.lectures.push({ nom: 'factures_honoraires', methode: req.method() });
     const unique = req.headers().accept?.includes('object');
-    if (unique) {
-      expect(url.searchParams.get('id')).toBe(`eq.${honoraires.id}`);
+    if (url.searchParams.has('id')) {
+      const liee = pieceSelectionnee.type_document === 'AVOIR' ? avoirHonoraires : honoraires;
+      expect(url.searchParams.get('id')).toBe(`eq.${liee.id}`);
+      expect(pieceSelectionnee.facture_honoraire_id).toBe(liee.id);
       expect(url.searchParams.has('statut')).toBe(false);
+      expect(url.searchParams.has('type_document')).toBe(false);
+      if (!unique) {
+        // maybeSingle(GET) demande du JSON ordinaire ; le SDK réduit le tableau.
+        expect(url.searchParams.get('select')).toBe('id,mission_id,etablissement_id,type_document,montant_ht');
+        lecturesAssiettes.push(liee.id);
+      }
+      return route.fulfill({ json: unique ? liee : [liee], headers: { 'access-control-allow-origin': '*' } });
     } else {
+      expect(unique).toBeFalsy();
       expect(url.searchParams.has('id')).toBe(false);
       expect(url.searchParams.get('type_document')).toBe('eq.FACTURE');
       expect(url.searchParams.get('statut')).toBe('in.(EMISE,EN_RETARD,VIREMENT_DECLARE)');
     }
-    // La pièce de référence est déjà PAYEE : elle est lisible par son ID,
-    // mais absente de la liste des factures d'honoraires encore ouvertes.
-    return route.fulfill({ json: unique ? honoraires : [], headers: { 'access-control-allow-origin': '*' } });
+    // La facture est PAYEE et l'autre pièce est un AVOIR : aucune n'est une
+    // facture d'honoraires ouverte, mais chacune reste lisible par son ID exact.
+    return route.fulfill({ json: [], headers: { 'access-control-allow-origin': '*' } });
   });
   let lecturesPlanning = 0;
   await page.route('**/rest/v1/mission_creneaux?*', async route => {
@@ -670,10 +686,10 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
   const verifierAvoir = (texte: string, estAnnule = false) => {
     expect(texte).toContain(`AVOIR COMMISSION ${document.numero_facture} AVOIR${estAnnule ? ' ANNULÉ' : ''}`);
     expect(texte).toContain('Mission de référence PDF fictive');
-    // La base de la mission reste positive ; seuls les montants de commission
+    // La base documentaire reste positive ; seuls les montants de commission
     // et les totaux de l'avoir sont signés. Aucun PDF artificiel n'est injecté.
-    expect(texte).toMatch(/Brut soignant 80,00\s*€/);
-    expect(texte).toMatch(/Commission Jolene 15% x 80,00\s*€ honoraires bruts -12,00\s*€/);
+    expect(texte).toMatch(/Assiette facturée pour la période Base de calcul de cette facture uniquement 80,00\s*€/);
+    expect(texte).toMatch(/Commission Jolene 15% x 80,00\s*€ assiette facturée pour la période -12,00\s*€/);
     expect(texte).toMatch(/TVA 20% -2,40\s*€/);
     expect(texte).toMatch(/Commission TTC de l'avoir -14,40\s*€/);
     expect(texte).toMatch(/Total HT -12,00\s*€ TVA \(20%\) -2,40\s*€ TOTAL TTC -14,40\s*€/);
@@ -704,6 +720,8 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
     await expect(page.getByRole('heading', { name: 'FACTURE', exact: true, level: 1 })).toBeVisible();
     const positif = await lirePdfTelecharge(page, analysePdf, page.getByRole('button', { name: 'PDF', exact: true }), temoin.numero_facture, info, 'facture-positive-temoin');
     expect(positif).toContain(`FACTURE COMMISSION ${temoin.numero_facture} PAYÉE`);
+    expect(positif).toMatch(/Assiette facturée pour la période Base de calcul de cette facture uniquement 80,00\s*€/);
+    expect(positif).toMatch(/Commission Jolene 15% x 80,00\s*€ assiette facturée pour la période 12,00\s*€/);
     expect(positif).toMatch(/Commission TTC facturée 14,40\s*€/);
     expect(positif).toMatch(/Total HT 12,00\s*€ TVA \(20%\) 2,40\s*€ TOTAL TTC 14,40\s*€/);
     expect(positif).toContain('FACTURE PAYÉE le');
@@ -711,12 +729,14 @@ test('PDF commission : vrai téléchargement de l’avoir depuis historique et d
     expect(positif).toContain('Facture générée le');
     expect(positif).not.toMatch(/AVOIR|-14,40|-12,00|-2,40/);
     expect(lecturesPlanning).toBe(4);
+    expect(lecturesAssiettes).toEqual([avoirHonoraires.id, avoirHonoraires.id, avoirHonoraires.id, honoraires.id]);
     expect(banc.lectures.filter(l => l.nom === 'factures_honoraires').length).toBeGreaterThanOrEqual(4);
     await stabiliserLectures(page); banc.verifier();
   } finally {
     await info.attach('pdf-avoirs-reponses-simulees', { body: JSON.stringify({
       simulation: true, realFrontendPdfGeneration: true, backendVerified: false, providerVerified: false,
-      role: 'ADMIN_ETABLISSEMENT', documents: [document, annule, temoin], mission, honoraires, lecturesPlanning,
+      role: 'ADMIN_ETABLISSEMENT', documents: [document, annule, temoin], mission, honoraires, avoirHonoraires,
+      lecturesPlanning, lecturesAssiettes,
       lectures: banc.lectures, interdits: banc.interdits, consoleErrors: banc.consoleErrors,
       inconnues: banc.etat.inconnues, erreurs: banc.etat.erreurs,
     }, null, 2), contentType: 'application/json' });
