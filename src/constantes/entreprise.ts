@@ -6,8 +6,8 @@ export const ENTREPRISE = {
   siret: '10330574400015',
   siret_formate: '103 305 744 00015',
   rcs: '103 305 744 R.C.S. Paris',
-  // Aucun numéro de TVA vérifié fourni : ne pas utiliser l'EUID à sa place.
-  tva_intra: null as string | null,
+  // Numéro publié par la DGFiP, vérifié le 21 octobre 2026.
+  tva_intra: 'FR13103305744' as string | null,
   code_ape: '62.01Z',
   libelle_ape: 'Programmation informatique',
   categorie_juridique: '5710 - SAS, société par actions simplifiée',
