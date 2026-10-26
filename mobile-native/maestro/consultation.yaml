@@ -1,13 +1,32 @@
 appId: ${APP_ID}
 name: Parcours natif soignant — données fictives
+env:
+  FRESH_EXPO_GO: ${FRESH_EXPO_GO || "0"}
 ---
 - openLink: ${EXPO_URL}
 - tapOn:
     text: "Open|Ouvrir"
     optional: true
-- tapOn:
-    text: "Continue|Continuer"
-    optional: true
+# A fresh CI install shows its tutorial only after the experience has loaded.
+# Wait for that screen explicitly; a short optional tap can miss it entirely.
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO == "1"}
+    commands:
+      - extendedWaitUntil:
+          visible: "Continue|Continuer"
+          timeout: 120000
+      - tapOn: "Continue|Continuer"
+      - extendedWaitUntil:
+          visible: "SDK version: 57.0.0"
+          timeout: 30000
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO != "1"}
+    commands:
+      - tapOn:
+          text: "Continue|Continuer"
+          optional: true
 # Expo Go's floating tools control can cover the application's sign-out button.
 # Prepare the simulator only at startup; never recover a failed application step.
 - runFlow:
@@ -48,32 +67,19 @@ name: Parcours natif soignant — données fictives
       platform: Android
       visible: "SDK version: 57.0.0"
     commands:
-      # The Compose menu scrolls; the Tools button row follows Fast Refresh.
-      # Its switch has a checked state, without iOS's textual 1/0 value.
+      # CI installs Expo Go on a fresh emulator; SDK 57 defaults showFab to true.
+      # This decorative switch does not expose a reliable checked state.
+      # Toggle the row once, then verify the actual floating control is absent.
       - scrollUntilVisible:
           element:
             text: "Tools button"
           direction: DOWN
           timeout: 15000
           centerElement: true
-      - runFlow:
-          when:
-            visible:
-              checked: true
-              rightOf: "Tools button"
-              below: "Fast Refresh"
-          commands:
-            - tapOn: "Tools button"
-      - assertVisible:
-          checked: false
-          rightOf: "Tools button"
-          below: "Fast Refresh"
-      - assertNotVisible:
-          checked: true
-          rightOf: "Tools button"
-          below: "Fast Refresh"
+      - tapOn: "Tools button"
       - tapOn: "Close"
       - assertNotVisible: "SDK version: 57.0.0"
+      - assertNotVisible: "^Tools$"
 - extendedWaitUntil:
     visible:
       id: "enter-demo"

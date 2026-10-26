@@ -148,7 +148,8 @@ async function runScenario(name, scenarioFlow, directory) {
     '--format', 'junit', '--output', resolve(directory, 'junit.xml'),
     '--debug-output', resolve(directory, 'maestro'), '--test-output-dir', resolve(directory, 'maestro'),
     '-e', `APP_ID=${appId}`, '-e', `EXPO_URL=${expoUrl}`,
-    '-e', `OUTPUT_DIR=${directory}`, '-e', `PLATFORM=${platform}`, scenarioFlow],
+    '-e', `OUTPUT_DIR=${directory}`, '-e', `PLATFORM=${platform}`,
+    '-e', `FRESH_EXPO_GO=${name === 'portrait' ? '1' : '0'}`, scenarioFlow],
   { timeout: 720_000, logfile: `${name}-maestro.log` });
   const junit = readFileSync(resolve(directory, 'junit.xml'), 'utf8');
   if (!/<testsuite\b[^>]*\btests="[1-9]\d*"/.test(junit)
