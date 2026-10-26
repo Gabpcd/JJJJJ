@@ -14,7 +14,7 @@ Signalement : sur l’application iPhone, le choix Médecin proposait toutes les
 
 ## Vérifications effectuées
 
-- 25 tests unitaires : 13 sur AuthLayout/clavier, aperçu marché et cohérence RPPS ; 12 sur les candidatures et les vues habilitées, dont l’attestation AS obligatoire et son absence pour un interne médecin.
+- 29 tests unitaires ciblés : 13 sur AuthLayout/clavier, aperçu marché et cohérence RPPS ; 12 sur les candidatures et les vues habilitées ; 4 sur la reprise progressive du profil et les préférences PSC. Après un premier échec CI dû au mock incomplet de `DeclarationEtudiant`, ce mock conserve les vrais exports du module et neutralise uniquement son rendu ; les assertions existantes sont conservées.
 - TypeScript et compilation web isolée réussis.
 - 30 scénarios Playwright réussis, sans retry ni scénario ignoré : 4 parcours d’inscription et 2 parcours de candidature × iPhone/WebKit, iPad portrait/WebKit, iPad paysage/WebKit, Android/Chromium, ordinateur/Chromium. Résumés dans `resultats.json` et `resultats-candidatures.json`.
 - Parcours : internat → saisie → sauvegarde → reprise via Candidater → rechargement → envoi du profil ; premier/deuxième cycles et choix AS explicite ; panne/réponse différée ; arrivée tardive de l’aperçu sans déplacement du prénom, de la profession ni du défilement.
