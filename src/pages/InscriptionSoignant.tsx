@@ -15,7 +15,7 @@ import { ErreurInscription } from '@/components/inscription/ErreurInscription';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
-import { DeclarationEtudiant, FORMATIONS_ETUDIANT } from '@/components/inscription/DeclarationEtudiant';
+import { DeclarationEtudiant, FORMATIONS_ETUDIANT, formationsPourProfession } from '@/components/inscription/DeclarationEtudiant';
 import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
 import { PROFESSIONS_SANS_RPPS, PROFESSIONS_RPPS_REQUIS } from '@/lib/constantes';
@@ -125,14 +125,21 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
   const champsAHighlighter = new Set(erreurInscription?.champs_highlight ?? []);
   const classeChampErreur = (champ: string) => champsAHighlighter.has(champ) ? 'border-destructive ring-1 ring-destructive/30' : '';
 
-  const [form, setForm] = useState(() => restaurerFormulaire({
+  const [form, setForm] = useState(() => {
+    const restaure = restaurerFormulaire({
     email: '', motDePasse: '', confirmMdp: '',
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
     estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
-}, parcours?.donnees || {}));
+    }, parcours?.donnees || {});
+    if (!formationsPourProfession(restaure.profession).some(f => f.valeur === restaure.scolariteFormation)) {
+      restaure.scolariteFormation = '';
+      restaure.scolariteAnnee = '';
+    }
+    return restaure;
+  });
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
@@ -158,7 +165,15 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     return nomMatch && prenomMatch;
   };
 
-  const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+  const maj = (champ: string, valeur: any) => setForm(prev => {
+    const suivant = { ...prev, [champ]: valeur };
+    if (champ === 'scolariteFormation') suivant.scolariteAnnee = '';
+    if (champ === 'profession' && !formationsPourProfession(valeur).some(f => f.valeur === prev.scolariteFormation)) {
+      suivant.scolariteFormation = '';
+      suivant.scolariteAnnee = '';
+    }
+    return suivant;
+  });
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
@@ -344,8 +359,10 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
     setErreurInscription(null);
     try {
       const formationLabel = FORMATIONS_ETUDIANT.find(f => f.valeur === form.scolariteFormation)?.label || form.scolariteFormation;
-      const etudiantDetails = form.estEtudiant && form.scolariteFormation && form.scolariteAnnee
-        ? `${formationLabel} — année ${form.scolariteAnnee} validée`
+      const etudiantDetails = form.estEtudiant && form.scolariteFormation
+        ? form.scolariteFormation === 'MEDECINE_DES'
+          ? formationLabel
+          : form.scolariteAnnee ? `${formationLabel} — année ${form.scolariteAnnee} validée` : null
         : null;
       if (parcours) {
         await finaliserProfil('SOIGNANT', { ...form, etudiant_details: etudiantDetails });
@@ -520,21 +537,6 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
           {etape === 2 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">{parcours ? 'Ces informations permettent de vérifier votre profil avant de candidater.' : 'Étape 2 — Votre profil professionnel'}</p>
-              {/* La valeur avant l'effort (Session E-2) : dès la profession choisie,
-                  montrer le marché réel — missions et taux, ou établissements inscrits.
-                  Rendu prominent (carte mise en avant) : c'est la motivation à finir.
-                  La géolocalisation et le rayon sont déférés à l'espace personnel
-                  (tâche post-inscription) pour alléger le funnel — l'aperçu reste
-                  national tant que la position n'est pas renseignée. */}
-              {form.profession && (
-                <ApercuMarche
-                  profession={form.profession}
-                  lat={form.lat}
-                  lng={form.lng}
-                  rayonKm={form.rayon}
-                  className="ring-1 ring-primary/20 rounded-2xl"
-                />
-              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
@@ -689,6 +691,18 @@ export default function InscriptionSoignant({ parcours }: { parcours?: ParcoursI
             </div>
           )}
         </form>
+
+        {/* L'aperçu arrive après un appel réseau. Sous le formulaire, il ne
+            déplace plus les champs pendant la saisie ou le choix de profession. */}
+        {etape === 2 && form.profession && (
+          <ApercuMarche
+            profession={form.profession}
+            lat={form.lat}
+            lng={form.lng}
+            rayonKm={form.rayon}
+            className="mt-4 ring-1 ring-primary/20 rounded-2xl"
+          />
+        )}
 
         <p className="text-center mt-6 text-sm text-muted-foreground">
           Déjà un compte ? <a href="/connexion" className="text-primary hover:underline font-medium">Se connecter</a>

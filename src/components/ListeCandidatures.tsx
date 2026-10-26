@@ -281,7 +281,7 @@ export function ListeCandidatures({
         p_candidature_id: candidatureId,
         p_decision: 'ACCEPTEE',
         p_creneaux_confirmes: planningRelu.map(({ debut, fin }) => ({ debut, fin })) as any,
-        p_motif: candidatureAConfirmer?.soignant?.est_etudiant
+        p_motif: candidatureAConfirmer?.soignant?.est_etudiant && candidatureAConfirmer.soignant.profession === 'AS'
           ? 'CADRE_ETUDIANT_AS_CONFIRME'
           : null,
       });
@@ -560,7 +560,7 @@ export function ListeCandidatures({
               <p className="text-xs text-muted-foreground">
                 En confirmant, ce soignant sera assigné à l’ensemble de ce planning.
               </p>
-              {candidatureAConfirmer?.soignant?.est_etudiant && (
+              {candidatureAConfirmer?.soignant?.est_etudiant && candidatureAConfirmer.soignant.profession === 'AS' && (
                 <label className="flex items-start gap-2 rounded-xl border border-violet-300 bg-violet-50 p-3 text-xs text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
                   <input
                     type="checkbox"
@@ -591,7 +591,7 @@ export function ListeCandidatures({
               onClick={() => void confirmerAcceptation()}
               disabled={Boolean(traitement)
                 || planningConfirmation.length === 0
-                || (Boolean(candidatureAConfirmer?.soignant?.est_etudiant) && !cadreEtudiantConfirme)}
+                || (Boolean(candidatureAConfirmer?.soignant?.est_etudiant) && candidatureAConfirmer?.soignant?.profession === 'AS' && !cadreEtudiantConfirme)}
               loading={Boolean(traitement)}
             >
               Confirmer et assigner

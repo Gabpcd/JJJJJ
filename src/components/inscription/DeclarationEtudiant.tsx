@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
 
-/** Formations reconnues par la table d'équivalence + l'IA (verify-document). */
+/** Déclarations de scolarité. L'internat ne relève pas des équivalences AS. */
 export const FORMATIONS_ETUDIANT = [
   { valeur: 'IFSI', label: 'Soins infirmiers (IFSI / ESI)' },
   { valeur: 'IFAS', label: 'Aide-soignant (IFAS)' },
   { valeur: 'MEDECINE_DFGSM', label: 'Médecine — 1er cycle (DFGSM)' },
   { valeur: 'MEDECINE_DFASM', label: 'Médecine — 2e cycle (DFASM / externat)' },
+  { valeur: 'MEDECINE_DES', label: 'Médecine — 3e cycle (internat)' },
   { valeur: 'MAIEUTIQUE', label: 'Maïeutique (sage-femme)' },
   { valeur: 'ODONTOLOGIE', label: 'Odontologie (chirurgie dentaire)' },
   { valeur: 'KINE', label: 'Masso-kinésithérapie (IFMK)' },
@@ -18,8 +19,11 @@ export const FORMATIONS_ETUDIANT = [
   { valeur: 'PHARMACIE', label: 'Pharmacie' },
 ] as const;
 
-// La plus qualifiante des professions autorisées (ex : DFASM2 → {AS, IDE} → IDE).
-const PRIORITE = ['MEDECIN', 'SAGE_FEMME', 'PHARMACIEN', 'IADE', 'IBODE', 'IDE', 'DENTISTE', 'KINE', 'AS', 'AES', 'AUXILIAIRE_PUERICULTURE'];
+export function formationsPourProfession(profession: string) {
+  return FORMATIONS_ETUDIANT.filter(({ valeur }) => profession === 'MEDECIN'
+    ? valeur.startsWith('MEDECINE_')
+    : valeur !== 'MEDECINE_DES');
+}
 
 const CONDITIONS_FORMATION: Record<string, string> = {
   IFSI: 'Pour travailler temporairement comme aide-soignant : admission en 2e année, 48 ECTS dont 15 de stages et validation des UE réglementaires concernées.',
@@ -57,66 +61,87 @@ export function DeclarationEtudiant({
   estEtudiant, formation, annee, professionDeclaree,
   onToggle, onChangeFormation, onChangeAnnee, onSuggererProfession,
 }: Props) {
-  const [professionsAutorisees, setProfessionsAutorisees] = useState<string[] | null>(null);
+  const internat = formation === 'MEDECINE_DES';
+  const medecine = professionDeclaree === 'MEDECIN';
+  const formations = formationsPourProfession(professionDeclaree);
+  const an = Number(annee);
+  const cle = estEtudiant && !internat && formation && Number.isInteger(an) && an >= 1
+    ? `${formation}:${an}` : '';
+  const [resultat, setResultat] = useState<{ cle: string; professions: string[]; indisponible: boolean } | null>(null);
+  // Un résultat ne décrit que le niveau qui l'a produit. En changeant de cycle,
+  // ne pas afficher la suggestion précédente pendant l'aller-retour réseau.
+  const courant = cle && resultat?.cle === cle ? resultat : null;
+  const professionsAutorisees = courant && !courant.indisponible ? courant.professions : null;
 
   useEffect(() => {
-    const an = parseInt(annee, 10);
-    if (!estEtudiant || !formation || !Number.isFinite(an) || an < 1) {
-      setProfessionsAutorisees(null);
-      return;
-    }
+    if (!cle) return;
     let annule = false;
     (supabase.rpc as any)('fn_professions_autorisees_scolarite', { p_formation: formation, p_annee_validee: an })
-      .then(({ data }: { data: any }) => {
+      .then(({ data, error }: { data: any; error?: unknown }) => {
         if (annule) return;
+        if (error) {
+          setResultat({ cle, professions: [], indisponible: true });
+          return;
+        }
         const liste: string[] = Array.isArray(data)
           ? data.map((r: any) => (typeof r === 'string' ? r : (r?.fn_professions_autorisees_scolarite ?? Object.values(r ?? {})[0]))).filter(Boolean)
           : [];
         // Pré-lancement : seules les passerelles temporaires vers AS sont
         // présentées. Les élévations IDE/pharmacien nécessitent des preuves et
         // autorisations supplémentaires non réductibles à une année validée.
-        setProfessionsAutorisees(liste.filter((profession) => profession === 'AS'));
-      }, () => { if (!annule) setProfessionsAutorisees([]); });
+        setResultat({ cle, professions: liste.filter((profession) => profession === 'AS'), indisponible: false });
+      }, () => { if (!annule) setResultat({ cle, professions: [], indisponible: true }); });
     return () => { annule = true; };
-  }, [estEtudiant, formation, annee]);
+  }, [cle, formation, an]);
 
-  const meilleure = professionsAutorisees?.length
-    ? (PRIORITE.find((p) => professionsAutorisees.includes(p)) ?? professionsAutorisees[0])
-    : null;
+  const meilleure = professionsAutorisees?.[0] ?? null;
   const incoherent = !!professionDeclaree && !!professionsAutorisees && professionsAutorisees.length > 0 && !professionsAutorisees.includes(professionDeclaree);
-  const niveauRenseigne = !!formation && !!annee;
+  const niveauRenseigne = !!cle;
 
   return (
     <div className="rounded-xl border border-input p-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">🎓 Je suis étudiant(e) en santé</p>
-          <p className="text-[11px] text-muted-foreground">Pré-éligibilité à un emploi temporaire selon l'arrêté du 3 février 2022, sous contrôle des preuves.</p>
+          <p className="text-xs text-muted-foreground">{medecine
+            ? 'Précisez votre cycle d’études en médecine.'
+            : 'Pré-éligibilité à un emploi temporaire selon l’arrêté du 3 février 2022, sous contrôle des preuves.'}</p>
         </div>
         <button type="button" onClick={() => onToggle(!estEtudiant)}
           aria-pressed={estEtudiant} aria-label="Je suis étudiant en santé"
-          className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${estEtudiant ? 'bg-primary' : 'bg-muted'}`}>
-          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estEtudiant ? 'translate-x-6' : 'translate-x-0.5'}`} />
+          className="inline-flex w-12 h-12 items-center justify-center rounded-xl shrink-0">
+          <span aria-hidden="true" className={`relative block w-12 h-6 rounded-full transition-colors ${estEtudiant ? 'bg-primary' : 'bg-muted'}`}>
+            <span className={`absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estEtudiant ? 'translate-x-6' : 'translate-x-0'}`} />
+          </span>
         </button>
       </div>
 
       {estEtudiant && (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
+          <div className={`grid gap-3 ${internat ? '' : 'sm:grid-cols-2'}`}>
+            <label className="block min-w-0">
               <span className="text-xs font-medium text-foreground mb-1 block">Formation</span>
-              <select value={formation} onChange={(e) => onChangeFormation(e.target.value)} className="input-base text-sm">
+              <select value={formation} onChange={(e) => onChangeFormation(e.target.value)} className="input-base text-base">
                 <option value="">— Choisir —</option>
-                {FORMATIONS_ETUDIANT.map((f) => <option key={f.valeur} value={f.valeur}>{f.label}</option>)}
+                {formations.map((f) => <option key={f.valeur} value={f.valeur}>{f.label}</option>)}
               </select>
             </label>
-            <label className="block">
+            {!internat && <label className="block min-w-0">
               <span className="text-xs font-medium text-foreground mb-1 block">Dernière année validée</span>
               <input value={annee} onChange={(e) => onChangeAnnee(e.target.value.replace(/\D/g, '').slice(0, 1))}
-                inputMode="numeric" placeholder="ex : 1" className="input-base text-sm" />
+                inputMode="numeric" placeholder="ex : 1" className="input-base text-base" />
               <span className="text-[10px] text-muted-foreground mt-1 block">Ex. : admis(e) en 2e année → indique 1.</span>
-            </label>
+            </label>}
           </div>
+
+          {internat && (
+            <p className="text-xs text-foreground">
+              Interne ou docteur junior : votre cycle d’études sera enregistré dans votre profil. Votre droit au remplacement n’est pas validé à cette étape.
+            </p>
+          )}
+
+          {cle && !courant && <p className="text-xs text-muted-foreground" role="status">Vérification des possibilités d’emploi temporaire…</p>}
+          {courant?.indisponible && <p className="text-xs text-muted-foreground" role="status">La vérification des possibilités d’emploi temporaire est indisponible. Votre niveau d’études reste enregistré ; aucune équivalence n’est confirmée.</p>}
 
           {meilleure && !incoherent && (
             <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
@@ -145,9 +170,9 @@ export function DeclarationEtudiant({
             </div>
           )}
 
-          <p className="text-[11px] text-muted-foreground">
-            Après inscription, téléverse une attestation détaillée. L'analyse automatique prépare le dossier, mais une revue humaine valide les conditions avant toute candidature.
-          </p>
+          {!internat && <p className="text-[11px] text-muted-foreground">
+            Après inscription, téléversez une attestation détaillée. L'analyse automatique prépare le dossier, mais une revue humaine valide les conditions avant toute candidature.
+          </p>}
         </>
       )}
     </div>

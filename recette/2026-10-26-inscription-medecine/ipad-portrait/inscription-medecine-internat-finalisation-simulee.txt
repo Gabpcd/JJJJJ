@@ -1,0 +1,75 @@
+- main:
+  - button "Retour":
+    - img
+    - text: Retour
+  - heading "Renfort infirmier — simulation" [level=1]
+  - paragraph: → À faire maintenant
+  - paragraph: Postule à cette mission
+  - paragraph: L'établissement examinera ton profil et te répondra.
+  - button "Postuler"
+  - text: Ouverte
+  - paragraph: Mission fictive pour contrôler les écrans.
+  - paragraph: Infirmier(ère) Diplômé(e) d'État (IDE)
+  - region "Rémunération de la mission":
+    - heading "💰 Décomposition financière" [level=3]
+    - text: Contrat salarié (CDD) Net salarié estimé avant PAS* 240,00 €
+    - paragraph: Estimation indicative avant prélèvement à la source. Le montant net exact à payer figure sur le bulletin officiel établi par l'établissement employeur.
+    - button "Détail comptable (brut, IFM, ICP, cotisations)":
+      - text: Détail comptable (brut, IFM, ICP, cotisations)
+      - img
+    - paragraph: Estimation non contractuelle. Le bulletin de paie officiel est établi et fourni par « Résidence Camille — simulation ».
+    - paragraph: Simulation salariale indicative avant prélèvement à la source. Le net exact figure sur le bulletin officiel établi par l’employeur.
+  - region "Suivi de la mission":
+    - heading "Suivi de la mission" [level=2]
+    - paragraph: Attribution · En attente d’attribution
+    - list "Repères du suivi":
+      - 'listitem "Dossier et conformité : Contrôles à consulter"'
+      - 'listitem "Contrat Jolene : À confirmer"'
+      - 'listitem "Planification : Créneaux prévus disponibles"'
+      - 'listitem "Présence : À confirmer"'
+      - 'listitem "Validation des heures : À confirmer"'
+      - 'listitem "Copie du bulletin officiel : À confirmer"'
+      - 'listitem "Règlement : À confirmer"'
+    - button "Afficher le détail du suivi"
+  - img
+  - heading "Résidence Camille — simulation" [level=3]
+  - paragraph: EHPAD
+  - paragraph: 75001 Paris
+  - img
+  - text: Distance non disponible
+  - paragraph: Cet établissement a publié 1 mission sur Jolene
+  - button "Autres actions":
+    - img
+    - text: Autres actions
+  - heading "🕐 Horaires" [level=3]
+  - region "Planning exact de la mission":
+    - text: 1 créneau 8 h au total
+    - list "Jours et horaires travaillés":
+      - listitem: lundi 2 novembre 2026 09h00 → 17h00 · 8 h
+  - paragraph: 📊 Plafond hebdomadaire
+  - text: Semaine du 2 nov. 8h / 48h
+  - paragraph: "Planifiées : 0h + mission : 8h"
+  - paragraph: ✅ Il vous reste 40h de disponibilité sur cette semaine
+  - heading "🔍 Vérification de compatibilité" [level=3]
+  - img
+  - paragraph: ✅ Repos 11h respecté
+  - paragraph: Aucun conflit de repos avec vos missions existantes
+  - img
+  - paragraph: ✅ Plafond 48h respecté
+  - paragraph: "Semaine du 02/11 : 0h + 8h = 8h / 48h"
+  - img
+  - paragraph: ✅ Pas de chevauchement
+  - paragraph: Aucune mission ne chevauche cet horaire
+  - paragraph: → Ces horaires sont compatibles avec votre planning.
+  - button "📅 Voir dans mon planning"
+  - img
+  - paragraph: Documents en cours — tu peux postuler dès maintenant
+  - paragraph: "Cette mission démarre bientôt : l'établissement ne pourra t'accepter qu'une fois tes documents validés (vérification automatique en quelques minutes). Prends 2 minutes maintenant."
+  - paragraph: Les justificatifs propres au libéral (RCP, URSSAF…) ne sont demandés que pour un parcours libéral.
+  - button "Valider mes documents →"
+  - img
+  - text: Les profils complets sont acceptés en priorité par les établissements. Message à l'établissement (optionnel)
+  - textbox "Présente-toi brièvement…"
+  - paragraph: 0/300
+  - button "📨 Vérifier et postuler"
+  - paragraph: L'établissement examinera ta candidature. Tu seras notifié(e) de sa décision.

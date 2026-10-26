@@ -29,42 +29,53 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
   const scrollRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    const scrollContainer = scrollRef.current;
+    scrollContainer?.scrollTo({ top: 0, behavior: 'auto' });
+    if (!scrollContainer) return;
 
     // WKWebView n'infère pas toujours « Suivant » entre les champs d'un même
     // formulaire. L'indiquer explicitement donne un clavier iOS cohérent et
     // permet de progresser sans devoir masquer le clavier pour atteindre le
     // champ suivant.
-    const forms = scrollRef.current?.querySelectorAll('form') ?? [];
-    const cleanups: Array<() => void> = [];
-    forms.forEach((form) => {
+    const updateKeyboardHints = (form: HTMLFormElement) => {
       const fields = keyboardFields(form);
       fields.forEach((field, index) => {
         if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
           field.enterKeyHint = index < fields.length - 1 ? 'next' : 'done';
         }
-
-        // Un listener DOM direct est volontaire ici : dans WKWebView, la
-        // touche Return du clavier logiciel peut masquer le clavier avant que
-        // la délégation d'événement React ait transféré le focus. Intercepter
-        // le keydown sur le champ conserve le clavier et produit le parcours
-        // natif attendu.
-        if (field instanceof HTMLInputElement) {
-          const handleEnter = (event: KeyboardEvent) => {
-            if (event.key !== 'Enter' || event.isComposing) return;
-            const next = fields[index + 1];
-            if (!next) return;
-
-            event.preventDefault();
-            next.focus({ preventScroll: true });
-          };
-          field.addEventListener('keydown', handleEnter);
-          cleanups.push(() => field.removeEventListener('keydown', handleEnter));
-        }
       });
-    });
+      return fields;
+    };
+    scrollContainer.querySelectorAll('form').forEach(updateKeyboardHints);
 
-    return () => cleanups.forEach((cleanup) => cleanup());
+    const handleFocus = (event: FocusEvent) => {
+      const field = event.target;
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) return;
+      if (field.form && scrollContainer.contains(field.form)) updateKeyboardHints(field.form);
+    };
+
+    // Capturer l'événement DOM avant la délégation React conserve le transfert
+    // synchrone du focus dans WKWebView. La liste doit être relue à chaque
+    // appui : étudiant/RPPS peuvent être ajoutés ou retirés sans changer d'étape.
+    const handleEnter = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return;
+      const field = event.target;
+      if (!(field instanceof HTMLInputElement) || !field.form || !scrollContainer.contains(field.form)) return;
+      const fields = updateKeyboardHints(field.form);
+      const index = fields.indexOf(field);
+      const next = index >= 0 ? fields[index + 1] : undefined;
+      if (!next) return;
+
+      event.preventDefault();
+      next.focus({ preventScroll: true });
+    };
+    scrollContainer.addEventListener('focusin', handleFocus);
+    scrollContainer.addEventListener('keydown', handleEnter, true);
+
+    return () => {
+      scrollContainer.removeEventListener('focusin', handleFocus);
+      scrollContainer.removeEventListener('keydown', handleEnter, true);
+    };
   }, [scrollKey]);
 
   const handleBack = () => {
@@ -133,7 +144,17 @@ function keyboardFields(form: HTMLFormElement): Array<HTMLInputElement | HTMLTex
   return Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
     'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select',
   )).filter((field) => (
-    !field.disabled
+    !field.matches(':disabled')
     && (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || !field.readOnly)
+    && isKeyboardFieldVisible(field)
   ));
+}
+
+function isKeyboardFieldVisible(field: HTMLElement): boolean {
+  if (field.closest('[hidden], [inert]')) return false;
+  for (let element: HTMLElement | null = field; element; element = element.parentElement) {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+  }
+  return true;
 }

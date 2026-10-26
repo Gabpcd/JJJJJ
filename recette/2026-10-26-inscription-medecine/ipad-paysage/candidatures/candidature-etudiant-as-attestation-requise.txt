@@ -1,0 +1,14 @@
+- dialog "Confirmer l’acceptation":
+  - heading "Confirmer l’acceptation" [level=2]
+  - paragraph: Vérifiez le planning contractuel avant d’assigner définitivement ce candidat.
+  - button "Fermer"
+  - paragraph: Camille Recette
+  - paragraph: Candidature étudiant AS — simulation
+  - paragraph: 1 créneau · 8 h au total
+  - list:
+    - listitem: jeudi 24 septembre 2026 09:00 → 17:00
+  - paragraph: En confirmant, ce soignant sera assigné à l’ensemble de ce planning.
+  - checkbox "Je confirme que cette mission est salariée dans un établissement de santé ou médico-social et que l’étudiant exercera temporairement comme aide-soignant au sein d’une équipe comportant au moins un infirmier diplômé d’État pendant ses activités."
+  - text: Je confirme que cette mission est salariée dans un établissement de santé ou médico-social et que l’étudiant exercera temporairement comme aide-soignant au sein d’une équipe comportant au moins un infirmier diplômé d’État pendant ses activités.
+  - button "Annuler"
+  - button "Confirmer et assigner" [disabled]

@@ -62,9 +62,9 @@ vi.mock('@/components/ui/checkbox', () => ({
 vi.mock('@/components/BoutonProSanteConnect', () => ({ BoutonProSanteConnect: () => null }));
 vi.mock('@/components/CaptchaTurnstile', () => ({ CaptchaTurnstile: () => null, TURNSTILE_REQUIRED: false }));
 vi.mock('@/components/inscription/ApercuMarche', () => ({ ApercuMarche: () => null }));
-vi.mock('@/components/inscription/DeclarationEtudiant', () => ({
+vi.mock('@/components/inscription/DeclarationEtudiant', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/components/inscription/DeclarationEtudiant')>(),
   DeclarationEtudiant: () => null,
-  FORMATIONS_ETUDIANT: [],
 }));
 vi.mock('@/components/SelectProfession', () => ({
   SelectProfession: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (

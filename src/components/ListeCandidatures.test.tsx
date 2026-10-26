@@ -265,4 +265,41 @@ describe('ListeCandidatures — confirmation établissement', () => {
       expect.objectContaining({ p_motif: 'CADRE_ETUDIANT_AS_CONFIRME' }),
     ));
   });
+
+  it('accepte un interne médecin sans lui demander l’attestation aide-soignant, même en vue bornée', async () => {
+    const onAccepted = vi.fn();
+    // La vue habilitée fournit profession et est_etudiant, sans détails de
+    // scolarité : l’attestation AS ne doit pas dépendre de champs absents.
+    const chargerCandidatures = vi.fn(async () => [{
+      id: 'cand-interne', soignant_id: 'sg-interne', statut: 'EN_ATTENTE',
+      soignant: { prenom: 'Camille', nom: 'R.', profession: 'MEDECIN', est_etudiant: true },
+    }]);
+    render(
+      <ListeCandidatures
+        missionId="mission-medecin"
+        missionCreneaux={creneaux}
+        missionNbCreneaux={1}
+        missionProfession="MEDECIN"
+        chargerCandidaturesHabilitees={chargerCandidatures}
+        chargerPlanningHabilite={async () => creneaux}
+        afficherDetailScore={false}
+        onAccepted={onAccepted}
+        onError={vi.fn()}
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Accepter cette candidature' }));
+    const confirmer = await screen.findByRole('button', { name: 'Confirmer et assigner' });
+    expect(screen.queryByRole('checkbox', { name: /mission est salariée/i })).not.toBeInTheDocument();
+    expect(confirmer).toBeEnabled();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('fn_traiter_candidature_planning_v1', expect.anything());
+    fireEvent.click(confirmer);
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_traiter_candidature_planning_v1', {
+      p_candidature_id: 'cand-interne', p_decision: 'ACCEPTEE', p_motif: null,
+      p_creneaux_confirmes: [{ debut: creneaux[0].debut, fin: creneaux[0].fin }],
+    }));
+    await waitFor(() => expect(onAccepted).toHaveBeenCalledOnce());
+  });
 });
