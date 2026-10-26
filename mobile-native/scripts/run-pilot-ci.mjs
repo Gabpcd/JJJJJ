@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { readPngDimensions } from './png-dimensions.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -14,7 +15,7 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(process.env.PILOT_OUTPUT_DIR || resolve(project, 'test-results', `native-${platform}`));
 mkdirSync(output, { recursive: true });
 const flow = resolve(project, 'maestro', 'consultation.yaml');
-const landscapeFlow = resolve(project, 'maestro', 'consultation-ipad-paysage.yaml');
+const landscapeProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 const isIpad = platform === 'ios' && process.env.IOS_DEVICE_FAMILY === 'ipad';
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
@@ -143,6 +144,7 @@ async function installExpoGo() {
 
 async function runScenario(name, scenarioFlow, directory) {
   stage = `maestro-${name}`;
+  console.log(`Début du parcours natif ${name} (${platform}).`);
   mkdirSync(directory, { recursive: true });
   await run('maestro', ['--device', device, '--platform', platform, 'test',
     '--format', 'junit', '--output', resolve(directory, 'junit.xml'),
@@ -157,6 +159,52 @@ async function runScenario(name, scenarioFlow, directory) {
     throw new Error(`Le rapport JUnit ${name} ne confirme pas un parcours exécuté sans échec ni exclusion.`);
   }
   scenarios.push({ name, success: true });
+  console.log(`Parcours natif ${name} terminé sans échec ni exclusion (${platform}).`);
+}
+
+async function runLandscapeXCTest(directory) {
+  stage = 'xctest-landscape';
+  console.log('Début du parcours iPad paysage avec XCTest (gestes Apple par élément).');
+  mkdirSync(directory, { recursive: true });
+  const temporary = process.env.RUNNER_TEMP;
+  if (!temporary) throw new Error('RUNNER_TEMP requis pour le runner XCTest CI.');
+  const resultPath = resolve(temporary, 'jolene-native-landscape.xcresult');
+  const result = await run('xcodebuild', ['test', '-project', landscapeProject,
+    '-scheme', 'NativePilotUITests', '-configuration', 'Debug', '-sdk', 'iphonesimulator',
+    '-destination', `platform=iOS Simulator,id=${device}`,
+    '-derivedDataPath', resolve(temporary, 'jolene-native-ui-derived'),
+    '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
+    '-maximum-concurrent-test-simulator-destinations', '1', '-test-iterations', '1',
+    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '300',
+    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO'],
+  { timeout: 600_000, logfile: 'landscape-xctest.log', allowFailure: true });
+  if (!existsSync(resultPath)) throw new Error('Rapport XCTest paysage absent. Voir landscape-xctest.log.');
+  const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
+  writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
+  const attachments = resolve(directory, 'attachments');
+  await run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments]);
+  const summary = JSON.parse(report.stdout);
+  if (result.code !== 0 || summary.result !== 'Passed' || summary.totalTestCount !== 1
+    || summary.passedTests !== 1 || summary.failedTests !== 0 || summary.skippedTests !== 0
+    || summary.expectedFailures !== 0) {
+    throw new Error('Le rapport XCTest paysage ne confirme pas un test réussi sans exclusion.');
+  }
+  const manifest = JSON.parse(readFileSync(resolve(attachments, 'manifest.json'), 'utf8'));
+  if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
+  const captures = resolve(directory, 'captures');
+  mkdirSync(captures, { recursive: true });
+  const names = ['connexion', 'liste', 'detail', 'retour'].map(screen => `ipad-paysage-${screen}`);
+  for (const name of names) {
+    const matching = manifest.flatMap(test => test.attachments ?? []).filter(item =>
+      item.suggestedHumanReadableName?.includes(name) && item.exportedFileName?.endsWith('.png'));
+    if (matching.length !== 1 || basename(matching[0].exportedFileName) !== matching[0].exportedFileName) {
+      throw new Error(`Capture XCTest absente ou ambiguë : ${name}.`);
+    }
+    copyFileSync(resolve(attachments, matching[0].exportedFileName), resolve(captures, `${name}.png`));
+  }
+  verifyCaptureOrientation(captures, 'LANDSCAPE_LEFT', names);
+  scenarios.push({ name: 'landscape', success: true, driver: 'XCTest' });
+  console.log('Parcours iPad paysage terminé : un test XCTest réussi et quatre captures en paysage.');
 }
 
 function verifyCaptureOrientation(directory, orientation, names) {
@@ -169,21 +217,23 @@ function verifyCaptureOrientation(directory, orientation, names) {
     const filename = `${screen}.png`;
     const matching = candidates.filter(file => basename(file) === filename);
     if (matching.length !== 1) throw new Error(`Capture ${orientation} absente ou ambiguë : ${filename}.`);
-    const image = readFileSync(matching[0]);
-    if (!image.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-      || image.subarray(12, 16).toString() !== 'IHDR') throw new Error(`Capture PNG invalide : ${filename}.`);
-    const width = image.readUInt32BE(16);
-    const height = image.readUInt32BE(20);
+    let dimensions;
+    try {
+      dimensions = readPngDimensions(readFileSync(matching[0]));
+    } catch (error) {
+      throw new Error(`Capture PNG invalide : ${filename}. ${error.message}`, { cause: error });
+    }
+    const { width, height } = dimensions;
     const expected = orientation === 'PORTRAIT' ? width < height : width > height;
     if (!expected) throw new Error(`Orientation ${orientation} non confirmée : ${filename}, ${width}×${height}.`);
-    return { screen, filename, width, height };
+    return { screen, filename, ...dimensions };
   });
   writeFileSync(resolve(directory, 'orientation.json'), JSON.stringify({ requested: orientation, captures }, null, 2));
 }
 
 try {
   if (!existsSync(flow)) throw new Error('Le scénario maestro/consultation.yaml est requis.');
-  if (isIpad && !existsSync(landscapeFlow)) throw new Error('Le scénario iPad paysage est requis en complément du portrait.');
+  if (isIpad && !existsSync(landscapeProject)) throw new Error('Le projet XCTest iPad paysage est requis en complément du portrait.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
   stage = 'expo-go-install';
   await installExpoGo();
@@ -239,10 +289,7 @@ try {
   verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour']);
   if (isIpad) {
     const landscapeOutput = resolve(output, 'landscape');
-    await runScenario('landscape', landscapeFlow, landscapeOutput);
-    stage = 'landscape-captures';
-    verifyCaptureOrientation(landscapeOutput, 'LANDSCAPE_LEFT',
-      ['connexion', 'liste', 'detail', 'retour'].map(screen => `ipad-paysage-${screen}`));
+    await runLandscapeXCTest(landscapeOutput);
   }
   success = true;
   stage = 'complete';

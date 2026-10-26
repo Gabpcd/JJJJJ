@@ -1,0 +1,81 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A10000000000000000000001 /* NativePilotLandscapeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* NativePilotLandscapeTests.swift */; };
+		A10000000000000000000002 /* NativePilotLandscapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePilotLandscapeTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* NativePilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NativePilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000004 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000006 /* NativePilotUITests */, A10000000000000000000007 /* Products */); sourceTree = "<group>"; };
+		A10000000000000000000006 /* NativePilotUITests */ = {isa = PBXGroup; children = (A10000000000000000000002 /* NativePilotLandscapeTests.swift */); path = NativePilotUITests; sourceTree = "<group>"; };
+		A10000000000000000000007 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000003 /* NativePilotUITests.xctest */); name = Products; sourceTree = "<group>"; };
+		A10000000000000000000008 /* NativePilotUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000010;
+			buildPhases = (A10000000000000000000009 /* Sources */, A10000000000000000000004 /* Frameworks */, A1000000000000000000000A /* Resources */);
+			buildRules = ();
+			dependencies = ();
+			name = NativePilotUITests;
+			productName = NativePilotUITests;
+			productReference = A10000000000000000000003;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		A10000000000000000000009 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* NativePilotLandscapeTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A1000000000000000000000A /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A1000000000000000000000B /* Project object */ = {
+			isa = PBXProject;
+			attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600; TargetAttributes = { A10000000000000000000008 = { CreatedOnToolsVersion = 26.0; }; }; };
+			buildConfigurationList = A1000000000000000000000F;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = fr;
+			hasScannedForEncodings = 0;
+			knownRegions = (fr, en, Base);
+			mainGroup = A10000000000000000000005;
+			productRefGroup = A10000000000000000000007;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A10000000000000000000008 /* NativePilotUITests */);
+		};
+		A1000000000000000000000C /* Debug project */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+		A1000000000000000000000D /* Release project */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
+		A10000000000000000000011 /* Debug target */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.jolene.nativepilot.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A10000000000000000000012 /* Release target */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_TESTING_SEARCH_PATHS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.jolene.nativepilot.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A1000000000000000000000F = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000000C, A1000000000000000000000D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000010 = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000011, A10000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+	};
+	rootObject = A1000000000000000000000B /* Project object */;
+}

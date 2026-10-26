@@ -56,8 +56,8 @@ rejoigne localhost. Aucun tunnel public n’est nécessaire.
     npm test
     npm run bundle
 
-La CI native exécute types, logique et exports de vérification, puis le scénario
-Maestro sur iPhone, iPad portrait puis paysage, et Android. Les exports ne sont ni une livraison ni une
+La CI native exécute types, logique et exports de vérification, puis les parcours
+Maestro sur iPhone, iPad portrait et Android, et XCTest sur iPad paysage. Les exports ne sont ni une livraison ni une
 soumission. Les journaux et captures sont conservés dans les artefacts CI.
 
 Le scénario maestro/consultation.yaml vérifie les filtres, l’état vide, le détail
@@ -65,11 +65,13 @@ d’une mission située loin dans la liste, le retour à sa position, l’arriè
 et la déconnexion. Les assertions de transport utilisent un client injecté et
 des réponses fictives : elles ne prouvent pas la RLS du serveur.
 
-Sur iPad, un second scénario `maestro/consultation-ipad-paysage.yaml` passe
-explicitement en `LANDSCAPE_LEFT` après le parcours portrait. Il vérifie de
-nouveau l’entrée, la liste, le détail et le retour à la position précédente.
-Ses quatre captures et son rapport JUnit sont distincts ; le runner contrôle
-que les quatre images sont effectivement plus larges que hautes. La présence
+Sur iPad, le test UI Apple de `ios-ui-tests/` passe explicitement en paysage
+après le parcours portrait. Il vérifie de nouveau l’entrée, la liste, le détail,
+le geste de retour à la position précédente et la déconnexion. Il cible les
+éléments avec XCTest, sans transformation tactile du driver Maestro.
+Ses quatre captures et son rapport XCTest sont distincts ; le runner contrôle
+que les quatre images sont effectivement plus larges que hautes, en tenant
+compte de leur orientation EXIF. La présence
 de ces scénarios ne vaut pas résultat : leur exécution CI doit être verte.
 Android cible un unique émulateur prêt et refuse tout appareil USB ou non
 autorisé ; Metro reste sur localhost via le port ADB inversé.
