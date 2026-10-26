@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Request } from '@playwright/test';
 import { creerMissionSimulee, ids, now } from './helpers/recette-complete-mission';
 import { preuve } from './helpers/recette-complete-etablissement';
 
@@ -22,6 +22,28 @@ for (const profession of ['AS', 'MEDECIN'] as const) {
       statut: 'EN_ATTENTE', cree_le: now, message: `Candidature fictive étudiant ${profession}`,
     };
     await simulation.installer(context, 'ADMIN_ETABLISSEMENT');
+    // networkidle peut déjà être acquis avant les lectures de l'état assigné.
+    // Attendre leur fin réelle avant de détruire le document par reload :
+    // WebKit signale autrement les requêtes interrompues comme des erreurs CORS.
+    const apiEnCours = new Set<Request>();
+    const requetesEchouees: string[] = [];
+    let dernierEvenementAPI = Date.now();
+    const estAPI = (request: Request) => /^\/(auth|rest|functions|storage)\/v1\//.test(new URL(request.url()).pathname);
+    page.on('request', request => {
+      if (estAPI(request)) { apiEnCours.add(request); dernierEvenementAPI = Date.now(); }
+    });
+    const terminerAPI = (request: Request) => {
+      if (estAPI(request)) { apiEnCours.delete(request); dernierEvenementAPI = Date.now(); }
+    };
+    page.on('requestfinished', terminerAPI);
+    page.on('requestfailed', request => {
+      terminerAPI(request);
+      if (estAPI(request)) requetesEchouees.push(`${request.method()} ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+    });
+    const stabiliserAPI = () => expect.poll(
+      () => apiEnCours.size === 0 && Date.now() - dernierEvenementAPI >= 500,
+      { message: 'Les lectures de la mission sont achevées avant le rechargement et les assertions finales' },
+    ).toBe(true);
     await page.clock.setFixedTime(new Date(now));
     await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
     await page.route('https://js.stripe.com/**', route => route.fulfill({ contentType: 'application/javascript', body: 'window.Stripe = function(){ throw new Error("Stripe interdit dans cette simulation"); };' }));
@@ -81,16 +103,18 @@ for (const profession of ['AS', 'MEDECIN'] as const) {
     await expect(dialogue).toBeHidden();
     await expect(page.getByText('Assignée', { exact: true }).first()).toBeVisible();
     expect(acceptations).toHaveLength(1);
-    await page.waitForLoadState('networkidle');
+    await stabiliserAPI();
     await page.reload();
     await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
     await expect(page.getByText('Assignée', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Accepter cette candidature', exact: true })).toHaveCount(0);
+    await stabiliserAPI();
     await preuve(page, `candidature-etudiant-${profession.toLowerCase()}-assignation-rechargee`, info);
     expect(acceptations).toHaveLength(1);
     expect(state.sms).toEqual([]); expect(state.emails).toEqual([]);
     expect(state.signatures).toEqual([]); expect(state.facture).toBeNull();
     expect(state.errors).toEqual([]); expect(state.unknown).toEqual([]); expect(state.external).toEqual([]);
+    expect(requetesEchouees).toEqual([]);
     await info.attach('acceptation-simulee', { body: JSON.stringify(acceptations, null, 2), contentType: 'application/json' });
   });
 }
