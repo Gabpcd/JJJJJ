@@ -91,15 +91,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: mobile-native/package-lock.json
-      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
-        with:
-          distribution: temurin
-          java-version: '21'
       - run: npm ci
         timeout-minutes: 8
-      - name: Installer Maestro vérifié
-        run: bash scripts/install-maestro-ci.sh
-        timeout-minutes: 10
       - name: Parcours dans Expo Go sur simulateur iOS
         run: node scripts/run-pilot-ci.mjs ios
         timeout-minutes: 25

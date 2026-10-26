@@ -12,7 +12,8 @@ final class NativePilotTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        if testRun?.hasSucceeded == false {
+        // hasSucceeded is still false during teardown; count only failures already recorded.
+        if (testRun?.totalFailureCount ?? 0) > 0 {
             record("\(proofPrefix)-echec")
             let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             screen.name = "\(proofPrefix)-echec-ecran-systeme"
@@ -24,12 +25,21 @@ final class NativePilotTests: XCTestCase {
 
     /// The runner opens the prepared exp:// URL before this test on a fresh iPad simulator.
     func testPortraitConsultation() throws {
-        proofPrefix = "ipad-portrait"
+        runPortraitConsultation(prefix: "ipad-portrait", deviceName: "iPad")
+    }
+
+    /// Uses the identical portrait assertions on a separate fresh iPhone simulator.
+    func testIphoneConsultation() throws {
+        runPortraitConsultation(prefix: "iphone-portrait", deviceName: "iPhone")
+    }
+
+    private func runPortraitConsultation(prefix: String, deviceName: String) {
+        proofPrefix = prefix
         prepareExpoGo()
         XCUIDevice.shared.orientation = .portrait
-        require("iPad portrait window") { self.app.frame.height > self.app.frame.width }
+        require("\(deviceName) portrait window") { self.app.frame.height > self.app.frame.width }
         assertSignedOutDemo()
-        record("ipad-portrait-connexion")
+        record("\(prefix)-connexion")
         element("enter-demo").tap()
         assertMissionCount(30)
 
@@ -54,9 +64,9 @@ final class NativePilotTests: XCTestCase {
         assertMissionCount(30)
         XCTAssertTrue((city.value as? String).map { $0.isEmpty || $0 == "Rechercher une ville" } ?? false,
                       "Reset must clear the city input")
-        record("ipad-portrait-missions")
+        record("\(prefix)-missions")
 
-        openMissionAndReturn(detailProof: "ipad-portrait-detail", returnProof: "ipad-portrait-retour")
+        openMissionAndReturn(detailProof: "\(prefix)-detail", returnProof: "\(prefix)-retour")
         XCUIDevice.shared.press(.home)
         require("The pilot actually entered the background") {
             self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
@@ -233,7 +243,8 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func record(_ name: String) {
-        let screenshot = XCTAttachment(data: app.screenshot().pngRepresentation, uniformTypeIdentifier: "public.png")
+        // Preserve the whole native screen and its orientation metadata without transforming pixels.
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = name
         screenshot.lifetime = .keepAlways
         add(screenshot)

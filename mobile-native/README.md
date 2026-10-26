@@ -57,7 +57,7 @@ rejoigne localhost. Aucun tunnel public n’est nécessaire.
     npm run bundle
 
 La CI native exécute types, logique et exports de vérification, puis les parcours
-Maestro sur iPhone et Android, et XCTest sur iPad portrait et paysage. Les exports ne sont ni une livraison ni une
+Maestro sur Android et XCTest sur iPhone et iPad portrait et paysage. Les exports ne sont ni une livraison ni une
 soumission. Les journaux et captures sont conservés dans les artefacts CI.
 
 Le scénario maestro/consultation.yaml vérifie les filtres, l’état vide, le détail
@@ -65,9 +65,9 @@ d’une mission située loin dans la liste, le retour à sa position, l’arriè
 et la déconnexion. Les assertions de transport utilisent un client injecté et
 des réponses fictives : elles ne prouvent pas la RLS du serveur.
 
-Sur iPad, les tests UI Apple de `ios-ui-tests/` vérifient le parcours complet
-en portrait, puis passent explicitement en paysage. Ils vérifient de nouveau l’entrée, la liste, le détail,
-le geste de retour à la position précédente et la déconnexion. Il cible les
+Sur iPhone et iPad, les tests UI Apple de `ios-ui-tests/` vérifient le parcours complet
+en portrait. Sur iPad, ils passent ensuite explicitement en paysage et vérifient de nouveau l’entrée, la liste, le détail,
+le geste de retour à la position précédente et la déconnexion. Ils ciblent les
 éléments avec XCTest, sans transformation tactile du driver Maestro.
 Chaque orientation conserve quatre captures et un rapport XCTest distinct ; le runner
 contrôle les dimensions affichées des images, en tenant compte de leur orientation EXIF. La présence

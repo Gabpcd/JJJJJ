@@ -15,8 +15,9 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(process.env.PILOT_OUTPUT_DIR || resolve(project, 'test-results', `native-${platform}`));
 mkdirSync(output, { recursive: true });
 const flow = resolve(project, 'maestro', 'consultation.yaml');
-const ipadProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
-const isIpad = platform === 'ios' && process.env.IOS_DEVICE_FAMILY === 'ipad';
+const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
+const iosFamily = process.env.IOS_DEVICE_FAMILY || 'iphone';
+const isIpad = platform === 'ios' && iosFamily === 'ipad';
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
@@ -162,16 +163,18 @@ async function runScenario(name, scenarioFlow, directory) {
   console.log(`Parcours natif ${name} terminé sans échec ni exclusion (${platform}).`);
 }
 
-async function runIpadXCTest(name, directory) {
+async function runIosXCTest(name, directory) {
   const portrait = name === 'portrait';
-  const testMethod = portrait ? 'testPortraitConsultation' : 'testLandscapeConsultation';
+  const testMethod = portrait
+    ? (isIpad ? 'testPortraitConsultation' : 'testIphoneConsultation')
+    : 'testLandscapeConsultation';
   stage = `xctest-${name}`;
-  console.log(`Début du parcours iPad ${name} avec XCTest (gestes Apple par élément).`);
+  console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
   mkdirSync(directory, { recursive: true });
   const temporary = process.env.RUNNER_TEMP;
   if (!temporary) throw new Error('RUNNER_TEMP requis pour le runner XCTest CI.');
-  const resultPath = resolve(temporary, `jolene-native-${name}.xcresult`);
-  const result = await run('xcodebuild', ['test', '-project', ipadProject,
+  const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
+  const result = await run('xcodebuild', ['test', '-project', iosProject,
     '-scheme', 'NativePilotUITests', `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`, '-configuration', 'Debug', '-sdk', 'iphonesimulator',
     '-destination', `platform=iOS Simulator,id=${device}`,
     '-derivedDataPath', resolve(temporary, 'jolene-native-ui-derived'),
@@ -196,7 +199,7 @@ async function runIpadXCTest(name, directory) {
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
   const names = portrait
-    ? ['connexion', 'missions', 'detail', 'retour'].map(screen => `ipad-portrait-${screen}`)
+    ? ['connexion', 'missions', 'detail', 'retour'].map(screen => `${iosFamily}-portrait-${screen}`)
     : ['connexion', 'liste', 'detail', 'retour'].map(screen => `ipad-paysage-${screen}`);
   for (const name of names) {
     const matching = manifest.flatMap(test => test.attachments ?? []).filter(item =>
@@ -208,7 +211,7 @@ async function runIpadXCTest(name, directory) {
   }
   verifyCaptureOrientation(captures, portrait ? 'PORTRAIT' : 'LANDSCAPE_LEFT', names);
   scenarios.push({ name, success: true, driver: 'XCTest' });
-  console.log(`Parcours iPad ${name} terminé : un test XCTest réussi et quatre captures dans l’orientation attendue.`);
+  console.log(`Parcours ${iosFamily} ${name} terminé : un test XCTest réussi et quatre captures dans l’orientation attendue.`);
 }
 
 function verifyCaptureOrientation(directory, orientation, names) {
@@ -237,7 +240,7 @@ function verifyCaptureOrientation(directory, orientation, names) {
 
 try {
   if (!existsSync(flow)) throw new Error('Le scénario maestro/consultation.yaml est requis.');
-  if (isIpad && !existsSync(ipadProject)) throw new Error('Le projet XCTest iPad portrait et paysage est requis.');
+  if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
   stage = 'expo-go-install';
   await installExpoGo();
@@ -288,12 +291,12 @@ try {
   writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
 
   console.log('Installation, manifeste et bundle prêts ; lancement du parcours natif.');
-  if (isIpad) {
-    stage = 'open-ipad-experience';
+  if (platform === 'ios') {
+    stage = 'open-ios-experience';
     await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
     await run('xcrun', ['simctl', 'openurl', device, expoUrl], { timeout: 120_000, logfile: 'expo-launch.log' });
-    await runIpadXCTest('portrait', resolve(output, 'portrait'));
-    await runIpadXCTest('landscape', resolve(output, 'landscape'));
+    await runIosXCTest('portrait', resolve(output, 'portrait'));
+    if (isIpad) await runIosXCTest('landscape', resolve(output, 'landscape'));
   } else {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
