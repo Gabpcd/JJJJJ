@@ -1,0 +1,121 @@
+appId: ${APP_ID}
+name: Parcours natif soignant — données fictives
+---
+- setOrientation: PORTRAIT
+- openLink: ${EXPO_URL}
+- tapOn:
+    text: "Open|Ouvrir"
+    optional: true
+- tapOn:
+    text: "Continue|Continuer"
+    optional: true
+# Expo Go's floating tools control can cover the application's sign-out button.
+# Prepare the simulator only at startup; never recover a failed application step.
+- runFlow:
+    when:
+      platform: iOS
+      visible: "Tools button"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "1"
+              checked: true
+              rightOf: "Tools button"
+              below: "Fast refresh"
+          commands:
+            - tapOn:
+                text: "1"
+                checked: true
+                rightOf: "Tools button"
+                below: "Fast refresh"
+                childOf:
+                  checked: true
+      - assertVisible:
+          text: "0"
+          checked: false
+          rightOf: "Tools button"
+          below: "Fast refresh"
+- tapOn:
+    id: "xmark"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "enter-demo"
+    timeout: 90000
+- assertVisible: ".*Démo · données fictives.*"
+- takeScreenshot: connexion
+- tapOn:
+    id: "enter-demo"
+- assertVisible:
+    id: "missions-list"
+- assertVisible:
+    id: "mission-count"
+    text: "30 missions.*"
+- tapOn:
+    id: "contract-filter-LIBERAL"
+- assertVisible:
+    id: "mission-count"
+    text: "10 missions.*"
+- tapOn:
+    id: "contract-filter-CDD"
+- assertVisible:
+    id: "mission-count"
+    text: "20 missions.*"
+- tapOn:
+    id: "contract-filter-TOUS"
+- tapOn:
+    id: "mission-city"
+- inputText: "VilleIntrouvable"
+- hideKeyboard
+- assertVisible:
+    id: "missions-empty"
+- tapOn:
+    id: "reset-filters"
+- assertVisible:
+    id: "mission-count"
+    text: "30 missions.*"
+- takeScreenshot: missions
+- scrollUntilVisible:
+    element:
+      id: "mission-card-demo-mission-016"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "mission-card-demo-mission-016"
+- assertVisible:
+    id: "mission-detail-title"
+    text: "Démonstration · Soins de suite 16"
+- takeScreenshot: detail
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- pressKey: Home
+- launchApp:
+    stopApp: false
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- tapOn:
+    id: "sign-out"
+- tapOn: "Quitter"
+- assertVisible:
+    id: "enter-demo"
+- assertNotVisible:
+    id: "missions-list"

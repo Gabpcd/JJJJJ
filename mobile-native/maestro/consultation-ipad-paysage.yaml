@@ -1,0 +1,48 @@
+appId: ${APP_ID}
+name: iPad paysage — entrée, liste, détail et retour
+---
+# Executed after the complete portrait flow has returned to the demo entry.
+# https://docs.maestro.dev/reference/commands-available/setorientation
+- setOrientation: LANDSCAPE_LEFT
+- assertVisible:
+    id: "enter-demo"
+- assertVisible: ".*Démo · données fictives.*"
+- takeScreenshot: ipad-paysage-connexion
+- tapOn:
+    id: "enter-demo"
+- assertVisible:
+    id: "missions-list"
+- assertVisible:
+    id: "mission-count"
+    text: "30 missions.*"
+- takeScreenshot: ipad-paysage-liste
+- scrollUntilVisible:
+    element:
+      id: "mission-card-demo-mission-016"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "mission-card-demo-mission-016"
+- assertVisible:
+    id: "mission-detail-title"
+    text: "Démonstration · Soins de suite 16"
+- takeScreenshot: ipad-paysage-detail
+- swipe:
+    start: "1%, 50%"
+    end: "90%, 50%"
+    duration: 600
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- takeScreenshot: ipad-paysage-retour
+- tapOn:
+    id: "sign-out"
+- tapOn: "Quitter"
+- assertVisible:
+    id: "enter-demo"
+- assertNotVisible:
+    id: "missions-list"

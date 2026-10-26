@@ -1,0 +1,35 @@
+{
+  "name": "@jolene/native-pilot",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-navigation/native": "7.5.1",
+    "@react-navigation/native-stack": "7.21.0",
+    "@supabase/supabase-js": "2.118.0",
+    "expo": "57.0.31",
+    "expo-crypto": "57.0.4",
+    "expo-linear-gradient": "57.0.2",
+    "expo-secure-store": "57.0.4",
+    "expo-status-bar": "57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.2",
+    "react-native-url-polyfill": "3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.2.18",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  },
+  "scripts": {
+    "start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --localhost",
+    "ios": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --ios --localhost",
+    "android": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --android --localhost",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/**/*.node.test.ts",
+    "bundle": "expo export --platform ios --platform android"
+  },
+  "private": true
+}
