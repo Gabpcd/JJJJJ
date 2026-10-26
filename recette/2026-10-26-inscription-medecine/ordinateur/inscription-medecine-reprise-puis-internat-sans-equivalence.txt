@@ -1,0 +1,74 @@
+- main:
+  - text: Jolene
+  - heading "Vos informations professionnelles" [level=1]
+  - paragraph: Ces informations permettent de vérifier votre profil avant de candidater.
+  - text: Prénom *
+  - textbox "Prénom *"
+  - text: Nom *
+  - textbox "Nom *"
+  - text: Téléphone *
+  - textbox "Téléphone * Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).":
+    - /placeholder: +33 6 ...
+  - paragraph: Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).
+  - text: Date de naissance *
+  - textbox "Date de naissance *"
+  - text: Profession *
+  - combobox "Profession *":
+    - text: Médecin
+    - img
+  - paragraph: 🎓 Je suis étudiant(e) en santé
+  - paragraph: Précisez votre cycle d’études en médecine.
+  - button "Je suis étudiant en santé" [pressed]
+  - text: Formation
+  - combobox "Formation":
+    - option "— Choisir —"
+    - option "Médecine — 1er cycle (DFGSM)"
+    - option "Médecine — 2e cycle (DFASM / externat)"
+    - option "Médecine — 3e cycle (internat)" [selected]
+  - paragraph: "Interne ou docteur junior : votre cycle d’études sera enregistré dans votre profil. Votre droit au remplacement n’est pas validé à cette étape."
+  - group "Modes d’exercice recherchés":
+    - text: Modes d’exercice recherchés
+    - paragraph: Le mode salarié inclut les CDD et les CDD courts. Vous pouvez sélectionner les deux modes si votre profession le permet.
+    - checkbox "Salarié (CDD compris)"
+    - text: Salarié (CDD compris)
+    - paragraph: Le mode libéral n’est pas proposé pour votre profession sur Jolene. Le mode salarié comprend les CDD et les CDD courts.
+    - paragraph: Sélectionnez au moins un mode d’exercice.
+  - text: Numéro RPPS *
+  - paragraph: "Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."
+  - 'textbox "Numéro RPPS * Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."':
+    - /placeholder: 11 chiffres
+  - text: Type d'exercice
+  - paragraph:
+    - text: En tant que
+    - strong: Médecin
+    - text: ", votre type d'exercice est automatiquement défini comme"
+    - strong: salarié
+    - text: .
+  - button "Enregistrer et continuer plus tard"
+  - button "Enregistrer mon profil"
+  - paragraph:
+    - text: Déjà un compte ?
+    - link "Se connecter":
+      - /url: /connexion
+  - link "❓ Centre d'aide":
+    - /url: /aide
+  - text: •
+  - link "🩺 Aide Pro Santé Connect":
+    - /url: /aide/pro-sante-connect
+  - text: •
+  - link "📋 CGU":
+    - /url: /cgu
+  - text: •
+  - link "💰 CGV":
+    - /url: /cgv
+  - text: •
+  - link "🔒 Confidentialité":
+    - /url: /confidentialite
+  - text: •
+  - link "📄 Mentions légales":
+    - /url: /mentions-legales
+  - link "♿ Accessibilité":
+    - /url: /accessibilite
+  - link "✉️ Contact":
+    - /url: /contact
+  - paragraph: © 2026 Jolene SASU — Tous droits réservés 🩷

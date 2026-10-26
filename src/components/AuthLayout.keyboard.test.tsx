@@ -33,6 +33,104 @@ describe('navigation clavier des formulaires Auth', () => {
     expect(document.activeElement).toBe(password);
   });
 
+  it('inclut les champs étudiant ajoutés sans changer d’étape ni remonter le formulaire', () => {
+    const formulaire = (etudiant: boolean) => (
+      <MemoryRouter>
+        <AuthLayout showBack={false} scrollKey={2}>
+          <form>
+            <input aria-label="Date de naissance" type="date" />
+            {etudiant && <div>
+              <select aria-label="Formation"><option>Médecine</option></select>
+              <input aria-label="Année validée" inputMode="numeric" />
+            </div>}
+            <input aria-label="RPPS" />
+          </form>
+        </AuthLayout>
+      </MemoryRouter>
+    );
+    const { container, getByLabelText, rerender } = render(formulaire(false));
+    const scroller = container.querySelector('main')!;
+    scroller.scrollTop = 240;
+    vi.mocked(scroller.scrollTo).mockClear();
+
+    rerender(formulaire(true));
+    const date = getByLabelText('Date de naissance');
+    const formation = getByLabelText('Formation');
+    const annee = getByLabelText('Année validée') as HTMLInputElement;
+    const rpps = getByLabelText('RPPS');
+    const focusFormation = vi.spyOn(formation, 'focus');
+    date.focus();
+    fireEvent.keyDown(date, { key: 'Enter' });
+    expect(document.activeElement).toBe(formation);
+    expect(focusFormation).toHaveBeenCalledWith({ preventScroll: true });
+
+    annee.focus();
+    expect(annee.enterKeyHint).toBe('next');
+    fireEvent.keyDown(annee, { key: 'Enter' });
+    expect(document.activeElement).toBe(rpps);
+    expect(scroller.scrollTop).toBe(240);
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('ignore le RPPS retiré et les champs masqués, inertes, désactivés ou en lecture seule', () => {
+    const formulaire = (rpps: boolean) => (
+      <MemoryRouter>
+        <AuthLayout showBack={false} scrollKey={2}>
+          <form>
+            <input aria-label="Prénom" />
+            {rpps && <input key="rpps" aria-label="RPPS" />}
+            <div hidden><input aria-label="Champ masqué" /></div>
+            <div style={{ display: 'none' }}><input aria-label="Champ sans affichage" /></div>
+            <input aria-label="Champ invisible" style={{ visibility: 'hidden' }} />
+            <div ref={element => { element?.setAttribute('inert', ''); }}><input aria-label="Champ inerte" /></div>
+            <fieldset disabled><input aria-label="Champ désactivé" /></fieldset>
+            <input aria-label="Identité vérifiée" readOnly />
+            <input aria-label="Téléphone" type="tel" />
+          </form>
+        </AuthLayout>
+      </MemoryRouter>
+    );
+    const { getByLabelText, rerender } = render(formulaire(true));
+    const ancienRpps = getByLabelText('RPPS');
+    const focusAncienRpps = vi.spyOn(ancienRpps, 'focus');
+    rerender(formulaire(false));
+
+    const prenom = getByLabelText('Prénom');
+    prenom.focus();
+    fireEvent.keyDown(prenom, { key: 'Enter' });
+    expect(document.activeElement).toBe(getByLabelText('Téléphone'));
+    expect(focusAncienRpps).not.toHaveBeenCalled();
+    expect((getByLabelText('Téléphone') as HTMLInputElement).enterKeyHint).toBe('done');
+  });
+
+  it('préserve Entrée sur le dernier champ, les zones multilignes et la composition', () => {
+    const { getByLabelText } = render(
+      <MemoryRouter>
+        <AuthLayout showBack={false}>
+          <form>
+            <input aria-label="Prénom" />
+            <textarea aria-label="Précisions" />
+            <input aria-label="Téléphone" type="tel" />
+          </form>
+        </AuthLayout>
+      </MemoryRouter>,
+    );
+    const prenom = getByLabelText('Prénom');
+    prenom.focus();
+    expect(fireEvent.keyDown(prenom, { key: 'Enter', isComposing: true })).toBe(true);
+    expect(document.activeElement).toBe(prenom);
+
+    const precisions = getByLabelText('Précisions');
+    precisions.focus();
+    expect(fireEvent.keyDown(precisions, { key: 'Enter' })).toBe(true);
+    expect(document.activeElement).toBe(precisions);
+
+    const telephone = getByLabelText('Téléphone');
+    telephone.focus();
+    expect(fireEvent.keyDown(telephone, { key: 'Enter' })).toBe(true);
+    expect(document.activeElement).toBe(telephone);
+  });
+
   it('attend la fin du toucher avant de masquer le clavier sur le fond', () => {
     const { container, getByLabelText } = render(
       <MemoryRouter>
