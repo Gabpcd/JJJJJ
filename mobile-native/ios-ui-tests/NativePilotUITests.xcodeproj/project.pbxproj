@@ -4,12 +4,12 @@
 	classes = {};
 	objectVersion = 56;
 	objects = {
-		A10000000000000000000001 /* NativePilotLandscapeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* NativePilotLandscapeTests.swift */; };
-		A10000000000000000000002 /* NativePilotLandscapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePilotLandscapeTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000001 /* NativePilotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* NativePilotTests.swift */; };
+		A10000000000000000000002 /* NativePilotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePilotTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000003 /* NativePilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NativePilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000004 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000006 /* NativePilotUITests */, A10000000000000000000007 /* Products */); sourceTree = "<group>"; };
-		A10000000000000000000006 /* NativePilotUITests */ = {isa = PBXGroup; children = (A10000000000000000000002 /* NativePilotLandscapeTests.swift */); path = NativePilotUITests; sourceTree = "<group>"; };
+		A10000000000000000000006 /* NativePilotUITests */ = {isa = PBXGroup; children = (A10000000000000000000002 /* NativePilotTests.swift */); path = NativePilotUITests; sourceTree = "<group>"; };
 		A10000000000000000000007 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000003 /* NativePilotUITests.xctest */); name = Products; sourceTree = "<group>"; };
 		A10000000000000000000008 /* NativePilotUITests */ = {
 			isa = PBXNativeTarget;
@@ -22,7 +22,7 @@
 			productReference = A10000000000000000000003;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		A10000000000000000000009 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* NativePilotLandscapeTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000009 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* NativePilotTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 		A1000000000000000000000A /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A1000000000000000000000B /* Project object */ = {
 			isa = PBXProject;
