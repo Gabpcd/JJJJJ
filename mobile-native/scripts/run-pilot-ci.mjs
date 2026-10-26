@@ -131,25 +131,26 @@ async function runScenario(name, scenarioFlow, directory) {
   scenarios.push({ name, success: true });
 }
 
-function verifyLandscapeCaptures(directory) {
+function verifyCaptureOrientation(directory, orientation, names) {
   function files(folder) {
     return readdirSync(folder, { withFileTypes: true }).flatMap(entry =>
       entry.isDirectory() ? files(resolve(folder, entry.name)) : [resolve(folder, entry.name)]);
   }
   const candidates = files(directory);
-  const captures = ['connexion', 'liste', 'detail', 'retour'].map(screen => {
-    const filename = `ipad-paysage-${screen}.png`;
+  const captures = names.map(screen => {
+    const filename = `${screen}.png`;
     const matching = candidates.filter(file => basename(file) === filename);
-    if (matching.length !== 1) throw new Error(`Capture paysage absente ou ambiguë : ${filename}.`);
+    if (matching.length !== 1) throw new Error(`Capture ${orientation} absente ou ambiguë : ${filename}.`);
     const image = readFileSync(matching[0]);
     if (!image.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       || image.subarray(12, 16).toString() !== 'IHDR') throw new Error(`Capture PNG invalide : ${filename}.`);
     const width = image.readUInt32BE(16);
     const height = image.readUInt32BE(20);
-    if (width <= height) throw new Error(`Le scénario paysage a produit une capture portrait : ${filename}, ${width}×${height}.`);
+    const expected = orientation === 'PORTRAIT' ? width < height : width > height;
+    if (!expected) throw new Error(`Orientation ${orientation} non confirmée : ${filename}, ${width}×${height}.`);
     return { screen, filename, width, height };
   });
-  writeFileSync(resolve(directory, 'orientation.json'), JSON.stringify({ requested: 'LANDSCAPE_LEFT', captures }, null, 2));
+  writeFileSync(resolve(directory, 'orientation.json'), JSON.stringify({ requested: orientation, captures }, null, 2));
 }
 
 try {
@@ -193,11 +194,14 @@ try {
 
   console.log('Installation et manifeste confirmés ; lancement du parcours natif.');
   await runScenario('portrait', flow, output);
+  stage = 'portrait-captures';
+  verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour']);
   if (isIpad) {
     const landscapeOutput = resolve(output, 'landscape');
     await runScenario('landscape', landscapeFlow, landscapeOutput);
     stage = 'landscape-captures';
-    verifyLandscapeCaptures(landscapeOutput);
+    verifyCaptureOrientation(landscapeOutput, 'LANDSCAPE_LEFT',
+      ['connexion', 'liste', 'detail', 'retour'].map(screen => `ipad-paysage-${screen}`));
   }
   success = true;
   stage = 'complete';
