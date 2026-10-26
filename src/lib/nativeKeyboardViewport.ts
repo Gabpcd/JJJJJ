@@ -25,10 +25,22 @@ export function keepNativeFieldVisible(
     ?? (document.scrollingElement as HTMLElement | null);
   if (!scrollParent) return false;
 
-  const bottomLimit = viewportHeight - FIELD_BOTTOM_GAP_PX;
+  // Un formulaire peut défiler dans un main situé sous un header fixe. Ses
+  // limites visibles sont l'intersection de son contenu et du viewport.
+  let visibleTop = 0;
+  let visibleBottom = viewportHeight;
+  if (scrollParent !== document.scrollingElement) {
+    const parentTop = scrollParent.getBoundingClientRect().top + scrollParent.clientTop;
+    visibleTop = Math.max(visibleTop, parentTop);
+    visibleBottom = Math.min(visibleBottom, parentTop + scrollParent.clientHeight);
+  }
+  if (visibleBottom <= visibleTop) return false;
+
+  const topLimit = visibleTop + FIELD_TOP_GAP_PX;
+  const bottomLimit = visibleBottom - FIELD_BOTTOM_GAP_PX;
   let delta = 0;
   if (rect.bottom > bottomLimit) delta = rect.bottom - bottomLimit;
-  else if (rect.top < FIELD_TOP_GAP_PX) delta = rect.top - FIELD_TOP_GAP_PX;
+  else if (rect.top < topLimit) delta = rect.top - topLimit;
 
   if (Math.abs(delta) < 1) return false;
   scrollParent.scrollTop += delta;

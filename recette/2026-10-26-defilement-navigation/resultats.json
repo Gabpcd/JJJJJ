@@ -1,0 +1,73 @@
+{
+  "statistiques": {
+    "startTime": "2026-10-26T17:18:02.551Z",
+    "duration": 51359.178,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "niveau": "Interface locale réelle, API et bridge Capacitor simulés. Aucun appareil physique ni service distant.",
+  "cas": [
+    {
+      "titre": "formulaire : bas accessible et position conservée après les CGU",
+      "format": "ipad-portrait",
+      "statut": "expected",
+      "duree_ms": 5567
+    },
+    {
+      "titre": "clavier simulé : champ visible sous le header après réduction puis rotation",
+      "format": "ipad-portrait",
+      "statut": "expected",
+      "duree_ms": 4213
+    },
+    {
+      "titre": "formulaire : bas accessible et position conservée après les CGU",
+      "format": "ipad-paysage",
+      "statut": "expected",
+      "duree_ms": 4950
+    },
+    {
+      "titre": "clavier simulé : champ visible sous le header après réduction puis rotation",
+      "format": "ipad-paysage",
+      "statut": "expected",
+      "duree_ms": 4217
+    },
+    {
+      "titre": "formulaire : bas accessible et position conservée après les CGU",
+      "format": "iphone",
+      "statut": "expected",
+      "duree_ms": 5080
+    },
+    {
+      "titre": "clavier simulé : champ visible sous le header après réduction puis rotation",
+      "format": "iphone",
+      "statut": "expected",
+      "duree_ms": 4026
+    },
+    {
+      "titre": "formulaire : bas accessible et position conservée après les CGU",
+      "format": "android",
+      "statut": "expected",
+      "duree_ms": 5188
+    },
+    {
+      "titre": "clavier simulé : champ visible sous le header après réduction puis rotation",
+      "format": "android",
+      "statut": "expected",
+      "duree_ms": 4086
+    },
+    {
+      "titre": "formulaire : bas accessible et position conservée après les CGU",
+      "format": "ordinateur",
+      "statut": "expected",
+      "duree_ms": 4522
+    },
+    {
+      "titre": "clavier simulé : champ visible sous le header après réduction puis rotation",
+      "format": "ordinateur",
+      "statut": "expected",
+      "duree_ms": 3906
+    }
+  ]
+}
