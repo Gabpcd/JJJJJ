@@ -72,6 +72,18 @@ describe('navigation clavier des formulaires Auth', () => {
     expect(scroller.scrollTo).not.toHaveBeenCalled();
   });
 
+  it('repart en haut lors d’une nouvelle étape, sans écraser une position restaurée au montage', () => {
+    const formulaire = (etape: number) => (
+      <MemoryRouter><AuthLayout scrollKey={etape}><form><input aria-label="Email" /></form></AuthLayout></MemoryRouter>
+    );
+    const { getByRole, rerender } = render(formulaire(1));
+    const scroller = getByRole('main');
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+    scroller.scrollTop = 240;
+    rerender(formulaire(2));
+    expect(scroller.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: 'instant' });
+  });
+
   it('ignore le RPPS retiré et les champs masqués, inertes, désactivés ou en lecture seule', () => {
     const formulaire = (rpps: boolean) => (
       <MemoryRouter>

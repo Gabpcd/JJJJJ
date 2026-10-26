@@ -158,7 +158,9 @@ export async function configurerClavier(): Promise<void> {
   if (!isNative()) return;
 
   const listeners: Array<{ remove: () => Promise<void> }> = [];
+  const retirerListenersDOM: Array<() => void> = [];
   let installationAnnulee = false;
+  let focusTimer: number | undefined;
   try {
     const { Keyboard, KeyboardResize } = await import('@capacitor/keyboard');
     const platform = Capacitor.getPlatform();
@@ -174,47 +176,113 @@ export async function configurerClavier(): Promise<void> {
       }
     }
 
-    let viewportSansClavier = window.innerHeight;
-    let hauteurVisibleAvecClavier: number | undefined;
+    const tailleViewport = () => ({ width: window.innerWidth, height: window.innerHeight });
+    let viewportSansClavier = tailleViewport();
+    let viewportAvantReduction: ReturnType<typeof tailleViewport> | undefined;
+    let etatClavier: 'ferme' | 'ouvert' | 'fermeture' = 'ferme';
+    let hauteurClavier = 0;
 
-    const revealFocusedField = (viewportHeight = hauteurVisibleAvecClavier) => {
-      // Attendre que le resize natif et les safe areas aient leur taille
-      // finale. On ne déplace la zone scrollable que si le champ reste masqué.
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          if (installationAnnulee) return;
-          const field = activeEditableField();
-          if (field) keepNativeFieldVisible(field, viewportHeight);
-        });
-      });
-    };
-
-    listeners.push(await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
-      // En resize Native, WKWebView ne reflète pas toujours la nouvelle
-      // hauteur dans visualViewport (notamment Simulator/Safari 18). La
-      // hauteur du plugin est la source fiable ; Math.min évite de retrancher
-      // deux fois si innerHeight a déjà été réduit par iOS.
-      const calculee = viewportSansClavier - keyboardHeight;
-      hauteurVisibleAvecClavier = Math.min(
+    const hauteurVisible = () => {
+      // La référence reste celle d'avant keyboardWillShow, même lorsque le
+      // WebView a déjà été réduit au moment de keyboardDidShow. Si l'app a
+      // tourné clavier ouvert, seule la géométrie actuelle est exploitable.
+      const calculee = window.innerWidth === viewportSansClavier.width
+        ? viewportSansClavier.height - hauteurClavier
+        : Number.POSITIVE_INFINITY;
+      return Math.min(
         window.innerHeight,
         window.visualViewport?.height ?? Number.POSITIVE_INFINITY,
         calculee > 0 ? calculee : Number.POSITIVE_INFINITY,
       );
-      revealFocusedField(hauteurVisibleAvecClavier);
+    };
+
+    const revealFocusedField = () => {
+      // Attendre que le resize natif et les safe areas aient leur taille
+      // finale. On ne déplace la zone scrollable que si le champ reste masqué.
+      window.requestAnimationFrame(() => {
+        if (installationAnnulee || etatClavier !== 'ouvert') return;
+        window.requestAnimationFrame(() => {
+          if (installationAnnulee || etatClavier !== 'ouvert') return;
+          const field = activeEditableField();
+          if (field) keepNativeFieldVisible(field, hauteurVisible());
+        });
+      });
+    };
+
+    const ouvrirClavier = (keyboardHeight: number) => {
+      if (etatClavier !== 'ouvert') {
+        const actuelle = tailleViewport();
+        // Sur certaines plateformes, resize précède la notification native.
+        // Une réduction à largeur constante peut déjà venir du clavier,
+        // sans correspondre exactement à keyboardHeight (barres système).
+        if (viewportAvantReduction?.width === actuelle.width) {
+          viewportSansClavier = viewportAvantReduction;
+        } else if (actuelle.width !== viewportSansClavier.width || actuelle.height > viewportSansClavier.height) {
+          viewportSansClavier = actuelle;
+        }
+        viewportAvantReduction = undefined;
+      }
+      etatClavier = 'ouvert';
+      hauteurClavier = keyboardHeight;
+    };
+
+    const onResize = () => {
+      if (etatClavier === 'ferme') {
+        const actuelle = tailleViewport();
+        if (actuelle.width === viewportSansClavier.width && actuelle.height === viewportSansClavier.height) return;
+        const reference = viewportAvantReduction ?? viewportSansClavier;
+        viewportAvantReduction = actuelle.width === reference.width && actuelle.height < reference.height
+          ? reference
+          : undefined;
+        viewportSansClavier = actuelle;
+      } else if (etatClavier === 'ouvert') {
+        revealFocusedField();
+      }
+    };
+    const onFocusIn = () => {
+      if (etatClavier !== 'ouvert') return;
+      window.clearTimeout(focusTimer);
+      focusTimer = window.setTimeout(revealFocusedField, 60);
+    };
+    window.addEventListener('resize', onResize);
+    retirerListenersDOM.push(() => window.removeEventListener('resize', onResize));
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener('resize', onResize);
+    retirerListenersDOM.push(() => visualViewport?.removeEventListener('resize', onResize));
+    document.addEventListener('focusin', onFocusIn);
+    retirerListenersDOM.push(() => document.removeEventListener('focusin', onFocusIn));
+
+    listeners.push(await Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => ouvrirClavier(keyboardHeight)));
+    listeners.push(await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+      ouvrirClavier(keyboardHeight);
+      revealFocusedField();
+    }));
+    listeners.push(await Keyboard.addListener('keyboardWillHide', () => {
+      etatClavier = 'fermeture';
+      window.clearTimeout(focusTimer);
     }));
     listeners.push(await Keyboard.addListener('keyboardDidHide', () => {
-      hauteurVisibleAvecClavier = undefined;
+      etatClavier = 'ferme';
+      hauteurClavier = 0;
+      viewportAvantReduction = undefined;
+      const memoriserViewportRestaure = () => {
+        const actuelle = tailleViewport();
+        // didHide peut précéder la restauration du WebView. Une hauteur
+        // encore réduite ne doit pas devenir la référence du prochain show.
+        if (actuelle.width !== viewportSansClavier.width || actuelle.height >= viewportSansClavier.height) {
+          viewportSansClavier = actuelle;
+        }
+      };
+      memoriserViewportRestaure();
       window.requestAnimationFrame(() => {
-        if (installationAnnulee) return;
-        viewportSansClavier = window.innerHeight;
+        if (installationAnnulee || etatClavier !== 'ferme') return;
+        memoriserViewportRestaure();
       });
     }));
-    document.addEventListener('focusin', () => {
-      if (!document.body.classList.contains('keyboard-is-open')) return;
-      window.setTimeout(() => revealFocusedField(), 60);
-    });
   } catch {
     installationAnnulee = true;
+    window.clearTimeout(focusTimer);
+    retirerListenersDOM.forEach(retirer => retirer());
     // Une installation partielle ne doit pas conserver un listener isolé.
     await Promise.allSettled(listeners.map(listener => Promise.resolve().then(() => listener.remove())));
   }

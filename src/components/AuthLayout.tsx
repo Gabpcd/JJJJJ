@@ -27,10 +27,16 @@ interface AuthLayoutProps {
 export function AuthLayout({ children, showBack = true, backTo, scrollKey }: AuthLayoutProps) {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLElement>(null);
+  const previousStep = useRef(scrollKey);
 
   useLayoutEffect(() => {
     const scrollContainer = scrollRef.current;
-    scrollContainer?.scrollTo({ top: 0, behavior: 'auto' });
+    // Le retour historique est restauré par ScrollToTop, y compris dans ce
+    // conteneur interne. Seul un changement d'étape repart en haut.
+    if (previousStep.current !== scrollKey) {
+      scrollContainer?.scrollTo({ top: 0, behavior: 'instant' });
+      previousStep.current = scrollKey;
+    }
     if (!scrollContainer) return;
 
     // WKWebView n'infère pas toujours « Suivant » entre les champs d'un même
@@ -127,6 +133,7 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
       <main
         ref={scrollRef}
         id="contenu-principal"
+        data-scroll-restoration="auth"
         className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:[&>:first-child]:mt-auto sm:[&>:last-child]:mb-auto sm:[&>*]:shrink-0 px-4 py-6"
         onClick={handleBackgroundClick}
         style={{

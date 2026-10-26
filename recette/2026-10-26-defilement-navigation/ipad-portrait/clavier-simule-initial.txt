@@ -1,0 +1,43 @@
+- main:
+  - text: Jolene
+  - heading "Vos informations professionnelles" [level=1]
+  - paragraph: Ces informations permettent de vérifier votre profil avant de candidater.
+  - text: Prénom *
+  - textbox "Prénom *"
+  - text: Nom *
+  - textbox "Nom *"
+  - text: Téléphone *
+  - textbox "Téléphone * Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).":
+    - /placeholder: +33 6 ...
+  - paragraph: Nécessaire pour qu'un établissement puisse vous joindre (missions urgentes).
+  - text: Date de naissance *
+  - textbox "Date de naissance *"
+  - text: Profession *
+  - combobox "Profession *":
+    - text: Infirmier(ère) Diplômé(e) d'État (IDE)
+    - img
+  - paragraph: 🎓 Je suis étudiant(e) en santé
+  - paragraph: Pré-éligibilité à un emploi temporaire selon l’arrêté du 3 février 2022, sous contrôle des preuves.
+  - button "Je suis étudiant en santé"
+  - group "Modes d’exercice recherchés":
+    - text: Modes d’exercice recherchés
+    - paragraph: Le mode salarié inclut les CDD et les CDD courts. Vous pouvez sélectionner les deux modes si votre profession le permet.
+    - checkbox "Salarié (CDD compris)"
+    - text: Salarié (CDD compris)
+    - checkbox "Libéral"
+    - text: Libéral
+    - paragraph: Sélectionnez au moins un mode d’exercice.
+  - text: Numéro RPPS
+  - paragraph: Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
+  - paragraph: "Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."
+  - 'textbox "Numéro RPPS Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là. Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active."':
+    - /placeholder: 11 chiffres (optionnel)
+  - text: Êtes-vous actuellement salarié(e) d'un établissement de santé ?
+  - button "Oui"
+  - button "Non"
+  - button "Enregistrer et continuer plus tard"
+  - button "Enregistrer mon profil"
+  - paragraph:
+    - text: Déjà un compte ?
+    - link "Se connecter":
+      - /url: /connexion

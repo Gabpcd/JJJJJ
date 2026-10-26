@@ -1,0 +1,73 @@
+{
+  "statistiques": {
+    "startTime": "2026-10-26T17:19:19.621Z",
+    "duration": 183654.215,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "niveau": "Parcours soignant et établissement dans le frontend local ; API simulées.",
+  "cas": [
+    {
+      "titre": "complétion établissement : validation, sauvegarde partielle, panne et reprise depuis inscription",
+      "format": "ipad-portrait",
+      "statut": "expected",
+      "duree_ms": 5516
+    },
+    {
+      "titre": "complétion établissement : validation, sauvegarde partielle, panne et reprise depuis inscription",
+      "format": "ipad-paysage",
+      "statut": "expected",
+      "duree_ms": 5238
+    },
+    {
+      "titre": "complétion établissement : validation, sauvegarde partielle, panne et reprise depuis inscription",
+      "format": "iphone",
+      "statut": "expected",
+      "duree_ms": 4902
+    },
+    {
+      "titre": "complétion établissement : validation, sauvegarde partielle, panne et reprise depuis inscription",
+      "format": "android",
+      "statut": "expected",
+      "duree_ms": 4828
+    },
+    {
+      "titre": "complétion établissement : validation, sauvegarde partielle, panne et reprise depuis inscription",
+      "format": "ordinateur",
+      "statut": "expected",
+      "duree_ms": 4878
+    },
+    {
+      "titre": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+      "format": "ipad-portrait",
+      "statut": "expected",
+      "duree_ms": 23372
+    },
+    {
+      "titre": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+      "format": "ipad-paysage",
+      "statut": "expected",
+      "duree_ms": 23019
+    },
+    {
+      "titre": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+      "format": "iphone",
+      "statut": "expected",
+      "duree_ms": 23032
+    },
+    {
+      "titre": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+      "format": "android",
+      "statut": "expected",
+      "duree_ms": 21013
+    },
+    {
+      "titre": "SOIGNANT — navigation réelle des cinq onglets et sous-onglets après inscription",
+      "format": "ordinateur",
+      "statut": "expected",
+      "duree_ms": 20213
+    }
+  ]
+}
