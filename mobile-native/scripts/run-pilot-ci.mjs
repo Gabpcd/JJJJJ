@@ -20,6 +20,7 @@ const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
   EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', MAESTRO_CLI_NO_ANALYTICS: '1',
+  MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
   NODE_OPTIONS: '--dns-result-order=ipv4first',
 };
 const appId = platform === 'ios' ? 'host.exp.Exponent' : 'host.exp.exponent';
@@ -114,6 +115,32 @@ async function chooseAndroidDevice() {
   return serial;
 }
 
+async function installExpoGo() {
+  // Use the SDK-pinned Expo CLI downloader, without its automatic app launch.
+  // Combining --ios with Metro lets a simctl openurl timeout kill the server.
+  const binaryRecord = resolve(output, 'expo-go.json');
+  const download = `
+    const { createRequire } = require('node:module');
+    const { dirname, resolve } = require('node:path');
+    const { writeFileSync } = require('node:fs');
+    const expoRequire = createRequire(require.resolve('expo/package.json'));
+    const cliRoot = dirname(expoRequire.resolve('@expo/cli/package.json'));
+    const { downloadExpoGoAsync } = require(resolve(cliRoot, 'build/src/utils/downloadExpoGoAsync.js'));
+    downloadExpoGoAsync(process.argv[1], { sdkVersion: '57.0.0' })
+      .then(binaryPath => writeFileSync(process.argv[2], JSON.stringify({ sdkVersion: '57.0.0', binaryPath })))
+      .catch(error => { console.error(error); process.exitCode = 1; });
+  `;
+  await run(process.execPath, ['-e', download, platform, binaryRecord],
+    { timeout: 360_000, logfile: 'expo-install.log' });
+  const { binaryPath } = JSON.parse(readFileSync(binaryRecord, 'utf8'));
+  if (typeof binaryPath !== 'string' || !existsSync(binaryPath)) throw new Error('Binaire Expo Go téléchargé introuvable.');
+  if (platform === 'ios') {
+    await run('xcrun', ['simctl', 'install', device, binaryPath], { timeout: 180_000, logfile: 'expo-install.log' });
+  } else {
+    await run('adb', ['-s', device, 'install', '-r', binaryPath], { timeout: 180_000, logfile: 'expo-install.log' });
+  }
+}
+
 async function runScenario(name, scenarioFlow, directory) {
   stage = `maestro-${name}`;
   mkdirSync(directory, { recursive: true });
@@ -157,11 +184,13 @@ try {
   if (!existsSync(flow)) throw new Error('Le scénario maestro/consultation.yaml est requis.');
   if (isIpad && !existsSync(landscapeFlow)) throw new Error('Le scénario iPad paysage est requis en complément du portrait.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
+  stage = 'expo-go-install';
+  await installExpoGo();
   stage = 'metro-start';
   console.log(`Démarrage Expo SDK 57 sur ${platform} (${device}).`);
   const metroLog = createWriteStream(resolve(output, 'metro.log'));
   streams.push(metroLog);
-  metro = spawn('npx', ['--no-install', 'expo', 'start', '--go', `--${platform}`, '--localhost', '--port', '8090'],
+  metro = spawn('npx', ['--no-install', 'expo', 'start', '--go', '--localhost', '--port', '8090'],
     { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   metro.stdout.pipe(metroLog, { end: false });
   metro.stderr.pipe(metroLog, { end: false });
@@ -173,7 +202,7 @@ try {
     } catch { return false; }
   }, 180_000);
 
-  stage = 'expo-go-install';
+  stage = 'expo-go-installed';
   await waitUntil('installation Expo Go pour SDK 57', async () => {
     const result = platform === 'ios'
       ? await run('xcrun', ['simctl', 'get_app_container', device, appId, 'app'], { allowFailure: true, timeout: 10_000 })
@@ -192,7 +221,18 @@ try {
   if (!String(sdk).startsWith('57.')) throw new Error(`Version Expo du manifeste inattendue : ${sdk}.`);
   writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', expoUrl }, null, 2));
 
-  console.log('Installation et manifeste confirmés ; lancement du parcours natif.');
+  stage = 'metro-bundle-ready';
+  const bundleUrl = new URL(manifest.launchAsset?.url);
+  if (bundleUrl.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(bundleUrl.hostname) || bundleUrl.port !== '8090') {
+    throw new Error('Le bundle de démonstration doit provenir du serveur Metro local.');
+  }
+  const bundle = await fetch(bundleUrl, { signal: AbortSignal.timeout(180_000) });
+  if (!bundle.ok) throw new Error(`Le bundle Metro retourne ${bundle.status}.`);
+  const bundleBytes = (await bundle.arrayBuffer()).byteLength;
+  if (!bundleBytes) throw new Error('Le bundle Metro est vide.');
+  writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
+
+  console.log('Installation, manifeste et bundle prêts ; lancement du parcours natif.');
   await runScenario('portrait', flow, output);
   stage = 'portrait-captures';
   verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour']);

@@ -48,6 +48,30 @@ name: Parcours natif soignant — données fictives
       platform: Android
       visible: "SDK version: 57.0.0"
     commands:
+      # The Compose menu scrolls; the Tools button row follows Fast Refresh.
+      # Its switch has a checked state, without iOS's textual 1/0 value.
+      - scrollUntilVisible:
+          element:
+            text: "Tools button"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
+      - runFlow:
+          when:
+            visible:
+              checked: true
+              rightOf: "Tools button"
+              below: "Fast Refresh"
+          commands:
+            - tapOn: "Tools button"
+      - assertVisible:
+          checked: false
+          rightOf: "Tools button"
+          below: "Fast Refresh"
+      - assertNotVisible:
+          checked: true
+          rightOf: "Tools button"
+          below: "Fast Refresh"
       - tapOn: "Close"
       - assertNotVisible: "SDK version: 57.0.0"
 - extendedWaitUntil:
@@ -120,10 +144,24 @@ name: Parcours natif soignant — données fictives
     id: "mission-city"
 - takeScreenshot: retour
 - pressKey: Home
-- launchApp:
-    stopApp: false
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          stopApp: false
+# Android's Expo Go launcher opens HomeActivity, not the running experience.
+# Reopening the same URL brings its existing task forward (SDK 57 Kernel.kt).
+# A reload would reset demo sign-in and fail the position assertions below.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - openLink: ${EXPO_URL}
 - assertVisible:
     id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
 - tapOn:
     id: "sign-out"
 - tapOn: "Quitter"
