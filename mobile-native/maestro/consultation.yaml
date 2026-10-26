@@ -16,7 +16,14 @@ env:
       - extendedWaitUntil:
           visible: "Continue|Continuer"
           timeout: 120000
+      - waitForAnimationToEnd:
+          timeout: 10000
       - tapOn: "Continue|Continuer"
+      # The SDK header remains accessible behind the onboarding sheet.
+      # Require its actual dismissal before preparing the development menu.
+      - extendedWaitUntil:
+          notVisible: "Continue|Continuer"
+          timeout: 15000
       - extendedWaitUntil:
           visible: "SDK version: 57.0.0"
           timeout: 30000
