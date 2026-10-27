@@ -3,6 +3,7 @@ import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, r
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { verifyContractsHomeEvidence } from './contracts-home-oracle.mjs';
 import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 import { createIosNavigationStallMonitor } from './ios-navigation-stall.mjs';
@@ -204,6 +205,19 @@ async function runIosXCTest(name, directory) {
   }
   const manifest = JSON.parse(readFileSync(resolve(attachments, 'manifest.json'), 'utf8'));
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
+  if (selectedScenario.name === 'contracts') {
+    const prefix = name === 'landscape' ? 'ipad-paysage' : `${iosFamily}-portrait`;
+    const proofs = manifest.flatMap(test => test.attachments ?? []).filter(item =>
+      item.suggestedHumanReadableName?.startsWith(`${prefix}-contrats-home-oracle`)
+      && ['.json', '.txt'].some(extension => item.exportedFileName?.endsWith(extension)));
+    if (proofs.length !== 1 || basename(proofs[0].exportedFileName) !== proofs[0].exportedFileName) {
+      throw new Error('Preuve Home XCTest absente ou ambiguë.');
+    }
+    const proof = JSON.parse(readFileSync(resolve(attachments, proofs[0].exportedFileName), 'utf8'));
+    if (proof.prefix !== prefix) throw new Error('Preuve Home provenant d’un autre format.');
+    const evidence = verifyContractsHomeEvidence({ proof, metro: readFileSync(resolve(output, 'metro.log'), 'utf8') });
+    writeFileSync(resolve(directory, 'contracts-home-evidence.json'), JSON.stringify(evidence, null, 2));
+  }
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
   const names = scenarioCaptureNames(selectedScenario, platform, iosFamily, name);
@@ -331,7 +345,7 @@ try {
   if (device) {
     if (platform === 'ios') {
       if (!success) {
-        try { await collectIosFailureDiagnostics({ device, output, started, run }); }
+        try { await collectIosFailureDiagnostics({ device, output, started, run, env, failed: true }); }
         catch (error) { writeFileSync(resolve(output, 'ios-diagnostics-error.txt'), String(error)); }
       }
       await run('xcrun', ['simctl', 'io', device, 'screenshot', resolve(output, 'final.png')], { allowFailure: true, timeout: 15_000, logfile: 'simulator.log' });

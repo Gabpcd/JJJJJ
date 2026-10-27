@@ -29,6 +29,7 @@ import { ActionButton, StatusPanel } from './src/ui/components';
 import type { NativeStackParams } from './src/ui/navigation';
 import { colors, shared } from './src/ui/theme';
 import { diagnosticStackListeners, diagnosticTouch, traceNavigationState } from './src/navigationDiagnostics';
+import { useApplicationTransitionDiagnostics } from './src/useApplicationTransitionDiagnostics';
 
 const Stack = createNativeStackNavigator<NativeStackParams>();
 const Tabs = createBottomTabNavigator();
@@ -55,6 +56,8 @@ function SignOutButton() {
   </Pressable>;
 }
 function Application({ route, navigation }: NativeStackScreenProps<NativeStackParams, 'Candidature'>) {
+  useApplicationTransitionDiagnostics(navigation.getState().routeNames.includes('Mission')
+    ? 'Exploration/Candidature' : 'Suivi/Candidature', navigation);
   const { context } = useCaregiverSession();
   const { missions } = useAccountServices();
   return <MissionApplicationScreen context={context} gateway={missions} missionId={route.params.id}

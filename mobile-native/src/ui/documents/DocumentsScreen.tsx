@@ -39,6 +39,8 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
   const [viewError, setViewError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [watch, setWatch] = useState<{ id: string; until: number } | null>(null);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullRequest = useRef<object | null>(null);
   const originalRequest = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const scroll = useRef<ScrollView | null>(null);
@@ -47,6 +49,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
   useEffect(() => {
     if (focused) return;
     setTarget(null); setUploadError(null);
+    pullRequest.current = null; setPullRefreshing(false);
     originalRequest.current?.abort(); originalRequest.current = null; setViewing(null);
   }, [focused]);
 
@@ -68,6 +71,22 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
     }, 5_000);
     return () => clearInterval(timer);
   }, [watch, focused, dossier, state.busy, state.refresh, target]);
+
+  // Only a pull gesture controls UIKit's refresh animation. Button, focus and polling reads
+  // retain their own loading feedback without moving the scroll offset programmatically.
+  const refreshFromPull = async () => {
+    if (!focused || !dossier || state.loading || state.busy || viewing || pullRequest.current) return;
+    const request = {}; pullRequest.current = request; setPullRefreshing(true);
+    void state.readJournal();
+    try { await state.refresh(); }
+    finally {
+      // A read completed after blur must not end a newer pull on the same mounted screen.
+      if (pullRequest.current === request) {
+        pullRequest.current = null;
+        if (alive.current) setPullRefreshing(false);
+      }
+    }
+  };
 
   const changed = () => { if (alive.current) onDocumentsChanged?.(); };
   const showReceipt = () => { if (alive.current) scroll.current?.scrollTo({ y: 0, animated: true }); };
@@ -172,7 +191,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
 
   return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
     <ScrollView ref={scroll} testID="documents-scroll" contentContainerStyle={styles.scroll}
-      refreshControl={<RefreshControl refreshing={state.loading && !!dossier} onRefresh={() => { void state.readJournal(); void state.refresh(); }}
+      refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void refreshFromPull(); }}
         tintColor={colors.pink} enabled={!state.busy && !viewing} /> }>
       <View style={[shared.content, styles.content]}>
         <ModeNotice mode={gateway.mode === 'demo' ? 'demo' : 'staging'} />

@@ -23,8 +23,10 @@ test('demo emits only fixed event names, lengths, counts, reset reasons and timi
   const { entries, diagnostics } = collect(); exercise(diagnostics);
   assert.equal(entries.length, 4);
   const sanitized = entries.map(entry => {
-    const { sequence, elapsedMs, ...fields } = entry as Record<string, unknown>;
-    assert.equal(typeof sequence, 'number'); assert.equal(typeof elapsedMs, 'number'); return fields;
+    const { sequence, elapsedMs, startedAtMs, atMs, ...fields } = entry as Record<string, unknown>;
+    assert.equal(typeof sequence, 'number'); assert.equal(typeof elapsedMs, 'number');
+    assert.equal(typeof startedAtMs, 'number'); assert.equal(typeof atMs, 'number');
+    assert.ok((atMs as number) >= (startedAtMs as number)); return fields;
   });
   assert.deepEqual(sanitized, [{ event: 'native-change', length: 6, eventCount: 8 }, { event: 'text-change', length: 6 },
     { event: 'committed', length: 6 }, { event: 'reset', reason: 'submit' }]);
@@ -44,4 +46,16 @@ test('diagnostics are bounded and a failed sink cannot break input actions', () 
   assert.equal(entries.length, 128);
   const failing = createContractInputDiagnostics({ gatewayMode: 'demo', appMode: 'demo', flag: '1', emit: () => { throw new Error('sink'); } });
   assert.doesNotThrow(() => exercise(failing));
+});
+
+test('committed visibility is observed without accepting arbitrary state strings', () => {
+  const { entries, diagnostics } = collect();
+  diagnostics.committed(6, true); diagnostics.committed(0, false); diagnostics.committed(0, true);
+  const observed = entries as Array<{ length: number; active: boolean; startedAtMs: number }>;
+  assert.deepEqual(observed.map(({ length, active }) => ({ length, active })), [
+    { length: 6, active: true }, { length: 0, active: false }, { length: 0, active: true },
+  ]);
+  assert.ok(observed.every(entry => entry.startedAtMs === observed[0].startedAtMs));
+  diagnostics.committed(0, 'private-state-canary' as unknown as boolean);
+  assert.equal(entries.length, 3);
 });

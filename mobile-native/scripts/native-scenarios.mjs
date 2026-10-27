@@ -74,6 +74,7 @@ export function scenarioCaptureNames(selection, platform, family, orientation) {
     : selection.name === 'documents' ? [...DOCUMENT_CAPTURES]
     : ['connexion', orientation === 'landscape' ? 'liste' : 'missions', 'detail', 'retour', ...EXTRA_CONSULTATION_CAPTURES];
   if (platform === 'android') return suffixes;
+  if (selection.name === 'contracts') suffixes.splice(3, 0, 'contrats-home');
   const prefix = orientation === 'landscape' ? 'ipad-paysage' : `${family}-portrait`;
   return suffixes.map(suffix => `${prefix}-${suffix}`);
 }

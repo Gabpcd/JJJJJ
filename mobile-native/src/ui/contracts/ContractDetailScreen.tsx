@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Keyboard, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { colors, shared } from '../theme';
 import { ContractOriginalReader } from './ContractOriginalReader';
 import { createContractDetailController } from './detailController';
 import { DEMO_CONTRACT_CODE } from '../../contracts/demoFixture';
+import { useContractKeyboardVisibility } from './useContractKeyboardVisibility';
 import { createContractInputDiagnostics, type ContractCodeResetReason } from './inputDiagnostics';
 import { contractContextKey, contractStatus, contractType, originalMessage, partyStatus, revisionKey } from './presentation';
 
@@ -19,7 +20,11 @@ export function ContractDetailScreen(props: ContractDetailScreenProps) {
 function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const controller = useMemo(() => createContractDetailController(gateway, context, contractId), [gateway, contractId]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  const keyboardVisibility = useContractKeyboardVisibility();
   const [code, setCode] = useState(''); const [clock, setClock] = useState(Date.now());
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullRequest = useRef<object | null>(null);
+  const stopPull = useCallback(() => { pullRequest.current = null; setPullRefreshing(false); }, []);
   const inputDiagnostics = useMemo(() => createContractInputDiagnostics({
     gatewayMode: gateway.mode, appMode: process.env.EXPO_PUBLIC_JOLENE_MODE,
     flag: process.env.EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS,
@@ -28,14 +33,14 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const clearCode = useCallback((reason: ContractCodeResetReason) => {
     inputDiagnostics.reset(reason); setCode('');
   }, [inputDiagnostics]);
-  useEffect(() => { inputDiagnostics.committed(code.length); }, [code, inputDiagnostics]);
+  useEffect(() => { inputDiagnostics.committed(code.length, state.active); }, [code, inputDiagnostics, state.active]);
   useFocusEffect(useCallback(() => {
     if (AppState.currentState === 'active') controller.activate();
     const sub = AppState.addEventListener('change', next => {
-      clearCode(next === 'active' ? 'app-active' : 'app-nonactive'); if (next === 'active') controller.activate(); else controller.deactivate();
+      clearCode(next === 'active' ? 'app-active' : 'app-nonactive'); if (next === 'active') controller.activate(); else { stopPull(); controller.deactivate(); }
     });
-    return () => { sub.remove(); clearCode('focus-cleanup'); controller.deactivate(); };
-  }, [controller, clearCode]));
+    return () => { sub.remove(); stopPull(); clearCode('focus-cleanup'); controller.deactivate(); };
+  }, [controller, clearCode, stopPull]));
   // Focus cleanup aborts requests and removes sensitive state. Do not permanently
   // dispose a memoized controller in an effect: Strict Mode reuses it on setup.
   const revision = revisionKey(state.details?.original ?? null);
@@ -53,13 +58,27 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const canRequest = eligible && consentReady && admissionValid && admission!.canSend;
   const canSign = eligible && consentReady && admissionValid && admission!.canValidate && !!admission!.otpExpiresAt && admission!.otpExpiresAt > clock;
   const remaining = admission?.otpExpiresAt ? Math.max(0, Math.ceil((admission.otpExpiresAt - clock) / 1000)) : null;
+  // UIKit's refresh animation belongs only to a user's pull gesture.
+  // Focus, resume and button reads retain their existing loading panels.
+  const refreshFromPull = async () => {
+    const current = controller.getSnapshot();
+    if (!current.active || !current.details || current.loading || current.busy || pullRequest.current) return;
+    const request = {}; pullRequest.current = request; setPullRefreshing(true);
+    clearCode('refresh');
+    try { await controller.reload(); }
+    finally {
+      // Blur/background invalidates this token; an old completion cannot finish a newer pull.
+      if (pullRequest.current === request) { pullRequest.current = null; setPullRefreshing(false); }
+    }
+  };
   const submit = () => { if (!canSign || code.length !== 6) return; const supplied = code; clearCode('submit'); Keyboard.dismiss(); void controller.sign(supplied); };
   return <SafeAreaView style={shared.screen} edges={['left', 'right', 'bottom']}>
     <View style={shared.flex}>
-      <ScrollView testID="contract-detail-scroll" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      <ScrollView ref={keyboardVisibility.scrollRef} innerViewRef={keyboardVisibility.contentRef}
+        onLayout={keyboardVisibility.reveal} testID="contract-detail-scroll" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        contentContainerStyle={[shared.content, styles.content]} refreshControl={<RefreshControl refreshing={state.loading && !!details}
-          onRefresh={() => { clearCode('refresh'); void controller.reload(); }} tintColor={colors.pink} colors={[colors.pink]} />}>
+        contentContainerStyle={[shared.content, styles.content]} refreshControl={<RefreshControl refreshing={pullRefreshing}
+          onRefresh={() => { void refreshFromPull(); }} tintColor={colors.pink} colors={[colors.pink]} />}>
         <ModeNotice mode={gateway.mode === 'demo' ? 'demo' : 'staging'} />
         {gateway.mode === 'demo' ? <Text style={shared.small} testID="contract-demo-notice">Simulation locale : aucun SMS envoyé et aucun contrat réel signé.</Text> : null}
         {state.loading ? <StatusPanel loading title="Lecture du contrat" message="Vérification de l’original et de ses signatures." /> : null}
@@ -107,12 +126,14 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
                 ? `Code utilisable pendant ${Math.floor(remaining / 60)} min ${String(remaining % 60).padStart(2, '0')} s.`
                 : 'Le code a expiré. Un nouvel envoi doit être demandé explicitement.'}</Text>
               <Text style={shared.body} nativeID="contract-code-label">Code reçu par SMS</Text>
-              <TextInput value={code} onChange={event => inputDiagnostics.nativeChange(event.nativeEvent.text.length, event.nativeEvent.eventCount)}
+              <View ref={keyboardVisibility.signatureRef} collapsable={false} onLayout={keyboardVisibility.reveal} style={styles.gap}>
+              <TextInput ref={keyboardVisibility.inputRef} onFocus={keyboardVisibility.reveal} onBlur={keyboardVisibility.cancel} value={code} onChange={event => inputDiagnostics.nativeChange(event.nativeEvent.text.length, event.nativeEvent.eventCount)}
                 onChangeText={value => { inputDiagnostics.textChange(value.length); setCode(value.replace(/[^0-9]/g, '').slice(0, 6)); }} maxLength={6}
                 keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="sms-otp" autoCorrect={false}
                 accessibilityLabel="Code reçu par SMS, six chiffres" editable={!blocked} style={styles.input} testID="contract-otp"
-                placeholder="6 chiffres" placeholderTextColor={colors.muted} returnKeyType="done" onSubmitEditing={submit} />
+                placeholder="6 chiffres" placeholderTextColor={colors.muted} returnKeyType={Platform.OS === 'ios' ? 'default' : 'done'} onSubmitEditing={submit} />
               <ActionButton label={gateway.mode === 'demo' ? 'Simuler la signature' : 'Signer le contrat TEST'} disabled={!canSign || code.length !== 6} busy={state.busy === 'sign'} onPress={submit} testID="contract-sign" />
+              </View>
             </> : null}
           </View> : null}
         </> : null}

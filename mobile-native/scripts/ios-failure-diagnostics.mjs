@@ -1,13 +1,15 @@
+import { collectExpoUpdatesFailureLog } from './expo-updates-failure-log.mjs';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 /** Diagnostic only: this reads the disposable CI simulator, never a developer's Mac. */
-export async function collectIosFailureDiagnostics({ device, output, started, run }) {
+export async function collectIosFailureDiagnostics({ device, output, started, run, env, failed }) {
   if (process.env.GITHUB_ACTIONS !== 'true' || !/^[0-9A-F-]{36}$/i.test(device)) return;
   const directory = resolve(output, 'ios-failure-diagnostics');
   mkdirSync(directory, { recursive: true });
   const notes = [];
+  notes.push(await collectExpoUpdatesFailureLog({ env, failed, device, started, directory, run }));
   try {
     const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '15m',
       '--style', 'compact', '--predicate',
@@ -18,13 +20,14 @@ export async function collectIosFailureDiagnostics({ device, output, started, ru
     notes.push({ systemLogExitCode: result.code });
   } catch (error) { notes.push({ systemLogError: String(error) }); }
 
-  // AX traffic can fill the general tail and erase the earlier project-load
-  // error. Preserve a separate bounded view of Expo network failures, without
+  // AX snapshots also repeat the visible error text: exclude XCTest's subsystem
+  // before bounding the log, otherwise it erases the original network failure.
+  // Preserve a separate bounded view of Expo network failures, without
   // enabling verbose network logging or changing the application under test.
   try {
     const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '15m',
       '--style', 'compact', '--predicate',
-      '(process == "Exponent" OR process == "Expo Go") AND (eventMessage CONTAINS[c] "timed out" OR eventMessage CONTAINS "NSURLError" OR eventMessage CONTAINS "CFNetwork" OR eventMessage CONTAINS[c] "connection failed")'],
+      '(process == "Exponent" OR process == "Expo Go") AND NOT (subsystem BEGINSWITH[c] "com.apple.dt.xctest") AND (subsystem CONTAINS[c] "CFNetwork" OR eventMessage CONTAINS[c] "timed out" OR eventMessage CONTAINS "NSURLError" OR eventMessage CONTAINS "CFNetwork" OR eventMessage CONTAINS[c] "connection failed")'],
     { timeout: 30_000, allowFailure: true });
     writeFileSync(resolve(directory, 'expo-network-errors.log'), (result.stdout + result.stderr).slice(-256_000));
     notes.push({ networkErrorLogExitCode: result.code });

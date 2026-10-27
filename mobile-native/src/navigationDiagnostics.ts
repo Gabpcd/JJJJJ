@@ -6,8 +6,9 @@ const started = Date.now();
 
 export function traceNativeNavigation(event: string, detail?: string) {
   if (!enabled || sequence >= 512) return;
+  const atMs = Date.now();
   console.log('[jolene-native-navigation]', JSON.stringify({
-    sequence: ++sequence, elapsedMs: Date.now() - started, event, detail,
+    sequence: ++sequence, elapsedMs: atMs - started, startedAtMs: started, atMs, event, detail,
   }));
 }
 

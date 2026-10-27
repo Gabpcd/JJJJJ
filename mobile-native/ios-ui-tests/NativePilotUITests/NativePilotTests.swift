@@ -119,6 +119,76 @@ final class NativePilotTests: XCTestCase {
     func testContractsIpadPortrait() throws { runContracts(prefix: "ipad-portrait", landscape: false) }
     func testContractsIpadLandscape() throws { runContracts(prefix: "ipad-paysage", landscape: true) }
 
+    // app.state is retained as a diagnostic: iPad may report both apps foreground
+    // while SpringBoard is visibly showing its full Home screen.
+    private func springboardShowsHome() -> Bool {
+        let home = springboard.otherElements.matching(identifier: "Home screen icons").firstMatch
+        guard home.exists, !home.frame.isEmpty, !springboard.frame.isEmpty,
+              springboard.frame.insetBy(dx: -1, dy: -1).contains(home.frame),
+              home.frame.width >= springboard.frame.width - 2,
+              home.frame.height >= springboard.frame.height - 2 else { return false }
+        return springboard.descendants(matching: .icon).matching(identifier: "Expo Go")
+            .allElementsBoundByIndex.contains { icon in
+                icon.exists && icon.isHittable && !icon.frame.isEmpty && home.frame.contains(icon.frame)
+            }
+    }
+
+    private func contractsHomeRoundTrip(prefix: String, detail: XCUIElement) -> Bool {
+        let proofID = UUID().uuidString
+        var markers: [[String: Any]] = []
+        var homePresses = 0
+        var activations = 0
+        func mark(_ stage: String, _ observations: [String: Any] = [:]) {
+            var marker = observations
+            marker["stage"] = stage
+            marker["atMs"] = Int64(Date().timeIntervalSince1970 * 1000)
+            marker["expoState"] = app.state.rawValue
+            marker["springboardState"] = springboard.state.rawValue
+            markers.append(marker)
+        }
+        defer {
+            let proof: [String: Any] = ["schemaVersion": 1, "id": proofID, "prefix": prefix,
+                "homePresses": homePresses, "activations": activations, "markers": markers]
+            if let bytes = try? JSONSerialization.data(withJSONObject: proof, options: [.sortedKeys]),
+               let json = String(data: bytes, encoding: .utf8) {
+                attachText(json, name: "\(prefix)-contrats-home-oracle.json")
+            } else { XCTFail("Home proof could not be recorded") }
+        }
+        let alreadyHome = springboardShowsHome()
+        XCTAssertFalse(alreadyHome, "Home must not be visible before the one Home press")
+        guard !alreadyHome else { return false }
+        guard element("contract-otp").value as? String == "000000" else {
+            XCTFail("The six typed digits must still be present immediately before Home"); return false
+        }
+        mark("armed", ["homeVisible": false, "codeLength": 6])
+        homePresses += 1
+        XCUIDevice.shared.press(.home)
+        require("The one Home press shows SpringBoard Home icons") { self.springboardShowsHome() }
+        guard springboardShowsHome() else { return false }
+        mark("home-visible", ["homeVisible": true])
+        let homeCapture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        homeCapture.name = "\(prefix)-contrats-home"
+        homeCapture.lifetime = .keepAlways
+        add(homeCapture)
+        attachText(springboard.debugDescription, name: "\(prefix)-contrats-home-accessibilite.txt")
+        mark("activate")
+        activations += 1
+        app.activate()
+        require("The contract is reread after resume") { self.element("contract-original").exists && !self.app.keyboards.firstMatch.exists }
+        scrollTo(element("contract-request-otp"), in: detail)
+        let consentEnabled = element("contract-request-otp").isEnabled
+        XCTAssertFalse(consentEnabled, "Consent must be reset after backgrounding")
+        scrollTo(element("contract-otp"), in: detail)
+        let cleared = (element("contract-otp").value as? String).map { $0.isEmpty || $0 == "6 chiffres" } ?? false
+        XCTAssertTrue(cleared, "The previously typed code must not survive resume")
+        let homeVisible = springboardShowsHome()
+        let originalVisible = element("contract-original").exists
+        XCTAssertFalse(homeVisible, "The contract must replace Home after the one activation")
+        mark("resumed", ["homeVisible": homeVisible, "codeLength": cleared ? 0 : -1,
+                         "consentEnabled": consentEnabled, "originalVisible": originalVisible])
+        return cleared && !consentEnabled && originalVisible && !homeVisible
+    }
+
     private func runContracts(prefix: String, landscape: Bool) {
         proofPrefix = prefix
         prepareExpoGo()
@@ -158,17 +228,7 @@ final class NativePilotTests: XCTestCase {
         dismissFirstKeyboardIntroductionIfPresent()
         typeContractCode()
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
-        XCUIDevice.shared.press(.home)
-        require("Contracts actually entered background") {
-            self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
-        }
-        app.activate()
-        require("The contract is reread after resume") { self.element("contract-original").exists && !self.app.keyboards.firstMatch.exists }
-        scrollTo(element("contract-request-otp"), in: detail)
-        XCTAssertFalse(element("contract-request-otp").isEnabled, "Consent must be reset after backgrounding")
-        scrollTo(element("contract-otp"), in: detail)
-        XCTAssertTrue((element("contract-otp").value as? String).map { $0.isEmpty || $0 == "6 chiffres" } ?? false,
-                      "The previously typed code must not survive resume")
+        guard contractsHomeRoundTrip(prefix: prefix, detail: detail) else { return }
         record("\(prefix)-contrats-reprise")
         scrollTo(element("contract-consent"), in: detail, downward: false)
         tap("contract-consent")
@@ -655,6 +715,7 @@ final class NativePilotTests: XCTestCase {
         bio.typeText(expected)
         require("The new biography is exact before saving") { bio.value as? String == expected }
         scrollTo(element("save-profile"), in: profile)
+        XCTAssertEqual(bio.value as? String, expected, "Scrolling to Save preserves the edited biography")
         tap("save-profile")
         require("Profile save has an explicit confirmation") { self.element("profile-saved").exists }
         scrollTo(element("profile-saved"), in: profile, downward: false)
@@ -784,14 +845,47 @@ final class NativePilotTests: XCTestCase {
         let window = app.windows.firstMatch
         // An edge gesture starts at the same physical inset on every device width.
         // A 1% inset moves from 4 pt on iPhone to almost 12 pt on landscape iPad.
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
             .withOffset(CGVector(dx: 1, dy: 0))
-            .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+        let startPoint = start.screenPoint
+        let endPoint = end.screenPoint
+        let proofID = UUID().uuidString
+        let startedAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let stateBefore = app.state.rawValue
+        defer {
+            let proof: [String: Any] = ["schemaVersion": 1, "id": proofID,
+                "startedAtMs": startedAtMs, "finishedAtMs": Int64(Date().timeIntervalSince1970 * 1000),
+                "start": ["x": startPoint.x, "y": startPoint.y], "end": ["x": endPoint.x, "y": endPoint.y],
+                "velocityPreset": "original-default", "velocityPixelsPerSecond": 500,
+                "initialHoldSeconds": 0.05, "finalHoldSeconds": 0,
+                "appStateBefore": stateBefore, "appStateAfter": app.state.rawValue]
+            if let data = try? JSONSerialization.data(withJSONObject: proof, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                attachText(json, name: "\(proofPrefix)-edge-back-\(proofID).json")
+            } else { XCTFail("The single edge gesture's diagnostic could not be recorded") }
+        }
+        // Preserve the original failing gesture while measuring its transition.
+        // A faster swipe must not silently replace this regression condition.
+        start.press(forDuration: 0.05, thenDragTo: end)
     }
 
     private func drag(_ container: XCUIElement, fromY: CGFloat, toY: CGFloat) {
-        container.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: fromY))
-            .press(forDuration: 0.05, thenDragTo: container.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: toY)))
+        // A ScrollView retains its full frame while iOS adds keyboard insets.
+        // Start the user's gesture in the unobscured viewport, never on a key.
+        var viewport = container.frame.intersection(app.frame)
+        if app.keyboards.firstMatch.exists {
+            let bottom = min(viewport.maxY, keyboardTopIncludingAccessory())
+            viewport.size.height = max(0, bottom - viewport.minY)
+        }
+        XCTAssertFalse(viewport.isNull || viewport.isEmpty, "A scroll gesture requires a visible viewport outside the keyboard")
+        guard !viewport.isNull && !viewport.isEmpty else { return }
+        let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+        let x = viewport.midX - app.frame.minX
+        let top = viewport.minY - app.frame.minY
+        let start = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * fromY))
+        let end = origin.withOffset(CGVector(dx: x, dy: top + viewport.height * toY))
+        start.press(forDuration: 0.05, thenDragTo: end)
     }
 
     private func scrollTo(_ target: XCUIElement, in container: XCUIElement, downward: Bool = true) {

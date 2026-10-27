@@ -38,7 +38,7 @@ test('incompatible modes and accidental scenario injections fail before tool sta
   assert.throws(() => selectNativeScenario({ NATIVE_PILOT_SCENARIO: 'documents', NATIVE_DOCUMENTS_ORIENTATION: 'landscape' }, 'android'));
 });
 
-test('Contracts selects one independent method and all eight exact captures per fresh format', () => {
+test('Contracts selects one independent method and eight Android captures and nine iOS captures including Home', () => {
   for (const [platform, family, orientation, method, prefix] of [
     ['ios', 'iphone', 'portrait', 'testContractsIphonePortrait', 'iphone-portrait-'],
     ['ios', 'ipad', 'portrait', 'testContractsIpadPortrait', 'ipad-portrait-'],
@@ -51,8 +51,10 @@ test('Contracts selects one independent method and all eight exact captures per 
       contractScenarioFlag: '1', orientations: [orientation] });
     if (method) assert.equal(iosTestMethod(selected, family, orientation), method);
     const captures = scenarioCaptureNames(selected, platform, family, orientation);
-    assert.deepEqual(captures, CONTRACT_CAPTURES.map(name => `${prefix}${name}`));
-    assert.equal(new Set(captures).size, 8);
+    const expected = [...CONTRACT_CAPTURES];
+    if (platform === 'ios') expected.splice(3, 0, 'contrats-home');
+    assert.deepEqual(captures, expected.map(name => `${prefix}${name}`));
+    assert.equal(new Set(captures).size, platform === 'ios' ? 9 : 8);
     const other = orientation === 'portrait' ? 'landscape' : 'portrait';
     assert.throws(() => scenarioCaptureNames(selected, platform, family, other));
     assert.throws(() => iosTestMethod(selected, family, other));
