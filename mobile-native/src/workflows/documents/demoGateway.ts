@@ -2,10 +2,11 @@ import { TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '../../../../src/lib/documents';
 import { validateDocumentBytes, type ValidatedDocumentBytes } from './bytes';
 import { createDemoDocumentFile } from './demoFixture';
 import { assertDemoDocumentUser } from './demoJournal';
+import { checkedUploadReceipt, currentProofIds } from './uploadRecovery';
 import { visibleDocumentRequirements } from './requirements';
 import { DocumentWorkflowError, type CaregiverDocument, type DocumentContext, type DocumentDossier, type DocumentGateway,
   type DocumentMutationResult, type DocumentOriginal, type DocumentProfile, type DocumentRequirement,
-  type NativeDocumentFile, type UploadDocumentInput } from './types';
+  type NativeDocumentFile, type UploadDocumentInput, type PendingDocumentUpload } from './types';
 
 export interface DemoDocumentSession {
   userId: string; epoch: number;
@@ -15,7 +16,7 @@ export interface DemoDocumentSession {
 export interface DemoDocumentOutcome {
   userId: 'demo-soignant' | 'demo-inscription'; typeDocument: string;
   /** A committed synthetic upload whose first response is deliberately unconfirmed. */
-  kind: 'confirmed' | 'uncertain_committed';
+  kind: 'confirmed' | 'uncertain_committed' | 'uncertain_prepared';
 }
 export interface DemoDocumentOptions {
   currentSession: () => DemoDocumentSession | null;
@@ -52,7 +53,7 @@ export class DemoDocumentGateway implements Omit<DocumentGateway, 'mode'> {
     this.now = options.now ?? (() => new Date());
     this.outcomes = (options.outcomes ?? []).map(outcome => {
       assertDemoDocumentUser(outcome.userId);
-      if (!['confirmed', 'uncertain_committed'].includes(outcome.kind) || TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(outcome.typeDocument)) {
+      if (!['confirmed', 'uncertain_committed', 'uncertain_prepared'].includes(outcome.kind) || TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(outcome.typeDocument)) {
         throw new Error('Scénario documentaire fictif invalide.');
       }
       return { ...outcome };
@@ -172,32 +173,55 @@ export class DemoDocumentGateway implements Omit<DocumentGateway, 'mode'> {
         throw new DocumentWorkflowError('INVALID_INPUT', 'Utilise Remplacer pour le justificatif fictif déjà présent.');
       }
       const path = `${identity.userId}/documents/${input.typeDocument}/demo-upload-${account.sequence + 1}-${file.safeName}`;
-      try { await input.onPrepared?.({ storageKey: path }); this.current(identity, signal); }
+      let receipt: PendingDocumentUpload = { storageKey: path, registration: { phase: 'prepared', name: file.originalName,
+        mime: file.mime, size: file.size, label: input.label?.trim() ?? '', previousIds: currentProofIds(account.records, input.typeDocument) } };
+      try { await input.onPrepared?.(receipt); this.current(identity, signal); }
       catch (error) {
         // Same safe boundary as TEST: no synthetic commit has started yet.
         if (input.onPrepared && input.onNotStarted) await input.onNotStarted({ storageKey: path });
         throw error;
       }
+      const index = this.outcomes.findIndex(item => item.userId === identity.userId && item.typeDocument === input.typeDocument);
+      const outcome = index < 0 ? null : this.outcomes.splice(index, 1)[0];
+      if (outcome?.kind === 'uncertain_prepared') return { kind: 'unconfirmed', dossier: null, document: null,
+        message: 'Simulation : interruption avant l’enregistrement fictif. Vérifie l’envoi précédent.', reconciliation: receipt };
+      receipt = { ...receipt, registration: { ...receipt.registration!, phase: 'started' } };
+      await input.onPrepared?.(receipt); this.current(identity, signal);
       const freshOriginal = input.replacesDocumentId ? this.active(account, input.replacesDocumentId) : null;
       const document = this.makeDocument(identity, account, input.typeDocument, file, input.label?.trim() || 'Simulation — document ajouté', path);
       if (freshOriginal) freshOriginal.revoque_le = this.now().toISOString();
       account.records.push(document);
-      const index = this.outcomes.findIndex(item => item.userId === identity.userId && item.typeDocument === input.typeDocument);
-      const outcome = index < 0 ? null : this.outcomes.splice(index, 1)[0];
       if (outcome?.kind === 'uncertain_committed') return { kind: 'unconfirmed', dossier: null, document: null,
-        message: 'Simulation : réponse interrompue après l’enregistrement fictif. Vérifie l’envoi précédent.', reconciliation: { storageKey: path } };
+        message: 'Simulation : réponse interrompue après l’enregistrement fictif. Vérifie l’envoi précédent.', reconciliation: receipt };
       return { kind: 'confirmed', dossier: this.snapshot(identity, account), document: clone(document),
-        message: 'Simulation : fichier enregistré en mémoire, sans envoi réel. Sa vérification reste une étape distincte.' };
+        message: 'Simulation : fichier enregistré en mémoire, sans envoi réel. Sa vérification reste une étape distincte.',
+        resolution: { storageKey: path, outcome: 'registered' } };
     });
   }
-  async reconcileUpload(context: DocumentContext, storageKey: string, signal?: AbortSignal): Promise<DocumentMutationResult> {
+  async reconcileUpload(context: DocumentContext, value: PendingDocumentUpload | string, signal?: AbortSignal): Promise<DocumentMutationResult> {
     const identity = this.identity(context, signal);
-    if (!storageKey.startsWith(`${identity.userId}/documents/`) || storageKey.includes('..')) scope();
+    const receipt = checkedUploadReceipt(identity.userId, typeof value === 'string' ? { storageKey: value } : value, true);
     const account = await this.account(identity, signal);
-    const document = account.records.find(row => row.s3_cle === storageKey && !row.supprime_le && !row.revoque_le);
-    return { kind: document ? 'confirmed' : 'unconfirmed', dossier: this.snapshot(identity, account), document: document ? clone(document) : null,
-      message: document ? 'Simulation : enregistrement fictif retrouvé, sans renvoi du fichier.' : 'Simulation : cet envoi fictif reste non confirmé.',
-      ...(document ? {} : { reconciliation: { storageKey } }) };
+    const document = account.records.find(row => row.s3_cle === receipt.storageKey);
+    const dossier = this.snapshot(identity, account);
+    if (document) {
+      const archived = !!document.supprime_le || !!document.revoque_le;
+      return { kind: archived ? 'rejected' : 'confirmed', dossier, document: clone(document),
+        message: archived ? 'Simulation : envoi fictif retrouvé dans les archives, sans réactivation.' : 'Simulation : enregistrement fictif retrouvé, sans renvoi du fichier.',
+        resolution: { storageKey: receipt.storageKey, outcome: archived ? 'archived' : 'registered' } };
+    }
+    if (receipt.registration && ['prepared', 'refused'].includes(receipt.registration.phase)) return {
+      kind: 'rejected', dossier, document: null, message: 'Simulation : cet envoi sans enregistrement est clos. Aucun fichier n’a été supprimé.',
+      resolution: { storageKey: receipt.storageKey, outcome: 'not_registered' },
+    };
+    return { kind: 'unconfirmed', dossier, document: null, reconciliation: receipt,
+      message: 'Simulation : cet envoi fictif reste non confirmé.' };
+  }
+  async resumeUploadRegistration(context: DocumentContext, receipt: PendingDocumentUpload,
+    _onPrepared: (receipt: PendingDocumentUpload) => Promise<void>, signal?: AbortSignal): Promise<DocumentMutationResult> {
+    // This synthetic scenario only injects a lost response after commit, recovered by read.
+    // It never invents an original object for an unknown receipt.
+    return this.reconcileUpload(context, receipt, signal);
   }
   async verify(context: DocumentContext, documentId: string, signal?: AbortSignal): Promise<DocumentMutationResult> {
     const identity = this.identity(context, signal);

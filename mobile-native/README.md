@@ -103,8 +103,8 @@ autorisé ; Metro reste sur localhost via le port ADB inversé.
 
 Les workflows `native-documents.yml` et `native-contracts.yml` préparent chacun
 quatre jobs distincts : iPhone, Android, iPad portrait et iPad paysage. Chaque job
-utilise une démo neuve, sans credentials STAGING, et exige respectivement huit
-ou sept captures avec les assertions du scénario. Le runner refuse le croisement
+utilise une démo neuve, sans credentials STAGING, et exige respectivement neuf
+ou huit captures avec les assertions du scénario. Le runner refuse le croisement
 des flags Documents/Contrats. Leur présence dans le dépôt ne prouve pas leur
 réussite : les premières simulations de ce lot restent à exécuter et relire.
 

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { validateDocumentBytes } from './bytes';
 import { createOriginalSigningTransport } from './originalTransport';
+import { currentProofIds, sameProofIds } from './uploadRecovery';
 import { visibleDocumentRequirements } from './requirements';
 import { SupabaseDocumentGateway } from './supabaseGateway';
 import { createDocumentUploadJournal } from '../../documents/uploadJournal';
@@ -30,7 +31,7 @@ interface Call { source: string; args?: any; ops: Array<[string, ...any[]]> }
 interface Response { data: any; error: unknown; count?: number | null }
 /** Transport doubles only: no database, RLS, Storage object or AI/human provider is contacted. */
 function fixture(options: { role?: string; origin?: string; profile?: DocumentProfile | null; foreignRow?: boolean;
-  registrationRefused?: boolean; lostRegistrationResponse?: boolean; unreadableAfterRegister?: boolean;
+  storageFails?: boolean; storageUnknown?: boolean; registrationNotSent?: boolean; registrationRefused?: boolean; lostRegistrationResponse?: boolean; unreadableAfterRegister?: boolean; unreadableDossierAfterRegister?: boolean;
   verificationFails?: boolean; unknownStatus?: string; zeroDelete?: boolean; auditFails?: boolean;
   switchDuringUpload?: boolean; switchDuringIdentity?: boolean; countMismatch?: boolean;
   signingUri?: string; staleAfterSign?: boolean; nullableLegacyRow?: boolean; numericDocumentType?: boolean } = {}) {
@@ -44,10 +45,18 @@ function fixture(options: { role?: string; origin?: string; profile?: DocumentPr
   const equal = (call: Call, field: string) => call.ops.find(op => op[0] === 'eq' && op[1] === field)?.[2];
   const handle = (call: Call): Response => {
     if (call.source === 'fn_get_my_role') return { data: { role: options.role ?? 'SOIGNANT', user_id: UID }, error: null };
+    if (call.source === 'soignants' && registered && options.unreadableDossierAfterRegister) return { data: null, error: true };
     if (call.source === 'soignants') return { data: options.profile === null ? null : options.profile ?? structuredClone(profile), error: null };
     if (call.source === 'documents_requis_par_profession') return { data: [], error: null, count: 0 };
     if (call.source === 'documents_soignants') {
       if (registered && options.unreadableAfterRegister) return { data: null, error: true };
+      const storageKey = equal(call, 's3_cle');
+      if (storageKey) {
+        assert.equal(equal(call, 's3_bucket'), 'jolene-documents');
+        assert.equal(equal(call, 'soignant_id'), UID);
+        assert.ok(!call.ops.some(op => op[0] === 'is'));
+        return { data: structuredClone(documents.find(row => row.s3_cle === storageKey) ?? null), error: null };
+      }
       const id = equal(call, 'id');
       const row = active().find(item => item.id === id);
       const update = call.ops.find(op => op[0] === 'update');
@@ -65,6 +74,9 @@ function fixture(options: { role?: string; origin?: string; profile?: DocumentPr
       return { data: rows.slice(range[1], range[2] + 1), error: null, count: rows.length + (options.countMismatch ? 1 : 0) };
     }
     if (call.source === 'fn_remplacer_document_soignant') {
+      if (options.registrationNotSent) return { data: null, error: true };
+      const existing = documents.find(row => row.s3_cle === call.args.p_s3_cle);
+      if (existing) return { data: { success: true, document_id: existing.id }, error: null };
       if (options.registrationRefused) return { data: { success: false, error_code: 'DOCUMENT_INACTIF' }, error: null };
       registered = true;
       for (const doc of active()) if (doc.type_document === call.args.p_type_document) doc.revoque_le = now.toISOString();
@@ -107,7 +119,7 @@ function fixture(options: { role?: string; origin?: string; profile?: DocumentPr
       upload: async (path: string, bytes: ArrayBuffer, args: any) => {
         calls.push({ source: 'storage.upload', args: { bucket, path, bytes, ...args }, ops: [] });
         if (options.switchDuringUpload) currentUser = OTHER;
-        return { data: { path }, error: null };
+        return options.storageFails ? { data: null, error: true } : { data: { path }, error: null };
       },
       remove: () => { throw new Error('Original objects must never be removed'); },
     }) },
@@ -119,13 +131,17 @@ function fixture(options: { role?: string; origin?: string; profile?: DocumentPr
       return { data: { verdict: 'REJETE' }, error: null };
     } },
   } as unknown as SupabaseClient;
-  const signer: OriginalSigningTransport = { sign: async args => {
+  const signer: OriginalSigningTransport = { inspect: async args => {
+    calls.push({ source: 'original.inspect', args, ops: [] });
+    return options.storageUnknown || options.storageFails ? { kind: 'unavailable' }
+      : { kind: 'present', size: pdf().bytes.byteLength, mime: 'application/pdf' };
+  }, sign: async args => {
     calls.push({ source: 'original.sign', args, ops: [] });
     if (options.staleAfterSign) documents[0]!.revoque_le = now.toISOString();
     return options.signingUri ?? `${ORIGIN}/storage/v1/object/sign/jolene-documents/${args.storageKey}?token=fake-test-signature`;
   } };
   const gateway = new SupabaseDocumentGateway(client, () => UPLOAD, signer, () => now);
-  return { gateway, calls, documents };
+  return { gateway, calls, documents, options, setUser: (user: string) => { currentUser = user; } };
 }
 
 test('native byte adapter uses exact Uint8Array view, copies it, and rejects mismatched formats', async () => {
@@ -219,8 +235,8 @@ test('receipt persistence must finish before upload; a journal failure leaves or
   assert.equal(sample.documents[0]!.revoque_le, null);
   const successful = fixture();
   let persisted = false;
-  await successful.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: async () => {
-    await Promise.resolve(); assert.equal(successful.calls.filter(call => call.source === 'storage.upload').length, 0); persisted = true;
+  await successful.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: async receipt => {
+    await Promise.resolve(); assert.equal(successful.calls.filter(call => call.source === 'storage.upload').length, receipt.registration?.phase === 'prepared' ? 0 : 1); persisted = true;
   } });
   assert.ok(persisted); assert.equal(successful.calls.filter(call => call.source === 'storage.upload').length, 1);
 });
@@ -357,4 +373,128 @@ test('requirement visibility retains existing mixed-exercise and specialised-dip
   assert.deepEqual(visibleDocumentRequirements({ ...profile, rpps_verifie: true }, rules).map(row => row.type_document), ['RCP_ASSURANCE', 'CASIER_JUDICIAIRE']);
   const specialised = { ...profile, profession: 'IADE', rpps_verifie: true };
   assert.equal(visibleDocumentRequirements(specialised, [{ ...rule('DIPLOME', 'TOUS'), profession: 'IADE' }]).length, 1);
+});
+
+function recoveryJournal() {
+  let stored: string | null = null;
+  const store = { getItem: async () => stored, setItem: async (_key: string, value: string) => { stored = value; }, removeItem: async () => { stored = null; } };
+  return { store, journal: createDocumentUploadJournal(store) };
+}
+
+test('crash before registration and certain Storage failure close after history read without deleting or resending bytes', async () => {
+  for (const storageFails of [false, true]) {
+    const sample = fixture({ storageFails }); const { journal } = recoveryJournal();
+    const upload = sample.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: async receipt => {
+      if (receipt.registration?.phase === 'started') throw new Error('process stops before durable RPC barrier');
+      await journal.write(UID, receipt);
+    } });
+    if (storageFails) assert.equal((await upload).kind, 'unconfirmed'); else await assert.rejects(upload, /process stops/);
+    const pending = (await journal.read(UID))!;
+    assert.equal(pending.registration?.phase, 'prepared');
+    const recovery = await sample.gateway.reconcileUpload(context, pending);
+    assert.equal(recovery.resolution?.outcome, 'not_registered');
+    assert.equal(recovery.kind, 'rejected');
+    await journal.clear(UID, recovery.resolution!.storageKey);
+    assert.equal(await journal.read(UID), null);
+    assert.equal(sample.calls.filter(call => call.source === 'storage.upload').length, 1);
+    assert.equal(sample.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 0);
+    assert.equal(sample.documents[0]!.revoque_le, null);
+  }
+});
+
+test('definitive RPC refusal is durable and an archived committed upload closes by historical identity', async () => {
+  const refused = fixture({ registrationRefused: true }); const first = recoveryJournal();
+  const rejected = await refused.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: r => first.journal.write(UID, r) });
+  assert.equal(rejected.resolution?.outcome, 'not_registered');
+  const resumed = createDocumentUploadJournal(first.store);
+  assert.equal((await resumed.read(UID))?.registration?.phase, 'refused');
+  assert.equal((await refused.gateway.reconcileUpload(context, (await resumed.read(UID))!)).resolution?.outcome, 'not_registered');
+  const committed = fixture(); const second = recoveryJournal();
+  const result = await committed.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: r => second.journal.write(UID, r) });
+  committed.documents.find(row => row.id === result.document!.id)!.revoque_le = now.toISOString();
+  const read = await committed.gateway.reconcileUpload(context, (await second.journal.read(UID))!);
+  assert.equal(read.kind, 'rejected'); assert.equal(read.resolution?.outcome, 'archived');
+  assert.equal(read.document!.id, NEW_DOC); assert.equal(read.dossier!.documents.length, 0);
+  assert.equal(committed.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 1);
+});
+
+test('started receipt survives failed readback; explicit same-key registration uses no second upload', async () => {
+  const sample = fixture(); const { store } = recoveryJournal(); let failRead = false;
+  const journal = createDocumentUploadJournal({ ...store,
+    getItem: async key => { if (failRead) { failRead = false; throw new Error('readback failed'); } return store.getItem(); },
+    setItem: async (key, value) => { await store.setItem(key, value); if (JSON.parse(value).registration.phase === 'started') failRead = true; },
+  });
+  await assert.rejects(sample.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: r => journal.write(UID, r) }), /readback failed/);
+  const restarted = createDocumentUploadJournal(store); const pending = (await restarted.read(UID))!;
+  assert.equal(pending.registration?.phase, 'started');
+  assert.equal(sample.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 0);
+  const read = await sample.gateway.reconcileUpload(context, pending);
+  assert.equal(read.kind, 'unconfirmed'); assert.equal(read.canResumeRegistration, true);
+  assert.equal(sample.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 0);
+  const result = await sample.gateway.resumeUploadRegistration(context, pending, r => restarted.write(UID, r));
+  assert.equal(result.kind, 'confirmed'); assert.equal(result.resolution?.outcome, 'registered');
+  assert.equal(sample.calls.filter(call => call.source === 'storage.upload').length, 1);
+  assert.equal(sample.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 1);
+});
+
+test('uncertain RPC has no automatic replay; a changed proof, unavailable Storage or session prevents explicit resume', async () => {
+  for (const obstacle of ['changed', 'storage', 'session', 'late-change'] as const) {
+    const sample = fixture({ registrationNotSent: true }); const { journal } = recoveryJournal();
+    const result = await sample.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: r => journal.write(UID, r) });
+    assert.equal(result.canResumeRegistration, true);
+    const pending = (await journal.read(UID))!;
+    if (obstacle === 'changed') sample.documents[0]!.id = NEW_DOC;
+    if (obstacle === 'storage') sample.options.storageUnknown = true;
+    if (obstacle === 'session') sample.setUser(OTHER);
+    const promise = sample.gateway.resumeUploadRegistration(context, pending, async r => {
+      await journal.write(UID, r); if (obstacle === 'late-change') sample.documents[0]!.id = NEW_DOC;
+    });
+    if (obstacle === 'session') await assert.rejects(promise, { code: 'SESSION_CHANGED' }); else assert.notEqual((await promise).kind, 'confirmed');
+    assert.equal(sample.calls.filter(call => call.source === 'fn_remplacer_document_soignant').length, 1);
+    assert.equal(sample.calls.filter(call => call.source === 'storage.upload').length, 1);
+    assert.equal((await journal.read(UID))?.registration?.phase, 'started');
+  }
+});
+
+test('Storage info pins the captured JWT and exact key; failures and mismatched metadata are never absence proof', async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  let status = 200; let name = original.s3_cle;
+  const transport = createOriginalSigningTransport({ url: ORIGIN, publishableKey: 'sb_publishable_unit_test_public_key' },
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(input), init });
+      return new Response(JSON.stringify(status === 200 ? { name, bucket_id: 'jolene-documents', size: 20, content_type: 'application/pdf' } : { message: 'not found' }),
+        { status, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch);
+  const args = { storageKey: original.s3_cle, authorization: 'Bearer pinned-jwt' };
+  assert.deepEqual(await transport.inspect(args), { kind: 'present', size: 20, mime: 'application/pdf' });
+  assert.equal(requests[0]!.url, `${ORIGIN}/storage/v1/object/info/jolene-documents/${original.s3_cle}`);
+  assert.equal(new Headers(requests[0]!.init?.headers).get('authorization'), 'Bearer pinned-jwt');
+  name = `${OTHER}/documents/DIPLOME/foreign.pdf`;
+  assert.deepEqual(await transport.inspect(args), { kind: 'unavailable' });
+  status = 404; assert.deepEqual(await transport.inspect(args), { kind: 'unavailable' });
+});
+
+
+test('replacement recovery compares the whole identity proof class rather than the selected document type', () => {
+  const identity = { ...original, type_document: 'CARTE_IDENTITE' };
+  const passport = { ...original, id: NEW_DOC, type_document: 'PASSEPORT' };
+  assert.deepEqual(currentProofIds([identity, passport], 'TITRE_SEJOUR'), [DOC, NEW_DOC]);
+  const receipt = { storageKey: `${UID}/documents/CARTE_IDENTITE/new.pdf`, registration: { phase: 'started' as const,
+    name: 'new.pdf', mime: 'application/pdf', size: 20, label: '', previousIds: [DOC] } };
+  assert.equal(sameProofIds([identity], receipt), true);
+  assert.equal(sameProofIds([identity, passport], receipt), false);
+  assert.equal(sameProofIds([{ ...identity, revoque_le: now.toISOString() }, passport], receipt), false);
+  assert.equal(sameProofIds([identity, original], receipt), true, 'An unrelated diploma does not alter identity proof');
+});
+
+
+test('exact historical proof can close a receipt without claiming an unreadable dossier was refreshed', async () => {
+  const sample = fixture({ unreadableDossierAfterRegister: true }); const { journal } = recoveryJournal();
+  const result = await sample.gateway.upload(context, { typeDocument: 'DIPLOME', file: pdf(), onPrepared: r => journal.write(UID, r) });
+  assert.equal(result.kind, 'confirmed'); assert.equal(result.resolution?.outcome, 'registered');
+  assert.equal(result.document?.id, NEW_DOC); assert.equal(result.dossier, null);
+  assert.equal(sample.calls.filter(call => call.source === 'verify-document').length, 0);
+  sample.documents.find(row => row.id === NEW_DOC)!.revoque_le = now.toISOString();
+  const archived = await sample.gateway.reconcileUpload(context, (await journal.read(UID))!);
+  assert.equal(archived.resolution?.outcome, 'archived'); assert.equal(archived.dossier, null);
 });

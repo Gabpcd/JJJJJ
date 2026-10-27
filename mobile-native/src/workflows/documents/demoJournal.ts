@@ -1,4 +1,5 @@
 import type { DocumentUploadJournal, PendingDocumentUpload } from '../../ui/documents/adapters';
+import { checkedUploadReceipt, mergeUploadReceipt } from './uploadRecovery';
 
 export const DEMO_DOCUMENT_USER_IDS = ['demo-soignant', 'demo-inscription'] as const;
 export function assertDemoDocumentUser(userId: string): void {
@@ -11,7 +12,7 @@ function checked(userId: string, receipt: PendingDocumentUpload): PendingDocumen
   const parts = path.split('/');
   if (parts.length !== 4 || parts[0] !== userId || parts[1] !== 'documents'
     || !/^[A-Z][A-Z0-9_]{1,79}$/.test(parts[2] ?? '') || !/^demo-[A-Za-z0-9._-]+$/.test(parts[3] ?? '')) throw new Error('Reçu de démonstration invalide.');
-  return { storageKey: path };
+  return checkedUploadReceipt(userId, receipt, true);
 }
 
 /** One explicit demo runtime instance. In-memory only; retained across screens and demo logout. */
@@ -26,13 +27,12 @@ export function createDemoDocumentUploadJournal(): DocumentUploadJournal {
     return next;
   };
   return {
-    read(userId) { return serial(userId, () => receipts.has(userId) ? { ...receipts.get(userId)! } : null); },
+    read(userId) { return serial(userId, () => receipts.has(userId) ? checked(userId, receipts.get(userId)!) : null); },
     write(userId, value) {
       const receipt = checked(userId, value);
       return serial(userId, () => {
         const previous = receipts.get(userId);
-        if (previous && previous.storageKey !== receipt.storageKey) throw new Error('Un autre envoi fictif reste à vérifier.');
-        receipts.set(userId, receipt);
+        receipts.set(userId, mergeUploadReceipt(previous ?? null, receipt));
       });
     },
     clear(userId, storageKey) {

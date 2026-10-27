@@ -6,6 +6,7 @@ import type { NativeDocumentFile } from './types';
 /** Explicitly opt-in for the separate UI scenario; never used by the TEST runtime. */
 export const DEMO_DOCUMENT_SCENARIO_OUTCOMES: readonly DemoDocumentOutcome[] = [
   { userId: 'demo-soignant', typeDocument: 'RCP_ASSURANCE', kind: 'uncertain_committed' },
+  { userId: 'demo-soignant', typeDocument: 'RIB', kind: 'uncertain_prepared' },
 ];
 export type DemoDocumentChoice = { kind: 'file'; file: NativeDocumentFile } | { kind: 'cancel' }
   | { kind: 'error'; code: 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'INVALID_FILE'; message: string };
@@ -15,6 +16,7 @@ export function createDemoDocumentChoices(): DemoDocumentChoice[] {
     { kind: 'file', file: createDemoDocumentFile('remplacement-annule-demo.png') },
     { kind: 'file', file: createDemoDocumentFile('diplome-remplace-demo.png') },
     { kind: 'file', file: createDemoDocumentFile('rcp-incertaine-demo.png') },
+    { kind: 'file', file: createDemoDocumentFile('rib-avant-enregistrement-demo.png') },
   ];
 }
 

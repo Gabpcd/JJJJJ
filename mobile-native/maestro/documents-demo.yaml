@@ -280,6 +280,89 @@ name: Justificatifs natifs — scénario en mémoire uniquement
 - assertNotVisible:
     id: document-status-RCP_ASSURANCE
 - takeScreenshot: documents-retrait-confirme
+# The fourth selection stops before registration; the receipt can be closed safely.
+- scrollUntilVisible:
+    element:
+      id: document-replace-RIB
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: document-replace-RIB
+- scrollUntilVisible:
+    element:
+      id: document-pick-file
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: document-pick-file
+- scrollUntilVisible:
+    element:
+      text: rib-avant-enregistrement-demo.png
+    direction: DOWN
+    timeout: 15000
+- assertVisible: rib-avant-enregistrement-demo.png
+- scrollUntilVisible:
+    element:
+      id: document-upload-submit
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: document-upload-submit
+- extendedWaitUntil:
+    visible: ".*Simulation : interruption avant.*"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: document-upload-submit
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-upload-submit
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: document-upload-cancel
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: document-upload-cancel
+- scrollUntilVisible:
+    element:
+      id: documents-reconcile
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: documents-reconcile
+- extendedWaitUntil:
+    visible: ".*cet envoi sans enregistrement est clos.*"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible:
+      id: documents-reconcile
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: document-status-RIB
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-RIB
+    text: En attente de vérification
+- scrollUntilVisible:
+    element:
+      text: Simulation — RIB
+    direction: UP
+    timeout: 15000
+- assertVisible: Simulation — RIB
+- scrollUntilVisible:
+    element:
+      id: document-replace-RIB
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-replace-RIB
+    enabled: true
+- takeScreenshot: documents-envoi-sans-enregistrement
 - runFlow:
     when:
       platform: iOS

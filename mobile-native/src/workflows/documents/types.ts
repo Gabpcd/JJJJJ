@@ -36,14 +36,25 @@ export interface UploadDocumentInput {
   /** The active original shown in the UI, re-read before any replacement. */
   replacesDocumentId?: string;
   /** Retain before Storage begins, including if a subsequent abort/timeout hides its response. */
-  onPrepared?: (receipt: { storageKey: string }) => void | Promise<void>;
+  onPrepared?: (receipt: PendingDocumentUpload) => void | Promise<void>;
   /** Local exact-receipt cleanup before Storage, also when preparation persisted then rejected. */
   onNotStarted?: (receipt: { storageKey: string }) => void | Promise<void>;
+}
+
+export interface PendingDocumentUpload {
+  storageKey: string;
+  /** Absent only on legacy receipts, which must never invent registration metadata. */
+  registration?: {
+    phase: 'prepared' | 'started' | 'refused';
+    name: string; mime: string; size: number; label: string; previousIds: string[];
+  };
 }
 
 export interface DocumentOriginal { uri: string; mime: string; fileName: string; expiresAt: string }
 export interface OriginalSigningTransport {
   sign(input: { storageKey: string; authorization: string; expiresIn: number; signal?: AbortSignal }): Promise<string>;
+  inspect(input: { storageKey: string; authorization: string; signal?: AbortSignal }): Promise<
+    { kind: 'present'; size: number; mime: string } | { kind: 'unavailable' }>;
 }
 
 export interface DocumentMutationResult {
@@ -51,7 +62,10 @@ export interface DocumentMutationResult {
   dossier: DocumentDossier | null; document: CaregiverDocument | null;
   message: string; warning?: string;
   /** Read-only reconciliation. Never automatically repeat an uncertain upload. */
-  reconciliation?: { storageKey: string };
+  reconciliation?: PendingDocumentUpload;
+  /** Exact-key proof for local CAS cleanup, distinct from a successful active upload. */
+  resolution?: { storageKey: string; outcome: 'registered' | 'archived' | 'not_registered' };
+  canResumeRegistration?: boolean;
 }
 
 export interface DocumentGateway {
@@ -59,7 +73,9 @@ export interface DocumentGateway {
   readDossier(context: DocumentContext, signal?: AbortSignal): Promise<DocumentDossier>;
   getOriginal(context: DocumentContext, documentId: string, signal?: AbortSignal): Promise<DocumentOriginal>;
   upload(context: DocumentContext, input: UploadDocumentInput, signal?: AbortSignal): Promise<DocumentMutationResult>;
-  reconcileUpload(context: DocumentContext, storageKey: string, signal?: AbortSignal): Promise<DocumentMutationResult>;
+  reconcileUpload(context: DocumentContext, receipt: PendingDocumentUpload | string, signal?: AbortSignal): Promise<DocumentMutationResult>;
+  resumeUploadRegistration(context: DocumentContext, receipt: PendingDocumentUpload,
+    onPrepared: (receipt: PendingDocumentUpload) => Promise<void>, signal?: AbortSignal): Promise<DocumentMutationResult>;
   verify(context: DocumentContext, documentId: string, signal?: AbortSignal): Promise<DocumentMutationResult>;
   requestReview(context: DocumentContext, documentId: string, motif: string, signal?: AbortSignal): Promise<DocumentMutationResult>;
   logicalDelete(context: DocumentContext, documentId: string, signal?: AbortSignal): Promise<DocumentMutationResult>;

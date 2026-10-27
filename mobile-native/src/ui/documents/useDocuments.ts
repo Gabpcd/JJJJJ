@@ -16,14 +16,14 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
   const [busy, setBusy] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DocumentMutationResult | null>(null);
   const [needsRead, setNeedsRead] = useState(false);
-  const [uncertainUpload, setUncertainUpload] = useState<string | null>(null);
+  const [uncertainUpload, setUncertainUpload] = useState<PendingDocumentUpload | null>(null);
   const [journalReady, setJournalReady] = useState(false);
   const [journalError, setJournalError] = useState<string | null>(null);
   const read = useRef<AbortController | null>(null);
   const write = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const mounted = useRef(false);
-  const pending = useRef<string | null>(null);
+  const pending = useRef<PendingDocumentUpload | null>(null);
   const journalAvailable = useRef(false);
   const journalGeneration = useRef(0);
   const available = useRef(false);
@@ -53,7 +53,7 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
     try {
       const receipt = await journal.read(context.userId);
       if (!mounted.current || !available.current || request !== journalGeneration.current) return;
-      pending.current = receipt?.storageKey ?? null;
+      pending.current = receipt;
       journalAvailable.current = true;
       setUncertainUpload(pending.current); setJournalReady(true); setJournalError(null);
     } catch {
@@ -104,18 +104,19 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
   const perform = useCallback(async (key: string, action: (signal: AbortSignal,
     onPrepared: (receipt: PendingDocumentUpload) => Promise<void>,
     onNotStarted: (receipt: PendingDocumentUpload) => Promise<void>) => Promise<DocumentMutationResult>) => {
-    if (!available.current || !mounted.current || write.current || !journalAvailable.current || (pending.current && key !== 'reconcile')) return null;
+    if (!available.current || !mounted.current || write.current || !journalAvailable.current || (pending.current && !['reconcile', 'resume'].includes(key) && !/^(review|verify):/.test(key))) return null;
     read.current?.abort(); read.current = null; ++generation.current; ++journalGeneration.current;
     const abort = new AbortController(); write.current = abort;
     // This operation owns this key. Never use the latest pending.current when clearing later.
-    let operationStorageKey = key === 'reconcile' ? pending.current : null;
+    let operationStorageKey = ['reconcile', 'resume'].includes(key) ? pending.current?.storageKey ?? null : null;
     const onPrepared = async (receipt: PendingDocumentUpload) => {
-      if (abort.signal.aborted || write.current !== abort || (operationStorageKey && operationStorageKey !== receipt.storageKey)) throw new Error('stale-upload');
+      if (!available.current || abort.signal.aborted || write.current !== abort || (operationStorageKey && operationStorageKey !== receipt.storageKey)) throw new Error('stale-upload');
       operationStorageKey = receipt.storageKey;
       // Await persistence before the gateway may send bytes to Storage, including on app termination.
       await journal.write(context.userId, receipt);
+      if (!available.current || abort.signal.aborted || write.current !== abort) throw new Error('stale-upload');
       if (mounted.current && write.current === abort) {
-        pending.current = receipt.storageKey; setUncertainUpload(receipt.storageKey);
+        pending.current = receipt; setUncertainUpload(receipt);
       }
     };
     const onNotStarted = async (receipt: PendingDocumentUpload) => {
@@ -137,18 +138,21 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
       if (operationStorageKey && result.kind === 'confirmed' && result.document?.s3_cle !== operationStorageKey) throw new Error('scope');
       setReceipt(result);
       if (result.dossier) setResource({ data: result.dossier, loading: false, error: null });
-      setNeedsRead(result.kind === 'unconfirmed');
+      setNeedsRead(!result.dossier || result.kind === 'unconfirmed');
       if (result.reconciliation) {
-        pending.current = result.reconciliation.storageKey;
+        pending.current = result.reconciliation;
         setUncertainUpload(pending.current);
         try { await journal.write(context.userId, result.reconciliation); }
         catch { if (mounted.current) setJournalError('Le suivi de l’envoi n’a pas pu être conservé. Ne renvoie pas le fichier avant sa vérification.'); }
-      } else if ((key === 'upload' || key === 'reconcile') && result.kind === 'confirmed' && operationStorageKey) {
+      } else if (result.resolution && operationStorageKey) {
+        if (result.resolution.storageKey !== operationStorageKey
+          || (result.resolution.outcome !== 'not_registered' && result.document?.s3_cle !== operationStorageKey)
+          || (result.resolution.outcome === 'not_registered' && result.document)) throw new Error('scope');
         try {
           await journal.clear(context.userId, operationStorageKey);
           // Another screen may already have prepared a newer operation. Preserve its receipt.
           await readJournal(abort);
-        } catch { if (mounted.current) setJournalError('Le fichier est enregistré, mais le suivi local doit encore être actualisé. Vérifie l’envoi précédent.'); }
+        } catch { if (mounted.current) setJournalError('Le résultat est relu, mais le suivi local doit encore être actualisé. Vérifie l’envoi précédent.'); }
       }
       return result;
     } catch (reason) {
@@ -156,6 +160,9 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
       const result: DocumentMutationResult = { kind: 'unconfirmed', dossier: null, document: null,
         message: reason instanceof DocumentWorkflowError ? reason.message : 'Action non confirmée. Actualise le dossier avant de réessayer.' };
       setReceipt(result); setNeedsRead(true);
+      // A write can persist its next phase before read-back rejects. Re-read the
+      // durable receipt rather than retaining an older prepared phase in memory.
+      await readJournal(abort);
       return result;
     } finally {
       if (timer) clearTimeout(timer);
@@ -171,5 +178,6 @@ export function useDocuments(gateway: DocumentScreenGateway, context: DocumentCo
   }, [context.userId, journal, readJournal]);
 
   return { ...resource, busy, receipt, needsRead, uncertainUpload, journalError, journalReady, refresh, perform, readJournal,
-    interactive: focused && active && journalReady && !journalError && !resource.loading && !resource.error && !busy && !needsRead && !uncertainUpload };
+    interactive: focused && active && journalReady && !journalError && !resource.loading && !resource.error && !busy && (!needsRead || !!uncertainUpload),
+    readable: focused && active && !resource.loading && !resource.error && !busy };
 }

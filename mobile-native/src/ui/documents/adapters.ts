@@ -8,7 +8,8 @@ export interface DocumentSelection {
   /** Optional local cache URI only. Never a provider URL or an embedded browser. */
   localPreviewUri?: string;
 }
-export interface PendingDocumentUpload { storageKey: string }
+export type { PendingDocumentUpload } from '../../workflows/documents/types';
+import type { PendingDocumentUpload } from '../../workflows/documents/types';
 /** Owned by the runtime, outside the screen. Persist before uploading; isolate by account. */
 export interface DocumentUploadJournal {
   read(userId: string): Promise<PendingDocumentUpload | null>;

@@ -34,8 +34,8 @@ est conservée ; ce passage ne démontre pas à lui seul la cause de ces échecs
 | Signature du contrat | Consentement lié à la révision affichée, OTP et signature via les RPC existantes, admission TEST, relecture après résultat incertain | Scénario synthétique ; droits réduits STAGING ; demande et validation du SMS chez le fournisseur TEST et preuve de signature serveur |
 
 Deux workflows distincts préparent quatre jobs frais chacun (iPhone, Android,
-iPad portrait et paysage). Documents exige huit captures par format, Contrats
-sept ; leurs assertions, arbres d’accessibilité et captures restent à exécuter
+iPad portrait et paysage). Documents exige neuf captures par format, Contrats
+huit ; leurs assertions, arbres d’accessibilité et captures restent à exécuter
 et relire pour ce lot. Les tests purs utilisent des transports injectés.
 Les scénarios n’envoient aucun fichier réel ni SMS et ne signent aucun contrat réel.
 Les diagnostics de navigation et d’échec iOS du premier lot restent actifs en CI démo.
@@ -70,3 +70,25 @@ commissions, droits et vérifications restent ceux du backend existant.
 5. Le contrôle physique utilise l’iPhone uniquement quand le parcours est prêt à essayer.
 
 La réussite d’un lot ne signifie pas que tous les parcours natifs sont terminés.
+
+
+La reprise des envois Documents conserve désormais un reçu versionné : phase
+avant enregistrement, arguments exacts et justificatif antérieur. La relecture
+cherche aussi les versions archivées. Un envoi prouvé sans enregistrement peut
+être clos localement, sans supprimer son objet privé. Un enregistrement incertain
+n’est jamais renvoyé automatiquement ; sa reprise explicite réutilise la même clé
+et vérifie la classe de justificatif courante. La RPC existante ne fournit pas de
+comparaison atomique avec le justificatif antérieur : un changement concurrent
+ultérieur à la dernière lecture reste soumis aux règles de remplacement serveur.
+Les anciens reçus sans métadonnées ne permettent pas cette reprise. La consultation
+et les demandes de revue restent accessibles pendant cette vérification.
+
+Le scénario Contrats conserve le contrôle d’un établissement en lecture seule,
+puis fait signer un établissement autorisé après le soignant. Les deux signatures
+synthétiques sont relues sur le même original ; huit captures sont attendues par
+format. Ces prolongements nécessitent encore leur simulation CI sur ce commit.
+
+Le scénario Documents inclut aussi l’arrêt synthétique avant enregistrement :
+la relecture clôture le reçu, conserve le justificatif courant et réactive son
+remplacement (neuvième capture). La reprise RPC explicite demeure couverte par
+les transports injectés ; sa vérification authentifiée STAGING reste requise.

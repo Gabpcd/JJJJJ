@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
+import { createIosNavigationStallMonitor } from './ios-navigation-stall.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
@@ -35,6 +36,7 @@ const expoUrl = 'exp://127.0.0.1:8090';
 let device;
 let metro;
 let metroError;
+let navigationStallMonitor;
 let stage = 'device-selection';
 let success = false;
 const started = new Date().toISOString();
@@ -256,6 +258,8 @@ try {
     { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   metro.stdout.pipe(metroLog, { end: false });
   metro.stderr.pipe(metroLog, { end: false });
+  metro.stdout.on('data', chunk => navigationStallMonitor?.consume('stdout', chunk));
+  metro.stderr.on('data', chunk => navigationStallMonitor?.consume('stderr', chunk));
   metro.once('error', error => { metroError = error; metroLog.write(`${error.message}\n`); });
   await waitUntil('réponse Metro sur IPv4 localhost', async () => {
     try {
@@ -297,8 +301,11 @@ try {
   console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
-    await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
-    await run('xcrun', ['simctl', 'openurl', device, expoUrl], { timeout: 120_000, logfile: 'expo-launch.log' });
+    const launch = await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
+    navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout });
+    // XCTest enters this same local URL through Expo Go's native Enter URL form.
+    // This avoids SpringBoard's external-open prompt; assertions are unchanged.
+    // ios-bootstrap.node.test.mjs guards the matching Swift constant.
     for (const orientation of selectedScenario.orientations) {
       await runIosXCTest(orientation, resolve(output, orientation));
     }
@@ -314,6 +321,7 @@ try {
   writeFileSync(resolve(output, 'failure.txt'), `${stage}: ${error.stack || error}\n`);
   process.exitCode = 1;
 } finally {
+  await navigationStallMonitor?.dispose();
   if (device) {
     if (platform === 'ios') {
       if (!success) {

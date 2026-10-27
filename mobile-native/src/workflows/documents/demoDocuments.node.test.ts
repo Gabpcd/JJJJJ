@@ -47,9 +47,9 @@ test('mutating a returned dossier cannot alter stored statuses, owners or origin
 });
 
 test('uncertain synthetic upload is reconciled without a second file or invented verification', async () => {
-  const f = fixture(); let saves = 0;
+  const f = fixture(); const phases: string[] = [];
   const result = await f.gateway.upload({ userId: A }, { typeDocument: 'RCP_ASSURANCE', file: createDemoDocumentFile(),
-    onPrepared: async receipt => { saves += 1; await f.journal.write(A, receipt); } });
+    onPrepared: async receipt => { phases.push(receipt.registration!.phase); await f.journal.write(A, receipt); } });
   assert.equal(result.kind, 'unconfirmed');
   assert.equal(result.document, null);
   const pending = (await f.journal.read(A))!;
@@ -57,7 +57,7 @@ test('uncertain synthetic upload is reconciled without a second file or invented
   assert.equal(reconciled.kind, 'confirmed');
   assert.equal(reconciled.document?.statut_verification, 'EN_ATTENTE');
   assert.equal(reconciled.dossier?.documents.filter(doc => doc.type_document === 'RCP_ASSURANCE').length, 1);
-  assert.equal(saves, 1);
+  assert.deepEqual(phases, ['prepared', 'started']);
   await f.journal.clear(A, pending.storageKey);
   assert.equal(await f.journal.read(A), null);
   const verified = await f.gateway.verify({ userId: A }, reconciled.document!.id);
@@ -128,4 +128,40 @@ test('demo picker returns only injected files and rejects a changed session', as
   assert.equal(selected?.file.name, 'remplacement-annule-demo.png');
   f.setSession({ userId: B, epoch: 2 });
   await assert.rejects(media.pick('file', new AbortController().signal));
+});
+
+
+test('synthetic reconciliation finds archived rows and closes a never-registered prepared receipt', async () => {
+  const f = fixture();
+  const result = await f.gateway.upload({ userId: A }, { typeDocument: 'RCP_ASSURANCE', file: createDemoDocumentFile(),
+    onPrepared: receipt => f.journal.write(A, receipt) });
+  const pending = (await f.journal.read(A))!;
+  const before = await f.gateway.reconcileUpload({ userId: A }, pending);
+  await f.gateway.logicalDelete({ userId: A }, before.document!.id);
+  const archived = await f.gateway.reconcileUpload({ userId: A }, pending);
+  assert.equal(archived.resolution?.outcome, 'archived'); assert.equal(archived.kind, 'rejected');
+  await f.journal.clear(A, pending.storageKey);
+  const prepared = { ...pending, storageKey: pending.storageKey.replace('demo-upload-', 'demo-never-registered-'),
+    registration: { ...pending.registration!, phase: 'prepared' as const } };
+  await f.journal.write(A, prepared);
+  const closed = await f.gateway.reconcileUpload({ userId: A }, prepared);
+  assert.equal(closed.resolution?.outcome, 'not_registered');
+  assert.equal(result.kind, 'unconfirmed');
+});
+
+
+test('explicit demo interruption before registration leaves the current RIB untouched and releases by read', async () => {
+  const f = fixture();
+  const gateway = new DemoDocumentGateway({ currentSession: f.currentSession,
+    outcomes: [{ userId: A, typeDocument: 'RIB', kind: 'uncertain_prepared' }] });
+  const before = await gateway.readDossier({ userId: A });
+  const original = before.documents.find(row => row.type_document === 'RIB')!;
+  const result = await gateway.upload({ userId: A }, { typeDocument: 'RIB', file: createDemoDocumentFile(), replacesDocumentId: original.id,
+    onPrepared: receipt => f.journal.write(A, receipt) });
+  assert.equal(result.kind, 'unconfirmed');
+  const pending = (await f.journal.read(A))!; assert.equal(pending.registration?.phase, 'prepared');
+  const read = await gateway.reconcileUpload({ userId: A }, pending);
+  assert.equal(read.resolution?.outcome, 'not_registered');
+  assert.deepEqual(read.dossier?.documents.find(row => row.type_document === 'RIB'), original);
+  await f.journal.clear(A, read.resolution!.storageKey); assert.equal(await f.journal.read(A), null);
 });

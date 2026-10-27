@@ -11,7 +11,7 @@ test('the default keeps the existing consultation methods and sixteen captures',
   assert.equal(selected.documentScenarioFlag, '0');
 });
 
-test('Documents selects one independent method and eight captures per fresh format', () => {
+test('Documents selects one independent method and nine captures per fresh format', () => {
   for (const [platform, family, orientation, method] of [
     ['ios', 'iphone', 'portrait', 'testDocumentsIphonePortrait'],
     ['ios', 'ipad', 'portrait', 'testDocumentsIpadPortrait'],
@@ -24,8 +24,8 @@ test('Documents selects one independent method and eight captures per fresh form
     assert.equal(selected.documentScenarioFlag, '1');
     if (method) assert.equal(iosTestMethod(selected, family, orientation), method);
     const captures = scenarioCaptureNames(selected, platform, family, orientation);
-    assert.equal(captures.length, 8);
-    assert.equal(new Set(captures).size, 8);
+    assert.equal(captures.length, 9);
+    assert.equal(new Set(captures).size, 9);
   }
 });
 
@@ -38,7 +38,7 @@ test('incompatible modes and accidental scenario injections fail before tool sta
   assert.throws(() => selectNativeScenario({ NATIVE_PILOT_SCENARIO: 'documents', NATIVE_DOCUMENTS_ORIENTATION: 'landscape' }, 'android'));
 });
 
-test('Contracts selects one independent method and all seven exact captures per fresh format', () => {
+test('Contracts selects one independent method and all eight exact captures per fresh format', () => {
   for (const [platform, family, orientation, method, prefix] of [
     ['ios', 'iphone', 'portrait', 'testContractsIphonePortrait', 'iphone-portrait-'],
     ['ios', 'ipad', 'portrait', 'testContractsIpadPortrait', 'ipad-portrait-'],
@@ -52,7 +52,7 @@ test('Contracts selects one independent method and all seven exact captures per 
     if (method) assert.equal(iosTestMethod(selected, family, orientation), method);
     const captures = scenarioCaptureNames(selected, platform, family, orientation);
     assert.deepEqual(captures, CONTRACT_CAPTURES.map(name => `${prefix}${name}`));
-    assert.equal(new Set(captures).size, 7);
+    assert.equal(new Set(captures).size, 8);
     const other = orientation === 'portrait' ? 'landscape' : 'portrait';
     assert.throws(() => scenarioCaptureNames(selected, platform, family, other));
     assert.throws(() => iosTestMethod(selected, family, other));

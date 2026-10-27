@@ -228,3 +228,145 @@ name: Contrats natifs — simulation locale sans fournisseur
     id: contract-original
 - assertNotVisible:
     id: contract-detail-scroll
+
+# Authorized establishment signs the same synthetic contract after the read-only check.
+- scrollUntilVisible:
+    element:
+      id: enter-establishment-demo
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: enter-establishment-demo
+- tapOn:
+    id: tab-contracts
+- assertVisible:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+    text: ".*Signé par le soignant.*"
+- tapOn:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+- scrollUntilVisible:
+    element:
+      id: contract-original-end
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-original-end
+    text: "(?s).*Dernière ligne.*"
+- scrollUntilVisible:
+    element:
+      id: contract-request-otp
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-request-otp
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: contract-consent
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: contract-consent
+- scrollUntilVisible:
+    element:
+      id: contract-request-otp
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-request-otp
+- scrollUntilVisible:
+    element:
+      id: contract-demo-code
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-demo-code
+    text: ".*000000.*Aucun SMS envoyé.*"
+- scrollUntilVisible:
+    element:
+      id: contract-otp
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-otp
+- inputText: "000000"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: contract-sign
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-sign
+- scrollUntilVisible:
+    element:
+      id: contract-result-unconfirmed
+    direction: UP
+    timeout: 15000
+- assertVisible: ".*Simulation : réponse interrompue.*"
+- scrollUntilVisible:
+    element:
+      id: contract-sign
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-sign
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: contract-reconcile
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: contract-reconcile
+- scrollUntilVisible:
+    element:
+      id: contract-status
+    direction: UP
+    timeout: 15000
+- assertVisible:
+    id: contract-status
+    text: Signé par les deux parties
+- scrollUntilVisible:
+    element:
+      id: contract-signature-soignant
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-signature-soignant
+    text: ".*Soignant : Signé.*"
+- assertVisible:
+    id: contract-signature-etablissement
+    text: ".*Établissement : Signé.*"
+- assertNotVisible:
+    id: contract-sign
+- assertNotVisible:
+    id: contract-consent
+- takeScreenshot: contrats-deux-signatures
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: contracts-list
+- assertVisible:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+    text: ".*Signé par les deux parties.*"
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- assertNotVisible:
+    id: contract-original

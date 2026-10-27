@@ -4,6 +4,7 @@ import XCTest
 final class NativePilotTests: XCTestCase {
     private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    private let expoExperienceURL = "exp://127.0.0.1:8090"
     private var proofPrefix = "ipad-portrait"
     private var backgroundStates: [UInt] = []
 
@@ -29,7 +30,7 @@ final class NativePilotTests: XCTestCase {
         }
     }
 
-    /// The runner opens the prepared exp:// URL before this test on a fresh iPad simulator.
+    /// The runner launches a fresh Expo Go; XCTest opens its prepared local server.
     func testPortraitConsultation() throws {
         runPortraitConsultation(prefix: "ipad-portrait", deviceName: "iPad")
     }
@@ -209,6 +210,47 @@ final class NativePilotTests: XCTestCase {
         signOut()
         XCTAssertFalse(element("contract-original").exists)
         XCTAssertFalse(element("contract-detail-scroll").exists)
+
+        scrollTo(element("enter-establishment-demo"), in: element("login-scroll"))
+        tap("enter-establishment-demo")
+        tap("tab-contracts")
+        require("Authorized establishment sees the first party signature") {
+            self.element("contract-card-00000000-0000-4000-8000-000000000021").label.contains("Signé par le soignant")
+        }
+        tap("contract-card-00000000-0000-4000-8000-000000000021")
+        scrollTo(element("contract-original-end"), in: detail)
+        XCTAssertTrue(element("contract-original-end").label.contains("Dernière ligne"))
+        scrollTo(element("contract-request-otp"), in: detail)
+        XCTAssertFalse(element("contract-request-otp").isEnabled)
+        scrollTo(element("contract-consent"), in: detail, downward: false)
+        tap("contract-consent")
+        scrollTo(element("contract-request-otp"), in: detail)
+        tap("contract-request-otp")
+        scrollTo(element("contract-demo-code"), in: detail)
+        XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
+        XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
+        scrollTo(element("contract-otp"), in: detail)
+        tap("contract-otp")
+        element("contract-otp").typeText("000000")
+        scrollTo(element("contract-sign"), in: detail)
+        tap("contract-sign")
+        scrollTo(element("contract-result-unconfirmed"), in: detail, downward: false)
+        XCTAssertFalse(element("contract-sign").isEnabled)
+        scrollTo(element("contract-reconcile"), in: detail)
+        tap("contract-reconcile")
+        require("Both synthetic signatures are reread") { self.element("contract-status").label == "Signé par les deux parties" }
+        scrollTo(element("contract-signature-soignant"), in: detail, downward: false)
+        XCTAssertTrue(element("contract-signature-soignant").label.contains("Soignant : Signé"))
+        XCTAssertTrue(element("contract-signature-etablissement").label.contains("Établissement : Signé"))
+        XCTAssertFalse(element("contract-consent").exists)
+        XCTAssertFalse(element("contract-sign").exists)
+        record("\(prefix)-contrats-deux-signatures")
+        backGesture()
+        require("List retains both signatures") {
+            self.visible(self.element("contracts-list")) && self.element("contract-card-00000000-0000-4000-8000-000000000021").label.contains("Signé par les deux parties")
+        }
+        signOut()
+        XCTAssertFalse(element("contract-original").exists)
     }
 
     // Selected independently by the Documents CI jobs. Each orientation receives a fresh
@@ -342,6 +384,34 @@ final class NativePilotTests: XCTestCase {
         XCTAssertFalse(element("document-status-RCP_ASSURANCE").exists)
         record("\(prefix)-documents-retrait-confirme")
 
+        // A second failure boundary: no registration occurred, so readback can close
+        // the local receipt while keeping the prior proof and never resending bytes.
+        scrollTo(element("document-replace-RIB"), in: documents)
+        tap("document-replace-RIB")
+        scrollTo(element("document-pick-file"), in: upload)
+        tap("document-pick-file")
+        scrollTo(text("rib-avant-enregistrement-demo.png"), in: upload)
+        XCTAssertTrue(visible(text("rib-avant-enregistrement-demo.png")))
+        scrollTo(element("document-upload-submit"), in: upload)
+        tap("document-upload-submit")
+        require("Pre-registration interruption is explicit") { self.textContaining("Simulation : interruption avant").exists }
+        scrollTo(element("document-upload-submit"), in: upload)
+        XCTAssertFalse(element("document-upload-submit").isEnabled)
+        scrollTo(element("document-upload-cancel"), in: upload)
+        tap("document-upload-cancel")
+        scrollTo(element("documents-reconcile"), in: documents, downward: false)
+        tap("documents-reconcile")
+        require("An unregistered receipt is closed without claiming upload success") {
+            self.textContaining("cet envoi sans enregistrement est clos").exists && !self.element("documents-reconcile").exists
+        }
+        scrollTo(element("document-status-RIB"), in: documents)
+        XCTAssertEqual(element("document-status-RIB").label, "En attente de vérification")
+        scrollTo(text("Simulation — RIB"), in: documents, downward: false)
+        XCTAssertTrue(visible(text("Simulation — RIB")))
+        scrollTo(element("document-replace-RIB"), in: documents)
+        XCTAssertTrue(element("document-replace-RIB").isEnabled)
+        record("\(prefix)-documents-envoi-sans-enregistrement")
+
         backGesture()
         require("The native back gesture returns to the caregiver profile") { self.visible(self.element("caregiver-profile-scroll")) }
         tap("tab-explore")
@@ -369,17 +439,27 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        // A system URL confirmation may be in SpringBoard, outside Expo's accessibility tree.
-        let open = springboard.alerts.buttons.matching(
-            NSPredicate(format: "label MATCHES %@", "Open|Ouvrir")
-        ).firstMatch
-        if open.waitForExistence(timeout: 5) {
-            require("The system Expo URL confirmation is hittable") { open.isHittable }
-            open.tap()
-            require("The system URL confirmation disappeared") { !open.exists }
-        }
         app.activate()
         XCUIDevice.shared.orientation = .portrait
+
+        // Open the local server inside Expo Go after XCTest owns the foreground.
+        // An external simctl openurl leaves a SpringBoard confirmation in front of
+        // the app while the test runner builds. The native Home toolbar exposes
+        // Enter URL, followed by the Add project by URL alert and Connect action.
+        // A Node guard keeps this URL equal to the runner's precompiled Metro URL.
+        let enterURL = app.buttons["Enter URL"]
+        require("The fresh Expo Go Home toolbar is available", timeout: 120) { self.visible(enterURL) }
+        enterURL.tap()
+        let urlDialog = app.alerts["Add project by URL"]
+        let urlField = urlDialog.textFields.firstMatch
+        require("The Expo server URL form is visible") { self.visible(urlField) }
+        urlField.tap()
+        urlField.typeText(expoExperienceURL)
+        XCTAssertEqual(urlField.value as? String, expoExperienceURL, "Only the runner's local Metro server is opened")
+        let connect = urlDialog.buttons["Connect"]
+        require("The exact local URL enables Connect") { self.visible(connect) && connect.isEnabled }
+        connect.tap()
+        require("The Expo URL form is dismissed after one native tap") { !urlDialog.exists }
 
         // A fresh Expo Go install must present this sheet. The SDK label behind it is not proof
         // of dismissal. Native Button.tap() resolves its actual control rather than screen pixels.
@@ -556,13 +636,18 @@ final class NativePilotTests: XCTestCase {
         let bio = element("profile-bio")
         scrollTo(bio, in: profile)
         let expected = "Simulation native \(proofPrefix)"
-        // This fixture is one paragraph. Apple's native triple-tap selects it all;
-        // a single long press on an unfocused TextView only opens the keyboard.
-        // https://support.apple.com/guide/iphone/iph1a9cae52c/ios
-        XCTAssertFalse((bio.value as? String ?? "").contains("\n"))
+        // Select All is an explicit native editing action. A synthesized triple
+        // tap selected only "Profil" on iPhone 17, so do not infer selection size.
         bio.tap()
         require("The native keyboard is available for profile editing") { self.app.keyboards.firstMatch.exists }
-        bio.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        // Place the insertion point after the short fixture, in the TextView's
+        // empty lower area; holding there opens the editing menu without selecting a word.
+        let insertion = bio.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.85))
+        insertion.tap()
+        insertion.press(forDuration: 1.0)
+        let selectAll = app.buttons.matching(NSPredicate(format: "label IN %@", ["Select All", "Tout sélectionner"])).firstMatch
+        require("The native Select All editing action is available") { self.visible(selectAll) }
+        selectAll.tap()
         bio.typeText(XCUIKeyboardKey.delete.rawValue)
         require("The entire previous biography was removed") { bio.value as? String == "" }
         bio.typeText(expected)

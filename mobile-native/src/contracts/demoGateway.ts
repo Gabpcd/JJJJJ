@@ -38,7 +38,7 @@ export class DemoContractGateway implements ContractGateway {
     const identity = this.identity(context, signal);
     if (id !== DEMO_CONTRACT_ID) throw new ContractWorkflowError('INVALID_SCOPE', 'Contrat fictif introuvable.');
     const owner = `${key(identity.context)}:${identity.epoch}`;
-    if (this.owner !== owner) { this.owner = owner; this.saved = null; this.otpRequested = false; this.otpExpiry = null; }
+    if (this.owner !== owner) { this.owner = owner; this.otpRequested = false; this.otpExpiry = null; }
     if (!this.saved) {
       const html = demoContractHtml(); const sha256 = await this.options.digestUtf8(html); this.same(identity, signal);
       const path = `${DEMO_CONTRACT_ID}/synthetic.html`;
@@ -52,10 +52,14 @@ export class DemoContractGateway implements ContractGateway {
         otpAdmission: null };
     }
     this.same(identity, signal);
-    this.saved.permissions.sign = identity.canSign;
-    this.saved.otpAdmission = identity.canSign ? { expiresAt: this.now() + 3_600_000, canSend: true,
+    // The synthetic contract is shared by its two parties. Session-specific OTP,
+    // identity and permissions are projected afresh and never inherited across actors.
+    const detail = clone(this.saved);
+    detail.userId = identity.context.userId; detail.party = identity.context.kind;
+    detail.permissions = { read: true, sign: identity.canSign };
+    detail.otpAdmission = identity.canSign ? { expiresAt: this.now() + 3_600_000, canSend: true,
       canValidate: this.otpRequested && !!this.otpExpiry && this.otpExpiry > this.now(), otpExpiresAt: this.otpExpiry } : null;
-    return clone(this.saved);
+    return detail;
   }
   async list(context: ContractContext, page = 0, signal?: AbortSignal): Promise<ContractPage> {
     if (!Number.isInteger(page) || page < 0) throw new ContractWorkflowError('INVALID_INPUT', 'Page fictive invalide.');
@@ -91,8 +95,10 @@ export class DemoContractGateway implements ContractGateway {
       const record = this.saved!.record;
       if (identity.context.kind === 'soignant') { record.signature_soignant = true; record.signature_soignant_le = at; record.statut = 'SIGNE_SOIGNANT'; }
       else { record.signature_etablissement = true; record.signature_etablissement_le = at; record.statut = 'SIGNE_ETABLISSEMENT'; }
-      this.saved!.signatures = [{ id: '00000000-0000-4000-8000-000000000023', contrat_id: record.id, signataire_user_id: identity.context.userId,
-        signataire_role: identity.context.kind, statut_signature: 'signe', signe_a: at, otp_valide_a: at, hash_document: input.revision.sha256, cree_le: at }];
+      if (record.signature_soignant && record.signature_etablissement) record.statut = 'SIGNE_COMPLET';
+      this.saved!.signatures.push({ id: identity.context.kind === 'soignant' ? '00000000-0000-4000-8000-000000000023' : '00000000-0000-4000-8000-000000000024', contrat_id: record.id, signataire_user_id: identity.context.userId,
+        signataire_role: identity.context.kind, statut_signature: 'signe', signe_a: at, otp_valide_a: at, hash_document: input.revision.sha256, cree_le: at });
+      this.otpRequested = false; this.otpExpiry = null;
       if (this.options.uncertainSignature) return { kind: 'unconfirmed', contract: null, issue: null,
         message: 'Simulation : réponse interrompue après enregistrement fictif. Actualisez sans recommencer la signature.' };
       return { kind: 'confirmed', contract: await this.read(context, DEMO_CONTRACT_ID, signal), issue: null,

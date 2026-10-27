@@ -68,7 +68,7 @@ export function DocumentUploadSheet({ type, replacing, media, busy, blocked, err
             </View> : null}
             <View style={styles.content}><Text style={shared.small}>Libellé (optionnel)</Text>
               <TextInput testID="document-upload-label" accessibilityLabel="Libellé du document, optionnel" value={label}
-                onChangeText={setLabel} maxLength={200} editable={!locked && !blocked} style={styles.input} placeholder="Ex. Pièce d’identité recto-verso" />
+                onChangeText={setLabel} autoCorrect={false} spellCheck={false} maxLength={200} editable={!locked && !blocked} style={styles.input} placeholder="Ex. Pièce d’identité recto-verso" />
             </View>
             {localError || error ? <ErrorNotice message={localError ?? error!} /> : null}
             {blocked ? <Text style={shared.body}>L’envoi précédent doit être vérifié. Ferme cette fenêtre puis actualise le dossier ; aucun nouvel envoi automatique ne sera effectué.</Text> : null}

@@ -2,9 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '../../../../src/lib/documents';
 import { validateDocumentBytes } from './bytes';
 import { visibleDocumentRequirements } from './requirements';
+import { checkedUploadReceipt, currentProofIds, sameProofIds } from './uploadRecovery';
 import { DocumentWorkflowError, type CaregiverDocument, type DocumentContext, type DocumentDossier,
   type DocumentGateway, type DocumentMutationResult, type DocumentOriginal, type DocumentProfile,
-  type DocumentRequirement, type OriginalSigningTransport, type UploadDocumentInput } from './types';
+  type DocumentRequirement, type OriginalSigningTransport, type UploadDocumentInput, type PendingDocumentUpload } from './types';
 
 const BUCKET = 'jolene-documents';
 const ALLOWED_ORIGIN = 'https://mejpriaetwgtcstbgfid.supabase.co';
@@ -235,10 +236,14 @@ export class SupabaseDocumentGateway implements DocumentGateway {
       const path = `${identity.userId}/documents/${input.typeDocument}/${uploadId}-${file.safeName}`;
       checkedPath(path, identity.userId, input.typeDocument);
       const bucket = this.client.storage.from(BUCKET);
+      let receipt: PendingDocumentUpload = checkedUploadReceipt(identity.userId, { storageKey: path, registration: {
+        phase: 'prepared', name: file.originalName, mime: file.mime, size: file.size, label: input.label?.trim() ?? '',
+        previousIds: currentProofIds(before.documents, input.typeDocument),
+      } });
       try {
         // Persistence can succeed before its read-back rejects. Storage still has
         // not been invoked, so the same exact local receipt is safe to clear.
-        await input.onPrepared?.({ storageKey: path });
+        await input.onPrepared?.(receipt);
         await this.current(identity, signal); abort(signal);
       }
       catch (cause) {
@@ -264,34 +269,109 @@ export class SupabaseDocumentGateway implements DocumentGateway {
       await this.current(identity, signal);
       if (storage.error || !storage.data || storage.data.path !== path) {
         return { kind: 'unconfirmed', dossier: await this.fresh(identity, signal), document: null,
-          message: 'Le téléversement ne peut pas être confirmé. L’ancienne pièce est conservée.', reconciliation: { storageKey: path } };
+          message: 'Le téléversement ne peut pas être confirmé. L’ancienne pièce est conservée.', reconciliation: receipt };
       }
       // Re-check the displayed original. The server still owns atomic replacement of its proof class.
       if (input.replacesDocumentId) await this.active(identity, input.replacesDocumentId, signal);
-      const response = await this.rpc(identity, 'fn_remplacer_document_soignant', {
-        p_type_document: input.typeDocument, p_libelle: input.label?.trim() ?? '', p_s3_cle: path,
-        p_nom_fichier: file.originalName, p_type_mime: file.mime, p_taille_octets: file.size,
-      }, signal);
-      const dossier = await this.fresh(identity, signal);
-      const document = dossier?.documents.find(row => row.s3_cle === path) ?? null;
-      if (document && (!response.data?.document_id || response.data.document_id === document.id)) {
-        return { kind: 'confirmed', dossier, document, message: 'Document reçu. Son statut de vérification est affiché dans votre dossier.' };
-      }
-      // No destructive cleanup after a timeout: the transaction may have committed without its response.
-      // Originals and uploaded objects stay intact; reconcileUpload is read-only.
-      return { kind: rejected(response) ? 'rejected' : 'unconfirmed', dossier, document: null,
-        message: rejected(response) ? 'Le serveur a refusé l’enregistrement. Rechargez votre dossier.' : UNCONFIRMED,
-        reconciliation: { storageKey: path } };
+      const fresh = await this.dossier(identity, signal);
+      if (!sameProofIds(fresh.documents, receipt)) return { kind: 'rejected', dossier: fresh, document: null,
+        message: 'Le justificatif courant a changé. Cet ancien envoi ne sera pas enregistré.',
+        resolution: { storageKey: path, outcome: 'not_registered' } };
+      receipt = { ...receipt, registration: { ...receipt.registration!, phase: 'started' } };
+      // Durable barrier BEFORE the RPC: a prepared receipt proves no registration was invoked.
+      await input.onPrepared?.(receipt);
+      return this.register(identity, receipt, input.onPrepared, signal);
     });
   }
 
-  async reconcileUpload(context: DocumentContext, storageKey: string, signal?: AbortSignal): Promise<DocumentMutationResult> {
-    checkedPath(storageKey, context.userId);
-    const dossier = await this.readDossier(context, signal);
-    const document = dossier.documents.find(row => row.s3_cle === storageKey) ?? null;
-    return { kind: document ? 'confirmed' : 'unconfirmed', dossier, document,
-      message: document ? 'Le document est bien enregistré.' : UNCONFIRMED,
-      ...(document ? {} : { reconciliation: { storageKey } }) };
+  private async historical(identity: Identity, storageKey: string, signal?: AbortSignal): Promise<CaregiverDocument | null> {
+    await this.current(identity, signal);
+    let query = this.client.from('documents_soignants').select(DOCUMENT).eq('soignant_id', identity.userId)
+      .eq('s3_bucket', BUCKET).eq('s3_cle', storageKey).setHeader('Authorization', identity.authorization);
+    if (signal) query = query.abortSignal(signal);
+    const result = await query.maybeSingle();
+    await this.current(identity, signal);
+    if (result.error) unavailable();
+    if (!result.data) return null;
+    const row = checkedDocument(result.data, identity.userId);
+    if (row.s3_cle !== storageKey) scope();
+    return row;
+  }
+
+  private async recovery(identity: Identity, receipt: PendingDocumentUpload, signal?: AbortSignal): Promise<DocumentMutationResult> {
+    const document = await this.historical(identity, receipt.storageKey, signal);
+    const dossier = await this.fresh(identity, signal);
+    if (document) {
+      const archived = document.supprime_le !== null || document.revoque_le !== null;
+      return { kind: archived ? 'rejected' : 'confirmed', dossier, document,
+        message: archived ? 'Cet envoi a été enregistré puis archivé ou remplacé. Il ne sera ni réactivé ni renvoyé.' : 'Le document est bien enregistré.',
+        resolution: { storageKey: receipt.storageKey, outcome: archived ? 'archived' : 'registered' } };
+    }
+    // Inspect the exact object with the same captured JWT; 404/RLS/network errors are
+    // never treated as proof that an uncertain database transaction did not commit.
+    let storage: Awaited<ReturnType<OriginalSigningTransport['inspect']>> = { kind: 'unavailable' };
+    try { storage = await this.originalSigner.inspect({ storageKey: receipt.storageKey, authorization: identity.authorization, signal }); }
+    catch { /* Preserve uncertainty; current() still rejects cancellation/account changes. */ }
+    await this.current(identity, signal);
+    if (receipt.registration?.phase === 'prepared' || receipt.registration?.phase === 'refused') {
+      return { kind: 'rejected', dossier, document: null,
+        message: receipt.registration.phase === 'prepared' ? 'L’enregistrement n’a pas commencé. Cet envoi est clos ; vous pouvez choisir à nouveau un fichier.'
+          : 'Le serveur a refusé cet enregistrement. Cet envoi est clos ; aucun document n’a été remplacé.',
+        warning: storage.kind === 'present' ? 'La copie privée téléversée reste conservée. Aucun fichier n’a été supprimé ni renvoyé.'
+          : 'La présence du fichier privé n’est pas confirmée. Aucun fichier n’a été supprimé ni renvoyé.',
+        resolution: { storageKey: receipt.storageKey, outcome: 'not_registered' } };
+    }
+    const metadata = receipt.registration;
+    const canResume = !!metadata && !!dossier && storage.kind === 'present' && storage.size === metadata.size
+      && storage.mime === metadata.mime && sameProofIds(dossier.documents, receipt);
+    return { kind: 'unconfirmed', dossier, document: null, reconciliation: receipt, canResumeRegistration: canResume,
+      message: canResume ? 'Le fichier privé est présent mais son enregistrement reste à confirmer. Vous pouvez reprendre uniquement l’enregistrement, sans renvoyer le fichier.'
+        : !metadata ? 'Cet ancien reçu ne permet pas de reprendre l’enregistrement. La consultation reste disponible ; faites vérifier cet envoi avant un nouveau téléversement.'
+          : dossier && !sameProofIds(dossier.documents, receipt) ? 'Le justificatif courant a changé. Cet ancien envoi ne sera pas rejoué ; faites vérifier son état. La consultation reste disponible.' : UNCONFIRMED };
+  }
+
+  private async register(identity: Identity, receipt: PendingDocumentUpload,
+    onPrepared: UploadDocumentInput['onPrepared'], signal?: AbortSignal): Promise<DocumentMutationResult> {
+    const metadata = receipt.registration!;
+    const response = await this.rpc(identity, 'fn_remplacer_document_soignant', {
+      p_type_document: receipt.storageKey.split('/')[2], p_libelle: metadata.label, p_s3_cle: receipt.storageKey,
+      p_nom_fichier: metadata.name, p_type_mime: metadata.mime, p_taille_octets: metadata.size,
+    }, signal);
+    if (rejected(response)) {
+      const refused: PendingDocumentUpload = { ...receipt, registration: { ...metadata, phase: 'refused' } };
+      // Preserve a definitive refusal across process restart. If persistence fails,
+      // leave the older started barrier intact and require another explicit read.
+      await onPrepared?.(refused); receipt = refused;
+    }
+    try { return await this.recovery(identity, receipt, signal); }
+    catch (error) {
+      abort(signal);
+      if (error instanceof DocumentWorkflowError && ['SESSION_CHANGED', 'INVALID_SCOPE'].includes(error.code)) throw error;
+      return { kind: rejected(response) ? 'rejected' : 'unconfirmed', dossier: null, document: null,
+        message: UNCONFIRMED, reconciliation: receipt };
+    }
+  }
+
+  async reconcileUpload(context: DocumentContext, value: PendingDocumentUpload | string, signal?: AbortSignal): Promise<DocumentMutationResult> {
+    return this.exclusive(context, async () => {
+      const receipt = checkedUploadReceipt(context.userId, typeof value === 'string' ? { storageKey: value } : value);
+      return this.recovery(await this.identity(context, signal), receipt, signal);
+    });
+  }
+
+  async resumeUploadRegistration(context: DocumentContext, value: PendingDocumentUpload,
+    onPrepared: (receipt: PendingDocumentUpload) => Promise<void>, signal?: AbortSignal): Promise<DocumentMutationResult> {
+    return this.exclusive(context, async () => {
+      const receipt = checkedUploadReceipt(context.userId, value);
+      const identity = await this.identity(context, signal);
+      const read = await this.recovery(identity, receipt, signal);
+      if (!read.canResumeRegistration || receipt.registration?.phase !== 'started') return read;
+      await onPrepared(receipt);
+      // Never replay an old replacement over a new proof discovered after local persistence.
+      const fresh = await this.recovery(identity, receipt, signal);
+      if (!fresh.canResumeRegistration) return fresh;
+      return this.register(identity, receipt, onPrepared, signal);
+    });
   }
 
   async verify(context: DocumentContext, documentId: string, signal?: AbortSignal): Promise<DocumentMutationResult> {

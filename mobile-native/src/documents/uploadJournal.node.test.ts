@@ -99,3 +99,36 @@ test('concurrent writes admit one receipt, and repeating that same receipt is id
   await journal.clear(A, first);
   assert.equal(await journal.read(A), null);
 });
+
+
+test('registration barrier survives restart and cannot downgrade or change replacement metadata', async () => {
+  const { store } = memoryStore(); const journal = createDocumentUploadJournal(store);
+  const prepared = { storageKey: first, registration: { phase: 'prepared' as const, name: 'diplome.pdf', mime: 'application/pdf', size: 20,
+    label: 'Diplôme', previousIds: [B] } };
+  await journal.write(A, prepared);
+  const started = { ...prepared, registration: { ...prepared.registration, phase: 'started' as const } };
+  await journal.write(A, started);
+  const restart = createDocumentUploadJournal(store);
+  assert.deepEqual(await restart.read(A), started);
+  await assert.rejects(restart.write(A, prepared));
+  await assert.rejects(restart.write(A, { ...started, registration: { ...started.registration, previousIds: [] } }));
+  await restart.write(A, { storageKey: first });
+  assert.deepEqual(await restart.read(A), started, 'Legacy response cannot erase durable RPC barrier');
+});
+
+
+test('an in-progress local close remains scoped to its captured account and never erases a later receipt', async () => {
+  const { store } = memoryStore(); let release!: () => void; let started!: () => void;
+  const began = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const journal = createDocumentUploadJournal({ ...store, removeItem: async key => { started(); await gate; await store.removeItem(key); } });
+  await journal.write(A, { storageKey: first });
+  const foreign = first.replace(A, B); await journal.write(B, { storageKey: foreign });
+  const close = journal.clear(A, first); await began;
+  // The later account is independent from the captured close in progress.
+  release(); await close;
+  assert.equal(await journal.read(A), null); assert.deepEqual(await journal.read(B), { storageKey: foreign });
+  await journal.write(A, { storageKey: second });
+  await assert.rejects(journal.clear(A, first));
+  assert.deepEqual(await journal.read(A), { storageKey: second });
+});

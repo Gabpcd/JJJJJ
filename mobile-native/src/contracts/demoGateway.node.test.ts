@@ -73,3 +73,31 @@ test('authenticated UI refuses a synthetic original returned by a STAGING gatewa
   t.after(() => controller.dispose()); controller.activate(); await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(controller.getSnapshot().details, null); assert.ok(controller.getSnapshot().error);
 });
+
+
+test('both authorized demo parties sign one immutable contract; read-only actor preserves first signature without OTP rights', async () => {
+  const { gateway, update } = harness(true);
+  const original = (await gateway.read(soignant, DEMO_CONTRACT_ID)).original!;
+  const input = { revision: original, accepted: true as const };
+  await gateway.requestOtp(soignant, input);
+  assert.equal((await gateway.sign(soignant, { ...input, code: DEMO_CONTRACT_CODE })).kind, 'unconfirmed');
+  update({ context: etablissement, epoch: 2, canRead: true, canSign: false });
+  const readOnly = await gateway.read(etablissement, DEMO_CONTRACT_ID);
+  assert.equal(readOnly.userId, etablissement.userId); assert.equal(readOnly.party, 'etablissement');
+  assert.equal(readOnly.record.signature_soignant, true); assert.equal(readOnly.record.signature_etablissement, false);
+  assert.equal(readOnly.otpAdmission, null); assert.equal(readOnly.permissions.sign, false);
+  await assert.rejects(gateway.requestOtp(etablissement, input));
+  await assert.rejects(gateway.sign(etablissement, { ...input, code: DEMO_CONTRACT_CODE }));
+  update({ context: etablissement, epoch: 3, canRead: true, canSign: true });
+  assert.equal((await gateway.sign(etablissement, { ...input, code: DEMO_CONTRACT_CODE })).kind, 'rejected', 'Caregiver code cannot cross actors');
+  await gateway.requestOtp(etablissement, input);
+  assert.equal((await gateway.sign(etablissement, { ...input, code: DEMO_CONTRACT_CODE })).kind, 'unconfirmed');
+  const both = await gateway.read(etablissement, DEMO_CONTRACT_ID);
+  assert.equal(both.record.statut, 'SIGNE_COMPLET'); assert.equal(both.record.signature_soignant, true); assert.equal(both.record.signature_etablissement, true);
+  assert.equal(both.signatures.length, 2); assert.deepEqual(both.signatures.map(row => row.signataire_role), ['soignant', 'etablissement']);
+  assert.deepEqual(both.original, original); assert.equal(both.otpAdmission?.canValidate, false);
+  await assert.rejects(gateway.sign(etablissement, { ...input, code: DEMO_CONTRACT_CODE }));
+  update({ context: soignant, epoch: 4, canRead: true, canSign: true });
+  const reread = await gateway.read(soignant, DEMO_CONTRACT_ID);
+  assert.equal(reread.userId, soignant.userId); assert.equal(reread.record.statut, 'SIGNE_COMPLET'); assert.equal(reread.signatures.length, 2);
+});

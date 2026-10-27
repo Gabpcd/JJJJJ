@@ -1,11 +1,11 @@
 export const DOCUMENT_CAPTURES = Object.freeze([
   'documents-statuts', 'documents-revue-humaine', 'documents-remplacement-annule',
   'documents-remplacement-confirme', 'documents-envoi-incertain', 'documents-envoi-reconcilie',
-  'documents-retrait-confirme', 'documents-reprise',
+  'documents-retrait-confirme', 'documents-reprise', 'documents-envoi-sans-enregistrement',
 ]);
 export const CONTRACT_CAPTURES = Object.freeze([
   'contrats-liste', 'contrats-original', 'contrats-otp-simule', 'contrats-reprise',
-  'contrats-signature-incertaine', 'contrats-signature-relue', 'contrats-lecture-seule',
+  'contrats-signature-incertaine', 'contrats-signature-relue', 'contrats-lecture-seule', 'contrats-deux-signatures',
 ]);
 const EXTRA_CONSULTATION_CAPTURES = [
   'mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu',

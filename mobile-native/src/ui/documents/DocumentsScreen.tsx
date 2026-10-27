@@ -79,11 +79,11 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
     showReceipt();
   };
   const beginUpload = (type: string, replacesDocumentId?: string) => {
-    if (locked || !canUpload) return;
+    if (locked || state.uncertainUpload || !canUpload) return;
     setUploadError(null); setTarget({ type, replacesDocumentId });
   };
   const upload = async (selection: DocumentSelection, label: string) => {
-    if (!target || locked || submitLock.current) return;
+    if (!target || locked || state.uncertainUpload || submitLock.current) return;
     submitLock.current = true;
     setUploadError(null);
     try {
@@ -100,7 +100,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
       setTarget(null);
       showReceipt();
       // Upload is now re-read and confirmed. Verification is a separate action: it never resends the file.
-      if (result.document) await runVerify(result.document.id);
+      if (result.document && result.dossier) await runVerify(result.document.id);
     } finally { submitLock.current = false; }
   };
   const review = (doc: CaregiverDocument) => {
@@ -117,7 +117,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
     ]);
   };
   const remove = (doc: CaregiverDocument) => {
-    if (locked) return;
+    if (locked || state.uncertainUpload) return;
     Alert.alert('Supprimer ce document ?', 'Le document sera archivé. Tu pourras en téléverser un nouveau.', [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Supprimer', style: 'destructive', onPress: () => {
@@ -129,7 +129,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
     ]);
   };
   const view = async (doc: CaregiverDocument) => {
-    if (locked || !media.open || originalRequest.current) return;
+    if (!state.readable || viewing || !media.open || originalRequest.current) return;
     const abort = new AbortController(); originalRequest.current = abort;
     setViewing(doc.id); setViewError(null);
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -156,6 +156,20 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
     if (result) showReceipt();
   };
 
+  const resumeRegistration = () => {
+    const pending = state.uncertainUpload;
+    if (!pending || !state.receipt?.canResumeRegistration || state.busy) return;
+    Alert.alert('Reprendre cet enregistrement ?', 'Le fichier déjà téléversé sera utilisé. Aucun fichier ne sera renvoyé. Le serveur peut remplacer le justificatif de même catégorie.', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Reprendre', onPress: () => {
+        void state.perform('resume', (signal, onPrepared) => gateway.resumeUploadRegistration(context, pending, onPrepared, signal)).then(result => {
+          if (result?.dossier) changed();
+          if (result) showReceipt();
+        });
+      } },
+    ]);
+  };
+
   return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
     <ScrollView ref={scroll} testID="documents-scroll" contentContainerStyle={styles.scroll}
       refreshControl={<RefreshControl refreshing={state.loading && !!dossier} onRefresh={() => { void state.readJournal(); void state.refresh(); }}
@@ -177,12 +191,14 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
         </View> : null}
         {state.receipt ? <View style={[shared.card, styles.gap, state.receipt.kind !== 'confirmed' && styles.receiptWarning]}
           accessibilityLiveRegion="polite" testID={`documents-result-${state.receipt.kind}`}>
-          <Text style={shared.sectionTitle}>{state.receipt.kind === 'confirmed' ? 'Dossier actualisé'
+          <Text style={shared.sectionTitle}>{state.receipt.kind === 'confirmed' ? (state.receipt.dossier ? 'Dossier actualisé' : 'Envoi confirmé — dossier à actualiser')
             : state.receipt.kind === 'rejected' ? 'Action non effectuée' : 'Confirmation à vérifier'}</Text>
           <Text style={shared.body}>{state.receipt.message}</Text>
           {state.receipt.warning ? <Text style={shared.small}>{state.receipt.warning}</Text> : null}
           {state.uncertainUpload ? <ActionButton label="Vérifier l’envoi précédent" secondary busy={state.busy === 'reconcile'}
             disabled={!!state.busy || !!viewing} onPress={() => { void reconcile(); }} testID="documents-reconcile" /> : null}
+          {state.uncertainUpload && state.receipt.canResumeRegistration ? <ActionButton label="Reprendre l’enregistrement"
+            disabled={!!state.busy || !!viewing || !state.journalReady} onPress={resumeRegistration} testID="documents-resume-registration" /> : null}
           {state.needsRead && !state.uncertainUpload ? <Text style={shared.small}>Actualise le dossier avant toute nouvelle action.</Text> : null}
         </View> : null}
         {state.error ? <ErrorNotice message={state.error} onRetry={() => { void state.refresh(); }} /> : null}
@@ -214,7 +230,7 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
           {rows.map(rule => {
             const doc = dossier.documents.find(item => item.type_document === rule.type_document);
             return <DocumentCard key={rule.type_document} rule={rule} doc={doc} profession={dossier.profile!.profession}
-              now={now} disabled={locked} canUpload={canUpload} canView={!!media.open}
+              now={now} disabled={locked} replacementDisabled={locked || !!state.uncertainUpload} viewDisabled={!state.readable || !!viewing} canUpload={canUpload} canView={!!media.open}
               busy={state.busy} viewing={viewing === doc?.id}
               onUpload={() => beginUpload(rule.type_document, doc?.id)} onView={() => { if (doc) void view(doc); }}
               onVerify={() => { if (doc && !locked) void runVerify(doc.id); }} onReview={() => { if (doc) review(doc); }}
@@ -231,10 +247,10 @@ function DocumentsContent({ context, gateway, media, uploadJournal, onOpenProfil
   </SafeAreaView>;
 }
 
-function DocumentCard({ rule, doc, profession, now, disabled, canUpload, canView, busy, viewing,
+function DocumentCard({ rule, doc, profession, now, disabled, replacementDisabled, viewDisabled, canUpload, canView, busy, viewing,
   onUpload, onView, onVerify, onReview, onRemove }: {
   rule: DocumentRequirement; doc?: CaregiverDocument; profession: string | null; now: number;
-  disabled: boolean; canUpload: boolean; canView: boolean; busy: string | null; viewing: boolean;
+  disabled: boolean; replacementDisabled: boolean; viewDisabled: boolean; canUpload: boolean; canView: boolean; busy: string | null; viewing: boolean;
   onUpload: () => void; onView: () => void; onVerify: () => void; onReview: () => void; onRemove: () => void;
 }) {
   const presentation = doc ? documentPresentation(doc, profession, now) : null;
@@ -258,14 +274,14 @@ function DocumentCard({ rule, doc, profession, now, disabled, canUpload, canView
       {displayDate(doc.valide_jusqua) ? <Text style={shared.small}>Échéance : {displayDate(doc.valide_jusqua)}</Text> : null}
       {soon ? <Text style={styles.dangerText}>Ce document expire dans moins de 30 jours.</Text> : null}
       <View style={styles.row}>
-        {canView ? <InlineAction label="Ouvrir le document" disabled={disabled} busy={viewing} onPress={onView} testID={`document-view-${rule.type_document}`} /> : null}
+        {canView ? <InlineAction label="Ouvrir le document" disabled={viewDisabled} busy={viewing} onPress={onView} testID={`document-view-${rule.type_document}`} /> : null}
         {presentation.reverify ? <InlineAction label="Revérifier" disabled={disabled} busy={busy === `verify:${doc.id}`} onPress={onVerify} testID={`document-verify-${rule.type_document}`} /> : null}
-        {canUpload ? <InlineAction label="Remplacer" disabled={disabled} onPress={onUpload} testID={`document-replace-${rule.type_document}`} /> : null}
+        {canUpload ? <InlineAction label="Remplacer" disabled={replacementDisabled} onPress={onUpload} testID={`document-replace-${rule.type_document}`} /> : null}
       </View>
       {presentation.review ? <ActionButton label="Demander une revue humaine" secondary disabled={disabled} busy={busy === `review:${doc.id}`}
         onPress={onReview} testID={`document-review-${rule.type_document}`} /> : null}
-      <InlineAction label="Supprimer" destructive disabled={disabled} busy={busy === `delete:${doc.id}`} onPress={onRemove} testID={`document-delete-${rule.type_document}`} />
-    </> : canUpload ? <ActionButton label={`Ajouter — ${documentTitle(rule.type_document)}`} disabled={disabled}
+      <InlineAction label="Supprimer" destructive disabled={replacementDisabled} busy={busy === `delete:${doc.id}`} onPress={onRemove} testID={`document-delete-${rule.type_document}`} />
+    </> : canUpload ? <ActionButton label={`Ajouter — ${documentTitle(rule.type_document)}`} disabled={replacementDisabled}
       onPress={onUpload} testID={`document-add-${rule.type_document}`} /> : <Text style={shared.small}>Aucun fichier téléversé.</Text>}
   </View>;
 }
