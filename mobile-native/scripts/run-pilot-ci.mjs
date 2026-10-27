@@ -198,7 +198,7 @@ async function runIosXCTest(name, directory) {
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
-  const extraScreens = ['candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee'];
+  const extraScreens = ['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee'];
   const names = portrait
     ? ['connexion', 'missions', 'detail', 'retour', ...extraScreens].map(screen => `${iosFamily}-portrait-${screen}`)
     : ['connexion', 'liste', 'detail', 'retour', ...extraScreens].map(screen => `ipad-paysage-${screen}`);
@@ -301,7 +301,7 @@ try {
   } else {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
-    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour', ...['candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee']]);
+    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour', ...['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee']]);
   }
   success = true;
   stage = 'complete';

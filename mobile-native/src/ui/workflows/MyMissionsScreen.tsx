@@ -63,9 +63,9 @@ function MyMissionsContent({ context, gateway, onOpenMission, onBrowseMissions }
         {current.error ? <ErrorNotice message={current.error} onRetry={load} /> : null}
       </View>}
       renderItem={({ item }) => <View style={[shared.content, styles.row]}><Pressable onPress={() => onOpenMission(item.id)}
-        accessibilityRole="button" accessibilityLabel={`${item.title}, ${statusLabel(item.applicationStatus ?? item.status)}`}
+        accessibilityRole="button" accessibilityLabel={`${item.title}, ${statusLabel(item.status === 'OUVERTE' ? item.applicationStatus ?? item.status : item.status)}`}
         testID={`my-mission-${item.id}`} style={({ pressed }) => [shared.card, styles.card, pressed && styles.pressed]}>
-        <Text style={styles.status}>{statusLabel(item.applicationStatus ?? item.status)}</Text>
+        <Text style={styles.status}>{statusLabel(item.status === 'OUVERTE' ? item.applicationStatus ?? item.status : item.status)}</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={shared.body}>{item.establishment}</Text>
         {item.city ? <Text style={shared.small}>{item.city}</Text> : null}

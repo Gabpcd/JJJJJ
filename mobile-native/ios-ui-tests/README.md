@@ -31,7 +31,11 @@ Les trois formats iOS exécutent ensuite les mêmes étapes :
   confirmation, confirmer, relire le résultat fictif avec « Actualiser le dossier ».
 - Retrouver cette candidature dans « Mes missions », ouvrir son dossier, utiliser
   « Voir mes missions » pour revenir à la liste, puis retrouver la pile et la
-  position de l’exploration par les gestes de retour.
+  position de l’exploration par les gestes de retour. Dans l’historique, ouvrir
+  aussi une mission annulée ayant une ancienne candidature acceptée : la carte
+  et le dossier doivent afficher l’annulation, sans attribution active, nouvelle
+  candidature ni bouton de reprise des anciens emails. Revenir à la liste par
+  « Voir mes missions », puis à l’onglet Candidatures.
 - Modifier la biographie, enregistrer, vérifier la confirmation et la fermeture
   du clavier, changer d’onglet, revenir et tirer pour actualiser avant de relire
   la valeur conservée. La sauvegarde reste uniquement en mémoire de démonstration.
@@ -123,10 +127,10 @@ des invocations. Captures conservées dans le résultat :
 - iPad paysage : `ipad-paysage-connexion`, `ipad-paysage-liste`,
   `ipad-paysage-detail`, `ipad-paysage-retour`.
 
-Chaque format conserve aussi les suffixes suivants, précédés de son préfixe
+Chaque format conserve 16 captures au total, dont les suffixes supplémentaires suivants, précédés de son préfixe
 (`iphone-portrait-`, `ipad-portrait-`, `ipad-paysage-`) :
 
-- `candidature-confirmee`, `mes-missions`, `dossier-relu`, `profil-relu` ;
+- `candidature-confirmee`, `mes-missions`, `dossier-relu`, `mission-annulee`, `profil-relu` ;
 - `etablissement-accueil`, `etablissement-missions`, `etablissement-planning`,
   `etablissement-retour`, `etablissement-acces` ;
 - `inscription-internat`, `inscription-terminee`.

@@ -88,7 +88,7 @@ Sur iPhone et iPad, les tests UI Apple de `ios-ui-tests/` vérifient le parcours
 en portrait. Sur iPad, ils passent ensuite explicitement en paysage et vérifient de nouveau l’entrée, la liste, le détail,
 le geste de retour à la position précédente, la candidature, le profil, les écrans établissement, l’inscription et la déconnexion. Ils ciblent les
 éléments avec XCTest, sans transformation tactile du driver Maestro.
-Chaque orientation conserve quinze captures et un rapport XCTest distinct ; le runner
+Chaque orientation conserve seize captures et un rapport XCTest distinct ; le runner
 contrôle les dimensions affichées des images, en tenant compte de leur orientation EXIF. La présence
 de ces scénarios ne vaut pas résultat : leur exécution CI doit être verte.
 Android cible un unique émulateur prêt et refuse tout appareil USB ou non

@@ -323,6 +323,84 @@ env:
     id: "application-my-missions"
 - assertVisible:
     id: "my-mission-demo-mission-016"
+# A historical accepted application must never override the terminal mission state.
+- scrollUntilVisible:
+    element:
+      id: "my-missions-tab-passees"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "my-missions-tab-passees"
+- scrollUntilVisible:
+    element:
+      id: "my-mission-demo-history-cancelled"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "my-mission-demo-history-cancelled"
+    text: ".*Annulée par l’établissement.*"
+- tapOn:
+    id: "my-mission-demo-history-cancelled"
+- assertVisible:
+    id: "application-title"
+    text: "Démonstration · Mission annulée"
+- scrollUntilVisible:
+    element:
+      text: "Annulée par l’établissement"
+      index: 0
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Ce dossier présente l’historique de la mission."
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertNotVisible: "Cette mission vous est attribuée"
+- assertNotVisible:
+    id: "application-retry-emails"
+- assertNotVisible:
+    id: "application-submit"
+- takeScreenshot: mission-annulee
+- scrollUntilVisible:
+    element:
+      id: "application-refresh"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertNotVisible:
+    id: "application-retry-emails"
+- assertNotVisible:
+    id: "application-submit"
+- scrollUntilVisible:
+    element:
+      id: "application-my-missions"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "application-my-missions"
+- assertVisible:
+    id: "my-mission-demo-history-cancelled"
+- scrollUntilVisible:
+    element:
+      id: "my-missions-tab-candidatures"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "my-missions-tab-candidatures"
+- scrollUntilVisible:
+    element:
+      id: "my-mission-demo-mission-016"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "my-mission-demo-mission-016"
 - tapOn:
     id: "tab-explore"
 - assertVisible:

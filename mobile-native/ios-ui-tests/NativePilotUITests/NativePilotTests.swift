@@ -254,6 +254,28 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("application-my-missions"), in: element("application-scroll"))
         tap("application-my-missions")
         require("My missions returns from its dossier to the list root") { self.visible(mine) }
+        let myList = element("my-missions-list")
+        scrollTo(element("my-missions-tab-passees"), in: myList, downward: false)
+        tap("my-missions-tab-passees")
+        let cancelled = element("my-mission-demo-history-cancelled")
+        scrollTo(cancelled, in: myList)
+        XCTAssertTrue(cancelled.label.contains("Annulée par l’établissement"), "A historical accepted application must not mask mission cancellation")
+        cancelled.tap()
+        require("The cancelled mission opens its historical dossier") {
+            self.visible(self.element("application-title")) && self.element("application-title").label == "Démonstration · Mission annulée"
+        }
+        scrollTo(text("Annulée par l’établissement"), in: element("application-scroll"))
+        scrollTo(text("Ce dossier présente l’historique de la mission."), in: element("application-scroll"))
+        XCTAssertFalse(text("Cette mission vous est attribuée").exists, "A cancelled mission is not an active assignment")
+        XCTAssertFalse(element("application-retry-emails").exists, "Historical failed emails must not offer a new send")
+        XCTAssertFalse(element("application-submit").exists, "A cancelled mission must not offer a new application")
+        record("\(proofPrefix)-mission-annulee")
+        scrollTo(element("application-my-missions"), in: element("application-scroll"))
+        tap("application-my-missions")
+        require("The historical dossier returns to the history list") { self.visible(cancelled) }
+        scrollTo(element("my-missions-tab-candidatures"), in: myList, downward: false)
+        tap("my-missions-tab-candidatures")
+        scrollTo(mine, in: myList)
         tap("tab-explore")
         require("Exploration retains its own application stack") { self.visible(self.element("application-scroll")) }
         backGesture()

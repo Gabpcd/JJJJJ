@@ -237,3 +237,16 @@ test('cancelled or finished assignment is displayed as history and cannot resend
     assert.equal(calls.filter(call => call.source === 'send-email').length, sentBefore);
   }
 });
+
+
+test('synthetic history keeps the cancelled assignment but refuses new actions and email retries', async () => {
+  const demo = new DemoMissionWorkflowGateway();
+  const history = await demo.listMine(DEMO_CONTEXT, 'passees');
+  assert.equal(history.rows[0].status, 'ANNULEE_PAR_ETABLISSEMENT');
+  const snapshot = await demo.readApplication(DEMO_CONTEXT, history.rows[0].id);
+  assert.ok(snapshot);
+  assert.equal(snapshot.assignedTo, DEMO_CONTEXT.userId);
+  assert.equal(applicationDisplayStatus(snapshot), 'ANNULEE_PAR_ETABLISSEMENT');
+  assert.equal((await demo.apply(DEMO_CONTEXT, snapshot, { message: '' })).kind, 'rejected');
+  await assert.rejects(demo.retryAcceptanceEmails(DEMO_CONTEXT, snapshot.mission.id));
+});
