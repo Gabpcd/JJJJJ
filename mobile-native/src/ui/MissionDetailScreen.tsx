@@ -2,7 +2,7 @@ import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 're
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatMissionPeriod, getMissionRemuneration, getProfessionLabel } from '../data/presentation';
-import { useSession } from '../session/SessionProvider';
+import { useCaregiverSession } from './useCaregiverSession';
 import { ActionButton, ErrorNotice, LabelValue, ModeNotice, StatusPanel } from './components';
 import { useGateway } from './gateway';
 import { contractLabel } from './MissionListScreen';
@@ -15,13 +15,12 @@ const slotDate = (value: string) => new Intl.DateTimeFormat('fr-FR', { weekday: 
 const slotTime = (value: string) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(value));
 
 export function MissionDetailScreen({ route, navigation }: NativeStackScreenProps<NativeStackParams, 'Mission'>) {
-  const { snapshot } = useSession();
+  const { snapshot, context } = useCaregiverSession();
   const gateway = useGateway();
-  const context = snapshot.context!;
   const resource = useMissionResource(missionResourceKey(snapshot.epoch, context, { kind: 'detail', id: route.params.id }), signal => gateway.getMission(route.params.id, context, signal));
   const mission = resource.data;
 
-  return <SafeAreaView style={shared.screen} edges={['left', 'right', 'bottom']}>
+  return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
     <ScrollView testID="mission-detail-scroll" contentContainerStyle={styles.scrollContent}
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       refreshControl={<RefreshControl refreshing={resource.loading && mission !== null} onRefresh={resource.refresh} tintColor={colors.pink} colors={[colors.pink]} />}>
@@ -66,10 +65,7 @@ export function MissionDetailScreen({ route, navigation }: NativeStackScreenProp
                 </View>)}
               <Text style={shared.small}>Horaires de Paris.</Text>
             </View>
-            <View style={styles.pilotNote}>
-              <Text style={styles.pilotTitle}>Vous consultez le pilote natif</Text>
-              <Text style={shared.small}>La candidature, le contrat et le paiement restent dans l’application actuelle. Aucune candidature n’est envoyée depuis cet écran.</Text>
-            </View>
+            <ActionButton label="Préparer ma candidature" onPress={() => navigation.navigate('Candidature', { id: mission.id })} testID="prepare-application" />
           </>}
       </View>
     </ScrollView>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 import type { NativeSessionController } from './controller';
+import { traceNativeNavigation } from '../navigationDiagnostics';
 
 const SessionContext = createContext<NativeSessionController | null>(null);
 
@@ -10,6 +11,7 @@ export function SessionProvider({ controller, children }: PropsWithChildren<{ co
     let previousState = AppState.currentState;
     controller.setForeground(previousState === 'active');
     const subscription = AppState.addEventListener('change', (state) => {
+      traceNativeNavigation('appState', state);
       controller.setForeground(state === 'active');
       if (state === 'active' && previousState !== 'active') void controller.revalidate();
       previousState = state;

@@ -27,7 +27,7 @@ export function ActionButton({ label, onPress, busy = false, secondary = false, 
 export function ModeNotice({ mode }: { mode: 'demo' | 'staging' }) {
   return <View style={styles.mode} testID="environment-banner">
     <View style={styles.modeDot} />
-    <Text style={styles.modeText}>{mode === 'demo' ? 'Démo · données fictives' : 'Environnement TEST · lecture seule'}</Text>
+    <Text style={styles.modeText}>{mode === 'demo' ? 'Démo · données fictives' : 'Environnement TEST'}</Text>
   </View>;
 }
 
@@ -56,10 +56,10 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (
   </View>;
 }
 
-export function LabelValue({ label, value }: { label: string; value: string }) {
+export function LabelValue({ label, value, testID }: { label: string; value: string; testID?: string }) {
   return <View style={styles.labelValue}>
     <Text style={shared.small}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
+    <Text style={styles.value} testID={testID}>{value}</Text>
   </View>;
 }
 

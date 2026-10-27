@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { defaultFilters, formatMissionPeriod, getMissionRemuneration } from '../data/presentation';
 import type { Mission, MissionFilters } from '../data/types';
-import { useSession } from '../session/SessionProvider';
+import { useCaregiverSession } from './useCaregiverSession';
 import { ActionButton, ErrorNotice, ModeNotice, StatusPanel } from './components';
 import { useGateway } from './gateway';
 import type { NativeStackParams } from './navigation';
@@ -47,9 +47,8 @@ function MissionCard({ mission, onPress }: { mission: Mission; onPress: () => vo
 }
 
 export function MissionListScreen({ navigation }: NativeStackScreenProps<NativeStackParams, 'Missions'>) {
-  const { snapshot } = useSession();
+  const { snapshot, context } = useCaregiverSession();
   const gateway = useGateway();
-  const context = snapshot.context!;
   const [cityInput, setCityInput] = useState('');
   const [city, setCity] = useState('');
   const [contract, setContract] = useState<ContractFilter>('TOUS');
@@ -62,7 +61,7 @@ export function MissionListScreen({ navigation }: NativeStackScreenProps<NativeS
   const hasFilters = cityInput.length > 0 || contract !== 'TOUS';
   const resetFilters = () => { Keyboard.dismiss(); setCityInput(''); setCity(''); setContract('TOUS'); };
 
-  return <SafeAreaView style={shared.screen} edges={['left', 'right', 'bottom']}>
+  return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
     <FlatList data={resource.data ?? []} keyExtractor={mission => mission.id} testID="missions-list"
       renderItem={({ item }) => <View style={shared.content}><MissionCard mission={item} onPress={() => { Keyboard.dismiss(); navigation.navigate('Mission', { id: item.id }); }} /></View>}
       ItemSeparatorComponent={() => <View style={styles.cardGap} />}
@@ -102,7 +101,7 @@ export function MissionListScreen({ navigation }: NativeStackScreenProps<NativeS
             {hasFilters ? <ActionButton secondary label="Effacer les filtres" onPress={resetFilters} testID="reset-filters" />
               : <ActionButton secondary label="Actualiser" onPress={resource.refresh} testID="refresh-empty" />}
           </StatusPanel>}
-      ListFooterComponent={<View style={[shared.content, styles.footer]}><Text style={styles.footerText}>Vous explorez le premier parcours natif de Jolene.{"\n"}Les candidatures restent dans l’application actuelle.</Text></View>}
+      ListFooterComponent={<View style={[shared.content, styles.footer]}><Text style={styles.footerText}>Ouvrez une mission pour consulter son planning et préparer votre candidature.</Text></View>}
     />
   </SafeAreaView>;
 }

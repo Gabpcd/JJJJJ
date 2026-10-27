@@ -12,10 +12,10 @@ dans cet ordre, sur le même simulateur et la même expérience Expo Go :
   les 30 missions, les filtres Libéral (10) et CDD (20), la recherche sans résultat,
   la remise à zéro des filtres (30), le défilement vers la mission 16, son détail,
   le retour par geste avec position conservée, la reprise après Home/activation,
-  puis la déconnexion avec confirmation native.
+  puis les parcours détaillés ci-dessous et les déconnexions avec confirmation native.
 - `testLandscapeConsultation` reprend l’expérience laissée déconnectée par le
   portrait. Il vérifie les 30 missions, la mission 16 après défilement, son détail,
-  le retour par geste avec position conservée, puis la déconnexion.
+  le retour par geste avec position conservée, puis les mêmes parcours supplémentaires.
 
 Sur un simulateur iPhone neuf distinct, `testIphoneConsultation` appelle le même
 parcours portrait partagé, avec toutes les mêmes assertions. Seuls le nom de
@@ -23,6 +23,39 @@ l’appareil dans le diagnostic d’orientation et le préfixe des captures chan
 Le paysage reste propre à l’iPad. Cette méthode remplace le pilotage Maestro de
 l’iPhone ; elle ne modifie pas l’application ni la préparation Expo validée en
 portrait sur iPad.
+
+Les trois formats iOS exécutent ensuite les mêmes étapes :
+
+- Changer d’onglet puis retrouver la mission 16 à la même position ; ouvrir sa
+  candidature, lire le planning, vérifier que l’envoi est désactivé avant
+  confirmation, confirmer, relire le résultat fictif avec « Actualiser le dossier ».
+- Retrouver cette candidature dans « Mes missions », ouvrir son dossier, utiliser
+  « Voir mes missions » pour revenir à la liste, puis retrouver la pile et la
+  position de l’exploration par les gestes de retour. Dans l’historique, ouvrir
+  aussi une mission annulée ayant une ancienne candidature acceptée : la carte
+  et le dossier doivent afficher l’annulation, sans attribution active, nouvelle
+  candidature ni bouton de reprise des anciens emails. Revenir à la liste par
+  « Voir mes missions », puis à l’onglet Candidatures.
+- Modifier la biographie, enregistrer, vérifier la confirmation et la fermeture
+  du clavier, changer d’onglet, revenir et tirer pour actualiser avant de relire
+  la valeur conservée. La sauvegarde reste uniquement en mémoire de démonstration.
+- Après déconnexion, ouvrir le compte établissement fictif, vérifier son identité,
+  filtrer ses 12 missions pour obtenir les 2 ouvertes, ouvrir la mission 1,
+  contrôler ses deux créneaux, revenir par geste avec filtre et carte conservés,
+  puis consulter son rôle et sa permission de lecture avant déconnexion.
+- Ouvrir le formulaire fictif médecin/interne, passer du deuxième au troisième
+  cycle, constater la disparition de l’année et l’absence d’équivalence AS,
+  enregistrer le brouillon puis terminer. Le profil médecin doit voir une liste
+  vide : les fixtures IDE ne lui deviennent pas accessibles. Cela ne prouve
+  aucune qualification professionnelle ni validation documentaire.
+
+Les boutons de démonstration de la connexion restent atteints par un défilement
+borné dans `login-scroll`, notamment sur iPad paysage. Aucun scénario n’est sauté
+si un contrôle n’est pas visible. Le scénario Android
+`mobile-native/maestro/consultation.yaml` reprend les mêmes assertions fonctionnelles,
+avec retour système Android et reprise de l’expérience existante par son URL.
+Le formulaire public de création de compte et l’envoi d’email de confirmation
+ne sont pas couverts par ces scénarios sans réseau.
 
 La préparation portrait traite l’éventuelle confirmation système Open/Ouvrir
 avant d’activer Expo. Elle exige le tutoriel de l’installation neuve, tape une
@@ -37,7 +70,7 @@ Les gestes de défilement et de retour utilisent les coordonnées relatives des
 vues natives dans leur orientation courante. Aucun fallback vers un bouton de
 retour, relancement, rechargement ou réessai ne masque un échec du parcours.
 L’activation après Home reprend l’expérience existante. Chaque test dispose de
-300 secondes maximum. La préparation attend jusqu’à 120 secondes le tutoriel ;
+600 secondes maximum pour les trois parcours de démonstration. La préparation attend jusqu’à 120 secondes le tutoriel ;
 les autres attentes et les boucles de défilement sont bornées.
 
 Depuis la racine du dépôt, avec le simulateur iPad déjà démarré et l’URL ouverte :
@@ -93,6 +126,18 @@ des invocations. Captures conservées dans le résultat :
   `ipad-portrait-detail`, `ipad-portrait-retour`.
 - iPad paysage : `ipad-paysage-connexion`, `ipad-paysage-liste`,
   `ipad-paysage-detail`, `ipad-paysage-retour`.
+
+Chaque format conserve 16 captures au total, dont les suffixes supplémentaires suivants, précédés de son préfixe
+(`iphone-portrait-`, `ipad-portrait-`, `ipad-paysage-`) :
+
+- `candidature-confirmee`, `mes-missions`, `dossier-relu`, `mission-annulee`, `profil-relu` ;
+- `etablissement-accueil`, `etablissement-missions`, `etablissement-planning`,
+  `etablissement-retour`, `etablissement-acces` ;
+- `inscription-internat`, `inscription-terminee`.
+
+Android utilise ces mêmes suffixes sans préfixe, en plus de `connexion`,
+`missions`, `detail` et `retour`. Les fichiers décrivent les assertions attendues ;
+seuls les résultats de l’exécution CI et leurs captures attestent leur réussite.
 
 Chaque capture utilise `XCTAttachment(screenshot: XCUIScreen.main.screenshot())` :
 l’écran iOS entier est conservé avec ses métadonnées d’orientation, sans recadrage,

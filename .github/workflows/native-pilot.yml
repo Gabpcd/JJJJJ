@@ -11,6 +11,11 @@ on:
       - 'src/lib/profession-hierarchy.ts'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
       - 'src/components/planning/planning-candidat.ts'
       - '.github/workflows/native-pilot.yml'
   push:
@@ -23,6 +28,11 @@ on:
       - 'src/lib/profession-hierarchy.ts'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
       - 'src/components/planning/planning-candidat.ts'
       - '.github/workflows/native-pilot.yml'
   workflow_dispatch:
@@ -38,6 +48,7 @@ concurrency:
 env:
   CI: '1'
   EXPO_PUBLIC_JOLENE_MODE: demo
+  EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS: '1'
   EXPO_PUBLIC_SUPABASE_URL: ''
   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
   EXPO_NO_DOTENV: '1'
@@ -95,7 +106,8 @@ jobs:
         timeout-minutes: 8
       - name: Parcours dans Expo Go sur simulateur iOS
         run: node scripts/run-pilot-ci.mjs ios
-        timeout-minutes: 25
+        # iPad runs two bounded 10-minute scenarios plus simulator/Expo startup.
+        timeout-minutes: 35
         env:
           IOS_DEVICE_FAMILY: ${{ matrix.family }}
           PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/native-${{ matrix.family }}

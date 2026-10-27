@@ -4,6 +4,7 @@ import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readPngDimensions } from './png-dimensions.mjs';
+import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -75,8 +76,11 @@ async function waitUntil(label, check, timeout) {
 }
 
 async function chooseIosDevice() {
-  const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'])).stdout).runtimes;
-  const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).stdout).devices;
+  // A fresh macOS runner may still be initializing CoreSimulator before listing
+  // runtimes. Bound that startup separately; do not relax any application assertion.
+  const inventory = { timeout: 180_000, logfile: 'simulator-inventory.log' };
+  const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], inventory)).stdout).runtimes;
+  const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], inventory)).stdout).devices;
   const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
   if (!['iphone', 'ipad'].includes(family)) throw new Error('Famille de simulateur iOS invalide.');
   const ios = runtimes.filter(runtime => runtime.isAvailable && runtime.identifier.includes('.iOS-'))
@@ -180,9 +184,9 @@ async function runIosXCTest(name, directory) {
     '-derivedDataPath', resolve(temporary, 'jolene-native-ui-derived'),
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
-    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '300',
+    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600',
     'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO'],
-  { timeout: 600_000, logfile: `${name}-xctest.log`, allowFailure: true });
+  { timeout: 900_000, logfile: `${name}-xctest.log`, allowFailure: true });
   if (!existsSync(resultPath)) throw new Error(`Rapport XCTest ${name} absent. Voir ${name}-xctest.log.`);
   const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
   writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
@@ -198,9 +202,10 @@ async function runIosXCTest(name, directory) {
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
+  const extraScreens = ['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee'];
   const names = portrait
-    ? ['connexion', 'missions', 'detail', 'retour'].map(screen => `${iosFamily}-portrait-${screen}`)
-    : ['connexion', 'liste', 'detail', 'retour'].map(screen => `ipad-paysage-${screen}`);
+    ? ['connexion', 'missions', 'detail', 'retour', ...extraScreens].map(screen => `${iosFamily}-portrait-${screen}`)
+    : ['connexion', 'liste', 'detail', 'retour', ...extraScreens].map(screen => `ipad-paysage-${screen}`);
   for (const name of names) {
     const matching = manifest.flatMap(test => test.attachments ?? []).filter(item =>
       item.suggestedHumanReadableName?.includes(name) && item.exportedFileName?.endsWith('.png'));
@@ -211,7 +216,7 @@ async function runIosXCTest(name, directory) {
   }
   verifyCaptureOrientation(captures, portrait ? 'PORTRAIT' : 'LANDSCAPE_LEFT', names);
   scenarios.push({ name, success: true, driver: 'XCTest' });
-  console.log(`Parcours ${iosFamily} ${name} terminé : un test XCTest réussi et quatre captures dans l’orientation attendue.`);
+  console.log(`Parcours ${iosFamily} ${name} terminé : un test XCTest réussi et ${names.length} captures dans l’orientation attendue.`);
 }
 
 function verifyCaptureOrientation(directory, orientation, names) {
@@ -300,7 +305,7 @@ try {
   } else {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
-    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour']);
+    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour', ...['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee']]);
   }
   success = true;
   stage = 'complete';
@@ -311,6 +316,10 @@ try {
 } finally {
   if (device) {
     if (platform === 'ios') {
+      if (!success) {
+        try { await collectIosFailureDiagnostics({ device, output, started, run }); }
+        catch (error) { writeFileSync(resolve(output, 'ios-diagnostics-error.txt'), String(error)); }
+      }
       await run('xcrun', ['simctl', 'io', device, 'screenshot', resolve(output, 'final.png')], { allowFailure: true, timeout: 15_000, logfile: 'simulator.log' });
     } else {
       await run('adb', ['-s', device, 'shell', 'screencap', '-p', '/sdcard/jolene-pilot-final.png'], { allowFailure: true, timeout: 15_000 });

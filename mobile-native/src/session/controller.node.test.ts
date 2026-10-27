@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { MissionReadContext } from '../data/types';
+import type { NativeAccountContext, NativeSoignantContext } from '../account/types';
 import { createNativeSessionController, UnsupportedNativeAccount, type AuthPort, type AuthSession } from './controller';
 
-function context(id: string): MissionReadContext {
-  return { userId: id, email: `${id}@example.invalid`, profile: {
+function context(id: string): NativeSoignantContext {
+  return { kind: 'soignant', userId: id, email: `${id}@example.invalid`, profile: {
     id, profession: 'INFIRMIER', adresse_lat: null, adresse_lng: null, rayon_deplacement_km: null,
     tous_documents_valides: false, type_contrat: null, types_contrat_acceptes: null, type_exercice: null, taux_horaire_minimum: null,
   } };
@@ -17,7 +17,7 @@ function deferred<T>() {
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }
-function fixture(resolveContext = async (value: AuthSession, _signal: AbortSignal) => context(value.user.id)) {
+function fixture(resolveContext: (value: AuthSession, signal: AbortSignal) => Promise<NativeAccountContext> = async (value) => context(value.user.id)) {
   let listener: ((value: AuthSession | null) => void) | null = null;
   let stored: AuthSession | null = null;
   let cleared = 0;
@@ -57,7 +57,7 @@ test('token refresh for the same user preserves navigation and list identity', a
 });
 
 test('external sign-out clears visible context synchronously and cancels old role resolution', async () => {
-  const late = deferred<MissionReadContext>();
+  const late = deferred<NativeSoignantContext>();
   const f = fixture(() => late.promise); f.controller.start(); await tick();
   f.emit(session('first')); await tick();
   f.emit(null);
@@ -68,7 +68,7 @@ test('external sign-out clears visible context synchronously and cancels old rol
 });
 
 test('changing user hides the old context immediately and late profile cannot overwrite the new user', async () => {
-  const first = deferred<MissionReadContext>();
+  const first = deferred<NativeSoignantContext>();
   const f = fixture((value) => value.user.id === 'first' ? first.promise : Promise.resolve(context(value.user.id)));
   f.controller.start(); await tick(); f.emit(session('first')); await tick();
   f.emit(session('second')); await tick();
@@ -163,4 +163,45 @@ test('role revalidation on resume blocks revoked access without retaining previo
   assert.equal(f.controller.getSnapshot().status, 'unsupported');
   assert.equal(f.controller.getSnapshot().context, null);
   f.controller.stop();
+});
+
+test('logout cancels registration follow-up before the draft RPC and clears any late auth token', async () => {
+  const response = deferred<void>();
+  const f = fixture(); f.controller.start(); await tick();
+  let draftWritten = false;
+  const creation = f.controller.runAuthOperation(async guard => {
+    await response.promise;
+    guard();
+    draftWritten = true;
+  });
+  const failure = assert.rejects(creation, /annulée/);
+  const logout = f.controller.signOut();
+  response.resolve();
+  await Promise.all([failure, logout]);
+  assert.equal(draftWritten, false);
+  assert.equal(f.cleared(), 1);
+  assert.equal(f.controller.getSnapshot().context, null);
+  f.controller.stop();
+});
+
+test('same-user transition from registration to professional role revalidates the account kind', async () => {
+  let completed = false;
+  const f = fixture(async session => completed ? context(session.user.id) : {
+    kind: 'onboarding', userId: session.user.id, email: 'a@example.invalid', emailConfirmed: true, parcours: null,
+  });
+  f.controller.start(); await tick(); await f.controller.signIn('a@example.invalid', 'fictional');
+  assert.equal(f.controller.getSnapshot().context?.kind, 'onboarding');
+  await f.controller.runAuthOperation(async () => { completed = true; });
+  assert.equal(f.controller.getSnapshot().context?.kind, 'soignant');
+  f.controller.stop();
+});
+
+test('saving a demonstration draft preserves its navigation epoch and cannot change identity', () => {
+  const controller = createNativeSessionController({ mode: 'demo', context: context('demo') });
+  controller.start(); controller.enterDemo();
+  const epoch = controller.getSnapshot().epoch;
+  controller.updateDemoContext({ ...context('demo'), email: 'updated@example.invalid' });
+  assert.equal(controller.getSnapshot().epoch, epoch);
+  assert.throws(() => controller.updateDemoContext(context('other')));
+  controller.stop();
 });

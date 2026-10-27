@@ -1,10 +1,11 @@
-import type { MissionReadContext } from '../data/types';
+import type { NativeAccountContext } from '../account/types';
+import { accountErrorMessage, NativeAccountError } from '../account/errors';
 
 export type SessionStatus = 'loading' | 'signedOut' | 'signingIn' | 'authenticated' | 'unsupported' | 'error';
 export interface SessionSnapshot {
   status: SessionStatus;
   mode: 'demo' | 'staging';
-  context: MissionReadContext | null;
+  context: NativeAccountContext | null;
   error: string | null;
   /** Changes only at an identity boundary; use as the navigation/cache key. */
   epoch: number;
@@ -19,9 +20,9 @@ export interface AuthPort {
   setForeground?(foreground: boolean): void;
 }
 export class UnsupportedNativeAccount extends Error {}
-type ControllerOptions = { mode: 'demo'; context: MissionReadContext } | {
+type ControllerOptions = { mode: 'demo'; context: NativeAccountContext } | {
   mode: 'staging'; auth: AuthPort;
-  resolveContext: (session: AuthSession, signal: AbortSignal) => Promise<MissionReadContext>;
+  resolveContext: (session: AuthSession, signal: AbortSignal) => Promise<NativeAccountContext>;
 };
 
 export function createNativeSessionController(options: ControllerOptions) {
@@ -122,10 +123,16 @@ export function createNativeSessionController(options: ControllerOptions) {
       foreground = value;
       if (options.mode === 'staging') options.auth.setForeground?.(foreground && !wantSignedOut);
     },
-    enterDemo() {
+    enterDemo(context?: NativeAccountContext) {
       if (options.mode !== 'demo') return;
       wantSignedOut = false;
-      emit({ status: 'authenticated', context: options.context, error: null, epoch: snapshot.epoch + 1 });
+      emit({ status: 'authenticated', context: context ?? options.context, error: null, epoch: snapshot.epoch + 1 });
+    },
+    updateDemoContext(context: NativeAccountContext) {
+      if (options.mode !== 'demo' || snapshot.status !== 'authenticated' || snapshot.context?.userId !== context.userId || snapshot.context.kind !== context.kind) {
+        throw new NativeAccountError('Le compte de démonstration a changé. Rouvrez le parcours.');
+      }
+      emit({ context });
     },
     signIn(email: string, password: string) {
       if (options.mode !== 'staging' || snapshot.status === 'signingIn' || snapshot.status === 'loading') return Promise.resolve();
@@ -140,11 +147,43 @@ export function createNativeSessionController(options: ControllerOptions) {
           const session = await options.auth.signIn(email.trim(), password);
           if (current !== operationRevision || wantSignedOut || !active) return;
           await accept(session, true);
-        } catch {
+        } catch (error) {
           if (active && current === operationRevision && !wantSignedOut)
-            clearIdentity('error', 'Connexion impossible. Vérifiez vos identifiants TEST et votre connexion.');
+            clearIdentity('error', accountErrorMessage(error));
         } finally { if (current === operationRevision) suppressEvents = false; }
       });
+    },
+    /** Account mutations share the auth queue: logout clears tokens written by a late signup/callback. */
+    runAuthOperation<T>(action: (assertActive: () => void) => Promise<T>): Promise<T> {
+      if (options.mode !== 'staging' || !active || suppressEvents || snapshot.status === 'loading' || snapshot.status === 'signingIn') {
+        return Promise.reject(new NativeAccountError('Une opération de connexion est déjà en cours. Réessayez.'));
+      }
+      const current = ++operationRevision;
+      const startup = lifecycle;
+      wantSignedOut = false;
+      suppressEvents = true;
+      options.auth.setForeground?.(foreground);
+      resolver?.abort();
+      revision += 1;
+      const assertActive = () => {
+        if (!active || current !== operationRevision || startup !== lifecycle || wantSignedOut) {
+          throw new NativeAccountError('Cette demande a été annulée. Reconnectez-vous pour continuer.', 'CANCELLED');
+        }
+      };
+      let result!: T;
+      return enqueue(async () => {
+        try {
+          assertActive();
+          result = await action(assertActive);
+          assertActive();
+        } finally {
+          if (active && current === operationRevision && startup === lifecycle && !wantSignedOut) {
+            try { await accept(await options.auth.getSession(), true); }
+            catch { clearIdentity('error', 'La session doit être vérifiée à nouveau. Réessayez.'); }
+            finally { if (current === operationRevision) suppressEvents = false; }
+          }
+        }
+      }).then(() => result);
     },
     signOut() {
       const current = ++operationRevision;
