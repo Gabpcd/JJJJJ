@@ -36,19 +36,22 @@ export function AccountChoice({ label, value, choices, onChange, disabled, testI
   onChange: (value: string) => void; disabled?: boolean; testID: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [presented, setPresented] = useState(false);
   const [search, setSearch] = useState('');
   const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const visible = choices.filter(choice => normalize(`${choice.label} ${choice.valeur}`).includes(normalize(search)));
   return <View style={formStyles.field}>
     <Text style={formStyles.label}>{label}</Text>
-    <Pressable onPress={() => { setSearch(''); setOpen(true); }} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} : ${choices.find(c => c.valeur === value)?.label ?? 'Choisir'}`}
+    <Pressable onPress={() => { setSearch(''); setPresented(false); setOpen(true); }} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} : ${choices.find(c => c.valeur === value)?.label ?? 'Choisir'}`}
+      accessibilityState={{ expanded: open, disabled }}
       style={formStyles.input} testID={testID}><Text style={shared.body}>{choices.find(c => c.valeur === value)?.label ?? 'Choisir…'}</Text></Pressable>
-    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)} presentationStyle="pageSheet">
+    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)} presentationStyle="pageSheet"
+      onShow={() => setPresented(true)} onDismiss={() => setPresented(false)}>
       <SafeAreaView style={shared.screen}>
         <View style={[shared.content, formStyles.content, shared.flex]} accessibilityViewIsModal>
-          <Text style={shared.sectionTitle} accessibilityRole="header">{label}</Text>
+          <Text style={shared.sectionTitle} accessibilityRole="header" testID={presented ? `${testID}-presented` : `${testID}-presenting`}>{label}</Text>
           <AccountField label="Rechercher" value={search} onChangeText={setSearch} autoCorrect={false} testID={`${testID}-search`} />
-          <ScrollView keyboardShouldPersistTaps="handled">
+          <ScrollView keyboardShouldPersistTaps="handled" testID={`${testID}-choices`}>
             {visible.length ? visible.map(choice => <Pressable key={choice.valeur} accessibilityRole="button" accessibilityState={{ selected: choice.valeur === value }}
               style={formStyles.choice} testID={`${testID}-${choice.valeur}`} onPress={() => { onChange(choice.valeur); setOpen(false); }}>
               <Text style={shared.body}>{choice.label}{choice.valeur === value ? ' ✓' : ''}</Text>

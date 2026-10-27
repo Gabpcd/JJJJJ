@@ -393,7 +393,8 @@ final class NativePilotTests: XCTestCase {
         }
         scrollTo(element("onboarding-formation"), in: form)
         tap("onboarding-formation")
-        let cycles = app.scrollViews.containing(.button, identifier: "onboarding-formation-MEDECINE_DES").firstMatch
+        require("The cycle sheet finished its native presentation") { self.visible(self.element("onboarding-formation-presented")) }
+        let cycles = element("onboarding-formation-choices")
         scrollTo(element("onboarding-formation-MEDECINE_DES"), in: cycles)
         require("Medicine offers its third cycle") { self.visible(self.element("onboarding-formation-MEDECINE_DES")) }
         XCTAssertFalse(element("onboarding-formation-KINE").exists, "Medicine must not offer a physiotherapy degree")
@@ -402,6 +403,7 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("onboarding-study-year"), in: form)
         scrollTo(element("onboarding-formation"), in: form, downward: false)
         tap("onboarding-formation")
+        require("The cycle sheet can be presented again") { self.visible(self.element("onboarding-formation-presented")) }
         scrollTo(element("onboarding-formation-MEDECINE_DES"), in: cycles)
         tap("onboarding-formation-MEDECINE_DES")
         scrollTo(element("onboarding-internat-notice"), in: form)
@@ -426,7 +428,10 @@ final class NativePilotTests: XCTestCase {
 
     private func backGesture() {
         let window = app.windows.firstMatch
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+        // An edge gesture starts at the same physical inset on every device width.
+        // A 1% inset moves from 4 pt on iPhone to almost 12 pt on landscape iPad.
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+            .withOffset(CGVector(dx: 1, dy: 0))
             .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
     }
 
