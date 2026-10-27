@@ -3,9 +3,9 @@
 Projet XCTest UI autonome : compile uniquement le runner de vérification, puis
 ouvre l’expérience dans Expo Go déjà installé (`host.exp.Exponent`). Il ne compile
 pas Jolene, n’installe pas de nouvelle version de Jolene et ne réinitialise aucune
-donnée. Le runner CI prépare le bundle local et lance Expo Go ; le test ouvre
-ensuite son URL fixe `exp://127.0.0.1:8090` avec `XCUIApplication.open(_:)`,
-l’API Apple disponible depuis iOS 16.4. Une version antérieure échoue explicitement.
+donnée. Le runner CI prépare le bundle local puis lance Expo Go une seule fois
+avec `--initialUrl exp://127.0.0.1:8090`, argument reconnu par Expo Go SDK 57.
+XCTest observe l’expérience déjà ouverte, sans seconde transaction d’ouverture.
 La feuille « Enter URL » d’Expo Home ne fait pas partie du parcours Jolene.
 
 Sur iPad, les deux méthodes suivantes de `NativePilotTests` s’exécutent séparément,
@@ -60,8 +60,8 @@ avec retour système Android et reprise de l’expérience existante par son URL
 Le formulaire public de création de compte et l’envoi d’email de confirmation
 ne sont pas couverts par ces scénarios sans réseau.
 
-La préparation ouvre une seule fois l’URL locale depuis XCTest, sans transaction
-`simctl openurl`, puis exige Expo Go au premier plan. Le tutoriel système du clavier,
+La préparation transmet l’URL locale au lancement initial, sans transaction
+`simctl openurl` ni `XCUIApplication.open`, puis exige Expo Go au premier plan. Le tutoriel système du clavier,
 s’il apparaît, est traité au premier champ Jolene de chaque scénario neuf avec
 le même contrôle identifié et borné à 3 secondes. La préparation exige le tutoriel
 Expo de l’installation neuve, tape une

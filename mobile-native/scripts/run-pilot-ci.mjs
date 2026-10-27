@@ -301,11 +301,11 @@ try {
   console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
-    const launch = await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
+    const launch = await run('xcrun', ['simctl', 'launch', device, appId, '--initialUrl', expoUrl], { timeout: 120_000, logfile: 'expo-launch.log' });
     navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout });
-    // XCTest opens this same local URL with XCUIApplication.open(_:) while active.
-    // The Expo Home URL form is not part of the Jolene assertions.
-    // ios-bootstrap.node.test.mjs guards the matching Swift constant.
+    // Expo Go SDK 57 opens --initialUrl after its home controller appears.
+    // XCTest observes that existing experience, without a second launch/open.
+    // The native tutorial and all Jolene assertions remain in XCTest.
     for (const orientation of selectedScenario.orientations) {
       await runIosXCTest(orientation, resolve(output, orientation));
     }

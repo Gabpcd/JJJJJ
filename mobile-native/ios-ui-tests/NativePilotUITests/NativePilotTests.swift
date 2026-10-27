@@ -1,10 +1,9 @@
 import XCTest
 
-/// Opens the prepared Expo Go experience once, then never reloads or resets a Jolene scenario.
+/// Drives the prepared Expo Go experience without launching, reopening or resetting it.
 final class NativePilotTests: XCTestCase {
     private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    private let expoExperienceURL = "exp://127.0.0.1:8090"
     private var proofPrefix = "ipad-portrait"
     private var backgroundStates: [UInt] = []
 
@@ -447,21 +446,11 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        // Open the fixed local experience directly after XCTest owns the device.
-        // XCUIApplication.open(_:) is Apple's synchronous URL-launch API; it fails
-        // the test if opening fails. Expo Go SDK 57 registers the exp:// scheme.
-        // The Node bootstrap guard keeps this URL equal to the prepared Metro URL.
-        guard #available(iOS 16.4, *) else {
-            XCTFail("Opening the local Expo experience requires iOS 16.4 or later")
-            return
-        }
-        guard let experienceURL = URL(string: expoExperienceURL) else {
-            XCTFail("The fixed local Expo experience URL must be valid")
-            return
-        }
+        // simctl launches Expo once with --initialUrl after the local bundle is
+        // prepared. Do not issue another launch-like XCTest transaction: on CI
+        // iOS 26.5, open(URL) timed out loading AX despite the rendered tutorial.
         XCUIDevice.shared.orientation = .portrait
-        app.open(experienceURL)
-        require("Expo Go is in the foreground after opening its local server") {
+        require("The prepared Expo Go experience is in the foreground") {
             self.app.state == .runningForeground
         }
 
@@ -507,7 +496,7 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func dismissFirstKeyboardIntroductionIfPresent() {
-        // Direct URL opening no longer uses Expo Home's text field. Handle the
+        // The startup URL argument does not use Expo Home's text field. Handle the
         // same identified system tutorial at the first Jolene input instead.
         // This retains the existing single, bounded startup check per scenario.
         let keyboardIntroduction = app.otherElements["UIContinuousPathIntroductionView"]
