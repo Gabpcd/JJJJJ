@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -24,6 +24,7 @@ import { TabIcon } from './src/ui/TabIcon';
 import { StatusPanel } from './src/ui/components';
 import type { NativeStackParams } from './src/ui/navigation';
 import { colors, shared } from './src/ui/theme';
+import { diagnosticStackListeners, diagnosticTouch, traceNavigationState } from './src/navigationDiagnostics';
 
 const Stack = createNativeStackNavigator<NativeStackParams>();
 const Tabs = createBottomTabNavigator();
@@ -57,7 +58,7 @@ function Application({ route, navigation }: NativeStackScreenProps<NativeStackPa
     onCompleteProfile={() => navigation.getParent()?.navigate('CompteSoignant')} />;
 }
 function ExploreNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="Missions" component={MissionListScreen} options={{ title: 'Jolene', headerRight: () => <SignOutButton /> }} />
     <Stack.Screen name="Mission" component={MissionDetailScreen} options={{ title: 'La mission', headerBackTitle: 'Missions' }} />
     <Stack.Screen name="Candidature" component={Application} options={{ title: 'Ma candidature', headerBackTitle: 'Mission' }} />
@@ -70,7 +71,7 @@ function MyMissions({ navigation }: NativeStackScreenProps<NativeStackParams, 'M
     onBrowseMissions={() => navigation.getParent()?.navigate('ExplorationSoignant')} />;
 }
 function MyMissionsNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="MesMissions" component={MyMissions} options={{ title: 'Mes missions', headerRight: () => <SignOutButton /> }} />
     <Stack.Screen name="Candidature" component={Application} options={{ title: 'Ma candidature', headerBackTitle: 'Mes missions' }} />
   </Stack.Navigator>;
@@ -82,7 +83,7 @@ function CaregiverProfile() {
   return <CaregiverProfileScreen context={context} gateway={profile} onSaved={() => { void retry(); }} onSignOut={leave} />;
 }
 function CaregiverProfileNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="Profil" component={CaregiverProfile} options={{ title: 'Mon profil', headerRight: () => <SignOutButton /> }} />
   </Stack.Navigator>;
 }
@@ -98,7 +99,7 @@ function EstablishmentHome({ navigation }: NativeStackScreenProps<NativeStackPar
     onOpenProfile={() => navigation.getParent()?.navigate('CompteEtablissement')} onSignOut={leave} />;
 }
 function EstablishmentHomeNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="AccueilEtablissement" component={EstablishmentHome} options={{ title: 'Jolene', headerRight: () => <SignOutButton /> }} />
   </Stack.Navigator>;
 }
@@ -109,14 +110,14 @@ function EstablishmentMission({ navigation, route }: NativeStackScreenProps<Nati
   return <EstablishmentMissionDetailScreen {...useEstablishment()} missionId={route.params.id} onBack={() => navigation.goBack()} />;
 }
 function EstablishmentMissionsNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="MissionsEtablissement" component={EstablishmentMissions} options={{ title: 'Mes missions', headerRight: () => <SignOutButton /> }} />
     <Stack.Screen name="MissionEtablissement" component={EstablishmentMission} options={{ title: 'La mission', headerBackTitle: 'Missions' }} />
   </Stack.Navigator>;
 }
 function EstablishmentProfile() { return <EstablishmentProfileScreen {...useEstablishment()} />; }
 function EstablishmentProfileNavigator() {
-  return <Stack.Navigator screenOptions={stackOptions}>
+  return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="ProfilEtablissement" component={EstablishmentProfile} options={{ title: 'Mon établissement', headerRight: () => <SignOutButton /> }} />
   </Stack.Navigator>;
 }
@@ -173,12 +174,12 @@ function NativeNavigator() {
   const key = context ? `session-${snapshot.epoch}:${context.kind}` : 'signed-out';
   if (confirmationUrl) return <AuthConfirmationScreen url={confirmationUrl} gateway={runtime.accountGateway}
     onComplete={() => { setConfirmationUrl(null); void retry(); }} onBack={() => setConfirmationUrl(null)} />;
-  return <NavigationContainer key={key} theme={navigationTheme}>
-    {context?.kind === 'onboarding' ? <Stack.Navigator screenOptions={stackOptions}>
+  return <NavigationContainer key={key} theme={navigationTheme} onStateChange={traceNavigationState}>
+    {context?.kind === 'onboarding' ? <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
       <Stack.Screen name="CompleterProfil" component={Onboarding} options={{ title: 'Mon inscription', headerRight: () => <SignOutButton /> }} />
     </Stack.Navigator>
       : context ? <AccountServicesProvider key={key}><AccountNavigator /></AccountServicesProvider>
-        : <Stack.Navigator screenOptions={stackOptions}>
+        : <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
           <Stack.Screen name="Connexion" component={Login} options={{ headerShown: false }} />
           <Stack.Screen name="Inscription" component={Registration} options={{ title: 'Créer mon compte', headerBackTitle: 'Connexion' }} />
         </Stack.Navigator>}
@@ -186,14 +187,14 @@ function NativeNavigator() {
 }
 export default function App() {
   const [runtime] = useState(createNativeRuntime);
-  return <SafeAreaProvider>
+  return <View style={shared.flex} onTouchStart={diagnosticTouch} accessible={false}><SafeAreaProvider>
     <StatusBar style="dark" />
     {runtime.configError ? <SafeAreaView style={shared.screen}><ScrollView contentContainerStyle={styles.configContent}>
       <StatusPanel title="Configuration native à compléter" message={runtime.configError} testID="configuration-error" />
     </ScrollView></SafeAreaView> : <RuntimeProvider runtime={runtime}><SessionProvider controller={runtime.controller}>
       <GatewayProvider gateway={runtime.gateway}><NativeNavigator /></GatewayProvider>
     </SessionProvider></RuntimeProvider>}
-  </SafeAreaProvider>;
+  </SafeAreaProvider></View>;
 }
 const styles = StyleSheet.create({
   headerButton: { minHeight: 44, paddingHorizontal: 3, justifyContent: 'center' },
