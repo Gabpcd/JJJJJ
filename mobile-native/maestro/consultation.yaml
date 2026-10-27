@@ -1,0 +1,184 @@
+appId: ${APP_ID}
+name: Parcours natif soignant — données fictives
+env:
+  FRESH_EXPO_GO: ${FRESH_EXPO_GO || "0"}
+---
+- openLink: ${EXPO_URL}
+- tapOn:
+    text: "Open|Ouvrir"
+    optional: true
+# A fresh CI install shows its tutorial only after the experience has loaded.
+# Wait for that screen explicitly; a short optional tap can miss it entirely.
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO == "1"}
+    commands:
+      - extendedWaitUntil:
+          visible: "Continue|Continuer"
+          timeout: 120000
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - tapOn: "Continue|Continuer"
+      # The SDK header remains accessible behind the onboarding sheet.
+      # Require its actual dismissal before preparing the development menu.
+      - extendedWaitUntil:
+          notVisible: "Continue|Continuer"
+          timeout: 15000
+      - extendedWaitUntil:
+          visible: "SDK version: 57.0.0"
+          timeout: 30000
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO != "1"}
+    commands:
+      - tapOn:
+          text: "Continue|Continuer"
+          optional: true
+# Expo Go's floating tools control can cover the application's sign-out button.
+# Prepare the simulator only at startup; never recover a failed application step.
+- runFlow:
+    when:
+      platform: iOS
+      visible: "SDK version: 57.0.0"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Tools button"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
+      - runFlow:
+          when:
+            visible:
+              text: "1"
+              checked: true
+              rightOf: "Tools button"
+              below: "Fast refresh"
+          commands:
+            - tapOn:
+                text: "1"
+                checked: true
+                rightOf: "Tools button"
+                below: "Fast refresh"
+      - assertVisible:
+          text: "0"
+          checked: false
+          rightOf: "Tools button"
+          below: "Fast refresh"
+      - tapOn:
+          id: "xmark"
+      - assertNotVisible: "SDK version: 57.0.0"
+# Android Expo Go exposes an accessibility label, not the iOS xmark identifier.
+- runFlow:
+    when:
+      platform: Android
+      visible: "SDK version: 57.0.0"
+    commands:
+      # CI installs Expo Go on a fresh emulator; SDK 57 defaults showFab to true.
+      # This decorative switch does not expose a reliable checked state.
+      # Toggle the row once, then verify the actual floating control is absent.
+      - scrollUntilVisible:
+          element:
+            text: "Tools button"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
+      - tapOn: "Tools button"
+      - tapOn: "Close"
+      - assertNotVisible: "SDK version: 57.0.0"
+      - assertNotVisible: "^Tools$"
+- extendedWaitUntil:
+    visible:
+      id: "enter-demo"
+    timeout: 90000
+- assertVisible: ".*Démo · données fictives.*"
+- takeScreenshot: connexion
+- tapOn:
+    id: "enter-demo"
+- assertVisible:
+    id: "missions-list"
+- assertVisible:
+    id: "mission-count"
+    text: "30 missions.*"
+- tapOn:
+    id: "contract-filter-LIBERAL"
+- assertVisible:
+    id: "mission-count"
+    text: "10 missions.*"
+- tapOn:
+    id: "contract-filter-CDD"
+- assertVisible:
+    id: "mission-count"
+    text: "20 missions.*"
+- tapOn:
+    id: "contract-filter-TOUS"
+- tapOn:
+    id: "mission-city"
+- inputText: "VilleIntrouvable"
+- hideKeyboard
+- assertVisible:
+    id: "missions-empty"
+- tapOn:
+    id: "reset-filters"
+- assertVisible:
+    id: "mission-count"
+    text: "30 missions.*"
+- takeScreenshot: missions
+- scrollUntilVisible:
+    element:
+      id: "mission-card-demo-mission-016"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "mission-card-demo-mission-016"
+- assertVisible:
+    id: "mission-detail-title"
+    text: "Démonstration · Soins de suite 16"
+- takeScreenshot: detail
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- takeScreenshot: retour
+- pressKey: Home
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          stopApp: false
+# Android's Expo Go launcher opens HomeActivity, not the running experience.
+# Reopening the same URL brings its existing task forward (SDK 57 Kernel.kt).
+# A reload would reset demo sign-in and fail the position assertions below.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - openLink: ${EXPO_URL}
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "sign-out"
+- tapOn: "Quitter"
+- assertVisible:
+    id: "enter-demo"
+- assertNotVisible:
+    id: "missions-list"

@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Jolene · Pilote natif",
+    "slug": "jolene-native-pilot",
+    "version": "0.1.0",
+    "scheme": "jolene-native-pilot",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.jolene.nativepilot"
+    },
+    "android": {
+      "package": "app.jolene.nativepilot",
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "updates": {
+      "enabled": false
+    }
+  }
+}
