@@ -29,7 +29,7 @@ final class NativePilotTests: XCTestCase {
         }
     }
 
-    /// The runner launches a fresh Expo Go; XCTest opens its prepared local server.
+    /// The runner launches a fresh Expo Go; XCTest activates its prepared experience.
     func testPortraitConsultation() throws {
         runPortraitConsultation(prefix: "ipad-portrait", deviceName: "iPad")
     }
@@ -156,7 +156,7 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
         dismissFirstKeyboardIntroductionIfPresent()
-        element("contract-otp").typeText("000000")
+        typeContractCode()
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         XCUIDevice.shared.press(.home)
         require("Contracts actually entered background") {
@@ -174,7 +174,7 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
-        element("contract-otp").typeText("000000")
+        typeContractCode()
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         // Dragging the native ScrollView dismisses the numeric keyboard if needed.
         scrollTo(element("contract-sign"), in: detail)
@@ -235,7 +235,7 @@ final class NativePilotTests: XCTestCase {
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
-        element("contract-otp").typeText("000000")
+        typeContractCode()
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         scrollTo(element("contract-sign"), in: detail)
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "Scrolling to the signature preserves all six typed digits")
@@ -445,53 +445,55 @@ final class NativePilotTests: XCTestCase {
         signOut()
     }
 
+    private func keyboardTopIncludingAccessory() -> CGFloat {
+        let keyboardFrame = app.keyboards.firstMatch.frame
+        var top = keyboardFrame.minY
+        let assistant = app.otherElements["SystemInputAssistantView"].firstMatch
+        if assistant.exists { top = min(top, assistant.frame.minY) }
+        // iPhone exposes the Done accessory as Toolbar, not the iPad assistant.
+        // Navigation headers are NavigationBar elements. The system accessory
+        // can be separated from the keys by a gap, so do not require adjacency.
+        for toolbar in app.toolbars.matching(identifier: "Toolbar").allElementsBoundByIndex {
+            let frame = toolbar.frame
+            if !frame.isEmpty && frame.minY < keyboardFrame.minY
+                && frame.minX < keyboardFrame.maxX && frame.maxX > keyboardFrame.minX {
+                top = min(top, frame.minY)
+            }
+        }
+        return top
+    }
+
+    private func typeContractCode() {
+        let input = element("contract-otp")
+        let detail = element("contract-detail-scroll")
+        require("The native keyboard is available for the signature code") {
+            self.app.keyboards.firstMatch.exists
+        }
+        require("The focused code field stays fully above the keyboard without another scroll") {
+            self.fullyVisible(input, inside: detail) && input.frame.maxY <= self.keyboardTopIncludingAccessory()
+        }
+        input.typeText("000000")
+    }
+
     private func prepareExpoGo() {
-        // simctl launches Expo once with --initialUrl after the local bundle is
-        // prepared. Do not issue another launch-like XCTest transaction: on CI
-        // iOS 26.5, open(URL) timed out loading AX despite the rendered tutorial.
-        XCUIDevice.shared.orientation = .portrait
-        require("The prepared Expo Go experience is in the foreground") {
+        // simctl already launched the fixed local experience. Activation attaches
+        // XCTest to this running process and waits until it can receive events;
+        // it does not reopen the URL or terminate/relaunch the application.
+        require("The prepared Expo Go process is already running") {
             self.app.state == .runningForeground
         }
-
-        // A fresh Expo Go install must present this sheet. The SDK label behind it is not proof
-        // of dismissal. Native Button.tap() resolves its actual control rather than screen pixels.
+        app.activate()
+        XCUIDevice.shared.orientation = .portrait
         let continueButton = app.buttons.matching(
             NSPredicate(format: "label MATCHES %@", "Continue|Continuer")
         ).firstMatch
-        require("The fresh Expo Go tutorial is visible", timeout: 120) { self.visible(continueButton) }
-        continueButton.tap()
-        require("The Expo tutorial disappeared after one native tap") { !continueButton.exists }
-
         let sdk = app.staticTexts["SDK version: 57.0.0"]
-        require("Expo SDK 57 development menu is visible") { self.visible(sdk) }
-        let toolsLabel = app.staticTexts["Tools button"]
-        var scrolls = 0
-        while toolsSwitch(alongside: toolsLabel) == nil && scrolls < 6 {
-            // Expo renders Text(title) and an unlabeled Toggle in the same row. The Text does
-            // not handle taps, so locate the real switch by row geometry, then use switch.tap().
-            let menu = app.scrollViews.containing(.staticText, identifier: "Tools button").firstMatch
-            require("Expo menu is scrollable to its Tools button row") { self.visible(menu) }
-            menu.swipeUp()
-            scrolls += 1
-        }
-        guard let tools = toolsSwitch(alongside: toolsLabel) else {
-            XCTFail("No hittable native Tools button switch on the matching row")
-            return
-        }
-        let initial = tools.value as? String
-        XCTAssertTrue(initial == "0" || initial == "1", "Expo Tools switch must expose a 0/1 state")
-        if initial == "1" {
-            tools.tap()
-        }
-        require("Expo floating Tools button is disabled") {
-            self.toolsSwitch(alongside: toolsLabel)?.value as? String == "0"
-        }
-        let close = app.buttons.matching(identifier: "xmark").firstMatch
-        require("The Expo menu close button is reachable") { self.visible(close) }
-        close.tap()
-        require("The development menu is closed and Jolene is mounted", timeout: 90) {
-            !sdk.exists && self.visible(self.element("login-scroll"))
+        // The runner supplies temporary Expo host preferences at launch. This
+        // checks their effect; it makes no claim to test Expo's own onboarding.
+        require("Jolene is mounted without the Expo tutorial or developer menu", timeout: 120) {
+            self.app.state == .runningForeground
+                && !continueButton.exists && !sdk.exists
+                && self.visible(self.element("login-scroll"))
         }
     }
 
@@ -506,18 +508,6 @@ final class NativePilotTests: XCTestCase {
             keyboardContinue.tap()
             require("The keyboard tutorial is dismissed") { !keyboardIntroduction.exists }
         }
-    }
-
-    private func toolsSwitch(alongside label: XCUIElement) -> XCUIElement? {
-        guard visible(label) else { return nil }
-        let labelFrame = label.frame
-        return app.switches.allElementsBoundByIndex.filter { candidate in
-            guard self.visible(candidate) else { return false }
-            let frame = candidate.frame
-            return frame.minX >= labelFrame.maxX - 2
-                && abs(frame.midY - labelFrame.midY) <= max(frame.height, labelFrame.height) / 2
-        }.min { $0.frame.width < $1.frame.width }
-        // SwiftUI can expose both the row switch and its child; use the narrow actual control.
     }
 
     private func assertSignedOutDemo() {
@@ -649,10 +639,7 @@ final class NativePilotTests: XCTestCase {
         // Focusing the field must keep it visible for the user. A coordinate on
         // an obscured TextView can hit a key instead of opening its editing menu.
         require("The focused biography stays above the native keyboard without another scroll") {
-            let keyboard = self.app.keyboards.firstMatch
-            let assistant = self.app.otherElements["SystemInputAssistantView"].firstMatch
-            let keyboardTop = assistant.exists ? min(keyboard.frame.minY, assistant.frame.minY) : keyboard.frame.minY
-            return self.fullyVisible(bio, inside: profile) && bio.frame.maxY <= keyboardTop
+            self.fullyVisible(bio, inside: profile) && bio.frame.maxY <= self.keyboardTopIncludingAccessory()
         }
         // Place the insertion point after the short fixture, in the TextView's
         // empty lower area; holding there opens the editing menu without selecting a word.

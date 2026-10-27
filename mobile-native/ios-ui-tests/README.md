@@ -5,7 +5,8 @@ ouvre l’expérience dans Expo Go déjà installé (`host.exp.Exponent`). Il ne
 pas Jolene, n’installe pas de nouvelle version de Jolene et ne réinitialise aucune
 donnée. Le runner CI prépare le bundle local puis lance Expo Go une seule fois
 avec `--initialUrl exp://127.0.0.1:8090`, argument reconnu par Expo Go SDK 57.
-XCTest observe l’expérience déjà ouverte, sans seconde transaction d’ouverture.
+XCTest active une seule fois le processus déjà ouvert pour attendre sa disponibilité
+aux événements, sans seconde ouverture d’URL ni relancement.
 La feuille « Enter URL » d’Expo Home ne fait pas partie du parcours Jolene.
 
 Sur iPad, les deux méthodes suivantes de `NativePilotTests` s’exécutent séparément,
@@ -61,22 +62,25 @@ Le formulaire public de création de compte et l’envoi d’email de confirmati
 ne sont pas couverts par ces scénarios sans réseau.
 
 La préparation transmet l’URL locale au lancement initial, sans transaction
-`simctl openurl` ni `XCUIApplication.open`, puis exige Expo Go au premier plan. Le tutoriel système du clavier,
-s’il apparaît, est traité au premier champ Jolene de chaque scénario neuf avec
-le même contrôle identifié et borné à 3 secondes. La préparation exige le tutoriel
-Expo de l’installation neuve, tape une
-seule fois sur le vrai bouton natif Continue et exige sa disparition. Le libellé
-SDK visible derrière la feuille ne suffit pas. Dans le menu Expo SDK 57,
-« Tools button » est un texte distinct du `Toggle` sans libellé : le test cible
-le switch natif visible sur cette ligne, vérifie sa valeur 0/1 et ne le tape que
-s’il est activé. Il exige ensuite la valeur 0 avant de fermer le menu par le
-bouton `xmark`. Aucune coordonnée absolue ni modification de préférences cachée.
+`simctl openurl` ni `XCUIApplication.open`. Elle passe trois préférences temporaires
+au processus Expo Go : `-EXDevMenuIsOnboardingFinished YES`,
+`-EXDevMenuShowsAtLaunch NO` et `-EXDevMenuShowFloatingActionButton NO`.
+Ces clés sont lues par Expo Go SDK 57 ; Apple les place dans `NSArgumentDomain`,
+sans modification directe du fichier de préférences ni des données Jolene.
+XCTest exige le processus déjà au premier plan, appelle `activate()` une seule
+fois pour garantir qu’il est prêt à recevoir les événements, puis vérifie
+l’absence du tutoriel et du menu Expo et la présence de la connexion Jolene.
+Le premier tap métier et son résultat restent vérifiés par chaque scénario.
+Cette préparation ne teste pas le bouton Continue d’Expo Go.
+
+Le tutoriel système du clavier, s’il apparaît, est traité au premier champ Jolene
+de chaque scénario neuf avec le même contrôle identifié et borné à 3 secondes.
 
 Les gestes de défilement et de retour utilisent les coordonnées relatives des
 vues natives dans leur orientation courante. Aucun fallback vers un bouton de
 retour, relancement, rechargement ou réessai ne masque un échec du parcours.
 L’activation après Home reprend l’expérience existante. Chaque test dispose de
-600 secondes maximum pour les trois parcours de démonstration. La préparation attend jusqu’à 120 secondes le tutoriel ;
+600 secondes maximum pour les trois parcours de démonstration. La préparation attend jusqu’à 120 secondes la connexion sans surcouche Expo ;
 les autres attentes et les boucles de défilement sont bornées.
 
 Depuis la racine du dépôt, avec le simulateur iPad démarré, Expo Go installé et le bundle local prêt :
@@ -159,7 +163,9 @@ Ces tests prouvent uniquement le parcours natif du pilote sur simulateur avec
 données fictives. Ils ne prouvent ni un paiement, ni une intégration STAGING,
 ni le comportement d’un appareil physique, ni les autres écrans de Jolene.
 
-Références : [contrôles Expo Go SDK 57](https://github.com/expo/expo/blob/sdk-57/apps/expo-go/ios/Exponent/DevMenu/SwiftUI/DevMenuButtons.swift),
+Références : [préférences Expo Go SDK 57 verrouillées](https://github.com/expo/expo/blob/1f504df4abcc9de37c215b5f741c6b1da245c839/apps/expo-go/ios/Exponent/DevMenu/DevMenuPreferences.swift),
+[préférences temporaires par arguments Apple](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/UserDefaults/AboutPreferenceDomains/AboutPreferenceDomains.html#//apple_ref/doc/uid/10000059i-CH2-SW4),
+[contrôles Expo Go SDK 57](https://github.com/expo/expo/blob/sdk-57/apps/expo-go/ios/Exponent/DevMenu/SwiftUI/DevMenuButtons.swift),
 [en-tête Expo Go](https://github.com/expo/expo/blob/sdk-57/apps/expo-go/ios/Exponent/DevMenu/SwiftUI/HeaderView.swift),
 [application externe XCTest](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/init(bundleidentifier:)),
 [activation](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/activate()),
@@ -235,3 +241,9 @@ par root. Les PNG sélectionnés sont synthétiques : ces scénarios ne prouvent
 la caméra, les autorisations système, un choix de fichier personnel, l’ouverture
 d’un original dans Safari/Chrome, une vérification professionnelle ou une opération
 STAGING. Aucun bouton d’original fictif n’est affiché.
+
+La saisie du code de signature exige un clavier natif présent et un champ
+entièrement visible au-dessus de sa barre accessoire avant de taper les six
+chiffres en une fois. Les assertions relisent exactement les six chiffres avant
+le passage en arrière-plan et avant la signature. Le champ Contrat utilise les
+insets clavier du ScrollView iOS, sans décalage fixe de 90 points.

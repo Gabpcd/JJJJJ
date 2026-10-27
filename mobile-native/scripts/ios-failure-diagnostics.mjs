@@ -18,6 +18,18 @@ export async function collectIosFailureDiagnostics({ device, output, started, ru
     notes.push({ systemLogExitCode: result.code });
   } catch (error) { notes.push({ systemLogError: String(error) }); }
 
+  // AX traffic can fill the general tail and erase the earlier project-load
+  // error. Preserve a separate bounded view of Expo network failures, without
+  // enabling verbose network logging or changing the application under test.
+  try {
+    const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '15m',
+      '--style', 'compact', '--predicate',
+      '(process == "Exponent" OR process == "Expo Go") AND (eventMessage CONTAINS[c] "timed out" OR eventMessage CONTAINS "NSURLError" OR eventMessage CONTAINS "CFNetwork" OR eventMessage CONTAINS[c] "connection failed")'],
+    { timeout: 30_000, allowFailure: true });
+    writeFileSync(resolve(directory, 'expo-network-errors.log'), (result.stdout + result.stderr).slice(-256_000));
+    notes.push({ networkErrorLogExitCode: result.code });
+  } catch (error) { notes.push({ networkErrorLogError: String(error) }); }
+
   const folders = [
     resolve(homedir(), 'Library/Logs/DiagnosticReports'),
     resolve(homedir(), 'Library/Developer/CoreSimulator/Devices', device, 'data/Library/Logs/CrashReporter'),

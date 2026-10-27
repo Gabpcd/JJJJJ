@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, Keyboard, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { canOfferSignature } from '../../workflows/contracts/business';
@@ -55,8 +55,9 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const remaining = admission?.otpExpiresAt ? Math.max(0, Math.ceil((admission.otpExpiresAt - clock) / 1000)) : null;
   const submit = () => { if (!canSign || code.length !== 6) return; const supplied = code; clearCode('submit'); Keyboard.dismiss(); void controller.sign(supplied); };
   return <SafeAreaView style={shared.screen} edges={['left', 'right', 'bottom']}>
-    <KeyboardAvoidingView style={shared.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-      <ScrollView testID="contract-detail-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+    <View style={shared.flex}>
+      <ScrollView testID="contract-detail-scroll" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         contentContainerStyle={[shared.content, styles.content]} refreshControl={<RefreshControl refreshing={state.loading && !!details}
           onRefresh={() => { clearCode('refresh'); void controller.reload(); }} tintColor={colors.pink} colors={[colors.pink]} />}>
         <ModeNotice mode={gateway.mode === 'demo' ? 'demo' : 'staging'} />
@@ -116,7 +117,7 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
           </View> : null}
         </> : null}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
