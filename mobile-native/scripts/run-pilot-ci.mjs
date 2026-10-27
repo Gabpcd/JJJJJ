@@ -4,6 +4,7 @@ import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readPngDimensions } from './png-dimensions.mjs';
+import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -315,6 +316,10 @@ try {
 } finally {
   if (device) {
     if (platform === 'ios') {
+      if (!success) {
+        try { await collectIosFailureDiagnostics({ device, output, started, run }); }
+        catch (error) { writeFileSync(resolve(output, 'ios-diagnostics-error.txt'), String(error)); }
+      }
       await run('xcrun', ['simctl', 'io', device, 'screenshot', resolve(output, 'final.png')], { allowFailure: true, timeout: 15_000, logfile: 'simulator.log' });
     } else {
       await run('adb', ['-s', device, 'shell', 'screencap', '-p', '/sdcard/jolene-pilot-final.png'], { allowFailure: true, timeout: 15_000 });

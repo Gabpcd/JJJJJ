@@ -5,6 +5,7 @@ final class NativePilotTests: XCTestCase {
     private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     private var proofPrefix = "ipad-portrait"
+    private var backgroundStates: [UInt] = []
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -15,6 +16,10 @@ final class NativePilotTests: XCTestCase {
     override func tearDownWithError() throws {
         // hasSucceeded is still false during teardown; count only failures already recorded.
         if (testRun?.totalFailureCount ?? 0) > 0 {
+            attachText("Expo state: \(app.state.rawValue); SpringBoard state: \(springboard.state.rawValue)",
+                       name: "\(proofPrefix)-process-state.txt")
+            attachText("States before and after Home: \(backgroundStates)",
+                       name: "\(proofPrefix)-background-states.txt")
             record("\(proofPrefix)-echec")
             let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             screen.name = "\(proofPrefix)-echec-ecran-systeme"
@@ -68,9 +73,14 @@ final class NativePilotTests: XCTestCase {
         record("\(prefix)-missions")
 
         openMissionAndReturn(detailProof: "\(prefix)-detail", returnProof: "\(prefix)-retour")
+        backgroundStates = [app.state.rawValue]
         XCUIDevice.shared.press(.home)
         require("The pilot actually entered the background") {
-            self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
+            let state = self.app.state
+            if self.backgroundStates.last != state.rawValue && self.backgroundStates.count < 16 {
+                self.backgroundStates.append(state.rawValue)
+            }
+            return state == .runningBackground || state == .runningBackgroundSuspended
         }
         app.activate()
         require("Foreground resume preserves the selected list position") {
