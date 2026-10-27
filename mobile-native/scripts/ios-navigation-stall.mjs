@@ -40,9 +40,16 @@ export async function createIosNavigationStallMonitor({
     try { mkdirSync(directory, { recursive: true }); writeFileSync(resolve(directory, 'index.json'), JSON.stringify(report, null, 2)); }
     catch { /* Existing XCTest/runner artifacts remain authoritative. */ }
   };
-  const read = async (command, args) => {
+  const read = async (operation, command, args) => {
+    // Fixed operation names identify the failed guard without exporting process
+    // arguments, paths or arbitrary command output. Keep the existing bounds.
+    report.operation = operation;
+    persist();
     const result = await run(command, args, { timeout: 5_000, allowFailure: true });
-    if (result.code !== 0) throw new Error('DIAGNOSTIC_COMMAND_FAILED');
+    if (result.code !== 0) {
+      report.commandExitCode = Number.isInteger(result.code) ? result.code : null;
+      throw new Error('DIAGNOSTIC_COMMAND_FAILED');
+    }
     return result.stdout;
   };
 
@@ -52,14 +59,14 @@ export async function createIosNavigationStallMonitor({
     const match = launches.length === 1 && launches[0].match(/^host\.exp\.Exponent: ([1-9]\d*)$/);
     const pid = match ? Number(match[1]) : NaN;
     if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2_147_483_647) throw new Error('INVALID_LAUNCH_PID');
-    const app = (await read('xcrun', ['simctl', 'get_app_container', device, BUNDLE_ID, 'app'])).trim();
+    const app = (await read('locate-expo-container', 'xcrun', ['simctl', 'get_app_container', device, BUNDLE_ID, 'app'])).trim();
     if (!app.startsWith('/') || !app.includes(`/CoreSimulator/Devices/${device}/data/Containers/Bundle/Application/`)
       || !app.endsWith('.app') || /[\r\n\0]/.test(app)) throw new Error('INVALID_SIMULATOR_APP_PATH');
     const plist = resolve(app, 'Info.plist');
-    const bundle = (await read('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plist])).trim();
-    const name = (await read('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', plist])).trim();
+    const bundle = (await read('read-expo-bundle-id', '/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plist])).trim();
+    const name = (await read('read-expo-executable', '/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', plist])).trim();
     if (bundle !== BUNDLE_ID || !/^[A-Za-z0-9._ -]+$/.test(name) || name === '.' || name === '..') throw new Error('INVALID_EXPO_BUNDLE');
-    identity = processIdentity(await read('/bin/ps', ['-ww', '-p', String(pid), '-o', 'pid=,uid=,lstart=,comm=']), pid, uid, resolve(app, name));
+    identity = processIdentity(await read('verify-launched-process', '/bin/ps', ['-ww', '-p', String(pid), '-o', 'pid=,uid=,lstart=,comm=']), pid, uid, resolve(app, name));
     if (!identity) throw new Error('LAUNCHED_PROCESS_MISMATCH');
     report.process = identity;
     report.status = 'waiting';
@@ -89,7 +96,7 @@ export async function createIosNavigationStallMonitor({
     report.status = 'verifying-process';
     persist();
     try {
-      const current = processIdentity(await read('/bin/ps', ['-ww', '-p', String(identity.pid), '-o', 'pid=,uid=,lstart=,comm=']), identity.pid, uid, identity.executable);
+      const current = processIdentity(await read('recheck-launched-process', '/bin/ps', ['-ww', '-p', String(identity.pid), '-o', 'pid=,uid=,lstart=,comm=']), identity.pid, uid, identity.executable);
       if (!current || current.started !== identity.started) throw new Error('LAUNCHED_PROCESS_CHANGED');
       // Transition callbacks can arrive while ps runs. Do not sample a recovered
       // transition or a route that has already been left.

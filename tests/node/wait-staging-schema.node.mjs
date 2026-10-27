@@ -47,6 +47,48 @@ test('attend le vrai job SQL toutes les 5 s avant toute réussite', async () => 
   const s = simulation({ jobs: n => [{ ...job, status: n < 2 ? 'in_progress' : 'completed', conclusion: n < 2 ? null : 'success' }] });
   await s.lancer(); assert.deepEqual(s.attentes, [5000, 5000]);
 });
+test('workflow déjà success, job SQL encore in_progress malgré ses étapes finies : attend sa conclusion exacte', async () => {
+  const completed = { ...run, status: 'completed', conclusion: 'success' };
+  const s = simulation({ runs: () => [completed], current: () => completed,
+    jobs: n => [{ ...job, status: n < 2 ? 'in_progress' : 'completed', conclusion: n < 2 ? null : 'success',
+      steps: [{ name: 'Post complete job', status: 'completed', conclusion: 'success', completed_at: '2026-10-27T14:07:52Z' }] }] });
+  assert.deepEqual(await s.lancer(), { sha, branch: env.STAGING_SCHEMA_BRANCH, runId: 100, runAttempt: 1, jobId: 200 });
+  assert.deepEqual(s.attentes, [5000, 5000]);
+  assert.equal(s.appels.filter(u => u.pathname.endsWith('/runs/100')).length, 1);
+  assert.ok(s.messages[0].includes('run 100, tentative 1, job SQL 200 in_progress'));
+  assert.ok(s.messages[0].includes('conclusion SQL attendue'));
+});
+test('succès global ne remplace jamais completed/success du job, même quand sa conclusion seule dit success', async () => {
+  for (const status of ['queued', 'in_progress']) {
+    const s = simulation({ runs: () => [{ ...run, status: 'completed', conclusion: 'success' }],
+      jobs: () => [{ ...job, status, conclusion: 'success' }] });
+    await assert.rejects(s.lancer(), error => {
+      assert.match(error.message, /après 15 s/);
+      assert.ok(error.message.includes(`run 100, tentative 1, job SQL 200 ${status}`));
+      return true;
+    });
+    assert.deepEqual(s.attentes, [5000, 5000, 5000]);
+    assert.equal(s.appels.filter(u => u.pathname.endsWith('/runs/100')).length, 0);
+  }
+});
+test('job SQL non terminal du workflow terminé reste refusé si sa conclusion finale est un échec', async () => {
+  const s = simulation({ runs: () => [{ ...run, status: 'completed', conclusion: 'success' }],
+    jobs: n => [{ ...job, status: n === 0 ? 'in_progress' : 'completed', conclusion: n === 0 ? null : 'failure' }] });
+  await assert.rejects(s.lancer(), /Validation SQL.*terminée en failure/);
+  assert.deepEqual(s.attentes, [5000]);
+});
+test('une nouvelle tentative remplace la tentative non terminale, sans réutiliser son job ni son succès', async () => {
+  const s = simulation({ runs: n => [{ ...run, run_attempt: n === 0 ? 1 : 2, status: 'completed', conclusion: 'success' }],
+    current: () => ({ ...run, run_attempt: 2 }),
+    jobs: (n, url) => {
+      if (n === 0) { assert.ok(url.pathname.endsWith('/attempts/1/jobs')); return [{ ...job, status: 'in_progress', conclusion: null }]; }
+      assert.ok(url.pathname.endsWith('/attempts/2/jobs'));
+      return [{ ...job, id: 201, status: n === 1 ? 'in_progress' : 'completed', conclusion: n === 1 ? null : 'success' }];
+    } });
+  assert.deepEqual(await s.lancer(), { sha, branch: env.STAGING_SCHEMA_BRANCH, runId: 100, runAttempt: 2, jobId: 201 });
+  assert.deepEqual(s.attentes, [5000, 5000]);
+  assert.equal(s.appels.filter(u => u.pathname.endsWith('/attempts/1/jobs')).length, 1);
+});
 test('dépôt public ou privé : mêmes exigences SHA, branche, workflow et propriétaire', async () => {
   for (const prive of [false, true]) {
     const s = simulation({ runs: () => [{ ...run, head_repository: { full_name: env.GITHUB_REPOSITORY, private: prive } }] });
@@ -90,10 +132,10 @@ test('un job d’un autre SHA/run, un homonyme partiel ou un doublon est refusé
   }
   await assert.rejects(simulation({ jobs: () => [job, { ...job, id: 201 }] }).lancer(), /homonymes/);
 });
-test('workflow terminé avant réussite SQL échoue immédiatement', async () => {
+test('workflow terminé sans job SQL correspondant échoue immédiatement avec run et tentative explicites', async () => {
   for (const conclusion of ['failure', 'cancelled', 'success']) {
     const s = simulation({ runs: () => [{ ...run, status: 'completed', conclusion }], jobs: () => [] });
-    await assert.rejects(s.lancer(), /sans succès du job SQL/); assert.deepEqual(s.attentes, []);
+    await assert.rejects(s.lancer(), /sans succès du job SQL.*aucun job SQL correspondant dans le run 100, tentative 1/); assert.deepEqual(s.attentes, []);
   }
 });
 test('lancement manuel sans validation ne fabrique pas un succès', async () => {

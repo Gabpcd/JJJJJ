@@ -439,7 +439,16 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        app.activate()
+        // simctl already launches Expo Go before XCTest. Do not issue a second
+        // SpringBoard open transaction when that same app is already foreground:
+        // CI 5f7d420 observed a launch timeout despite the rendered Home screen.
+        // Background/not-running states still require the one normal activation.
+        if app.state != .runningForeground {
+            app.activate()
+        }
+        require("Expo Go is in the foreground before opening its local server") {
+            self.app.state == .runningForeground
+        }
         XCUIDevice.shared.orientation = .portrait
 
         // Open the local server inside Expo Go after XCTest owns the foreground.
