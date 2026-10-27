@@ -11,6 +11,11 @@ on:
       - 'src/lib/profession-hierarchy.ts'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
       - 'src/components/planning/planning-candidat.ts'
       - '.github/workflows/native-pilot.yml'
   push:
@@ -23,6 +28,11 @@ on:
       - 'src/lib/profession-hierarchy.ts'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
       - 'src/components/planning/planning-candidat.ts'
       - '.github/workflows/native-pilot.yml'
   workflow_dispatch:

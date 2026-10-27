@@ -5,7 +5,10 @@ import { useSession } from '../session/SessionProvider';
 import { ActionButton, ErrorNotice, ModeNotice, StatusPanel } from './components';
 import { colors, shared } from './theme';
 
-export function LoginScreen() {
+export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishmentDemo, onEnterOnboardingDemo }: {
+  onRegister?: () => void; onForgotPassword?: () => void;
+  onEnterEstablishmentDemo?: () => void; onEnterOnboardingDemo?: () => void;
+} = {}) {
   const { snapshot, signIn, enterDemo, signOut } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +40,7 @@ export function LoginScreen() {
 
   if (snapshot.status === 'unsupported') return <SafeAreaView style={shared.screen}>
     <ScrollView contentContainerStyle={styles.centered}>
-      <StatusPanel title="Ce compte ne peut pas ouvrir le pilote" message={snapshot.error ?? 'Le pilote accueille les comptes soignants existants de l’environnement TEST.'}>
+      <StatusPanel title="Ce compte ne peut pas ouvrir cet espace" message={snapshot.error ?? 'Cet espace n’est pas disponible dans le parcours natif.'}>
         <ActionButton label="Revenir à la connexion" onPress={() => { void signOut(); }} testID="unsupported-sign-out" />
       </StatusPanel>
     </ScrollView>
@@ -62,7 +65,9 @@ export function LoginScreen() {
             <Text style={shared.sectionTitle} accessibilityRole="header">Découvrez le parcours natif</Text>
             <Text style={shared.subtitle}>Explorez les missions et leurs détails avec un compte fictif. Aucun identifiant n’est nécessaire.</Text>
             {snapshot.error ? <ErrorNotice message={snapshot.error} /> : null}
-            <ActionButton label="Explorer la démo" onPress={enterDemo} testID="enter-demo" />
+            <ActionButton label="Explorer la démo" onPress={() => enterDemo()} testID="enter-demo" />
+            {onEnterEstablishmentDemo ? <ActionButton label="Découvrir l’espace établissement" secondary onPress={onEnterEstablishmentDemo} testID="enter-establishment-demo" /> : null}
+            {onEnterOnboardingDemo ? <ActionButton label="Essayer l’inscription médecin / interne" secondary onPress={onEnterOnboardingDemo} testID="enter-onboarding-demo" /> : null}
           </View> : <View style={styles.form}>
             <Text style={shared.sectionTitle} accessibilityRole="header">Ravi de vous retrouver</Text>
             <View style={styles.fieldGroup}>
@@ -88,9 +93,11 @@ export function LoginScreen() {
             </View>
             {validationError || snapshot.error ? <ErrorNotice message={validationError ?? snapshot.error!} /> : null}
             <ActionButton label={busy ? 'Connexion en cours…' : 'Se connecter'} busy={busy} onPress={submit} testID="sign-in" />
-            <Text style={shared.small}>Utilisez votre compte soignant TEST existant. L’inscription et la récupération du mot de passe restent dans l’application actuelle.</Text>
+            {onRegister ? <ActionButton label="Créer mon compte" secondary onPress={onRegister} disabled={busy} testID="open-registration" /> : null}
+            {onForgotPassword ? <ActionButton label="Mot de passe oublié" secondary onPress={onForgotPassword} disabled={busy} testID="open-password-reset" /> : null}
+            <Text style={shared.small}>Connectez-vous à votre compte TEST pour retrouver votre espace ou reprendre votre inscription.</Text>
           </View>}
-          <Text style={styles.footer}>Premier parcours natif · connexion, missions et détails.{"\n"}Aucune candidature ni opération financière dans ce pilote.</Text>
+          <Text style={styles.footer}>Votre espace Jolene, en natif.{"\n"}Environnement de démonstration ou de test.</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,13 +1,15 @@
 import 'react-native-url-polyfill/auto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { DEMO_CONTEXT, DemoGateway } from '../data/demoGateway';
 import { SupabaseMissionGateway } from '../data/supabaseGateway';
-import { validateMobileAccess, type MissionGateway } from '../data/types';
+import type { MissionGateway } from '../data/types';
+import { DemoAccountGateway, SupabaseAccountGateway, type NativeAccountGateway } from '../account';
+import { resolveNativeAccount } from '../account/resolveContext';
 import { readNativeConfig } from './config';
-import { createNativeSessionController, UnsupportedNativeAccount, type NativeSessionController } from './controller';
+import { createNativeSessionController, type NativeSessionController } from './controller';
 import { createSecureSessionStorage } from './secureSessionStorage';
 
 // Same staging project as scripts/recette-fournisseurs/lib/manifest.mjs.
@@ -15,6 +17,8 @@ const STAGING_PROJECTS = ['mejpriaetwgtcstbgfid'] as const;
 export interface NativeRuntime {
   controller: NativeSessionController;
   gateway: MissionGateway;
+  client: SupabaseClient | null;
+  accountGateway: NativeAccountGateway;
   configError: string | null;
 }
 
@@ -31,7 +35,10 @@ async function boundedFetch(input: RequestInfo | URL, init?: RequestInit): Promi
 
 /** Create once per app lifecycle. No server is contacted in the default demo mode. */
 export function createNativeRuntime(): NativeRuntime {
-  const demo = () => ({ controller: createNativeSessionController({ mode: 'demo', context: DEMO_CONTEXT }), gateway: new DemoGateway(), configError: null });
+  const demo = () => {
+    const controller = createNativeSessionController({ mode: 'demo', context: { ...DEMO_CONTEXT, kind: 'soignant' } });
+    return { controller, gateway: new DemoGateway(), client: null, accountGateway: new DemoAccountGateway(controller), configError: null };
+  };
   try {
     // Expo only substitutes explicit EXPO_PUBLIC variable references.
     const config = readNativeConfig({
@@ -48,7 +55,7 @@ export function createNativeRuntime(): NativeRuntime {
     }, (value) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value));
     const storageKey = `sb-${config.projectRef}-native-pilot-auth`;
     const client = createClient(config.url, config.publishableKey, {
-      auth: { storage, storageKey, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
+      auth: { storage, storageKey, flowType: 'pkce', autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
       global: { fetch: boundedFetch },
     });
     void client.auth.stopAutoRefresh();
@@ -74,23 +81,15 @@ export function createNativeRuntime(): NativeRuntime {
           const { error } = await client.auth.signOut({ scope: 'local' });
           if (error) throw error;
         },
-        clearStorage: () => storage.removeItem(storageKey),
+        clearStorage: async () => {
+          await storage.removeItem(storageKey);
+          await storage.removeItem(`${storageKey}-code-verifier`);
+        },
         setForeground(foreground) { void (foreground ? client.auth.startAutoRefresh() : client.auth.stopAutoRefresh()); },
       },
-      async resolveContext(session, signal) {
-        // Validate identity with Auth, then role with the existing backend RPC.
-        const { data, error } = await client.auth.getUser(session.access_token);
-        if (signal.aborted) throw new Error('Aborted');
-        if (error || !data.user || data.user.id !== session.user.id) throw new Error('Session invalide.');
-        const role = await gateway.getRole(signal);
-        const access = validateMobileAccess(data.user, role.role);
-        if (!access.allowed) throw new UnsupportedNativeAccount(access.message);
-        const profile = await gateway.getProfile(data.user.id, signal);
-        if (!profile) throw new UnsupportedNativeAccount('Terminez d’abord votre profil soignant dans Jolene pour accéder à ce pilote.');
-        return { userId: data.user.id, email: data.user.email ?? null, profile };
-      },
+      resolveContext: (session, signal) => resolveNativeAccount(client, gateway, session, signal),
     });
-    return { controller, gateway, configError: null };
+    return { controller, gateway, client, accountGateway: new SupabaseAccountGateway(client, controller), configError: null };
   } catch (error) {
     return { ...demo(), configError: error instanceof Error ? error.message : 'Configuration TEST invalide.' };
   }

@@ -1,4 +1,4 @@
-# Jolene — premier parcours React Native
+# Jolene — migration React Native
 
 Client mobile séparé de l’application Capacitor publiée. Les écrans utilisent les
 composants React Native et une pile de navigation native : aucun écran WebView.
@@ -6,17 +6,30 @@ Le backend et les comptes existants ne sont pas réécrits.
 
 ## Périmètre
 
-- Connexion email/mot de passe d’un **soignant existant de STAGING**.
+- Connexion email/mot de passe et résolution du compte **STAGING** : soignant,
+  membre d’établissement avec son périmètre serveur, ou inscription à compléter.
+- Création du compte, confirmation email, brouillon d’inscription et finalisation
+  soignant/établissement. Médecine affiche les trois cycles, dont l’internat,
+  sans déduire un droit de remplacement du seul cycle déclaré.
 - Consultation des missions autorisées, filtres ville/contrat, détail et planning.
+- Candidature avec planning confirmé, choix du contrat si demandé par le serveur,
+  relecture après envoi et consultation de ses candidatures/missions.
+- Profil soignant : lecture et modification des coordonnées, présentation,
+  expérience et préférences géographiques. L’identité vérifiée reste verrouillée.
+- Établissement : accueil, missions filtrées et paginées, détail du planning,
+  profil et permissions réelles du membre. Pas de mutation établissement dans ce lot.
+- Navigation à onglets avec une pile native par espace ; les pages conservent leur état.
 - Retour par geste iOS / bouton système Android, conservation du défilement,
   clavier, actualisation et reprise après arrière-plan.
 - Session dans le stockage sécurisé du système ; changement d’identité et
   déconnexion invalident les anciennes lectures.
 
-Ce pilote ne remplace pas encore l’application publiée. Inscription, espace
-établissement, candidature, documents, contrat, pointage, PSC, notifications et
-paiements restent dans le client existant. Aucun parcours financier n’est exercé
-ici et aucun contrat signé n’est modifié.
+Ce client ne remplace pas encore l’application publiée. Documents, contrats et
+signature, pointage, PSC, messagerie/push, revenus/facturation, publication et
+traitement des candidatures par l’établissement restent à porter. La récupération
+du mot de passe et le challenge anti-bot natif restent à intégrer si requis par
+la configuration Auth. Aucun parcours financier n’est exercé ici et aucun contrat
+signé n’est modifié. Voir [MIGRATION.md](MIGRATION.md) pour les limites de vérification.
 
 ## Exécuter le pilote
 
@@ -46,6 +59,12 @@ invalide affiche un écran bloquant ; elle ne bascule pas silencieusement en dé
 Ne jamais mettre un mot de passe, jeton utilisateur ou clé de service dans une
 variable EXPO_PUBLIC. Saisir les identifiants du compte TEST dans l’interface.
 
+La confirmation utilise PKCE et `jolene-native-pilot://auth/confirm` : ce retour
+doit être autorisé dans **Auth STAGING** avant la vérification intégrée. Expo Go
+ne possède pas ce scheme ; la confirmation nécessite un binaire de développement
+avec l’identifiant distinct du pilote. Ne pas utiliser une redirection production
+pour contourner une configuration TEST absente.
+
 Un redémarrage Metro est nécessaire après un changement de configuration ou de
 dépendances. Les scripts fixent la résolution IPv4 pour que le simulateur
 rejoigne localhost. Aucun tunnel public n’est nécessaire.
@@ -62,14 +81,14 @@ soumission. Les journaux et captures sont conservés dans les artefacts CI.
 
 Le scénario maestro/consultation.yaml vérifie les filtres, l’état vide, le détail
 d’une mission située loin dans la liste, le retour à sa position, l’arrière-plan
-et la déconnexion. Les assertions de transport utilisent un client injecté et
+et la déconnexion, puis la candidature, la reprise du profil, la lecture établissement et l’inscription médecin/interne. Les assertions de transport utilisent un client injecté et
 des réponses fictives : elles ne prouvent pas la RLS du serveur.
 
 Sur iPhone et iPad, les tests UI Apple de `ios-ui-tests/` vérifient le parcours complet
 en portrait. Sur iPad, ils passent ensuite explicitement en paysage et vérifient de nouveau l’entrée, la liste, le détail,
-le geste de retour à la position précédente et la déconnexion. Ils ciblent les
+le geste de retour à la position précédente, la candidature, le profil, les écrans établissement, l’inscription et la déconnexion. Ils ciblent les
 éléments avec XCTest, sans transformation tactile du driver Maestro.
-Chaque orientation conserve quatre captures et un rapport XCTest distinct ; le runner
+Chaque orientation conserve quinze captures et un rapport XCTest distinct ; le runner
 contrôle les dimensions affichées des images, en tenant compte de leur orientation EXIF. La présence
 de ces scénarios ne vaut pas résultat : leur exécution CI doit être verte.
 Android cible un unique émulateur prêt et refuse tout appareil USB ou non
@@ -89,12 +108,11 @@ de cette première vérification. Xcode 26.4+ est nécessaire pour compiler un
 binaire de développement correspondant ; le runtime simulateur évite une
 installation supplémentaire de SDK sur le Mac.
 
-L’audit npm du 26/10/2026 signale deux dépendances transitives de l’outillage Expo
-CLI : node-forge (GHSA-86w9-cpqp-85rv) et zod (GHSA-mrhx-c7xc-m3w5).
-Le registre ne fournit pas de correction node-forge compatible publiée à cette
-date ; ne pas appliquer la rétrogradation Expo 44 suggérée par npm audit fix
---force. Ces composants d’outillage ne sont pas importés par les écrans natifs ;
-aucune signature OTA n’est utilisée. Réévaluer les versions avant une livraison.
+Le correctif compatible node-forge 1.4.1 est appliqué le 27/10/2026. L’audit npm
+signale encore zod 3, dépendance de l’outillage Expo CLI
+(GHSA-mrhx-c7xc-m3w5), et ses deux dépendants. Ne pas appliquer la rétrogradation
+Expo proposée par `npm audit fix --force`. Zod n’est pas importé par les écrans
+natifs ; aucune signature OTA n’est utilisée. Réévaluer l’outillage avant livraison.
 
 Sources de l’architecture : [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/),
 [React Native](https://reactnative.dev/docs/intro-react-native-components),

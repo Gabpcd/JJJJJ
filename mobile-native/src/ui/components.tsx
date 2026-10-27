@@ -27,7 +27,7 @@ export function ActionButton({ label, onPress, busy = false, secondary = false, 
 export function ModeNotice({ mode }: { mode: 'demo' | 'staging' }) {
   return <View style={styles.mode} testID="environment-banner">
     <View style={styles.modeDot} />
-    <Text style={styles.modeText}>{mode === 'demo' ? 'Démo · données fictives' : 'Environnement TEST · lecture seule'}</Text>
+    <Text style={styles.modeText}>{mode === 'demo' ? 'Démo · données fictives' : 'Environnement TEST'}</Text>
   </View>;
 }
 

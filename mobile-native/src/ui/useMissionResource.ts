@@ -5,7 +5,7 @@ import { useIsFocused } from '@react-navigation/native';
 type Resource<T> = { key: string; data: T | null; loading: boolean; error: string | null };
 
 /** Keep a screen's data and scroll position on back; cancel reads off screen. */
-export function useMissionResource<T>(key: string, loader: (signal: AbortSignal) => Promise<T>) {
+export function useMissionResource<T>(key: string, loader: (signal: AbortSignal) => Promise<T>, errorMessage = 'Les missions ne sont pas accessibles pour le moment. Réessayez dans un instant.') {
   const focused = useIsFocused();
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [resource, setResource] = useState<Resource<T>>({ key, data: null, loading: true, error: null });
@@ -40,12 +40,12 @@ export function useMissionResource<T>(key: string, loader: (signal: AbortSignal)
       if (currentGeneration !== generation.current || (controller.signal.aborted && !timedOut)) return;
       setResource(previous => ({ ...previous, loading: false,
         error: timedOut ? 'La connexion prend trop de temps. Vérifiez votre réseau puis réessayez.'
-          : 'Les missions ne sont pas accessibles pour le moment. Réessayez dans un instant.' }));
+          : errorMessage }));
     }).finally(() => {
       if (timeout) clearTimeout(timeout);
       if (currentGeneration === generation.current) request.current = null;
     });
-  }, [key, focused, active]);
+  }, [key, focused, active, errorMessage]);
 
   useEffect(() => {
     if (focused && active && (lastSuccess.current.key !== key || Date.now() - lastSuccess.current.at > 30_000)) refresh();

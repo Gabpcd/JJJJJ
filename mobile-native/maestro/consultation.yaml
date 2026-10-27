@@ -1,5 +1,5 @@
 appId: ${APP_ID}
-name: Parcours natif soignant — données fictives
+name: Parcours natifs soignant et établissement — données fictives
 env:
   FRESH_EXPO_GO: ${FRESH_EXPO_GO || "0"}
 ---
@@ -89,9 +89,20 @@ env:
       - assertNotVisible: "^Tools$"
 - extendedWaitUntil:
     visible:
-      id: "enter-demo"
+      id: "login-scroll"
     timeout: 90000
+- scrollUntilVisible:
+    element:
+      text: ".*Démo · données fictives.*"
+    direction: DOWN
+    timeout: 15000
 - assertVisible: ".*Démo · données fictives.*"
+- scrollUntilVisible:
+    element:
+      id: "enter-demo"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
 - takeScreenshot: connexion
 - tapOn:
     id: "enter-demo"
@@ -175,9 +186,544 @@ env:
     id: "mission-card-demo-mission-016"
 - assertNotVisible:
     id: "mission-city"
+# Each tab owns its stack; returning to exploration must retain mission 16.
+- tapOn:
+    id: "tab-my-missions"
+- scrollUntilVisible:
+    element:
+      id: "my-missions-empty"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "my-missions-empty"
+- tapOn:
+    id: "tab-explore"
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "mission-card-demo-mission-016"
+- scrollUntilVisible:
+    element:
+      id: "prepare-application"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "prepare-application"
+- assertVisible:
+    id: "application-title"
+    text: "Démonstration · Soins de suite 16"
+- scrollUntilVisible:
+    element:
+      text: "Dates et horaires à confirmer"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Horaires de Paris. Tous les créneaux affichés sont concernés."
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      id: "application-submit"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "application-submit"
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: "application-confirm-planning"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "application-confirm-planning"
+- scrollUntilVisible:
+    element:
+      id: "application-submit"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "application-submit"
+    enabled: true
+- tapOn:
+    id: "application-submit"
+- scrollUntilVisible:
+    element:
+      text: "Simulation enregistrée"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Aucune candidature réelle n’a été envoyée."
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      id: "application-refresh"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "application-refresh"
+- scrollUntilVisible:
+    element:
+      text: "Simulation enregistrée"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "application-confirmed"
+- takeScreenshot: candidature-confirmee
+- scrollUntilVisible:
+    element:
+      id: "application-my-missions"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "application-my-missions"
+- scrollUntilVisible:
+    element:
+      id: "my-mission-demo-mission-016"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "my-mission-demo-mission-016"
+- takeScreenshot: mes-missions
+- tapOn:
+    id: "my-mission-demo-mission-016"
+- scrollUntilVisible:
+    element:
+      text: "Simulation enregistrée"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "application-confirmed"
+- takeScreenshot: dossier-relu
+- scrollUntilVisible:
+    element:
+      id: "application-my-missions"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "application-my-missions"
+- assertVisible:
+    id: "my-mission-demo-mission-016"
+- tapOn:
+    id: "tab-explore"
+- assertVisible:
+    id: "application-scroll"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: "mission-detail-scroll"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+# The biography is saved, then read again after tab return and pull-to-refresh.
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "profile-bio"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "profile-bio"
+- eraseText: 100
+- inputText: "Simulation native Android"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "save-profile"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "save-profile"
+- scrollUntilVisible:
+    element:
+      id: "profile-saved"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "profile-saved"
+    text: "Profil fictif enregistré pour cette démonstration."
+- tapOn:
+    id: "tab-explore"
+- assertVisible:
+    id: "mission-card-demo-mission-016"
+- assertNotVisible:
+    id: "mission-city"
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "caregiver-profile-title"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 700
+- scrollUntilVisible:
+    element:
+      id: "profile-bio"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "profile-bio"
+    text: "Simulation native Android"
+- takeScreenshot: profil-relu
 - tapOn:
     id: "sign-out"
 - tapOn: "Quitter"
+- assertVisible:
+    id: "login-scroll"
+- scrollUntilVisible:
+    element:
+      id: "enter-demo"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "enter-demo"
+- assertNotVisible:
+    id: "missions-list"
+# Establishment access uses a distinct synthetic account and its own mission scope.
+- scrollUntilVisible:
+    element:
+      id: "enter-establishment-demo"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "enter-establishment-demo"
+- scrollUntilVisible:
+    element:
+      id: "establishment-name"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "establishment-name"
+    text: "Clinique des Lilas · Démo"
+- takeScreenshot: etablissement-accueil
+- scrollUntilVisible:
+    element:
+      id: "establishment-open-missions"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "establishment-open-missions"
+- scrollUntilVisible:
+    element:
+      id: "establishment-mission-count"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "establishment-mission-count"
+    text: "12 missions sur cette page"
+- scrollUntilVisible:
+    element:
+      id: "establishment-status-OUVERTE"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "establishment-status-OUVERTE"
+- scrollUntilVisible:
+    element:
+      id: "establishment-mission-count"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "establishment-mission-count"
+    text: "2 missions sur cette page"
+- takeScreenshot: etablissement-missions
+- scrollUntilVisible:
+    element:
+      id: "establishment-mission-demo-etab-mission-001"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "establishment-mission-demo-etab-mission-001"
+- assertVisible:
+    id: "establishment-mission-detail-title"
+    text: "Médecine — mission fictive 1"
+- scrollUntilVisible:
+    element:
+      text: ".*2 créneaux.*"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Planning prévisionnel"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "[0-9]{2}:[0-9]{2} — [0-9]{2}:[0-9]{2}"
+      index: 0
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "[0-9]{2}:[0-9]{2} — [0-9]{2}:[0-9]{2}"
+      index: 1
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Horaires de Paris."
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertNotVisible:
+    id: "establishment-planning-incomplete"
+- takeScreenshot: etablissement-planning
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: "establishment-mission-demo-etab-mission-001"
+- takeScreenshot: etablissement-retour
+- scrollUntilVisible:
+    element:
+      id: "establishment-mission-count"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "establishment-mission-count"
+    text: "2 missions sur cette page"
+- tapOn:
+    id: "tab-establishment-profile"
+- scrollUntilVisible:
+    element:
+      text: "Vos droits dans l’établissement"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      text: "Consulter l’établissement"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible: "Propriétaire"
+- scrollUntilVisible:
+    element:
+      text: "Autorisé"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible: "Autorisé"
+- takeScreenshot: etablissement-acces
+- tapOn:
+    id: "sign-out"
+- tapOn: "Quitter"
+- assertVisible:
+    id: "login-scroll"
+- scrollUntilVisible:
+    element:
+      id: "enter-demo"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "enter-demo"
+- assertNotVisible:
+    id: "missions-list"
+# Declaring the third medical cycle does not grant RPPS/document eligibility.
+- scrollUntilVisible:
+    element:
+      id: "enter-onboarding-demo"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "enter-onboarding-demo"
+- assertVisible:
+    id: "account-environment"
+    text: "Démo · formulaire fictif, aucune donnée envoyée"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-formation"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "onboarding-formation"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-formation-MEDECINE_DES"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: "onboarding-formation-MEDECINE_DES"
+- assertNotVisible:
+    id: "onboarding-formation-KINE"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-formation-MEDECINE_DFASM"
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: "onboarding-formation-MEDECINE_DFASM"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-study-year"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "onboarding-study-year"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-formation"
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "onboarding-formation"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-formation-MEDECINE_DES"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: "onboarding-formation-MEDECINE_DES"
+- scrollUntilVisible:
+    element:
+      id: "onboarding-internat-notice"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "onboarding-internat-notice"
+    text: ".*Votre droit au remplacement n’est pas validé à cette étape.*"
+- assertNotVisible:
+    id: "onboarding-study-year"
+- assertNotVisible: "Choisir le profil aide-soignant"
+- takeScreenshot: inscription-internat
+- scrollUntilVisible:
+    element:
+      id: "onboarding-save"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "onboarding-save"
+- scrollUntilVisible:
+    element:
+      text: "Brouillon de démonstration conservé en mémoire."
+    direction: UP
+    timeout: 20000
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      id: "onboarding-complete"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn:
+    id: "onboarding-complete"
+- scrollUntilVisible:
+    element:
+      id: "mission-count"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "mission-count"
+    text: "0 missions disponibles"
+- scrollUntilVisible:
+    element:
+      id: "missions-empty"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible:
+    id: "missions-empty"
+- assertNotVisible:
+    id: "mission-card-demo-mission-016"
+- takeScreenshot: inscription-terminee
+- tapOn:
+    id: "sign-out"
+- tapOn: "Quitter"
+- assertVisible:
+    id: "login-scroll"
+- scrollUntilVisible:
+    element:
+      id: "enter-demo"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
 - assertVisible:
     id: "enter-demo"
 - assertNotVisible:
