@@ -1,6 +1,6 @@
 import XCTest
 
-/// Drives the existing Expo Go experience; never launches, reloads or resets Jolene.
+/// Opens the prepared Expo Go experience once, then never reloads or resets a Jolene scenario.
 final class NativePilotTests: XCTestCase {
     private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -60,6 +60,7 @@ final class NativePilotTests: XCTestCase {
         let city = element("mission-city")
         require("The native city input is reachable") { self.visible(city) }
         city.tap()
+        dismissFirstKeyboardIntroductionIfPresent()
         // Return invokes the TextInput search action, including its keyboard dismissal.
         city.typeText("VilleIntrouvable\n")
         require("An unmatched city displays the empty state after keyboard dismissal") {
@@ -155,7 +156,9 @@ final class NativePilotTests: XCTestCase {
         record("\(prefix)-contrats-otp-simule")
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
+        dismissFirstKeyboardIntroductionIfPresent()
         element("contract-otp").typeText("000000")
+        XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         XCUIDevice.shared.press(.home)
         require("Contracts actually entered background") {
             self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
@@ -173,8 +176,10 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
         element("contract-otp").typeText("000000")
+        XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         // Dragging the native ScrollView dismisses the numeric keyboard if needed.
         scrollTo(element("contract-sign"), in: detail)
+        XCTAssertEqual(element("contract-otp").value as? String, "000000", "Scrolling to the signature preserves all six typed digits")
         tap("contract-sign")
         scrollTo(element("contract-result-unconfirmed"), in: detail, downward: false)
         XCTAssertTrue(element("contract-result-message").label.contains("Simulation"))
@@ -232,7 +237,9 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
         element("contract-otp").typeText("000000")
+        XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         scrollTo(element("contract-sign"), in: detail)
+        XCTAssertEqual(element("contract-otp").value as? String, "000000", "Scrolling to the signature preserves all six typed digits")
         tap("contract-sign")
         scrollTo(element("contract-result-unconfirmed"), in: detail, downward: false)
         XCTAssertFalse(element("contract-sign").isEnabled)
@@ -330,6 +337,7 @@ final class NativePilotTests: XCTestCase {
         let label = element("document-upload-label")
         scrollTo(label, in: upload)
         label.tap()
+        dismissFirstKeyboardIntroductionIfPresent()
         label.typeText("Simulation diplome remplace")
         XCTAssertEqual(label.value as? String, "Simulation diplome remplace")
         drag(upload, fromY: 0.8, toY: 0.25)
@@ -439,46 +447,23 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        // simctl already launches Expo Go before XCTest. Do not issue a second
-        // SpringBoard open transaction when that same app is already foreground:
-        // CI 5f7d420 observed a launch timeout despite the rendered Home screen.
-        // Background/not-running states still require the one normal activation.
-        if app.state != .runningForeground {
-            app.activate()
+        // Open the fixed local experience directly after XCTest owns the device.
+        // XCUIApplication.open(_:) is Apple's synchronous URL-launch API; it fails
+        // the test if opening fails. Expo Go SDK 57 registers the exp:// scheme.
+        // The Node bootstrap guard keeps this URL equal to the prepared Metro URL.
+        guard #available(iOS 16.4, *) else {
+            XCTFail("Opening the local Expo experience requires iOS 16.4 or later")
+            return
         }
-        require("Expo Go is in the foreground before opening its local server") {
-            self.app.state == .runningForeground
+        guard let experienceURL = URL(string: expoExperienceURL) else {
+            XCTFail("The fixed local Expo experience URL must be valid")
+            return
         }
         XCUIDevice.shared.orientation = .portrait
-
-        // Open the local server inside Expo Go after XCTest owns the foreground.
-        // An external simctl openurl leaves a SpringBoard confirmation in front of
-        // the app while the test runner builds. The native Home toolbar exposes
-        // Enter URL, followed by the native URL sheet and Connect action.
-        // A Node guard keeps this URL equal to the runner's precompiled Metro URL.
-        let enterURL = app.buttons["Enter URL"]
-        require("The fresh Expo Go Home toolbar is available", timeout: 120) { self.visible(enterURL) }
-        enterURL.tap()
-        let urlTitle = app.navigationBars["Enter URL"]
-        let urlField = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "exp://192.168.1.1:8081")).firstMatch
-        require("The Expo server URL sheet is present") { urlTitle.exists && urlField.exists }
-        // The fresh iOS keyboard can cover this first text input with its own
-        // typing tutorial. Handle only that identified system view at startup.
-        let keyboardIntroduction = app.otherElements["UIContinuousPathIntroductionView"]
-        if keyboardIntroduction.waitForExistence(timeout: 3) {
-            let keyboardContinue = keyboardIntroduction.buttons["Continue"]
-            require("The keyboard tutorial exposes Continue") { self.visible(keyboardContinue) }
-            keyboardContinue.tap()
-            require("The keyboard tutorial is dismissed") { !keyboardIntroduction.exists }
+        app.open(experienceURL)
+        require("Expo Go is in the foreground after opening its local server") {
+            self.app.state == .runningForeground
         }
-        require("The Expo server URL field is reachable") { self.visible(urlField) }
-        urlField.tap()
-        urlField.typeText(expoExperienceURL)
-        XCTAssertEqual(urlField.value as? String, expoExperienceURL, "Only the runner's local Metro server is opened")
-        let connect = app.buttons["Connect"]
-        require("The exact local URL enables Connect") { self.visible(connect) && connect.isEnabled }
-        connect.tap()
-        require("The Expo URL form is dismissed after one native tap") { !urlTitle.exists }
 
         // A fresh Expo Go install must present this sheet. The SDK label behind it is not proof
         // of dismissal. Native Button.tap() resolves its actual control rather than screen pixels.
@@ -518,6 +503,19 @@ final class NativePilotTests: XCTestCase {
         close.tap()
         require("The development menu is closed and Jolene is mounted", timeout: 90) {
             !sdk.exists && self.visible(self.element("login-scroll"))
+        }
+    }
+
+    private func dismissFirstKeyboardIntroductionIfPresent() {
+        // Direct URL opening no longer uses Expo Home's text field. Handle the
+        // same identified system tutorial at the first Jolene input instead.
+        // This retains the existing single, bounded startup check per scenario.
+        let keyboardIntroduction = app.otherElements["UIContinuousPathIntroductionView"]
+        if keyboardIntroduction.waitForExistence(timeout: 3) {
+            let keyboardContinue = keyboardIntroduction.buttons["Continue"]
+            require("The keyboard tutorial exposes Continue") { self.visible(keyboardContinue) }
+            keyboardContinue.tap()
+            require("The keyboard tutorial is dismissed") { !keyboardIntroduction.exists }
         }
     }
 
@@ -659,12 +657,21 @@ final class NativePilotTests: XCTestCase {
         // tap selected only "Profil" on iPhone 17, so do not infer selection size.
         bio.tap()
         require("The native keyboard is available for profile editing") { self.app.keyboards.firstMatch.exists }
+        // Focusing the field must keep it visible for the user. A coordinate on
+        // an obscured TextView can hit a key instead of opening its editing menu.
+        require("The focused biography stays above the native keyboard without another scroll") {
+            let keyboard = self.app.keyboards.firstMatch
+            let assistant = self.app.otherElements["SystemInputAssistantView"].firstMatch
+            let keyboardTop = assistant.exists ? min(keyboard.frame.minY, assistant.frame.minY) : keyboard.frame.minY
+            return self.fullyVisible(bio, inside: profile) && bio.frame.maxY <= keyboardTop
+        }
         // Place the insertion point after the short fixture, in the TextView's
         // empty lower area; holding there opens the editing menu without selecting a word.
         let insertion = bio.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.85))
         insertion.tap()
         insertion.press(forDuration: 1.0)
-        let selectAll = app.buttons.matching(NSPredicate(format: "label IN %@", ["Select All", "Tout sélectionner"])).firstMatch
+        // The native text editing menu exposes this action as MenuItem (iPad AX).
+        let selectAll = app.menuItems.matching(NSPredicate(format: "label IN %@", ["Select All", "Tout sélectionner"])).firstMatch
         require("The native Select All editing action is available") { self.visible(selectAll) }
         selectAll.tap()
         bio.typeText(XCUIKeyboardKey.delete.rawValue)

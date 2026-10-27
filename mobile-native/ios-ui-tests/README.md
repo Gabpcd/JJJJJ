@@ -1,9 +1,12 @@
 # iPhone et iPad — pilote existant
 
 Projet XCTest UI autonome : compile uniquement le runner de vérification, puis
-active l’application Expo Go déjà installée (`host.exp.Exponent`). Il ne compile
+ouvre l’expérience dans Expo Go déjà installé (`host.exp.Exponent`). Il ne compile
 pas Jolene, n’installe pas de nouvelle version de Jolene et ne réinitialise aucune
-donnée. Le runner CI ouvre l’URL `exp://` du bundle préparé avant le test portrait.
+donnée. Le runner CI prépare le bundle local et lance Expo Go ; le test ouvre
+ensuite son URL fixe `exp://127.0.0.1:8090` avec `XCUIApplication.open(_:)`,
+l’API Apple disponible depuis iOS 16.4. Une version antérieure échoue explicitement.
+La feuille « Enter URL » d’Expo Home ne fait pas partie du parcours Jolene.
 
 Sur iPad, les deux méthodes suivantes de `NativePilotTests` s’exécutent séparément,
 dans cet ordre, sur le même simulateur et la même expérience Expo Go :
@@ -57,8 +60,11 @@ avec retour système Android et reprise de l’expérience existante par son URL
 Le formulaire public de création de compte et l’envoi d’email de confirmation
 ne sont pas couverts par ces scénarios sans réseau.
 
-La préparation portrait traite l’éventuelle confirmation système Open/Ouvrir
-avant d’activer Expo. Elle exige le tutoriel de l’installation neuve, tape une
+La préparation ouvre une seule fois l’URL locale depuis XCTest, sans transaction
+`simctl openurl`, puis exige Expo Go au premier plan. Le tutoriel système du clavier,
+s’il apparaît, est traité au premier champ Jolene de chaque scénario neuf avec
+le même contrôle identifié et borné à 3 secondes. La préparation exige le tutoriel
+Expo de l’installation neuve, tape une
 seule fois sur le vrai bouton natif Continue et exige sa disparition. Le libellé
 SDK visible derrière la feuille ne suffit pas. Dans le menu Expo SDK 57,
 « Tools button » est un texte distinct du `Toggle` sans libellé : le test cible
@@ -73,7 +79,7 @@ L’activation après Home reprend l’expérience existante. Chaque test dispos
 600 secondes maximum pour les trois parcours de démonstration. La préparation attend jusqu’à 120 secondes le tutoriel ;
 les autres attentes et les boucles de défilement sont bornées.
 
-Depuis la racine du dépôt, avec le simulateur iPad déjà démarré et l’URL ouverte :
+Depuis la racine du dépôt, avec le simulateur iPad démarré, Expo Go installé et le bundle local prêt :
 
 ```sh
 xcodebuild test \

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getProfessionLabel } from '../data/presentation';
@@ -15,8 +15,8 @@ export function CaregiverProfileScreen({ context, gateway, onSaved, onSignOut, o
   const resource = useMissionResource(`profile:${context.userId}`, signal => gateway.read(context, signal),
     'Votre profil ne peut pas être chargé. Vérifiez votre connexion puis réessayez.');
   return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
-    <KeyboardAvoidingView style={shared.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={96}>
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+    <View style={shared.flex}>
+      <ScrollView automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         testID="caregiver-profile-scroll" contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={resource.loading && resource.data !== null} onRefresh={resource.refresh} />}>
         <View style={[shared.content, styles.body]}>
@@ -28,7 +28,7 @@ export function CaregiverProfileScreen({ context, gateway, onSaved, onSignOut, o
           <ActionButton secondary label="Se déconnecter" onPress={onSignOut} testID="profile-sign-out" />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   </SafeAreaView>;
 }
 

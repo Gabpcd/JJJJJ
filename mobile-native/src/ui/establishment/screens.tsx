@@ -159,7 +159,6 @@ export function EstablishmentMissionDetailScreen({ gateway, context, missionId, 
         {mission.service ? <LabelValue label="Service" value={mission.service} /> : null}
         <LabelValue label="Période" value={formatMissionPeriod(mission)} />
         <LabelValue label={mission.mode_remuneration === 'RETROCESSION' ? 'Rémunération annoncée' : 'Tarif horaire annoncé'} value={getMissionRemuneration(mission)} />
-        {mission.rist_plafond_applique ? <Text style={shared.small}>Le tarif affiché tient compte du plafond appliqué à cette mission.</Text> : null}
       </View>
       <View style={[shared.card, styles.content]}><Text accessibilityRole="header" style={shared.sectionTitle}>Description</Text>
         <Text selectable style={shared.body}>{mission.description?.trim() || 'Aucune description ajoutée.'}</Text>

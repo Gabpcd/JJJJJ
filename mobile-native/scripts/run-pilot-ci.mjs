@@ -303,8 +303,8 @@ try {
     stage = 'open-ios-experience';
     const launch = await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
     navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout });
-    // XCTest enters this same local URL through Expo Go's native Enter URL form.
-    // This avoids SpringBoard's external-open prompt; assertions are unchanged.
+    // XCTest opens this same local URL with XCUIApplication.open(_:) while active.
+    // The Expo Home URL form is not part of the Jolene assertions.
     // ios-bootstrap.node.test.mjs guards the matching Swift constant.
     for (const orientation of selectedScenario.orientations) {
       await runIosXCTest(orientation, resolve(output, orientation));

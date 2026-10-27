@@ -9,6 +9,7 @@ import { colors, shared } from '../theme';
 import { ContractOriginalReader } from './ContractOriginalReader';
 import { createContractDetailController } from './detailController';
 import { DEMO_CONTRACT_CODE } from '../../contracts/demoFixture';
+import { createContractInputDiagnostics, type ContractCodeResetReason } from './inputDiagnostics';
 import { contractContextKey, contractStatus, contractType, originalMessage, partyStatus, revisionKey } from './presentation';
 
 export interface ContractDetailScreenProps { context: ContractContext; sessionEpoch: number; contractId: string; gateway: ContractGateway }
@@ -19,17 +20,26 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const controller = useMemo(() => createContractDetailController(gateway, context, contractId), [gateway, contractId]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const [code, setCode] = useState(''); const [clock, setClock] = useState(Date.now());
+  const inputDiagnostics = useMemo(() => createContractInputDiagnostics({
+    gatewayMode: gateway.mode, appMode: process.env.EXPO_PUBLIC_JOLENE_MODE,
+    flag: process.env.EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS,
+    emit: entry => console.log('[jolene-native-contract-input]', JSON.stringify(entry)),
+  }), [gateway.mode]);
+  const clearCode = useCallback((reason: ContractCodeResetReason) => {
+    inputDiagnostics.reset(reason); setCode('');
+  }, [inputDiagnostics]);
+  useEffect(() => { inputDiagnostics.committed(code.length); }, [code, inputDiagnostics]);
   useFocusEffect(useCallback(() => {
     if (AppState.currentState === 'active') controller.activate();
     const sub = AppState.addEventListener('change', next => {
-      setCode(''); if (next === 'active') controller.activate(); else controller.deactivate();
+      clearCode(next === 'active' ? 'app-active' : 'app-nonactive'); if (next === 'active') controller.activate(); else controller.deactivate();
     });
-    return () => { sub.remove(); setCode(''); controller.deactivate(); };
-  }, [controller]));
+    return () => { sub.remove(); clearCode('focus-cleanup'); controller.deactivate(); };
+  }, [controller, clearCode]));
   // Focus cleanup aborts requests and removes sensitive state. Do not permanently
   // dispose a memoized controller in an effect: Strict Mode reuses it on setup.
   const revision = revisionKey(state.details?.original ?? null);
-  useEffect(() => { setCode(''); }, [revision]);
+  useEffect(() => { clearCode('revision-change'); }, [revision, clearCode]);
   useEffect(() => {
     if (!state.active) return;
     setClock(Date.now()); const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer);
@@ -43,16 +53,16 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const canRequest = eligible && consentReady && admissionValid && admission!.canSend;
   const canSign = eligible && consentReady && admissionValid && admission!.canValidate && !!admission!.otpExpiresAt && admission!.otpExpiresAt > clock;
   const remaining = admission?.otpExpiresAt ? Math.max(0, Math.ceil((admission.otpExpiresAt - clock) / 1000)) : null;
-  const submit = () => { if (!canSign || code.length !== 6) return; const supplied = code; setCode(''); Keyboard.dismiss(); void controller.sign(supplied); };
+  const submit = () => { if (!canSign || code.length !== 6) return; const supplied = code; clearCode('submit'); Keyboard.dismiss(); void controller.sign(supplied); };
   return <SafeAreaView style={shared.screen} edges={['left', 'right', 'bottom']}>
     <KeyboardAvoidingView style={shared.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       <ScrollView testID="contract-detail-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
         contentContainerStyle={[shared.content, styles.content]} refreshControl={<RefreshControl refreshing={state.loading && !!details}
-          onRefresh={() => { setCode(''); void controller.reload(); }} tintColor={colors.pink} colors={[colors.pink]} />}>
+          onRefresh={() => { clearCode('refresh'); void controller.reload(); }} tintColor={colors.pink} colors={[colors.pink]} />}>
         <ModeNotice mode={gateway.mode === 'demo' ? 'demo' : 'staging'} />
         {gateway.mode === 'demo' ? <Text style={shared.small} testID="contract-demo-notice">Simulation locale : aucun SMS envoyé et aucun contrat réel signé.</Text> : null}
         {state.loading ? <StatusPanel loading title="Lecture du contrat" message="Vérification de l’original et de ses signatures." /> : null}
-        {state.error ? <ErrorNotice message={state.error} onRetry={() => { setCode(''); void controller.reload(); }} /> : null}
+        {state.error ? <ErrorNotice message={state.error} onRetry={() => { clearCode('error-reload'); void controller.reload(); }} /> : null}
         {details ? <>
           <View style={styles.gap}>
             <Text style={shared.small}>{contractType(details.record.type_contrat)}</Text>
@@ -77,7 +87,7 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
             <Text style={shared.body} testID="contract-result-message">{state.result.message}</Text>
             {state.result.issue?.attemptsRemaining != null ? <Text style={shared.small}>Tentatives restantes : {state.result.issue.attemptsRemaining}</Text> : null}
           </View> : null}
-          {state.needsRead ? <ActionButton secondary label="Actualiser l’état du contrat" onPress={() => { setCode(''); void controller.reload(); }}
+          {state.needsRead ? <ActionButton secondary label="Actualiser l’état du contrat" onPress={() => { clearCode('reconcile'); void controller.reload(); }}
             busy={state.loading} testID="contract-reconcile" /> : null}
           {eligible ? <View style={[shared.card, styles.gap]}>
             <Text style={shared.sectionTitle} accessibilityRole="header">Votre signature</Text>
@@ -89,14 +99,15 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
               <Text style={[shared.body, styles.consentText]}>J'ai lu l'intégralité du contrat affiché ci-dessus et j'accepte ses termes.</Text>
             </Pressable>
             <ActionButton label={gateway.mode === 'demo' ? 'Simuler un code SMS' : admission?.canValidate ? 'Demander un nouveau code SMS' : 'Demander un code SMS'}
-              disabled={!canRequest} busy={state.busy === 'request'} onPress={() => { setCode(''); void controller.requestOtp(); }} testID="contract-request-otp" />
+              disabled={!canRequest} busy={state.busy === 'request'} onPress={() => { clearCode('request-otp'); void controller.requestOtp(); }} testID="contract-request-otp" />
             {admission?.canValidate ? <>
               {gateway.mode === 'demo' ? <Text style={shared.body} testID="contract-demo-code">Code fictif : {DEMO_CONTRACT_CODE}. Aucun SMS envoyé.</Text> : null}
               <Text style={shared.small} testID="contract-otp-status">{remaining && remaining > 0
                 ? `Code utilisable pendant ${Math.floor(remaining / 60)} min ${String(remaining % 60).padStart(2, '0')} s.`
                 : 'Le code a expiré. Un nouvel envoi doit être demandé explicitement.'}</Text>
               <Text style={shared.body} nativeID="contract-code-label">Code reçu par SMS</Text>
-              <TextInput value={code} onChangeText={value => setCode(value.replace(/[^0-9]/g, '').slice(0, 6))} maxLength={6}
+              <TextInput value={code} onChange={event => inputDiagnostics.nativeChange(event.nativeEvent.text.length, event.nativeEvent.eventCount)}
+                onChangeText={value => { inputDiagnostics.textChange(value.length); setCode(value.replace(/[^0-9]/g, '').slice(0, 6)); }} maxLength={6}
                 keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="sms-otp" autoCorrect={false}
                 accessibilityLabel="Code reçu par SMS, six chiffres" editable={!blocked} style={styles.input} testID="contract-otp"
                 placeholder="6 chiffres" placeholderTextColor={colors.muted} returnKeyType="done" onSubmitEditing={submit} />

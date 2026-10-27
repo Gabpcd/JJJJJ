@@ -387,10 +387,14 @@ name: Justificatifs natifs — scénario en mémoire uniquement
     id: missions-list
 - tapOn:
     id: tab-profile
+- extendedWaitUntil:
+    visible:
+      id: caregiver-profile-scroll
+    timeout: 15000
 - scrollUntilVisible:
     element:
       id: profile-documents
-    direction: DOWN
+    direction: UP
     timeout: 15000
     centerElement: true
 - tapOn:

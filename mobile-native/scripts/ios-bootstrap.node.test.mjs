@@ -11,5 +11,5 @@ test('XCTest and Metro use the same fixed loopback experience URL', () => {
   assert.equal(swiftValues.length, 1, 'one XCTest URL');
   assert.equal(runnerValues[0][1], 'exp://127.0.0.1:8090');
   assert.equal(swiftValues[0][1], runnerValues[0][1]);
-  assert.doesNotMatch(runner, /\[['"]simctl['"],\s*['"]openurl['"]/, 'iOS must use the native Expo form, without a SpringBoard open prompt');
+  assert.doesNotMatch(runner, /\[['"]simctl['"],\s*['"]openurl['"]/, 'iOS opens the local URL inside XCTest, not via an external simctl transaction');
 });

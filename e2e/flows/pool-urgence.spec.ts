@@ -27,7 +27,9 @@ test.describe('Flow pool urgence', () => {
     await loginAs(page, 'etab');
 
     await page.goto('/etablissement/pool-urgence');
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/etablissement\/pool-urgence$/);
+    // Ce filtre apparaît après le chargement, contrairement au titre du skeleton.
+    await expect(page.getByRole('combobox', { name: 'Filtrer par profession', exact: true })).toBeVisible();
 
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
   });

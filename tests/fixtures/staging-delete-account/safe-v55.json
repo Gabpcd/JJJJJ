@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "projectRef": "mejpriaetwgtcstbgfid",
+  "auditedSourceSha": "5221dd6352147967dd36020ae38e0ac062251024",
+  "edge": {
+    "id": "3f9903db-2d89-436e-9630-d2d348ee6d11",
+    "slug": "delete-account",
+    "version": 55,
+    "ezbr_sha256": "85050e9c3150db51a100a0e95285289d04d106da556a0713b5737b3ccc158a89",
+    "status": "ACTIVE",
+    "verify_jwt": false,
+    "import_map": false,
+    "import_map_path": null,
+    "entrypoint_path": "file:///tmp/user_fn_mejpriaetwgtcstbgfid_3f9903db-2d89-436e-9630-d2d348ee6d11_14/source/supabase/functions/delete-account/index.ts"
+  },
+  "files": {
+    "supabase/functions/_shared/admin-auth.ts": "367938019377395d5ee480416e25392d7d3ac0e5a8466c2ee8293640e5243318",
+    "supabase/functions/_shared/cors.ts": "2fdef467c6eae9fed9035b70a7f97074363faed944f72050d277ff5834139911",
+    "supabase/functions/_shared/rate-limit.ts": "6ecb4f1fa4e8dfd0f11d61a51d96bb3e572f14a14e3d07ccc749b4cd180d10f4",
+    "supabase/functions/delete-account/index.ts": "4ae55ac7eee2f57b652cb05dd62357b96ad6860ec194fb89fc3c3c6ffbdf78f4"
+  },
+  "catalogueQuerySha256": "babeb6089a5c6ab88a718ad136c300851c8e041c7bc8b0fdcc8add5b90ff42a7",
+  "catalogue": {
+    "psc_constraints": [
+      "PRIMARY KEY (state)"
+    ],
+    "psc_routines": [
+      {
+        "definition_md5": "fb13734025d00c4d9bc9bd7454a672f7",
+        "signature": "public.fn_nettoyer_psc_sessions_expirees()"
+      }
+    ],
+    "routines": [
+      {
+        "acl": "{postgres=X/postgres}",
+        "definition_md5": "5c50320480585c8cf8bd9ed462f36548",
+        "owner": "postgres",
+        "signature": "private.fn_anonymisation_compte_confirmee(p_uid uuid, p_type text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "definition_md5": "10631df806112f8f5fa83385f90e0761",
+        "owner": "postgres",
+        "signature": "public.fn_anonymisation_compte_confirmee(p_utilisateur_id uuid, p_type_profil text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "definition_md5": "6c6a63a59c112636b141fb630f9c48f6",
+        "owner": "postgres",
+        "signature": "public.fn_supprimer_compte_etablissement_rate_limited()"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "definition_md5": "3a69aaead63b899fd3ba4b0b3019fb90",
+        "owner": "postgres",
+        "signature": "public.fn_supprimer_compte_rate_limited()"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "definition_md5": "9b50372ce3ebd43e8f6e0302f92b46b9",
+        "owner": "postgres",
+        "signature": "public.fn_supprimer_mon_compte()"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "definition_md5": "3eb0bafbbdd5b6816a2c0bc8d85a94c4",
+        "owner": "postgres",
+        "signature": "public.fn_supprimer_mon_compte_etablissement()"
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "definition_md5": "dba769c412de40072b9c5d615cf2e39a",
+        "owner": "postgres",
+        "signature": "public.fn_verifier_rate_limit(p_cle text, p_action text, p_max_tentatives integer, p_fenetre_secondes integer)"
+      }
+    ]
+  }
+}
