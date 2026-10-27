@@ -289,14 +289,13 @@ final class NativePilotTests: XCTestCase {
         let bio = element("profile-bio")
         scrollTo(bio, in: profile)
         let expected = "Simulation native \(proofPrefix)"
-        // A tap can place the caret in the middle; backspacing its length leaves the suffix.
-        // Use the actual native editing menu, then verify both replacement boundaries.
-        bio.press(forDuration: 1)
-        let selectAll = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label MATCHES %@", "Select All|Tout sélectionner")
-        ).firstMatch
-        require("The native Select All action is reachable") { self.visible(selectAll) }
-        selectAll.tap()
+        // This fixture is one paragraph. Apple's native triple-tap selects it all;
+        // a single long press on an unfocused TextView only opens the keyboard.
+        // https://support.apple.com/guide/iphone/iph1a9cae52c/ios
+        XCTAssertFalse((bio.value as? String ?? "").contains("\n"))
+        bio.tap()
+        require("The native keyboard is available for profile editing") { self.app.keyboards.firstMatch.exists }
+        bio.tap(withNumberOfTaps: 3, numberOfTouches: 1)
         bio.typeText(XCUIKeyboardKey.delete.rawValue)
         require("The entire previous biography was removed") { bio.value as? String == "" }
         bio.typeText(expected)

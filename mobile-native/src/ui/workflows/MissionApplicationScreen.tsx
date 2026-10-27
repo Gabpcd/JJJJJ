@@ -58,7 +58,7 @@ function ApplicationContent({ context, gateway, missionId, onBack, onMyMissions,
               <LabelValue label="État" value={statusLabel(applicationDisplayStatus(snapshot))} />
             </View>
             <View style={[shared.card, styles.section]}>
-              <Text style={shared.sectionTitle} accessibilityRole="header">Dates et horaires à confirmer</Text>
+              <Text style={shared.sectionTitle} accessibilityRole="header">{action && !applied && !terminal ? 'Dates et horaires à confirmer' : 'Dates et horaires'}</Text>
               {!snapshot.exactPersistedPlanning ? <Text style={shared.body}>Le planning exact n’est pas disponible. Rechargez le dossier avant de candidater.</Text>
                 : mission.creneaux_planifies.map((slot, index) => <View key={slot.id ?? String(index)} style={styles.slot}>
                   <Text style={shared.body}>{dateTime(slot.debut)}</Text>

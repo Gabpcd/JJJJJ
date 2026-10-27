@@ -75,8 +75,11 @@ async function waitUntil(label, check, timeout) {
 }
 
 async function chooseIosDevice() {
-  const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'])).stdout).runtimes;
-  const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).stdout).devices;
+  // A fresh macOS runner may still be initializing CoreSimulator before listing
+  // runtimes. Bound that startup separately; do not relax any application assertion.
+  const inventory = { timeout: 180_000, logfile: 'simulator-inventory.log' };
+  const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], inventory)).stdout).runtimes;
+  const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], inventory)).stdout).devices;
   const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
   if (!['iphone', 'ipad'].includes(family)) throw new Error('Famille de simulateur iOS invalide.');
   const ios = runtimes.filter(runtime => runtime.isAvailable && runtime.identifier.includes('.iOS-'))

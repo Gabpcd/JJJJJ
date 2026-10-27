@@ -450,9 +450,8 @@ env:
     id: "profile-bio"
 - tapOn: "Select All|Tout sélectionner"
 - eraseText: 1
-- assertVisible:
-    id: "profile-bio"
-    text: "^$"
+# Android omits the text attribute when empty. The exact value below proves
+# the old text was fully replaced before saving (without matching its label).
 - inputText: "Simulation native Android"
 - assertVisible:
     id: "profile-bio"
