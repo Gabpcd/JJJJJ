@@ -9,8 +9,8 @@ import { ActionButton, ErrorNotice, LabelValue, ModeNotice, StatusPanel } from '
 import { colors, shared } from './theme';
 import { useMissionResource } from './useMissionResource';
 
-export function CaregiverProfileScreen({ context, gateway, onSaved, onSignOut }: {
-  context: MissionReadContext; gateway: ProfileGateway; onSaved: () => void; onSignOut: () => void;
+export function CaregiverProfileScreen({ context, gateway, onSaved, onSignOut, onOpenDocuments }: {
+  context: MissionReadContext; gateway: ProfileGateway; onSaved: () => void; onSignOut: () => void; onOpenDocuments: () => void;
 }) {
   const resource = useMissionResource(`profile:${context.userId}`, signal => gateway.read(context, signal),
     'Votre profil ne peut pas être chargé. Vérifiez votre connexion puis réessayez.');
@@ -21,6 +21,7 @@ export function CaregiverProfileScreen({ context, gateway, onSaved, onSignOut }:
         refreshControl={<RefreshControl refreshing={resource.loading && resource.data !== null} onRefresh={resource.refresh} />}>
         <View style={[shared.content, styles.body]}>
           <ModeNotice mode={gateway.mode === 'demo' ? 'demo' : 'staging'} />
+          <ActionButton secondary label="Mes documents" onPress={onOpenDocuments} testID="profile-documents" />
           {resource.error ? <ErrorNotice message={resource.error} onRetry={resource.refresh} /> : null}
           {resource.data ? <ProfileForm key={context.userId} profile={resource.data} context={context} gateway={gateway} onSaved={onSaved} />
             : <StatusPanel loading={resource.loading} title={resource.loading ? 'Chargement du profil' : 'Profil indisponible'} />}

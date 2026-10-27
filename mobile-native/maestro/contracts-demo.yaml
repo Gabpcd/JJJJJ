@@ -1,0 +1,230 @@
+appId: ${APP_ID}
+name: Contrats natifs — simulation locale sans fournisseur
+---
+# Fresh demo runtime, EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO=1.
+# The startup parent signs into the synthetic caregiver; no server fixture is used.
+- tapOn:
+    id: tab-contracts
+- assertVisible:
+    id: contracts-list
+- assertVisible:
+    id: contracts-count
+    text: "1 contrat.*"
+- assertVisible: ".*Démo · données fictives.*"
+- takeScreenshot: contrats-liste
+- tapOn:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+- assertVisible:
+    id: contract-demo-notice
+- assertVisible:
+    id: contract-number
+    text: ".*DEMO-CONTRAT-001.*"
+- scrollUntilVisible:
+    element:
+      id: contract-original-end
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: contract-original-end
+    text: "(?s).*DOCUMENT FICTIF.*Dernière ligne.*"
+- takeScreenshot: contrats-original
+- scrollUntilVisible:
+    element:
+      id: contract-request-otp
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-request-otp
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: contract-consent
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: contract-consent
+- scrollUntilVisible:
+    element:
+      id: contract-request-otp
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-request-otp
+- scrollUntilVisible:
+    element:
+      id: contract-demo-code
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-demo-code
+    text: ".*000000.*Aucun SMS envoyé.*"
+- takeScreenshot: contrats-otp-simule
+- scrollUntilVisible:
+    element:
+      id: contract-otp
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-otp
+- inputText: "000000"
+- pressKey: Home
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          stopApp: false
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - openLink: ${EXPO_URL}
+- extendedWaitUntil:
+    visible:
+      id: contract-original
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: contract-request-otp
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-request-otp
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: contract-otp
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-otp
+    text: "^6 chiffres$|^$"
+- takeScreenshot: contrats-reprise
+- scrollUntilVisible:
+    element:
+      id: contract-consent
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: contract-consent
+- scrollUntilVisible:
+    element:
+      id: contract-otp
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-otp
+- inputText: "000000"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: contract-sign
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: contract-sign
+- scrollUntilVisible:
+    element:
+      id: contract-result-unconfirmed
+    direction: UP
+    timeout: 15000
+- assertVisible: ".*Simulation : réponse interrompue.*"
+- takeScreenshot: contrats-signature-incertaine
+- scrollUntilVisible:
+    element:
+      id: contract-sign
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-sign
+    enabled: false
+- scrollUntilVisible:
+    element:
+      id: contract-reconcile
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: contract-reconcile
+- scrollUntilVisible:
+    element:
+      id: contract-status
+    direction: UP
+    timeout: 15000
+- assertVisible:
+    id: contract-status
+    text: Signé par le soignant
+- assertNotVisible:
+    id: contract-consent
+- assertNotVisible:
+    id: contract-sign
+- takeScreenshot: contrats-signature-relue
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: contracts-list
+- assertVisible:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+    text: ".*Signé par le soignant.*"
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- scrollUntilVisible:
+    element:
+      id: enter-contracts-readonly-demo
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: enter-contracts-readonly-demo
+- tapOn:
+    id: tab-contracts
+- assertVisible:
+    id: contracts-count
+    text: "1 contrat.*"
+- tapOn:
+    id: contract-card-00000000-0000-4000-8000-000000000021
+- scrollUntilVisible:
+    element:
+      id: contract-original-end
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: contract-original-end
+    text: "(?s).*Dernière ligne.*"
+- scrollUntilVisible:
+    element:
+      id: contract-read-only
+    direction: DOWN
+    timeout: 15000
+- assertNotVisible:
+    id: contract-consent
+- assertNotVisible:
+    id: contract-request-otp
+- assertNotVisible:
+    id: contract-sign
+- takeScreenshot: contrats-lecture-seule
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- assertNotVisible:
+    id: contract-original
+- assertNotVisible:
+    id: contract-detail-scroll

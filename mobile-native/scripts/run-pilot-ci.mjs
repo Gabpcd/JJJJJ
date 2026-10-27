@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
+import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -15,12 +16,15 @@ if (!['ios', 'android'].includes(platform)) throw new Error('Plateforme attendue
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(process.env.PILOT_OUTPUT_DIR || resolve(project, 'test-results', `native-${platform}`));
 mkdirSync(output, { recursive: true });
-const flow = resolve(project, 'maestro', 'consultation.yaml');
-const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 const iosFamily = process.env.IOS_DEVICE_FAMILY || 'iphone';
-const isIpad = platform === 'ios' && iosFamily === 'ipad';
+const selectedScenario = selectNativeScenario(process.env, platform, iosFamily);
+const flow = resolve(project, 'maestro', selectedScenario.flowFile);
+const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
+writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
+  EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: selectedScenario.documentScenarioFlag,
+  EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: selectedScenario.contractScenarioFlag ?? '0',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
   EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', MAESTRO_CLI_NO_ANALYTICS: '1',
   MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
@@ -157,7 +161,7 @@ async function runScenario(name, scenarioFlow, directory) {
     '-e', `APP_ID=${appId}`, '-e', `EXPO_URL=${expoUrl}`,
     '-e', `OUTPUT_DIR=${directory}`, '-e', `PLATFORM=${platform}`,
     '-e', `FRESH_EXPO_GO=${name === 'portrait' ? '1' : '0'}`, scenarioFlow],
-  { timeout: 720_000, logfile: `${name}-maestro.log` });
+  { timeout: selectedScenario.name === 'consultation' ? 720_000 : 600_000, logfile: `${name}-maestro.log` });
   const junit = readFileSync(resolve(directory, 'junit.xml'), 'utf8');
   if (!/<testsuite\b[^>]*\btests="[1-9]\d*"/.test(junit)
     || /\b(?:failures|errors|skipped)="[1-9]\d*"/.test(junit)) {
@@ -169,9 +173,7 @@ async function runScenario(name, scenarioFlow, directory) {
 
 async function runIosXCTest(name, directory) {
   const portrait = name === 'portrait';
-  const testMethod = portrait
-    ? (isIpad ? 'testPortraitConsultation' : 'testIphoneConsultation')
-    : 'testLandscapeConsultation';
+  const testMethod = iosTestMethod(selectedScenario, iosFamily, name);
   stage = `xctest-${name}`;
   console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
   mkdirSync(directory, { recursive: true });
@@ -202,10 +204,7 @@ async function runIosXCTest(name, directory) {
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
-  const extraScreens = ['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee'];
-  const names = portrait
-    ? ['connexion', 'missions', 'detail', 'retour', ...extraScreens].map(screen => `${iosFamily}-portrait-${screen}`)
-    : ['connexion', 'liste', 'detail', 'retour', ...extraScreens].map(screen => `ipad-paysage-${screen}`);
+  const names = scenarioCaptureNames(selectedScenario, platform, iosFamily, name);
   for (const name of names) {
     const matching = manifest.flatMap(test => test.attachments ?? []).filter(item =>
       item.suggestedHumanReadableName?.includes(name) && item.exportedFileName?.endsWith('.png'));
@@ -244,7 +243,7 @@ function verifyCaptureOrientation(directory, orientation, names) {
 }
 
 try {
-  if (!existsSync(flow)) throw new Error('Le scénario maestro/consultation.yaml est requis.');
+  if (!existsSync(flow)) throw new Error(`Le scénario Maestro sélectionné est absent : ${selectedScenario.flowFile}.`);
   if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
   stage = 'expo-go-install';
@@ -295,17 +294,18 @@ try {
   if (!bundleBytes) throw new Error('Le bundle Metro est vide.');
   writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
 
-  console.log('Installation, manifeste et bundle prêts ; lancement du parcours natif.');
+  console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
     await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
     await run('xcrun', ['simctl', 'openurl', device, expoUrl], { timeout: 120_000, logfile: 'expo-launch.log' });
-    await runIosXCTest('portrait', resolve(output, 'portrait'));
-    if (isIpad) await runIosXCTest('landscape', resolve(output, 'landscape'));
+    for (const orientation of selectedScenario.orientations) {
+      await runIosXCTest(orientation, resolve(output, orientation));
+    }
   } else {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
-    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour', ...['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee']]);
+    verifyCaptureOrientation(output, 'PORTRAIT', scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
   }
   success = true;
   stage = 'complete';
@@ -332,7 +332,7 @@ try {
     await delay(1000);
     stopTree(metro, 'SIGKILL');
   }
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform,
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform, scenario: selectedScenario.name, orientations: selectedScenario.orientations,
     device, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
   await Promise.all(streams.map(stream => new Promise(resolveClose => stream.end(resolveClose))));
 }

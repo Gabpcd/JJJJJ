@@ -9,7 +9,7 @@ final class NativePilotTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        // One bounded scenario now includes three distinct demo account journeys.
+        // Each selected consultation, Documents or Contracts scenario has its own bounded budget.
         executionTimeAllowance = 600
     }
 
@@ -109,6 +109,263 @@ final class NativePilotTests: XCTestCase {
         signOut()
         runEstablishment()
         runSignup()
+    }
+
+
+    // Each Contracts scenario starts in a fresh demo runtime with the explicit
+    // EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO=1 flag. No provider is contacted.
+    func testContractsIphonePortrait() throws { runContracts(prefix: "iphone-portrait", landscape: false) }
+    func testContractsIpadPortrait() throws { runContracts(prefix: "ipad-portrait", landscape: false) }
+    func testContractsIpadLandscape() throws { runContracts(prefix: "ipad-paysage", landscape: true) }
+
+    private func runContracts(prefix: String, landscape: Bool) {
+        proofPrefix = prefix
+        prepareExpoGo()
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
+        require("Contracts starts in the requested orientation") {
+            landscape ? self.app.frame.width > self.app.frame.height : self.app.frame.height > self.app.frame.width
+        }
+        assertSignedOutDemo()
+        tap("enter-demo")
+        assertMissionCount(30)
+        tap("tab-contracts")
+        require("One synthetic contract is listed") {
+            self.visible(self.element("contracts-list")) && self.element("contracts-count").label.hasPrefix("1 contrat")
+        }
+        XCTAssertTrue(text("Démo · données fictives").exists)
+        record("\(prefix)-contrats-liste")
+        tap("contract-card-00000000-0000-4000-8000-000000000021")
+        let detail = element("contract-detail-scroll")
+        require("The synthetic contract is explicitly identified") { self.visible(self.element("contract-demo-notice")) }
+        XCTAssertTrue(element("contract-number").label.contains("DEMO-CONTRAT-001"))
+        scrollTo(element("contract-original-end"), in: detail)
+        XCTAssertTrue(element("contract-original-end").label.contains("DOCUMENT FICTIF — AUCUN ENGAGEMENT RÉEL"))
+        XCTAssertTrue(element("contract-original-end").label.contains("Dernière ligne : l’employeur fictif dit 'oui'."))
+        record("\(prefix)-contrats-original")
+        scrollTo(element("contract-request-otp"), in: detail)
+        XCTAssertFalse(element("contract-request-otp").isEnabled, "Reading does not accept the contract")
+        scrollTo(element("contract-consent"), in: detail, downward: false)
+        tap("contract-consent")
+        scrollTo(element("contract-request-otp"), in: detail)
+        tap("contract-request-otp")
+        scrollTo(element("contract-demo-code"), in: detail)
+        XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
+        XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
+        record("\(prefix)-contrats-otp-simule")
+        scrollTo(element("contract-otp"), in: detail)
+        tap("contract-otp")
+        element("contract-otp").typeText("000000")
+        XCUIDevice.shared.press(.home)
+        require("Contracts actually entered background") {
+            self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
+        }
+        app.activate()
+        require("The contract is reread after resume") { self.element("contract-original").exists && !self.app.keyboards.firstMatch.exists }
+        scrollTo(element("contract-request-otp"), in: detail)
+        XCTAssertFalse(element("contract-request-otp").isEnabled, "Consent must be reset after backgrounding")
+        scrollTo(element("contract-otp"), in: detail)
+        XCTAssertTrue((element("contract-otp").value as? String).map { $0.isEmpty || $0 == "6 chiffres" } ?? false,
+                      "The previously typed code must not survive resume")
+        record("\(prefix)-contrats-reprise")
+        scrollTo(element("contract-consent"), in: detail, downward: false)
+        tap("contract-consent")
+        scrollTo(element("contract-otp"), in: detail)
+        tap("contract-otp")
+        element("contract-otp").typeText("000000")
+        // Dragging the native ScrollView dismisses the numeric keyboard if needed.
+        scrollTo(element("contract-sign"), in: detail)
+        tap("contract-sign")
+        scrollTo(element("contract-result-unconfirmed"), in: detail, downward: false)
+        XCTAssertTrue(element("contract-result-message").label.contains("Simulation"))
+        XCTAssertFalse(element("contract-sign").isEnabled, "An uncertain response must not offer a second signature")
+        record("\(prefix)-contrats-signature-incertaine")
+        scrollTo(element("contract-reconcile"), in: detail)
+        tap("contract-reconcile")
+        require("Signature reread completed") { self.element("contract-status").label == "Signé par le soignant" }
+        scrollTo(element("contract-signature-soignant"), in: detail, downward: false)
+        XCTAssertTrue(element("contract-signature-soignant").label.contains("Soignant : Signé"))
+        XCTAssertFalse(element("contract-consent").exists)
+        XCTAssertFalse(element("contract-sign").exists)
+        record("\(prefix)-contrats-signature-relue")
+        backGesture()
+        require("Native back returns to the contract list") { self.visible(self.element("contracts-list")) }
+        XCTAssertTrue(element("contract-card-00000000-0000-4000-8000-000000000021").label.contains("Signé par le soignant"))
+        signOut()
+
+        scrollTo(element("enter-contracts-readonly-demo"), in: element("login-scroll"))
+        tap("enter-contracts-readonly-demo")
+        tap("tab-contracts")
+        require("Read-only establishment can list its synthetic contract") {
+            self.visible(self.element("contract-card-00000000-0000-4000-8000-000000000021"))
+        }
+        tap("contract-card-00000000-0000-4000-8000-000000000021")
+        scrollTo(element("contract-original-end"), in: detail)
+        XCTAssertTrue(element("contract-original-end").label.contains("Dernière ligne"))
+        scrollTo(element("contract-read-only"), in: detail)
+        XCTAssertFalse(element("contract-consent").exists)
+        XCTAssertFalse(element("contract-request-otp").exists)
+        XCTAssertFalse(element("contract-sign").exists)
+        record("\(prefix)-contrats-lecture-seule")
+        signOut()
+        XCTAssertFalse(element("contract-original").exists)
+        XCTAssertFalse(element("contract-detail-scroll").exists)
+    }
+
+    // Selected independently by the Documents CI jobs. Each orientation receives a fresh
+    // simulator/runtime; no hidden reset, existing 1091 journey, or personal file is required.
+    func testDocumentsIphonePortrait() throws {
+        runDocuments(prefix: "iphone-portrait", landscape: false)
+    }
+
+    func testDocumentsIpadPortrait() throws {
+        runDocuments(prefix: "ipad-portrait", landscape: false)
+    }
+
+    func testDocumentsIpadLandscape() throws {
+        runDocuments(prefix: "ipad-paysage", landscape: true)
+    }
+
+    private func runDocuments(prefix: String, landscape: Bool) {
+        proofPrefix = prefix
+        prepareExpoGo()
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
+        require("Documents starts in the requested orientation") {
+            landscape ? self.app.frame.width > self.app.frame.height : self.app.frame.height > self.app.frame.width
+        }
+        assertSignedOutDemo()
+        tap("enter-demo")
+        assertMissionCount(30)
+        tap("tab-profile")
+        scrollTo(element("profile-documents"), in: element("caregiver-profile-scroll"))
+        tap("profile-documents")
+
+        let documents = element("documents-scroll")
+        require("The native document dossier is loaded") { self.visible(self.element("documents-title")) }
+        XCTAssertTrue(text("Démo · données fictives").exists)
+        scrollTo(element("document-status-DIPLOME"), in: documents)
+        XCTAssertEqual(element("document-status-DIPLOME").label, "Vérifié")
+        XCTAssertFalse(element("document-view-DIPLOME").exists, "The synthetic demo must not pretend to open an original")
+        record("\(prefix)-documents-statuts")
+        scrollTo(element("document-status-CARTE_IDENTITE"), in: documents)
+        XCTAssertEqual(element("document-status-CARTE_IDENTITE").label, "Rejeté")
+        scrollTo(element("document-status-RIB"), in: documents)
+        XCTAssertEqual(element("document-status-RIB").label, "En attente de vérification")
+        scrollTo(element("document-review-CARTE_IDENTITE"), in: documents, downward: false)
+        tap("document-review-CARTE_IDENTITE")
+        let reviewAlert = app.alerts["Demander une revue humaine ?"]
+        require("Human review needs an explicit native confirmation") { reviewAlert.exists && reviewAlert.buttons["Demander la revue"].isHittable }
+        reviewAlert.buttons["Demander la revue"].tap()
+        scrollTo(element("document-status-CARTE_IDENTITE"), in: documents)
+        require("A requested review is pending, never verified automatically") {
+            self.element("document-status-CARTE_IDENTITE").label == "En cours de vérification"
+        }
+        scrollTo(textContaining("Demande reçue — en attente d’attribution"), in: documents)
+        XCTAssertTrue(textContaining("pour la revue humaine.").exists)
+        record("\(prefix)-documents-revue-humaine")
+
+        // The first synthetic selection is deliberately cancelled: the old record remains.
+        scrollTo(element("document-replace-DIPLOME"), in: documents, downward: false)
+        tap("document-replace-DIPLOME")
+        let upload = element("document-upload-scroll")
+        require("Replacement opens the native upload sheet") { self.element("document-upload-title").exists && self.element("document-upload-title").label == "Remplacer le justificatif" }
+        scrollTo(element("document-pick-file"), in: upload)
+        tap("document-pick-file")
+        scrollTo(text("remplacement-annule-demo.png"), in: upload)
+        XCTAssertTrue(visible(text("remplacement-annule-demo.png")))
+        scrollTo(element("document-upload-cancel"), in: upload)
+        tap("document-upload-cancel")
+        require("Cancelling closes the sheet without an upload") { !self.element("document-upload-title").exists }
+        scrollTo(text("Simulation — DIPLOME"), in: documents, downward: false)
+        XCTAssertTrue(visible(text("Simulation — DIPLOME")))
+        record("\(prefix)-documents-remplacement-annule")
+
+        scrollTo(element("document-replace-DIPLOME"), in: documents)
+        tap("document-replace-DIPLOME")
+        scrollTo(element("document-pick-file"), in: upload)
+        tap("document-pick-file")
+        scrollTo(text("diplome-remplace-demo.png"), in: upload)
+        XCTAssertTrue(visible(text("diplome-remplace-demo.png")))
+        let label = element("document-upload-label")
+        scrollTo(label, in: upload)
+        label.tap()
+        label.typeText("Simulation diplome remplace")
+        XCTAssertEqual(label.value as? String, "Simulation diplome remplace")
+        drag(upload, fromY: 0.8, toY: 0.25)
+        require("A user scroll dismisses the upload keyboard") { !self.app.keyboards.firstMatch.exists }
+        scrollTo(element("document-upload-submit"), in: upload)
+        tap("document-upload-submit")
+        require("The confirmed replacement closes the sheet") { !self.element("document-upload-title").exists }
+        scrollTo(element("document-status-DIPLOME"), in: documents)
+        require("The replacement receives its separate synthetic verification") { self.element("document-status-DIPLOME").label == "Vérifié" }
+        scrollTo(text("Simulation diplome remplace"), in: documents, downward: false)
+        XCTAssertTrue(visible(text("Simulation diplome remplace")))
+        XCTAssertFalse(text("Simulation — DIPLOME").exists, "The cancelled original label must be replaced only after explicit submit")
+        record("\(prefix)-documents-remplacement-confirme")
+
+        // The next injected in-memory commit loses its response. No retry may send the file again.
+        scrollTo(element("document-add-RCP_ASSURANCE"), in: documents)
+        tap("document-add-RCP_ASSURANCE")
+        scrollTo(element("document-pick-file"), in: upload)
+        tap("document-pick-file")
+        scrollTo(text("rcp-incertaine-demo.png"), in: upload)
+        XCTAssertTrue(visible(text("rcp-incertaine-demo.png")))
+        scrollTo(element("document-upload-submit"), in: upload)
+        tap("document-upload-submit")
+        require("The uncertain response is explicitly displayed") { self.textContaining("Simulation : réponse interrompue").exists }
+        scrollTo(textContaining("Simulation : réponse interrompue"), in: upload)
+        scrollTo(element("document-upload-submit"), in: upload)
+        XCTAssertFalse(element("document-upload-submit").isEnabled, "An uncertain upload must not be sent twice")
+        record("\(prefix)-documents-envoi-incertain")
+        scrollTo(element("document-upload-cancel"), in: upload)
+        tap("document-upload-cancel")
+        require("The blocked upload sheet closes without another write") { !self.element("document-upload-title").exists }
+        scrollTo(element("documents-refresh"), in: documents, downward: false)
+        tap("documents-refresh")
+        scrollTo(element("documents-reconcile"), in: documents)
+        tap("documents-reconcile")
+        require("Reconciliation finds the committed synthetic file without resending") {
+            self.text("Simulation : enregistrement fictif retrouvé, sans renvoi du fichier.").exists
+                && !self.element("documents-reconcile").exists
+        }
+        scrollTo(element("document-status-RCP_ASSURANCE"), in: documents)
+        XCTAssertEqual(element("document-status-RCP_ASSURANCE").label, "En attente de vérification",
+                       "Readback must not manufacture a successful verification")
+        record("\(prefix)-documents-envoi-reconcilie")
+
+        scrollTo(element("document-delete-RCP_ASSURANCE"), in: documents)
+        tap("document-delete-RCP_ASSURANCE")
+        let deleteAlert = app.alerts["Supprimer ce document ?"]
+        require("Archiving needs explicit native confirmation") { deleteAlert.exists && deleteAlert.buttons["Supprimer"].isHittable }
+        deleteAlert.buttons["Supprimer"].tap()
+        scrollTo(element("document-add-RCP_ASSURANCE"), in: documents)
+        XCTAssertTrue(visible(element("document-add-RCP_ASSURANCE")))
+        XCTAssertFalse(element("document-status-RCP_ASSURANCE").exists)
+        record("\(prefix)-documents-retrait-confirme")
+
+        backGesture()
+        require("The native back gesture returns to the caregiver profile") { self.visible(self.element("caregiver-profile-scroll")) }
+        tap("tab-explore")
+        require("The separate exploration tab is usable") { self.visible(self.element("missions-list")) }
+        tap("tab-profile")
+        scrollTo(element("profile-documents"), in: element("caregiver-profile-scroll"), downward: false)
+        tap("profile-documents")
+        require("The dossier reloads after a native navigation return") { self.visible(documents) }
+        XCUIDevice.shared.press(.home)
+        require("Documents actually enters the background") { self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended }
+        app.activate()
+        require("Documents returns to the same native screen") { self.visible(documents) }
+        scrollTo(element("document-status-DIPLOME"), in: documents)
+        XCTAssertEqual(element("document-status-DIPLOME").label, "Vérifié")
+        scrollTo(text("Simulation diplome remplace"), in: documents, downward: false)
+        XCTAssertTrue(visible(text("Simulation diplome remplace")))
+        scrollTo(element("document-status-CARTE_IDENTITE"), in: documents)
+        XCTAssertEqual(element("document-status-CARTE_IDENTITE").label, "En cours de vérification")
+        scrollTo(element("document-add-RCP_ASSURANCE"), in: documents)
+        XCTAssertTrue(visible(element("document-add-RCP_ASSURANCE")))
+        XCTAssertFalse(element("document-status-RCP_ASSURANCE").exists)
+        record("\(prefix)-documents-reprise")
+        backGesture()
+        signOut()
     }
 
     private func prepareExpoGo() {

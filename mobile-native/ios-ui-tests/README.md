@@ -160,3 +160,72 @@ Références : [contrôles Expo Go SDK 57](https://github.com/expo/expo/blob/sdk
 [orientation](https://developer.apple.com/documentation/xcuiautomation/xcuidevice/orientation),
 [geste relatif](https://developer.apple.com/documentation/xcuiautomation/xcuicoordinate/press(forduration:thendragto:)),
 [capture attachée](https://developer.apple.com/documentation/xctest/xctattachment/init(screenshot:)).
+
+
+## Scénario Documents séparé — préparation du 27 octobre
+
+Le sélecteur du runner conserve `consultation` par défaut. Le workflow distinct
+`.github/workflows/native-documents.yml` sélectionne explicitement
+`NATIVE_PILOT_SCENARIO=documents` et `EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO=1`,
+toujours avec `EXPO_PUBLIC_JOLENE_MODE=demo` et sans clé ni URL de backend.
+Il n’exécute pas les candidatures, le profil établissement ou l’inscription avant
+les justificatifs. Le workflow consultation existant reste indépendant.
+
+Le scénario Documents modifie volontairement son dossier en mémoire. Chaque
+format a donc son propre job CI neuf : aucun reset caché, aucun dossier préparé
+par le portrait, aucune dépendance entre les trois invocations iOS.
+
+| Format | `IOS_DEVICE_FAMILY` | `NATIVE_DOCUMENTS_ORIENTATION` | Méthode XCTest |
+| --- | --- | --- | --- |
+| iPhone portrait | `iphone` | `portrait` | `testDocumentsIphonePortrait` |
+| iPad portrait | `ipad` | `portrait` | `testDocumentsIpadPortrait` |
+| iPad paysage | `ipad` | `landscape` | `testDocumentsIpadLandscape` |
+
+Android utilise `documents-run.yaml` : préparation Expo Go initiale, connexion au
+compte fictif, puis `documents-demo.yaml`. Le paysage Android n’est pas annoncé.
+Les méthodes Documents iOS partagent la préparation Expo Go existante, puis
+choisissent l’orientation demandée avant la première assertion Documents.
+La confirmation système Open/Ouvrir n’est ni ignorée ni traitée après un échec métier.
+
+Le dossier exige les états Vérifié, Rejeté et En attente de vérification.
+La revue humaine d’une pièce rejetée doit devenir **En cours de vérification**,
+pas Vérifié. La première sélection de remplacement est annulée et conserve
+l’ancien libellé. La deuxième remplace le diplôme et reçoit séparément son statut
+fictif. Le troisième fichier simule une réponse interrompue après l’écriture :
+le nouvel envoi doit être désactivé ; actualiser puis vérifier l’envoi précédent
+retrouve la pièce sans la renvoyer et la laisse non vérifiée. Après retrait
+confirmé, cette pièce disparaît. Le retour natif, le changement d’onglet et
+Home/reprise doivent conserver exactement ces états. La déconnexion finale
+est confirmée et aucun dossier authentifié ne reste affiché.
+
+Huit captures et leurs hiérarchies sont requises, avec les suffixes suivants :
+
+1. `documents-statuts`
+2. `documents-revue-humaine`
+3. `documents-remplacement-annule`
+4. `documents-remplacement-confirme`
+5. `documents-envoi-incertain`
+6. `documents-envoi-reconcilie`
+7. `documents-retrait-confirme`
+8. `documents-reprise`
+
+Les noms iOS commencent par `iphone-portrait-`, `ipad-portrait-` ou
+`ipad-paysage-`. Android conserve les suffixes seuls. Le runner vérifie les huit
+fichiers, leur unicité et leur orientation en tenant compte des métadonnées PNG.
+`scenario.json` et `result.json` identifient le scénario et l’orientation attendus.
+Chaque méthode XCTest reste bornée à **600 secondes**, son processus xcodebuild
+à **900 secondes** ; le scénario Maestro Documents est borné à **600 secondes**.
+Un résultat doit contenir exactement un test réussi sans échec ni exclusion.
+
+Les tests purs `scripts/native-scenarios.node.test.mjs` sont inclus par le script
+`npm test` existant. Ils vérifient le maintien du scénario consultation par défaut,
+les quatre sélections Documents indépendantes, les méthodes et captures requises,
+et le refus des modes, injections et orientations incompatibles avant le démarrage
+des outils. Ils ne remplacent pas les quatre campagnes UI.
+
+Cette préparation n’a pas été exécutée. Avant de l’intégrer, ajouter les quatre
+paquets Expo et leur lockfile, relire le diff puis exécuter les contrôles coordonnés
+par root. Les PNG sélectionnés sont synthétiques : ces scénarios ne prouvent pas
+la caméra, les autorisations système, un choix de fichier personnel, l’ouverture
+d’un original dans Safari/Chrome, une vérification professionnelle ou une opération
+STAGING. Aucun bouton d’original fictif n’est affiché.

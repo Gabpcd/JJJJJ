@@ -11,6 +11,16 @@ import { resolveNativeAccount } from '../account/resolveContext';
 import { readNativeConfig } from './config';
 import { createNativeSessionController, type NativeSessionController } from './controller';
 import { createSecureSessionStorage } from './secureSessionStorage';
+import { createDocumentRuntime, type NativeDocumentRuntime } from '../documents/runtime';
+import { createDocumentUploadJournal } from '../documents/uploadJournal';
+import { createDemoDocumentMedia } from '../documents/demoMedia';
+import { createExpoDocumentMediaAdapter } from '../media/documents';
+import { SupabaseDocumentGateway, createOriginalSigningTransport } from '../workflows/documents';
+import { DemoDocumentGateway, type DemoDocumentSession } from '../workflows/documents/demoGateway';
+import { createDemoDocumentUploadJournal } from '../workflows/documents/demoJournal';
+import { DEMO_DOCUMENT_SCENARIO_OUTCOMES } from '../workflows/documents/demoScenario';
+import { contractScenario, createContractRuntime, nativeContractContext } from '../contracts/runtime';
+import type { ContractGateway } from '../workflows/contracts/types';
 
 // Same staging project as scripts/recette-fournisseurs/lib/manifest.mjs.
 const STAGING_PROJECTS = ['mejpriaetwgtcstbgfid'] as const;
@@ -19,6 +29,9 @@ export interface NativeRuntime {
   gateway: MissionGateway;
   client: SupabaseClient | null;
   accountGateway: NativeAccountGateway;
+  documents: NativeDocumentRuntime;
+  contracts: ContractGateway;
+  contractsScenario: boolean;
   configError: string | null;
 }
 
@@ -35,9 +48,34 @@ async function boundedFetch(input: RequestInfo | URL, init?: RequestInit): Promi
 
 /** Create once per app lifecycle. No server is contacted in the default demo mode. */
 export function createNativeRuntime(): NativeRuntime {
-  const demo = () => {
+  const currentDocumentsSession = (controller: NativeSessionController): DemoDocumentSession | null => {
+    const snapshot = controller.getSnapshot();
+    if (snapshot.status !== 'authenticated' || snapshot.context?.kind !== 'soignant') return null;
+    return { userId: snapshot.context.userId, epoch: snapshot.epoch, profile: {
+      profession: snapshot.context.profile?.profession, type_exercice: snapshot.context.profile?.type_exercice,
+    } };
+  };
+  const demo = (documentsScenario = false, contractsScenario = false) => {
     const controller = createNativeSessionController({ mode: 'demo', context: { ...DEMO_CONTEXT, kind: 'soignant' } });
-    return { controller, gateway: new DemoGateway(), client: null, accountGateway: new DemoAccountGateway(controller), configError: null };
+    const currentSession = () => currentDocumentsSession(controller);
+    const documents = createDocumentRuntime({
+      gateway: new DemoDocumentGateway({ currentSession, ...(documentsScenario ? { outcomes: DEMO_DOCUMENT_SCENARIO_OUTCOMES } : {}) }),
+      uploadJournal: createDemoDocumentUploadJournal(), currentSession,
+      createMedia: scope => createDemoDocumentMedia({ scope, currentSession, scenario: documentsScenario }),
+    });
+    const contracts = createContractRuntime({ mode: 'demo', scenario: contractsScenario,
+      digestUtf8: value => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
+      currentSession: () => {
+        const snapshot = controller.getSnapshot();
+        const account = snapshot.status === 'authenticated' ? snapshot.context : null;
+        const context = nativeContractContext(account);
+        return context && account ? { context, epoch: snapshot.epoch,
+          canRead: account.kind === 'soignant' || account.kind === 'etablissement' && account.permissions.lecture,
+          canSign: account.kind === 'soignant' || account.kind === 'etablissement' && account.permissions.contrats } : null;
+      },
+    });
+    return { controller, gateway: new DemoGateway(), client: null, accountGateway: new DemoAccountGateway(controller), documents,
+      contracts, contractsScenario, configError: null };
   };
   try {
     // Expo only substitutes explicit EXPO_PUBLIC variable references.
@@ -46,7 +84,12 @@ export function createNativeRuntime(): NativeRuntime {
       url: process.env.EXPO_PUBLIC_SUPABASE_URL,
       publishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     }, STAGING_PROJECTS);
-    if (config.mode === 'demo') return demo();
+    const scenarioFlag = process.env.EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO?.trim() ?? '';
+    if (!['', '0', '1'].includes(scenarioFlag)) throw new Error('Le scénario documentaire doit être explicitement activé avec 1, ou désactivé.');
+    const documentsScenario = scenarioFlag === '1';
+    if (documentsScenario && config.mode !== 'demo') throw new Error('Le scénario documentaire fictif est réservé au mode Démonstration. Désactivez-le pour utiliser TEST.');
+    const contractsScenario = contractScenario(config.mode, process.env.EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO);
+    if (config.mode === 'demo') return demo(documentsScenario, contractsScenario);
     if (Platform.OS === 'web') throw new Error('La connexion TEST de ce pilote nécessite l’application native et son stockage sécurisé.');
     const storage = createSecureSessionStorage({
       getItem: (key) => SecureStore.getItemAsync(key),
@@ -89,7 +132,24 @@ export function createNativeRuntime(): NativeRuntime {
       },
       resolveContext: (session, signal) => resolveNativeAccount(client, gateway, session, signal),
     });
-    return { controller, gateway, client, accountGateway: new SupabaseAccountGateway(client, controller), configError: null };
+    // Raw SecureStore, separate keys/service from the auth tombstone/chunk adapter.
+    // Logout never erases an unresolved upload receipt.
+    const documentStoreOptions = { keychainService: 'jolene.native.documents.staging',
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
+    const documents = createDocumentRuntime({
+      gateway: new SupabaseDocumentGateway(client, () => Crypto.randomUUID(), createOriginalSigningTransport(config, boundedFetch)),
+      uploadJournal: createDocumentUploadJournal({
+        getItem: key => SecureStore.getItemAsync(key, documentStoreOptions),
+        setItem: (key, value) => SecureStore.setItemAsync(key, value, documentStoreOptions),
+        removeItem: key => SecureStore.deleteItemAsync(key, documentStoreOptions),
+      }),
+      currentSession: () => currentDocumentsSession(controller),
+      createMedia: (scope, isCurrent) => createExpoDocumentMediaAdapter({ scope, isCurrent }),
+    });
+    const contracts = createContractRuntime({ mode: 'staging', client, config, fetch: boundedFetch,
+      digestUtf8: value => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value) });
+    return { controller, gateway, client, accountGateway: new SupabaseAccountGateway(client, controller), documents,
+      contracts, contractsScenario: false, configError: null };
   } catch (error) {
     return { ...demo(), configError: error instanceof Error ? error.message : 'Configuration TEST invalide.' };
   }

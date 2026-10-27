@@ -5,9 +5,9 @@ import { useSession } from '../session/SessionProvider';
 import { ActionButton, ErrorNotice, ModeNotice, StatusPanel } from './components';
 import { colors, shared } from './theme';
 
-export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishmentDemo, onEnterOnboardingDemo }: {
+export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishmentDemo, onEnterOnboardingDemo, onEnterReadOnlyContractsDemo }: {
   onRegister?: () => void; onForgotPassword?: () => void;
-  onEnterEstablishmentDemo?: () => void; onEnterOnboardingDemo?: () => void;
+  onEnterEstablishmentDemo?: () => void; onEnterOnboardingDemo?: () => void; onEnterReadOnlyContractsDemo?: () => void;
 } = {}) {
   const { snapshot, signIn, enterDemo, signOut } = useSession();
   const [email, setEmail] = useState('');
@@ -67,6 +67,7 @@ export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishment
             {snapshot.error ? <ErrorNotice message={snapshot.error} /> : null}
             <ActionButton label="Explorer la démo" onPress={() => enterDemo()} testID="enter-demo" />
             {onEnterEstablishmentDemo ? <ActionButton label="Découvrir l’espace établissement" secondary onPress={onEnterEstablishmentDemo} testID="enter-establishment-demo" /> : null}
+            {onEnterReadOnlyContractsDemo ? <ActionButton label="Démo contrats · établissement en lecture seule" secondary onPress={onEnterReadOnlyContractsDemo} testID="enter-contracts-readonly-demo" /> : null}
             {onEnterOnboardingDemo ? <ActionButton label="Essayer l’inscription médecin / interne" secondary onPress={onEnterOnboardingDemo} testID="enter-onboarding-demo" /> : null}
           </View> : <View style={styles.form}>
             <Text style={shared.sectionTitle} accessibilityRole="header">Ravi de vous retrouver</Text>

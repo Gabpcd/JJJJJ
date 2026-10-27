@@ -1,0 +1,204 @@
+name: Contrats React Native — démonstration isolée
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile-native/**'
+      - 'src/lib/constantes.ts'
+      - 'src/lib/documents.ts'
+      - 'src/lib/documentUpload.ts'
+      - 'src/lib/donnees-test.ts'
+      - 'src/lib/geo.ts'
+      - 'src/lib/profession-hierarchy.ts'
+      - 'src/lib/date-heure-paris.ts'
+      - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/lib/contratMissionUi.ts'
+      - 'src/lib/signatureSmsStagingAdmission.ts'
+      - 'supabase/functions/_shared/cdd-employeur.ts'
+      - 'supabase/functions/_shared/contrat-liberal.ts'
+      - 'supabase/functions/generate-contrat-mission-pdf/**'
+      - 'tests/admin/security/fixtures/contrat-liberal-master-v3.html'
+      - '.github/workflows/native-contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-native/**'
+      - 'src/lib/constantes.ts'
+      - 'src/lib/documents.ts'
+      - 'src/lib/documentUpload.ts'
+      - 'src/lib/donnees-test.ts'
+      - 'src/lib/geo.ts'
+      - 'src/lib/profession-hierarchy.ts'
+      - 'src/lib/date-heure-paris.ts'
+      - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/profil-soignant.ts'
+      - 'src/lib/valider-profil-soignant.ts'
+      - 'src/lib/preferencesModesExercice.ts'
+      - 'src/lib/luhn.ts'
+      - 'src/lib/completude-planning-mission.ts'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/lib/contratMissionUi.ts'
+      - 'src/lib/signatureSmsStagingAdmission.ts'
+      - 'supabase/functions/_shared/cdd-employeur.ts'
+      - 'supabase/functions/_shared/contrat-liberal.ts'
+      - 'supabase/functions/generate-contrat-mission-pdf/**'
+      - 'tests/admin/security/fixtures/contrat-liberal-master-v3.html'
+      - '.github/workflows/native-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Synthetic demonstration only: no credentials, EAS, native delivery or store upload.
+env:
+  CI: '1'
+  EXPO_PUBLIC_JOLENE_MODE: demo
+  EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS: '1'
+  NATIVE_PILOT_SCENARIO: contracts
+  EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: '0'
+  EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: '1'
+  EXPO_PUBLIC_SUPABASE_URL: ''
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+  EXPO_NO_DOTENV: '1'
+  EXPO_NO_TELEMETRY: '1'
+  MAESTRO_CLI_NO_ANALYTICS: '1'
+  NODE_OPTIONS: --dns-result-order=ipv4first
+
+defaults:
+  run:
+    shell: bash
+    working-directory: mobile-native
+
+jobs:
+  checks:
+    name: Contrats — types, logique et bundles de contrôle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        timeout-minutes: 8
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run bundle
+        timeout-minutes: 8
+
+  ios:
+    name: Contrats — ${{ matrix.family }} ${{ matrix.orientation }}
+    needs: checks
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each orientation gets a fresh runtime and its original synthetic fixtures.
+        # Contracts landscape never follows an already signed portrait fixture.
+        include:
+          - family: iphone
+            orientation: portrait
+          - family: ipad
+            orientation: portrait
+          - family: ipad
+            orientation: landscape
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        timeout-minutes: 8
+      - name: Contrat fictif dans Expo Go sur simulateur iOS
+        run: node scripts/run-pilot-ci.mjs ios
+        # One selected Contracts test: 600 seconds, xcodebuild bounded to 900 seconds.
+        timeout-minutes: 35
+        env:
+          IOS_DEVICE_FAMILY: ${{ matrix.family }}
+          NATIVE_CONTRACTS_ORIENTATION: ${{ matrix.orientation }}
+          PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/contracts-${{ matrix.family }}-${{ matrix.orientation }}
+      - name: Conserver preuves, rapport et diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-contracts-${{ matrix.family }}-${{ matrix.orientation }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: mobile-native/test-results/contracts-${{ matrix.family }}-${{ matrix.orientation }}/
+          retention-days: 7
+          if-no-files-found: warn
+
+  android:
+    name: Contrats — Android portrait
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+        timeout-minutes: 8
+      - name: Installer Maestro vérifié
+        run: bash scripts/install-maestro-ci.sh
+        timeout-minutes: 10
+      - name: Activer KVM sur le runner éphémère
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Contrat fictif Android 15 avec reprise et retour système
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 2048M
+          disk-size: 4096M
+          enable-hw-keyboard: false
+          disable-animations: false
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: cd mobile-native && node scripts/run-pilot-ci.mjs android
+        env:
+          NATIVE_CONTRACTS_ORIENTATION: portrait
+          PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/contracts-android
+      - name: Conserver preuves, rapport et diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-contracts-android-${{ github.event.pull_request.head.sha || github.sha }}
+          path: mobile-native/test-results/contracts-android/
+          retention-days: 7
+          if-no-files-found: warn

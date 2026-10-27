@@ -1,0 +1,391 @@
+appId: ${APP_ID}
+name: Justificatifs natifs — scénario en mémoire uniquement
+---
+# Sub-flow: demo-soignant is already signed in; Expo Go setup belongs to the parent flow.
+# The runner explicitly selects EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO=1 in demo mode.
+# Every CI format starts in a separate fresh runtime; no OS picker or personal file is used.
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: profile-documents
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: profile-documents
+- assertVisible:
+    id: documents-title
+- assertVisible: ".*Démo · données fictives.*"
+- scrollUntilVisible:
+    element:
+      id: document-status-DIPLOME
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-DIPLOME
+    text: Vérifié
+- assertNotVisible:
+    id: document-view-DIPLOME
+- takeScreenshot: documents-statuts
+- scrollUntilVisible:
+    element:
+      id: document-status-CARTE_IDENTITE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-CARTE_IDENTITE
+    text: Rejeté
+- scrollUntilVisible:
+    element:
+      id: document-status-RIB
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-RIB
+    text: En attente de vérification
+- scrollUntilVisible:
+    element:
+      id: document-review-CARTE_IDENTITE
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-review-CARTE_IDENTITE
+- assertVisible: '^Demander une revue humaine \?$'
+- tapOn: Demander la revue
+- scrollUntilVisible:
+    element:
+      id: document-status-CARTE_IDENTITE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-CARTE_IDENTITE
+    text: En cours de vérification
+- scrollUntilVisible:
+    element:
+      text: ".*Demande reçue.*revue humaine.*"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*Demande reçue.*revue humaine.*"
+- takeScreenshot: documents-revue-humaine
+# Select a synthetic replacement, then cancel. The original remains active.
+- scrollUntilVisible:
+    element:
+      id: document-replace-DIPLOME
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-replace-DIPLOME
+- assertVisible: Remplacer le justificatif
+- scrollUntilVisible:
+    element:
+      id: document-pick-file
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-pick-file
+- scrollUntilVisible:
+    element:
+      text: remplacement-annule-demo.png
+    direction: DOWN
+    timeout: 15000
+- assertVisible: remplacement-annule-demo.png
+- scrollUntilVisible:
+    element:
+      id: document-upload-cancel
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-upload-cancel
+- assertNotVisible:
+    id: document-upload-title
+- scrollUntilVisible:
+    element:
+      text: Simulation — DIPLOME
+    direction: UP
+    timeout: 15000
+- assertVisible: Simulation — DIPLOME
+- takeScreenshot: documents-remplacement-annule
+# A second explicit selection is committed, then separately verified in memory.
+- scrollUntilVisible:
+    element:
+      id: document-replace-DIPLOME
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-replace-DIPLOME
+- scrollUntilVisible:
+    element:
+      id: document-pick-file
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-pick-file
+- scrollUntilVisible:
+    element:
+      text: diplome-remplace-demo.png
+    direction: DOWN
+    timeout: 15000
+- assertVisible: diplome-remplace-demo.png
+- scrollUntilVisible:
+    element:
+      id: document-upload-label
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-upload-label
+- inputText: Simulation diplome remplace
+- assertVisible:
+    id: document-upload-label
+    text: "^Simulation diplome remplace$"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: document-upload-submit
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-upload-submit
+- extendedWaitUntil:
+    notVisible:
+      id: document-upload-title
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: document-status-DIPLOME
+    direction: DOWN
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: document-status-DIPLOME
+      text: Vérifié
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: Simulation diplome remplace
+    direction: UP
+    timeout: 15000
+- assertVisible: Simulation diplome remplace
+- assertNotVisible: Simulation — DIPLOME
+- takeScreenshot: documents-remplacement-confirme
+# The third injected file commits in memory but deliberately loses its first response.
+- scrollUntilVisible:
+    element:
+      id: document-add-RCP_ASSURANCE
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-add-RCP_ASSURANCE
+- scrollUntilVisible:
+    element:
+      id: document-pick-file
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-pick-file
+- scrollUntilVisible:
+    element:
+      text: rcp-incertaine-demo.png
+    direction: DOWN
+    timeout: 15000
+- assertVisible: rcp-incertaine-demo.png
+- scrollUntilVisible:
+    element:
+      id: document-upload-submit
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-upload-submit
+- scrollUntilVisible:
+    element:
+      text: ".*Simulation : réponse interrompue.*"
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: document-upload-submit
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-upload-submit
+    enabled: false
+- takeScreenshot: documents-envoi-incertain
+- scrollUntilVisible:
+    element:
+      id: document-upload-cancel
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-upload-cancel
+- scrollUntilVisible:
+    element:
+      id: documents-refresh
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: documents-refresh
+- scrollUntilVisible:
+    element:
+      id: documents-reconcile
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: documents-reconcile
+- extendedWaitUntil:
+    visible: ".*Simulation : enregistrement fictif retrouvé, sans renvoi du fichier.*"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible:
+      id: documents-reconcile
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: document-status-RCP_ASSURANCE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-RCP_ASSURANCE
+    text: En attente de vérification
+- takeScreenshot: documents-envoi-reconcilie
+- scrollUntilVisible:
+    element:
+      id: document-delete-RCP_ASSURANCE
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: document-delete-RCP_ASSURANCE
+- assertVisible: '^Supprimer ce document \?$'
+- tapOn: "^Supprimer$"
+- scrollUntilVisible:
+    element:
+      id: document-add-RCP_ASSURANCE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-add-RCP_ASSURANCE
+- assertNotVisible:
+    id: document-status-RCP_ASSURANCE
+- takeScreenshot: documents-retrait-confirme
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- tapOn:
+    id: tab-explore
+- assertVisible:
+    id: missions-list
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: profile-documents
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: profile-documents
+- assertVisible:
+    id: documents-title
+- pressKey: Home
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          stopApp: false
+# The same Expo URL brings the existing Android experience task forward.
+# A restart loses the in-memory modifications and fails the assertions below.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - openLink: ${EXPO_URL}
+- assertVisible:
+    id: documents-title
+- scrollUntilVisible:
+    element:
+      id: document-status-DIPLOME
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-DIPLOME
+    text: Vérifié
+- scrollUntilVisible:
+    element:
+      text: Simulation diplome remplace
+    direction: UP
+    timeout: 15000
+- assertVisible: Simulation diplome remplace
+- scrollUntilVisible:
+    element:
+      id: document-status-CARTE_IDENTITE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-status-CARTE_IDENTITE
+    text: En cours de vérification
+- scrollUntilVisible:
+    element:
+      id: document-add-RCP_ASSURANCE
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: document-add-RCP_ASSURANCE
+- assertNotVisible:
+    id: document-status-RCP_ASSURANCE
+- takeScreenshot: documents-reprise
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: caregiver-profile-scroll
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- scrollUntilVisible:
+    element:
+      id: enter-demo
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: enter-demo
+- assertNotVisible:
+    id: documents-title
+- assertNotVisible:
+    id: missions-list
