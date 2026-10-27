@@ -445,21 +445,31 @@ final class NativePilotTests: XCTestCase {
         // Open the local server inside Expo Go after XCTest owns the foreground.
         // An external simctl openurl leaves a SpringBoard confirmation in front of
         // the app while the test runner builds. The native Home toolbar exposes
-        // Enter URL, followed by the Add project by URL alert and Connect action.
+        // Enter URL, followed by the native URL sheet and Connect action.
         // A Node guard keeps this URL equal to the runner's precompiled Metro URL.
         let enterURL = app.buttons["Enter URL"]
         require("The fresh Expo Go Home toolbar is available", timeout: 120) { self.visible(enterURL) }
         enterURL.tap()
-        let urlDialog = app.alerts["Add project by URL"]
-        let urlField = urlDialog.textFields.firstMatch
-        require("The Expo server URL form is visible") { self.visible(urlField) }
+        let urlTitle = app.navigationBars["Enter URL"]
+        let urlField = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "exp://192.168.1.1:8081")).firstMatch
+        require("The Expo server URL sheet is present") { urlTitle.exists && urlField.exists }
+        // The fresh iOS keyboard can cover this first text input with its own
+        // typing tutorial. Handle only that identified system view at startup.
+        let keyboardIntroduction = app.otherElements["UIContinuousPathIntroductionView"]
+        if keyboardIntroduction.waitForExistence(timeout: 3) {
+            let keyboardContinue = keyboardIntroduction.buttons["Continue"]
+            require("The keyboard tutorial exposes Continue") { self.visible(keyboardContinue) }
+            keyboardContinue.tap()
+            require("The keyboard tutorial is dismissed") { !keyboardIntroduction.exists }
+        }
+        require("The Expo server URL field is reachable") { self.visible(urlField) }
         urlField.tap()
         urlField.typeText(expoExperienceURL)
         XCTAssertEqual(urlField.value as? String, expoExperienceURL, "Only the runner's local Metro server is opened")
-        let connect = urlDialog.buttons["Connect"]
+        let connect = app.buttons["Connect"]
         require("The exact local URL enables Connect") { self.visible(connect) && connect.isEnabled }
         connect.tap()
-        require("The Expo URL form is dismissed after one native tap") { !urlDialog.exists }
+        require("The Expo URL form is dismissed after one native tap") { !urlTitle.exists }
 
         // A fresh Expo Go install must present this sheet. The SDK label behind it is not proof
         // of dismissal. Native Button.tap() resolves its actual control rather than screen pixels.

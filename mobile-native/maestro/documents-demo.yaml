@@ -6,12 +6,17 @@ name: Justificatifs natifs — scénario en mémoire uniquement
 # Every CI format starts in a separate fresh runtime; no OS picker or personal file is used.
 - tapOn:
     id: tab-profile
+- extendedWaitUntil:
+    visible:
+      id: caregiver-profile-scroll
+    timeout: 15000
+# The documents shortcut is at the top of the profile. Wait for the destination
+# before scrolling so a still-mounting tab cannot send the search past it.
 - scrollUntilVisible:
     element:
       id: profile-documents
-    direction: DOWN
+    direction: UP
     timeout: 15000
-    centerElement: true
 - tapOn:
     id: profile-documents
 - assertVisible:

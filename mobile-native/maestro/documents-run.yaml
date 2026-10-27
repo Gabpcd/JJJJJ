@@ -14,8 +14,18 @@ env:
       true: ${FRESH_EXPO_GO == "1"}
     commands:
       - extendedWaitUntil:
-          visible: "Continue|Continuer"
+          visible: "Continue|Continuer|Pixel Launcher isn't responding"
           timeout: 120000
+      # A disposable Android emulator can show its launcher ANR over Expo's
+      # tutorial. Close only that named system app, before any Jolene step.
+      - runFlow:
+          when:
+            platform: Android
+            visible: "Pixel Launcher isn't responding"
+          commands:
+            - tapOn: "Close app"
+            - assertNotVisible: "Pixel Launcher isn't responding"
+      - assertVisible: "Continue|Continuer"
       - waitForAnimationToEnd:
           timeout: 10000
       - tapOn: "Continue|Continuer"
