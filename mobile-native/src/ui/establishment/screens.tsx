@@ -81,8 +81,8 @@ export function EstablishmentProfileScreen({ gateway, context }: EstablishmentSc
         <LabelValue label="Publication autorisée pour l’établissement" value={yesNo(profile.peut_publier_missions)} />
       </View>
       <View style={shared.card}><Text accessibilityRole="header" style={shared.sectionTitle}>Vos droits dans l’établissement</Text>
-        <LabelValue label="Votre rôle" value={roles[context.membershipRole ?? ''] ?? 'Membre de l’établissement'} />
-        {ESTABLISHMENT_PERMISSION_KEYS.map(key => <LabelValue key={key} label={permissionLabels[key]} value={context.permissions[key] ? 'Autorisé' : 'Non autorisé'} />)}
+        <LabelValue label="Votre rôle" value={roles[context.membershipRole ?? ''] ?? 'Membre de l’établissement'} testID="establishment-membership-role" />
+        {ESTABLISHMENT_PERMISSION_KEYS.map(key => <LabelValue key={key} label={permissionLabels[key]} value={context.permissions[key] ? 'Autorisé' : 'Non autorisé'} testID={`establishment-permission-${key}`} />)}
       </View><ReadOnlyNote />
     </> : !resource.error ? <StatusPanel title="Profil indisponible" message="Actualisez pour vérifier votre accès." /> : null}
   </Frame>;
@@ -167,7 +167,7 @@ export function EstablishmentMissionDetailScreen({ gateway, context, missionId, 
       <View style={[shared.card, styles.content]}><Text accessibilityRole="header" style={shared.sectionTitle}>Planning prévisionnel</Text>
         {!mission.planning_exact ? <Text style={shared.subtitle} testID="establishment-planning-incomplete">Le planning détaillé est incomplet. Actualisez pour le vérifier.</Text>
           : mission.creneaux_planifies.map((slot, index) => <View key={slot.id ?? `${slot.debut}-${index}`} style={styles.slot}>
-            <Text style={shared.body}>{formatDate(slot.debut)}</Text><Text style={shared.body}>{formatTime(slot.debut)} — {slot.fin ? formatTime(slot.fin) : 'Fin non renseignée'}</Text>
+            <Text style={shared.body}>{formatDate(slot.debut)}</Text><Text style={shared.body} testID={`establishment-slot-time-${index}`}>{formatTime(slot.debut)} — {slot.fin ? formatTime(slot.fin) : 'Fin non renseignée'}</Text>
             {slot.fin && formatDate(slot.fin) !== formatDate(slot.debut) ? <Text style={shared.small}>Fin le {formatDate(slot.fin)}</Text> : null}
           </View>)}
         <Text style={shared.small}>Horaires de Paris.</Text>

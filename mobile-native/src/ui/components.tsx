@@ -56,10 +56,10 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (
   </View>;
 }
 
-export function LabelValue({ label, value }: { label: string; value: string }) {
+export function LabelValue({ label, value, testID }: { label: string; value: string; testID?: string }) {
   return <View style={styles.labelValue}>
     <Text style={shared.small}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
+    <Text style={styles.value} testID={testID}>{value}</Text>
   </View>;
 }
 

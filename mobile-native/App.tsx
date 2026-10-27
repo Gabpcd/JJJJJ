@@ -31,7 +31,9 @@ const navigationTheme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, pri
   background: colors.background, card: colors.surface, text: colors.text, border: colors.border } };
 const stackOptions = { headerTintColor: colors.pink, headerStyle: { backgroundColor: colors.surface },
   headerTitleStyle: { color: colors.text, fontWeight: '600' as const }, contentStyle: { backgroundColor: colors.background },
-  headerShadowVisible: false, gestureEnabled: true, animation: 'default' as const };
+  // Keep UIKit's edge-back gesture ahead of the content ScrollView recognizer.
+  // Explicit false also matters on iOS 26, where screens enables content-pop by default.
+  headerShadowVisible: false, gestureEnabled: true, fullScreenGestureEnabled: false, animation: 'default' as const };
 
 function useSignOut() {
   const { snapshot, signOut } = useSession();
@@ -57,7 +59,7 @@ function Application({ route, navigation }: NativeStackScreenProps<NativeStackPa
 function ExploreNavigator() {
   return <Stack.Navigator screenOptions={stackOptions}>
     <Stack.Screen name="Missions" component={MissionListScreen} options={{ title: 'Jolene', headerRight: () => <SignOutButton /> }} />
-    <Stack.Screen name="Mission" component={MissionDetailScreen} options={{ title: 'La mission', headerBackTitle: 'Missions', fullScreenGestureEnabled: true }} />
+    <Stack.Screen name="Mission" component={MissionDetailScreen} options={{ title: 'La mission', headerBackTitle: 'Missions' }} />
     <Stack.Screen name="Candidature" component={Application} options={{ title: 'Ma candidature', headerBackTitle: 'Mission' }} />
   </Stack.Navigator>;
 }
@@ -109,7 +111,7 @@ function EstablishmentMission({ navigation, route }: NativeStackScreenProps<Nati
 function EstablishmentMissionsNavigator() {
   return <Stack.Navigator screenOptions={stackOptions}>
     <Stack.Screen name="MissionsEtablissement" component={EstablishmentMissions} options={{ title: 'Mes missions', headerRight: () => <SignOutButton /> }} />
-    <Stack.Screen name="MissionEtablissement" component={EstablishmentMission} options={{ title: 'La mission', headerBackTitle: 'Missions', fullScreenGestureEnabled: true }} />
+    <Stack.Screen name="MissionEtablissement" component={EstablishmentMission} options={{ title: 'La mission', headerBackTitle: 'Missions' }} />
   </Stack.Navigator>;
 }
 function EstablishmentProfile() { return <EstablishmentProfileScreen {...useEstablishment()} />; }

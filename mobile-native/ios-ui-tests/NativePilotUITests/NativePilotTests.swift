@@ -349,10 +349,18 @@ final class NativePilotTests: XCTestCase {
         }
         scrollTo(textContaining("2 créneaux"), in: detail)
         scrollTo(text("Planning prévisionnel"), in: detail)
-        let slotTimes = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "[0-9]{2}:[0-9]{2} — [0-9]{2}:[0-9]{2}"))
+        // React Native can expose both the parent Text and its untagged native
+        // child with the same label. Count the two tagged rows, not that duplicate.
+        let slotTimes = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "establishment-slot-time-"))
         XCTAssertEqual(slotTimes.count, 2, "The detail must render both exact synthetic time slots")
-        scrollTo(slotTimes.element(boundBy: 0), in: detail)
-        scrollTo(slotTimes.element(boundBy: 1), in: detail)
+        for index in 0..<2 {
+            let slot = element("establishment-slot-time-\(index)")
+            scrollTo(slot, in: detail)
+            // Fixture is 08–16 UTC on relative future dates: Paris is UTC+1 or
+            // UTC+2, including when the two slots straddle a DST transition.
+            XCTAssertTrue(["09:00 — 17:00", "10:00 — 18:00"].contains(slot.label),
+                          "Each synthetic slot renders its complete eight-hour Paris interval")
+        }
         scrollTo(text("Horaires de Paris."), in: detail)
         XCTAssertFalse(element("establishment-planning-incomplete").exists, "Both persisted synthetic slots must be rendered")
         record("\(proofPrefix)-etablissement-planning")
@@ -364,10 +372,14 @@ final class NativePilotTests: XCTestCase {
         tap("tab-establishment-profile")
         let profile = element("establishment-profile")
         scrollTo(text("Vos droits dans l’établissement"), in: profile)
-        scrollTo(text("Consulter l’établissement"), in: profile)
-        require("The declared membership role is visible") { self.visible(self.text("Propriétaire")) }
-        scrollTo(text("Autorisé"), in: profile)
-        require("The read permission is visible") { self.visible(self.text("Autorisé")) }
+        let role = element("establishment-membership-role")
+        scrollTo(role, in: profile)
+        require("The declared membership role is visible") { self.visible(role) && role.label == "Propriétaire" }
+        let readPermission = element("establishment-permission-lecture")
+        scrollTo(readPermission, in: profile)
+        require("The establishment read permission is visible and authorized") {
+            self.visible(self.text("Consulter l’établissement")) && self.visible(readPermission) && readPermission.label == "Autorisé"
+        }
         record("\(proofPrefix)-etablissement-acces")
         signOut()
     }
