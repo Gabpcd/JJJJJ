@@ -289,9 +289,18 @@ final class NativePilotTests: XCTestCase {
         let bio = element("profile-bio")
         scrollTo(bio, in: profile)
         let expected = "Simulation native \(proofPrefix)"
-        bio.tap()
-        let original = bio.value as? String ?? ""
-        bio.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: original.count) + expected)
+        // A tap can place the caret in the middle; backspacing its length leaves the suffix.
+        // Use the actual native editing menu, then verify both replacement boundaries.
+        bio.press(forDuration: 1)
+        let selectAll = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label MATCHES %@", "Select All|Tout sélectionner")
+        ).firstMatch
+        require("The native Select All action is reachable") { self.visible(selectAll) }
+        selectAll.tap()
+        bio.typeText(XCUIKeyboardKey.delete.rawValue)
+        require("The entire previous biography was removed") { bio.value as? String == "" }
+        bio.typeText(expected)
+        require("The new biography is exact before saving") { bio.value as? String == expected }
         scrollTo(element("save-profile"), in: profile)
         tap("save-profile")
         require("Profile save has an explicit confirmation") { self.element("profile-saved").exists }
@@ -303,7 +312,15 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("caregiver-profile-title"), in: profile, downward: false)
         drag(profile, fromY: 0.25, toY: 0.8) // User pull-to-refresh, not a hidden data mutation.
         scrollTo(bio, in: profile)
-        require("The saved biography is read back after tab return and refresh") { self.visible(bio) && bio.value as? String == expected }
+        require("The saved biography is read back after tab return and refresh") {
+            // Reading a visible TextView does not require a new activation/hit point.
+            // XCTest can fail that hit calculation while its text and frame remain readable.
+            guard bio.exists else { return false }
+            let frame = bio.frame
+            return !frame.isEmpty && self.app.frame.contains(frame)
+                && profile.frame.insetBy(dx: -1, dy: -1).contains(frame)
+                && bio.value as? String == expected
+        }
         record("\(proofPrefix)-profil-relu")
     }
 

@@ -446,10 +446,17 @@ env:
     direction: DOWN
     timeout: 20000
     centerElement: true
-- tapOn:
+- longPressOn:
     id: "profile-bio"
-- eraseText: 100
+- tapOn: "Select All|Tout sélectionner"
+- eraseText: 1
+- assertVisible:
+    id: "profile-bio"
+    text: "^$"
 - inputText: "Simulation native Android"
+- assertVisible:
+    id: "profile-bio"
+    text: "^Simulation native Android$"
 - hideKeyboard
 - scrollUntilVisible:
     element:
