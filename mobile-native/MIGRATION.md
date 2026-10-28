@@ -71,10 +71,10 @@ plugin Expo impose une compilation RN depuis les sources. La CI refuse un cœur
 précompilé, une autre SHA de checkout ou l'absence des deux objets natifs attendus.
 
 Les trois workflows produit iOS utilisent désormais ce client Debug non signé
-sur iPhone et iPad, avec les mêmes scénarios, rôles, assertions et délais XCTest.
+sur iPhone et iPad, avec les mêmes scénarios, rôles, assertions et délais par écran.
 Le doublon de comparaison iPhone est remplacé par la même exécution dans la
 matrice Contrats. La préparation froide du simulateur et l'inventaire Xcode ont
-leurs propres plafonds et reçus d'échec. Aucun retry ni délai fonctionnel accru.
+leurs propres plafonds et reçus d'échec. Aucun retry ni délai par écran accru.
 Android conserve son hôte existant.
 
 Validation locale de ce delta : 279 tests de logique et TypeScript réussis ; revues
@@ -83,6 +83,26 @@ Les simulations complètes produit sur la nouvelle révision restent à réussir
 avec relecture des captures, avant de valider ou fusionner ce lot. L'A/B ne prouve
 pas IME/AutoFill/secureTextEntry, les signatures réelles ou le bon fonctionnement
 de toutes les saisies de l'app. `main` doit être contrôlé séparément après fusion.
+
+Sur `0c93075`, Documents passe aussi sur iPhone et sur les deux orientations iPad.
+La consultation iPad échoue encore sur l'ouverture du détail. Une collecte
+`sample` a tourné quinze secondes pendant cette transition ; cet outil suspend
+le processus échantillonné et peut donc perturber la mesure. Il est retiré de
+l'exécution UI. Les événements natifs, captures et diagnostics après échec sont
+conservés ; ce retrait ne démontre pas que tout ralentissement est corrigé.
+
+La consultation iPhone a exécuté toutes ses étapes en 654 secondes, mais XCTest
+l'a rejetée pour dépassement du plafond global de 600 secondes. Le précédent
+passage réussi prenait déjà 592 secondes. Ce scénario regroupant les deux rôles,
+la candidature, le profil et l'inscription reçoit un budget global de 900 secondes,
+plus 300 secondes pour la finalisation de xcodebuild. Les délais de chaque écran
+restent à 15 secondes et Documents/Contrats conservent leurs budgets antérieurs.
+Les résultats expirés, incomplets, sautés ou repris après échec restent refusés.
+
+Validation locale de ce dernier ajustement : 273 tests de logique natifs réussis.
+Les 11 tests supprimés appartenaient uniquement au collecteur `sample` retiré ;
+aucune assertion de parcours n'est supprimée. Les simulations et la revue
+indépendante du dernier ajustement restent requises avant fusion.
 
 Les tests purs utilisent des transports injectés. Les scénarios démo n'envoient
 aucun fichier réel ni SMS et ne signent aucun contrat réel. Documents exige neuf

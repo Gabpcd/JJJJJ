@@ -78,6 +78,21 @@ test('endpoint names are fixed enums and the two role/viewport matrices are boun
     ['UNREAD_MESSAGES_RPC', 'OTHER_RPC', 'REST_RESOURCE', 'EDGE_FUNCTION', 'AUTH', 'STORAGE', 'OTHER']);
 });
 
+test('network and CORS diagnostics preserve failure counts without disclosing private console strings', () => {
+  const f = fixture('soignant', 'series-c-android');
+  f.audit[37].consoleErrors = [
+    `https://example.invalid/${canary} :: Access to fetch blocked by CORS policy`,
+    ...['ERR_ABORTED', 'ERR_CONNECTION_CLOSED', 'ERR_NAME_NOT_RESOLVED',
+      'ERR_CERT_AUTHORITY_INVALID', 'ERR_HTTP2_PROTOCOL_ERROR', 'ERR_FAILED', 'ERR_UNKNOWN_PRIVATE']
+      .map(code => `https://example.invalid/?secret=${canary} :: Failed to load resource: net::${code}`),
+  ];
+  const actual = project(f);
+  assert.equal(actual.rows[0].consoleCount, 8);
+  assert.deepEqual(actual.rows[0].consoleCategories,
+    ['CORS', 'NETWORK_ABORTED', 'NETWORK_CONNECTION', 'NETWORK_DNS', 'NETWORK_TLS',
+      'NETWORK_HTTP2', 'NETWORK_FAILED', 'RESOURCE_LOAD'].map(category => ({ category, count: 1 })));
+});
+
 test('keeps RPC provenance including unknown and never guesses the WS viewport', () => {
   const f = fixture();
   const event = { timestamp: canary, route: canary, requestId: canary, documentId: canary,

@@ -49,6 +49,8 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func runPortraitConsultation(prefix: String, deviceName: String) {
+        // Both roles plus signup share one test; individual screen deadlines stay at 15s.
+        executionTimeAllowance = 900
         proofPrefix = prefix
         prepareExpoGo()
         XCUIDevice.shared.orientation = .portrait
@@ -105,6 +107,7 @@ final class NativePilotTests: XCTestCase {
 
     /// Runs separately after portrait, using the same signed-out experience without preparation/reset.
     func testLandscapeConsultation() throws {
+        executionTimeAllowance = 900
         proofPrefix = "ipad-paysage"
         app.activate()
         XCUIDevice.shared.orientation = .landscapeLeft

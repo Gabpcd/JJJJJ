@@ -6,7 +6,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { verifyContractsHomeEvidence } from './contracts-home-oracle.mjs';
 import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
-import { createIosNavigationStallMonitor } from './ios-navigation-stall.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
 import { startNativeEventStream } from './ios-native-event-stream.mjs';
@@ -44,7 +43,6 @@ const expoUrl = 'exp://127.0.0.1:8090';
 let device;
 let metro;
 let metroError;
-let navigationStallMonitor;
 let compiledClient;
 let nativeEventStream;
 let iosTestsBuilt = false;
@@ -243,17 +241,22 @@ async function runIosXCTest(name, directory) {
   }
   stage = `xctest-${name}`;
   console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
+  // Consultation includes both roles, applications, profile editing and signup.
+  // Its unchanged per-screen assertions completed in 654s on the source client;
+  // a 600s whole-test cap invalidated the run after every assertion had passed.
+  const executionAllowance = selectedScenario.name === 'consultation' ? 900 : 600;
+  const commandTimeout = (executionAllowance + 300) * 1_000;
   const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
   const result = await run('xcodebuild', ['test-without-building', ...common,
     `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`,
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
-    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600'],
-  { timeout: 900_000, logfile: `${name}-xctest.log`, allowFailure: true });
-  saveCommand(resolve(directory, 'xctest-command.json'), result, 900_000);
+    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', String(executionAllowance)],
+  { timeout: commandTimeout, logfile: `${name}-xctest.log`, allowFailure: true });
+  saveCommand(resolve(directory, 'xctest-command.json'), result, commandTimeout);
   // Preserve an external timeout even if xcresulttool encounters a partial bundle.
   // A readable report is collected once for diagnosis; it cannot rescue a timeout.
-  const commandFailure = result.expired ? 'Délai externe XCTest de 900 s dépassé. '
+  const commandFailure = result.expired ? `Délai externe XCTest de ${commandTimeout / 1_000} s dépassé. `
     : result.code !== 0 ? `xcodebuild code ${result.code}, signal ${result.signal ?? 'aucun'}. ` : '';
   const attachments = resolve(directory, 'attachments');
   let summary;
@@ -345,8 +348,6 @@ try {
     { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   metro.stdout.pipe(metroLog, { end: false });
   metro.stderr.pipe(metroLog, { end: false });
-  metro.stdout.on('data', chunk => { if (!compiled) navigationStallMonitor?.consume('stdout', chunk); });
-  metro.stderr.on('data', chunk => { if (!compiled) navigationStallMonitor?.consume('stderr', chunk); });
   metro.once('error', error => { metroError = error; metroLog.write(`${error.message}\n`); });
   await waitUntil('réponse Metro sur IPv4 localhost', async () => {
     try {
@@ -389,8 +390,7 @@ try {
   if (platform === 'ios') {
     stage = 'open-ios-experience';
     if (compiled) {
-      nativeEventStream = await startNativeEventStream({ device, executable: compiledClient.executable, output, env,
-        onLine: line => navigationStallMonitor?.consume('stdout', line) });
+      nativeEventStream = await startNativeEventStream({ device, executable: compiledClient.executable, output, env });
     }
     // RCTBundleURLProvider in the locked RN version reads this NSArgumentDomain
     // setting. It also works when the precompiled RN core has port 8081 baked in.
@@ -402,7 +402,6 @@ try {
       'simctl', 'launch', device, appId, ...launchArguments,
     ], { timeout: 120_000, logfile: compiled ? 'compiled-launch.log' : 'expo-launch.log' });
     nativeEventStream?.bindLaunch(launch.stdout, appId);
-    navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout, bundleId: appId });
     // Expo Go SDK 57 opens --initialUrl after its home controller appears.
     // Temporary NSArgumentDomain defaults prepare the Expo Go host only.
     // XCTest activates the existing process and requires its overlays absent;
@@ -422,7 +421,6 @@ try {
   writeFileSync(resolve(output, 'failure.txt'), `${stage}: ${error.stack || error}\n`);
   process.exitCode = 1;
 } finally {
-  await navigationStallMonitor?.dispose();
   await nativeEventStream?.dispose();
   if (device) {
     if (platform === 'ios') {
