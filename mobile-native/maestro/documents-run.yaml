@@ -1,0 +1,123 @@
+appId: ${APP_ID}
+name: Justificatifs natifs — lancement isolé en démonstration
+env:
+  FRESH_EXPO_GO: ${FRESH_EXPO_GO || "0"}
+---
+- openLink: ${EXPO_URL}
+- tapOn:
+    text: "Open|Ouvrir"
+    optional: true
+# A fresh CI install shows its tutorial only after the experience has loaded.
+# Wait for that screen explicitly; a short optional tap can miss it entirely.
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO == "1"}
+    commands:
+      - extendedWaitUntil:
+          visible: "Continue|Continuer|Pixel Launcher isn't responding"
+          timeout: 120000
+      # A disposable Android emulator can show its launcher ANR over Expo's
+      # tutorial. Close only that named system app, before any Jolene step.
+      - runFlow:
+          when:
+            platform: Android
+            visible: "Pixel Launcher isn't responding"
+          commands:
+            - tapOn: "Close app"
+            - assertNotVisible: "Pixel Launcher isn't responding"
+      - assertVisible: "Continue|Continuer"
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - tapOn: "Continue|Continuer"
+      # The SDK header remains accessible behind the onboarding sheet.
+      # Require its actual dismissal before preparing the development menu.
+      - extendedWaitUntil:
+          notVisible: "Continue|Continuer"
+          timeout: 15000
+      - extendedWaitUntil:
+          visible: "SDK version: 57.0.0"
+          timeout: 30000
+- runFlow:
+    when:
+      true: ${FRESH_EXPO_GO != "1"}
+    commands:
+      - tapOn:
+          text: "Continue|Continuer"
+          optional: true
+# Expo Go's floating tools control can cover the application's sign-out button.
+# Prepare the simulator only at startup; never recover a failed application step.
+- runFlow:
+    when:
+      platform: iOS
+      visible: "SDK version: 57.0.0"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Tools button"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
+      - runFlow:
+          when:
+            visible:
+              text: "1"
+              checked: true
+              rightOf: "Tools button"
+              below: "Fast refresh"
+          commands:
+            - tapOn:
+                text: "1"
+                checked: true
+                rightOf: "Tools button"
+                below: "Fast refresh"
+      - assertVisible:
+          text: "0"
+          checked: false
+          rightOf: "Tools button"
+          below: "Fast refresh"
+      - tapOn:
+          id: "xmark"
+      - assertNotVisible: "SDK version: 57.0.0"
+# Android Expo Go exposes an accessibility label, not the iOS xmark identifier.
+- runFlow:
+    when:
+      platform: Android
+      visible: "SDK version: 57.0.0"
+    commands:
+      # CI installs Expo Go on a fresh emulator; SDK 57 defaults showFab to true.
+      # This decorative switch does not expose a reliable checked state.
+      # Toggle the row once, then verify the actual floating control is absent.
+      - scrollUntilVisible:
+          element:
+            text: "Tools button"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
+      - tapOn: "Tools button"
+      - tapOn: "Close"
+      - assertNotVisible: "SDK version: 57.0.0"
+      - assertNotVisible: "^Tools$"
+- extendedWaitUntil:
+    visible:
+      id: "login-scroll"
+    timeout: 90000
+- scrollUntilVisible:
+    element:
+      text: ".*Démo · données fictives.*"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*Démo · données fictives.*"
+- scrollUntilVisible:
+    element:
+      id: "enter-demo"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: enter-demo
+- assertVisible:
+    id: missions-list
+- assertVisible:
+    id: mission-count
+    text: "30 missions.*"
+- runFlow: documents-demo.yaml

@@ -38,6 +38,15 @@ function attachment(attachments, name, observeSize) {
 function category(raw) {
   const value = text(raw);
   if (value.includes('HTTP/2 Error: NO_ERROR')) return 'HTTP2_NO_ERROR';
+  // Keep transport failures actionable without exporting a URL, account or
+  // arbitrary browser error. Classification never changes the test verdict.
+  if (/blocked by CORS policy|Cross-Origin Request Blocked|Access-Control-Allow-Origin/.test(value)) return 'CORS';
+  if (/net::ERR_ABORTED\b/.test(value)) return 'NETWORK_ABORTED';
+  if (/net::ERR_(?:CONNECTION_CLOSED|CONNECTION_RESET|CONNECTION_REFUSED|CONNECTION_TIMED_OUT|TIMED_OUT)\b/.test(value)) return 'NETWORK_CONNECTION';
+  if (/net::ERR_NAME_NOT_RESOLVED\b/.test(value)) return 'NETWORK_DNS';
+  if (/net::ERR_(?:CERT_AUTHORITY_INVALID|CERT_DATE_INVALID|SSL_PROTOCOL_ERROR)\b/.test(value)) return 'NETWORK_TLS';
+  if (/net::ERR_HTTP2_PROTOCOL_ERROR\b/.test(value)) return 'NETWORK_HTTP2';
+  if (/net::ERR_FAILED\b/.test(value)) return 'NETWORK_FAILED';
   if (/WebSocket connection\b/.test(value)) return 'WEBSOCKET';
   if (/Failed to load resource\b/.test(value)) return 'RESOURCE_LOAD';
   if (/Failed to fetch|Load failed|NetworkError/.test(value)) return 'FETCH_FAILED';

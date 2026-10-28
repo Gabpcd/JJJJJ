@@ -3,9 +3,11 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, shared } from './theme';
 
-export function ActionButton({ label, onPress, busy = false, secondary = false, disabled = false, testID }: {
+export function ActionButton({ label, onPress, busy = false, secondary = false, disabled = false, testID, onPressIn, onPressOut }: {
   label: string;
   onPress: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   busy?: boolean;
   secondary?: boolean;
   disabled?: boolean;
@@ -17,7 +19,7 @@ export function ActionButton({ label, onPress, busy = false, secondary = false, 
     <Text style={[styles.buttonText, secondary && styles.secondaryText]}>{label}</Text>
   </View>;
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: blocked, busy }}
-    onPress={onPress} disabled={blocked} testID={testID}
+    onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} disabled={blocked} testID={testID}
     style={({ pressed }) => [styles.button, secondary && styles.secondary, (pressed || blocked) && styles.dimmed]}>
     {secondary ? content : <LinearGradient colors={[colors.pink, colors.purple]}
       start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>{content}</LinearGradient>}

@@ -8,6 +8,7 @@ export type NativeStackParams = {
   Candidature: { id: string };
   MesMissions: undefined;
   Profil: undefined;
+  Documents: undefined;
   AccueilEtablissement: undefined;
   MissionsEtablissement: undefined;
   MissionEtablissement: { id: string };

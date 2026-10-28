@@ -7,7 +7,14 @@
       </BuildActionEntry>
     </BuildActionEntries>
   </BuildAction>
-  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO">
+    <MacroExpansion>
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A10000000000000000000008" BuildableName="NativePilotUITests.xctest" BlueprintName="NativePilotUITests" ReferencedContainer="container:NativePilotUITests.xcodeproj" />
+    </MacroExpansion>
+    <EnvironmentVariables>
+      <EnvironmentVariable key="JOLENE_TEST_APP_ID" value="$(JOLENE_TEST_APP_ID)" isEnabled="YES" />
+      <EnvironmentVariable key="JOLENE_TEST_HOME_ICON" value="$(JOLENE_TEST_HOME_ICON)" isEnabled="YES" />
+    </EnvironmentVariables>
     <Testables>
       <TestableReference skipped="NO" parallelizable="NO">
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A10000000000000000000008" BuildableName="NativePilotUITests.xctest" BlueprintName="NativePilotUITests" ReferencedContainer="container:NativePilotUITests.xcodeproj" />

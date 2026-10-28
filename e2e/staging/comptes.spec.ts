@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { createDeletionSafetyGate } from '../../scripts/ci/staging-delete-account-safety.mjs';
+import { withPreservedPscCanary } from '../helpers/staging-psc-canary.mjs';
 
 const url = process.env.STAGING_SUPABASE_URL;
 const anon = process.env.STAGING_SUPABASE_ANON_KEY;
@@ -18,6 +20,7 @@ const options = { auth: { persistSession: false, autoRefreshToken: false }, glob
 } };
 const admin = createClient(url, service, options);
 const client = () => createClient(url!, anon!, options);
+const verifyDeletionDeployment = createDeletionSafetyGate();
 
 async function compteJetable() {
   const email = `playwright-test-national-${randomUUID()}@example.invalid`;
@@ -334,11 +337,8 @@ test('mot de passe : refus ancien erroné, modification UI réelle, ancien refus
 });
 
 test('suppression : confirmation UI → delete-account réel → profil anonymisé, session inutilisable', async ({ page }) => {
-  // Le staging peut encore porter la fonction pré-correction. Refuser la
-  // recette si une tentative PSC indépendante existe, même expirée.
-  const { count, error: pscError } = await admin.from('psc_auth_sessions').select('state', { head: true, count: 'exact' });
-  expect(pscError).toBeNull();
-  expect(count, 'Aucune authentification PSC indépendante ne peut être interrompue').toBe(0);
+  // Sources/routines déployées épinglées + canari propre préservé ; aucune
+  // lecture ou suppression d'une tentative PSC indépendante.
   const fixture = await compteJetable();
   try {
     await test.step('Connexion du compte jetable', () => connexion(page, fixture.email, fixture.password));
@@ -347,9 +347,11 @@ test('suppression : confirmation UI → delete-account réel → profil anonymis
     await page.getByRole('button', { name: 'Supprimer mon compte', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Supprimer définitivement' })).toBeDisabled();
     await page.getByPlaceholder('Tape SUPPRIMER').fill('SUPPRIMER');
-    const reponse = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'Supprimer définitivement' }).click();
-    const resultat = await reponse;
+    const resultat = await withPreservedPscCanary(admin, verifyDeletionDeployment, async () => {
+      const reponse = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST', { timeout: 30_000 });
+      await page.getByRole('button', { name: 'Supprimer définitivement' }).click();
+      return await reponse;
+    });
     expect(resultat.status()).toBe(200);
     expect(await resultat.json()).toMatchObject({ success: true, auth_deleted: true });
     await expect(page).toHaveURL('http://localhost:5173/');
@@ -372,9 +374,11 @@ test('établissement : suppression confirmée dans l’interface, anonymisation 
     const confirmation = page.getByRole('button', { name: 'Confirmer la suppression', exact: true });
     await expect(confirmation).toBeDisabled();
     await page.locator('#etablissement-confirmation-suppression').fill('SUPPRIMER');
-    const response = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST', { timeout: 30_000 });
-    await confirmation.click();
-    const result = await response;
+    const result = await withPreservedPscCanary(admin, verifyDeletionDeployment, async () => {
+      const response = page.waitForResponse(r => r.url().endsWith('/functions/v1/delete-account') && r.request().method() === 'POST', { timeout: 30_000 });
+      await confirmation.click();
+      return await response;
+    });
     expect(result.status()).toBe(200);
     expect(await result.json()).toMatchObject({ success: true, auth_deleted: true });
     await expect(page).toHaveURL('http://localhost:5173/');
@@ -398,9 +402,9 @@ test('compte suspendu : le refus Data API conserve l’identité Auth et ne pré
     // jeton : un supprime_le présent ne prouve pas l’anonymisation des données.
     const { error: suspendError } = await admin.from('soignants').update({ supprime_le: new Date().toISOString() }).eq('id', fixture.id);
     expect(suspendError).toBeNull();
-    const response = await request.post(`${url}/functions/v1/delete-account`, {
+    const response = await withPreservedPscCanary(admin, verifyDeletionDeployment, () => request.post(`${url}/functions/v1/delete-account`, {
       headers: { Authorization: `Bearer ${session.session!.access_token}`, apikey: anon! }, data: {},
-    });
+    }));
     // Le pre-request PostgREST interdit les RPC aux comptes suspendus, même
     // avec un JWT antérieur valide. L’Edge doit respecter ce refus et ne pas
     // confondre supprime_le (suspension) avec une anonymisation déjà terminée.

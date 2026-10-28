@@ -3,34 +3,49 @@ import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, r
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { verifyContractsHomeEvidence } from './contracts-home-oracle.mjs';
 import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
+import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
+import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
+import { startNativeEventStream } from './ios-native-event-stream.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
-// Local Expo Go on CI simulators only. No app build, OTA or store delivery.
+// CI simulators only: Expo Go or an unsigned Debug source build.
+// No archive, OTA, EAS or store delivery.
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Runner réservé aux simulateurs GitHub Actions.');
 const platform = process.argv[2];
 if (!['ios', 'android'].includes(platform)) throw new Error('Plateforme attendue : ios ou android.');
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(process.env.PILOT_OUTPUT_DIR || resolve(project, 'test-results', `native-${platform}`));
 mkdirSync(output, { recursive: true });
-const flow = resolve(project, 'maestro', 'consultation.yaml');
-const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 const iosFamily = process.env.IOS_DEVICE_FAMILY || 'iphone';
-const isIpad = platform === 'ios' && iosFamily === 'ipad';
+const selectedScenario = selectNativeScenario(process.env, platform, iosFamily);
+const iosHost = process.env.NATIVE_IOS_HOST || 'expo-go';
+if (!['expo-go', 'compiled-debug'].includes(iosHost)) throw new Error('Hôte iOS inconnu.');
+const compiled = iosHost === 'compiled-debug';
+if (compiled && platform !== 'ios') throw new Error('Le client compilé est réservé aux simulateurs iOS.');
+const flow = resolve(project, 'maestro', selectedScenario.flowFile);
+const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
+writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
+  EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: selectedScenario.documentScenarioFlag,
+  EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: selectedScenario.contractScenarioFlag ?? '0',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
   EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', MAESTRO_CLI_NO_ANALYTICS: '1',
   MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
   NODE_OPTIONS: '--dns-result-order=ipv4first',
 };
-const appId = platform === 'ios' ? 'host.exp.Exponent' : 'host.exp.exponent';
+const appId = compiled ? COMPILED_APP_ID : platform === 'ios' ? 'host.exp.Exponent' : 'host.exp.exponent';
 const expoUrl = 'exp://127.0.0.1:8090';
 let device;
 let metro;
 let metroError;
+let compiledClient;
+let nativeEventStream;
+let iosTestsBuilt = false;
 let stage = 'device-selection';
 let success = false;
 const started = new Date().toISOString();
@@ -42,26 +57,42 @@ function stopTree(child, signal = 'SIGTERM') {
   try { process.kill(-child.pid, signal); } catch { /* Already stopped. */ }
 }
 
-async function run(command, args, { timeout = 60_000, logfile, allowFailure = false } = {}) {
+async function run(command, args, { timeout = 60_000, logfile, allowFailure = false, captureLimit, extraEnv } = {}) {
   const stream = logfile ? createWriteStream(resolve(output, logfile), { flags: 'a' }) : null;
   if (stream) streams.push(stream);
-  const child = spawn(command, args, { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const commandStarted = performance.now();
+  const child = spawn(command, args, { cwd: project, env: { ...env, ...extraEnv }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
   let expired = false;
-  child.stdout.on('data', chunk => { stdout += chunk.toString(); stream?.write(chunk); });
-  child.stderr.on('data', chunk => { stderr += chunk.toString(); stream?.write(chunk); });
+  let diskError;
+  let logBytes = 0;
+  const logLimit = compiled ? 16_000_000 : Infinity;
+  const log = chunk => {
+    if (!stream || logBytes >= logLimit) return;
+    const remaining = logLimit - logBytes;
+    stream.write(chunk.subarray(0, Math.min(chunk.length, remaining)));
+    logBytes += chunk.length;
+    if (logBytes >= logLimit) stream.write('\n[runner: diagnostic log capped at 16000000 bytes]\n');
+  };
+  child.stdout.on('data', chunk => { stdout += chunk.toString(); if (captureLimit) stdout = stdout.slice(-captureLimit); log(chunk); });
+  child.stderr.on('data', chunk => { stderr += chunk.toString(); if (captureLimit) stderr = stderr.slice(-captureLimit); log(chunk); });
   const timer = setTimeout(() => { expired = true; stopTree(child, 'SIGKILL'); }, timeout);
+  const diskTimer = compiled ? setInterval(() => {
+    try { requireSimulatorBuildSpace(project); }
+    catch (error) { diskError = error; stopTree(child, 'SIGKILL'); }
+  }, 10_000) : undefined;
   try {
-    const code = await new Promise((res, rej) => {
+    const { code, signal } = await new Promise((res, rej) => {
       child.once('error', rej);
-      child.once('close', res);
+      child.once('close', (code, signal) => res({ code, signal }));
     });
+    if (diskError) throw diskError;
     if ((expired || code !== 0) && !allowFailure) {
       throw new Error(`${command} ${args[0] ?? ''} ${expired ? 'délai dépassé' : `code ${code}`}: ${stderr.slice(-2000)}`);
     }
-    return { code, stdout, stderr };
-  } finally { clearTimeout(timer); }
+    return { code, signal, expired, durationMs: Math.round(performance.now() - commandStarted), stdout, stderr };
+  } finally { clearTimeout(timer); clearInterval(diskTimer); }
 }
 
 async function waitUntil(label, check, timeout) {
@@ -95,7 +126,20 @@ async function chooseIosDevice() {
       // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
       await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
       await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
-      await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
+      // Cold iOS 26.5 data migrations exceeded four minutes on both source
+      // reference runners, before any app build. Bound simulator preparation
+      // separately; application waits and XCTest allowances remain unchanged.
+      stage = 'ios-boot-readiness';
+      const bootTimeout = 600_000;
+      const bootStarted = new Date().toISOString();
+      const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
+        { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
+      writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
+        phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
+        started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
+        code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
+      }, null, 2));
+      if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
       await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
       return selected.udid;
     }
@@ -157,7 +201,7 @@ async function runScenario(name, scenarioFlow, directory) {
     '-e', `APP_ID=${appId}`, '-e', `EXPO_URL=${expoUrl}`,
     '-e', `OUTPUT_DIR=${directory}`, '-e', `PLATFORM=${platform}`,
     '-e', `FRESH_EXPO_GO=${name === 'portrait' ? '1' : '0'}`, scenarioFlow],
-  { timeout: 720_000, logfile: `${name}-maestro.log` });
+  { timeout: selectedScenario.name === 'consultation' ? 720_000 : 600_000, logfile: `${name}-maestro.log` });
   const junit = readFileSync(resolve(directory, 'junit.xml'), 'utf8');
   if (!/<testsuite\b[^>]*\btests="[1-9]\d*"/.test(junit)
     || /\b(?:failures|errors|skipped)="[1-9]\d*"/.test(junit)) {
@@ -169,43 +213,89 @@ async function runScenario(name, scenarioFlow, directory) {
 
 async function runIosXCTest(name, directory) {
   const portrait = name === 'portrait';
-  const testMethod = portrait
-    ? (isIpad ? 'testPortraitConsultation' : 'testIphoneConsultation')
-    : 'testLandscapeConsultation';
-  stage = `xctest-${name}`;
-  console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
+  const testMethod = iosTestMethod(selectedScenario, iosFamily, name);
   mkdirSync(directory, { recursive: true });
   const temporary = process.env.RUNNER_TEMP;
   if (!temporary) throw new Error('RUNNER_TEMP requis pour le runner XCTest CI.');
-  const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
-  const result = await run('xcodebuild', ['test', '-project', iosProject,
-    '-scheme', 'NativePilotUITests', `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`, '-configuration', 'Debug', '-sdk', 'iphonesimulator',
+  const common = ['-project', iosProject, '-scheme', 'NativePilotUITests',
+    '-configuration', 'Debug', '-sdk', 'iphonesimulator',
     '-destination', `platform=iOS Simulator,id=${device}`,
     '-derivedDataPath', resolve(temporary, 'jolene-native-ui-derived'),
+    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO',
+    `JOLENE_TEST_APP_ID=${appId}`, `JOLENE_TEST_HOME_ICON=${compiledClient?.iconName ?? 'Expo Go'}`];
+  const saveCommand = (path, result, timeoutMs) => {
+    const { code, signal, expired, durationMs } = result;
+    writeFileSync(path, JSON.stringify({ code, signal, expired, durationMs, timeoutMs }, null, 2));
+  };
+  // Compilation must not consume the bounded execution/finalization budget.
+  // Reuse the same built test bundle for the next orientation in this CI job.
+  if (!iosTestsBuilt) {
+    stage = 'xctest-build';
+    const build = await run('xcodebuild', ['build-for-testing', ...common],
+      { timeout: 300_000, logfile: 'xctest-build.log', allowFailure: true });
+    saveCommand(resolve(output, 'xctest-build-command.json'), build, 300_000);
+    if (build.expired || build.code !== 0) {
+      throw new Error(`Compilation du harnais XCTest ${build.expired ? 'délai externe de 300 s dépassé' : `code ${build.code}, signal ${build.signal ?? 'aucun'}`}. Voir xctest-build.log.`);
+    }
+    iosTestsBuilt = true;
+  }
+  stage = `xctest-${name}`;
+  console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
+  // Consultation includes both roles, applications, profile editing and signup.
+  // Its unchanged per-screen assertions completed in 654s on the source client;
+  // a 600s whole-test cap invalidated the run after every assertion had passed.
+  const executionAllowance = selectedScenario.name === 'consultation' ? 900 : 600;
+  const commandTimeout = (executionAllowance + 300) * 1_000;
+  const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
+  const result = await run('xcodebuild', ['test-without-building', ...common,
+    `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`,
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
-    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600',
-    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO'],
-  { timeout: 900_000, logfile: `${name}-xctest.log`, allowFailure: true });
-  if (!existsSync(resultPath)) throw new Error(`Rapport XCTest ${name} absent. Voir ${name}-xctest.log.`);
-  const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
-  writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
+    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', String(executionAllowance)],
+  { timeout: commandTimeout, logfile: `${name}-xctest.log`, allowFailure: true });
+  saveCommand(resolve(directory, 'xctest-command.json'), result, commandTimeout);
+  // Preserve an external timeout even if xcresulttool encounters a partial bundle.
+  // A readable report is collected once for diagnosis; it cannot rescue a timeout.
+  const commandFailure = result.expired ? `Délai externe XCTest de ${commandTimeout / 1_000} s dépassé. `
+    : result.code !== 0 ? `xcodebuild code ${result.code}, signal ${result.signal ?? 'aucun'}. ` : '';
   const attachments = resolve(directory, 'attachments');
-  await run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments]);
-  const summary = JSON.parse(report.stdout);
-  if (result.code !== 0 || summary.result !== 'Passed' || summary.totalTestCount !== 1
+  let summary;
+  try {
+    if (!existsSync(resultPath)) throw new Error('Le bundle .xcresult est absent.');
+    const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
+    writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
+    summary = JSON.parse(report.stdout);
+    await run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments]);
+  } catch (error) {
+    throw new Error(`${commandFailure}Rapport ou pièces jointes XCTest ${name} incomplets ou inexploitables : ${error.message}`, { cause: error });
+  }
+  if (result.expired || result.code !== 0 || summary.result !== 'Passed' || summary.totalTestCount !== 1
     || summary.passedTests !== 1 || summary.failedTests !== 0 || summary.skippedTests !== 0
     || summary.expectedFailures !== 0) {
-    throw new Error(`Le rapport XCTest ${name} ne confirme pas un test réussi sans exclusion.`);
+    throw new Error(`${commandFailure}Le rapport XCTest ${name} ne confirme pas un test réussi sans exclusion.`);
   }
   const manifest = JSON.parse(readFileSync(resolve(attachments, 'manifest.json'), 'utf8'));
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');
+  if (selectedScenario.name === 'contracts') {
+    const prefix = name === 'landscape' ? 'ipad-paysage' : `${iosFamily}-portrait`;
+    const proofs = manifest.flatMap(test => test.attachments ?? []).filter(item =>
+      item.suggestedHumanReadableName?.startsWith(`${prefix}-contrats-home-oracle`)
+      && ['.json', '.txt'].some(extension => item.exportedFileName?.endsWith(extension)));
+    if (proofs.length !== 1 || basename(proofs[0].exportedFileName) !== proofs[0].exportedFileName) {
+      throw new Error('Preuve Home XCTest absente ou ambiguë.');
+    }
+    const proof = JSON.parse(readFileSync(resolve(attachments, proofs[0].exportedFileName), 'utf8'));
+    if (proof.prefix !== prefix) throw new Error('Preuve Home provenant d’un autre format.');
+    nativeEventStream?.assertHealthy();
+    const evidence = verifyContractsHomeEvidence({ proof,
+      metro: readFileSync(resolve(output, 'metro.log'), 'utf8'),
+      ...(nativeEventStream ? { native: readFileSync(nativeEventStream.eventPath, 'utf8') } : {}),
+    });
+    writeFileSync(resolve(directory, 'contracts-home-evidence.json'), JSON.stringify(evidence, null, 2));
+  }
   const captures = resolve(directory, 'captures');
   mkdirSync(captures, { recursive: true });
-  const extraScreens = ['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee'];
-  const names = portrait
-    ? ['connexion', 'missions', 'detail', 'retour', ...extraScreens].map(screen => `${iosFamily}-portrait-${screen}`)
-    : ['connexion', 'liste', 'detail', 'retour', ...extraScreens].map(screen => `ipad-paysage-${screen}`);
+  const names = scenarioCaptureNames(selectedScenario, platform, iosFamily, name);
   for (const name of names) {
     const matching = manifest.flatMap(test => test.attachments ?? []).filter(item =>
       item.suggestedHumanReadableName?.includes(name) && item.exportedFileName?.endsWith('.png'));
@@ -244,16 +334,17 @@ function verifyCaptureOrientation(directory, orientation, names) {
 }
 
 try {
-  if (!existsSync(flow)) throw new Error('Le scénario maestro/consultation.yaml est requis.');
+  if (!existsSync(flow)) throw new Error(`Le scénario Maestro sélectionné est absent : ${selectedScenario.flowFile}.`);
   if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
-  stage = 'expo-go-install';
-  await installExpoGo();
+  stage = compiled ? 'compiled-debug-build' : 'expo-go-install';
+  if (compiled) compiledClient = await buildCompiledIosClient({ project, output, device, env, run });
+  else await installExpoGo();
   stage = 'metro-start';
   console.log(`Démarrage Expo SDK 57 sur ${platform} (${device}).`);
   const metroLog = createWriteStream(resolve(output, 'metro.log'));
   streams.push(metroLog);
-  metro = spawn('npx', ['--no-install', 'expo', 'start', '--go', '--localhost', '--port', '8090'],
+  metro = spawn('npx', ['--no-install', 'expo', 'start', compiled ? '--dev-client' : '--go', '--localhost', '--port', '8090'],
     { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   metro.stdout.pipe(metroLog, { end: false });
   metro.stderr.pipe(metroLog, { end: false });
@@ -265,8 +356,8 @@ try {
     } catch { return false; }
   }, 180_000);
 
-  stage = 'expo-go-installed';
-  await waitUntil('installation Expo Go pour SDK 57', async () => {
+  stage = 'app-installed';
+  await waitUntil(`installation de ${appId}`, async () => {
     const result = platform === 'ios'
       ? await run('xcrun', ['simctl', 'get_app_container', device, appId, 'app'], { allowFailure: true, timeout: 10_000 })
       : await run('adb', ['-s', device, 'shell', 'pm', 'path', appId], { allowFailure: true, timeout: 10_000 });
@@ -282,7 +373,7 @@ try {
   const manifest = await response.json();
   const sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
   if (!String(sdk).startsWith('57.')) throw new Error(`Version Expo du manifeste inattendue : ${sdk}.`);
-  writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', expoUrl }, null, 2));
+  writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', host: iosHost, appId, expoUrl: compiled ? null : expoUrl }, null, 2));
 
   stage = 'metro-bundle-ready';
   const bundleUrl = new URL(manifest.launchAsset?.url);
@@ -295,17 +386,33 @@ try {
   if (!bundleBytes) throw new Error('Le bundle Metro est vide.');
   writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
 
-  console.log('Installation, manifeste et bundle prêts ; lancement du parcours natif.');
+  console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
-    await run('xcrun', ['simctl', 'launch', device, appId], { timeout: 120_000, logfile: 'expo-launch.log' });
-    await run('xcrun', ['simctl', 'openurl', device, expoUrl], { timeout: 120_000, logfile: 'expo-launch.log' });
-    await runIosXCTest('portrait', resolve(output, 'portrait'));
-    if (isIpad) await runIosXCTest('landscape', resolve(output, 'landscape'));
+    if (compiled) {
+      nativeEventStream = await startNativeEventStream({ device, executable: compiledClient.executable, output, env });
+    }
+    // RCTBundleURLProvider in the locked RN version reads this NSArgumentDomain
+    // setting. It also works when the precompiled RN core has port 8081 baked in.
+    const launchArguments = compiled ? ['-RCT_jsLocation', '127.0.0.1:8090'] : [
+      '--initialUrl', expoUrl, '-EXDevMenuIsOnboardingFinished', 'YES',
+      '-EXDevMenuShowsAtLaunch', 'NO', '-EXDevMenuShowFloatingActionButton', 'NO',
+    ];
+    const launch = await run('xcrun', [
+      'simctl', 'launch', device, appId, ...launchArguments,
+    ], { timeout: 120_000, logfile: compiled ? 'compiled-launch.log' : 'expo-launch.log' });
+    nativeEventStream?.bindLaunch(launch.stdout, appId);
+    // Expo Go SDK 57 opens --initialUrl after its home controller appears.
+    // Temporary NSArgumentDomain defaults prepare the Expo Go host only.
+    // XCTest activates the existing process and requires its overlays absent;
+    // every Jolene interaction and assertion remains in the scenario.
+    for (const orientation of selectedScenario.orientations) {
+      await runIosXCTest(orientation, resolve(output, orientation));
+    }
   } else {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
-    verifyCaptureOrientation(output, 'PORTRAIT', ['connexion', 'missions', 'detail', 'retour', ...['mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu', 'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour', 'etablissement-acces', 'inscription-internat', 'inscription-terminee']]);
+    verifyCaptureOrientation(output, 'PORTRAIT', scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
   }
   success = true;
   stage = 'complete';
@@ -314,10 +421,11 @@ try {
   writeFileSync(resolve(output, 'failure.txt'), `${stage}: ${error.stack || error}\n`);
   process.exitCode = 1;
 } finally {
+  await nativeEventStream?.dispose();
   if (device) {
     if (platform === 'ios') {
       if (!success) {
-        try { await collectIosFailureDiagnostics({ device, output, started, run }); }
+        try { await collectIosFailureDiagnostics({ device, output, started, run, env, failed: true, compiledClient }); }
         catch (error) { writeFileSync(resolve(output, 'ios-diagnostics-error.txt'), String(error)); }
       }
       await run('xcrun', ['simctl', 'io', device, 'screenshot', resolve(output, 'final.png')], { allowFailure: true, timeout: 15_000, logfile: 'simulator.log' });
@@ -332,7 +440,7 @@ try {
     await delay(1000);
     stopTree(metro, 'SIGKILL');
   }
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform,
-    device, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform, scenario: selectedScenario.name, orientations: selectedScenario.orientations,
+    device, host: iosHost, appId, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
   await Promise.all(streams.map(stream => new Promise(resolveClose => stream.end(resolveClose))));
 }

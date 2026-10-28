@@ -17,19 +17,26 @@ Le backend et les comptes existants ne sont pas réécrits.
 - Profil soignant : lecture et modification des coordonnées, présentation,
   expérience et préférences géographiques. L’identité vérifiée reste verrouillée.
 - Établissement : accueil, missions filtrées et paginées, détail du planning,
-  profil et permissions réelles du membre. Pas de mutation établissement dans ce lot.
+  profil et permissions réelles du membre. Les missions restent en lecture seule.
+- Documents soignant : sélection de fichier, galerie ou caméra, ajout/remplacement,
+  analyse, revue humaine, archivage et consultation de l’original privé. Un reçu
+  local durable conserve les envois incertains pour les relire sans renvoyer le fichier.
+- Contrats soignant/établissement : liste, lecture native du document serveur vérifié
+  et signature OTP selon les permissions et l’admission TEST existantes. Le lecteur
+  refuse un format qu’il ne sait pas restituer ; il ne régénère aucun contrat.
 - Navigation à onglets avec une pile native par espace ; les pages conservent leur état.
 - Retour par geste iOS / bouton système Android, conservation du défilement,
   clavier, actualisation et reprise après arrière-plan.
 - Session dans le stockage sécurisé du système ; changement d’identité et
   déconnexion invalident les anciennes lectures.
 
-Ce client ne remplace pas encore l’application publiée. Documents, contrats et
-signature, pointage, PSC, messagerie/push, revenus/facturation, publication et
-traitement des candidatures par l’établissement restent à porter. La récupération
+Ce client ne remplace pas encore l’application publiée. La recette des nouveaux
+parcours Documents et Contrats reste à exécuter en simulation puis en intégration
+STAGING. Pointage, PSC, messagerie/push, revenus/facturation, préparation employeur,
+publication et traitement des candidatures par l’établissement restent à porter. La récupération
 du mot de passe et le challenge anti-bot natif restent à intégrer si requis par
-la configuration Auth. Aucun parcours financier n’est exercé ici et aucun contrat
-signé n’est modifié. Voir [MIGRATION.md](MIGRATION.md) pour les limites de vérification.
+la configuration Auth. Aucun parcours financier n’est exercé ici et le contenu
+d’un contrat signé reste protégé. Voir [MIGRATION.md](MIGRATION.md) pour les limites de vérification.
 
 ## Exécuter le pilote
 
@@ -93,6 +100,13 @@ contrôle les dimensions affichées des images, en tenant compte de leur orienta
 de ces scénarios ne vaut pas résultat : leur exécution CI doit être verte.
 Android cible un unique émulateur prêt et refuse tout appareil USB ou non
 autorisé ; Metro reste sur localhost via le port ADB inversé.
+
+Les workflows `native-documents.yml` et `native-contracts.yml` préparent chacun
+quatre jobs distincts : iPhone, Android, iPad portrait et iPad paysage. Chaque job
+utilise une démo neuve, sans credentials STAGING, et exige respectivement neuf
+ou huit captures avec les assertions du scénario. Le runner refuse le croisement
+des flags Documents/Contrats. Leur présence dans le dépôt ne prouve pas leur
+réussite : les premières simulations de ce lot restent à exécuter et relire.
 
 Les preuves doivent toujours distinguer : données fictives sur simulateur,
 intégration STAGING avec compte réel de test, appareil physique et production.

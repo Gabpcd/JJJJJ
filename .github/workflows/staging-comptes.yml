@@ -50,6 +50,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Garde de suppression et canari PSC — transports fictifs sans réseau
+        run: node --test tests/node/staging-delete-account-safety.node.mjs
       - name: Résoudre les accès du staging uniquement
         run: node scripts/ci/prepare-staging-api-env.mjs
         env:
@@ -69,6 +71,9 @@ jobs:
         env:
           # Ce job teste la tête de PR, pas le commit de fusion virtuel.
           JOLENE_E2E_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Lecture Management uniquement pour admettre chaque suppression.
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
       - name: Résumé public sans sessions ni contenu de page
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5

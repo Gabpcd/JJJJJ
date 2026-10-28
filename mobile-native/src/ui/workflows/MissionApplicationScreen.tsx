@@ -71,7 +71,7 @@ function ApplicationContent({ context, gateway, missionId, onBack, onMyMissions,
               <Text style={shared.body}>{terminal ? 'Ce dossier présente l’historique de la mission.' : gateway.mode === 'demo' ? 'Aucune candidature réelle n’a été envoyée.'
                 : assigned ? 'L’attribution a été relue sur le serveur.' : 'L’établissement peut consulter votre candidature.'}</Text>
               <ActionButton label="Voir mes missions" onPress={onMyMissions} testID="application-my-missions" />
-              <Text style={shared.small}>Le contrat et le pointage ne sont pas encore disponibles dans ce parcours natif.</Text>
+              <Text style={shared.small}>Les contrats disponibles sont consultables dans l’onglet Contrats. Le pointage n’est pas encore disponible dans ce parcours natif.</Text>
               {assigned && snapshot.acceptanceEmails?.length ? <View style={styles.section} testID="application-emails">
                 <Text style={styles.label}>Emails de confirmation</Text>
                 {snapshot.acceptanceEmails.map(receipt => <Text key={receipt.recipient} style={shared.small}>

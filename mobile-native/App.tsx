@@ -12,19 +12,24 @@ import { DEMO_ONBOARDING_CONTEXT } from './src/account/demoAccountGateway';
 import { DEMO_ESTABLISHMENT_CONTEXT } from './src/establishment';
 import { GatewayProvider } from './src/ui/gateway';
 import { LoginScreen } from './src/ui/LoginScreen';
+import { ContractsNavigator } from './src/ui/contracts/ContractsNavigator';
+import { readOnlyContractDemo } from './src/contracts/runtime';
 import { MissionListScreen } from './src/ui/MissionListScreen';
 import { MissionDetailScreen } from './src/ui/MissionDetailScreen';
 import { CaregiverProfileScreen } from './src/ui/CaregiverProfileScreen';
+import { DocumentsScreen } from './src/ui/documents';
+import { useDocumentMedia } from './src/ui/documents/useDocumentMedia';
 import { MyMissionsScreen, MissionApplicationScreen } from './src/ui/workflows';
 import { EstablishmentHomeScreen, EstablishmentProfileScreen, EstablishmentMissionListScreen, EstablishmentMissionDetailScreen } from './src/ui/establishment';
 import { RegistrationScreen, OnboardingScreen, AuthConfirmationScreen } from './src/ui/account';
 import { AccountServicesProvider, RuntimeProvider, useAccountServices, useNativeRuntime } from './src/ui/runtime';
 import { useCaregiverSession } from './src/ui/useCaregiverSession';
 import { TabIcon } from './src/ui/TabIcon';
-import { StatusPanel } from './src/ui/components';
+import { ActionButton, StatusPanel } from './src/ui/components';
 import type { NativeStackParams } from './src/ui/navigation';
 import { colors, shared } from './src/ui/theme';
 import { diagnosticStackListeners, diagnosticTouch, traceNavigationState } from './src/navigationDiagnostics';
+import { useApplicationTransitionDiagnostics } from './src/useApplicationTransitionDiagnostics';
 
 const Stack = createNativeStackNavigator<NativeStackParams>();
 const Tabs = createBottomTabNavigator();
@@ -51,11 +56,14 @@ function SignOutButton() {
   </Pressable>;
 }
 function Application({ route, navigation }: NativeStackScreenProps<NativeStackParams, 'Candidature'>) {
+  useApplicationTransitionDiagnostics(navigation.getState().routeNames.includes('Mission')
+    ? 'Exploration/Candidature' : 'Suivi/Candidature', navigation);
   const { context } = useCaregiverSession();
   const { missions } = useAccountServices();
   return <MissionApplicationScreen context={context} gateway={missions} missionId={route.params.id}
     onBack={() => navigation.goBack()} onMyMissions={() => navigation.getParent()?.navigate('SuiviSoignant', { screen: 'MesMissions', pop: true })}
-    onCompleteProfile={() => navigation.getParent()?.navigate('CompteSoignant')} />;
+    onCompleteProfile={() => navigation.getParent()?.navigate('CompteSoignant', { screen: 'Profil', pop: true })}
+    onOpenDocuments={() => navigation.getParent()?.navigate('CompteSoignant', { screen: 'Documents', initial: false, pop: true })} />;
 }
 function ExploreNavigator() {
   return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
@@ -76,15 +84,33 @@ function MyMissionsNavigator() {
     <Stack.Screen name="Candidature" component={Application} options={{ title: 'Ma candidature', headerBackTitle: 'Mes missions' }} />
   </Stack.Navigator>;
 }
-function CaregiverProfile() {
+function CaregiverProfile({ navigation }: NativeStackScreenProps<NativeStackParams, 'Profil'>) {
   const { context, retry } = useCaregiverSession();
   const { profile } = useAccountServices();
   const leave = useSignOut();
-  return <CaregiverProfileScreen context={context} gateway={profile} onSaved={() => { void retry(); }} onSignOut={leave} />;
+  return <CaregiverProfileScreen context={context} gateway={profile} onSaved={() => { void retry(); }} onSignOut={leave}
+    onOpenDocuments={() => navigation.navigate('Documents')} />;
+}
+function CaregiverDocuments({ navigation }: NativeStackScreenProps<NativeStackParams, 'Documents'>) {
+  const { context, snapshot, retry } = useCaregiverSession();
+  const { documents } = useNativeRuntime();
+  const media = useDocumentMedia(documents, context.userId, snapshot.epoch);
+  if (!media.media) return <SafeAreaView style={shared.screen} edges={['left', 'right']}>
+    <StatusPanel loading={media.loading} title={media.loading ? 'Préparation des documents' : 'Documents indisponibles'}
+      message={media.error ?? undefined} testID="documents-media-status">
+      {!media.loading ? <ActionButton label="Réessayer" onPress={media.retry} testID="documents-media-retry" /> : null}
+    </StatusPanel>
+  </SafeAreaView>;
+  return <DocumentsScreen context={{ userId: context.userId }} sessionEpoch={snapshot.epoch}
+    gateway={documents.gateway} uploadJournal={documents.uploadJournal} media={media.media}
+    onOpenProfile={() => navigation.popTo('Profil')}
+    onExploreMissions={() => navigation.getParent()?.navigate('ExplorationSoignant')}
+    onDocumentsChanged={() => { void retry(); }} />;
 }
 function CaregiverProfileNavigator() {
   return <Stack.Navigator screenOptions={stackOptions} screenListeners={diagnosticStackListeners}>
     <Stack.Screen name="Profil" component={CaregiverProfile} options={{ title: 'Mon profil', headerRight: () => <SignOutButton /> }} />
+    <Stack.Screen name="Documents" component={CaregiverDocuments} options={{ title: 'Mes documents', headerBackTitle: 'Profil' }} />
   </Stack.Navigator>;
 }
 function useEstablishment() {
@@ -131,19 +157,23 @@ function AccountNavigator() {
     {isEstablishment ? <>
       <Tabs.Screen name="TableauEtablissement" component={EstablishmentHomeNavigator} options={{ title: 'Accueil', tabBarButtonTestID: 'tab-establishment-home', tabBarIcon: ({ color }) => <TabIcon name="home" color={color} /> }} />
       <Tabs.Screen name="SuiviEtablissement" component={EstablishmentMissionsNavigator} options={{ title: 'Missions', tabBarButtonTestID: 'tab-establishment-missions', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
+      <Tabs.Screen name="ContratsEtablissement" component={ContractsNavigator} options={{ title: 'Contrats', tabBarButtonTestID: 'tab-contracts', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
       <Tabs.Screen name="CompteEtablissement" component={EstablishmentProfileNavigator} options={{ title: 'Établissement', tabBarButtonTestID: 'tab-establishment-profile', tabBarIcon: ({ color }) => <TabIcon name="person" color={color} /> }} />
     </> : <>
       <Tabs.Screen name="ExplorationSoignant" component={ExploreNavigator} options={{ title: 'Explorer', tabBarButtonTestID: 'tab-explore', tabBarIcon: ({ color }) => <TabIcon name="search" color={color} /> }} />
       <Tabs.Screen name="SuiviSoignant" component={MyMissionsNavigator} options={{ title: 'Mes missions', tabBarButtonTestID: 'tab-my-missions', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
+      <Tabs.Screen name="ContratsSoignant" component={ContractsNavigator} options={{ title: 'Contrats', tabBarButtonTestID: 'tab-contracts', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
       <Tabs.Screen name="CompteSoignant" component={CaregiverProfileNavigator} options={{ title: 'Profil', tabBarButtonTestID: 'tab-profile', tabBarIcon: ({ color }) => <TabIcon name="person" color={color} /> }} />
     </>}
   </Tabs.Navigator>;
 }
 function Login({ navigation }: NativeStackScreenProps<NativeStackParams, 'Connexion'>) {
   const { enterDemo } = useSession();
+  const runtime = useNativeRuntime();
   return <LoginScreen onRegister={() => navigation.navigate('Inscription')}
     onEnterEstablishmentDemo={() => enterDemo({ ...DEMO_ESTABLISHMENT_CONTEXT, kind: 'etablissement', membershipRole: 'PROPRIETAIRE' })}
-    onEnterOnboardingDemo={() => enterDemo(DEMO_ONBOARDING_CONTEXT)} />;
+    onEnterOnboardingDemo={() => enterDemo(DEMO_ONBOARDING_CONTEXT)}
+    onEnterReadOnlyContractsDemo={runtime.contractsScenario ? () => enterDemo(readOnlyContractDemo({ ...DEMO_ESTABLISHMENT_CONTEXT, kind: 'etablissement' })) : undefined} />;
 }
 function Registration({ navigation }: NativeStackScreenProps<NativeStackParams, 'Inscription'>) {
   const runtime = useNativeRuntime();

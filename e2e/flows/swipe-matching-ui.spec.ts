@@ -12,19 +12,27 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
-import { loginAs } from '../helpers/auth';
+import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
 
 async function connecterEtLireClePreference(page: Page) {
-  let session: { user?: { id?: string } } | undefined;
-  await loginAs(page, 'soignant', async () => {
-    const reponseSession = await page.waitForResponse(response =>
-      new URL(response.url()).pathname === '/auth/v1/token'
-      && response.request().method() === 'POST',
-    );
-    session = await reponseSession.json();
-  });
-  expect(session?.user?.id).toMatch(/^[0-9a-f-]{36}$/i);
-  return `jolene_missions_view_pref:${session!.user!.id}`;
+  // Le login attend déjà le dashboard authentifié. Observer en parallèle la
+  // réponse Auth avec le délai d'action (10 s) faisait échouer ce test avant
+  // la limite de connexion (15 s), uniquement pour lire la clé de préférence.
+  await loginAs(page, 'soignant');
+  // Le web conserve sa session dans sessionStorage. Lire son UUID après la
+  // connexion vérifie aussi que la préférence appartient au compte connecté,
+  // sans extraire ni joindre les tokens au rapport Playwright.
+  const userId = await page.evaluate(emailAttendu => {
+    const cles = Object.keys(sessionStorage).filter(cle => /^sb-.+-auth-token$/.test(cle));
+    if (cles.length !== 1) throw new Error('Une session Auth unique est requise.');
+    let session: { user?: { id?: string; email?: string } };
+    try { session = JSON.parse(sessionStorage.getItem(cles[0])!); }
+    catch { throw new Error('La session Auth persistée est illisible.'); }
+    if (session?.user?.email !== emailAttendu) throw new Error('La session Auth ne correspond pas au compte de recette.');
+    return session.user.id;
+  }, TEST_ACCOUNTS.soignant.email);
+  expect(userId).toMatch(/^[0-9a-f-]{36}$/i);
+  return `jolene_missions_view_pref:${userId}`;
 }
 
 test.describe('Sprint 14 — UI swipe matching (réels)', () => {

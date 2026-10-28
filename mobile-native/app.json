@@ -16,7 +16,16 @@
       "predictiveBackGestureEnabled": true
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Jolene utilise l’appareil photo pour photographier le document que vous choisissez de transmettre.",
+          "photosPermission": "Jolene utilise la photo que vous sélectionnez pour votre justificatif.",
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/with-rn-text-input-source.cjs"
     ],
     "updates": {
       "enabled": false

@@ -32,7 +32,7 @@ export async function waitStagingSchema({ env = process.env, fetchImpl = fetch,
   let dernierEtat = '';
   let vu = false;
   const timeout = () => new Error(`Schéma staging non confirmé pour ${branch}@${sha} après ${Math.round(maxWaitMs / 1000)} s. ${vu
-    ? `Le job « ${SQL_JOB_NAME} » n’a pas réussi.`
+    ? `Le job « ${SQL_JOB_NAME} » n’a pas réussi. Dernier état observé : ${dernierEtat || 'inconnu'}.`
     : `Aucun run ${WORKFLOW} de cette branche et de ce SHA. Un lancement manuel ne remplace pas une validation SQL réussie.`} Aucun compte de recette ne doit être créé.`);
   async function lire(path) {
     const restant = deadline - now();
@@ -76,7 +76,7 @@ export async function waitStagingSchema({ env = process.env, fetchImpl = fetch,
       const candidats = jobs.filter(j => j.name === SQL_JOB_NAME && j.head_sha === sha && j.run_id === run.id);
       if (candidats.length > 1) throw new Error('Plusieurs jobs SQL homonymes : validation ambiguë.');
       const job = candidats[0];
-      etat = `run ${run.id}, tentative ${run.run_attempt}, SQL ${job?.status ?? 'absent'}`;
+      etat = `run ${run.id}, tentative ${run.run_attempt}, job SQL ${job?.id ?? 'absent'} ${job?.status ?? 'absent'}`;
       if (job?.status === 'completed') {
         if (job.conclusion !== 'success') throw new Error(`Validation SQL du SHA ${sha} terminée en ${job.conclusion || 'état inconnu'} (run ${run.id}).`);
         const courant = await lire(`/runs/${run.id}`);
@@ -86,8 +86,14 @@ export async function waitStagingSchema({ env = process.env, fetchImpl = fetch,
           return { sha, branch, runId: run.id, runAttempt: run.run_attempt, jobId: job.id };
         }
         etat = `run ${run.id} relancé : attente de sa nouvelle tentative`;
+      } else if (run.status === 'completed' && !job) {
+        throw new Error(`Validation ${WORKFLOW} terminée (${run.conclusion || 'état inconnu'}) sans succès du job SQL pour ${sha} : aucun job SQL correspondant dans le run ${run.id}, tentative ${run.run_attempt}.`);
       } else if (run.status === 'completed') {
-        throw new Error(`Validation ${WORKFLOW} terminée (${run.conclusion || 'état inconnu'}) sans succès du job SQL pour ${sha}.`);
+        // Les ressources run et jobs peuvent être mises à jour à des instants
+        // différents : même avec toutes ses étapes terminées, un job encore
+        // in_progress n'est ni absent ni confirmé. Attendre sa propre conclusion
+        // dans la même borne ; jamais déduire sa réussite de celle du workflow.
+        etat += ` ; workflow terminé (${run.conclusion || 'état inconnu'}), conclusion SQL attendue`;
       }
     }
     if (etat !== dernierEtat) { log(`Attente du schéma staging : ${etat}.`); dernierEtat = etat; }

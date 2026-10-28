@@ -6,8 +6,9 @@ const started = Date.now();
 
 export function traceNativeNavigation(event: string, detail?: string) {
   if (!enabled || sequence >= 512) return;
+  const atMs = Date.now();
   console.log('[jolene-native-navigation]', JSON.stringify({
-    sequence: ++sequence, elapsedMs: Date.now() - started, event, detail,
+    sequence: ++sequence, elapsedMs: atMs - started, startedAtMs: started, atMs, event, detail,
   }));
 }
 
@@ -31,3 +32,20 @@ export const diagnosticStackListeners = ({ route }: { route: { name: string } })
   gestureCancel: () => traceNativeNavigation('gestureCancel', route.name),
 });
 export const diagnosticTouch = enabled ? () => traceNativeNavigation('rootTouch') : undefined;
+
+// Login-only observations share the existing bounded demo stream. Never retain
+// touch coordinates, native event objects or form values, and never claim a responder.
+const loginDiagnostic = (event: string) => enabled ? () => {
+  try { traceNativeNavigation(event); } catch { /* Observation must not block the tap handler. */ }
+} : undefined;
+export const diagnosticLoginTouch = {
+  start: loginDiagnostic('loginTouchStart'),
+  end: loginDiagnostic('loginTouchEnd'),
+  cancel: loginDiagnostic('loginTouchCancel'),
+  dragStart: loginDiagnostic('loginScrollDragStart'),
+};
+export const diagnosticEnterDemo = {
+  pressIn: loginDiagnostic('enterDemoPressIn'),
+  pressOut: loginDiagnostic('enterDemoPressOut'),
+  handler: loginDiagnostic('enterDemoHandlerEntry'),
+};

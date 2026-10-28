@@ -87,7 +87,7 @@ jobs:
     name: Native — ${{ matrix.family }} simulateur
     needs: checks
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 140
     strategy:
       fail-fast: false
       matrix:
@@ -104,11 +104,16 @@ jobs:
           cache-dependency-path: mobile-native/package-lock.json
       - run: npm ci
         timeout-minutes: 8
-      - name: Parcours dans Expo Go sur simulateur iOS
+      - name: Parcours dans le client Debug source sur simulateur iOS
         run: node scripts/run-pilot-ci.mjs ios
-        # iPad runs two bounded 10-minute scenarios plus simulator/Expo startup.
-        timeout-minutes: 35
+        # Source compilation and simulator preparation have separate budgets.
+        # The two original iPad XCTest scenarios and their UI deadlines are unchanged.
+        timeout-minutes: 130
         env:
+          NATIVE_IOS_HOST: compiled-debug
+          NATIVE_IOS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RCT_USE_PREBUILT_RNCORE: '0'
+          RCT_USE_RN_DEP: '1'
           IOS_DEVICE_FAMILY: ${{ matrix.family }}
           PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/native-${{ matrix.family }}
       - name: Conserver preuves, rapport et diagnostic

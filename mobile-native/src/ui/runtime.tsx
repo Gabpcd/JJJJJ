@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import type { NativeRuntime } from '../session/nativeRuntime';
 import { DemoProfileGateway, SupabaseProfileGateway, type ProfileGateway } from '../caregiver/profile';
 import { EstablishmentGateway } from '../establishment';
@@ -8,6 +8,14 @@ type Services = { runtime: NativeRuntime; profile: ProfileGateway; establishment
 const RuntimeContext = createContext<NativeRuntime | null>(null);
 const ServicesContext = createContext<Services | null>(null);
 export function RuntimeProvider({ runtime, children }: PropsWithChildren<{ runtime: NativeRuntime }>) {
+  useEffect(() => {
+    // Invalidation/dispose starts synchronously at the identity boundary, before React remounts.
+    // Cleanup failures are retained by Documents and surfaced/retried on its next preparation.
+    const changed = () => { void runtime.documents.invalidateSession().catch(() => undefined); };
+    const unsubscribe = runtime.controller.subscribe(changed);
+    changed();
+    return () => { unsubscribe(); void runtime.documents.releaseSession().catch(() => undefined); };
+  }, [runtime]);
   return <RuntimeContext.Provider value={runtime}>{children}</RuntimeContext.Provider>;
 }
 export function useNativeRuntime() {

@@ -1,0 +1,43 @@
+name: Témoin UIKit OTP — diagnostic synthétique séparé
+
+# Separate diagnostic only. Runs only after this prepared patch is integrated;
+# it never replaces or rescues a Contracts job.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile-native/ios-ui-tests/UIKitOtpReference/**'
+      - 'mobile-native/ios-ui-tests/NativePilotUITests/UIKitOtpReferenceTests.swift'
+      - 'mobile-native/ios-ui-tests/NativePilotUITests.xcodeproj/**'
+      - 'mobile-native/scripts/run-uikit-otp-reference-ci.mjs'
+      - '.github/workflows/native-uikit-otp-reference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reference:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Compiler et observer uniquement le témoin UIKit
+        run: node mobile-native/scripts/run-uikit-otp-reference-ci.mjs
+        timeout-minutes: 15
+        env:
+          UIKIT_REFERENCE_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/uikit-otp-reference
+      - name: Conserver les preuves propres au témoin
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: uikit-otp-reference-${{ github.event.pull_request.head.sha || github.sha }}
+          path: mobile-native/test-results/uikit-otp-reference/
+          retention-days: 7
+          if-no-files-found: warn
