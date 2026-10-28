@@ -30,6 +30,19 @@ export async function collectIosFailureDiagnostics({ device, output, started, ru
     notes.push({ systemLogExitCode: result.code });
   } catch (error) { notes.push({ systemLogError: String(error) }); }
 
+  // App-filtered logs show touch cancellation but omit the system sender that
+  // disappeared. Preserve a bounded passive view on this disposable simulator;
+  // no gesture, retry, setting or verdict is changed by diagnostic collection.
+  try {
+    const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '2m',
+      '--style', 'ndjson', '--info', '--debug', '--predicate',
+      '(process == "backboardd" OR process == "testmanagerd" OR process == "SpringBoard") AND (eventMessage CONTAINS[c] "digitizer" OR eventMessage CONTAINS[c] "HID" OR eventMessage CONTAINS[c] "sender" OR eventMessage CONTAINS[c] "synthesi")'],
+    { timeout: 30_000, allowFailure: true, captureLimit: 2_000_001 });
+    const contents = result.stdout + result.stderr;
+    writeFileSync(resolve(directory, 'simulator-input-system.ndjson'), contents.slice(-2_000_000));
+    notes.push({ inputSystemExitCode: result.code, inputSystemTruncated: contents.length > 2_000_000 });
+  } catch (error) { notes.push({ inputSystemError: String(error) }); }
+
   // AX snapshots also repeat the visible error text: exclude XCTest's subsystem
   // before bounding the log, otherwise it erases the original network failure.
   // Preserve a separate bounded view of Expo network failures, without

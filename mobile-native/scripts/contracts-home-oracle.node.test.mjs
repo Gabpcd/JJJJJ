@@ -24,6 +24,9 @@ function verdict({ proof, entries }) {
   return verifyContractsHomeEvidence({ proof, metro: entries.map(([stream, entry]) =>
     ` LOG [jolene-native-${stream}] ${JSON.stringify(entry)}`).join('\n') });
 }
+function log(entries) {
+  return entries.map(([stream, entry]) => `[jolene-native-${stream}] ${JSON.stringify(entry)}`).join('\n');
+}
 test('requires real Home UI plus one background/active transition and purge in the same input stream', () => {
   const result = verdict(fixture()); assert.equal(result.success, true);
   assert.equal(result.committedBeforeHome, 6); assert.equal(result.committedAfterResume, 0);
@@ -76,4 +79,54 @@ test('old non-correlatable logs, reordered markers and a missing final marker fa
   assert.throws(() => verdict(reordered), /ordre des marqueurs/);
   const incomplete = fixture(); incomplete.proof.markers.pop();
   assert.throws(() => verdict(incomplete), /marqueurs XCTest/);
+});
+
+test('a lost native log burst does not discard the complete Metro sequence and matching UI evidence', () => {
+  const { proof, entries } = fixture();
+  const early = ['contract-input', { sequence: 7, startedAtMs: 500, atMs: 900, event: 'focus', count: 1 }];
+  const metro = log([early, ...entries]);
+  // Unified Logging lost the six-digit commit; retain only independent native
+  // witnesses before Home, background/active, and the final cleared commit.
+  const native = log([early, entries[4], entries[6], entries[8]]);
+  const result = verifyContractsHomeEvidence({ proof, metro, native });
+  assert.equal(result.success, true);
+  assert.equal(result.nativeProcessStreamMatched, true);
+  assert.equal(result.canonicalStream, 'metro');
+  assert.equal(result.committedBeforeHome, 6);
+  assert.equal(result.committedAfterResume, 0);
+});
+
+test('native data cannot fill a gap or rescue an invalid Metro/UI proof', () => {
+  const { proof, entries } = fixture();
+  const native = log(entries);
+  for (const remove of [0, 2, 4, 6, 8]) {
+    assert.throws(() => verifyContractsHomeEvidence({ proof,
+      metro: log(entries.filter((_, index) => index !== remove)), native }));
+  }
+  const altered = structuredClone(entries); altered[0][1].length = 2;
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro: log(altered), native }), /six chiffres/);
+  const noHome = structuredClone(proof); noHome.markers[1].homeVisible = false;
+  assert.throws(() => verifyContractsHomeEvidence({ proof: noHome, metro: log(entries), native }), /oracles visuels/);
+});
+
+test('native provenance must match the same input instance and both lifecycle transitions', () => {
+  const { proof, entries } = fixture();
+  const metro = log(entries);
+  for (const remove of [0, 4, 6, 8]) {
+    assert.throws(() => verifyContractsHomeEvidence({ proof, metro,
+      native: log(entries.filter((_, index) => index !== remove)) }), /origine native/);
+  }
+  const changed = structuredClone(entries); changed[0][1].startedAtMs = 501;
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro, native: log(changed) }), /flux natif distinct/);
+  const conflicting = structuredClone(entries); conflicting[0][1].length = 2;
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro, native: log(conflicting) }), /flux natif distinct/);
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro, native: '' }), /origine native/);
+});
+
+test('duplicated events in either transport cannot count as an independent native witness', () => {
+  const { proof, entries } = fixture();
+  const metro = log(entries);
+  const duplicate = log([entries[0], ...entries]);
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro, native: duplicate }), /flux natif distinct/);
+  assert.throws(() => verifyContractsHomeEvidence({ proof, metro: duplicate, native: metro }), /événement Metro dupliqué/);
 });

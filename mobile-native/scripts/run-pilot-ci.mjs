@@ -284,8 +284,10 @@ async function runIosXCTest(name, directory) {
     const proof = JSON.parse(readFileSync(resolve(attachments, proofs[0].exportedFileName), 'utf8'));
     if (proof.prefix !== prefix) throw new Error('Preuve Home provenant d’un autre format.');
     nativeEventStream?.assertHealthy();
-    const evidenceLog = nativeEventStream?.eventPath ?? resolve(output, 'metro.log');
-    const evidence = verifyContractsHomeEvidence({ proof, metro: readFileSync(evidenceLog, 'utf8') });
+    const evidence = verifyContractsHomeEvidence({ proof,
+      metro: readFileSync(resolve(output, 'metro.log'), 'utf8'),
+      ...(nativeEventStream ? { native: readFileSync(nativeEventStream.eventPath, 'utf8') } : {}),
+    });
     writeFileSync(resolve(directory, 'contracts-home-evidence.json'), JSON.stringify(evidence, null, 2));
   }
   const captures = resolve(directory, 'captures');

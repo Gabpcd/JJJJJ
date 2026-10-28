@@ -30,7 +30,7 @@ function orderedStream(entries, label) {
   }
 }
 
-export function verifyContractsHomeEvidence({ proof, metro }) {
+export function verifyContractsHomeEvidence({ proof, metro, native }) {
   if (!proof || proof.schemaVersion !== 1 || !/^[0-9a-f-]{36}$/i.test(proof.id ?? '')
     || !['iphone-portrait', 'ipad-portrait', 'ipad-paysage'].includes(proof.prefix)
     || proof.homePresses !== 1 || proof.activations !== 1 || !Array.isArray(proof.markers)
@@ -76,9 +76,38 @@ export function verifyContractsHomeEvidence({ proof, metro }) {
   if (!cleared || cleared.line <= active.line || cleared.length !== 0 || cleared.active !== true) {
     fail('purge à zéro non confirmée après reprise active');
   }
+  if (native !== undefined) {
+    // Metro is the single complete event sequence, also used by Expo Go. Unified
+    // Logging can drop a burst (28dc500: input 10..35), even with a healthy stream.
+    // The separately PID-bound native stream attests its origin; it never fills
+    // gaps, replaces events or rescues an incomplete Metro/UI proof.
+    const key = entry => `${entry.stream}:${entry.startedAtMs}:${entry.sequence}`;
+    const value = ({ line, ...entry }) => JSON.stringify(entry);
+    const canonical = new Map();
+    for (const entry of events.filter(entry => entry.atMs <= resumed.atMs)) {
+      if (canonical.has(key(entry))) fail('événement Metro dupliqué');
+      canonical.set(key(entry), value(entry));
+    }
+    const witnesses = readEvents(native).filter(entry => entry.atMs <= resumed.atMs);
+    const seen = new Set();
+    for (const entry of witnesses) {
+      if (seen.has(key(entry)) || canonical.get(key(entry)) !== value(entry)) {
+        fail('flux natif distinct du journal Metro');
+      }
+      seen.add(key(entry));
+    }
+    const sameInput = witnesses.filter(entry => entry.stream === 'contract-input'
+      && entry.startedAtMs === six.startedAtMs);
+    if (!sameInput.some(entry => entry.atMs <= armed.atMs)
+      || !sameInput.some(entry => key(entry) === key(cleared))
+      || !seen.has(key(background)) || !seen.has(key(active))) {
+      fail('origine native de la saisie et du cycle Home non confirmée');
+    }
+  }
   return { schemaVersion: 1, success: true, proofId: proof.id, prefix: proof.prefix,
     homePresses: 1, activations: 1, committedBeforeHome: 6, committedAfterResume: 0,
     backgroundObserved: true, source: 'synthetic-simulator-ui-and-js',
+    ...(native !== undefined ? { nativeProcessStreamMatched: true, canonicalStream: 'metro' } : {}),
     times: { armed: armed.atMs, homeVisible: home.atMs, background: background.atMs,
       activate: activate.atMs, active: active.atMs, cleared: cleared.atMs, resumed: resumed.atMs } };
 }
