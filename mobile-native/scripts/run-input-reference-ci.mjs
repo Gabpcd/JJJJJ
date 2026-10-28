@@ -3,9 +3,10 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prepareSourceVariant } from './rn-input-source-variant.mjs';
 
-// Only creates a synthetic JS experience and reuses the existing CI simulator
-// runner. No prebuild, native RN build, SDK installation, delivery or supplier.
+// Creates a synthetic experience with the existing simulator runner. Explicit
+// source variants compile an unsigned Debug client; no delivery or supplier.
 if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin'
   || process.env.NATIVE_PILOT_SCENARIO !== 'input-reference' || !process.env.RUNNER_TEMP) {
   throw new Error('Témoin input-reference réservé au runner macOS GitHub Actions.');
@@ -13,7 +14,9 @@ if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin'
 const sourceProject = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(process.env.INPUT_REFERENCE_OUTPUT_DIR || resolve(sourceProject, 'test-results', 'rn-input-reference'));
 mkdirSync(output, { recursive: true });
-const result = { source: 'synthetic-rn-input-reference', scenario: 'input-reference',
+const sourceVariant = process.env.NATIVE_RN_SOURCE_VARIANT || null;
+const host = sourceVariant ? 'compiled-debug' : 'expo-go';
+const result = { sourceVariant, source: 'synthetic-rn-input-reference', scenario: 'input-reference',
   started: new Date().toISOString(), stage: 'prepare', success: false,
   productScenario: false, contractsVerdictChanged: false, production: false, physicalDevice: false };
 const sha256 = path => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -35,7 +38,13 @@ try {
   if (!/^[a-f0-9]{40}$/.test(sourceSha) || sourceSha !== process.env.INPUT_REFERENCE_SOURCE_SHA) {
     throw new Error('La tête du checkout ne correspond pas à la provenance demandée.');
   }
+  if (sourceVariant) save('rn-source-variant.json', prepareSourceVariant({
+    root: resolve(modules, 'react-native'), reference: resolve(sourceProject, 'input-reference'),
+    env: process.env, temporaryRoot: realpathSync(process.env.RUNNER_TEMP),
+  }));
   const project = mkdtempSync(resolve(realpathSync(process.env.RUNNER_TEMP), 'jolene-rn-input-reference-'));
+  cpSync(resolve(sourceProject, 'input-reference'), resolve(project, 'input-reference'), { recursive: true });
+  copyFileSync(resolve(sourceProject, 'package-lock.json'), resolve(project, 'package-lock.json'));
   cpSync(resolve(sourceProject, 'scripts'), resolve(project, 'scripts'), { recursive: true });
   cpSync(resolve(sourceProject, 'ios-ui-tests'), resolve(project, 'ios-ui-tests'), { recursive: true });
   copyFileSync(resolve(sourceProject, 'input-reference', 'index.tsx'), resolve(project, 'index.tsx'));
@@ -51,6 +60,7 @@ try {
   writeFileSync(resolve(project, 'app.json'), JSON.stringify({ expo: {
     name: 'Jolene Input Reference', slug: 'jolene-input-reference-ci', version: '0.1.0',
     platforms: ['ios'], orientation: 'portrait',
+    ...(sourceVariant ? { ios: { bundleIdentifier: 'app.jolene.nativepilot' }, updates: { enabled: false } } : {}),
   } }, null, 2));
   // Metro must watch the real target of node_modules, while resolving React only
   // from the locked native installation. No Jolene source is imported by the entry.
@@ -68,20 +78,21 @@ module.exports = config;
 `);
   save('provenance.json', { ...result, sourceSha, versions,
     xcode: execFileSync('xcodebuild', ['-version'], { encoding: 'utf8', timeout: 30_000 }).trim(),
-    host: 'expo-go', appId: 'host.exp.Exponent', platform: 'iphonesimulator',
+    host, appId: sourceVariant ? 'app.jolene.nativepilot' : 'host.exp.Exponent', platform: 'iphonesimulator',
     test: 'NativePilotUITests/NativeInputReferenceTests/testFields',
     packageLockSha256: sha256(resolve(sourceProject, 'package-lock.json')),
     entrySha256: sha256(resolve(project, 'index.tsx')), testSha256: sha256(syntheticTest),
     originalContractsTestSha256: sha256(resolve(sourceProject, 'ios-ui-tests', 'NativePilotUITests', 'NativePilotTests.swift')),
     runnerSha256: sha256(resolve(project, 'scripts', 'run-pilot-ci.mjs')),
     selectorSha256: sha256(resolve(project, 'scripts', 'native-scenarios.mjs')),
-    nodeModulesLinked: true, supplierCalls: false, nativeRnBuild: false,
+    nodeModulesLinked: true, supplierCalls: false, nativeRnBuild: Boolean(sourceVariant),
   });
   result.stage = 'runner';
   const child = spawn(process.execPath, [resolve(project, 'scripts', 'run-pilot-ci.mjs'), 'ios'], {
     cwd: project, stdio: 'inherit', env: {
       ...process.env, PILOT_OUTPUT_DIR: output, NATIVE_PILOT_SCENARIO: 'input-reference',
-      NATIVE_INPUT_REFERENCE_PROJECT: '1', NATIVE_IOS_HOST: 'expo-go', IOS_DEVICE_FAMILY: 'iphone',
+      NATIVE_INPUT_REFERENCE_PROJECT: '1', NATIVE_IOS_HOST: host, IOS_DEVICE_FAMILY: 'iphone',
+      NATIVE_INPUT_REFERENCE_SOURCE_SHA: sourceSha,
       NATIVE_CONTRACTS_ORIENTATION: '', NATIVE_DOCUMENTS_ORIENTATION: '',
       EXPO_PUBLIC_JOLENE_MODE: 'demo', EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: '0',
       EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: '0', EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS: '0',

@@ -26,8 +26,8 @@ const selectedScenario = selectNativeScenario(process.env, platform, iosFamily);
 const iosHost = process.env.NATIVE_IOS_HOST || 'expo-go';
 if (!['expo-go', 'compiled-debug'].includes(iosHost)) throw new Error('Hôte iOS inconnu.');
 const compiled = iosHost === 'compiled-debug';
-if (compiled && (platform !== 'ios' || iosFamily !== 'iphone' || selectedScenario.name !== 'contracts'
-  || selectedScenario.orientations.join() !== 'portrait')) throw new Error('Comparaison compilée limitée à Contrats iPhone portrait.');
+if (compiled && (platform !== 'ios' || iosFamily !== 'iphone' || !['contracts', 'input-reference'].includes(selectedScenario.name)
+  || selectedScenario.orientations.join() !== 'portrait')) throw new Error('Comparaison compilée limitée à Contrats ou au témoin RN iPhone portrait.');
 const flow = selectedScenario.flowFile ? resolve(project, 'maestro', selectedScenario.flowFile) : null;
 if (selectedScenario.name === 'input-reference'
   && JSON.parse(readFileSync(resolve(project, 'package.json'), 'utf8')).name !== 'jolene-input-reference-ci') {
@@ -325,7 +325,8 @@ try {
   if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
   stage = compiled ? 'compiled-debug-build' : 'expo-go-install';
-  if (compiled) compiledClient = await buildCompiledIosClient({ project, output, device, env, run });
+  if (compiled) compiledClient = await buildCompiledIosClient({ project, output, device, env, run,
+    referenceSourceSha: selectedScenario.name === 'input-reference' ? env.NATIVE_INPUT_REFERENCE_SOURCE_SHA : undefined });
   else await installExpoGo();
   stage = 'metro-start';
   console.log(`Démarrage Expo SDK 57 sur ${platform} (${device}).`);

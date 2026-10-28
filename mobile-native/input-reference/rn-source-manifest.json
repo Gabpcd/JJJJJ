@@ -1,0 +1,26 @@
+{
+  "reactNativeVersion": "0.86.3",
+  "upstreamPR": "https://github.com/react/react-native/pull/59197",
+  "upstreamHead": "a91468ffe62122bc49d964a08b493374f0af4775",
+  "upstreamStatus": "open-unmerged-no-reviews-observed-2026-10-28",
+  "patchSha256": "2a0d5e639d0593f02e585ea7b038384633e8519d188401e4a34155aad0d0d85a",
+  "files": [
+    {
+      "path": "React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm",
+      "sha256": "7c81348ba39bceabdca979fd11ae6eba88edbebc11db9551f71ccfb61a2b10dc",
+      "candidateSha256": "ecf4010202db2cc2de6aa5f0b6045a2b2bf10ce1b5fe487a3ad4addca9077ea8"
+    },
+    {
+      "path": "ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/RCTAttributedTextUtils.h",
+      "sha256": "8964283806e1204228310d6fee9e3294dc511dc47ec91d7107ed14baea79167f",
+      "candidateSha256": "b8863dcf2432ea9ea71113be4085c2b58921110c19524fe85d9b31ac0d7f0279"
+    },
+    {
+      "path": "ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/RCTAttributedTextUtils.mm",
+      "sha256": "a997f442c93c192d3dff5c27989cf1d3da4962fd97a346a3dbf80e63faaf6fb3",
+      "candidateSha256": "dfa1c6b86ba5515d01656929afd78d9031b6dfa6a05df9af4eeae4693c72988d"
+    }
+  ],
+  "application": "scratch-only",
+  "compiled": false
+}

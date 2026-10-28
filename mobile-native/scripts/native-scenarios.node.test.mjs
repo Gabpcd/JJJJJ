@@ -111,3 +111,17 @@ test('the RN input reference selects only its separate iPhone test and six captu
   }
   assert.throws(() => iosTestMethod(selection, 'iphone', 'landscape'));
 });
+
+test('source reference keeps the same method and six captures without allowing product or Expo Go patching', () => {
+  const env = { NATIVE_PILOT_SCENARIO: 'input-reference', NATIVE_INPUT_REFERENCE_PROJECT: '1',
+    NATIVE_IOS_HOST: 'compiled-debug', NATIVE_RN_SOURCE_VARIANT: 'baseline', RCT_USE_PREBUILT_RNCORE: '0', RCT_USE_RN_DEP: '1' };
+  const baseline = selectNativeScenario(env, 'ios');
+  assert.deepEqual(selectNativeScenario({ ...env, NATIVE_RN_SOURCE_VARIANT: 'patched' }, 'ios'), baseline);
+  assert.equal(iosTestMethod(baseline, 'iphone', 'portrait'), 'testFields');
+  assert.equal(scenarioCaptureNames(baseline, 'ios', 'iphone', 'portrait').length, 6);
+  for (const invalid of [{ NATIVE_IOS_HOST: 'expo-go' }, { RCT_USE_PREBUILT_RNCORE: '1' },
+    { NATIVE_RN_SOURCE_VARIANT: 'unknown' }, { NATIVE_PILOT_SCENARIO: 'contracts' },
+    { NATIVE_PILOT_SCENARIO: 'documents' }, { RCT_TESTONLY_RNCORE_TARBALL_PATH: 'alternate' }]) {
+    assert.throws(() => selectNativeScenario({ ...env, ...invalid }, 'ios'));
+  }
+});

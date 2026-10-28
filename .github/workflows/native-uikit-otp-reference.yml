@@ -23,14 +23,14 @@ on:
         description: Témoin synthétique à exécuter
         type: choice
         default: all
-        options: [all, uikit, rn]
+        options: [all, uikit, rn, rn-source]
 
 permissions:
   contents: read
 
 jobs:
   reference:
-    if: github.event_name != 'workflow_dispatch' || inputs.reference != 'rn'
+    if: github.event_name != 'workflow_dispatch' || (inputs.reference == 'all' || inputs.reference == 'uikit')
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -56,7 +56,7 @@ jobs:
           if-no-files-found: warn
 
   rn-input-reference:
-    if: github.event_name != 'workflow_dispatch' || inputs.reference != 'uikit'
+    if: github.event_name != 'workflow_dispatch' || (inputs.reference == 'all' || inputs.reference == 'rn')
     name: Témoin RN — contrôle et style du champ (verdict indépendant)
     runs-on: macos-26
     timeout-minutes: 45
@@ -86,5 +86,47 @@ jobs:
         with:
           name: rn-input-reference-${{ github.event.pull_request.head.sha || github.sha }}
           path: mobile-native/test-results/rn-input-reference/
+          retention-days: 7
+          if-no-files-found: warn
+
+  rn-source-reference:
+    # Costly source builds are opt-in only, including when reference=all.
+    if: github.event_name == 'workflow_dispatch' && inputs.reference == 'rn-source'
+    name: Témoin RN source — ${{ matrix.variant }} (verdict indépendant)
+    runs-on: macos-26
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, patched]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        working-directory: mobile-native
+        timeout-minutes: 8
+      - name: Compiler RN verrouillé et observer les trois champs inchangés
+        run: node mobile-native/scripts/run-input-reference-ci.mjs
+        timeout-minutes: 80
+        env:
+          NATIVE_PILOT_SCENARIO: input-reference
+          NATIVE_RN_SOURCE_VARIANT: ${{ matrix.variant }}
+          RCT_USE_PREBUILT_RNCORE: '0'
+          RCT_USE_RN_DEP: '1'
+          INPUT_REFERENCE_SOURCE_SHA: ${{ github.sha }}
+          INPUT_REFERENCE_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/rn-source-${{ matrix.variant }}
+      - name: Conserver chaque verdict source sans convertir un échec
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rn-input-reference-source-${{ matrix.variant }}-${{ github.sha }}
+          path: mobile-native/test-results/rn-source-${{ matrix.variant }}/
           retention-days: 7
           if-no-files-found: warn

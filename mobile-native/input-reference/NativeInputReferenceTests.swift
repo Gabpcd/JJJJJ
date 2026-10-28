@@ -1,6 +1,6 @@
 import XCTest
 final class NativeInputReferenceTests: XCTestCase {
-    private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
+    private let app = XCUIApplication(bundleIdentifier: ProcessInfo.processInfo.environment["JOLENE_TEST_APP_ID"] ?? "host.exp.Exponent")
     override func setUpWithError() throws { continueAfterFailure = false; executionTimeAllowance = 180 }
     func testFields() throws {
         app.activate()

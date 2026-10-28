@@ -1,3 +1,5 @@
+import { requireSourceVariant } from './rn-input-source-variant.mjs';
+
 export const DOCUMENT_CAPTURES = Object.freeze([
   'documents-statuts', 'documents-revue-humaine', 'documents-remplacement-annule',
   'documents-remplacement-confirme', 'documents-envoi-incertain', 'documents-envoi-reconcilie',
@@ -22,11 +24,15 @@ export function selectNativeScenario(env, platform, family = 'iphone') {
   if (name !== 'contracts' && (env.EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO === '1' || env.NATIVE_CONTRACTS_ORIENTATION)) {
     throw new Error('La préparation Contrats exige son scénario explicite.');
   }
+  if (env.NATIVE_RN_SOURCE_VARIANT && name !== 'input-reference') throw new Error('RN source exige son témoin isolé.');
   if (name === 'input-reference') {
+    const compiledReference = env.NATIVE_IOS_HOST === 'compiled-debug';
+    if (compiledReference) requireSourceVariant(env);
+    else if (env.NATIVE_RN_SOURCE_VARIANT) throw new Error('Le correctif RN ne peut pas modifier Expo Go.');
     if (platform !== 'ios' || family !== 'iphone' || env.NATIVE_INPUT_REFERENCE_PROJECT !== '1'
-      || (env.NATIVE_IOS_HOST && env.NATIVE_IOS_HOST !== 'expo-go')
+      || (env.NATIVE_IOS_HOST && !['expo-go', 'compiled-debug'].includes(env.NATIVE_IOS_HOST))
       || env.EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO === '1' || env.NATIVE_DOCUMENTS_ORIENTATION) {
-      throw new Error('Le témoin RN exige son projet synthétique séparé et Expo Go sur iPhone.');
+      throw new Error('Le témoin RN exige son projet synthétique séparé sur iPhone.');
     }
     return { name, flowFile: null, documentScenarioFlag: '0', contractScenarioFlag: '0',
       iosTestClass: 'NativeInputReferenceTests', orientations: ['portrait'] };
