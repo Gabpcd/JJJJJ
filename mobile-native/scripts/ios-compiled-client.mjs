@@ -75,7 +75,22 @@ export async function buildCompiledIosClient({ project, output, device, env, run
   if (workspaces.length !== 1 || projects.length !== 1) throw new Error('Workspace iOS généré absent ou ambigu.');
   const scheme = basename(projects[0], '.xcodeproj');
   const workspace = resolve(ios, workspaces[0]);
-  const inventory = JSON.parse((await run('xcodebuild', ['-list', '-json', '-workspace', workspace])).stdout);
+  const inventoryArgs = ['-list', '-json', '-workspace', workspace];
+  const inventoryTimeout = 180_000;
+  const inventoryStarted = new Date().toISOString();
+  const inventoryCommand = await run('xcodebuild', inventoryArgs, {
+    timeout: inventoryTimeout, logfile: 'compiled-workspace-inventory.log', allowFailure: true,
+  });
+  writeFileSync(resolve(output, 'compiled-workspace-inventory-command.json'), JSON.stringify({
+    phase: 'compiled-workspace-inventory', command: ['xcodebuild', ...inventoryArgs],
+    started: inventoryStarted, ended: new Date().toISOString(), timeoutMs: inventoryTimeout,
+    code: inventoryCommand.code, signal: inventoryCommand.signal,
+    expired: inventoryCommand.expired, durationMs: inventoryCommand.durationMs,
+  }, null, 2));
+  if (inventoryCommand.expired || inventoryCommand.signal || inventoryCommand.code !== 0) {
+    throw new Error('Inventaire du workspace Xcode échoué ; voir le reçu et le journal conservés.');
+  }
+  const inventory = JSON.parse(inventoryCommand.stdout);
   if (!inventory.workspace?.schemes?.includes(scheme)) throw new Error('Scheme de l’app générée introuvable.');
   const derived = resolve(env.RUNNER_TEMP, 'jolene-compiled-app-derived');
   if (sourceVariant && existsSync(derived)) throw new Error('La comparaison source exige un DerivedData neuf.');
