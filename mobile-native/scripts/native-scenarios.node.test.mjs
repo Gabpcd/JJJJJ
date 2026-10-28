@@ -86,3 +86,28 @@ test('adding Contracts preserves the exact Consultation and Documents manifests'
   assert.deepEqual(selectNativeScenario({ NATIVE_PILOT_SCENARIO: 'documents' }, 'android'), { name: 'documents',
     flowFile: 'documents-run.yaml', documentScenarioFlag: '1', orientations: ['portrait'] });
 });
+
+test('the RN input reference selects only its separate iPhone test and six captures', () => {
+  const env = { NATIVE_PILOT_SCENARIO: 'input-reference', NATIVE_INPUT_REFERENCE_PROJECT: '1' };
+  const selection = selectNativeScenario(env, 'ios', 'iphone');
+  assert.deepEqual(selection, { name: 'input-reference', flowFile: null, documentScenarioFlag: '0',
+    contractScenarioFlag: '0', iosTestClass: 'NativeInputReferenceTests', orientations: ['portrait'] });
+  assert.equal(iosTestMethod(selection, 'iphone', 'portrait'), 'testFields');
+  const captures = scenarioCaptureNames(selection, 'ios', 'iphone', 'portrait');
+  assert.deepEqual(captures,
+    ['input-reference-controlled-styled-before', 'input-reference-controlled-styled-after',
+      'input-reference-uncontrolled-styled-before', 'input-reference-uncontrolled-styled-after',
+      'input-reference-controlled-basic-before', 'input-reference-controlled-basic-after']);
+  // The shared runner searches attachment names by inclusion. In particular,
+  // "controlled" alone would collide with "uncontrolled" without this prefix.
+  for (const capture of captures) assert.equal(captures.filter(name => name.includes(capture)).length, 1);
+  assert.throws(() => selectNativeScenario({ NATIVE_PILOT_SCENARIO: 'input-reference' }, 'ios'));
+  assert.throws(() => selectNativeScenario(env, 'android'));
+  assert.throws(() => selectNativeScenario(env, 'ios', 'ipad'));
+  for (const mixed of [{ NATIVE_IOS_HOST: 'compiled-debug' }, { EXPO_PUBLIC_JOLENE_MODE: 'staging' },
+    { EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: '1' }, { NATIVE_DOCUMENTS_ORIENTATION: 'portrait' },
+    { EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: '1' }, { NATIVE_CONTRACTS_ORIENTATION: 'portrait' }]) {
+    assert.throws(() => selectNativeScenario({ ...env, ...mixed }, 'ios'));
+  }
+  assert.throws(() => iosTestMethod(selection, 'iphone', 'landscape'));
+});

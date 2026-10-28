@@ -17,10 +17,19 @@ const EXTRA_CONSULTATION_CAPTURES = [
 export function selectNativeScenario(env, platform, family = 'iphone') {
   if (!['ios', 'android'].includes(platform) || !['iphone', 'ipad'].includes(family)) throw new Error('Format natif invalide.');
   const name = env.NATIVE_PILOT_SCENARIO || 'consultation';
-  if (!['consultation', 'documents', 'contracts'].includes(name)) throw new Error('Scénario natif invalide.');
+  if (!['consultation', 'documents', 'contracts', 'input-reference'].includes(name)) throw new Error('Scénario natif invalide.');
   if (env.EXPO_PUBLIC_JOLENE_MODE && env.EXPO_PUBLIC_JOLENE_MODE !== 'demo') throw new Error('Ces scénarios sont exclusivement fictifs.');
   if (name !== 'contracts' && (env.EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO === '1' || env.NATIVE_CONTRACTS_ORIENTATION)) {
     throw new Error('La préparation Contrats exige son scénario explicite.');
+  }
+  if (name === 'input-reference') {
+    if (platform !== 'ios' || family !== 'iphone' || env.NATIVE_INPUT_REFERENCE_PROJECT !== '1'
+      || (env.NATIVE_IOS_HOST && env.NATIVE_IOS_HOST !== 'expo-go')
+      || env.EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO === '1' || env.NATIVE_DOCUMENTS_ORIENTATION) {
+      throw new Error('Le témoin RN exige son projet synthétique séparé et Expo Go sur iPhone.');
+    }
+    return { name, flowFile: null, documentScenarioFlag: '0', contractScenarioFlag: '0',
+      iosTestClass: 'NativeInputReferenceTests', orientations: ['portrait'] };
   }
   if (name === 'contracts') {
     if (env.EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO === '1' || env.NATIVE_DOCUMENTS_ORIENTATION) {
@@ -56,6 +65,7 @@ export function selectNativeScenario(env, platform, family = 'iphone') {
 
 export function iosTestMethod(selection, family, orientation) {
   if (!selection.orientations.includes(orientation)) throw new Error('Orientation non sélectionnée.');
+  if (selection.name === 'input-reference') return 'testFields';
   if (selection.name === 'contracts') {
     return orientation === 'landscape' ? 'testContractsIpadLandscape'
       : family === 'ipad' ? 'testContractsIpadPortrait' : 'testContractsIphonePortrait';
@@ -70,6 +80,10 @@ export function iosTestMethod(selection, family, orientation) {
 
 export function scenarioCaptureNames(selection, platform, family, orientation) {
   if (!selection.orientations.includes(orientation)) throw new Error('Orientation non sélectionnée.');
+  if (selection.name === 'input-reference') {
+    return ['controlled-styled', 'uncontrolled-styled', 'controlled-basic']
+      .flatMap(variant => [`input-reference-${variant}-before`, `input-reference-${variant}-after`]);
+  }
   const suffixes = selection.name === 'contracts' ? [...CONTRACT_CAPTURES]
     : selection.name === 'documents' ? [...DOCUMENT_CAPTURES]
     : ['connexion', orientation === 'landscape' ? 'liste' : 'missions', 'detail', 'retour', ...EXTRA_CONSULTATION_CAPTURES];

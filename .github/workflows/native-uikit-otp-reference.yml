@@ -1,4 +1,4 @@
-name: Témoin UIKit OTP — diagnostic synthétique séparé
+name: Témoins OTP UIKit et RN — diagnostics synthétiques séparés
 
 # Separate diagnostic only. Runs only after this prepared patch is integrated;
 # it never replaces or rescues a Contracts job.
@@ -10,14 +10,27 @@ on:
       - 'mobile-native/ios-ui-tests/NativePilotUITests/UIKitOtpReferenceTests.swift'
       - 'mobile-native/ios-ui-tests/NativePilotUITests.xcodeproj/**'
       - 'mobile-native/scripts/run-uikit-otp-reference-ci.mjs'
+      - 'mobile-native/input-reference/**'
+      - 'mobile-native/scripts/run-input-reference-ci.mjs'
+      - 'mobile-native/scripts/run-pilot-ci.mjs'
+      - 'mobile-native/scripts/native-scenarios.mjs'
+      - 'mobile-native/package.json'
+      - 'mobile-native/package-lock.json'
       - '.github/workflows/native-uikit-otp-reference.yml'
   workflow_dispatch:
+    inputs:
+      reference:
+        description: Témoin synthétique à exécuter
+        type: choice
+        default: all
+        options: [all, uikit, rn]
 
 permissions:
   contents: read
 
 jobs:
   reference:
+    if: github.event_name != 'workflow_dispatch' || inputs.reference != 'rn'
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -39,5 +52,39 @@ jobs:
         with:
           name: uikit-otp-reference-${{ github.event.pull_request.head.sha || github.sha }}
           path: mobile-native/test-results/uikit-otp-reference/
+          retention-days: 7
+          if-no-files-found: warn
+
+  rn-input-reference:
+    if: github.event_name != 'workflow_dispatch' || inputs.reference != 'uikit'
+    name: Témoin RN — contrôle et style du champ (verdict indépendant)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        working-directory: mobile-native
+        timeout-minutes: 8
+      - name: Observer les trois champs synthétiques avec le harnais existant
+        run: node mobile-native/scripts/run-input-reference-ci.mjs
+        timeout-minutes: 35
+        env:
+          NATIVE_PILOT_SCENARIO: input-reference
+          INPUT_REFERENCE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          INPUT_REFERENCE_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/rn-input-reference
+      - name: Conserver uniquement les preuves indépendantes RN
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rn-input-reference-${{ github.event.pull_request.head.sha || github.sha }}
+          path: mobile-native/test-results/rn-input-reference/
           retention-days: 7
           if-no-files-found: warn

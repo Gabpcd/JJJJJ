@@ -28,7 +28,11 @@ if (!['expo-go', 'compiled-debug'].includes(iosHost)) throw new Error('Hôte iOS
 const compiled = iosHost === 'compiled-debug';
 if (compiled && (platform !== 'ios' || iosFamily !== 'iphone' || selectedScenario.name !== 'contracts'
   || selectedScenario.orientations.join() !== 'portrait')) throw new Error('Comparaison compilée limitée à Contrats iPhone portrait.');
-const flow = resolve(project, 'maestro', selectedScenario.flowFile);
+const flow = selectedScenario.flowFile ? resolve(project, 'maestro', selectedScenario.flowFile) : null;
+if (selectedScenario.name === 'input-reference'
+  && JSON.parse(readFileSync(resolve(project, 'package.json'), 'utf8')).name !== 'jolene-input-reference-ci') {
+  throw new Error('Le témoin RN ne peut pas utiliser le projet applicatif Jolene.');
+}
 const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
 const env = {
@@ -233,7 +237,7 @@ async function runIosXCTest(name, directory) {
   console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
   const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
   const result = await run('xcodebuild', ['test-without-building', ...common,
-    `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`,
+    `-only-testing:NativePilotUITests/${selectedScenario.iosTestClass ?? 'NativePilotTests'}/${testMethod}`,
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
     '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600'],
@@ -317,7 +321,7 @@ function verifyCaptureOrientation(directory, orientation, names) {
 }
 
 try {
-  if (!existsSync(flow)) throw new Error(`Le scénario Maestro sélectionné est absent : ${selectedScenario.flowFile}.`);
+  if (flow && !existsSync(flow)) throw new Error(`Le scénario Maestro sélectionné est absent : ${selectedScenario.flowFile}.`);
   if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
   stage = compiled ? 'compiled-debug-build' : 'expo-go-install';
@@ -429,6 +433,9 @@ try {
     stopTree(metro, 'SIGKILL');
   }
   writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform, scenario: selectedScenario.name, orientations: selectedScenario.orientations,
-    device, host: iosHost, appId, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
+    device, host: iosHost, appId, stage, success, scenarios,
+    evidence: selectedScenario.name === 'input-reference' ? 'synthetic-rn-input-reference' : 'native-simulator-synthetic-demo',
+    ...(selectedScenario.name === 'input-reference' ? { productScenario: false, contractsVerdictChanged: false } : {}),
+    production: false, physicalDevice: false }, null, 2));
   await Promise.all(streams.map(stream => new Promise(resolveClose => stream.end(resolveClose))));
 }
