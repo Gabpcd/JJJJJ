@@ -133,7 +133,20 @@ async function chooseIosDevice() {
       // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
       await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
       await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
-      await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
+      // Cold iOS 26.5 data migrations exceeded four minutes on both source
+      // reference runners, before any app build. Bound simulator preparation
+      // separately; application waits and XCTest allowances remain unchanged.
+      stage = 'ios-boot-readiness';
+      const bootTimeout = 600_000;
+      const bootStarted = new Date().toISOString();
+      const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
+        { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
+      writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
+        phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
+        started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
+        code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
+      }, null, 2));
+      if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
       await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
       return selected.udid;
     }
