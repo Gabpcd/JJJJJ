@@ -9,14 +9,14 @@ const enabled = Platform.OS === 'ios' && process.env.EXPO_PUBLIC_JOLENE_MODE ===
 const MAX_TOTAL_EVENTS = 64;
 const MAX_INSTANCE_EVENTS = 24;
 let totalEvents = 0;
-type Screen = 'Exploration/Candidature' | 'Suivi/Candidature';
-type Navigation = NativeStackScreenProps<NativeStackParams, 'Candidature'>['navigation'];
+type Screen = 'Exploration/Candidature' | 'Suivi/Candidature' | 'Compte/Documents';
+type Navigation = Pick<NativeStackScreenProps<NativeStackParams, 'Candidature'>['navigation'], 'addListener'>;
 type Field = 'progress' | 'closing' | 'goingForward';
 type Sample = { value: number; atMs: number };
 
 /** Observe the existing native transition. Never drive an animation or navigation action. */
 export function useApplicationTransitionDiagnostics(screen: Screen, navigation: Navigation) {
-  // Application is rendered inside ScreenStackItem's native transition provider.
+  // Every observed screen is rendered inside ScreenStackItem's native transition provider.
   const { progress, closing, goingForward } = useTransitionProgress();
   const startedAtMs = useRef(Date.now());
   const sequence = useRef(0);

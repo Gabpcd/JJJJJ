@@ -92,6 +92,7 @@ function CaregiverProfile({ navigation }: NativeStackScreenProps<NativeStackPara
     onOpenDocuments={() => navigation.navigate('Documents')} />;
 }
 function CaregiverDocuments({ navigation }: NativeStackScreenProps<NativeStackParams, 'Documents'>) {
+  useApplicationTransitionDiagnostics('Compte/Documents', navigation);
   const { context, snapshot, retry } = useCaregiverSession();
   const { documents } = useNativeRuntime();
   const media = useDocumentMedia(documents, context.userId, snapshot.epoch);

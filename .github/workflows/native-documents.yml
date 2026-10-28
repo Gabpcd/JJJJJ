@@ -40,6 +40,13 @@ on:
       - 'src/components/planning/planning-candidat.ts'
       - '.github/workflows/native-documents.yml'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Formats de simulation (iphone uniquement pour un diagnostic ciblé)
+        type: choice
+        required: true
+        default: all
+        options: [all, iphone]
 
 permissions:
   contents: read
@@ -99,13 +106,8 @@ jobs:
       matrix:
         # Each orientation gets a fresh runtime and its original synthetic fixtures.
         # Documents landscape never follows a mutated portrait dossier.
-        include:
-          - family: iphone
-            orientation: portrait
-          - family: ipad
-            orientation: portrait
-          - family: ipad
-            orientation: landscape
+        # PRs and main pushes always keep every format; only an explicit dispatch may narrow them.
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'iphone' && '[{"family":"iphone","orientation":"portrait"}]' || '[{"family":"iphone","orientation":"portrait"},{"family":"ipad","orientation":"portrait"},{"family":"ipad","orientation":"landscape"}]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -137,6 +139,7 @@ jobs:
 
   android:
     name: Documents — Android portrait
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.scope != 'iphone' }}
     needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 45
