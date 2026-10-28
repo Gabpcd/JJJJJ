@@ -392,7 +392,9 @@ try {
   console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
-    if (compiled) {
+    // The isolated input reference has no Jolene navigation or Home oracle.
+    // Product scenarios still require their compiled native event stream.
+    if (compiled && selectedScenario.name !== 'input-reference') {
       nativeEventStream = await startNativeEventStream({ device, executable: compiledClient.executable, output, env,
         onLine: line => navigationStallMonitor?.consume('stdout', line) });
     }
