@@ -226,7 +226,7 @@ final class NativePilotTests: XCTestCase {
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
         dismissFirstKeyboardIntroductionIfPresent()
-        typeContractCode()
+        guard typeContractCode() else { return }
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         guard contractsHomeRoundTrip(prefix: prefix, detail: detail) else { return }
         record("\(prefix)-contrats-reprise")
@@ -234,7 +234,7 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
-        typeContractCode()
+        guard typeContractCode() else { return }
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         // Dragging the native ScrollView dismisses the numeric keyboard if needed.
         scrollTo(element("contract-sign"), in: detail)
@@ -295,7 +295,7 @@ final class NativePilotTests: XCTestCase {
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
         scrollTo(element("contract-otp"), in: detail)
         tap("contract-otp")
-        typeContractCode()
+        guard typeContractCode() else { return }
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "The six typed digits are exact before any further action")
         scrollTo(element("contract-sign"), in: detail)
         XCTAssertEqual(element("contract-otp").value as? String, "000000", "Scrolling to the signature preserves all six typed digits")
@@ -523,7 +523,7 @@ final class NativePilotTests: XCTestCase {
         return top
     }
 
-    private func typeContractCode() {
+    private func typeContractCode() -> Bool {
         let input = element("contract-otp")
         let detail = element("contract-detail-scroll")
         require("The native keyboard is available for the signature code") {
@@ -533,6 +533,80 @@ final class NativePilotTests: XCTestCase {
             self.fullyVisible(input, inside: detail) && input.frame.maxY <= self.keyboardTopIncludingAccessory()
         }
         input.typeText("000000")
+        let originalValue = input.value as? String
+        guard originalValue == "000000" else {
+            // Record the original failure BEFORE the comparison. Continuing is
+            // enabled only for this one report, then immediately restored.
+            do {
+                let previous = continueAfterFailure
+                continueAfterFailure = true
+                defer { continueAfterFailure = previous }
+                XCTAssertEqual(originalValue, "000000", "The six typed digits are exact before any further action")
+            }
+            diagnoseContractKeypadAfterTypingFailure(input, originalValue: originalValue)
+            XCTFail("Original typeText(000000) did not produce six exact digits. The keypad comparison is diagnostic only; the contract scenario stops without signing.")
+            return false
+        }
+        return true
+    }
+
+    // This is reached only after the original, unchanged six-character typing
+    // operation has already failed its value check. It can never rescue the test.
+    private func diagnoseContractKeypadAfterTypingFailure(_ input: XCUIElement, originalValue: String?) {
+        let name = "\(proofPrefix)-diagnostic-otp-input-comparison"
+        var markers: [[String: Any]] = []
+        var deleteTapAttempts = 0
+        var zeroTapAttempts = 0
+        func mark(_ stage: String, value: String? = nil) {
+            var marker: [String: Any] = ["stage": stage, "atMs": Int64(Date().timeIntervalSince1970 * 1000)]
+            if let value { marker["value"] = value }
+            markers.append(marker)
+        }
+        mark("original-typeText-failed", value: originalValue ?? "<unavailable>")
+        record("\(name)-before")
+        defer {
+            mark("comparison-finished", value: input.exists ? (input.value as? String ?? "<unavailable>") : "<absent>")
+            record("\(name)-after")
+            let proof: [String: Any] = ["schemaVersion": 1, "diagnosticOnly": true,
+                "originalTypingPassed": false, "deleteTapAttempts": deleteTapAttempts,
+                "zeroTapAttempts": zeroTapAttempts, "markers": markers]
+            if let data = try? JSONSerialization.data(withJSONObject: proof, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                attachText(json, name: "\(name).json")
+            }
+        }
+        // A single observed zero is the only admitted comparison case. No clear(),
+        // paste, re-focus, keyboard toggle, repeated deletion or delayed retry.
+        let keyboard = app.keyboards.firstMatch
+        guard originalValue == "0", input.exists, input.isEnabled,
+              input.value as? String == "0", keyboard.exists else {
+            mark("comparison-skipped-preconditions"); return
+        }
+        let zeros = keyboard.keys.matching(NSPredicate(format: "label == %@", "0"))
+        let deletes = keyboard.keys.matching(NSPredicate(format: "label == %@ OR label == %@", "Delete", "delete"))
+        guard zeros.count == 1, deletes.count == 1,
+              visible(zeros.firstMatch), visible(deletes.firstMatch),
+              zeros.firstMatch.isEnabled, deletes.firstMatch.isEnabled,
+              keyboard.frame.contains(zeros.firstMatch.frame), keyboard.frame.contains(deletes.firstMatch.frame) else {
+            mark("comparison-skipped-keys"); return
+        }
+        mark("delete-tap")
+        deleteTapAttempts += 1
+        deletes.firstMatch.tap()
+        let afterDelete = input.value as? String
+        mark("after-delete", value: afterDelete ?? "<unavailable>")
+        guard afterDelete == "" || afterDelete == "6 chiffres" else {
+            mark("comparison-stopped-delete-not-empty"); return
+        }
+        for index in 1...6 {
+            guard keyboard.exists, zeros.count == 1, visible(zeros.firstMatch),
+                  zeros.firstMatch.isEnabled, keyboard.frame.contains(zeros.firstMatch.frame) else {
+                mark("comparison-stopped-key-unavailable"); return
+            }
+            mark("visible-zero-tap-\(index)")
+            zeroTapAttempts += 1
+            zeros.firstMatch.tap()
+        }
     }
 
     private func prepareExpoGo() {

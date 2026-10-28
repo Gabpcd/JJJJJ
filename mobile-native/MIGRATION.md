@@ -35,11 +35,15 @@ est conservée ; ce passage ne démontre pas à lui seul la cause de ces échecs
 
 Deux workflows distincts préparent quatre jobs frais chacun (iPhone, Android,
 iPad portrait et paysage). Documents exige neuf captures par format, Contrats
-huit. Sur `5221dd6`, Documents passe sur iPhone et les deux orientations iPad ;
-Android échoue lors du retour au bouton Documents. Contrats passe sur Android
-et iPad paysage ; iPhone échoue sur une saisie OTP incomplète et iPad portrait
-avant l’ouverture de Jolene. Ce lot reste non validé : les corrections doivent
-passer une nouvelle simulation complète et la revue des preuves.
+huit (neuf sur iOS avec la preuve Home). Dernier résultat complet, `e33404f` :
+Documents passe sur Android et les deux orientations iPad ; iPhone échoue à
+l’entrée de la démo. Contrats passe sur Android ; iPhone et iPad paysage ne
+conservent qu’un chiffre sur les six saisis, et iPad portrait échoue à l’entrée
+de la démo. Consultation passe sur iPhone, Android et iPad dans les deux
+orientations. Les contrôles web passent également. Ce lot reste non validé :
+les quatre échecs iOS doivent être corrigés et les nouvelles preuves relues.
+Les diagnostics opt-in de touches/focus/sélection ne capturent que des longueurs,
+des positions et des états ; ils ne constituent pas une correction de ces échecs.
 Les tests purs utilisent des transports injectés.
 Les scénarios n’envoient aucun fichier réel ni SMS et ne signent aucun contrat réel.
 Les diagnostics de navigation et d’échec iOS du premier lot restent actifs en CI démo.

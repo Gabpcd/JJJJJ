@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../session/SessionProvider';
+import { diagnosticEnterDemo, diagnosticLoginTouch } from '../navigationDiagnostics';
 import { ActionButton, ErrorNotice, ModeNotice, StatusPanel } from './components';
 import { colors, shared } from './theme';
 
@@ -49,6 +50,8 @@ export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishment
   return <SafeAreaView style={shared.screen} edges={['top', 'left', 'right', 'bottom']}>
     <KeyboardAvoidingView style={shared.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={shared.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled"
+        onTouchStart={diagnosticLoginTouch.start} onTouchEnd={diagnosticLoginTouch.end}
+        onTouchCancel={diagnosticLoginTouch.cancel} onScrollBeginDrag={diagnosticLoginTouch.dragStart}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} testID="login-scroll">
         <View style={[shared.content, styles.content]}>
           <View style={styles.brandRow}>
@@ -65,7 +68,8 @@ export function LoginScreen({ onRegister, onForgotPassword, onEnterEstablishment
             <Text style={shared.sectionTitle} accessibilityRole="header">Découvrez le parcours natif</Text>
             <Text style={shared.subtitle}>Explorez les missions et leurs détails avec un compte fictif. Aucun identifiant n’est nécessaire.</Text>
             {snapshot.error ? <ErrorNotice message={snapshot.error} /> : null}
-            <ActionButton label="Explorer la démo" onPress={() => enterDemo()} testID="enter-demo" />
+            <ActionButton label="Explorer la démo" onPress={() => { diagnosticEnterDemo.handler?.(); enterDemo(); }}
+              onPressIn={diagnosticEnterDemo.pressIn} onPressOut={diagnosticEnterDemo.pressOut} testID="enter-demo" />
             {onEnterEstablishmentDemo ? <ActionButton label="Découvrir l’espace établissement" secondary onPress={onEnterEstablishmentDemo} testID="enter-establishment-demo" /> : null}
             {onEnterReadOnlyContractsDemo ? <ActionButton label="Démo contrats · établissement en lecture seule" secondary onPress={onEnterReadOnlyContractsDemo} testID="enter-contracts-readonly-demo" /> : null}
             {onEnterOnboardingDemo ? <ActionButton label="Essayer l’inscription médecin / interne" secondary onPress={onEnterOnboardingDemo} testID="enter-onboarding-demo" /> : null}

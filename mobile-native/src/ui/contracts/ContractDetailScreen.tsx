@@ -33,7 +33,8 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const clearCode = useCallback((reason: ContractCodeResetReason) => {
     inputDiagnostics.reset(reason); setCode('');
   }, [inputDiagnostics]);
-  useEffect(() => { inputDiagnostics.committed(code.length, state.active); }, [code, inputDiagnostics, state.active]);
+  const blocked = !state.active || state.loading || !!state.busy || state.needsRead || !!state.error || !!state.readerError;
+  useEffect(() => { inputDiagnostics.committed(code.length, state.active, blocked); }, [code, inputDiagnostics, state.active, blocked]);
   useFocusEffect(useCallback(() => {
     if (AppState.currentState === 'active') controller.activate();
     const sub = AppState.addEventListener('change', next => {
@@ -52,7 +53,6 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
   const details = state.details;
   const admission = details?.otpAdmission;
   const eligible = !!details && canOfferSignature(details);
-  const blocked = !state.active || state.loading || !!state.busy || state.needsRead || !!state.error || !!state.readerError;
   const consentReady = !blocked && !!state.accepted && !!state.presented;
   const admissionValid = !!admission && admission.expiresAt > clock;
   const canRequest = eligible && consentReady && admissionValid && admission!.canSend;
@@ -127,7 +127,12 @@ function Content({ context, contractId, gateway }: ContractDetailScreenProps) {
                 : 'Le code a expiré. Un nouvel envoi doit être demandé explicitement.'}</Text>
               <Text style={shared.body} nativeID="contract-code-label">Code reçu par SMS</Text>
               <View ref={keyboardVisibility.signatureRef} collapsable={false} onLayout={keyboardVisibility.reveal} style={styles.gap}>
-              <TextInput ref={keyboardVisibility.inputRef} onFocus={keyboardVisibility.reveal} onBlur={keyboardVisibility.cancel} value={code} onChange={event => inputDiagnostics.nativeChange(event.nativeEvent.text.length, event.nativeEvent.eventCount)}
+              <TextInput ref={keyboardVisibility.inputRef}
+                onFocus={() => { inputDiagnostics.focus(); keyboardVisibility.reveal(); }}
+                onBlur={() => { inputDiagnostics.blur(); keyboardVisibility.cancel(); }}
+                onKeyPress={inputDiagnostics.enabled ? event => inputDiagnostics.keyPress(event.nativeEvent.key.length) : undefined}
+                onSelectionChange={inputDiagnostics.enabled ? event => inputDiagnostics.selection(event.nativeEvent.selection.start, event.nativeEvent.selection.end) : undefined}
+                value={code} onChange={event => inputDiagnostics.nativeChange(event.nativeEvent.text.length, event.nativeEvent.eventCount)}
                 onChangeText={value => { inputDiagnostics.textChange(value.length); setCode(value.replace(/[^0-9]/g, '').slice(0, 6)); }} maxLength={6}
                 keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="sms-otp" autoCorrect={false}
                 accessibilityLabel="Code reçu par SMS, six chiffres" editable={!blocked} style={styles.input} testID="contract-otp"

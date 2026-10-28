@@ -13,9 +13,11 @@ export async function collectIosFailureDiagnostics({ device, output, started, ru
   try {
     const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '15m',
       '--style', 'compact', '--predicate',
-      'process == "Exponent" OR process == "Expo Go" OR eventMessage CONTAINS "host.exp.Exponent"'],
+      '(process == "Exponent" OR process == "Expo Go" OR eventMessage CONTAINS "host.exp.Exponent") AND NOT (subsystem BEGINSWITH[c] "com.apple.dt.xctest")'],
     { timeout: 30_000, allowFailure: true });
-    // Keep a bounded tail; the original test result remains the only success criterion.
+    // AX dumps otherwise consume the entire tail and erase the touch/focus events
+    // preceding the failure. XCTest preserves its own AX attachments separately.
+    // The original test result remains the only success criterion.
     writeFileSync(resolve(directory, 'expo-system.log'), (result.stdout + result.stderr).slice(-2_000_000));
     notes.push({ systemLogExitCode: result.code });
   } catch (error) { notes.push({ systemLogError: String(error) }); }
