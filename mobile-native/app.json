@@ -24,7 +24,8 @@
           "photosPermission": "Jolene utilise la photo que vous sélectionnez pour votre justificatif.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/with-rn-text-input-source.cjs"
     ],
     "updates": {
       "enabled": false

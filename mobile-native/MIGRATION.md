@@ -33,55 +33,61 @@ est conservée ; ce passage ne démontre pas à lui seul la cause de ces échecs
 | Contrats soignant/établissement | Liste selon le périmètre serveur ; original HTML comparé à Storage et à son empreinte ; rendu natif strict, sans WebView ni régénération | Simulations des quatre formats ; originaux réels STAGING et refus des formats non pris en charge |
 | Signature du contrat | Consentement lié à la révision affichée, OTP et signature via les RPC existantes, admission TEST, relecture après résultat incertain | Scénario synthétique ; droits réduits STAGING ; demande et validation du SMS chez le fournisseur TEST et preuve de signature serveur |
 
-Deux workflows distincts préparent quatre jobs frais chacun (iPhone, Android,
-iPad portrait et paysage). Documents exige neuf captures par format, Contrats
-huit (neuf sur iOS avec la preuve Home). Sur `9de851f`, Consultation et tous
-les contrôles web passent ; Documents et Contrats passent sur Android.
-Les trois formats iOS Contrats échouent à la saisie : six événements de touche,
-un seul changement du texte et un chiffre conservé. Le champ reste actif et
-modifiable. La sonde, exécutée seulement après avoir enregistré l’échec, obtient
-six chiffres par six appuis visibles ; elle ne valide pas le scénario et ne signe
-rien. La cause de cette différence reste à déterminer.
+### Stabilisation iOS — 28 octobre 2026
 
-Documents iOS a subi deux annulations du contact par BackBoard (« digitizer did
-disappear », iPhone et iPad portrait) et un téléchargement Expo Go interrompu
-avant installation (iPad paysage). Une reprise ciblée à code inchangé a été exécutée.
-Aucun changement du bouton ni assouplissement de ses assertions n’est justifié par
-ces interruptions système. Les preuves initiales restent conservées.
+Les derniers contrôles produit sur `9d311d8` comptent 52 succès, six échecs et
+quatre contrôles sautés. Consultation native et les simulations web passent ;
+Documents et Contrats passent sur Android, Documents aussi sur iPad paysage.
+Les captures de ces réussites ont été relues. Ce commit n'est pas validé ni fusionné.
 
-La reprise Documents à code inchangé a ensuite passé sur iPhone (neuf captures
-relues). Les deux iPad ont échoué avec un écran attendu apparu après le délai du
-contrôle ; la cause de ces latences reste ouverte.
+Les échecs restants sont conservés : entrée démo annulée par BackBoard sur
+Documents iPad portrait et Contrats iPhone Expo ; retour Documents→Profil annulé
+sur iPhone ; saisie de six chiffres réduite à un sur Contrats iPad portrait et
+client iPhone compilé, à trois sur iPad paysage. La cause des interruptions de
+navigation reste ouverte. La sonde de clavier exécutée après un échec ne valide
+jamais le scénario et ne poursuit pas vers la signature.
 
-Sur `617c967`, Documents et Contrats Android passent à nouveau, avec leurs captures
-relues. Le client iPhone compilé en Debug reproduit la perte de chiffres : six
-demandes de touche, un seul changement de texte. Le même XCTest et le même runtime
-iOS 26.5 ont été utilisés, sans Expo Go. Le champ reste modifiable et conserve les
-six chiffres lors de la sonde ultérieure par touches visibles ; le test reste en
-échec et s'arrête avant signature. Expo Go n'est donc pas nécessaire à la
-reproduction, mais la responsabilité de la perte n'est pas encore établie.
-Les jobs Expo Go Contrats échouent aussi : un chiffre sur iPhone/iPad portrait,
-deux sur iPad paysage. Les événements key-press ne prouvent pas que toutes les
-mutations ont été acceptées par le champ natif.
+Le témoin UIKit sans React Native conserve les six chiffres. Une comparaison
+React Native compilée depuis les sources, avec la même entrée, le même XCTest et
+le même verrou, a ensuite été exécutée dans le
+[run 40692122474](https://github.com/Gabpcd/JJJJJ/actions/runs/40692122474),
+SHA diagnostic `5cd1676` :
 
-Documents passe aussi sur iPad paysage (neuf captures relues). Sur iPhone,
-le contact de l’entrée démo est annulé par BackBoard. Sur iPad portrait, la saisie
-groupée du libellé de remplacement perd huit caractères ; le test s’arrête avant
-la confirmation. Consultation passe sur Android ; iPhone rencontre la même
-annulation de contact. Le rapport iPad reste incomplet après expiration et ne
-valide ni le portrait ni le paysage. Le runner sépare désormais compilation et
-exécution, conserve l’expiration et refuse tout résultat incomplet ; les délais
-fonctionnels et l’allocation XCTest de 600 secondes restent inchangés.
+| Variante iPhone | Champs contrôlé stylé / non contrôlé stylé / contrôlé simple | Verdict |
+| --- | --- | --- |
+| RN0.86.3 original | 6 / 2 / 6 chiffres conservés | 1 échec réel, sans expiration |
+| RN0.86.3 avec correctif épinglé | 6 / 6 / 6 chiffres conservés | 1 réussite |
 
-Ce lot reste non validé. Un témoin UIKit séparé est ajouté avec la même saisie
-automatisée sur un simple champ iOS, sans React Native, sans remplacement des
-contrôles Contrats. Son résultat ne pourra pas valider le parcours de Jolene.
-Les diagnostics opt-in ne capturent que longueurs, positions et états ; ils ne
-constituent pas une correction. Ces résultats de PR ne signifient pas que `main`
-est vert ni que le client publié a changé.
-Les tests purs utilisent des transports injectés.
-Les scénarios n’envoient aucun fichier réel ni SMS et ne signent aucun contrat réel.
-Les diagnostics de navigation et d’échec iOS du premier lot restent actifs en CI démo.
+Les douze captures avant/après et leurs arbres d'accessibilité ont été relus.
+Les champs sont visibles au-dessus du clavier. Le run diagnostic reste rouge
+parce que le témoin original échoue ; ce témoin ne fait pas partie de la CI produit.
+
+Le client applique maintenant les trois sources du
+[correctif RN59197](https://github.com/react/react-native/pull/59197), révision
+`a91468ffe62122bc49d964a08b493374f0af4775`. Cette proposition upstream reste ouverte,
+non fusionnée : ce n'est pas une version officielle corrigée. Le postinstall
+vérifie les versions verrouillées et les empreintes originales/corrigées ; le
+plugin Expo impose une compilation RN depuis les sources. La CI refuse un cœur
+précompilé, une autre SHA de checkout ou l'absence des deux objets natifs attendus.
+
+Les trois workflows produit iOS utilisent désormais ce client Debug non signé
+sur iPhone et iPad, avec les mêmes scénarios, rôles, assertions et délais XCTest.
+Le doublon de comparaison iPhone est remplacé par la même exécution dans la
+matrice Contrats. La préparation froide du simulateur et l'inventaire Xcode ont
+leurs propres plafonds et reçus d'échec. Aucun retry ni délai fonctionnel accru.
+Android conserve son hôte existant.
+
+Validation locale de ce delta : 279 tests de logique et TypeScript réussis ; revues
+indépendantes favorables du patch, du plugin et de leur composition avec la CI.
+Les simulations complètes produit sur la nouvelle révision restent à réussir,
+avec relecture des captures, avant de valider ou fusionner ce lot. L'A/B ne prouve
+pas IME/AutoFill/secureTextEntry, les signatures réelles ou le bon fonctionnement
+de toutes les saisies de l'app. `main` doit être contrôlé séparément après fusion.
+
+Les tests purs utilisent des transports injectés. Les scénarios démo n'envoient
+aucun fichier réel ni SMS et ne signent aucun contrat réel. Documents exige neuf
+captures par format ; Contrats huit sur Android et neuf sur iOS avec la preuve
+Home. Les diagnostics opt-in restent bornés et ne conservent pas les codes saisis.
 
 L’intégration authentifiée vise uniquement le projet STAGING autorisé. Il n’existe
 aucun repli automatique vers la production. Les autorisations et l’admission TEST
@@ -117,7 +123,7 @@ commissions, droits et vérifications restent ceux du backend existant.
 ## Niveaux de preuve
 
 1. Les tests de logique utilisent des réponses injectées et ne prouvent pas les RPC déployées.
-2. Les simulations Expo Go utilisent exclusivement des données fictives.
+2. Les simulations démo (client iOS compilé et Expo Go Android) utilisent exclusivement des données fictives.
 3. L’intégration STAGING doit relier les actions natives aux objets réellement persistés.
 4. Les signatures SMS, emails et mouvements Stripe se vérifient avec les fournisseurs TEST.
 5. Le contrôle physique utilise l’iPhone uniquement quand le parcours est prêt à essayer.

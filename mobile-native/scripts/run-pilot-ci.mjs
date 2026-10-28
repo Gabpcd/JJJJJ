@@ -13,7 +13,7 @@ import { startNativeEventStream } from './ios-native-event-stream.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
-// CI simulators only: Expo Go, or an additional unsigned Debug comparison.
+// CI simulators only: Expo Go or an unsigned Debug source build.
 // No archive, OTA, EAS or store delivery.
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Runner réservé aux simulateurs GitHub Actions.');
 const platform = process.argv[2];
@@ -26,8 +26,7 @@ const selectedScenario = selectNativeScenario(process.env, platform, iosFamily);
 const iosHost = process.env.NATIVE_IOS_HOST || 'expo-go';
 if (!['expo-go', 'compiled-debug'].includes(iosHost)) throw new Error('Hôte iOS inconnu.');
 const compiled = iosHost === 'compiled-debug';
-if (compiled && (platform !== 'ios' || iosFamily !== 'iphone' || selectedScenario.name !== 'contracts'
-  || selectedScenario.orientations.join() !== 'portrait')) throw new Error('Comparaison compilée limitée à Contrats iPhone portrait.');
+if (compiled && platform !== 'ios') throw new Error('Le client compilé est réservé aux simulateurs iOS.');
 const flow = resolve(project, 'maestro', selectedScenario.flowFile);
 const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
@@ -129,7 +128,20 @@ async function chooseIosDevice() {
       // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
       await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
       await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
-      await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
+      // Cold iOS 26.5 data migrations exceeded four minutes on both source
+      // reference runners, before any app build. Bound simulator preparation
+      // separately; application waits and XCTest allowances remain unchanged.
+      stage = 'ios-boot-readiness';
+      const bootTimeout = 600_000;
+      const bootStarted = new Date().toISOString();
+      const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
+        { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
+      writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
+        phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
+        started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
+        code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
+      }, null, 2));
+      if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
       await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
       return selected.udid;
     }

@@ -35,7 +35,9 @@
     "android": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --android --localhost",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.node.test.ts\" scripts/*.node.test.mjs",
-    "bundle": "expo export --platform ios --platform android"
+    "bundle": "expo export --platform ios --platform android",
+    "postinstall": "node scripts/rn-text-input-patch.cjs",
+    "native:verify-rn": "node scripts/rn-text-input-patch.cjs --verify-build"
   },
   "private": true
 }

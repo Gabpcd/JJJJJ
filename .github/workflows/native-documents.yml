@@ -93,7 +93,7 @@ jobs:
     name: Documents — ${{ matrix.family }} ${{ matrix.orientation }}
     needs: checks
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 140
     strategy:
       fail-fast: false
       matrix:
@@ -118,11 +118,15 @@ jobs:
           cache-dependency-path: mobile-native/package-lock.json
       - run: npm ci
         timeout-minutes: 8
-      - name: Justificatifs dans Expo Go sur simulateur iOS
+      - name: Justificatifs dans le client Debug source sur simulateur iOS
         run: node scripts/run-pilot-ci.mjs ios
-        # One selected Documents test: 600 seconds, xcodebuild bounded to 900 seconds.
-        timeout-minutes: 35
+        # Source compilation is included; the original XCTest deadlines are unchanged.
+        timeout-minutes: 130
         env:
+          NATIVE_IOS_HOST: compiled-debug
+          NATIVE_IOS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RCT_USE_PREBUILT_RNCORE: '0'
+          RCT_USE_RN_DEP: '1'
           IOS_DEVICE_FAMILY: ${{ matrix.family }}
           NATIVE_DOCUMENTS_ORIENTATION: ${{ matrix.orientation }}
           PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/documents-${{ matrix.family }}-${{ matrix.orientation }}
