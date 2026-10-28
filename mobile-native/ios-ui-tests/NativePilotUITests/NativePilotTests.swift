@@ -1,14 +1,23 @@
 import XCTest
 
-/// Drives the prepared Expo Go experience without launching, reopening or resetting it.
+/// Drives the prepared CI experience without launching, reopening or resetting it.
 final class NativePilotTests: XCTestCase {
-    private let app = XCUIApplication(bundleIdentifier: "host.exp.Exponent")
+    private let targetBundle = ProcessInfo.processInfo.environment["JOLENE_TEST_APP_ID"] ?? "host.exp.Exponent"
+    private let homeIcon = ProcessInfo.processInfo.environment["JOLENE_TEST_HOME_ICON"] ?? "Expo Go"
+    private lazy var app = XCUIApplication(bundleIdentifier: targetBundle)
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     private var proofPrefix = "ipad-portrait"
     private var backgroundStates: [UInt] = []
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        guard ["host.exp.Exponent", "app.jolene.nativepilot"].contains(targetBundle),
+              !homeIcon.isEmpty, homeIcon.count <= 100, !homeIcon.contains("$("),
+              !homeIcon.contains("\n"), !homeIcon.contains("\r"),
+              targetBundle != "host.exp.Exponent" || homeIcon == "Expo Go" else {
+            XCTFail("The runner must identify the prepared app and its Home icon explicitly")
+            return
+        }
         // Each selected consultation, Documents or Contracts scenario has its own bounded budget.
         executionTimeAllowance = 600
     }
@@ -127,7 +136,7 @@ final class NativePilotTests: XCTestCase {
               springboard.frame.insetBy(dx: -1, dy: -1).contains(home.frame),
               home.frame.width >= springboard.frame.width - 2,
               home.frame.height >= springboard.frame.height - 2 else { return false }
-        return springboard.descendants(matching: .icon).matching(identifier: "Expo Go")
+        return springboard.descendants(matching: .icon).matching(identifier: homeIcon)
             .allElementsBoundByIndex.contains { icon in
                 icon.exists && icon.isHittable && !icon.frame.isEmpty && home.frame.contains(icon.frame)
             }
@@ -613,7 +622,7 @@ final class NativePilotTests: XCTestCase {
         // simctl already launched the fixed local experience. Activation attaches
         // XCTest to this running process and waits until it can receive events;
         // it does not reopen the URL or terminate/relaunch the application.
-        require("The prepared Expo Go process is already running") {
+        require("The prepared pilot process is already running") {
             self.app.state == .runningForeground
         }
         app.activate()

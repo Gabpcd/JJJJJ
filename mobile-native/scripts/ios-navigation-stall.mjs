@@ -18,18 +18,19 @@ function processIdentity(stdout, pid, uid, executable) {
 }
 
 /**
- * One bounded, read-only host sample of Expo Go in a disposable CI simulator.
+ * One bounded, read-only host sample of the prepared app in a disposable CI simulator.
  * Apple sample(1): duration is seconds; interval is milliseconds. Sampling briefly
  * suspends threads, so its timestamps are recorded and never used as a test pass.
  * No process-name fallback, elevated access, new app launch, or test retry.
  */
 export async function createIosNavigationStallMonitor({
-  env, platform, device, output, launchOutput, run,
+  env, platform, device, output, launchOutput, run, bundleId = BUNDLE_ID,
   hostPlatform = process.platform, uid = process.getuid?.(),
   schedule = setTimeout, cancel = clearTimeout, now = Date.now,
 }) {
   if (env.GITHUB_ACTIONS !== 'true' || platform !== 'ios' || hostPlatform !== 'darwin'
     || env.EXPO_PUBLIC_JOLENE_MODE !== 'demo' || env.EXPO_PUBLIC_JOLENE_NAVIGATION_DIAGNOSTICS !== '1'
+    || ![BUNDLE_ID, 'app.jolene.nativepilot'].includes(bundleId)
     || !/^[0-9A-F-]{36}$/i.test(device) || !Number.isSafeInteger(uid)) return noopMonitor;
 
   const directory = resolve(output, 'ios-navigation-stall');
@@ -56,16 +57,17 @@ export async function createIosNavigationStallMonitor({
   let identity;
   try {
     const launches = launchOutput.trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    const match = launches.length === 1 && launches[0].match(/^host\.exp\.Exponent: ([1-9]\d*)$/);
-    const pid = match ? Number(match[1]) : NaN;
+    const prefix = `${bundleId}: `;
+    const value = launches.length === 1 && launches[0].startsWith(prefix) ? launches[0].slice(prefix.length) : '';
+    const pid = /^[1-9]\d*$/.test(value) ? Number(value) : NaN;
     if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2_147_483_647) throw new Error('INVALID_LAUNCH_PID');
-    const app = (await read('locate-expo-container', 'xcrun', ['simctl', 'get_app_container', device, BUNDLE_ID, 'app'])).trim();
+    const app = (await read('locate-expo-container', 'xcrun', ['simctl', 'get_app_container', device, bundleId, 'app'])).trim();
     if (!app.startsWith('/') || !app.includes(`/CoreSimulator/Devices/${device}/data/Containers/Bundle/Application/`)
       || !app.endsWith('.app') || /[\r\n\0]/.test(app)) throw new Error('INVALID_SIMULATOR_APP_PATH');
     const plist = resolve(app, 'Info.plist');
     const bundle = (await read('read-expo-bundle-id', '/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plist])).trim();
     const name = (await read('read-expo-executable', '/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', plist])).trim();
-    if (bundle !== BUNDLE_ID || !/^[A-Za-z0-9._ -]+$/.test(name) || name === '.' || name === '..') throw new Error('INVALID_EXPO_BUNDLE');
+    if (bundle !== bundleId || !/^[A-Za-z0-9._ -]+$/.test(name) || name === '.' || name === '..') throw new Error('INVALID_EXPO_BUNDLE');
     identity = processIdentity(await read('verify-launched-process', '/bin/ps', ['-ww', '-p', String(pid), '-o', 'pid=,uid=,lstart=,comm=']), pid, uid, resolve(app, name));
     if (!identity) throw new Error('LAUNCHED_PROCESS_MISMATCH');
     report.process = identity;

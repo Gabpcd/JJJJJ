@@ -148,6 +148,42 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  ios-compiled-comparison:
+    name: Contrats — iPhone Debug compilé (comparaison)
+    needs: checks
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        timeout-minutes: 8
+      - name: Compiler sans signature puis exécuter le même XCTest Contrats
+        # Additional comparison only. The original Expo Go matrices remain above.
+        # No EAS, archive, signing, store upload, dependency upgrade or test retry.
+        run: node scripts/run-pilot-ci.mjs ios
+        timeout-minutes: 80
+        env:
+          NATIVE_IOS_HOST: compiled-debug
+          IOS_DEVICE_FAMILY: iphone
+          NATIVE_CONTRACTS_ORIENTATION: portrait
+          PILOT_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/contracts-iphone-compiled
+      - name: Conserver les preuves de comparaison et les diagnostics bornés
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-contracts-iphone-compiled-${{ github.event.pull_request.head.sha || github.sha }}
+          path: mobile-native/test-results/contracts-iphone-compiled/
+          retention-days: 7
+          if-no-files-found: warn
+
   android:
     name: Contrats — Android portrait
     needs: checks

@@ -8,10 +8,13 @@ import { readPngDimensions } from './png-dimensions.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 import { createIosNavigationStallMonitor } from './ios-navigation-stall.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
+import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
+import { startNativeEventStream } from './ios-native-event-stream.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
-// Local Expo Go on CI simulators only. No app build, OTA or store delivery.
+// CI simulators only: Expo Go, or an additional unsigned Debug comparison.
+// No archive, OTA, EAS or store delivery.
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Runner réservé aux simulateurs GitHub Actions.');
 const platform = process.argv[2];
 if (!['ios', 'android'].includes(platform)) throw new Error('Plateforme attendue : ios ou android.');
@@ -20,6 +23,11 @@ const output = resolve(process.env.PILOT_OUTPUT_DIR || resolve(project, 'test-re
 mkdirSync(output, { recursive: true });
 const iosFamily = process.env.IOS_DEVICE_FAMILY || 'iphone';
 const selectedScenario = selectNativeScenario(process.env, platform, iosFamily);
+const iosHost = process.env.NATIVE_IOS_HOST || 'expo-go';
+if (!['expo-go', 'compiled-debug'].includes(iosHost)) throw new Error('Hôte iOS inconnu.');
+const compiled = iosHost === 'compiled-debug';
+if (compiled && (platform !== 'ios' || iosFamily !== 'iphone' || selectedScenario.name !== 'contracts'
+  || selectedScenario.orientations.join() !== 'portrait')) throw new Error('Comparaison compilée limitée à Contrats iPhone portrait.');
 const flow = resolve(project, 'maestro', selectedScenario.flowFile);
 const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodeproj');
 writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
@@ -32,12 +40,14 @@ const env = {
   MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
   NODE_OPTIONS: '--dns-result-order=ipv4first',
 };
-const appId = platform === 'ios' ? 'host.exp.Exponent' : 'host.exp.exponent';
+const appId = compiled ? COMPILED_APP_ID : platform === 'ios' ? 'host.exp.Exponent' : 'host.exp.exponent';
 const expoUrl = 'exp://127.0.0.1:8090';
 let device;
 let metro;
 let metroError;
 let navigationStallMonitor;
+let compiledClient;
+let nativeEventStream;
 let stage = 'device-selection';
 let success = false;
 const started = new Date().toISOString();
@@ -49,26 +59,41 @@ function stopTree(child, signal = 'SIGTERM') {
   try { process.kill(-child.pid, signal); } catch { /* Already stopped. */ }
 }
 
-async function run(command, args, { timeout = 60_000, logfile, allowFailure = false } = {}) {
+async function run(command, args, { timeout = 60_000, logfile, allowFailure = false, captureLimit, extraEnv } = {}) {
   const stream = logfile ? createWriteStream(resolve(output, logfile), { flags: 'a' }) : null;
   if (stream) streams.push(stream);
-  const child = spawn(command, args, { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, { cwd: project, env: { ...env, ...extraEnv }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
   let expired = false;
-  child.stdout.on('data', chunk => { stdout += chunk.toString(); stream?.write(chunk); });
-  child.stderr.on('data', chunk => { stderr += chunk.toString(); stream?.write(chunk); });
+  let diskError;
+  let logBytes = 0;
+  const logLimit = compiled ? 16_000_000 : Infinity;
+  const log = chunk => {
+    if (!stream || logBytes >= logLimit) return;
+    const remaining = logLimit - logBytes;
+    stream.write(chunk.subarray(0, Math.min(chunk.length, remaining)));
+    logBytes += chunk.length;
+    if (logBytes >= logLimit) stream.write('\n[runner: diagnostic log capped at 16000000 bytes]\n');
+  };
+  child.stdout.on('data', chunk => { stdout += chunk.toString(); if (captureLimit) stdout = stdout.slice(-captureLimit); log(chunk); });
+  child.stderr.on('data', chunk => { stderr += chunk.toString(); if (captureLimit) stderr = stderr.slice(-captureLimit); log(chunk); });
   const timer = setTimeout(() => { expired = true; stopTree(child, 'SIGKILL'); }, timeout);
+  const diskTimer = compiled ? setInterval(() => {
+    try { requireSimulatorBuildSpace(project); }
+    catch (error) { diskError = error; stopTree(child, 'SIGKILL'); }
+  }, 10_000) : undefined;
   try {
     const code = await new Promise((res, rej) => {
       child.once('error', rej);
       child.once('close', res);
     });
+    if (diskError) throw diskError;
     if ((expired || code !== 0) && !allowFailure) {
       throw new Error(`${command} ${args[0] ?? ''} ${expired ? 'délai dépassé' : `code ${code}`}: ${stderr.slice(-2000)}`);
     }
     return { code, stdout, stderr };
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); clearInterval(diskTimer); }
 }
 
 async function waitUntil(label, check, timeout) {
@@ -190,7 +215,8 @@ async function runIosXCTest(name, directory) {
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
     '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600',
-    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO'],
+    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO',
+    `JOLENE_TEST_APP_ID=${appId}`, `JOLENE_TEST_HOME_ICON=${compiledClient?.iconName ?? 'Expo Go'}`],
   { timeout: 900_000, logfile: `${name}-xctest.log`, allowFailure: true });
   if (!existsSync(resultPath)) throw new Error(`Rapport XCTest ${name} absent. Voir ${name}-xctest.log.`);
   const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
@@ -215,7 +241,9 @@ async function runIosXCTest(name, directory) {
     }
     const proof = JSON.parse(readFileSync(resolve(attachments, proofs[0].exportedFileName), 'utf8'));
     if (proof.prefix !== prefix) throw new Error('Preuve Home provenant d’un autre format.');
-    const evidence = verifyContractsHomeEvidence({ proof, metro: readFileSync(resolve(output, 'metro.log'), 'utf8') });
+    nativeEventStream?.assertHealthy();
+    const evidenceLog = nativeEventStream?.eventPath ?? resolve(output, 'metro.log');
+    const evidence = verifyContractsHomeEvidence({ proof, metro: readFileSync(evidenceLog, 'utf8') });
     writeFileSync(resolve(directory, 'contracts-home-evidence.json'), JSON.stringify(evidence, null, 2));
   }
   const captures = resolve(directory, 'captures');
@@ -262,18 +290,19 @@ try {
   if (!existsSync(flow)) throw new Error(`Le scénario Maestro sélectionné est absent : ${selectedScenario.flowFile}.`);
   if (platform === 'ios' && !existsSync(iosProject)) throw new Error('Le projet XCTest iPhone et iPad est requis.');
   device = platform === 'ios' ? await chooseIosDevice() : await chooseAndroidDevice();
-  stage = 'expo-go-install';
-  await installExpoGo();
+  stage = compiled ? 'compiled-debug-build' : 'expo-go-install';
+  if (compiled) compiledClient = await buildCompiledIosClient({ project, output, device, env, run });
+  else await installExpoGo();
   stage = 'metro-start';
   console.log(`Démarrage Expo SDK 57 sur ${platform} (${device}).`);
   const metroLog = createWriteStream(resolve(output, 'metro.log'));
   streams.push(metroLog);
-  metro = spawn('npx', ['--no-install', 'expo', 'start', '--go', '--localhost', '--port', '8090'],
+  metro = spawn('npx', ['--no-install', 'expo', 'start', compiled ? '--dev-client' : '--go', '--localhost', '--port', '8090'],
     { cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   metro.stdout.pipe(metroLog, { end: false });
   metro.stderr.pipe(metroLog, { end: false });
-  metro.stdout.on('data', chunk => navigationStallMonitor?.consume('stdout', chunk));
-  metro.stderr.on('data', chunk => navigationStallMonitor?.consume('stderr', chunk));
+  metro.stdout.on('data', chunk => { if (!compiled) navigationStallMonitor?.consume('stdout', chunk); });
+  metro.stderr.on('data', chunk => { if (!compiled) navigationStallMonitor?.consume('stderr', chunk); });
   metro.once('error', error => { metroError = error; metroLog.write(`${error.message}\n`); });
   await waitUntil('réponse Metro sur IPv4 localhost', async () => {
     try {
@@ -282,8 +311,8 @@ try {
     } catch { return false; }
   }, 180_000);
 
-  stage = 'expo-go-installed';
-  await waitUntil('installation Expo Go pour SDK 57', async () => {
+  stage = 'app-installed';
+  await waitUntil(`installation de ${appId}`, async () => {
     const result = platform === 'ios'
       ? await run('xcrun', ['simctl', 'get_app_container', device, appId, 'app'], { allowFailure: true, timeout: 10_000 })
       : await run('adb', ['-s', device, 'shell', 'pm', 'path', appId], { allowFailure: true, timeout: 10_000 });
@@ -299,7 +328,7 @@ try {
   const manifest = await response.json();
   const sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
   if (!String(sdk).startsWith('57.')) throw new Error(`Version Expo du manifeste inattendue : ${sdk}.`);
-  writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', expoUrl }, null, 2));
+  writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', host: iosHost, appId, expoUrl: compiled ? null : expoUrl }, null, 2));
 
   stage = 'metro-bundle-ready';
   const bundleUrl = new URL(manifest.launchAsset?.url);
@@ -315,13 +344,21 @@ try {
   console.log(`Installation, manifeste et bundle prêts ; parcours natif ${selectedScenario.name}.`);
   if (platform === 'ios') {
     stage = 'open-ios-experience';
+    if (compiled) {
+      nativeEventStream = await startNativeEventStream({ device, executable: compiledClient.executable, output, env,
+        onLine: line => navigationStallMonitor?.consume('stdout', line) });
+    }
+    // RCTBundleURLProvider in the locked RN version reads this NSArgumentDomain
+    // setting. It also works when the precompiled RN core has port 8081 baked in.
+    const launchArguments = compiled ? ['-RCT_jsLocation', '127.0.0.1:8090'] : [
+      '--initialUrl', expoUrl, '-EXDevMenuIsOnboardingFinished', 'YES',
+      '-EXDevMenuShowsAtLaunch', 'NO', '-EXDevMenuShowFloatingActionButton', 'NO',
+    ];
     const launch = await run('xcrun', [
-      'simctl', 'launch', device, appId, '--initialUrl', expoUrl,
-      '-EXDevMenuIsOnboardingFinished', 'YES',
-      '-EXDevMenuShowsAtLaunch', 'NO',
-      '-EXDevMenuShowFloatingActionButton', 'NO',
-    ], { timeout: 120_000, logfile: 'expo-launch.log' });
-    navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout });
+      'simctl', 'launch', device, appId, ...launchArguments,
+    ], { timeout: 120_000, logfile: compiled ? 'compiled-launch.log' : 'expo-launch.log' });
+    nativeEventStream?.bindLaunch(launch.stdout, appId);
+    navigationStallMonitor = await createIosNavigationStallMonitor({ env, platform, device, output, run, launchOutput: launch.stdout, bundleId: appId });
     // Expo Go SDK 57 opens --initialUrl after its home controller appears.
     // Temporary NSArgumentDomain defaults prepare the Expo Go host only.
     // XCTest activates the existing process and requires its overlays absent;
@@ -342,10 +379,11 @@ try {
   process.exitCode = 1;
 } finally {
   await navigationStallMonitor?.dispose();
+  await nativeEventStream?.dispose();
   if (device) {
     if (platform === 'ios') {
       if (!success) {
-        try { await collectIosFailureDiagnostics({ device, output, started, run, env, failed: true }); }
+        try { await collectIosFailureDiagnostics({ device, output, started, run, env, failed: true, compiledClient }); }
         catch (error) { writeFileSync(resolve(output, 'ios-diagnostics-error.txt'), String(error)); }
       }
       await run('xcrun', ['simctl', 'io', device, 'screenshot', resolve(output, 'final.png')], { allowFailure: true, timeout: 15_000, logfile: 'simulator.log' });
@@ -361,6 +399,6 @@ try {
     stopTree(metro, 'SIGKILL');
   }
   writeFileSync(resolve(output, 'result.json'), JSON.stringify({ started, ended: new Date().toISOString(), platform, scenario: selectedScenario.name, orientations: selectedScenario.orientations,
-    device, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
+    device, host: iosHost, appId, stage, success, scenarios, evidence: 'native-simulator-synthetic-demo', production: false, physicalDevice: false }, null, 2));
   await Promise.all(streams.map(stream => new Promise(resolveClose => stream.end(resolveClose))));
 }

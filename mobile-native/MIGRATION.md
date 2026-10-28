@@ -35,15 +35,25 @@ est conservée ; ce passage ne démontre pas à lui seul la cause de ces échecs
 
 Deux workflows distincts préparent quatre jobs frais chacun (iPhone, Android,
 iPad portrait et paysage). Documents exige neuf captures par format, Contrats
-huit (neuf sur iOS avec la preuve Home). Dernier résultat complet, `e33404f` :
-Documents passe sur Android et les deux orientations iPad ; iPhone échoue à
-l’entrée de la démo. Contrats passe sur Android ; iPhone et iPad paysage ne
-conservent qu’un chiffre sur les six saisis, et iPad portrait échoue à l’entrée
-de la démo. Consultation passe sur iPhone, Android et iPad dans les deux
-orientations. Les contrôles web passent également. Ce lot reste non validé :
-les quatre échecs iOS doivent être corrigés et les nouvelles preuves relues.
-Les diagnostics opt-in de touches/focus/sélection ne capturent que des longueurs,
-des positions et des états ; ils ne constituent pas une correction de ces échecs.
+huit (neuf sur iOS avec la preuve Home). Sur `9de851f`, Consultation et tous
+les contrôles web passent ; Documents et Contrats passent sur Android.
+Les trois formats iOS Contrats échouent à la saisie : six événements de touche,
+un seul changement du texte et un chiffre conservé. Le champ reste actif et
+modifiable. La sonde, exécutée seulement après avoir enregistré l’échec, obtient
+six chiffres par six appuis visibles ; elle ne valide pas le scénario et ne signe
+rien. La cause de cette différence reste à déterminer.
+
+Documents iOS a subi deux annulations du contact par BackBoard (« digitizer did
+disappear », iPhone et iPad portrait) et un téléchargement Expo Go interrompu
+avant installation (iPad paysage). Une reprise ciblée à code inchangé est en cours.
+Aucun changement du bouton ni assouplissement de ses assertions n’est justifié par
+ces interruptions système. Les preuves initiales restent conservées.
+
+Ce lot reste non validé. Une comparaison avec le même parcours dans le client
+compilé pour simulateur est en préparation, sans remplacer les contrôles Expo Go.
+Les diagnostics opt-in ne capturent que longueurs, positions et états ; ils ne
+constituent pas une correction. Ces résultats de PR ne signifient pas que `main`
+est vert ni que le client publié a changé.
 Les tests purs utilisent des transports injectés.
 Les scénarios n’envoient aucun fichier réel ni SMS et ne signent aucun contrat réel.
 Les diagnostics de navigation et d’échec iOS du premier lot restent actifs en CI démo.
