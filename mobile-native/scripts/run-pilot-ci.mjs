@@ -48,6 +48,7 @@ let metroError;
 let navigationStallMonitor;
 let compiledClient;
 let nativeEventStream;
+let iosTestsBuilt = false;
 let stage = 'device-selection';
 let success = false;
 const started = new Date().toISOString();
@@ -62,6 +63,7 @@ function stopTree(child, signal = 'SIGTERM') {
 async function run(command, args, { timeout = 60_000, logfile, allowFailure = false, captureLimit, extraEnv } = {}) {
   const stream = logfile ? createWriteStream(resolve(output, logfile), { flags: 'a' }) : null;
   if (stream) streams.push(stream);
+  const commandStarted = performance.now();
   const child = spawn(command, args, { cwd: project, env: { ...env, ...extraEnv }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
@@ -84,15 +86,15 @@ async function run(command, args, { timeout = 60_000, logfile, allowFailure = fa
     catch (error) { diskError = error; stopTree(child, 'SIGKILL'); }
   }, 10_000) : undefined;
   try {
-    const code = await new Promise((res, rej) => {
+    const { code, signal } = await new Promise((res, rej) => {
       child.once('error', rej);
-      child.once('close', res);
+      child.once('close', (code, signal) => res({ code, signal }));
     });
     if (diskError) throw diskError;
     if ((expired || code !== 0) && !allowFailure) {
       throw new Error(`${command} ${args[0] ?? ''} ${expired ? 'délai dépassé' : `code ${code}`}: ${stderr.slice(-2000)}`);
     }
-    return { code, stdout, stderr };
+    return { code, signal, expired, durationMs: Math.round(performance.now() - commandStarted), stdout, stderr };
   } finally { clearTimeout(timer); clearInterval(diskTimer); }
 }
 
@@ -202,32 +204,60 @@ async function runScenario(name, scenarioFlow, directory) {
 async function runIosXCTest(name, directory) {
   const portrait = name === 'portrait';
   const testMethod = iosTestMethod(selectedScenario, iosFamily, name);
-  stage = `xctest-${name}`;
-  console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
   mkdirSync(directory, { recursive: true });
   const temporary = process.env.RUNNER_TEMP;
   if (!temporary) throw new Error('RUNNER_TEMP requis pour le runner XCTest CI.');
-  const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
-  const result = await run('xcodebuild', ['test', '-project', iosProject,
-    '-scheme', 'NativePilotUITests', `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`, '-configuration', 'Debug', '-sdk', 'iphonesimulator',
+  const common = ['-project', iosProject, '-scheme', 'NativePilotUITests',
+    '-configuration', 'Debug', '-sdk', 'iphonesimulator',
     '-destination', `platform=iOS Simulator,id=${device}`,
     '-derivedDataPath', resolve(temporary, 'jolene-native-ui-derived'),
+    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO',
+    `JOLENE_TEST_APP_ID=${appId}`, `JOLENE_TEST_HOME_ICON=${compiledClient?.iconName ?? 'Expo Go'}`];
+  const saveCommand = (path, result, timeoutMs) => {
+    const { code, signal, expired, durationMs } = result;
+    writeFileSync(path, JSON.stringify({ code, signal, expired, durationMs, timeoutMs }, null, 2));
+  };
+  // Compilation must not consume the bounded execution/finalization budget.
+  // Reuse the same built test bundle for the next orientation in this CI job.
+  if (!iosTestsBuilt) {
+    stage = 'xctest-build';
+    const build = await run('xcodebuild', ['build-for-testing', ...common],
+      { timeout: 300_000, logfile: 'xctest-build.log', allowFailure: true });
+    saveCommand(resolve(output, 'xctest-build-command.json'), build, 300_000);
+    if (build.expired || build.code !== 0) {
+      throw new Error(`Compilation du harnais XCTest ${build.expired ? 'délai externe de 300 s dépassé' : `code ${build.code}, signal ${build.signal ?? 'aucun'}`}. Voir xctest-build.log.`);
+    }
+    iosTestsBuilt = true;
+  }
+  stage = `xctest-${name}`;
+  console.log(`Début du parcours ${iosFamily} ${name} avec XCTest (gestes Apple par élément).`);
+  const resultPath = resolve(temporary, `jolene-native-${iosFamily}-${name}.xcresult`);
+  const result = await run('xcodebuild', ['test-without-building', ...common,
+    `-only-testing:NativePilotUITests/NativePilotTests/${testMethod}`,
     '-resultBundlePath', resultPath, '-parallel-testing-enabled', 'NO',
     '-maximum-concurrent-test-simulator-destinations', '1',
-    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600',
-    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO',
-    `JOLENE_TEST_APP_ID=${appId}`, `JOLENE_TEST_HOME_ICON=${compiledClient?.iconName ?? 'Expo Go'}`],
+    '-test-timeouts-enabled', 'YES', '-maximum-test-execution-time-allowance', '600'],
   { timeout: 900_000, logfile: `${name}-xctest.log`, allowFailure: true });
-  if (!existsSync(resultPath)) throw new Error(`Rapport XCTest ${name} absent. Voir ${name}-xctest.log.`);
-  const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
-  writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
+  saveCommand(resolve(directory, 'xctest-command.json'), result, 900_000);
+  // Preserve an external timeout even if xcresulttool encounters a partial bundle.
+  // A readable report is collected once for diagnosis; it cannot rescue a timeout.
+  const commandFailure = result.expired ? 'Délai externe XCTest de 900 s dépassé. '
+    : result.code !== 0 ? `xcodebuild code ${result.code}, signal ${result.signal ?? 'aucun'}. ` : '';
   const attachments = resolve(directory, 'attachments');
-  await run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments]);
-  const summary = JSON.parse(report.stdout);
-  if (result.code !== 0 || summary.result !== 'Passed' || summary.totalTestCount !== 1
+  let summary;
+  try {
+    if (!existsSync(resultPath)) throw new Error('Le bundle .xcresult est absent.');
+    const report = await run('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath]);
+    writeFileSync(resolve(directory, 'xctest-summary.json'), report.stdout);
+    summary = JSON.parse(report.stdout);
+    await run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments]);
+  } catch (error) {
+    throw new Error(`${commandFailure}Rapport ou pièces jointes XCTest ${name} incomplets ou inexploitables : ${error.message}`, { cause: error });
+  }
+  if (result.expired || result.code !== 0 || summary.result !== 'Passed' || summary.totalTestCount !== 1
     || summary.passedTests !== 1 || summary.failedTests !== 0 || summary.skippedTests !== 0
     || summary.expectedFailures !== 0) {
-    throw new Error(`Le rapport XCTest ${name} ne confirme pas un test réussi sans exclusion.`);
+    throw new Error(`${commandFailure}Le rapport XCTest ${name} ne confirme pas un test réussi sans exclusion.`);
   }
   const manifest = JSON.parse(readFileSync(resolve(attachments, 'manifest.json'), 'utf8'));
   if (!Array.isArray(manifest)) throw new Error('Manifest des captures XCTest invalide.');

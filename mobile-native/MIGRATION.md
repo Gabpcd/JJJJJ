@@ -45,12 +45,37 @@ rien. La cause de cette différence reste à déterminer.
 
 Documents iOS a subi deux annulations du contact par BackBoard (« digitizer did
 disappear », iPhone et iPad portrait) et un téléchargement Expo Go interrompu
-avant installation (iPad paysage). Une reprise ciblée à code inchangé est en cours.
+avant installation (iPad paysage). Une reprise ciblée à code inchangé a été exécutée.
 Aucun changement du bouton ni assouplissement de ses assertions n’est justifié par
 ces interruptions système. Les preuves initiales restent conservées.
 
-Ce lot reste non validé. Une comparaison avec le même parcours dans le client
-compilé pour simulateur est en préparation, sans remplacer les contrôles Expo Go.
+La reprise Documents à code inchangé a ensuite passé sur iPhone (neuf captures
+relues). Les deux iPad ont échoué avec un écran attendu apparu après le délai du
+contrôle ; la cause de ces latences reste ouverte.
+
+Sur `617c967`, Documents et Contrats Android passent à nouveau, avec leurs captures
+relues. Le client iPhone compilé en Debug reproduit la perte de chiffres : six
+demandes de touche, un seul changement de texte. Le même XCTest et le même runtime
+iOS 26.5 ont été utilisés, sans Expo Go. Le champ reste modifiable et conserve les
+six chiffres lors de la sonde ultérieure par touches visibles ; le test reste en
+échec et s'arrête avant signature. Expo Go n'est donc pas nécessaire à la
+reproduction, mais la responsabilité de la perte n'est pas encore établie.
+Les jobs Expo Go Contrats échouent aussi : un chiffre sur iPhone/iPad portrait,
+deux sur iPad paysage. Les événements key-press ne prouvent pas que toutes les
+mutations ont été acceptées par le champ natif.
+
+Documents passe aussi sur iPad paysage (neuf captures relues). Sur iPhone,
+le contact de l’entrée démo est annulé par BackBoard. Sur iPad portrait, la saisie
+groupée du libellé de remplacement perd huit caractères ; le test s’arrête avant
+la confirmation. Consultation passe sur Android ; iPhone rencontre la même
+annulation de contact. Le rapport iPad reste incomplet après expiration et ne
+valide ni le portrait ni le paysage. Le runner sépare désormais compilation et
+exécution, conserve l’expiration et refuse tout résultat incomplet ; les délais
+fonctionnels et l’allocation XCTest de 600 secondes restent inchangés.
+
+Ce lot reste non validé. Un témoin UIKit séparé est ajouté avec la même saisie
+automatisée sur un simple champ iOS, sans React Native, sans remplacement des
+contrôles Contrats. Son résultat ne pourra pas valider le parcours de Jolene.
 Les diagnostics opt-in ne capturent que longueurs, positions et états ; ils ne
 constituent pas une correction. Ces résultats de PR ne signifient pas que `main`
 est vert ni que le client publié a changé.
