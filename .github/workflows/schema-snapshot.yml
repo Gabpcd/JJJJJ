@@ -57,9 +57,9 @@ jobs:
             --password "$SUPABASE_DB_PASSWORD" \
             > supabase/schema/public.sql
         env:
-          # setup-cli pins GHCR for CLI 2.98; its shared quota can reject pulls.
-          # Use the CLI default Supabase mirror, with the same Postgres tag.
-          SUPABASE_INTERNAL_IMAGE_REGISTRY: public.ecr.aws
+          # GHCR and public ECR hit anonymous runner quotas (run 40918773216/40948374087).
+          # CLI 2.98 supports the original official Docker Hub image with the same tag.
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
