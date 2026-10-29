@@ -2,6 +2,7 @@
 -- Algorithme du 30/09 conservé ; successeurs explicitement liés aux migrations :
 -- suppression soignant 20261001131013, suppression établissement 20261017191635
 -- puis imputation 20261018140952, résolution salariée 20261018140952.
+-- Recherche établissement : projection internat 20261029080849.
 -- Aucun repli vers les anciens corps. Node vérifie les corps, migrations et snapshot.
 BEGIN;
 CREATE TEMP TABLE inventory_before AS SELECT * FROM private.security_definer_inventory;
@@ -78,8 +79,8 @@ DECLARE
   },
   {
     "signature": "fn_rechercher_soignants_etab(text,text[],text,integer,text,numeric,integer,integer,boolean,boolean,text,integer,integer)",
-    "old_md5": "e8f0fd0eacd824c7c83e78ae10b9823d",
-    "definition_md5": "5a1fc4a4651f794ca8d95c3f6885195a",
+    "old_md5": "5a1fc4a4651f794ca8d95c3f6885195a",
+    "definition_md5": "62d0bf39f1600b82a93a522a411f1bd7",
     "categorie": "MIXTE_TENANT_ADMIN",
     "proconfig": [
       "search_path=public, extensions"
@@ -261,8 +262,8 @@ DECLARE
   },
   {
     "signature": "fn_rechercher_soignants_etab(text,text[],text,integer,text,numeric,integer,integer,boolean,boolean,text,integer,integer)",
-    "old_md5": "e8f0fd0eacd824c7c83e78ae10b9823d",
-    "definition_md5": "5a1fc4a4651f794ca8d95c3f6885195a",
+    "old_md5": "5a1fc4a4651f794ca8d95c3f6885195a",
+    "definition_md5": "62d0bf39f1600b82a93a522a411f1bd7",
     "categorie": "MIXTE_TENANT_ADMIN",
     "proconfig": [
       "search_path=public, extensions"
