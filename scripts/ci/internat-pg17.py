@@ -59,7 +59,14 @@ assert sql("SELECT current_setting('server_version_num')::int/10000") == '17'
 assert sql("SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace") == '0'
 assert sql("SELECT count(*) FROM pg_namespace WHERE nspname IN('auth','private','extensions')") == '0'
 assert sql("SELECT count(*) FROM pg_roles WHERE rolname IN('anon','authenticated','service_role','supabase_auth_admin','dashboard_user')") == '0'
-snapshot = (ROOT/'supabase/schema/public.sql').read_text()
+# This witness exercises the full migration from its original prerequisites.
+# The rolling production snapshot already includes it after deployment and must
+# never become the starting point (otherwise ADD COLUMN is applied twice).
+snapshot_raw = (ROOT/'tests/fixtures/internat-schema-prerequisite-20261029.sql').read_bytes()
+assert hashlib.sha256(snapshot_raw).hexdigest() == 'd9c4a7e2c1cfb8cb82dc7271e89c8a80fbc8504a6fb7d7b828c17a97d63fdcf7'
+snapshot = snapshot_raw.decode()
+print(json.dumps({'source': 'internat-schema-prerequisite-20261029.sql',
+                  'sha256': hashlib.sha256(snapshot_raw).hexdigest()}), flush=True)
 migration = (ROOT/'supabase/migrations/20261029080849_internat_specialite_et_choix_etablissement.sql').read_text()
 rows = {}
 for filename in ['internat-live-full-closure-20261029.json', 'internat-live-admission-dependencies-20261029.json']:

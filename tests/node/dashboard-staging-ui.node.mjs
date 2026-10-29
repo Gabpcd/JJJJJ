@@ -115,18 +115,26 @@ test('projection backend exclut tous champs inconnus et canaris de session', () 
   assert.deepEqual(resultat,avant); assert.doesNotMatch(JSON.stringify(resultat),/canari/);
 });
 
-test('préflight accepte le contrat des triggers versionnés puis refuse dérive, trigger ajouté et surcharge', () => {
-  const source=readFileSync(new URL('../../supabase/schema/public.sql',import.meta.url),'utf8');
+function lireTriggersDuSnapshot(source) {
   const triggers={};
   for(const line of source.split('\n').filter(l=>l.startsWith('CREATE OR REPLACE TRIGGER '))){
     const profile=line.includes(' ON "public"."soignants" ') && line.includes('UPDATE') && !line.includes('UPDATE OF');
     const journal=line.includes(' ON "public"."journaux_audit" ') && line.includes('INSERT');
     if(!profile&&!journal)continue;
     const name=line.match(/^CREATE OR REPLACE TRIGGER "([^"]+)"/)[1];
-    const fonction=line.match(/EXECUTE FUNCTION "public"\."([^"]+)"/)[1];
+    const fonction=line.match(/EXECUTE FUNCTION "([^"]+)"\."([^"]+)"/);
+    assert.ok(fonction, `Fonction du trigger ${name} introuvable`);
     triggers[name]={table:profile?'soignants':'journaux_audit',type:1+(line.includes(' BEFORE ')?2:0)+(line.includes('INSERT')?4:0)+(line.includes('UPDATE')?16:0),
-      fonction,schema_fonction:'public',enabled:'O',condition:null,arguments:''};
+      fonction:fonction[2],schema_fonction:fonction[1],enabled:'O',condition:null,arguments:''};
   }
+  return triggers;
+}
+
+test('préflight accepte son contrat historique puis refuse dérive, trigger ajouté et surcharge', () => {
+  // Le contrat de recette reste fermé face aux changements ultérieurs du schéma.
+  // Cette fixture versionnée ne réautorise aucune écriture sur le staging actuel.
+  const source=readFileSync(new URL('../fixtures/dashboard-ui-triggers-reviewed-20260930.sql',import.meta.url),'utf8');
+  const triggers=lireTriggersDuSnapshot(source);
   const data={crons_actifs:0,audit_fk:0,fonctions_count:Object.keys(contratEcritures).length,fonctions:structuredClone(contratEcritures),triggers,triggers_count:Object.keys(triggers).length};
   verifierGardeUI(data);
   for(const changer of [d=>d.fonctions_count++,d=>d.triggers_count++,d=>d.fonctions.fn_audit_connexion.source_md5='x',
@@ -134,6 +142,16 @@ test('préflight accepte le contrat des triggers versionnés puis refuse dérive
     d=>d.triggers.dec_age_minimum.type=21,d=>d.triggers.dec_age_minimum.enabled='A']){
     const modifie=structuredClone(data);changer(modifie);assert.throws(()=>verifierGardeUI(modifie));
   }
+});
+
+test('le schéma actuel avec son nouveau trigger privé reste refusé par la recette dashboard historique', () => {
+  const source=readFileSync(new URL('../../supabase/schema/public.sql',import.meta.url),'utf8');
+  const triggers=lireTriggersDuSnapshot(source);
+  assert.equal(triggers.trg_zz_identifier_parcours_interne.schema_fonction,'private');
+  assert.equal(triggers.trg_zz_identifier_parcours_interne.fonction,'fn_identifier_parcours_interne');
+  const data={crons_actifs:0,audit_fk:0,fonctions_count:Object.keys(contratEcritures).length,
+    fonctions:structuredClone(contratEcritures),triggers,triggers_count:Object.keys(triggers).length};
+  assert.throws(()=>verifierGardeUI(data),/Nombre de triggers UI inattendu/);
 });
 
 
