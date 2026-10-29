@@ -9,6 +9,7 @@ export async function simulerCompletionEtablissement(page: Page, profession: 'ID
   const base = await simulerEtablissement(page, 'minimal');
   const { etat } = base;
   const state = {
+    schemaInternat: true,
     erreurInscription: false, erreurPublication: false, erreurModification: false,
     appels: [] as { nom: string; payload: Record<string, unknown> }[],
     profil: { ...etablissement, nom: nomRecette, siret: siretRecette, statut_verification: 'EN_ATTENTE', est_verifie: false, peut_publier_missions: false, contrat_service_signe: false, contrat_service_statut: 'NON_SIGNE' },
@@ -58,6 +59,12 @@ export async function simulerCompletionEtablissement(page: Page, profession: 'ID
       return repondre(route, { success: true, mission_id: ids.mission });
     }
     let rows: Record<string, unknown>[] = nom === 'etablissements' ? etat.mode === 'complet' ? [state.profil] : [] : nom === 'missions' ? state.mission ? [state.mission] : [] : state.creneaux;
+    if (nom === 'missions' && !state.schemaInternat) {
+      if (url.searchParams.get('select')?.split(',').some(champ => champ.trim() === 'accepte_internes')) {
+        return repondre(route, { code: '42703', message: 'column missions.accepte_internes does not exist' }, 400);
+      }
+      rows = rows.map(({ accepte_internes: _choix, ...historique }) => historique);
+    }
     for (const key of ['id', 'etablissement_id', 'mission_id', 'statut', 'type_creneau', 'est_pause']) {
       const filtre = url.searchParams.get(key);
       if (filtre?.startsWith('eq.')) rows = rows.filter(r => String(r[key]) === filtre.slice(3));

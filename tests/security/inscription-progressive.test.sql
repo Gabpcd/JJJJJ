@@ -55,6 +55,18 @@ BEGIN
   IF r->'donnees'->>'missionVille' <> 'Lyon' THEN RAISE EXCEPTION 'Brouillon mission non enregistré'; END IF;
   r := public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"intitule":"Renfort de nuit","description":"À reprendre","creneaux":[{"debut":"2027-01-12T07:00:00Z","fin":"2027-01-12T15:00:00Z"}]}}');
   IF r#>>'{donnees,missionFormulaire,intitule}' <> 'Renfort de nuit' THEN RAISE EXCEPTION 'Brouillon complet perdu'; END IF;
+  r := public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"profession":"MEDECIN","accepteInternes":true}}');
+  IF r#>'{donnees,missionFormulaire,accepteInternes}' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'Choix des internes perdu'; END IF;
+  r := public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"profession":"MEDECIN"}}');
+  IF (r#>'{donnees,missionFormulaire}') ? 'accepteInternes' THEN RAISE EXCEPTION 'Ancien choix des internes conservé malgré retrait'; END IF;
+  refuse := false;
+  BEGIN PERFORM public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"profession":"MEDECIN","accepteInternes":"true"}}');
+  EXCEPTION WHEN invalid_parameter_value THEN refuse := true; END;
+  IF NOT refuse THEN RAISE EXCEPTION 'Choix non booléen accepté'; END IF;
+  refuse := false;
+  BEGIN PERFORM public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"profession":"IDE","accepteInternes":true}}');
+  EXCEPTION WHEN invalid_parameter_value THEN refuse := true; END;
+  IF NOT refuse THEN RAISE EXCEPTION 'Choix des internes accepté hors médecine'; END IF;
   refuse := false;
   BEGIN PERFORM public.fn_enregistrer_parcours_inscription('{"missionFormulaire":{"peut_publier_missions":true}}');
   EXCEPTION WHEN invalid_parameter_value THEN refuse := true; END;

@@ -15,6 +15,7 @@ BEGIN
     ('public.fn_calculer_tous_documents_valides(uuid)','b657145d300a5750338f7f3aadeb169e','postgres','{postgres=X/postgres,service_role=X/postgres}'),
     ('public.fn_creer_mission_multi_jours_v3(text,text,type_profession,text,numeric,boolean,integer,text,text,boolean,jsonb,text,text,numeric,text)','bba0db7877485b54ac22cdb76351cdb6','postgres','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'),
     ('public.fn_documents_ok_pour_mission(uuid,text)','6d12fc8dbca0531792dc810a786e3f64','postgres','{postgres=X/postgres,service_role=X/postgres}'),
+    ('public.fn_enregistrer_parcours_inscription(jsonb)','700340e254fbec43c0449440c64dc122','postgres','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'),
     ('public.fn_enregistrer_swipe(uuid,text,text)','a9bcaf6626e8f8c143f41b89af6fcbe2','postgres','{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}'),
     ('public.fn_finaliser_attribution_mission(uuid,uuid,text)','15b78cd8f72f811becb878b3ed1bc8fe','postgres','{postgres=X/postgres,service_role=X/postgres}'),
     ('public.fn_finaliser_document_verification(uuid,uuid,uuid,text,text,text,text,text,date,text,text,text,text,text,boolean,boolean,text,text,date,date,jsonb,text,text,numeric,boolean,date,text,text,text,integer,text,date,text,text,date,date,numeric,text)','fa55027307a0de0ec444edf49641b0ed','postgres','{postgres=X/postgres,service_role=X/postgres}'),
@@ -2957,7 +2958,49 @@ BEGIN
 END;
 $function$;
 
+-- Le brouillon conserve un choix, jamais une preuve ni une autorisation de publier.
+CREATE OR REPLACE FUNCTION public.fn_enregistrer_parcours_inscription(p_donnees jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public', 'auth'
+AS $function$
+DECLARE v_parcours public.parcours_inscription;
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() THEN
+    RAISE EXCEPTION 'Session invalide.' USING ERRCODE = '42501';
+  END IF;
+  IF p_donnees IS NULL OR jsonb_typeof(p_donnees) <> 'object' OR octet_length(p_donnees::text) > 32768 THEN
+    RAISE EXCEPTION 'Brouillon invalide.' USING ERRCODE = '22023';
+  END IF;
+  -- Aucun mot de passe, jeton, pièce ni état de vérification dans le brouillon.
+  IF EXISTS (SELECT 1 FROM jsonb_object_keys(p_donnees) k WHERE k NOT IN (
+    'profession','prenom','nom','telephone','dateNaissance','typesContrat','rpps','rayon',
+    'estSalarieEtablissement','estEtudiant','scolariteFormation','scolariteAnnee',
+    'siret','finess','type','rue','ville','codePostal','departement','emailContact',
+    'telephoneContact','numeroLicence','missionProfession','missionVille','missionDate',
+    'missionDebut','missionFin','missionChoisie','brouillonMission','missionFormulaire'
+  )) THEN RAISE EXCEPTION 'Champ non autorisé dans le brouillon.' USING ERRCODE = '22023'; END IF;
+  IF p_donnees ? 'missionFormulaire' AND (
+    jsonb_typeof(p_donnees->'missionFormulaire') <> 'object'
+    OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_donnees->'missionFormulaire') k
+      WHERE k NOT IN ('intitule','description','profession','specialite','service',
+        'tauxHoraire','estUrgente','niveauUrgence','modeAttribution','contratPreference','creneaux','accepteInternes'))
+  ) THEN RAISE EXCEPTION 'Brouillon de mission invalide.' USING ERRCODE='22023'; END IF;
+  IF (p_donnees->'missionFormulaire') ? 'accepteInternes' AND (
+    jsonb_typeof(p_donnees#>'{missionFormulaire,accepteInternes}') IS DISTINCT FROM 'boolean'
+    OR (p_donnees#>'{missionFormulaire,accepteInternes}' = 'true'::jsonb
+      AND p_donnees#>>'{missionFormulaire,profession}' IS DISTINCT FROM 'MEDECIN')
+  ) THEN RAISE EXCEPTION 'Choix des internes invalide dans le brouillon.' USING ERRCODE='22023'; END IF;
+  UPDATE public.parcours_inscription SET donnees = donnees || p_donnees, modifie_le = now()
+    WHERE user_id = auth.uid() RETURNING * INTO v_parcours;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Inscription introuvable.' USING ERRCODE = 'P0002'; END IF;
+  RETURN to_jsonb(v_parcours);
+END;
+$function$;
+
 -- Registre : uniquement les routines modifiées par ce lot.
+UPDATE private.security_definer_inventory SET definition_md5=(SELECT md5(prosrc) FROM pg_proc WHERE oid='public.fn_enregistrer_parcours_inscription(jsonb)'::regprocedure),recense_le=now() WHERE signature IN ('public.fn_enregistrer_parcours_inscription(jsonb)','fn_enregistrer_parcours_inscription(jsonb)');
 UPDATE private.security_definer_inventory SET definition_md5=(SELECT md5(prosrc) FROM pg_proc WHERE oid='private.fn_resultats_filtre_missions(uuid,timestamp with time zone)'::regprocedure),recense_le=now() WHERE signature IN ('private.fn_resultats_filtre_missions(uuid,timestamp with time zone)','private.fn_resultats_filtre_missions(uuid,timestamp with time zone)');
 UPDATE private.security_definer_inventory SET definition_md5=(SELECT md5(prosrc) FROM pg_proc WHERE oid='private.fn_soignant_visible_pool_etablissement(uuid,uuid,uuid)'::regprocedure),recense_le=now() WHERE signature IN ('private.fn_soignant_visible_pool_etablissement(uuid,uuid,uuid)','private.fn_soignant_visible_pool_etablissement(uuid,uuid,uuid)');
 UPDATE private.security_definer_inventory SET definition_md5=(SELECT md5(prosrc) FROM pg_proc WHERE oid='public.fn_accepter_mission_urgence(uuid)'::regprocedure),recense_le=now() WHERE signature IN ('public.fn_accepter_mission_urgence(uuid)','fn_accepter_mission_urgence(uuid)');

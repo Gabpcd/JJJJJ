@@ -4,6 +4,46 @@ import { allerA, entrer as entrerEtablissement, ids, preuve, simulerEtablissemen
 import { simulerCompletionEtablissement } from './helpers/recette-complete-completion-etablissement';
 
 // Vrais écrans, réponses intégralement synthétiques, fournisseurs bloqués.
+test('inscription établissement — choix des internes sauvegardé, relu puis retiré du brouillon', async ({ page }, info) => {
+  const { etat, state, parcours } = await simulerCompletionEtablissement(page, 'MEDECIN');
+  etat.overrides.set('specialites_medicales', [{ code: 'SM01', label: 'Médecine générale', profession_parent: 'MEDECIN', actif: true }]);
+  await entrerEtablissement(page, 'inscription');
+  await allerA(page, '/etablissement/missions/creer');
+  await page.getByLabel('Intitulé *', { exact: true }).fill('Brouillon médical — simulation');
+  await page.locator('#mission-profession').click();
+  await page.getByRole('option', { name: 'Médecin', exact: true }).click();
+  await page.getByRole('combobox').filter({ hasText: 'Toutes spécialités acceptées' }).click();
+  await page.getByRole('option', { name: 'Médecine générale', exact: true }).click();
+  const accueil = page.getByTestId('mission-accepte-internes');
+  await accueil.check();
+  await page.getByRole('radio', { name: /^Salarié/ }).check();
+  const jour = '2030-10-15';
+  await page.getByLabel('Première date affichée *', { exact: true }).fill(jour);
+  await page.getByLabel('Dernière date affichée *', { exact: true }).fill(jour);
+  await page.getByRole('button', { name: 'Toutes les dates', exact: true }).click();
+  await page.getByLabel(`Début du créneau 1 du ${jour}`, { exact: true }).fill('07:00');
+  await page.getByLabel(`Fin du créneau 1 du ${jour}`, { exact: true }).fill('19:00');
+  await page.getByLabel('Taux horaire brut * (€/h)', { exact: true }).fill('30');
+  await page.getByRole('button', { name: 'Publier la mission', exact: true }).click();
+  await expect(page).toHaveURL(/\/inscription\/completer$/);
+  expect(parcours.donnees.missionFormulaire).toMatchObject({ profession: 'MEDECIN', specialite: 'SM01', accepteInternes: true });
+  expect(state.mission).toBeNull();
+  await allerA(page, '/etablissement/missions/creer');
+  await expect(accueil).toBeChecked();
+  await stabiliserLectures(page); await page.reload();
+  await expect(accueil).toBeChecked();
+  await accueil.uncheck();
+  await page.getByRole('button', { name: 'Publier la mission', exact: true }).click();
+  await expect(page).toHaveURL(/\/inscription\/completer$/);
+  expect(parcours.donnees.missionFormulaire).not.toHaveProperty('accepteInternes');
+  await allerA(page, '/etablissement/missions/creer');
+  await expect(accueil).not.toBeChecked();
+  await expect(page.getByRole('combobox').filter({ hasText: 'Médecine générale' })).toBeVisible();
+  await preuve(page, 'internat-brouillon-choix-retire-relu', info);
+  expect(state.mission).toBeNull();
+  expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]);
+});
+
 test('établissement — accueil explicite des internes, spécialité obligatoire, relecture et duplication sans accord implicite', async ({ page }, info) => {
   const { etat, state } = await simulerCompletionEtablissement(page, 'MEDECIN');
   etat.mode = 'complet';

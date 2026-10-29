@@ -157,6 +157,19 @@ INSERT INTO public.documents_soignants(id,soignant_id,type_document,nom_fichier,
 ('{D}','{S}','CARTE_ORDRE','attestation-fictive.pdf','jolene-documents','fixture/ordre-v1.pdf','application/pdf',100,
  'VERIFIE',now(),true,current_date-1,NULL,'{{}}');
 """)
+# Le choix du brouillon n'accorde aucun droit et ne remplace aucune autre saisie.
+sql(f"INSERT INTO public.parcours_inscription(user_id,type_compte,donnees,consentement_cgv_le) VALUES('{E}','ETABLISSEMENT','{{\"nom\":\"Fixture\"}}',now()),('{S}','SOIGNANT','{{}}',NULL);")
+def draft(form):
+    return value(etab+"SELECT public.fn_enregistrer_parcours_inscription("+literal(json.dumps({'missionFormulaire':form}))+"::jsonb)")
+assert draft({'profession':'MEDECIN','accepteInternes':True})['donnees']['missionFormulaire']['accepteInternes'] is True
+assert draft({'profession':'MEDECIN','accepteInternes':False})['donnees']['missionFormulaire']['accepteInternes'] is False
+assert 'accepteInternes' not in draft({'profession':'MEDECIN'})['donnees']['missionFormulaire']
+assert draft({'profession':'IDE'})['donnees']['nom'] == 'Fixture'
+for form in [{'profession':'MEDECIN','accepteInternes':'true'}, {'profession':'MEDECIN','accepteInternes':None}, {'profession':'IDE','accepteInternes':True}, {'profession':'MEDECIN','rpps_verifie':True}]:
+    refused(etab+"SELECT public.fn_enregistrer_parcours_inscription("+literal(json.dumps({'missionFormulaire':form}))+"::jsonb)", '22023')
+assert value(f"SELECT donnees FROM public.parcours_inscription WHERE user_id='{S}'") == {}
+print('INTERNAT_BROUILLON_REPRISE_ET_VALIDATION_OK', flush=True)
+
 assert value(f"SELECT private.fn_statut_internat_medical('{S}')")['specialite_code'] == 'SM01'
 assert sql(f"SELECT private.fn_compatibilite_profil_mission('{S}','MEDECIN','SM02',true,true,now()+interval '1 day')") == 'f'
 assert sql(f"SELECT private.fn_compatibilite_profil_mission('{S}','MEDECIN','SM01',true,false,now()+interval '1 day')") == 'f'

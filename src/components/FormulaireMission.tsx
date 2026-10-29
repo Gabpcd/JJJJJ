@@ -488,7 +488,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       setLoading(true);
       try {
         await enregistrerParcours({ brouillonMission: true, missionFormulaire: {
-          intitule, description, profession, specialite: specialiteMedicaleRequise, accepteInternes, service,
+          intitule, description, profession, specialite: specialiteMedicaleRequise, service,
+          // Le formulaire entier remplace le précédent : l’absence efface aussi
+          // un ancien choix et reste compatible avec les brouillons historiques.
+          ...(profession === 'MEDECIN' && accepteInternes ? { accepteInternes: true } : {}),
           tauxHoraire, estUrgente, niveauUrgence, modeAttribution, contratPreference,
           creneaux: creneaux.map(({ debut, fin }) => ({ debut, fin })),
         } });
