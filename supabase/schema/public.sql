@@ -5161,10 +5161,9 @@ BEGIN
   IF v_mission.statut <> 'OUVERTE' OR NOT COALESCE(v_mission.est_urgente, false) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Mission urgente non disponible');
   END IF;
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
-    COALESCE(v_mission.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    v_uid, v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Profession ou spécialité incompatible');
   END IF;
@@ -8676,6 +8675,67 @@ $$;
 ALTER FUNCTION "public"."fn_admin_decider_preuve_etablissement"("p_etablissement_id" "uuid", "p_preuve" "text", "p_decision" "text", "p_motif" "text", "p_version_attendue" bigint, "p_source_s3_key_attendue" "text", "p_date_naissance_confirmee" "date") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_decider_qualification_medicale"("p_soignant_id" "uuid", "p_document_id" "uuid", "p_preuve_empreinte" "text", "p_decision_attendue" "uuid", "p_specialite_code" "text", "p_numero_rpps_lu" "text", "p_inscription_confirmee" boolean, "p_qualification_confirmee" boolean, "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE v_s public.soignants%ROWTYPE; v_d public.documents_soignants%ROWTYPE;
+  v_q private.qualifications_medicales%ROWTYPE; v_id uuid;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Administrateur autorisé requis' USING ERRCODE='42501';
+  END IF;
+  -- Même sérialisation que l'admission ; ne pas prendre de verrou document après.
+  SELECT * INTO v_s FROM public.soignants WHERE id=p_soignant_id AND supprime_le IS NULL FOR UPDATE;
+  IF NOT FOUND OR v_s.profession <> 'MEDECIN' OR v_s.internat_medical_identifie IS NOT TRUE THEN
+    RAISE EXCEPTION 'Profil non concerné par la transition après internat.' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO v_q FROM private.qualifications_medicales WHERE soignant_id=v_s.id AND revoque_le IS NULL;
+  SELECT * INTO v_d FROM public.documents_soignants WHERE id=p_document_id AND soignant_id=v_s.id;
+  IF NOT FOUND OR p_preuve_empreinte IS NULL OR p_preuve_empreinte IS DISTINCT FROM
+      private.fn_empreinte_qualification(v_s.id,v_d.id) THEN
+    RAISE EXCEPTION 'La preuve ou l’identité a changé : rechargez la revue.' USING ERRCODE='40001';
+  END IF;
+  -- Réponse perdue/double clic : le même état et la même décision restent uniques.
+  IF v_q.id IS NOT NULL AND v_q.document_id=p_document_id AND v_q.preuve_empreinte=p_preuve_empreinte
+      AND v_q.specialite_code=p_specialite_code AND v_q.decide_par=auth.uid()
+      AND v_q.motif=btrim(p_motif) AND private.fn_qualification_medicale_actuelle(v_s.id) IS NOT NULL THEN
+    RETURN public.fn_admin_lire_qualification_medicale(v_s.id);
+  END IF;
+  IF v_q.id IS DISTINCT FROM p_decision_attendue THEN
+    RAISE EXCEPTION 'Une autre décision a été prise : rechargez la revue.' USING ERRCODE='40001';
+  END IF;
+  IF v_d.type_document<>'CARTE_ORDRE' OR v_d.statut_verification<>'VERIFIE'
+      OR v_d.verifie_le IS NULL OR v_d.coherence_nom IS NOT TRUE
+      OR v_d.supprime_le IS NOT NULL OR v_d.revoque_le IS NOT NULL
+      OR v_d.valide_depuis IS NULL OR v_d.valide_depuis>current_date
+      OR (v_d.valide_jusqua IS NOT NULL AND v_d.valide_jusqua<=current_date)
+      OR v_s.rpps_verifie IS NOT TRUE OR v_s.numero_rpps IS NULL
+      OR btrim(p_numero_rpps_lu) IS DISTINCT FROM v_s.numero_rpps
+      OR p_inscription_confirmee IS NOT TRUE OR p_qualification_confirmee IS NOT TRUE
+      OR p_motif IS NULL OR char_length(btrim(p_motif)) NOT BETWEEN 20 AND 1000
+      OR p_specialite_code IS NULL OR NOT EXISTS (SELECT 1 FROM public.specialites_medicales sm
+        WHERE sm.code=p_specialite_code AND sm.code~'^SM[0-9]+$'
+          AND sm.actif IS TRUE AND sm.profession_parent='MEDECIN') THEN
+    RAISE EXCEPTION 'Confirmez l’attestation d’inscription actuelle, le RPPS et la qualification exacte portée par cette preuve.' USING ERRCODE='23514';
+  END IF;
+  UPDATE private.qualifications_medicales SET revoque_le=now(),revoque_par=auth.uid(),
+    motif_revocation='Remplacée par une nouvelle revue documentée.' WHERE id=v_q.id;
+  INSERT INTO private.qualifications_medicales(soignant_id,document_id,specialite_code,preuve_empreinte,decide_par,motif)
+  VALUES(v_s.id,v_d.id,p_specialite_code,p_preuve_empreinte,auth.uid(),btrim(p_motif)) RETURNING id INTO v_id;
+  INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details)
+  VALUES(auth.uid(),'ADMIN','MODERATION_DOCUMENT','document',v_d.id,
+    jsonb_build_object('decision','QUALIFICATION_APRES_INTERNAT','decision_id',v_id,'precedente',v_q.id,
+      'critere','INSCRIPTION_ORDRE_QUALIFICATION_V1','specialite_code',p_specialite_code,
+      'preuve_empreinte',p_preuve_empreinte,'motif',btrim(p_motif)));
+  RETURN public.fn_admin_lire_qualification_medicale(v_s.id);
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_admin_decider_qualification_medicale"("p_soignant_id" "uuid", "p_document_id" "uuid", "p_preuve_empreinte" "text", "p_decision_attendue" "uuid", "p_specialite_code" "text", "p_numero_rpps_lu" "text", "p_inscription_confirmee" boolean, "p_qualification_confirmee" boolean, "p_motif" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_decider_revue_manuelle"("p_revue_id" "uuid", "p_decision" "text", "p_motif" "text", "p_jeton_cas" "text", "p_confirmation" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'private', 'extensions'
@@ -10068,6 +10128,37 @@ $$;
 ALTER FUNCTION "public"."fn_admin_lever_suspension"("p_soignant_id" "uuid", "p_raison" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_lire_qualification_medicale"("p_soignant_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v_s public.soignants%ROWTYPE; v_q private.qualifications_medicales%ROWTYPE; v_documents jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Administrateur autorisé requis' USING ERRCODE='42501';
+  END IF;
+  SELECT * INTO v_s FROM public.soignants WHERE id=p_soignant_id AND supprime_le IS NULL;
+  IF NOT FOUND OR v_s.profession <> 'MEDECIN' OR v_s.internat_medical_identifie IS NOT TRUE THEN
+    RAISE EXCEPTION 'Ce profil ne relève pas de la transition après internat.' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO v_q FROM private.qualifications_medicales WHERE soignant_id=p_soignant_id AND revoque_le IS NULL;
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'nom_fichier',d.nom_fichier,
+    's3_bucket',d.s3_bucket,'s3_cle',d.s3_cle,
+    'statut',d.statut_verification,'valide_depuis',d.valide_depuis,'valide_jusqua',d.valide_jusqua,
+    'empreinte',private.fn_empreinte_qualification(v_s.id,d.id)) ORDER BY d.televerse_le DESC,d.id),'[]'::jsonb)
+  INTO v_documents FROM public.documents_soignants d
+  WHERE d.soignant_id=v_s.id AND d.type_document='CARTE_ORDRE' AND d.supprime_le IS NULL AND d.revoque_le IS NULL;
+  RETURN jsonb_build_object('soignant_id',v_s.id,'numero_rpps',v_s.numero_rpps,
+    'rpps_verifie',v_s.rpps_verifie,'documents',v_documents,'decision_id',v_q.id,
+    'qualification',private.fn_qualification_medicale_actuelle(v_s.id),
+    'decision_invalidee',v_q.id IS NOT NULL AND private.fn_qualification_medicale_actuelle(v_s.id) IS NULL);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_lire_qualification_medicale"("p_soignant_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_lister_alertes_pointage"("p_type_filtre" "text" DEFAULT NULL::"text", "p_statut_filtre" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -11275,6 +11366,7 @@ DECLARE
   v_formation text;
   v_annee_validee integer;
   v_specialite_licence text;
+  v_code_licence text;
   v_override_requis boolean := false;
   v_ai_indisponible boolean := false;
   v_source text;
@@ -11319,7 +11411,7 @@ BEGIN
     'profession_certifiee', 'diplome_etranger',
     'type_identifiant_professionnel', 'numero_professionnel', 'iban',
     'scolarite_formation', 'scolarite_annee_validee',
-    'licence_remplacement_specialite', 'employeur_extrait',
+    'licence_remplacement_specialite', 'licence_remplacement_specialite_code', 'employeur_extrait',
     'periode_debut_extraite', 'periode_fin_extraite', 'heures_extraites'
   ]::text[])
   LIMIT 1;
@@ -11697,6 +11789,11 @@ BEGIN
   END IF;
 
   IF v_doc.type_document = 'LICENCE_REMPLACEMENT' THEN
+    v_code_licence := NULLIF(btrim(v_validation->>'licence_remplacement_specialite_code'), '');
+    IF NOT EXISTS (SELECT 1 FROM public.specialites_medicales sm
+      WHERE sm.code=v_code_licence AND sm.code ~ '^SM[0-9]+$') THEN
+      RAISE EXCEPTION 'Choisissez la spécialité canonique portée par la licence.' USING ERRCODE='23514';
+    END IF;
     v_specialite_licence := NULLIF(left(btrim(
       v_validation ->> 'licence_remplacement_specialite'
     ), 200), '');
@@ -11816,6 +11913,7 @@ BEGIN
     'scolarite_formation', v_formation,
     'scolarite_annee_validee', v_annee_validee,
     'licence_remplacement_specialite', v_specialite_licence,
+    'licence_remplacement_specialite_code', v_code_licence,
     'employeur_extrait', CASE WHEN v_heures.id IS NULL THEN NULL ELSE v_heures.employeur_nom END,
     'periode_debut_extraite', CASE WHEN v_heures.id IS NULL THEN NULL ELSE v_heures.date_debut END,
     'periode_fin_extraite', CASE WHEN v_heures.id IS NULL THEN NULL ELSE v_heures.date_fin END,
@@ -14982,6 +15080,33 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_resume_alertes_pointage"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_revoquer_qualification_medicale"("p_soignant_id" "uuid", "p_decision_id" "uuid", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE v_q private.qualifications_medicales%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Administrateur autorisé requis' USING ERRCODE='42501';
+  END IF;
+  PERFORM 1 FROM public.soignants WHERE id=p_soignant_id FOR UPDATE;
+  SELECT * INTO v_q FROM private.qualifications_medicales WHERE id=p_decision_id AND soignant_id=p_soignant_id;
+  IF NOT FOUND OR p_motif IS NULL OR char_length(btrim(p_motif)) NOT BETWEEN 20 AND 1000 THEN
+    RAISE EXCEPTION 'Décision ou motif de révocation invalide.' USING ERRCODE='23514';
+  END IF;
+  IF v_q.revoque_le IS NOT NULL THEN RETURN public.fn_admin_lire_qualification_medicale(p_soignant_id); END IF;
+  UPDATE private.qualifications_medicales SET revoque_le=now(),revoque_par=auth.uid(),motif_revocation=btrim(p_motif) WHERE id=v_q.id;
+  INSERT INTO public.journaux_audit(acteur_id,type_acteur,action,type_ressource,id_ressource,details)
+  VALUES(auth.uid(),'ADMIN','MODERATION_DOCUMENT','document',v_q.document_id,
+    jsonb_build_object('decision','REVOCATION_QUALIFICATION_APRES_INTERNAT','decision_id',v_q.id,'motif',btrim(p_motif)));
+  RETURN public.fn_admin_lire_qualification_medicale(p_soignant_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_revoquer_qualification_medicale"("p_soignant_id" "uuid", "p_decision_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") RETURNS "jsonb"
@@ -27077,6 +27202,37 @@ $$;
 ALTER FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE v_resultat jsonb;
+BEGIN
+  IF auth.uid() IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE='28000';
+  END IF;
+  IF p_accepte_internes IS NULL OR (p_accepte_internes AND (
+    p_profession_requise::text <> 'MEDECIN' OR NOT EXISTS (
+      SELECT 1 FROM public.specialites_medicales sm
+      WHERE sm.code=p_specialite_medicale_requise AND sm.code ~ '^SM[0-9]+$' AND sm.actif IS TRUE AND sm.profession_parent='MEDECIN'))) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Indiquez votre choix et la spécialité des internes acceptés.');
+  END IF;
+  INSERT INTO private.mission_internat_intent VALUES
+    (pg_backend_pid(),txid_current(),auth.uid(),NULL,p_accepte_internes,p_specialite_medicale_requise);
+  v_resultat := public.fn_creer_mission_multi_jours_v3(
+    p_intitule,p_description,p_profession_requise,p_service,p_taux_horaire_base,p_est_urgente,
+    p_niveau_urgence,p_mode_attribution,p_specialite_medicale_requise,p_accepte_non_specialises,
+    p_creneaux,p_type_contrat_recherche,p_mode_remuneration,p_retrocession_pct,p_nature_tva_prestation);
+  DELETE FROM private.mission_internat_intent
+    WHERE backend_pid=pg_backend_pid() AND transaction_id=txid_current();
+  RETURN v_resultat || jsonb_build_object('accepte_internes',p_accepte_internes);
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
@@ -32242,8 +32398,13 @@ BEGIN
     jsonb_typeof(p_donnees->'missionFormulaire') <> 'object'
     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_donnees->'missionFormulaire') k
       WHERE k NOT IN ('intitule','description','profession','specialite','service',
-        'tauxHoraire','estUrgente','niveauUrgence','modeAttribution','contratPreference','creneaux'))
+        'tauxHoraire','estUrgente','niveauUrgence','modeAttribution','contratPreference','creneaux','accepteInternes'))
   ) THEN RAISE EXCEPTION 'Brouillon de mission invalide.' USING ERRCODE='22023'; END IF;
+  IF (p_donnees->'missionFormulaire') ? 'accepteInternes' AND (
+    jsonb_typeof(p_donnees#>'{missionFormulaire,accepteInternes}') IS DISTINCT FROM 'boolean'
+    OR (p_donnees#>'{missionFormulaire,accepteInternes}' = 'true'::jsonb
+      AND p_donnees#>>'{missionFormulaire,profession}' IS DISTINCT FROM 'MEDECIN')
+  ) THEN RAISE EXCEPTION 'Choix des internes invalide dans le brouillon.' USING ERRCODE='22023'; END IF;
   UPDATE public.parcours_inscription SET donnees = donnees || p_donnees, modifie_le = now()
     WHERE user_id = auth.uid() RETURNING * INTO v_parcours;
   IF NOT FOUND THEN RAISE EXCEPTION 'Inscription introuvable.' USING ERRCODE = 'P0002'; END IF;
@@ -32573,10 +32734,9 @@ BEGIN
   END IF;
   SELECT * INTO v_soignant FROM public.soignants WHERE id = v_uid AND supprime_le IS NULL;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'error', 'profil_introuvable'); END IF;
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
-    COALESCE(v_mission.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    v_uid, v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'profession_incompatible');
   END IF;
@@ -36527,10 +36687,9 @@ BEGIN
    WHERE id = p_soignant_id AND supprime_le IS NULL;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Profil soignant introuvable'); END IF;
 
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
-    COALESCE(v_mission.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    p_soignant_id, v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN jsonb_build_object(
       'error', 'Ce soignant (' || v_soignant.profession::text ||
@@ -36721,6 +36880,7 @@ DECLARE
   v_statut public.statut_verification;
   v_coherence_nom boolean := p_coherence_nom;
   v_identite boolean;
+  v_code_licence text;
 BEGIN
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role requis' USING ERRCODE = '42501';
@@ -36836,6 +36996,12 @@ BEGIN
   END IF;
 
   IF p_licence_valide_jusqua IS NOT NULL OR p_licence_specialite IS NOT NULL THEN
+    v_code_licence := private.fn_code_specialite_licence_exact(p_licence_specialite);
+    IF v_code_licence IS NULL THEN
+      RAISE EXCEPTION 'Spécialité de licence non résolue : revue manuelle requise' USING ERRCODE='23514';
+    END IF;
+    p_resultat_ia := COALESCE(p_resultat_ia, '{}'::jsonb)
+      || jsonb_build_object('licence_remplacement_specialite_code', v_code_licence);
     IF v_statut IS DISTINCT FROM 'VERIFIE'
        OR v_doc.type_document IS DISTINCT FROM 'LICENCE_REMPLACEMENT'
        OR v_soignant.profession::text IS DISTINCT FROM 'MEDECIN'
@@ -39346,7 +39512,8 @@ BEGIN
       'etablissement_id',v_mission.etablissement_id,'etablissement_nom',v_nom,
       'statut',v_mission.statut,'mode_attribution',v_mission.mode_attribution,
       'nb_creneaux',v_mission.nb_creneaux,'profession_requise',v_mission.profession_requise,
-      'specialite_medicale_requise',v_mission.specialite_medicale_requise),
+      'specialite_medicale_requise',v_mission.specialite_medicale_requise,
+      'accepte_internes',v_mission.accepte_internes),
     'creneaux',COALESCE((SELECT jsonb_agg(jsonb_build_object(
       'id',mc.id,'mission_id',mc.mission_id,'debut',mc.debut,'fin',mc.fin,
       'est_pause',mc.est_pause,'type_creneau',mc.type_creneau) ORDER BY mc.debut,mc.id)
@@ -39358,6 +39525,7 @@ BEGIN
         'nom',left(COALESCE(s.nom,''),1)||'.','nom_anonymise',true,
         'profession',s.profession,'specialite_medicale',s.specialite_medicale,
         'type_exercice',s.type_exercice,'est_etudiant',s.est_etudiant,
+        'internat',private.fn_statut_internat_medical(s.id),
         'score_fiabilite',s.score_fiabilite,'total_missions_terminees',s.total_missions_terminees,
         'note_moyenne',s.note_moyenne,'nb_evaluations',s.nb_evaluations,
         'etudiant_details',s.etudiant_details,'tous_documents_valides',s.tous_documents_valides))
@@ -43458,6 +43626,41 @@ $$;
 ALTER FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_mission_etablissement_v5"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE v_resultat jsonb; v_m public.missions%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE='28000';
+  END IF;
+  SELECT * INTO v_m FROM public.missions WHERE id=p_mission_id FOR UPDATE;
+  IF NOT FOUND OR public.fn_a_permission_etablissement('missions',v_m.etablissement_id) IS NOT TRUE THEN
+    RETURN jsonb_build_object('success',false,'error','Mission introuvable ou accès refusé.');
+  END IF;
+  IF p_accepte_internes IS NULL OR (p_accepte_internes AND (
+    p_profession_requise::text <> 'MEDECIN' OR NOT EXISTS (
+      SELECT 1 FROM public.specialites_medicales sm
+      WHERE sm.code=p_specialite_medicale_requise AND sm.code ~ '^SM[0-9]+$' AND sm.actif IS TRUE AND sm.profession_parent='MEDECIN'))) THEN
+    RETURN jsonb_build_object('success',false,'error','Indiquez votre choix et la spécialité des internes acceptés.');
+  END IF;
+  INSERT INTO private.mission_internat_intent VALUES
+    (pg_backend_pid(),txid_current(),auth.uid(),p_mission_id,p_accepte_internes,p_specialite_medicale_requise);
+  v_resultat := public.fn_modifier_mission_etablissement_v4(
+    p_mission_id,p_intitule,p_description,p_service,p_profession_requise,p_taux_horaire_base,
+    p_est_urgente,p_niveau_urgence,p_mode_attribution,p_type_contrat_recherche,
+    p_specialite_medicale_requise,p_accepte_non_specialises,p_creneaux,p_nature_tva_prestation);
+  DELETE FROM private.mission_internat_intent
+    WHERE backend_pid=pg_backend_pid() AND transaction_id=txid_current();
+  RETURN v_resultat || jsonb_build_object('accepte_internes',p_accepte_internes);
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_modifier_mission_etablissement_v5"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text" DEFAULT NULL::"text", "p_finess" "text" DEFAULT NULL::"text", "p_adresse_rue" "text" DEFAULT NULL::"text", "p_adresse_ville" "text" DEFAULT NULL::"text", "p_adresse_code_postal" "text" DEFAULT NULL::"text", "p_adresse_departement" "text" DEFAULT NULL::"text", "p_email_contact" "text" DEFAULT NULL::"text", "p_telephone" "text" DEFAULT NULL::"text", "p_adresse_lat" numeric DEFAULT NULL::numeric, "p_adresse_lng" numeric DEFAULT NULL::numeric, "p_taux_majoration_nuit" numeric DEFAULT NULL::numeric, "p_taux_majoration_dimanche" numeric DEFAULT NULL::numeric, "p_taux_majoration_ferie" numeric DEFAULT NULL::numeric, "p_couleur_theme" "text" DEFAULT NULL::"text", "p_convention_collective" "text" DEFAULT NULL::"text", "p_mode_paiement_commission" "text" DEFAULT NULL::"text", "p_logo_url" "text" DEFAULT NULL::"text", "p_contrat_url" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -47515,22 +47718,19 @@ BEGIN
           AND m.statut IN (
             'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'ABSENCE', 'LITIGE'
           )
-          AND public.fn_soignant_compatible_mission(
-            s.profession,
-            s.specialite_medicale,
-            m.profession_requise,
-            m.specialite_medicale_requise,
-            COALESCE(m.accepte_non_specialises, true)
-          )
+          AND private.fn_compatibilite_profil_mission(
+    s.id, m.profession_requise, m.specialite_medicale_requise,
+    COALESCE(m.accepte_non_specialises, true), m.accepte_internes, m.fin_le
+  )
       )
-      OR NOT EXISTS (
+      OR (private.fn_statut_internat_medical(s.id)->>'statut' = 'NON_CONCERNE' AND NOT EXISTS (
         SELECT 1
         FROM public.missions m
         WHERE m.etablissement_id = p_etablissement_id
           AND m.statut IN (
             'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'ABSENCE', 'LITIGE'
           )
-      )
+      ))
     )
   ORDER BY
     CASE
@@ -47700,12 +47900,9 @@ BEGIN
     );
   END IF;
 
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession,
-    v_soignant.specialite_medicale,
-    v_mission.profession_requise,
-    v_mission.specialite_medicale_requise,
-    COALESCE(v_mission.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    auth.uid(), v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN jsonb_build_object(
       'error',
@@ -49046,10 +49243,9 @@ BEGIN
     FROM public.soignants
    WHERE id = p_soignant_id AND supprime_le IS NULL;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Soignant introuvable'); END IF;
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
-    COALESCE(v_mission.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    p_soignant_id, v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN jsonb_build_object(
       'error', 'Ce soignant n’est pas compatible avec la profession requise par la mission (' ||
@@ -51389,10 +51585,9 @@ BEGIN
   END IF;
   SELECT * INTO v_s FROM public.soignants WHERE id = p_soignant_id AND supprime_le IS NULL;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Soignant introuvable'); END IF;
-  IF NOT public.fn_soignant_compatible_mission(
-    v_s.profession, v_s.specialite_medicale,
-    v_m.profession_requise, v_m.specialite_medicale_requise,
-    COALESCE(v_m.accepte_non_specialises, true)
+  IF NOT private.fn_compatibilite_profil_mission(
+    p_soignant_id, v_m.profession_requise, v_m.specialite_medicale_requise,
+    COALESCE(v_m.accepte_non_specialises, true), false, p_fin
   ) THEN
     RETURN jsonb_build_object('error', 'Le soignant n’est pas compatible avec la profession requise par la mission modèle.');
   END IF;
@@ -52228,6 +52423,7 @@ BEGIN
       'nom_initiale', left(p.nom, 1) || '.',
       'profession', p.profession::text,
       'specialite_medicale', p.specialite_medicale,
+      'internat', private.fn_statut_internat_medical(p.id),
       'type_exercice', COALESCE(p.type_exercice, 'SALARIE'),
       'score_fiabilite', CASE
         WHEN COALESCE(p.total_missions_terminees, 0) >= 3
@@ -56798,7 +56994,7 @@ DECLARE
   v_type text;
   v_resolution jsonb;
 BEGIN
-  SELECT m.profession_requise, m.specialite_medicale_requise,
+  SELECT m.profession_requise, m.specialite_medicale_requise, m.accepte_internes, m.fin_le,
          COALESCE(m.accepte_non_specialises, true) AS accepte_non_specialises,
          COALESCE(m.type_contrat_recherche::text, 'SALARIE') AS type_contrat_recherche,
          m.remplacement_de_mission_id,
@@ -56854,10 +57050,9 @@ BEGIN
     RETURN false;
   END IF;
 
-  IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
-    v_mission.accepte_non_specialises
+  IF NOT private.fn_compatibilite_profil_mission(
+    p_soignant_id, v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    COALESCE(v_mission.accepte_non_specialises, true), v_mission.accepte_internes, v_mission.fin_le
   ) THEN
     RETURN false;
   END IF;
@@ -56965,7 +57160,8 @@ BEGIN
             'specialites', specialites,
             'disponible_urgence', disponible_urgence,
             'est_etudiant', est_etudiant,
-            'etudiant_details', etudiant_details
+            'etudiant_details', etudiant_details,
+            'internat', private.fn_statut_internat_medical(id)
         )
         FROM soignants WHERE id = p_soignant_id AND supprime_le IS NULL
     );
@@ -67843,6 +68039,7 @@ CREATE TABLE IF NOT EXISTS "public"."soignants" (
     "siret_liberal_preuve_identite_empreinte_sha256" "text",
     "regime_tva_honoraires" "text",
     "statut_tva_honoraires" "text",
+    "internat_medical_identifie" boolean DEFAULT false NOT NULL,
     CONSTRAINT "chk_rayon_raisonnable" CHECK ((("rayon_deplacement_km" >= 1) AND ("rayon_deplacement_km" <= 200))),
     CONSTRAINT "chk_telephone_format" CHECK ((("telephone" IS NULL) OR (("telephone")::"text" ~ '^\+?[0-9\s\-\.]{8,20}$'::"text"))),
     CONSTRAINT "soignants_coherence_identite_check" CHECK (("coherence_identite" = ANY (ARRAY['NON_VERIFIE'::"text", 'COHERENT'::"text", 'INCOHERENT'::"text", 'EN_ATTENTE_REVUE'::"text"]))),
@@ -70468,6 +70665,9 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     "revue_tva_motif" "text",
     "revue_tva_resolue_par" "uuid",
     "revue_tva_resolue_le" timestamp with time zone,
+    "accepte_internes" boolean DEFAULT false NOT NULL,
+    "accepte_internes_confirme_par" "uuid",
+    "accepte_internes_confirme_le" timestamp with time zone,
     CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (17568)::numeric)))),
     CONSTRAINT "chk_missions_dates" CHECK (("debut_le" < "fin_le")),
     CONSTRAINT "chk_prochain_type_scan" CHECK (("prochain_type_scan" = ANY (ARRAY['OUVERTURE'::"text", 'FERMETURE'::"text"]))),
@@ -75331,6 +75531,10 @@ CREATE OR REPLACE TRIGGER "trg_00_versionner_verifications_etablissement" BEFORE
 
 
 
+CREATE OR REPLACE TRIGGER "trg_01_appliquer_choix_internat" BEFORE INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_appliquer_choix_internat"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_code_secours_mission" BEFORE INSERT ON "public"."codes_secours_mission" FOR EACH ROW EXECUTE FUNCTION "public"."trg_exiger_conformite_code_pointage"();
 
 
@@ -76055,6 +76259,10 @@ CREATE OR REPLACE TRIGGER "trg_proteger_ecriture_document_soignant" BEFORE INSER
 
 
 
+CREATE OR REPLACE TRIGGER "trg_proteger_proprietaire_attestation_ordre" BEFORE UPDATE ON "public"."documents_soignants" FOR EACH ROW EXECUTE FUNCTION "private"."fn_proteger_proprietaire_attestation_ordre"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_proteger_provenance_iban_soignant" BEFORE UPDATE OF "iban_virement", "iban_titulaire", "iban_last4", "iban_source_document_id", "iban_identite_document_id", "iban_source_s3_cle", "iban_empreinte_sha256", "iban_verifie_le", "iban_titulaire_coherent" ON "public"."soignants" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_provenance_iban_soignant"();
 
 
@@ -76227,11 +76435,23 @@ CREATE OR REPLACE TRIGGER "trg_zz_geler_mission" BEFORE UPDATE ON "public"."miss
 
 
 
+CREATE OR REPLACE TRIGGER "trg_zz_guard_candidature_internat" BEFORE INSERT OR UPDATE ON "public"."candidatures" FOR EACH ROW EXECUTE FUNCTION "private"."fn_guard_candidature_internat"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_zz_identifier_parcours_interne" BEFORE INSERT OR UPDATE ON "public"."soignants" FOR EACH ROW EXECUTE FUNCTION "private"."fn_identifier_parcours_interne"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_zz_invalider_provenance_rib_etablissement" BEFORE UPDATE OF "rib_s3_key", "nom", "siret", "siret_raison_sociale", "finess", "finess_raison_sociale" ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "public"."fn_invalider_provenance_rib_etablissement"();
 
 
 
 CREATE OR REPLACE TRIGGER "trg_zzz_corriger_strategie_facturation" BEFORE UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_corriger_strategie_facturation_assignation"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_zzz_guard_nouvelle_attribution_internat" BEFORE INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_guard_nouvelle_attribution_internat"();
 
 
 
@@ -77859,6 +78079,10 @@ ALTER TABLE "public"."mission_series" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."missions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "missions_internat_restrictive" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING ("private"."fn_mission_visible_internat"("profession_requise", "specialite_medicale_requise", "accepte_internes", "fin_le", "soignant_assigne_id", "statut", "etablissement_id", "accepte_non_specialises"));
+
 
 
 CREATE POLICY "missions_masquer_etabs_test" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (((NOT ( SELECT "public"."est_soignant"() AS "est_soignant")) OR "private"."fn_comptes_meme_cohorte_test"(( SELECT "auth"."uid"() AS "uid"), "etablissement_id")));
@@ -80639,6 +80863,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_decider_preuve_etablissement"("p_etabli
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_decider_qualification_medicale"("p_soignant_id" "uuid", "p_document_id" "uuid", "p_preuve_empreinte" "text", "p_decision_attendue" "uuid", "p_specialite_code" "text", "p_numero_rpps_lu" "text", "p_inscription_confirmee" boolean, "p_qualification_confirmee" boolean, "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_decider_qualification_medicale"("p_soignant_id" "uuid", "p_document_id" "uuid", "p_preuve_empreinte" "text", "p_decision_attendue" "uuid", "p_specialite_code" "text", "p_numero_rpps_lu" "text", "p_inscription_confirmee" boolean, "p_qualification_confirmee" boolean, "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_decider_qualification_medicale"("p_soignant_id" "uuid", "p_document_id" "uuid", "p_preuve_empreinte" "text", "p_decision_attendue" "uuid", "p_specialite_code" "text", "p_numero_rpps_lu" "text", "p_inscription_confirmee" boolean, "p_qualification_confirmee" boolean, "p_motif" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_decider_revue_manuelle"("p_revue_id" "uuid", "p_decision" "text", "p_motif" "text", "p_jeton_cas" "text", "p_confirmation" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_decider_revue_manuelle"("p_revue_id" "uuid", "p_decision" "text", "p_motif" "text", "p_jeton_cas" "text", "p_confirmation" "jsonb") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_admin_decider_revue_manuelle"("p_revue_id" "uuid", "p_decision" "text", "p_motif" "text", "p_jeton_cas" "text", "p_confirmation" "jsonb") TO "authenticated";
@@ -80741,6 +80971,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_kpi"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_admin_lever_suspension"("p_soignant_id" "uuid", "p_raison" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_lever_suspension"("p_soignant_id" "uuid", "p_raison" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_lever_suspension"("p_soignant_id" "uuid", "p_raison" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_lire_qualification_medicale"("p_soignant_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_lire_qualification_medicale"("p_soignant_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_lire_qualification_medicale"("p_soignant_id" "uuid") TO "authenticated";
 
 
 
@@ -81011,6 +81247,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_salarie"("p_litige_id" 
 REVOKE ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_revoquer_qualification_medicale"("p_soignant_id" "uuid", "p_decision_id" "uuid", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_revoquer_qualification_medicale"("p_soignant_id" "uuid", "p_decision_id" "uuid", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_revoquer_qualification_medicale"("p_soignant_id" "uuid", "p_decision_id" "uuid", "p_motif" "text") TO "authenticated";
 
 
 
@@ -81963,6 +82205,12 @@ GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "t
 REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) TO "authenticated";
 
 
 
@@ -83336,6 +83584,12 @@ GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission
 REVOKE ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v5"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v5"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v5"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text", "p_accepte_internes" boolean) TO "authenticated";
 
 
 
