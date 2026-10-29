@@ -398,6 +398,12 @@ name: Pointages natifs — simulation manuelle sans caméra ni GPS
 - assertVisible:
     id: presence-establishment-code
     text: Code de pointage 1 0 0 0 0 2
+- scrollUntilVisible:
+    element:
+      text: Code fictif relu en mémoire.
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
 - assertVisible: Code fictif relu en mémoire.
 - assertNotVisible:
     id: presence-detail-open-scan
