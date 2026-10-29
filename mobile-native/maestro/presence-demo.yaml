@@ -407,6 +407,18 @@ name: Pointages natifs — simulation manuelle sans caméra ni GPS
 - assertVisible: Code fictif relu en mémoire.
 - assertNotVisible:
     id: presence-detail-open-scan
+# Android clips an accessibility node to the ScrollView viewport. Its QR node
+# can look fully visible to Maestro while the pixels remain behind the header.
+# Re-enter from the top, as for the initial QR, before decoding the screenshot.
+- scrollUntilVisible:
+    element:
+      id: presence-detail-title
+    direction: UP
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: presence-detail-title
+    text: Mission B fictive
 - scrollUntilVisible:
     element:
       id: presence-establishment-qr
