@@ -11,6 +11,9 @@ for (const profession of ['AS', 'MEDECIN'] as const) {
     const aideSoignant = profession === 'AS';
     const mode = aideSoignant ? 'SALARIE' : 'LIBERAL';
     Object.assign(state.soignant, { profession, est_etudiant: true, type_exercice: mode });
+    if (!aideSoignant) Object.assign(state.soignant, { internat: {
+      statut: 'VERIFIE', specialite_code: 'SM01', specialite_label: 'Médecine générale', valide_jusqua: '2026-10-31',
+    } });
     Object.assign(state.mission, {
       intitule: `Candidature étudiant ${profession} — simulation`, profession_requise: profession,
       type_contrat_recherche: mode,
@@ -79,6 +82,10 @@ for (const profession of ['AS', 'MEDECIN'] as const) {
     await page.goto(`/etablissement/missions/${ids.mission}`);
     await expect(page.getByRole('heading', { name: state.mission.intitule, exact: true })).toBeVisible();
     await expect(page.getByText(`"Candidature fictive étudiant ${profession}"`, { exact: true })).toBeVisible();
+    if (!aideSoignant) {
+      await expect(page.getByTestId('internat-status')).toContainText('Interne · licence vérifiée');
+      await expect(page.getByTestId('internat-status')).toContainText('Spécialité autorisée : Médecine générale');
+    }
     await page.getByRole('button', { name: 'Accepter cette candidature', exact: true }).click();
     const dialogue = page.getByRole('dialog', { name: 'Confirmer l’acceptation', exact: true });
     await expect(dialogue).toBeVisible();
@@ -96,6 +103,8 @@ for (const profession of ['AS', 'MEDECIN'] as const) {
     } else {
       await expect(attestation).toHaveCount(0);
       await expect(dialogue).not.toContainText('temporairement comme aide-soignant');
+      await expect(dialogue.getByTestId('internat-status')).toContainText('Interne · licence vérifiée');
+      await expect(dialogue.getByTestId('internat-status')).toContainText('31/10/2026');
       await preuve(page, 'candidature-interne-medecin-sans-attestation-as', info);
     }
     await expect(confirmer).toBeEnabled();

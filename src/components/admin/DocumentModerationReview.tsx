@@ -1,3 +1,4 @@
+import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Check, Eye, FileCheck2, ShieldCheck, UserRound, X } from 'lucide-react';
 
@@ -333,6 +334,7 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
   const [formation, setFormation] = useState(aiText(analysis, 'scolarite_formation'));
   const [anneeValidee, setAnneeValidee] = useState(String(analysis?.scolarite_annee_validee ?? ''));
   const [specialiteLicence, setSpecialiteLicence] = useState(aiText(analysis, 'licence_remplacement_specialite'));
+  const [specialiteLicenceCode, setSpecialiteLicenceCode] = useState(aiText(analysis, 'licence_remplacement_specialite_code'));
   const [employeur, setEmployeur] = useState(aiText(analysis, 'employeur_extrait'));
   const [periodeDebut, setPeriodeDebut] = useState(aiText(analysis, 'periode_debut_extraite'));
   const [periodeFin, setPeriodeFin] = useState(aiText(analysis, 'periode_fin_extraite'));
@@ -351,11 +353,11 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
     if (document.type_document === 'RIB') return iban.replace(/\s/g, '').length >= 15;
     if (document.type_document === 'RPPS_ADELI') return Boolean(typeIdentifiant && numeroProfessionnel);
     if (document.type_document === 'ATTESTATION_SCOLARITE') return Boolean(formation && anneeValidee && dateEmission);
-    if (document.type_document === 'LICENCE_REMPLACEMENT') return Boolean(specialiteLicence && dateEmission && dateExpiration);
+    if (document.type_document === 'LICENCE_REMPLACEMENT') return Boolean(specialiteLicence.trim() && specialiteLicenceCode && dateEmission && dateExpiration);
     if (TYPES_HEURES.has(document.type_document)) return Boolean(employeur && periodeDebut && periodeFin && heures);
     if (document.exige_expiration) return Boolean(dateExpiration);
     return true;
-  }, [anneeValidee, dateEmission, dateExpiration, dateNaissance, document.exige_expiration, document.type_document, employeur, formation, heures, iban, numeroProfessionnel, periodeDebut, periodeFin, professionCertifiee, specialiteLicence, typeIdentifiant]);
+  }, [anneeValidee, dateEmission, dateExpiration, dateNaissance, document.exige_expiration, document.type_document, employeur, formation, heures, iban, numeroProfessionnel, periodeDebut, periodeFin, professionCertifiee, specialiteLicence, specialiteLicenceCode, typeIdentifiant]);
 
   const canSubmit = Boolean(
     document.soignant
@@ -396,6 +398,7 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
           ? conditionsScolarite
           : null,
         licence_remplacement_specialite: specialiteLicence || null,
+        licence_remplacement_specialite_code: specialiteLicenceCode || null,
         employeur_extrait: employeur || null,
         periode_debut_extraite: periodeDebut || null,
         periode_fin_extraite: periodeFin || null,
@@ -432,8 +435,8 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
 
         <SpecificValidationFields
           document={document}
-          values={{ dateNaissance, dateEmission, dateExpiration, professionCertifiee, diplomeEtranger, typeIdentifiant, numeroProfessionnel, iban, formation, anneeValidee, specialiteLicence, employeur, periodeDebut, periodeFin, heures }}
-          setters={{ setDateNaissance, setDateEmission, setDateExpiration, setProfessionCertifiee, setDiplomeEtranger, setTypeIdentifiant, setNumeroProfessionnel, setIban, setFormation, setAnneeValidee, setSpecialiteLicence, setEmployeur, setPeriodeDebut, setPeriodeFin, setHeures }}
+          values={{ dateNaissance, dateEmission, dateExpiration, professionCertifiee, diplomeEtranger, typeIdentifiant, numeroProfessionnel, iban, formation, anneeValidee, specialiteLicence, specialiteLicenceCode, employeur, periodeDebut, periodeFin, heures }}
+          setters={{ setDateNaissance, setDateEmission, setDateExpiration, setProfessionCertifiee, setDiplomeEtranger, setTypeIdentifiant, setNumeroProfessionnel, setIban, setFormation, setAnneeValidee, setSpecialiteLicence, setSpecialiteLicenceCode, setEmployeur, setPeriodeDebut, setPeriodeFin, setHeures }}
           loading={loading}
         />
 
@@ -479,7 +482,7 @@ type Values = {
   dateNaissance: string; dateEmission: string; dateExpiration: string;
   professionCertifiee: string; diplomeEtranger: boolean; typeIdentifiant: string;
   numeroProfessionnel: string; iban: string; formation: string; anneeValidee: string;
-  specialiteLicence: string; employeur: string; periodeDebut: string;
+  specialiteLicence: string; specialiteLicenceCode: string; employeur: string; periodeDebut: string;
   periodeFin: string; heures: string;
 };
 
@@ -489,7 +492,7 @@ type Setters = {
   setDiplomeEtranger: (value: boolean) => void; setTypeIdentifiant: (value: string) => void;
   setNumeroProfessionnel: (value: string) => void; setIban: (value: string) => void;
   setFormation: (value: string) => void; setAnneeValidee: (value: string) => void;
-  setSpecialiteLicence: (value: string) => void; setEmployeur: (value: string) => void;
+  setSpecialiteLicence: (value: string) => void; setSpecialiteLicenceCode: (value: string) => void; setEmployeur: (value: string) => void;
   setPeriodeDebut: (value: string) => void; setPeriodeFin: (value: string) => void;
   setHeures: (value: string) => void;
 };
@@ -540,7 +543,11 @@ function SpecificValidationFields({ document, values, setters, loading }: { docu
   );
   if (type === 'LICENCE_REMPLACEMENT') return (
     <section className="grid gap-3 sm:grid-cols-3" aria-label="Contrôle de la licence de remplacement">
-      <Field label="Spécialité / DES *"><Input value={values.specialiteLicence} onChange={(e) => setters.setSpecialiteLicence(e.target.value)} disabled={loading} /></Field>
+      <Field label="Mention de spécialité / DES lue sur la licence *"><Input value={values.specialiteLicence} onChange={(e) => setters.setSpecialiteLicence(e.target.value)} disabled={loading} /></Field>
+      <Field label="Spécialité autorisée — référentiel *">
+        <SelectSpecialiteMedicale value={values.specialiteLicenceCode} onChange={setters.setSpecialiteLicenceCode} professionParent="MEDECIN" disabled={loading} placeholder="Sélectionnez la correspondance exacte" />
+        <p className="mt-1 text-xs text-muted-foreground">Choisissez uniquement la spécialité portée par la licence. Sans correspondance exacte, conservez la revue en attente ; la déclaration du profil ne constitue pas une preuve.</p>
+      </Field>
       <Field label="Date d’émission *"><Input type="date" value={values.dateEmission} onChange={(e) => setters.setDateEmission(e.target.value)} disabled={loading} /></Field>
       <Field label="Date d’expiration *"><Input type="date" value={values.dateExpiration} onChange={(e) => setters.setDateExpiration(e.target.value)} disabled={loading} /></Field>
     </section>

@@ -29,6 +29,7 @@ import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUplo
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { urlCallbackPublique } from '@/lib/nativeLinks';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { QualificationMedicaleReview } from '@/components/admin/QualificationMedicaleReview';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();
@@ -567,6 +568,9 @@ export default function AdminDetailUtilisateur() {
                     />
                   </label>
                 </div>
+                {soignant?.profession === 'MEDECIN' && soignant?.internat_medical_identifie === true && etatDocuments === 'ok' && (
+                  <div className="mb-4"><QualificationMedicaleReview key={id} soignantId={id!} /></div>
+                )}
                 {etatDocuments === 'erreur' ? (
                   <DocumentsIndisponibles onReessayer={() => void charger()} />
                 ) : documents.length === 0 ? (

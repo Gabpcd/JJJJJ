@@ -1,3 +1,4 @@
+import { documentsComplementairesVisibles } from '@/lib/documents-complementaires';
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -879,19 +880,19 @@ export function DocumentsSoignantContent() {
         );
       })()}
 
-      {/* Documents complémentaires — étudiant / interne faisant fonction.
-          Masqué si RPPS/ADELI vérifié : profession déjà reconnue, le « faisant
-          fonction » étudiant / la licence de remplacement n'ont plus lieu d'être
-          (cohérent avec le masquage du diplôme et de l'autorisation d'exercice). */}
-      {user && !(soignant?.rpps_verifie || soignant?.adeli_verifie) && (() => {
+      {/* Le RPPS vérifié ne dispense pas un interne de sa licence. */}
+      {user && (() => {
+        const visibles = documentsComplementairesVisibles(soignant);
+        if (!visibles.scolarite && !visibles.licence && !visibles.qualification) return null;
         const docScol = mesDocuments.find((d) => d.type_document === 'ATTESTATION_SCOLARITE');
         const statScol = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
         const docLic = mesDocuments.find((d) => d.type_document === 'LICENCE_REMPLACEMENT');
+        const docOrdre = mesDocuments.find((d) => d.type_document === 'CARTE_ORDRE');
         const statLic = docLic ? STATUTS_VERIFICATION[docLic.statut_verification as string] : null;
         return (
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Étudiant / interne en santé</p>
-            <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+            {visibles.scolarite && <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
                 <p className="text-xs text-muted-foreground">
@@ -905,8 +906,8 @@ export function DocumentsSoignantContent() {
               <button onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')} className="btn-primary min-h-[44px] shrink-0 px-3 py-2 text-xs">
                 {docScol ? 'Remplacer' : '+ Téléverser'}
               </button>
-            </div>
-            <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+            </div>}
+            {visibles.licence && <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🩺 Licence de remplacement (interne en médecine)</p>
                 <p className="text-xs text-muted-foreground">
@@ -920,7 +921,15 @@ export function DocumentsSoignantContent() {
               <button onClick={() => setTeleversementType('LICENCE_REMPLACEMENT')} className="btn-primary min-h-[44px] shrink-0 px-3 py-2 text-xs">
                 {docLic ? 'Remplacer' : '+ Téléverser'}
               </button>
-            </div>
+            </div>}
+            {visibles.qualification && <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">Inscription à l’Ordre après l’internat</p>
+                <p className="text-xs text-muted-foreground">Tu es désormais médecin inscrit à l’Ordre ? Ajoute l’attestation précisant ta qualification. L’équipe vérifiera cette preuve pour mettre à jour ton parcours.</p>
+                {docOrdre && <p className="text-xs text-muted-foreground break-words">{docOrdre.nom_fichier} · {STATUTS_VERIFICATION[docOrdre.statut_verification as string]?.label || 'Statut à actualiser'}</p>}
+              </div>
+              <button onClick={() => setTeleversementType('CARTE_ORDRE')} className="btn-primary min-h-[44px] shrink-0 px-3 py-2 text-xs">{docOrdre ? 'Remplacer l’attestation' : '+ Ajouter l’attestation'}</button>
+            </div>}
           </div>
         );
       })()}

@@ -1,3 +1,4 @@
+import { resolveLicenseSpecialty } from '../_shared/licence-specialite.ts';
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 import { appelerAnthropic } from "../_shared/anthropic.ts";
@@ -522,7 +523,7 @@ Deno.serve(async (req) => {
       MEDECINE_TRAVAIL: "Attestation d'aptitude de la médecine du travail",
       FORMATION_OBLIGATOIRE: "Certificat de formation obligatoire",
       AUTRE: "Autre justificatif professionnel",
-      CARTE_ORDRE: "Carte professionnelle délivrée par un ordre de santé",
+      CARTE_ORDRE: "Carte professionnelle ou attestation d'inscription délivrée par un ordre de santé",
       ATTESTATION_CPAM: "Attestation d'inscription ou de conventionnement CPAM",
       NOTE_HONORAIRES: "Note d'honoraires",
       ATTESTATION_3200H: "Attestation justifiant des heures d'exercice professionnel",
@@ -1143,7 +1144,16 @@ Analyse ce document et vérifie sa conformité.`;
       const specialiteLicence = typeof analysis.licence_remplacement_specialite === "string"
         ? analysis.licence_remplacement_specialite.trim().slice(0, 200)
         : "";
-      if (soignant.profession !== "MEDECIN") {
+      const { data: medicalSpecialties, error: specialtyReadError } = await supabase
+        .from("specialites_medicales").select("code,label")
+        .eq("actif", true).eq("profession_parent", "MEDECIN");
+      const specialtyCode = specialtyReadError ? null
+        : resolveLicenseSpecialty(specialiteLicence, medicalSpecialties);
+      analysis.licence_remplacement_specialite_code = specialtyCode;
+      if (!specialtyCode) {
+        verdictFinal = "EN_ATTENTE";
+        motifRejet = "La spécialité de la licence nécessite une correspondance vérifiée avec le référentiel — revue manuelle requise.";
+      } else if (soignant.profession !== "MEDECIN") {
         verdictFinal = "EN_ATTENTE";
         motifRejet = "Une licence de remplacement médical ne peut valider qu'un profil médecin — vérification manuelle requise.";
       } else if (!dateEmission || !dateExpiration) {

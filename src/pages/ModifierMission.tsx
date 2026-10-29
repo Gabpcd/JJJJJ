@@ -24,7 +24,7 @@ export default function ModifierMission() {
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence,
           mode_attribution, type_contrat_recherche,
-          specialite_medicale_requise, accepte_non_specialises,
+          specialite_medicale_requise, accepte_non_specialises, accepte_internes,
           nb_creneaux, statut, nature_tva_prestation
         `).eq('id', id).single(),
         supabase

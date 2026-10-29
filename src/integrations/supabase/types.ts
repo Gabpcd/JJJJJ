@@ -4474,6 +4474,9 @@ export type Database = {
       }
       missions: {
         Row: {
+          accepte_internes: boolean
+          accepte_internes_confirme_par: string | null
+          accepte_internes_confirme_le: string | null
           absence_sans_prevenir: boolean
           accepte_non_specialises: boolean | null
           annulee_le: string | null
@@ -4580,6 +4583,9 @@ export type Database = {
           type_paiement_soignant: string | null
         }
         Insert: {
+          accepte_internes?: boolean
+          accepte_internes_confirme_par?: string | null
+          accepte_internes_confirme_le?: string | null
           absence_sans_prevenir?: boolean
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
@@ -4686,6 +4692,9 @@ export type Database = {
           type_paiement_soignant?: string | null
         }
         Update: {
+          accepte_internes?: boolean
+          accepte_internes_confirme_par?: string | null
+          accepte_internes_confirme_le?: string | null
           absence_sans_prevenir?: boolean
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
@@ -7222,6 +7231,7 @@ export type Database = {
           iban_titulaire: string | null
           iban_virement: string | null
           id: string
+          internat_medical_identifie: boolean
           identite_verifiee: boolean | null
           lieu_naissance_commune: string | null
           lieu_naissance_departement: string | null
@@ -7376,6 +7386,7 @@ export type Database = {
           iban_titulaire?: string | null
           iban_virement?: string | null
           id?: string
+          internat_medical_identifie?: boolean
           identite_verifiee?: boolean | null
           lieu_naissance_commune?: string | null
           lieu_naissance_departement?: string | null
@@ -7530,6 +7541,7 @@ export type Database = {
           iban_titulaire?: string | null
           iban_virement?: string | null
           id?: string
+          internat_medical_identifie?: boolean
           identite_verifiee?: boolean | null
           lieu_naissance_commune?: string | null
           lieu_naissance_departement?: string | null
@@ -8363,6 +8375,28 @@ export type Database = {
         Returns: Json
       }
       fn_activer_liberal: { Args: never; Returns: Json }
+      fn_admin_lire_qualification_medicale: {
+        Args: { p_soignant_id: string }
+        Returns: Json
+      }
+      fn_admin_decider_qualification_medicale: {
+        Args: {
+          p_soignant_id: string
+          p_document_id: string
+          p_preuve_empreinte: string
+          p_decision_attendue: string | null
+          p_specialite_code: string
+          p_numero_rpps_lu: string
+          p_inscription_confirmee: boolean
+          p_qualification_confirmee: boolean
+          p_motif: string
+        }
+        Returns: Json
+      }
+      fn_admin_revoquer_qualification_medicale: {
+        Args: { p_soignant_id: string; p_decision_id: string; p_motif: string }
+        Returns: Json
+      }
       fn_admin_acquisition_canaux: { Args: { p_jours?: number }; Returns: Json }
       fn_admin_chercher_prospects: {
         Args: {
@@ -9043,6 +9077,27 @@ export type Database = {
       }
       fn_creer_mission_multi_jours_v3: {
         Args: {
+          p_accepte_non_specialises: boolean
+          p_creneaux: Json
+          p_description: string | null
+          p_est_urgente: boolean
+          p_intitule: string
+          p_mode_attribution: string
+          p_mode_remuneration: string
+          p_nature_tva_prestation: string | null
+          p_niveau_urgence: number
+          p_profession_requise: Database["public"]["Enums"]["type_profession"]
+          p_retrocession_pct: number | null
+          p_service: string | null
+          p_specialite_medicale_requise: string | null
+          p_taux_horaire_base: number
+          p_type_contrat_recherche: string
+        }
+        Returns: Json
+      }
+      fn_creer_mission_multi_jours_v4: {
+        Args: {
+          p_accepte_internes: boolean
           p_accepte_non_specialises: boolean
           p_creneaux: Json
           p_description: string | null
@@ -9915,6 +9970,26 @@ export type Database = {
       }
       fn_modifier_mission_etablissement_v4: {
         Args: {
+          p_accepte_non_specialises: boolean
+          p_creneaux: Json
+          p_description: string | null
+          p_est_urgente: boolean
+          p_intitule: string
+          p_mission_id: string
+          p_mode_attribution: string
+          p_nature_tva_prestation: string | null
+          p_niveau_urgence: number
+          p_profession_requise: Database["public"]["Enums"]["type_profession"]
+          p_service: string | null
+          p_specialite_medicale_requise: string | null
+          p_taux_horaire_base: number
+          p_type_contrat_recherche: string
+        }
+        Returns: Json
+      }
+      fn_modifier_mission_etablissement_v5: {
+        Args: {
+          p_accepte_internes: boolean
           p_accepte_non_specialises: boolean
           p_creneaux: Json
           p_description: string | null

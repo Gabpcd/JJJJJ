@@ -1,0 +1,58 @@
+name: Internat — spécialité et qualification PostgreSQL 17
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/internat-pg17.yml'
+      - 'scripts/ci/internat-pg17.py'
+      - 'tests/fixtures/internat-live-full-closure-20261029.json'
+      - 'tests/fixtures/internat-live-admission-dependencies-20261029.json'
+      - 'supabase/migrations/**'
+      - 'supabase/schema/public.sql'
+      - 'supabase/functions/verify-document/**'
+      - 'supabase/functions/notif-match/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/internat-pg17.yml'
+      - 'scripts/ci/internat-pg17.py'
+      - 'tests/fixtures/internat-live-full-closure-20261029.json'
+      - 'tests/fixtures/internat-live-admission-dependencies-20261029.json'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/verify-document/**'
+      - 'supabase/functions/notif-match/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    name: Internat, rôles, preuves et admissions concurrentes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_DB: internat_temoin
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-ci-ephemere
+        ports: ['127.0.0.1:54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d internat_temoin"
+          --health-interval 5s --health-timeout 5s --health-retries 6
+    env:
+      JOLENE_INTERNAT_WITNESS: LOCAL_EPHEMERE
+      PGHOST: 127.0.0.1
+      PGPORT: '54329'
+      PGDATABASE: internat_temoin
+      PGUSER: postgres
+      PGPASSWORD: fixture-ci-ephemere
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Migration complète et scénarios sur base neuve sans fournisseur
+        run: python3 scripts/ci/internat-pg17.py
