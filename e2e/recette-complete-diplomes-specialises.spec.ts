@@ -321,6 +321,7 @@ for (const profession of ['IADE', 'IBODE']) {
     // conversation vide et affichage de l'interlocuteur. Aucune saisie, message,
     // signature ou scan ; les POST de contexte sont tracés, jamais effacés.
     const rpcsContexte = {
+      fn_contrat_signe_pour_pointage: { payload: { p_mission_id: idsEtablissement.mission }, reponse: () => false },
       fn_etat_pointage_mission: { payload: { p_mission_id: idsEtablissement.mission }, reponse: () => ({
         statut: mission.statut, intitule: mission.intitule, prochain_type_scan: 'ARRIVEE', nb_scans: 0,
         segment_ouvert: false, segments: [], code_pointage_actif: null, est_etab: true,

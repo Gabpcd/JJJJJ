@@ -18,7 +18,7 @@ final class NativePilotTests: XCTestCase {
             XCTFail("The runner must identify the prepared app and its Home icon explicitly")
             return
         }
-        // Each selected consultation, Documents or Contracts scenario has its own bounded budget.
+        // Each selected consultation, Documents, Contracts or Presence scenario has its own bounded budget.
         executionTimeAllowance = 600
     }
 
@@ -124,6 +124,181 @@ final class NativePilotTests: XCTestCase {
         runSignup()
     }
 
+
+    // Dedicated synthetic attendance runtime. The manual code, not the previously
+    // opened detail, selects the mission. No physical QR or GPS claim is made.
+    func testPresenceIphonePortrait() throws { runPresence(prefix: "iphone-portrait", landscape: false) }
+    func testPresenceIpadPortrait() throws { runPresence(prefix: "ipad-portrait", landscape: false) }
+    func testPresenceIpadLandscape() throws { runPresence(prefix: "ipad-paysage", landscape: true) }
+
+    private func runPresence(prefix: String, landscape: Bool) {
+        proofPrefix = prefix
+        prepareExpoGo()
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
+        require("Presence starts in the requested orientation") {
+            landscape ? self.app.frame.width > self.app.frame.height : self.app.frame.height > self.app.frame.width
+        }
+        assertSignedOutDemo()
+        tap("enter-demo")
+        assertMissionCount(30)
+        tap("tab-presence")
+        let list = element("presence-list-scroll")
+        let detail = element("presence-detail-scroll")
+        let scan = element("presence-scan-scroll")
+        require("The synthetic presence list is displayed") {
+            self.visible(list) && self.element("presence-demo-notice").exists
+        }
+        scrollTo(element("presence-mission-demo-presence-a"), in: list)
+        XCTAssertTrue(element("presence-mission-demo-presence-a").label.contains("Mission A fictive"))
+        record("\(prefix)-presences-liste")
+        tap("presence-mission-demo-presence-a")
+        require("The chosen detail is mission A") { self.element("presence-detail-title").label == "Mission A fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "0")
+        XCTAssertEqual(element("presence-state-label").label, "Aucune présence ouverte")
+        record("\(prefix)-presences-mission-avant")
+        scrollTo(element("presence-detail-open-scan"), in: detail)
+        tap("presence-detail-open-scan")
+        require("Manual attendance entry is mounted") { self.visible(scan) }
+        XCTAssertFalse(element("presence-open-camera").exists)
+        XCTAssertFalse(element("presence-gps-choice").exists)
+        enterPresenceCode("000000", in: scan)
+        require("A synthetic authentication refusal is explicit") { self.element("presence-rejected").exists }
+        scrollTo(element("presence-rejected"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("La connexion a été refusée avant l’enregistrement du pointage").exists)
+        XCTAssertFalse(element("presence-pending").exists)
+        XCTAssertFalse(element("presence-confirmed").exists)
+        record("\(prefix)-presences-auth-refusee")
+        scrollTo(element("presence-code-input"), in: scan)
+        XCTAssertTrue(element("presence-code-input").isEnabled, "A definitive refusal must not leave an uncertain journal")
+        enterPresenceCode("654321", in: scan)
+        require("The first synthetic write has an explicitly uncertain result") { self.element("presence-unconfirmed").exists }
+        scrollTo(element("presence-unconfirmed"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("Démonstration d’une réponse perdue").exists)
+        record("\(prefix)-presences-confirmation-incertaine")
+        scrollTo(element("presence-submit"), in: scan)
+        XCTAssertFalse(element("presence-submit").isEnabled, "The pending receipt must forbid a second scan")
+
+        tap("tab-explore")
+        require("The separate missions tab is usable") { self.visible(self.element("missions-list")) }
+        tap("tab-presence")
+        require("Tab return retains the attendance route") { self.visible(scan) }
+        XCUIDevice.shared.press(.home)
+        require("Presence actually entered background") {
+            self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
+        }
+        app.activate()
+        require("Presence resumes and rereads its pending receipt") { self.visible(scan) && self.element("presence-pending").exists }
+        scrollTo(element("presence-pending"), in: scan, downward: false)
+        XCTAssertFalse(element("presence-confirmed").exists, "Resume must not manufacture a successful scan")
+        XCTAssertTrue(textContaining("Ne saisissez pas de nouveau code").exists)
+        XCTAssertFalse(element("presence-code-input").isEnabled)
+        XCTAssertFalse(element("presence-submit").isEnabled)
+        record("\(prefix)-presences-reprise")
+        scrollTo(element("presence-reconcile"), in: scan)
+        tap("presence-reconcile")
+        require("Read-only reconciliation confirms the existing synthetic arrival") { self.element("presence-confirmed").exists }
+        scrollTo(element("presence-actual-mission"), in: scan, downward: false)
+        XCTAssertEqual(element("presence-actual-mission").label, "Mission B fictive", "The result must identify B despite opening A")
+        XCTAssertTrue(text("Simulation enregistrée").exists)
+        scrollTo(element("presence-confirmed-time"), in: scan)
+        XCTAssertTrue(text("Arrivée").exists)
+        XCTAssertEqual(element("presence-confirmed-time").label, "27 octobre 2026 à 11:00")
+        XCTAssertFalse(element("presence-pending").exists)
+        record("\(prefix)-presences-arrivee-relue")
+        scrollTo(element("presence-open-actual-mission"), in: scan)
+        tap("presence-open-actual-mission")
+        require("The result opens B, not the original A screen") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-state-label").label, "Présence ouverte")
+        XCTAssertEqual(element("presence-scan-count").label, "1", "Reconciliation and resume must not create another proof")
+        record("\(prefix)-presences-ouverte")
+        scrollTo(element("presence-detail-open-scan"), in: detail)
+        tap("presence-detail-open-scan")
+        enterPresenceCode("654321", in: scan)
+        require("The previous code is refused after rotation") { self.element("presence-rejected").exists }
+        scrollTo(element("presence-rejected"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("Ce code fictif est invalide ou a déjà été renouvelé").exists)
+        XCTAssertFalse(element("presence-confirmed").exists)
+        XCTAssertFalse(element("presence-pending").exists)
+        record("\(prefix)-presences-code-obsolete")
+        enterPresenceCode("100001", in: scan)
+        require("The renewed code confirms the synthetic departure") { self.element("presence-confirmed").exists }
+        scrollTo(element("presence-actual-mission"), in: scan, downward: false)
+        XCTAssertEqual(element("presence-actual-mission").label, "Mission B fictive")
+        scrollTo(element("presence-confirmed-time"), in: scan)
+        XCTAssertTrue(text("Départ").exists)
+        XCTAssertEqual(element("presence-confirmed-time").label, "27 octobre 2026 à 11:03")
+        record("\(prefix)-presences-depart-relu")
+        scrollTo(element("presence-open-actual-mission"), in: scan)
+        tap("presence-open-actual-mission")
+        require("Departure links to the same mission B") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-state-label").label, "Aucune présence ouverte")
+        XCTAssertEqual(element("presence-scan-count").label, "2")
+        scrollTo(element("presence-effective-demo-presence-effective-1"), in: detail)
+        XCTAssertTrue(text("27 octobre 2026 à 11:00").exists)
+        XCTAssertTrue(text("27 octobre 2026 à 11:03").exists)
+        XCTAssertFalse(text("Pas encore enregistré").exists)
+        record("\(prefix)-presences-cloturee")
+        signOut()
+        XCTAssertFalse(scan.exists)
+        XCTAssertFalse(detail.exists)
+
+        // The establishment has its own identity. It reads the shared synthetic
+        // mission world, never a fabricated UI-only counter or a real server.
+        scrollTo(element("enter-establishment-demo"), in: element("login-scroll"))
+        tap("enter-establishment-demo")
+        tap("tab-presence")
+        require("Establishment presence list is mounted") { self.visible(list) }
+        XCTAssertFalse(element("presence-open-scan").exists)
+        scrollTo(element("presence-mission-demo-presence-a"), in: list)
+        tap("presence-mission-demo-presence-a")
+        require("The unrelated mission A remains readable") { self.element("presence-detail-title").label == "Mission A fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "0", "Opening A must not attach B's pointages to A")
+        scrollTo(element("presence-establishment-code"), in: detail)
+        XCTAssertEqual(element("presence-establishment-code").label, "Code de pointage 1 2 3 4 5 6")
+        scrollTo(element("presence-establishment-qr"), in: detail)
+        require("The establishment QR is visible") { self.visible(self.element("presence-establishment-qr")) }
+        record("\(prefix)-presences-code-initial")
+        backGesture()
+        require("Return from A restores the establishment list") { self.visible(list) }
+        scrollTo(element("presence-mission-demo-presence-b"), in: list)
+        tap("presence-mission-demo-presence-b")
+        require("The establishment reads its mission B") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "2")
+        scrollTo(element("presence-establishment-code"), in: detail)
+        XCTAssertEqual(element("presence-establishment-code").label, "Code de pointage 1 0 0 0 0 2")
+        XCTAssertTrue(text("Code fictif relu en mémoire.").exists)
+        XCTAssertFalse(element("presence-detail-open-scan").exists)
+        scrollTo(element("presence-establishment-qr"), in: detail)
+        require("The renewed establishment QR is visible") { self.visible(self.element("presence-establishment-qr")) }
+        record("\(prefix)-presences-code-renouvele")
+        backGesture()
+        require("The native back gesture returns to the same establishment list position") {
+            self.visible(list) && self.visible(self.element("presence-mission-demo-presence-b"))
+        }
+        XCTAssertTrue(element("presence-mission-demo-presence-b").label.contains("En cours"))
+        record("\(prefix)-presences-retour-etablissement")
+        signOut()
+        XCTAssertFalse(element("presence-establishment-code").exists)
+        XCTAssertFalse(list.exists)
+    }
+
+    private func enterPresenceCode(_ code: String, in scan: XCUIElement) {
+        scrollTo(element("presence-code-input"), in: scan)
+        require("The journal allows a new explicit manual scan") { self.element("presence-code-input").isEnabled }
+        tap("presence-code-input")
+        element("presence-code-input").typeText(code)
+        XCTAssertEqual(element("presence-code-input").value as? String, code)
+        // A real ScrollView gesture dismisses the number pad; no programmatic UI reset.
+        if app.keyboards.firstMatch.exists { drag(scan, fromY: 0.8, toY: 0.55) }
+        require("The native keyboard is dismissed before confirmation") { !self.app.keyboards.firstMatch.exists }
+        scrollTo(element("presence-submit"), in: scan)
+        tap("presence-submit")
+    }
 
     // Each Contracts scenario starts in a fresh demo runtime with the explicit
     // EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO=1 flag. No provider is contacted.

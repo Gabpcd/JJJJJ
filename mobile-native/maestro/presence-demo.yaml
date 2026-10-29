@@ -1,0 +1,440 @@
+appId: ${APP_ID}
+name: Pointages natifs — simulation manuelle sans caméra ni GPS
+---
+# Fresh runtime with EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO=1.
+# No server, QR camera, GPS sensor or real attendance record is exercised here.
+- tapOn:
+    id: tab-presence
+- assertVisible:
+    id: presence-list-scroll
+- assertVisible:
+    id: presence-demo-notice
+- scrollUntilVisible:
+    element:
+      id: presence-mission-demo-presence-a
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: presence-mission-demo-presence-a
+    text: ".*Mission A fictive.*"
+- takeScreenshot: presences-liste
+- tapOn:
+    id: presence-mission-demo-presence-a
+- assertVisible:
+    id: presence-detail-title
+    text: Mission A fictive
+- scrollUntilVisible:
+    element:
+      id: presence-scan-count
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-scan-count
+    text: "0"
+- assertVisible:
+    id: presence-state-label
+    text: Aucune présence ouverte
+- takeScreenshot: presences-mission-avant
+- scrollUntilVisible:
+    element:
+      id: presence-detail-open-scan
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-detail-open-scan
+- assertVisible:
+    id: presence-scan-scroll
+- assertNotVisible:
+    id: presence-open-camera
+- assertNotVisible:
+    id: presence-gps-choice
+- scrollUntilVisible:
+    element:
+      id: presence-code-input
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-code-input
+- inputText: "000000"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: presence-submit
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-submit
+- scrollUntilVisible:
+    element:
+      id: presence-rejected
+    direction: UP
+    timeout: 15000
+- assertVisible: ".*La connexion a été refusée avant l’enregistrement du pointage.*"
+- assertNotVisible:
+    id: presence-pending
+- assertNotVisible:
+    id: presence-confirmed
+- takeScreenshot: presences-auth-refusee
+- scrollUntilVisible:
+    element:
+      id: presence-code-input
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-code-input
+    enabled: true
+- scrollUntilVisible:
+    element:
+      id: presence-code-input
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: presence-code-input
+- inputText: "654321"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: presence-submit
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-submit
+- scrollUntilVisible:
+    element:
+      id: presence-unconfirmed
+    direction: UP
+    timeout: 15000
+- assertVisible: ".*Démonstration d’une réponse perdue.*"
+- takeScreenshot: presences-confirmation-incertaine
+- scrollUntilVisible:
+    element:
+      id: presence-submit
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-submit
+    enabled: false
+# Switch tabs and background with a pending receipt; neither action resends a scan.
+- tapOn:
+    id: tab-explore
+- assertVisible:
+    id: missions-list
+- tapOn:
+    id: tab-presence
+- assertVisible:
+    id: presence-scan-scroll
+- pressKey: Home
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          stopApp: false
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - openLink: ${EXPO_URL}
+- extendedWaitUntil:
+    visible:
+      id: presence-scan-scroll
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: presence-pending
+    direction: UP
+    timeout: 15000
+- assertNotVisible:
+    id: presence-confirmed
+- assertVisible: ".*Ne saisissez pas de nouveau code.*"
+- takeScreenshot: presences-reprise
+- scrollUntilVisible:
+    element:
+      id: presence-reconcile
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-reconcile
+- scrollUntilVisible:
+    element:
+      id: presence-actual-mission
+    direction: UP
+    timeout: 15000
+- assertVisible:
+    id: presence-actual-mission
+    text: Mission B fictive
+- assertVisible: Simulation enregistrée
+- scrollUntilVisible:
+    element:
+      id: presence-confirmed-time
+    direction: DOWN
+    timeout: 15000
+- assertVisible: Arrivée
+- assertVisible:
+    id: presence-confirmed-time
+    text: "27 octobre 2026 à 11:00"
+- assertNotVisible:
+    id: presence-pending
+- takeScreenshot: presences-arrivee-relue
+- scrollUntilVisible:
+    element:
+      id: presence-open-actual-mission
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-open-actual-mission
+- assertVisible:
+    id: presence-detail-title
+    text: Mission B fictive
+- scrollUntilVisible:
+    element:
+      id: presence-scan-count
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-state-label
+    text: Présence ouverte
+- assertVisible:
+    id: presence-scan-count
+    text: "1"
+- takeScreenshot: presences-ouverte
+- scrollUntilVisible:
+    element:
+      id: presence-detail-open-scan
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-detail-open-scan
+- scrollUntilVisible:
+    element:
+      id: presence-code-input
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-code-input
+- inputText: "654321"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: presence-submit
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-submit
+- scrollUntilVisible:
+    element:
+      id: presence-rejected
+    direction: UP
+    timeout: 15000
+- assertVisible: ".*Ce code fictif est invalide ou a déjà été renouvelé.*"
+- assertNotVisible:
+    id: presence-confirmed
+- assertNotVisible:
+    id: presence-pending
+- takeScreenshot: presences-code-obsolete
+- scrollUntilVisible:
+    element:
+      id: presence-code-input
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-code-input
+- inputText: "100001"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: presence-submit
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-submit
+- scrollUntilVisible:
+    element:
+      id: presence-actual-mission
+    direction: UP
+    timeout: 15000
+- assertVisible:
+    id: presence-actual-mission
+    text: Mission B fictive
+- scrollUntilVisible:
+    element:
+      id: presence-confirmed-time
+    direction: DOWN
+    timeout: 15000
+- assertVisible: Départ
+- assertVisible:
+    id: presence-confirmed-time
+    text: "27 octobre 2026 à 11:03"
+- takeScreenshot: presences-depart-relu
+- scrollUntilVisible:
+    element:
+      id: presence-open-actual-mission
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: presence-open-actual-mission
+- assertVisible:
+    id: presence-detail-title
+    text: Mission B fictive
+- scrollUntilVisible:
+    element:
+      id: presence-scan-count
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-state-label
+    text: Aucune présence ouverte
+- assertVisible:
+    id: presence-scan-count
+    text: "2"
+- scrollUntilVisible:
+    element:
+      id: presence-effective-demo-presence-effective-1
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "27 octobre 2026 à 11:00"
+- assertVisible: "27 octobre 2026 à 11:03"
+- assertNotVisible: Pas encore enregistré
+- takeScreenshot: presences-cloturee
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- assertNotVisible:
+    id: presence-scan-scroll
+- assertNotVisible:
+    id: presence-detail-scroll
+- scrollUntilVisible:
+    element:
+      id: enter-establishment-demo
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: enter-establishment-demo
+- tapOn:
+    id: tab-presence
+- assertVisible:
+    id: presence-list-scroll
+- assertNotVisible:
+    id: presence-open-scan
+- scrollUntilVisible:
+    element:
+      id: presence-mission-demo-presence-a
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: presence-mission-demo-presence-a
+- assertVisible:
+    id: presence-detail-title
+    text: Mission A fictive
+- scrollUntilVisible:
+    element:
+      id: presence-scan-count
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-scan-count
+    text: "0"
+- scrollUntilVisible:
+    element:
+      id: presence-establishment-code
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-establishment-code
+    text: Code de pointage 1 2 3 4 5 6
+- scrollUntilVisible:
+    element:
+      id: presence-establishment-qr
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: presence-establishment-qr
+- takeScreenshot: presences-code-initial
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: presence-list-scroll
+- scrollUntilVisible:
+    element:
+      id: presence-mission-demo-presence-b
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: presence-mission-demo-presence-b
+- assertVisible:
+    id: presence-detail-title
+    text: Mission B fictive
+- scrollUntilVisible:
+    element:
+      id: presence-scan-count
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-scan-count
+    text: "2"
+- scrollUntilVisible:
+    element:
+      id: presence-establishment-code
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: presence-establishment-code
+    text: Code de pointage 1 0 0 0 0 2
+- assertVisible: Code fictif relu en mémoire.
+- assertNotVisible:
+    id: presence-detail-open-scan
+- scrollUntilVisible:
+    element:
+      id: presence-establishment-qr
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- assertVisible:
+    id: presence-establishment-qr
+- takeScreenshot: presences-code-renouvele
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: presence-list-scroll
+- assertVisible:
+    id: presence-mission-demo-presence-b
+    text: ".*Mission B fictive.*En cours.*"
+- takeScreenshot: presences-retour-etablissement
+- tapOn:
+    id: sign-out
+- tapOn: Quitter
+- assertVisible:
+    id: login-scroll
+- assertNotVisible:
+    id: presence-establishment-code
+- assertNotVisible:
+    id: presence-list-scroll

@@ -78,7 +78,8 @@ async function ouvrirLecteur(page: Page) {
   return dialog;
 }
 
-test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de l’ancien code', async ({ browser, context, page }, info) => {
+for (const permissionEtab of ['PROPRIETAIRE', 'POINTAGE_ONLY'] as const) {
+test(`QR réel — ${permissionEtab} — pixels établissement, un pointage, nouveau QR puis rejet de l’ancien code`, async ({ browser, context, page }, info) => {
   const simulation = creerActionsNationales();
   const { state, control } = simulation;
   state.contratCree = true;
@@ -90,6 +91,45 @@ test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de 
   // pointage accepté. Compléter seulement sa lecture d'état côté frontend.
   const installer = async (target: BrowserContext, role: RoleRecette) => {
     await simulation.installer(target, role);
+    if (role === 'ADMIN_ETABLISSEMENT' && permissionEtab === 'POINTAGE_ONLY') {
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' };
+      await target.route('**/rest/v1/rpc/fn_mes_permissions_etab', async route => {
+        const request = route.request();
+        if (!['127.0.0.1', 'localhost'].includes(new URL(request.url()).hostname)) return route.abort();
+        if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+        expect(request.method()).toBe('POST');
+        expect(request.headers().authorization).toBe('Bearer simulation-mission-ADMIN_ETABLISSEMENT');
+        const body = request.postDataJSON();
+        expect([null, ids.etablissement]).toContain(body.p_etablissement_id ?? null);
+        state.calls.push({ role, name: 'fn_mes_permissions_etab', method: request.method(), body });
+        return route.fulfill({ headers, json: { success: true, role: permissionEtab, etablissement_id: ids.etablissement,
+          permissions: Object.fromEntries(['gerer_equipe', 'supprimer_compte', 'profil_etab', 'paiement', 'lecture_paiement',
+            'missions', 'candidatures', 'contrats', 'pointage', 'rh', 'lecture', 'lecture_pointage'].map(name => [name,
+              ['pointage', 'lecture', 'lecture_pointage'].includes(name)])) } });
+      });
+      // RLS des contrats inchangée : aucune ligne n'est accessible à ce membre.
+      await target.route('**/rest/v1/contrats_mission?*', async route => {
+        const request = route.request();
+        if (!['127.0.0.1', 'localhost'].includes(new URL(request.url()).hostname)) return route.abort();
+        if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+        expect(request.method()).toBe('GET');
+        expect(request.headers().authorization).toBe('Bearer simulation-mission-ADMIN_ETABLISSEMENT');
+        state.calls.push({ role, name: 'contrats_mission', method: request.method(), body: null });
+        return route.fulfill({ headers, json: [] });
+      });
+      await target.route('**/rest/v1/rpc/fn_presences_detail_mission', async route => {
+        const request = route.request();
+        if (!['127.0.0.1', 'localhost'].includes(new URL(request.url()).hostname)) return route.abort();
+        if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+        expect(request.method()).toBe('POST');
+        expect(request.headers().authorization).toBe('Bearer simulation-mission-ADMIN_ETABLISSEMENT');
+        expect(request.postDataJSON()).toEqual({ p_mission_id: ids.mission });
+        state.calls.push({ role, name: 'fn_presences_detail_mission', method: request.method(), body: request.postDataJSON() });
+        return route.fulfill({ headers, json: { pointage_effectue: !!state.presence, heures_planifiees: state.mission.duree_heures,
+          pointage_arrivee: state.presence?.pointage_arrivee_le ?? null,
+          pointage_depart: state.presence?.pointage_depart_le ?? null, pauses: [], nb_pauses: 0 } });
+      });
+    }
     await target.route('**/rest/v1/rpc/fn_etat_pointage_mission', async route => {
       const request = route.request(); const url = new URL(request.url());
       if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
@@ -117,11 +157,23 @@ test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de 
   const lecturesE = () => state.calls.filter(call => call.name === 'fn_etat_pointage_mission' && call.role === 'ADMIN_ETABLISSEMENT').length;
   const formatCode = (code: string) => `${code.slice(0, 3)} ${code.slice(3)}`;
   try {
-    await etab.goto(`/etablissement/missions/${ids.mission}`);
+    await etab.goto(permissionEtab === 'POINTAGE_ONLY'
+      ? `/etablissement/presences/mission/${ids.mission}` : `/etablissement/missions/${ids.mission}`);
     const carte = etab.getByRole('heading', { name: 'Code de pointage', exact: true }).locator('..').locator('..');
     const qrE = carte.locator('svg[width="150"][height="150"]');
     const premierCode = control.codePointage;
     await expect(carte.getByText(formatCode(premierCode), { exact: true })).toBeVisible();
+    const codeRendu = await carte.getByText(formatCode(premierCode), { exact: true }).evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rect = element.getBoundingClientRect();
+      const parent = element.parentElement!.getBoundingClientRect();
+      const style = getComputedStyle(element.parentElement!);
+      return { lignes: range.getClientRects().length,
+        contenuVisible: rect.left >= parent.left + parseFloat(style.paddingLeft)
+          && rect.right <= parent.right - parseFloat(style.paddingRight) };
+    });
+    expect(codeRendu).toEqual({ lignes: 1, contenuVisible: true });
     await expect(qrE).toBeVisible();
     const premierSvg = await qrE.evaluate(svg => new XMLSerializer().serializeToString(svg));
     await info.attach('qr-etablissement-initial.svg', { body: premierSvg, contentType: 'image/svg+xml' });
@@ -186,6 +238,10 @@ test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de 
     await expect(carte.getByText('Segment en cours', { exact: true })).toHaveCount(0);
     await etab.reload();
     await expect(carte.getByText(formatCode(troisiemeCode), { exact: true })).toBeVisible();
+    expect(state.calls.some(call => call.role === 'ADMIN_ETABLISSEMENT' && call.name === 'fn_contrat_signe_pour_pointage')).toBe(true);
+    if (permissionEtab === 'POINTAGE_ONLY') {
+      expect(state.calls.filter(call => call.role === 'ADMIN_ETABLISSEMENT' && call.name === 'contrats_mission')).toEqual([]);
+    }
     const camera = await cameraStats(page);
     expect(camera.demandes).toBe(6);
     expect(camera.frames).toBeGreaterThan(0);
@@ -195,7 +251,7 @@ test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de 
     expect(scans()).toHaveLength(3);
     expect(state.unknown).toEqual([]); expect(state.errors).toEqual([]);
     await info.attach('preuve-decodage-reel-api-simulee', { body: JSON.stringify({
-      niveau: 'Html5Qrcode/ZXing réel ; images QRCodeSVG établissement ; caméra canvas et backend simulés',
+      niveau: 'Html5Qrcode/ZXing réel ; images QRCodeSVG établissement ; caméra canvas, permissions et backend simulés', permissionEtab,
       codes: [premierCode, secondCode, troisiemeCode],
       imagesSha256: [premierSvg, secondSvg].map(svg => createHash('sha256').update(svg).digest('hex')),
       scans: scans(), segments: state.segments, camera,
@@ -204,3 +260,4 @@ test('QR réel — pixels établissement, un pointage, nouveau QR puis rejet de 
     await etabContext.close();
   }
 });
+}

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyContractsHomeEvidence } from './contracts-home-oracle.mjs';
 import { readPngDimensions } from './png-dimensions.mjs';
+import { verifyPresenceQrCaptures } from './verify-presence-qr.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
@@ -33,6 +34,7 @@ const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
   EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: selectedScenario.documentScenarioFlag,
   EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: selectedScenario.contractScenarioFlag ?? '0',
+  EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO: selectedScenario.presenceScenarioFlag ?? '0',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
   EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', MAESTRO_CLI_NO_ANALYTICS: '1',
   MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
@@ -305,6 +307,7 @@ async function runIosXCTest(name, directory) {
     copyFileSync(resolve(attachments, matching[0].exportedFileName), resolve(captures, `${name}.png`));
   }
   verifyCaptureOrientation(captures, portrait ? 'PORTRAIT' : 'LANDSCAPE_LEFT', names);
+  if (selectedScenario.name === 'presence') verifyPresenceQrCaptures(captures, names);
   scenarios.push({ name, success: true, driver: 'XCTest' });
   console.log(`Parcours ${iosFamily} ${name} terminé : un test XCTest réussi et ${names.length} captures dans l’orientation attendue.`);
 }
@@ -413,6 +416,7 @@ try {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
     verifyCaptureOrientation(output, 'PORTRAIT', scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
+    if (selectedScenario.name === 'presence') verifyPresenceQrCaptures(output, scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
   }
   success = true;
   stage = 'complete';
