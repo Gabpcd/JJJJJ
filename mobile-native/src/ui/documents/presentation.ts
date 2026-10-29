@@ -1,3 +1,4 @@
+import { documentsComplementairesVisibles } from '../../../../src/lib/documents-complementaires';
 import { diplomeCompatibleProfession, TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '../../../../src/lib/documents';
 import type { CaregiverDocument, DocumentDossier, DocumentRequirement } from '../../workflows/documents/types';
 
@@ -45,14 +46,16 @@ export function documentPresentation(doc: CaregiverDocument, profession: string 
 export function documentRows(dossier: DocumentDossier): DocumentRequirement[] {
   const rows = dossier.requirements.filter(rule => !TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(rule.type_document));
   const unique = new Map(rows.map(row => [row.type_document, row]));
-  if (dossier.profile && !(dossier.profile.rpps_verifie || dossier.profile.adeli_verifie)) {
+  if (dossier.profile) {
+    const visibles = documentsComplementairesVisibles(dossier.profile);
     const extras = [
       ['ATTESTATION_SCOLARITE', 'L’analyse prépare ton dossier, puis l’équipe Jolene contrôle les crédits, stages, unités d’enseignement et attestations exigés avant d’ouvrir une pré-éligibilité.'],
       ['LICENCE_REMPLACEMENT', 'Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l’Ordre : elle est contrôlée avant tout accès aux remplacements de médecin.'],
+      ['CARTE_ORDRE', 'Tu es désormais médecin inscrit à l’Ordre ? Ajoute l’attestation précisant ta qualification pour que l’équipe mette à jour ton parcours après vérification.'],
     ];
-    for (const [type, description] of extras) if (!unique.has(type)) unique.set(type, {
+    for (const [type, description] of extras) if ((type === 'ATTESTATION_SCOLARITE' ? visibles.scolarite : type === 'LICENCE_REMPLACEMENT' ? visibles.licence : visibles.qualification) && !unique.has(type)) unique.set(type, {
       id: `additional-${type}`, profession: dossier.profile.profession ?? '', type_document: type, description,
-      a_expiration: true, duree_validite_mois: null, est_critique: false, type_exercice_requis: 'TOUS',
+      a_expiration: type !== 'CARTE_ORDRE', duree_validite_mois: null, est_critique: false, type_exercice_requis: 'TOUS',
     });
   }
   return [...unique.values()].sort((a, b) => Number(b.est_critique) - Number(a.est_critique));

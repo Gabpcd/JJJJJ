@@ -1,3 +1,4 @@
+import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { estimerCommissionEnCentimes } from '@/lib/commissionEstimee';
@@ -25,6 +26,8 @@ export interface RecapMissionData {
   intitule: string;
   description?: string | null;
   profession: string;
+  accepteInternes?: boolean;
+  specialiteMedicaleRequise?: string | null;
   service?: string | null;
   debutLe: string;
   finLe: string;
@@ -218,6 +221,13 @@ export function ModalRecapMission({
           </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-5">
+          {data.profession === 'MEDECIN' && <section aria-label="Accueil des internes" className="rounded-xl border border-border p-3 text-sm">
+            <p className="font-semibold">Internes : {data.accepteInternes === true ? 'acceptés sous contrôle des preuves' : 'non acceptés'}</p>
+            {data.accepteInternes === true && <div className="mt-2 space-y-2">
+              <SelectSpecialiteMedicale value={data.specialiteMedicaleRequise || ''} onChange={() => {}} professionParent="MEDECIN" disabled placeholder="Spécialité à confirmer" />
+              <p className="text-muted-foreground">La spécialité autorisée par la licence vérifiée doit correspondre exactement à cette spécialité.</p>
+            </div>}
+          </section>}
           {/* Section 1 — Infos mission */}
           <section className="space-y-2">
             <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">

@@ -1,3 +1,5 @@
+import { StatutInternat } from '@/components/internat/StatutInternat';
+import { presentationInternat } from '@/lib/internat-presentation';
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Clock, RefreshCw, Scale, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -411,7 +413,8 @@ export function ListeCandidatures({
                         {getLabelProfession(c.soignant.profession)}
                       </span>
                     )}
-                    {c.soignant?.est_etudiant && (
+                    <StatutInternat value={c.soignant?.internat} declareEtudiant={c.soignant?.est_etudiant === true} profession={c.soignant?.profession} />
+                    {c.soignant?.est_etudiant && c.soignant.profession !== 'MEDECIN' && (
                       <span className="badge-base text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300" title={c.soignant?.etudiant_details || 'Étudiant(e) en santé'}>
                         🎓 Étudiant{c.soignant?.etudiant_details ? ` · ${c.soignant.etudiant_details}` : ''}
                       </span>
@@ -422,6 +425,10 @@ export function ListeCandidatures({
                       </span>
                     )}
                     {(() => {
+                      // Le parcours d'internat affiche sa preuve serveur propre.
+                      // Le badge historique ne doit pas annoncer une dérogation
+                      // « non spécialisé » à partir de la spécialité déclarative.
+                      if (presentationInternat(c.soignant?.internat, c.soignant?.est_etudiant === true, c.soignant?.profession)) return null;
                       const badge = getCandidatMatchBadge(
                         c.soignant?.profession,
                         c.soignant?.specialite_medicale,
@@ -539,6 +546,7 @@ export function ListeCandidatures({
                   {candidatureAConfirmer?.soignant?.prenom} {candidatureAConfirmer?.soignant?.nom}
                 </p>
                 {missionIntitule && <p className="text-xs text-muted-foreground">{missionIntitule}</p>}
+                <StatutInternat value={candidatureAConfirmer?.soignant?.internat} declareEtudiant={candidatureAConfirmer?.soignant?.est_etudiant === true} profession={candidatureAConfirmer?.soignant?.profession} detail />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">

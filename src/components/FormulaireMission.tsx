@@ -1,4 +1,6 @@
 import { tauxCommissionEtablissement } from '@/lib/tauxCommissionEtablissement';
+import { ChoixInternesMission } from '@/components/internat/ChoixInternesMission';
+import { erreurChoixInternes } from '@/lib/internat-presentation';
 import { IntroductionMission } from '@/components/mission/IntroductionMission';
 import { useRole } from '@/hooks/useRole';
 import { chargerParcours, enregistrerParcours } from '@/lib/inscriptionProgressive';
@@ -35,6 +37,7 @@ const ModalRecapMission = lazy(() =>
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { contratServiceEstSigne } from '@/lib/contratEtablissement';
 import { cleJourParis, formatParis, instantJolene } from '@/lib/date-heure-paris';
@@ -100,6 +103,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [description, setDescription] = useState('');
   const [profession, setProfession] = useState('');
   const [specialiteMedicaleRequise, setSpecialiteMedicaleRequise] = useState('');
+  const [accepteInternes, setAccepteInternes] = useState(false);
+  const erreurInternes = erreurChoixInternes(profession, accepteInternes, specialiteMedicaleRequise);
+  useEffect(() => { if (profession !== 'MEDECIN') setAccepteInternes(false); }, [profession]);
   const [service, setService] = useState('');
   const [debutLe, setDebutLe] = useState('');
   const [finLe, setFinLe] = useState('');
@@ -214,6 +220,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         if (typeof f.description === 'string') setDescription(f.description);
         if (typeof f.profession === 'string') setProfession(f.profession);
         if (typeof f.specialite === 'string') setSpecialiteMedicaleRequise(f.specialite);
+        setAccepteInternes(f.profession === 'MEDECIN' && f.accepteInternes === true);
         if (typeof f.service === 'string') setService(f.service);
         if (typeof f.tauxHoraire === 'string') setTauxHoraire(f.tauxHoraire);
         setEstUrgente(f.estUrgente === true);
@@ -263,6 +270,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           setNiveauUrgence(data.niveau_urgence || 1);
           setSpecialiteMedicaleRequise(((data as any).specialite_medicale_requise as string) || '');
           setNatureTvaPrestation(((data as any).nature_tva_prestation as NatureTvaPrestation) || '');
+          setAccepteInternes(false);
           setDupliquerInfo(data.intitule);
         }
       });
@@ -309,6 +317,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           || extraireContratPreference(missionSource.description),
       );
       setSpecialiteMedicaleRequise(missionSource.specialite_medicale_requise || '');
+      setAccepteInternes(missionSource.profession_requise === 'MEDECIN' && missionSource.accepte_internes === true);
       setNatureTvaPrestation((missionSource.nature_tva_prestation as NatureTvaPrestation) || '');
     }
   }, [missionSource]);
@@ -399,6 +408,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   // Le pointage QR, la paie et la facturation gèrent déjà le multi-créneaux.
   const publierMissionMultiJours = async () => {
     if (!user || creneaux.length === 0) return;
+    if (erreurInternes) { afficherNotification({ type: 'erreur', message: erreurInternes }); return; }
     setPublicationEnCours(true);
     try {
       // Sanitize description — strip injected tags, puis ré-inject le tag contrat.
@@ -410,10 +420,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         fin: c.fin,
       }));
 
-      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours_v3' as any, {
+      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours_v4', {
         p_intitule: intitule,
         p_description: descriptionFinale || null,
-        p_profession_requise: profession,
+        p_profession_requise: profession as Database['public']['Enums']['type_profession'],
         p_service: service || null,
         p_taux_horaire_base: tauxCreation,
         p_est_urgente: estUrgente,
@@ -421,6 +431,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         p_mode_attribution: modeAttribution,
         p_specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
         p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
+        p_accepte_internes: profession === 'MEDECIN' && accepteInternes,
         p_creneaux: creneauxPayload as any,
         p_type_contrat_recherche: contratPreference,
         p_mode_remuneration: 'TAUX_HORAIRE',
@@ -478,6 +489,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       try {
         await enregistrerParcours({ brouillonMission: true, missionFormulaire: {
           intitule, description, profession, specialite: specialiteMedicaleRequise, service,
+          // Le formulaire entier remplace le précédent : l’absence efface aussi
+          // un ancien choix et reste compatible avec les brouillons historiques.
+          ...(profession === 'MEDECIN' && accepteInternes ? { accepteInternes: true } : {}),
           tauxHoraire, estUrgente, niveauUrgence, modeAttribution, contratPreference,
           creneaux: creneaux.map(({ debut, fin }) => ({ debut, fin })),
         } });
@@ -487,12 +501,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       } finally { setLoading(false); }
       return;
     }
+    if (erreurInternes) { afficherNotification({ type: 'erreur', message: erreurInternes }); return; }
     if (recurrenceBlocante || creneaux.length === 0 || !recurrenceValide) return;
     setModalRecapOuvert(true);
   };
 
   const enregistrerMission = async () => {
     if (!user) return;
+    if (erreurInternes) { afficherNotification({ type: 'erreur', message: erreurInternes }); return; }
     if (!modeEdition || !missionSource) {
       await publierMissionMultiJours();
       return;
@@ -502,12 +518,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     try {
       const cleanDescription = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
       const descriptionFinale = injecterContratTag(cleanDescription, contratPreference);
-      const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v4' as any, {
+      const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v5', {
         p_mission_id: missionSource.id,
         p_intitule: intitule,
         p_description: descriptionFinale || null,
         p_service: service || null,
-        p_profession_requise: profession,
+        p_profession_requise: profession as Database['public']['Enums']['type_profession'],
         p_taux_horaire_base: parseFloat(tauxHoraire),
         p_est_urgente: estUrgente,
         p_niveau_urgence: estUrgente ? niveauUrgence : 0,
@@ -515,6 +531,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         p_type_contrat_recherche: contratPreference,
         p_specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
         p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
+        p_accepte_internes: profession === 'MEDECIN' && accepteInternes,
         p_creneaux: creneaux.map((creneau) => ({
           debut: creneau.debut,
           fin: creneau.fin,
@@ -546,6 +563,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     && contratNonValide === false
     && !blocageVerification
     && !erreurFactureImpayee
+    && !erreurInternes
     && !!intitule
     && !!profession
     && tauxCreation > 0
@@ -561,6 +579,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     intitule,
     description,
     profession,
+    accepteInternes: profession === 'MEDECIN' && accepteInternes,
+    specialiteMedicaleRequise: profession === 'MEDECIN' ? specialiteMedicaleRequise : null,
     service,
     debutLe,
     finLe,
@@ -701,6 +721,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             </p>
           </div>
         )}
+
+        {profession === 'MEDECIN' && <ChoixInternesMission
+          checked={accepteInternes} onChange={setAccepteInternes}
+          disabled={loading || publicationEnCours || (modeEdition && missionSource?.statut !== 'OUVERTE')}
+          specialiteCode={specialiteMedicaleRequise} error={erreurInternes}
+        />}
 
         {/* Service — Lot 12 : liste normalisée (datalist) + saisie libre en repli.
             La fragmentation « Urgences/urgences/URG » dégrade la recherche et le

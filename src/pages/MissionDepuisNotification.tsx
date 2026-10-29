@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { ChargementPage } from '@/components/ChargementPage';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
+import type { InternatServeur } from '@/lib/internat-presentation';
 import { OUVERTURE_NOTIFICATION } from '@/lib/navigationNotification';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import type { CreneauPointage } from '@/lib/disponibilite-pointage';
@@ -17,7 +18,7 @@ type CandidatureHabilitee = Pick<Tables<'candidatures'>, 'id' | 'soignant_id' | 
   soignant: Pick<Tables<'soignants'>,
     'id' | 'prenom' | 'nom' | 'profession' | 'specialite_medicale' | 'type_exercice'
     | 'est_etudiant' | 'etudiant_details' | 'tous_documents_valides' | 'score_fiabilite'
-    | 'total_missions_terminees' | 'note_moyenne' | 'nb_evaluations'> & { nom_anonymise: true };
+    | 'total_missions_terminees' | 'note_moyenne' | 'nb_evaluations'> & { nom_anonymise: true; internat?: InternatServeur };
 };
 
 type Lecture = {

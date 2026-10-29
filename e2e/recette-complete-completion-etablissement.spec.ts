@@ -193,6 +193,7 @@ test('complétion depuis mission : brouillon conservé, garde publication, créa
   await expect(page).toHaveURL(/\/inscription\/completer$/);
   expect(state.mission).toBeNull();
   expect(parcours.donnees.missionFormulaire).toMatchObject({ intitule: titre, profession: 'IDE', contratPreference: 'SALARIE', tauxHoraire: '30', creneaux: [{ debut: '2030-10-15T05:00:00.000Z', fin: '2030-10-15T17:00:00.000Z' }] });
+  expect(parcours.donnees.missionFormulaire).not.toHaveProperty('accepteInternes');
   await remplirProfil(page);
   await page.getByRole('button', { name: 'Enregistrer mon établissement', exact: true }).click();
   await expect(page).toHaveURL(/\/etablissement\/missions\/creer\?inscription=1$/);
@@ -223,8 +224,12 @@ test('complétion depuis mission : brouillon conservé, garde publication, créa
   await expect(page.getByText(titre, { exact: true }).first()).toBeVisible();
   expect(parcours.donnees.brouillonMission).toBe(false);
   expect(state.mission).toMatchObject({ intitule: titre, debut_le: '2030-10-15T05:00:00.000Z', fin_le: '2030-10-15T17:00:00.000Z', total_brut: 360 });
-  expect(state.appels.filter(a => a.nom === 'fn_creer_mission_multi_jours_v3')).toHaveLength(2);
+  expect(state.appels.filter(a => a.nom === 'fn_creer_mission_multi_jours_v4')).toHaveLength(2);
+  // Prévisualisation précédant la migration : la lecture du planning reste possible.
+  state.schemaInternat = false;
   await allerA(page, `/etablissement/missions/${ids.mission}/modifier`);
+  await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue(titre);
+  state.schemaInternat = true;
   await page.getByLabel('Intitulé *', { exact: true }).fill(`${titre} — modifiée`);
   await page.getByRole('button', { name: 'Enregistrer les modifications', exact: true }).click();
   state.erreurModification = true;
@@ -237,8 +242,8 @@ test('complétion depuis mission : brouillon conservé, garde publication, créa
   await expect(page.getByRole('heading', { name: `${titre} — modifiée`, exact: true })).toBeVisible();
   await stabiliserLectures(page); await page.reload();
   await expect(page.getByRole('heading', { name: `${titre} — modifiée`, exact: true })).toBeVisible();
-  expect(state.appels.filter(a => a.nom === 'fn_modifier_mission_etablissement_v4')).toHaveLength(2);
-  expect(state.appels.filter(a => a.nom === 'fn_modifier_mission_etablissement_v4').at(-1)?.payload).toMatchObject({ p_mission_id: ids.mission, p_intitule: `${titre} — modifiée`, p_creneaux: [{ debut: '2030-10-15T05:00:00.000Z', fin: '2030-10-15T17:00:00.000Z' }] });
+  expect(state.appels.filter(a => a.nom === 'fn_modifier_mission_etablissement_v5')).toHaveLength(2);
+  expect(state.appels.filter(a => a.nom === 'fn_modifier_mission_etablissement_v5').at(-1)?.payload).toMatchObject({ p_mission_id: ids.mission, p_intitule: `${titre} — modifiée`, p_creneaux: [{ debut: '2030-10-15T05:00:00.000Z', fin: '2030-10-15T17:00:00.000Z' }] });
   await preuve(page, 'mission-publiee-modifiee-relue', info);
   expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]);
 });

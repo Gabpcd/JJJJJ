@@ -21,10 +21,15 @@ const suppressionEtablissementImputation = 'a43978aee09ef1ae4a157dbee9911b2f';
 const litigeSalarieSignature = 'fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)';
 const litigeSalarieAvant = '139ca12a3fcbff5bd5f65074d3242b53';
 const litigeSalarieApres = 'f07f34e05904c5f7c233a9477b6cdd1c';
+const internatMigration = read('supabase/migrations/20261029080849_internat_specialite_et_choix_etablissement.sql');
+const rechercheSignature = 'fn_rechercher_soignants_etab(text,text[],text,integer,text,numeric,integer,integer,boolean,boolean,text,integer,integer)';
+const rechercheAvant = '5a1fc4a4651f794ca8d95c3f6885195a';
+const rechercheApres = '62d0bf39f1600b82a93a522a411f1bd7';
 const successors = new Map([
   [suppressionSignature, { old_md5: suppressionAvant, definition_md5: suppressionApres }],
   [suppressionEtablissementSignature, { old_md5: suppressionEtablissementApres, definition_md5: suppressionEtablissementImputation }],
   [litigeSalarieSignature, { old_md5: litigeSalarieAvant, definition_md5: litigeSalarieApres }],
+  [rechercheSignature, { old_md5: rechercheAvant, definition_md5: rechercheApres }],
 ]);
 const replayEntries = entries.map(entry => successors.has(entry.signature)
   ? { ...entry, ...successors.get(entry.signature) }
@@ -115,8 +120,18 @@ test('imputation : le successeur litige salarié reste lié à sa preuve histori
   assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), name)), litigeSalarieApres);
 });
 
-test('seuls les trois successeurs explicites changent le manifeste historique', () => {
-  assert.deepEqual([...successors.keys()].sort(), [suppressionSignature, suppressionEtablissementSignature, litigeSalarieSignature].sort());
+test('la projection internat reste liée au corps LIVE de recherche et à son successeur exact', () => {
+  const name = 'fn_rechercher_soignants_etab';
+  const live = JSON.parse(read('tests/fixtures/internat-live-full-closure-20261029.json')).routines
+    .find(row => row.signature === rechercheSignature);
+  assert.equal(entries.find(entry => entry.signature === rechercheSignature).definition_md5, rechercheAvant);
+  assert.equal(md5(sourceBody(live.definition, name)), rechercheAvant);
+  assert.equal(md5(sourceBody(internatMigration, name)), rechercheApres);
+  assert.ok(internatMigration.includes(`oid='public.${rechercheSignature}'::regprocedure`));
+});
+
+test('seuls les quatre successeurs explicites changent le manifeste historique', () => {
+  assert.deepEqual([...successors.keys()].sort(), [suppressionSignature, suppressionEtablissementSignature, litigeSalarieSignature, rechercheSignature].sort());
   assert.deepEqual(replayEntries.filter(entry => !successors.has(entry.signature)), entries.filter(entry => !successors.has(entry.signature)));
   for (const entry of entries.filter(entry => successors.has(entry.signature))) {
     assert.deepEqual(replayEntries.find(replayed => replayed.signature === entry.signature), {

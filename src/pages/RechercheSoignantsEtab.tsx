@@ -13,6 +13,8 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
 import { normaliserFiltresRechercheSoignants, type FiltresRechercheSoignants as Filtres } from '@/lib/filtresRechercheSoignants';
+import { StatutInternat } from '@/components/internat/StatutInternat';
+import { presentationInternat, type InternatServeur } from '@/lib/internat-presentation';
 
 interface SoignantResultat {
   id: string;
@@ -20,6 +22,7 @@ interface SoignantResultat {
   nom_initiale: string;
   profession: string;
   specialite_medicale: string | null;
+  internat?: Partial<InternatServeur> | null;
   type_exercice: 'LIBERAL' | 'SALARIE' | 'MIXTE';
   score_fiabilite: number | null;
   note_moyenne: number | null;
@@ -412,6 +415,10 @@ function RechercheSoignantsEtabContent() {
 
 function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: SoignantResultat; onClick: () => void; etablissementId?: string }) {
   const initiales = `${s.prenom?.[0] ?? ''}${s.nom_initiale?.[0] ?? ''}`.toUpperCase() || 'SD';
+  const internat = presentationInternat(s.internat, false, s.profession);
+  // Sans projection médecin, ne pas présenter le champ brut comme une preuve.
+  const afficherSpecialiteMedicale = !internat
+    && (s.profession !== 'MEDECIN' || s.internat?.statut === 'NON_CONCERNE');
   return (
     <div className="card-base relative text-left transition-shadow hover:shadow-md">
       {etablissementId && (
@@ -441,11 +448,17 @@ function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: So
               </p>
               <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
                 <Briefcase className="h-3.5 w-3.5" /> {getLabelProfession(s.profession)}
-                {s.specialite_medicale && <span> · {s.specialite_medicale}</span>}
+                {afficherSpecialiteMedicale && s.specialite_medicale && <span> · {s.specialite_medicale}</span>}
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
           </div>
+
+          {internat && (
+            <div className="mt-2">
+              <StatutInternat value={s.internat} profession={s.profession} />
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
             {s.type_exercice && (

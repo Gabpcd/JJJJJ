@@ -20,13 +20,9 @@ export default function ModifierMission() {
     if (!id) return;
     (async () => {
       const [missionResult, creneauxResult] = await Promise.all([
-        supabase.from('missions').select(`
-          id, intitule, description, service, profession_requise,
-          debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence,
-          mode_attribution, type_contrat_recherche,
-          specialite_medicale_requise, accepte_non_specialises,
-          nb_creneaux, statut, nature_tva_prestation
-        `).eq('id', id).single(),
+        // La projection de la ligne reste lisible pendant le déploiement du
+        // nouveau champ ; les droits et le planning exact restent contrôlés.
+        supabase.from('missions').select('*').eq('id', id).single(),
         supabase
           .from('mission_creneaux')
           .select('id, mission_id, debut, fin, est_pause, type_creneau, ordre')

@@ -5,10 +5,11 @@ export const siretRecette = '90000000000001';
 export const nomRecette = 'Établissement de complétion — simulation';
 
 /** Extension explicite : seuls les endpoints du parcours peuvent écrire en mémoire. */
-export async function simulerCompletionEtablissement(page: Page) {
+export async function simulerCompletionEtablissement(page: Page, profession: 'IDE' | 'MEDECIN' = 'IDE') {
   const base = await simulerEtablissement(page, 'minimal');
   const { etat } = base;
   const state = {
+    schemaInternat: true,
     erreurInscription: false, erreurPublication: false, erreurModification: false,
     appels: [] as { nom: string; payload: Record<string, unknown> }[],
     profil: { ...etablissement, nom: nomRecette, siret: siretRecette, statut_verification: 'EN_ATTENTE', est_verifie: false, peut_publier_missions: false, contrat_service_signe: false, contrat_service_statut: 'NON_SIGNE' },
@@ -21,7 +22,7 @@ export async function simulerCompletionEtablissement(page: Page) {
     if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.fallback();
     const nom = url.pathname.split('/').pop()!;
     const endpoint = url.pathname.startsWith('/functions/v1/') && ['verify-siret', 'verify-finess', 'register-etablissement'].includes(nom)
-      || url.pathname.startsWith('/rest/v1/rpc/') && ['fn_mon_etablissement_complet', 'fn_creer_mission_multi_jours_v3', 'fn_modifier_mission_etablissement_v4'].includes(nom);
+      || url.pathname.startsWith('/rest/v1/rpc/') && ['fn_mon_etablissement_complet', 'fn_creer_mission_multi_jours_v4', 'fn_modifier_mission_etablissement_v5'].includes(nom);
     const table = url.pathname.startsWith('/rest/v1/') && ['etablissements', 'missions', 'mission_creneaux'].includes(nom);
     if (!endpoint && !table) return route.fallback();
     if ((endpoint && req.method() !== 'POST') || (table && !['GET', 'HEAD'].includes(req.method()))) {
@@ -44,18 +45,26 @@ export async function simulerCompletionEtablissement(page: Page) {
       }
       if (nom === 'fn_mon_etablissement_complet') return repondre(route, etat.mode === 'minimal' ? { error: 'Profil introuvable' } : state.profil);
       if (etat.mode !== 'complet' || state.profil.peut_publier_missions !== true || state.profil.contrat_service_signe !== true) return repondre(route, { success: false, error: 'VERIFICATION_INCOMPLETE', message: 'Votre établissement doit être vérifié avant publication.' });
-      if ((nom === 'fn_creer_mission_multi_jours_v3' && state.erreurPublication) || (nom === 'fn_modifier_mission_etablissement_v4' && state.erreurModification)) return repondre(route, { message: 'Enregistrement de mission temporairement indisponible.' }, 503);
+      if ((nom === 'fn_creer_mission_multi_jours_v4' && state.erreurPublication) || (nom === 'fn_modifier_mission_etablissement_v5' && state.erreurModification)) return repondre(route, { message: 'Enregistrement de mission temporairement indisponible.' }, 503);
       const creneaux = p.p_creneaux as { debut: string; fin: string }[];
-      if (!Array.isArray(creneaux) || creneaux.length !== 1 || !p.p_intitule || p.p_profession_requise !== 'IDE' || p.p_type_contrat_recherche !== 'SALARIE' || p.p_taux_horaire_base !== 30) return repondre(route, { success: false, error: 'PAYLOAD_RECETTE_INVALIDE' }, 400);
-      if (nom === 'fn_modifier_mission_etablissement_v4' && (!state.mission || p.p_mission_id !== ids.mission)) return repondre(route, { success: false, error: 'MISSION_INTROUVABLE' }, 404);
+      if (!Array.isArray(creneaux) || creneaux.length !== 1 || !p.p_intitule || p.p_profession_requise !== profession || p.p_type_contrat_recherche !== 'SALARIE' || p.p_taux_horaire_base !== 30 || typeof p.p_accepte_internes !== 'boolean') return repondre(route, { success: false, error: 'PAYLOAD_RECETTE_INVALIDE' }, 400);
+      if (p.p_accepte_internes && (profession !== 'MEDECIN' || p.p_specialite_medicale_requise !== 'SM01')) return repondre(route, { success: false, error: 'SPECIALITE_INTERNAT_RECETTE_INVALIDE' }, 400);
+      if (nom === 'fn_modifier_mission_etablissement_v5' && (!state.mission || p.p_mission_id !== ids.mission)) return repondre(route, { success: false, error: 'MISSION_INTROUVABLE' }, 404);
       const dureeHeures = creneaux.reduce((somme, c) => somme + (Date.parse(c.fin) - Date.parse(c.debut)) / 3_600_000, 0);
       if (!Number.isFinite(dureeHeures) || dureeHeures <= 0) return repondre(route, { success: false, error: 'CRENEAUX_RECETTE_INVALIDES' }, 400);
       state.mission = { ...mission, intitule: p.p_intitule, description: p.p_description, service: p.p_service, profession_requise: p.p_profession_requise, type_contrat_recherche: p.p_type_contrat_recherche, mode_attribution: p.p_mode_attribution, est_urgente: p.p_est_urgente, taux_horaire_base: p.p_taux_horaire_base, duree_heures: dureeHeures, total_brut: dureeHeures * Number(p.p_taux_horaire_base), nb_creneaux: creneaux.length, debut_le: creneaux[0].debut, fin_le: creneaux.at(-1)!.fin, etablissements: state.profil };
+      Object.assign(state.mission, { accepte_internes: p.p_accepte_internes, specialite_medicale_requise: p.p_specialite_medicale_requise, accepte_non_specialises: p.p_accepte_non_specialises });
       state.creneaux = creneaux.map((c, i) => ({ ...c, id: `creneau-completion-${i}`, mission_id: ids.mission, type_creneau: 'PREVISIONNEL', est_pause: false }));
       etat.donnees = true;
       return repondre(route, { success: true, mission_id: ids.mission });
     }
     let rows: Record<string, unknown>[] = nom === 'etablissements' ? etat.mode === 'complet' ? [state.profil] : [] : nom === 'missions' ? state.mission ? [state.mission] : [] : state.creneaux;
+    if (nom === 'missions' && !state.schemaInternat) {
+      if (url.searchParams.get('select')?.split(',').some(champ => champ.trim() === 'accepte_internes')) {
+        return repondre(route, { code: '42703', message: 'column missions.accepte_internes does not exist' }, 400);
+      }
+      rows = rows.map(({ accepte_internes: _choix, ...historique }) => historique);
+    }
     for (const key of ['id', 'etablissement_id', 'mission_id', 'statut', 'type_creneau', 'est_pause']) {
       const filtre = url.searchParams.get(key);
       if (filtre?.startsWith('eq.')) rows = rows.filter(r => String(r[key]) === filtre.slice(3));

@@ -1,3 +1,4 @@
+import { StatutInternat } from '@/components/internat/StatutInternat';
 import { AccesEtablissement } from '@/components/AccesEtablissement';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -181,6 +182,7 @@ function ProfilSoignantEtablissementContent() {
 
             <div className="card-base">
               <h2 className="font-semibold text-foreground mb-3">Informations professionnelles</h2>
+              <StatutInternat value={soignant.internat} declareEtudiant={soignant.est_etudiant === true} profession={soignant.profession} detail />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Profession</p>

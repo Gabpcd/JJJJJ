@@ -88,6 +88,15 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: "missing_soignant_or_mission" }, 400);
   }
 
+  // Un événement ancien ou mis en file ne doit pas proposer un profil dont
+  // l'éligibilité actuelle (dont licence + spécialité + opt-in) a changé.
+  const { data: eligible, error: eligibilityError } = await admin.rpc(
+    "fn_soignant_eligible_mission",
+    { p_soignant_id: soignantId, p_mission_id: missionId, p_exiger_documents: false },
+  );
+  if (eligibilityError) return jsonResponse(req, { error: "eligibility_unavailable" }, 503);
+  if (eligible !== true) return jsonResponse(req, { ok: true, skipped: "profile_no_longer_eligible" });
+
   // Récup mission + étab + soignant
   const { data: mission } = await admin
     .from("missions")
