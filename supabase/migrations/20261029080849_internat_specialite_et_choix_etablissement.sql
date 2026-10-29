@@ -436,6 +436,11 @@ BEGIN
       AND (NEW.statut IS DISTINCT FROM OLD.statut
         OR NEW.soignant_id IS DISTINCT FROM OLD.soignant_id
         OR NEW.mission_id IS DISTINCT FROM OLD.mission_id)) THEN RETURN NEW; END IF;
+  -- BEFORE précède le contrôle RLS : conserver son refus d'accès pour un
+  -- compte suspendu, sans le transformer en erreur de justificatif d'internat.
+  IF auth.uid() IS NOT NULL AND public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Compte suspendu, supprimé ou désactivé' USING ERRCODE='42501';
+  END IF;
   SELECT * INTO v_m FROM public.missions WHERE id=NEW.mission_id FOR SHARE;
   IF NOT FOUND THEN RETURN NEW; END IF; -- FK/couches existantes traitent l'absence.
   PERFORM private.fn_verrouiller_preuves_internat(NEW.soignant_id);
@@ -461,6 +466,9 @@ BEGIN
   IF NEW.soignant_assigne_id IS NULL THEN RETURN NEW; END IF;
   IF TG_OP='UPDATE' AND NEW.soignant_assigne_id IS NOT DISTINCT FROM OLD.soignant_assigne_id
     THEN RETURN NEW; END IF;
+  IF auth.uid() IS NOT NULL AND public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Compte suspendu, supprimé ou désactivé' USING ERRCODE='42501';
+  END IF;
   PERFORM private.fn_verrouiller_preuves_internat(NEW.soignant_assigne_id);
   -- Même frontière de snapshot que pour la candidature, après le verrou.
   SELECT private.fn_statut_internat_medical(NEW.soignant_assigne_id) INTO v_preuve;

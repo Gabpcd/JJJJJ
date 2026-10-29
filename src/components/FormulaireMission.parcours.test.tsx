@@ -138,7 +138,7 @@ describe('FormulaireMission — parcours de création critique', () => {
         return etablissement.promise;
       }
       if (fonction === 'fn_mode_exercice') return modeExercice.promise;
-      if (fonction === 'fn_creer_mission_multi_jours_v3') {
+      if (fonction === 'fn_creer_mission_multi_jours_v4') {
         return Promise.resolve({ data: { success: true, mission_id: 'mission-test-creee' }, error: null });
       }
       throw new Error(`RPC inattendue : ${fonction}`);
@@ -204,7 +204,8 @@ describe('FormulaireMission — parcours de création critique', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la publication' }));
     await waitFor(() => {
-      expect(mocks.rpc).toHaveBeenCalledWith('fn_creer_mission_multi_jours_v3', expect.objectContaining({
+      expect(mocks.rpc).toHaveBeenCalledWith('fn_creer_mission_multi_jours_v4', expect.objectContaining({
+        p_accepte_internes: false,
         p_intitule: 'IDE — test conservation du formulaire',
         p_profession_requise: 'IDE',
         p_service: 'Soins continus',
@@ -274,7 +275,7 @@ describe('FormulaireMission — parcours de création critique', () => {
           error: null,
         });
       }
-      if (fonction === 'fn_creer_mission_multi_jours_v3') {
+      if (fonction === 'fn_creer_mission_multi_jours_v4') {
         return Promise.resolve({
           data: {
             success: false,

@@ -299,7 +299,7 @@ describe('planning exact de bout en bout', () => {
   });
 
   it('applique contrat et retrocession atomiquement a la creation formulaire et API', () => {
-    expect(formulaireMission).toContain("supabase.rpc('fn_creer_mission_multi_jours_v3'");
+    expect(formulaireMission).toContain("supabase.rpc('fn_creer_mission_multi_jours_v4'");
     expect(formulaireMission).not.toContain("supabase.rpc('fn_modifier_type_contrat_mission'");
     expect(formulaireMission).not.toContain("supabase.rpc('fn_definir_retrocession_mission'");
     expect(formulaireMission).not.toContain("setTauxHoraire('0')");

@@ -178,6 +178,14 @@ creneaux = "jsonb_build_array(jsonb_build_object('debut',now()+interval '4 days'
 published = value(etab+"BEGIN; SELECT public.fn_creer_mission_multi_jours_v4('Publication témoin','Aucun travail réel','MEDECIN','Médecine',50,false,1,'CANDIDATURE','SM01',false,"+creneaux+",'SALARIE','TAUX_HORAIRE',NULL,NULL,true);"
     +"SELECT jsonb_build_object('accord',accepte_internes,'acteur',accepte_internes_confirme_par,'specialite',specialite_medicale_requise) FROM public.missions WHERE intitule='Publication témoin'; ROLLBACK;")
 assert published == {'accord': True, 'acteur': E, 'specialite': 'SM01'}
+# A suspended actor keeps the existing access-denied contract before the
+# intern-specific BEFORE triggers. The clinical profession does not change it.
+for profession in ['IDE', 'MEDECIN']:
+    for suspension in [f"UPDATE auth.users SET banned_until=now()+interval '1 day' WHERE id='{S2}';",
+                       f"UPDATE public.soignants SET supprime_le=now() WHERE id='{S2}';"]:
+        setup = f"BEGIN; UPDATE public.soignants SET profession='{profession}' WHERE id='{S2}';"+suspension+context(S2)
+        refused(setup+f"INSERT INTO public.candidatures(mission_id,soignant_id,statut) VALUES('{M}','{S2}','EN_ATTENTE');", '42501')
+        refused(setup+f"UPDATE public.missions SET soignant_assigne_id='{S2}' WHERE id='{M}';", '42501')
 assert sql(context(role='service_role')+f"SELECT public.fn_soignant_eligible_mission('{S}','{M}',false);").splitlines()[-1] == 't'
 for mission in [M2,M3]:
     assert sql(context(role='service_role')+f"SELECT public.fn_soignant_eligible_mission('{S}','{mission}',false);").splitlines()[-1] == 'f'
