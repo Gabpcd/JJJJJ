@@ -57,6 +57,9 @@ jobs:
             --password "$SUPABASE_DB_PASSWORD" \
             > supabase/schema/public.sql
         env:
+          # setup-cli pins GHCR for CLI 2.98; its shared quota can reject pulls.
+          # Use the CLI default Supabase mirror, with the same Postgres tag.
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: public.ecr.aws
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
