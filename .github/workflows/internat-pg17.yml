@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/internat-pg17.yml'
       - 'scripts/ci/internat-pg17.py'
+      - 'tests/fixtures/internat-schema-prerequisite-20261029.sql'
       - 'tests/fixtures/internat-live-full-closure-20261029.json'
       - 'tests/fixtures/internat-live-admission-dependencies-20261029.json'
       - 'supabase/migrations/**'
@@ -17,6 +18,7 @@ on:
     paths:
       - '.github/workflows/internat-pg17.yml'
       - 'scripts/ci/internat-pg17.py'
+      - 'tests/fixtures/internat-schema-prerequisite-20261029.sql'
       - 'tests/fixtures/internat-live-full-closure-20261029.json'
       - 'tests/fixtures/internat-live-admission-dependencies-20261029.json'
       - 'supabase/migrations/**'
