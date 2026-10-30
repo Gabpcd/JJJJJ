@@ -734,14 +734,36 @@ final class NativePilotTests: XCTestCase {
             self.fullyVisible(input, inside: detail) && input.frame.maxY <= self.keyboardTopIncludingAccessory()
         }
         input.typeText("000000")
+        // typeText can return before UIKit has delivered every original key.
+        // Observe that one input operation for at most five seconds: no second
+        // typing, deletion, focus change or gesture can complete the code here.
+        let started = ProcessInfo.processInfo.systemUptime
+        var observations: [[String: Any]] = []
+        var lastObserved: String?
+        let delivery = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let value = input.exists ? input.value as? String : nil
+            let observed = value ?? "<unavailable>"
+            if observed != lastObserved {
+                observations.append(["elapsedMs": Int((ProcessInfo.processInfo.systemUptime - started) * 1000), "value": observed])
+                lastObserved = observed
+            }
+            return value == "000000"
+        }, object: nil)
+        let delivered = XCTWaiter.wait(for: [delivery], timeout: 5) == .completed
         let originalValue = input.value as? String
-        guard originalValue == "000000" else {
+        if let data = try? JSONSerialization.data(withJSONObject: ["timeoutSeconds": 5, "completed": delivered,
+                "typingOperations": 1, "observations": observations] as [String: Any], options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) {
+            attachText(json, name: "\(proofPrefix)-otp-original-delivery.json")
+        }
+        guard delivered && originalValue == "000000" else {
             // Record the original failure BEFORE the comparison. Continuing is
             // enabled only for this one report, then immediately restored.
             do {
                 let previous = continueAfterFailure
                 continueAfterFailure = true
                 defer { continueAfterFailure = previous }
+                XCTAssertTrue(delivered, "The original typing delivers all six digits within five seconds")
                 XCTAssertEqual(originalValue, "000000", "The six typed digits are exact before any further action")
             }
             diagnoseContractKeypadAfterTypingFailure(input, originalValue: originalValue)
