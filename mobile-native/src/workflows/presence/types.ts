@@ -1,3 +1,5 @@
+import type { DefiniteTransactionRollbackCode } from '../rpcOutcome';
+
 export type PresenceContext = { kind: 'soignant'; userId: string; epoch: number }
   | { kind: 'etablissement'; userId: string; epoch: number; etablissementId: string };
 export type ScanKind = 'OUVERTURE' | 'FERMETURE';
@@ -52,7 +54,7 @@ export interface PresenceAttemptReceipt {
   version: 2; phase: PresenceAttemptPhase; userId: string; attemptId: string; sessionEpoch: number; terminalId: string;
   /** The code already entered by this user is needed for the existing SQL readback filter. */
   enteredCode: string; baselineProofIds: string[]; gps: GpsObservation['kind'];
-  rejectionCode: 'P0002' | '42501' | '23514' | 'PGRST202' | 'PGRST300' | 'PGRST301' | 'PGRST302' | 'PGRST303' | null;
+  rejectionCode: 'P0002' | '42501' | '23514' | 'PGRST202' | 'PGRST300' | 'PGRST301' | 'PGRST302' | 'PGRST303' | DefiniteTransactionRollbackCode | null;
 }
 export interface PresenceAttemptJournal {
   read(userId: string): Promise<PresenceAttemptReceipt | null>;

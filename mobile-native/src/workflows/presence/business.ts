@@ -1,5 +1,6 @@
 import { analyserCompletudePlanningMission } from '../../../../src/lib/completude-planning-mission';
 import { choisirContratPointage, evaluerDisponibilitePointage } from '../../../../src/lib/disponibilite-pointage';
+import { isDefiniteTransactionRollback } from '../rpcOutcome';
 import { PresenceWorkflowError, type GpsObservation, type PresenceAvailability, type PresenceContract,
   type PresenceMission, type PresenceProof, type PresenceSegment } from './types';
 
@@ -48,6 +49,7 @@ export function rejectedScanMessage(error: unknown): string | null {
   const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : null;
   if (code === 'PGRST202') return 'Le service de pointage est momentanément indisponible. Aucun pointage n’a été enregistré par cette demande.';
   if (isPresencePreExecutionRefusal(code)) return 'La connexion a été refusée avant l’enregistrement du pointage. Reconnectez-vous avant de réessayer.';
+  if (isDefiniteTransactionRollback(code)) return 'Le serveur a annulé cette demande sans enregistrer le pointage. Vérifiez le code actuel avant de réessayer.';
   if (code === 'P0002') return 'Ce code est invalide ou a déjà été renouvelé. Demandez le code actuellement affiché par l’établissement.';
   if (code === '42501') return 'Le pointage de cette mission n’est pas autorisé pour votre compte.';
   if (code === '23514') return 'Le serveur a refusé ce pointage : vérifiez le contrat, le créneau et l’état du dernier scan avant de continuer.';

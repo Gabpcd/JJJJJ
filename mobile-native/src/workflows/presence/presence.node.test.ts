@@ -94,7 +94,7 @@ function fixture() {
       const receipt = JSON.parse([...secure.values()][0]); assert.equal(receipt.userId, ids.user); assert.equal(receipt.enteredCode, '123456');
       assert.equal(receipt.version, 2); assert.equal(receipt.phase, 'started', 'the started barrier must be durable before invocation');
       env.rpcCalls.push(query); if (env.pauseRpc) await env.pauseRpc;
-      if (env.sqlError) return { data: null, error: { code: env.sqlError, message: 'fixture refusal' } };
+      if (env.sqlError) { env.afterRpc?.(); return { data: null, error: { code: env.sqlError, message: 'fixture refusal' } }; }
       if (env.commit) commit(); env.afterRpc?.();
       if (env.loseResponse) throw new Error('response lost');
       return { data: { nouveau_code: '987654', nouveau_hmac: 'fixture-new-secret', creneau_effectif_id: ids.effective,
@@ -255,8 +255,8 @@ test('token refresh mid-operation never replaces the captured JWT', async () => 
   assert.equal((await f.gateway.scan(caregiver, '123456')).kind, 'confirmed');
   assert(f.env.queries.every(query => query.authorization === 'Bearer fixture-access-A'));
 });
-test('an explicit PostgREST admission refusal survives cleanup failure and unlocks after reconnect without resending', async () => {
-  for (const code of ['PGRST202', 'PGRST300', 'PGRST301', 'PGRST302', 'PGRST303']) {
+test('an explicit server refusal survives cleanup failure and unlocks after reconnect without resending', async () => {
+  for (const code of ['PGRST202', 'PGRST300', 'PGRST301', 'PGRST302', 'PGRST303', '40P01', '40001', '57014']) {
     const f = fixture(); f.env.sqlError = code; f.storageState.failDelete = true;
     assert.equal((await f.gateway.scan(caregiver, '123456')).kind, 'unconfirmed');
     assert.equal((await f.options.journal.read(ids.user))?.rejectionCode, code);
@@ -271,12 +271,34 @@ test('an explicit PostgREST admission refusal survives cleanup failure and unloc
     assert.equal(f.env.rpcCalls.length, 2); assert.equal(f.env.proofs.length, 1);
   }
 });
-test('unknown PostgREST errors remain ambiguous even if no proof is immediately visible', async () => {
-  const f = fixture(); f.env.sqlError = 'PGRSTX00';
-  assert.equal((await f.gateway.scan(caregiver, '123456')).kind, 'unconfirmed');
-  assert.equal((await f.options.journal.read(ids.user))?.rejectionCode, null);
-  await assert.rejects(f.gateway.scan(caregiver, '123456'), { code: 'RECONCILIATION_REQUIRED' });
-  assert.equal(f.env.rpcCalls.length, 1);
+test('an explicit rollback is durable for its owner even when the session changes during the reply', async () => {
+  for (const code of ['40P01', '40001', '57014']) {
+    const f = fixture(); f.env.sqlError = code; f.storageState.failDelete = true;
+    f.env.afterRpc = () => { f.env.current = { ...caregiver, userId: ids.other }; f.env.userId = ids.other; };
+    await assert.rejects(f.gateway.scan(caregiver, '123456'), { code: 'SESSION_CHANGED' });
+    assert.equal((await f.options.journal.read(ids.user))?.rejectionCode, code);
+    assert.equal(await f.gateway.pending(f.env.current!), null);
+    f.env.current = { ...caregiver, epoch: caregiver.epoch + 1 }; f.env.userId = ids.user; f.storageState.failDelete = false;
+    const restarted = new SupabasePresenceGateway(f.client, { ...f.options, journal: createPresenceAttemptJournal(f.storage) });
+    assert.equal((await restarted.reconcile(f.env.current, ids.attempt)).kind, 'rejected');
+    assert.equal(await restarted.pending(f.env.current), null); assert.equal(f.env.rpcCalls.length, 1);
+    assert.equal(f.env.proofs.length, 0);
+    f.env.sqlError = null; f.env.afterRpc = null;
+    assert.equal((await restarted.scan(f.env.current, '123456')).kind, 'confirmed');
+    assert.equal(f.env.rpcCalls.length, 2);
+  }
+});
+test('unknown or explicitly indeterminate errors remain ambiguous after restart even with no visible proof', async () => {
+  for (const code of ['PGRSTX00', '08007', '40003', 'UNKNOWN']) {
+    const f = fixture(); f.env.sqlError = code;
+    assert.equal((await f.gateway.scan(caregiver, '123456')).kind, 'unconfirmed');
+    assert.equal((await f.options.journal.read(ids.user))?.rejectionCode, null);
+    f.env.current = { ...caregiver, epoch: caregiver.epoch + 1 };
+    const restarted = new SupabasePresenceGateway(f.client, { ...f.options, journal: createPresenceAttemptJournal(f.storage) });
+    assert.equal((await restarted.reconcile(f.env.current, ids.attempt)).kind, 'unconfirmed');
+    await assert.rejects(restarted.scan(f.env.current, '123456'), { code: 'RECONCILIATION_REQUIRED' });
+    assert.equal(f.env.rpcCalls.length, 1);
+  }
 });
 test('state read never exposes an active code to a caregiver, even if a response unexpectedly contains it', async () => {
   const f = fixture(); const details = await f.gateway.read(caregiver, ids.missionA);

@@ -1,4 +1,5 @@
 import { PRESENCE_ID, isPresencePreExecutionRefusal } from './business';
+import { isDefiniteTransactionRollback } from '../rpcOutcome';
 import { PresenceWorkflowError, type PresenceAttemptJournal, type PresenceAttemptReceipt } from './types';
 
 /** Supply raw Expo SecureStore with WHEN_UNLOCKED_THIS_DEVICE_ONLY; never auth's prefixed/chunked adapter. */
@@ -38,6 +39,7 @@ function checked(raw: unknown, userId: string): PresenceAttemptReceipt {
     || new Set(row.baselineProofIds).size !== row.baselineProofIds.length
     || !['available', 'denied', 'unavailable', 'not_requested'].includes(row.gps)
     || row.rejectionCode !== null && (!['P0002', '42501', '23514'].includes(row.rejectionCode) && !isPresencePreExecutionRefusal(row.rejectionCode)
+      && !isDefiniteTransactionRollback(row.rejectionCode)
       || row.version === 2 && row.phase !== 'started')) failure();
   // A legacy receipt has no evidence that its RPC was not invoked. Never infer prepared.
   const phase = row.version === 1 ? 'started' : row.phase as PresenceAttemptReceipt['phase'];
