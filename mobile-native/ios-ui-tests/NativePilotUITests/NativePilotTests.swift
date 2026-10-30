@@ -1186,9 +1186,8 @@ final class NativePilotTests: XCTestCase {
             dismissDebuggerMigrationBannerIfPresent()
         }
         require("Control \(identifier) is reachable") { self.visible(target) && target.isEnabled }
-        // The simulator's Recap digitizer can detach during a 50 ms contact,
-        // including later taps on contract cards. Use one ordinary 200 ms
-        // contact; keep every navigation assertion and deadline, with no retry.
+        // One ordinary 200 ms contact. A system touch cancellation still fails
+        // the unchanged navigation assertion; there is no retry or press-on-cancel.
         target.press(forDuration: 0.2)
     }
 

@@ -11,6 +11,7 @@ import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './nat
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
 import { startNativeEventStream } from './ios-native-event-stream.mjs';
 import { readMetroResponse } from './metro-http.mjs';
+import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from './ios-ci-toolchain.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -33,6 +34,7 @@ const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodepro
 writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
+  ...(platform === 'ios' ? { DEVELOPER_DIR: IOS_CI_DEVELOPER_DIR } : {}),
   EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: selectedScenario.documentScenarioFlag,
   EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: selectedScenario.contractScenarioFlag ?? '0',
   EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO: selectedScenario.presenceScenarioFlag ?? '0',
@@ -113,41 +115,32 @@ async function chooseIosDevice() {
   // A fresh macOS runner may still be initializing CoreSimulator before listing
   // runtimes. Bound that startup separately; do not relax any application assertion.
   const inventory = { timeout: 180_000, logfile: 'simulator-inventory.log' };
+  const toolchain = verifyIosCiXcode((await run('xcodebuild', ['-version'], inventory)).stdout);
+  writeFileSync(resolve(output, 'ios-toolchain.json'), JSON.stringify(toolchain, null, 2));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], inventory)).stdout).runtimes;
   const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], inventory)).stdout).devices;
   const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
-  if (!['iphone', 'ipad'].includes(family)) throw new Error('Famille de simulateur iOS invalide.');
-  const ios = runtimes.filter(runtime => runtime.isAvailable && runtime.identifier.includes('.iOS-'))
-    .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
-  for (const runtime of ios) {
-    const candidates = (devices[runtime.identifier] || [])
-      .filter(item => item.isAvailable && (item.deviceTypeIdentifier || item.name).toLowerCase().includes(family))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    if (candidates.length) {
-      const selected = candidates[0];
-      writeFileSync(resolve(output, 'device.json'), JSON.stringify({ platform, family, runtime: runtime.version, name: selected.name, udid: selected.udid }, null, 2));
-      // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
-      await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
-      await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
-      // Cold iOS 26.5 data migrations exceeded four minutes on both source
-      // reference runners, before any app build. Bound simulator preparation
-      // separately; application waits and XCTest allowances remain unchanged.
-      stage = 'ios-boot-readiness';
-      const bootTimeout = 600_000;
-      const bootStarted = new Date().toISOString();
-      const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
-        { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
-      writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
-        phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
-        started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
-        code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
-      }, null, 2));
-      if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
-      await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
-      return selected.udid;
-    }
-  }
-  throw new Error(`Aucun simulateur ${family} disponible : aucun SDK supplémentaire ne sera installé.`);
+  const { runtime, device: selected } = selectIosCiSimulator(runtimes, devices, family);
+  writeFileSync(resolve(output, 'device.json'), JSON.stringify({ platform, family, runtime: runtime.version, name: selected.name, udid: selected.udid }, null, 2));
+  // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
+  await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
+  await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
+  // Cold iOS 26.5 data migrations exceeded four minutes on both source
+  // reference runners, before any app build. Bound simulator preparation
+  // separately; application waits and XCTest allowances remain unchanged.
+  stage = 'ios-boot-readiness';
+  const bootTimeout = 600_000;
+  const bootStarted = new Date().toISOString();
+  const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
+    { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
+  writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
+    phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
+    started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
+    code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
+  }, null, 2));
+  if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
+  await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
+  return selected.udid;
 }
 
 async function chooseAndroidDevice() {

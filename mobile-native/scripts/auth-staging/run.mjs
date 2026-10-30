@@ -8,6 +8,7 @@ import { finished } from 'node:stream/promises';
 import { androidFlows } from './android-flow.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from '../ios-compiled-client.mjs';
 import { readMetroResponse } from '../metro-http.mjs';
+import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from '../ios-ci-toolchain.mjs';
 import { CAPTURES, PHASES, PROJECT_REF, guardRun, parseCohort, privateLogFilter,
   publicEnvironment, publicReport, sensitiveForms, validatePhaseProof, validatePublicDirectory } from './policy.mjs';
 
@@ -82,20 +83,19 @@ async function chooseDevice() {
     await run('adb', ['-s', device, 'reverse', 'tcp:8090', 'tcp:8090']);
     return;
   }
+  environment.DEVELOPER_DIR = IOS_CI_DEVELOPER_DIR;
+  const toolchain = verifyIosCiXcode((await run('xcodebuild', ['-version'])).stdout);
+  await privateWrite(resolve(temporary, 'ios-toolchain.json'), JSON.stringify(toolchain));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], { timeout: 180_000 })).stdout).runtimes;
   const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], { timeout: 180_000 })).stdout).devices;
   const family = format === 'iphone' ? 'iphone' : 'ipad';
-  for (const runtime of runtimes.filter(r => r.isAvailable && r.identifier.includes('.iOS-')).sort((a,b) => b.version.localeCompare(a.version, undefined, { numeric: true }))) {
-    const candidate = (devices[runtime.identifier] ?? []).find(d => d.isAvailable && (d.deviceTypeIdentifier ?? d.name).toLowerCase().includes(family));
-    if (!candidate) continue;
-    device = candidate.udid;
-    await run('xcrun', ['simctl', 'shutdown', 'all']);
-    await run('xcrun', ['simctl', 'boot', device]);
-    await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 360_000 });
-    await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
-    return;
-  }
-  fail('SIMULATOR_UNAVAILABLE');
+  const { device: candidate } = selectIosCiSimulator(runtimes, devices, family);
+  device = candidate.udid;
+  await run('xcrun', ['simctl', 'shutdown', 'all']);
+  await run('xcrun', ['simctl', 'boot', device]);
+  await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 360_000 });
+  await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
+  return;
 }
 
 async function prepareExpo() {

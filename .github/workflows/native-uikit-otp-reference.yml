@@ -10,6 +10,7 @@ on:
       - 'mobile-native/ios-ui-tests/NativePilotUITests/UIKitOtpReferenceTests.swift'
       - 'mobile-native/ios-ui-tests/NativePilotUITests.xcodeproj/**'
       - 'mobile-native/scripts/run-uikit-otp-reference-ci.mjs'
+      - 'mobile-native/scripts/ios-ci-toolchain*.mjs'
       - '.github/workflows/native-uikit-otp-reference.yml'
   workflow_dispatch:
 

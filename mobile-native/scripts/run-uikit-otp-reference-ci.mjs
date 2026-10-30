@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statfsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from './ios-ci-toolchain.mjs';
 
 // Standalone UIKit control: no npm install, Pods, Metro, RN or product mutation.
 if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin' || !process.env.RUNNER_TEMP) {
@@ -17,6 +18,7 @@ const bundleId = 'app.jolene.otp-uikit-reference';
 const scheme = 'UIKitOtpReference';
 const test = 'NativePilotUITests/UIKitOtpReferenceTests/testSixZeros';
 const started = new Date().toISOString();
+const environment = { ...process.env, CI: '1', DEVELOPER_DIR: IOS_CI_DEVELOPER_DIR };
 let device;
 let stage = 'inventory';
 let success = false;
@@ -29,7 +31,7 @@ function space() {
 
 async function run(command, args, { timeout = 60_000, logfile, allowFailure = false } = {}) {
   space();
-  const child = spawn(command, args, { cwd: root, env: { ...process.env, CI: '1' },
+  const child = spawn(command, args, { cwd: root, env: environment,
     detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '', bytes = 0, issue;
   const kill = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { } };
@@ -55,24 +57,18 @@ async function run(command, args, { timeout = 60_000, logfile, allowFailure = fa
 }
 
 try {
+  const toolchain = verifyIosCiXcode((await run('xcodebuild', ['-version'])).stdout);
+  writeFileSync(resolve(output, 'ios-toolchain.json'), JSON.stringify(toolchain, null, 2));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], { timeout: 180_000 })).stdout).runtimes;
   const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], { timeout: 180_000 })).stdout).devices;
-  for (const runtime of runtimes.filter(item => item.isAvailable && item.identifier.includes('.iOS-'))
-    .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))) {
-    const selected = (devices[runtime.identifier] || []).filter(item => item.isAvailable
-      && (item.deviceTypeIdentifier || item.name).toLowerCase().includes('iphone'))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0];
-    if (!selected) continue;
-    device = selected.udid;
-    if (!/^[0-9A-F-]{36}$/i.test(device)) throw new Error('UUID simulateur invalide.');
-    writeFileSync(resolve(output, 'device.json'), JSON.stringify({ udid: device, name: selected.name,
-      runtime: runtime.version, family: 'iphone', platform: 'ios' }, null, 2));
-    if (selected.state !== 'Booted') await run('xcrun', ['simctl', 'boot', device], { logfile: 'simulator.log' });
-    await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
-    await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
-    break;
-  }
-  if (!device) throw new Error('Aucun iPhone installé ; aucun SDK supplémentaire ne sera installé.');
+  const { runtime, device: selected } = selectIosCiSimulator(runtimes, devices, 'iphone');
+  device = selected.udid;
+  if (!/^[0-9A-F-]{36}$/i.test(device)) throw new Error('UUID simulateur invalide.');
+  writeFileSync(resolve(output, 'device.json'), JSON.stringify({ udid: device, name: selected.name,
+    runtime: runtime.version, family: 'iphone', platform: 'ios' }, null, 2));
+  if (selected.state !== 'Booted') await run('xcrun', ['simctl', 'boot', device], { logfile: 'simulator.log' });
+  await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
+  await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
   stage = 'build-reference';
   const base = ['-project', project, '-scheme', scheme, '-configuration', 'Debug', '-sdk', 'iphonesimulator',
     '-destination', `platform=iOS Simulator,id=${device}`, '-derivedDataPath', derived,
