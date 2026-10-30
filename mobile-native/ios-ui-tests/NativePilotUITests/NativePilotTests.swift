@@ -1161,7 +1161,20 @@ final class NativePilotTests: XCTestCase {
         require("The expected scroll container is visible") { self.visible(container) }
         var scrolls = 0
         while !fullyVisible(target, inside: container) && scrolls < 20 {
-            drag(container, fromY: downward ? 0.8 : 0.25, toY: downward ? 0.25 : 0.8)
+            var forward = downward
+            var distance: CGFloat = 0.55
+            if target.exists && !target.frame.isEmpty {
+                let frame = target.frame
+                let viewport = container.frame
+                // A large paragraph can be skipped by a fixed half-screen drag.
+                // Follow its actual frame, including reversing an overshoot,
+                // and use less than the available space around that paragraph.
+                if frame.minY < viewport.minY { forward = false }
+                else if frame.maxY > viewport.maxY { forward = true }
+                distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
+            }
+            drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,
+                 toY: 0.5 - (forward ? distance : -distance) / 2)
             scrolls += 1
         }
         require("The requested control is fully visible after bounded scrolling") { self.fullyVisible(target, inside: container) }
@@ -1173,14 +1186,10 @@ final class NativePilotTests: XCTestCase {
             dismissDebuggerMigrationBannerIfPresent()
         }
         require("Control \(identifier) is reachable") { self.visible(target) && target.isEnabled }
-        if identifier == "enter-demo" {
-            // XCTest's 50 ms first tap can be cancelled by the simulator's Recap
-            // digitizer teardown before release. Use one 200 ms native contact;
-            // keep every navigation assertion and deadline, with no retry.
-            target.press(forDuration: 0.2)
-        } else {
-            target.tap()
-        }
+        // The simulator's Recap digitizer can detach during a 50 ms contact,
+        // including later taps on contract cards. Use one ordinary 200 ms
+        // contact; keep every navigation assertion and deadline, with no retry.
+        target.press(forDuration: 0.2)
     }
 
     private func dismissDebuggerMigrationBannerIfPresent() {
