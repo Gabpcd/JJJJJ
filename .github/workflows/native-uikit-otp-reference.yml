@@ -1,17 +1,7 @@
-name: Témoins UIKit — diagnostics synthétiques séparés
+name: Diagnostic UIKit — comparaison des hôtes ARM64
 
-# Separate diagnostic only. Runs only after this prepared patch is integrated;
-# it never replaces or rescues a Contracts job.
+# Temporary diagnostic branch. Manual only; never a product validation or release.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mobile-native/ios-ui-tests/UIKitOtpReference/**'
-      - 'mobile-native/ios-ui-tests/NativePilotUITests/UIKitOtpReferenceTests.swift'
-      - 'mobile-native/ios-ui-tests/NativePilotUITests.xcodeproj/**'
-      - 'mobile-native/scripts/run-uikit-otp-reference-ci.mjs'
-      - 'mobile-native/scripts/ios-ci-toolchain*.mjs'
-      - '.github/workflows/native-uikit-otp-reference.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,18 +9,20 @@ permissions:
 
 jobs:
   reference:
-    runs-on: macos-26
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - kind: otp
+          - os: macos-15
+            host: '15'
+            kind: touch
             family: iphone
-          - kind: touch
+          - os: macos-26
+            host: '26'
+            kind: touch
             family: iphone
-          - kind: touch
-            family: ipad
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -45,12 +37,13 @@ jobs:
         env:
           UIKIT_REFERENCE_KIND: ${{ matrix.kind }}
           IOS_DEVICE_FAMILY: ${{ matrix.family }}
+          UIKIT_HOST_FAMILY: ${{ matrix.host }}
           UIKIT_REFERENCE_OUTPUT_DIR: ${{ github.workspace }}/mobile-native/test-results/uikit-otp-reference
       - name: Conserver les preuves propres au témoin
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: uikit-reference-${{ matrix.kind }}-${{ matrix.family }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: uikit-host-${{ matrix.os }}-${{ github.sha }}
           path: mobile-native/test-results/uikit-otp-reference/
           retention-days: 7
           if-no-files-found: warn

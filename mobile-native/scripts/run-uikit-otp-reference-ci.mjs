@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statfsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from './ios-ci-toolchain.mjs';
+import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from './uikit-host-toolchain.mjs';
 
 // Standalone UIKit control: no npm install, Pods, Metro, RN or product mutation.
-if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin' || !process.env.RUNNER_TEMP) {
+if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin' || process.arch !== 'arm64' || !process.env.RUNNER_TEMP) {
   throw new Error('Le témoin UIKit est réservé au simulateur GitHub Actions.');
 }
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,8 +18,9 @@ const bundleId = 'app.jolene.otp-uikit-reference';
 const scheme = 'UIKitOtpReference';
 const kind = process.env.UIKIT_REFERENCE_KIND || 'otp';
 const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
-if (!['otp', 'touch'].includes(kind) || !['iphone', 'ipad'].includes(family)) {
-  throw new Error('Témoin UIKit ou famille non reconnue.');
+const expectedHost = process.env.UIKIT_HOST_FAMILY;
+if (kind !== 'touch' || family !== 'iphone' || !['15', '26'].includes(expectedHost)) {
+  throw new Error('Comparaison UIKit limitée au bouton iPhone et aux deux hôtes explicites.');
 }
 const test = `NativePilotUITests/UIKitOtpReferenceTests/${kind === 'touch' ? 'testButtonReleases' : 'testSixZeros'}`;
 const source = kind === 'touch' ? 'synthetic-uikit-touch-reference' : 'synthetic-uikit-reference';
@@ -64,6 +65,12 @@ async function run(command, args, { timeout = 60_000, logfile, allowFailure = fa
 }
 
 try {
+  const hostVersion = (await run('sw_vers', ['-productVersion'])).stdout.trim();
+  if (!hostVersion.startsWith(`${expectedHost}.`)) throw new Error('Hôte macOS différent de la variante déclarée.');
+  writeFileSync(resolve(output, 'host.json'), JSON.stringify({ version: hostVersion,
+    build: (await run('sw_vers', ['-buildVersion'])).stdout.trim(), arch: process.arch,
+    imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion, expectedHost,
+    referenceSourceSha: '2e32388b3063959925d9f56f37bbc87b58e6c573' }, null, 2));
   const toolchain = verifyIosCiXcode((await run('xcodebuild', ['-version'])).stdout);
   writeFileSync(resolve(output, 'ios-toolchain.json'), JSON.stringify(toolchain, null, 2));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], { timeout: 180_000 })).stdout).runtimes;
@@ -72,7 +79,8 @@ try {
   device = selected.udid;
   if (!/^[0-9A-F-]{36}$/i.test(device)) throw new Error('UUID simulateur invalide.');
   writeFileSync(resolve(output, 'device.json'), JSON.stringify({ udid: device, name: selected.name,
-    runtime: runtime.version, family, platform: 'ios' }, null, 2));
+    runtime: runtime.version, runtimeBuild: runtime.buildversion, deviceType: selected.deviceTypeIdentifier,
+    family, platform: 'ios' }, null, 2));
   if (selected.state !== 'Booted') await run('xcrun', ['simctl', 'boot', device], { logfile: 'simulator.log' });
   await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
   await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
