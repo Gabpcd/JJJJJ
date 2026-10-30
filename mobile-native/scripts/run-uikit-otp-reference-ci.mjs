@@ -16,7 +16,14 @@ const derived = resolve(process.env.RUNNER_TEMP, 'jolene-uikit-reference-derived
 const resultPath = resolve(process.env.RUNNER_TEMP, 'jolene-uikit-reference.xcresult');
 const bundleId = 'app.jolene.otp-uikit-reference';
 const scheme = 'UIKitOtpReference';
-const test = 'NativePilotUITests/UIKitOtpReferenceTests/testSixZeros';
+const kind = process.env.UIKIT_REFERENCE_KIND || 'otp';
+const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
+if (!['otp', 'touch'].includes(kind) || !['iphone', 'ipad'].includes(family)) {
+  throw new Error('Témoin UIKit ou famille non reconnue.');
+}
+const test = `NativePilotUITests/UIKitOtpReferenceTests/${kind === 'touch' ? 'testButtonReleases' : 'testSixZeros'}`;
+const source = kind === 'touch' ? 'synthetic-uikit-touch-reference' : 'synthetic-uikit-reference';
+const prefix = kind === 'touch' ? 'uikit-touch' : 'uikit-reference';
 const started = new Date().toISOString();
 const environment = { ...process.env, CI: '1', DEVELOPER_DIR: IOS_CI_DEVELOPER_DIR };
 let device;
@@ -61,11 +68,11 @@ try {
   writeFileSync(resolve(output, 'ios-toolchain.json'), JSON.stringify(toolchain, null, 2));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], { timeout: 180_000 })).stdout).runtimes;
   const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], { timeout: 180_000 })).stdout).devices;
-  const { runtime, device: selected } = selectIosCiSimulator(runtimes, devices, 'iphone');
+  const { runtime, device: selected } = selectIosCiSimulator(runtimes, devices, family);
   device = selected.udid;
   if (!/^[0-9A-F-]{36}$/i.test(device)) throw new Error('UUID simulateur invalide.');
   writeFileSync(resolve(output, 'device.json'), JSON.stringify({ udid: device, name: selected.name,
-    runtime: runtime.version, family: 'iphone', platform: 'ios' }, null, 2));
+    runtime: runtime.version, family, platform: 'ios' }, null, 2));
   if (selected.state !== 'Booted') await run('xcrun', ['simctl', 'boot', device], { logfile: 'simulator.log' });
   await run('xcrun', ['simctl', 'bootstatus', device, '-b'], { timeout: 240_000, logfile: 'simulator.log' });
   await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
@@ -79,8 +86,11 @@ try {
   const readPlist = async key => (await run('/usr/libexec/PlistBuddy', ['-c', `Print :${key}`, plist])).stdout.trim();
   if (await readPlist('CFBundleIdentifier') !== bundleId || await readPlist('CFBundleSupportedPlatforms:0') !== 'iPhoneSimulator'
     || await readPlist('CFBundleExecutable') !== 'UIKitOtpReference') throw new Error('Mauvaise cible compilée.');
+  if (await readPlist('UIDeviceFamily:0') !== '1' || await readPlist('UIDeviceFamily:1') !== '2') {
+    throw new Error('Le témoin doit être universel iPhone/iPad, sans mode de compatibilité iPhone.');
+  }
   const hash = relative => createHash('sha256').update(readFileSync(resolve(root, relative))).digest('hex');
-  writeFileSync(resolve(output, 'provenance.json'), JSON.stringify({ source: 'synthetic-uikit-reference',
+  writeFileSync(resolve(output, 'provenance.json'), JSON.stringify({ source, kind, family,
     sourceSha: (await run('git', ['rev-parse', 'HEAD'])).stdout.trim(), bundleId, test,
     xcode: (await run('xcodebuild', ['-version'])).stdout.trim(), platform: 'iphonesimulator', configuration: 'Debug',
     applicationSha256: hash('ios-ui-tests/UIKitOtpReference/UIKitOtpReference.swift'),
@@ -88,7 +98,7 @@ try {
     physicalDevice: false, production: false, productScenario: false }, null, 2));
   stage = 'launch-reference';
   await run('xcrun', ['simctl', 'install', device, app], { timeout: 120_000, logfile: 'launch.log' });
-  const launch = await run('xcrun', ['simctl', 'launch', device, bundleId], { timeout: 120_000, logfile: 'launch.log' });
+  const launch = await run('xcrun', ['simctl', 'launch', device, bundleId, '-JoleneReferenceMode', kind], { timeout: 120_000, logfile: 'launch.log' });
   if (!/^app\.jolene\.otp-uikit-reference: [1-9]\d*$/.test(launch.stdout.trim())) throw new Error('Lancement absent ou ambigu.');
   stage = 'xctest-reference';
   const result = await run('xcodebuild', ['test-without-building', ...base, `-only-testing:${test}`,
@@ -108,7 +118,7 @@ try {
   const manifest = JSON.parse(readFileSync(resolve(attachments, 'manifest.json'), 'utf8'));
   if (!Array.isArray(manifest)) throw new Error('Manifest de preuves absent.');
   for (const moment of ['before', 'after']) for (const kind of ['screen', 'accessibility', 'metrics.json']) {
-    const name = `uikit-reference-${moment}-${kind}`;
+    const name = `${prefix}-${moment}-${kind}`;
     const matches = manifest.flatMap(item => item.attachments || []).filter(item =>
       item.suggestedHumanReadableName?.startsWith(name.replace(/\.json$/, ''))
       && item.exportedFileName?.endsWith(kind === 'screen' ? '.png' : '.txt'));
@@ -123,7 +133,20 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ source: 'synthetic-uikit-reference', started,
+  // Read-only system evidence after the observation. It cannot retry a contact
+  // or alter the result; successful controls retain a comparison trace too.
+  if (device && kind === 'touch') {
+    try {
+      const input = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '10m',
+        '--style', 'ndjson', '--info', '--debug', '--predicate',
+        '(process == "backboardd" OR process == "testmanagerd" OR process == "SpringBoard") AND (eventMessage CONTAINS[c] "digitizer" OR eventMessage CONTAINS[c] "HID" OR eventMessage CONTAINS[c] "sender" OR eventMessage CONTAINS[c] "synthesi")'],
+      { timeout: 30_000, allowFailure: true });
+      writeFileSync(resolve(output, 'simulator-input-system.ndjson'), input.stdout);
+      writeFileSync(resolve(output, 'input-collection.json'), JSON.stringify({ code: input.code,
+        tailLimitCharacters: 1_000_000, mayBeTruncated: input.stdout.length >= 1_000_000 }));
+    } catch (error) { writeFileSync(resolve(output, 'input-collection-error.txt'), String(error)); }
+  }
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ source, kind, family, started,
     ended: new Date().toISOString(), device, bundleId, stage, success,
     productScenario: false, contractsVerdictChanged: false, production: false, physicalDevice: false }, null, 2));
 }

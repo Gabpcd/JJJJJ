@@ -19,7 +19,8 @@ final class UIKitOtpReferenceScene: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene)
-        window.rootViewController = UIKitOtpReferenceController()
+        window.rootViewController = UserDefaults.standard.string(forKey: "JoleneReferenceMode") == "touch"
+            ? UIKitTouchReferenceController() : UIKitOtpReferenceController()
         self.window = window
         window.makeKeyAndVisible()
     }
@@ -32,6 +33,68 @@ private final class ReferenceMetricsView: UIView {
     override var accessibilityValue: String? {
         get { readMetrics?() }
         set { }
+    }
+}
+
+// Separate touch-up control: no text field, scrolling, React Native or warm-up
+// gesture. Callbacks only update memory; reading AX serializes the observation.
+private final class UIKitTouchReferenceController: UIViewController {
+    private var downs = 0
+    private var releases = 0
+    private var cancels = 0
+    private var events: [[String: Any]] = []
+    private var truncated = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        let title = UILabel()
+        title.text = "Témoin UIKit · relâchement du bouton"
+        title.accessibilityIdentifier = "uikit-touch-title"
+        title.numberOfLines = 0
+        let button = UIButton(type: .system)
+        button.setTitle("Contact synthétique", for: .normal)
+        button.accessibilityIdentifier = "uikit-touch-button"
+        button.addTarget(self, action: #selector(down), for: .touchDown)
+        button.addTarget(self, action: #selector(releaseInside), for: .touchUpInside)
+        button.addTarget(self, action: #selector(cancel), for: .touchCancel)
+        let metrics = ReferenceMetricsView()
+        metrics.isAccessibilityElement = true
+        metrics.accessibilityIdentifier = "uikit-touch-metrics"
+        metrics.accessibilityLabel = "Mesures des contacts UIKit"
+        metrics.accessibilityTraits = .staticText
+        metrics.readMetrics = { [weak self] in self?.metricsJSON() ?? "unavailable" }
+        let stack = UIStackView(arrangedSubviews: [title, button, metrics])
+        stack.axis = .vertical
+        stack.spacing = 20
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            stack.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+            button.heightAnchor.constraint(equalToConstant: 55),
+            metrics.heightAnchor.constraint(equalToConstant: 20),
+        ])
+    }
+
+    @objc private func down() { downs += 1; record("down") }
+    @objc private func releaseInside() { releases += 1; record("upInside") }
+    @objc private func cancel() { cancels += 1; record("cancel") }
+
+    private func record(_ event: String) {
+        guard events.count < 64 else { truncated = true; return }
+        events.append(["sequence": events.count + 1, "contact": downs, "event": event,
+            "atMs": Int64(Date().timeIntervalSince1970 * 1000)])
+    }
+
+    private func metricsJSON() -> String {
+        let snapshot: [String: Any] = ["schemaVersion": 1, "source": "synthetic-uikit-touch-reference",
+            "bundleId": Bundle.main.bundleIdentifier ?? "", "downs": downs, "upInside": releases,
+            "cancels": cancels, "events": events, "truncated": truncated]
+        guard let data = try? JSONSerialization.data(withJSONObject: snapshot, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else { return "invalid-metrics" }
+        return json
     }
 }
 

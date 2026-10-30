@@ -12,7 +12,6 @@ final class UIKitOtpReferenceTests: XCTestCase {
     func testSixZeros() throws {
         XCUIDevice.shared.orientation = .portrait
         XCTAssertEqual(app.state, .runningForeground, "The runner prepared the distinct UIKit control")
-        app.activate()
         let title = app.staticTexts["uikit-reference-title"]
         XCTAssertTrue(title.waitForExistence(timeout: 15))
         XCTAssertEqual(title.label, "Témoin UIKit · saisie synthétique")
@@ -42,6 +41,38 @@ final class UIKitOtpReferenceTests: XCTestCase {
         XCTAssertEqual(after["selectionEnd"] as? Int, 6)
     }
 
+    func testButtonReleases() throws {
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertEqual(app.state, .runningForeground, "The runner prepared the distinct touch control")
+        let title = app.staticTexts["uikit-touch-title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.label, "Témoin UIKit · relâchement du bouton")
+        XCTAssertEqual(app.textFields.count, 0, "No OTP field or preparatory focus gesture")
+        let buttons = app.buttons.matching(identifier: "uikit-touch-button")
+        XCTAssertEqual(buttons.count, 1)
+        let button = buttons.element(boundBy: 0)
+        let before = try capture("before", kind: "touch")
+        XCTAssertEqual(before["downs"] as? Int, 0)
+        XCTAssertEqual(before["upInside"] as? Int, 0)
+        XCTAssertEqual(before["cancels"] as? Int, 0)
+        // Twelve distinct planned observations, never retries. Each failed
+        // original release ends the test before another contact is attempted.
+        for index in 1...12 {
+            XCTAssertTrue(button.isHittable)
+            XCTAssertTrue(app.frame.contains(button.frame))
+            button.press(forDuration: 0.2)
+            let observed = try capture("contact-\(index)", kind: "touch", screen: false)
+            guard observed["downs"] as? Int == index,
+                  observed["upInside"] as? Int == index,
+                  observed["cancels"] as? Int == 0 else {
+                _ = try capture("failure-\(index)", kind: "touch")
+                XCTFail("Contact \(index) must produce exactly one down and one upInside, without cancellation")
+                return
+            }
+        }
+        _ = try capture("after", kind: "touch")
+    }
+
     private func keyboardTop() -> CGFloat {
         let keyboard = app.keyboards.firstMatch.frame
         var top = keyboard.minY
@@ -56,25 +87,28 @@ final class UIKitOtpReferenceTests: XCTestCase {
         return top
     }
 
-    private func capture(_ stage: String) throws -> [String: Any] {
-        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        screenshot.name = "uikit-reference-\(stage)-screen"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        let ax = XCTAttachment(string: app.debugDescription)
-        ax.name = "uikit-reference-\(stage)-accessibility"
-        ax.lifetime = .keepAlways
-        add(ax)
-        let metrics = app.descendants(matching: .any).matching(identifier: "uikit-reference-metrics")
+    private func capture(_ stage: String, kind: String = "otp", screen: Bool = true) throws -> [String: Any] {
+        let prefix = kind == "touch" ? "uikit-touch" : "uikit-reference"
+        if screen {
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "\(prefix)-\(stage)-screen"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            let ax = XCTAttachment(string: app.debugDescription)
+            ax.name = "\(prefix)-\(stage)-accessibility"
+            ax.lifetime = .keepAlways
+            add(ax)
+        }
+        let metrics = app.descendants(matching: .any).matching(identifier: "\(prefix)-metrics")
         XCTAssertEqual(metrics.count, 1)
         let json = metrics.element(boundBy: 0).value as? String ?? ""
         let attachment = XCTAttachment(string: json)
-        attachment.name = "uikit-reference-\(stage)-metrics.json"
+        attachment.name = "\(prefix)-\(stage)-metrics.json"
         attachment.lifetime = .keepAlways
         add(attachment)
         let value = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertEqual(value["schemaVersion"] as? Int, 1)
-        XCTAssertEqual(value["source"] as? String, "synthetic-uikit-reference")
+        XCTAssertEqual(value["source"] as? String, kind == "touch" ? "synthetic-uikit-touch-reference" : "synthetic-uikit-reference")
         XCTAssertEqual(value["bundleId"] as? String, "app.jolene.otp-uikit-reference")
         XCTAssertEqual(value["truncated"] as? Bool, false, "A truncated trace is not complete evidence")
         return value

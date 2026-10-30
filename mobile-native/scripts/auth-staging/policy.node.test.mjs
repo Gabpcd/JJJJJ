@@ -183,9 +183,7 @@ test('iOS initial bootstrap observes one prepared launch; four explicit restarts
   assert.doesNotMatch(runner, /'simctl', 'openurl'/);
   const bootstrap = swift.split('private func prepareCompiledClient() throws {')[1].split('private func developerOverlaysAbsent')[0];
   assert.match(bootstrap, /self\.app\.state == \.runningForeground/);
-  assert.ok(bootstrap.indexOf('self.app.state == .runningForeground') < bootstrap.indexOf('app.activate()'));
-  assert.equal((swift.match(/app\.activate\(\)/g) ?? []).length, 1);
-  assert.doesNotMatch(bootstrap, /app\.(?:launch|open)\(|\.tap\(|toolsSwitch|xmark/);
+  assert.doesNotMatch(bootstrap, /app\.(?:activate|launch|open)\(|\.tap\(|toolsSwitch|xmark/);
   assert.match(bootstrap, /self\.visible\(self\.element\("login-scroll"\)\)/);
   assert.match(bootstrap, /self\.developerOverlaysAbsent\(\)/);
   const overlays = swift.split('private func developerOverlaysAbsent() -> Bool {')[1].split('private func element')[0];

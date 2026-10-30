@@ -164,10 +164,9 @@ final class NativeAuthTests: XCTestCase {
 
     private func prepareCompiledClient() throws {
         // The runner has already launched the compiled source client once. Require its
-        // foreground process before the single activation that attaches XCTest
-        // and waits for event readiness. Never open its URL or relaunch here.
+        // foreground process and mounted screen without requesting another
+        // SpringBoard activation. Genuine session restarts stay in the scenario.
         try check("Prepared Jolene process is already running") { self.app.state == .runningForeground }
-        app.activate()
         XCUIDevice.shared.orientation = .portrait
         try check("Jolene TEST login is mounted without a developer menu", timeout: 120) {
             self.app.state == .runningForeground && self.developerOverlaysAbsent()

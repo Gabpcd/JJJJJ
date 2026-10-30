@@ -36,7 +36,7 @@
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SUPPORTED_PLATFORMS = iphonesimulator;
 			SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-			TARGETED_DEVICE_FAMILY = 1;
+			TARGETED_DEVICE_FAMILY = "1,2";
 		}; name = Debug; };
 		B20000000000000000000021 /* UIKitOtpReferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000022; };
 		B20000000000000000000022 /* UIKitOtpReferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKitOtpReferenceTests.swift; sourceTree = "<group>"; };

@@ -401,7 +401,7 @@ try {
     nativeEventStream?.bindLaunch(launch.stdout, appId);
     // Expo Go SDK 57 opens --initialUrl after its home controller appears.
     // Temporary NSArgumentDomain defaults prepare the Expo Go host only.
-    // XCTest activates the existing process and requires its overlays absent;
+    // XCTest observes the existing foreground process and requires its overlays absent;
     // every Jolene interaction and assertion remains in the scenario.
     for (const orientation of selectedScenario.orientations) {
       await runIosXCTest(orientation, resolve(output, orientation));

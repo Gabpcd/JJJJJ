@@ -414,6 +414,9 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-request-otp"), in: detail)
         tap("contract-request-otp")
+        require("The single caregiver code request rendered its synthetic response before scrolling") {
+            self.element("contract-demo-code").exists
+        }
         scrollTo(element("contract-demo-code"), in: detail)
         XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
@@ -485,6 +488,9 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-request-otp"), in: detail)
         tap("contract-request-otp")
+        require("The single establishment code request rendered its synthetic response before scrolling") {
+            self.element("contract-demo-code").exists
+        }
         scrollTo(element("contract-demo-code"), in: detail)
         XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
@@ -805,13 +811,12 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        // simctl already launched the fixed local experience. Activation attaches
-        // XCTest to this running process and waits until it can receive events;
-        // it does not reopen the URL or terminate/relaunch the application.
+        // simctl already launched the fixed local experience. Observe that same
+        // foreground process: activate() unnecessarily asks SpringBoard to open
+        // it again and can time out before any test interaction (iPad CI).
         require("The prepared pilot process is already running") {
             self.app.state == .runningForeground
         }
-        app.activate()
         XCUIDevice.shared.orientation = .portrait
         let continueButton = app.buttons.matching(
             NSPredicate(format: "label MATCHES %@", "Continue|Continuer")
