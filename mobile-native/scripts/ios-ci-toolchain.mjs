@@ -1,13 +1,14 @@
 // Reproducible simulator baseline, already installed on the macos-26 image.
 // Never silently switch Xcode/runtime when that hosted image is updated.
-// The independent UIKit contact witness completes on 26.2; 26.4.1 exhibited
-// cancelled synthetic contacts even without React Native. Product tests remain required.
-export const IOS_CI_DEVELOPER_DIR = '/Applications/Xcode_26.2.app/Contents/Developer';
+// Compiler and simulator runtime are independent: Expo SDK 57 needs Xcode >=26.4
+// (https://docs.expo.dev/versions/latest/). Keep its compatible source compiler
+// while running the fixed 26.2 simulator; UIKit and product tests remain required.
+export const IOS_CI_DEVELOPER_DIR = '/Applications/Xcode_26.4.1.app/Contents/Developer';
 export const IOS_CI_RUNTIME = '26.2';
 
 export function verifyIosCiXcode(version) {
-  if (version.trim() !== 'Xcode 26.2\nBuild version 17C52') {
-    throw new Error('La CI native exige Xcode 26.2 (17C52), sans repli automatique.');
+  if (version.trim() !== 'Xcode 26.4.1\nBuild version 17E202') {
+    throw new Error('La CI native exige Xcode 26.4.1 (17E202), sans repli automatique.');
   }
   return { xcode: version.trim(), developerDir: IOS_CI_DEVELOPER_DIR, runtime: IOS_CI_RUNTIME };
 }

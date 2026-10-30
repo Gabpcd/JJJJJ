@@ -29,8 +29,8 @@ test('a missing family, invalid device or unknown family cannot select an uninte
 });
 
 test('Xcode provenance is exact and rejects the moving hosted default', () => {
-  assert.equal(verifyIosCiXcode('Xcode 26.2\nBuild version 17C52\n').runtime, '26.2');
-  for (const version of ['Xcode 26.6\nBuild version 17F113', 'Xcode 26.2\nBuild version 17C99', '']) {
+  assert.equal(verifyIosCiXcode('Xcode 26.4.1\nBuild version 17E202\n').runtime, '26.2');
+  for (const version of ['Xcode 26.6\nBuild version 17F113', 'Xcode 26.2\nBuild version 17C52', 'Xcode 26.4.1\nBuild version 17E999', '']) {
     assert.throws(() => verifyIosCiXcode(version), /sans repli/);
   }
 });
