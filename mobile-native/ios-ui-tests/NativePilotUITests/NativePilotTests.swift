@@ -58,7 +58,7 @@ final class NativePilotTests: XCTestCase {
         require("\(deviceName) portrait window") { self.app.frame.height > self.app.frame.width }
         assertSignedOutDemo()
         record("\(prefix)-connexion")
-        element("enter-demo").tap()
+        tap("enter-demo")
         assertMissionCount(30)
 
         element("contract-filter-LIBERAL").tap()
@@ -115,7 +115,7 @@ final class NativePilotTests: XCTestCase {
         require("iPad landscape window") { self.app.frame.width > self.app.frame.height }
         assertSignedOutDemo()
         record("ipad-paysage-connexion")
-        element("enter-demo").tap()
+        tap("enter-demo")
         assertMissionCount(30)
         record("ipad-paysage-liste")
         openMissionAndReturn(detailProof: "ipad-paysage-detail", returnProof: "ipad-paysage-retour")
@@ -1173,7 +1173,14 @@ final class NativePilotTests: XCTestCase {
             dismissDebuggerMigrationBannerIfPresent()
         }
         require("Control \(identifier) is reachable") { self.visible(target) && target.isEnabled }
-        target.tap()
+        if identifier == "enter-demo" {
+            // XCTest's 50 ms first tap can be cancelled by the simulator's Recap
+            // digitizer teardown before release. Use one 200 ms native contact;
+            // keep every navigation assertion and deadline, with no retry.
+            target.press(forDuration: 0.2)
+        } else {
+            target.tap()
+        }
     }
 
     private func dismissDebuggerMigrationBannerIfPresent() {
