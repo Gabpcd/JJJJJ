@@ -409,13 +409,31 @@ name: Pointages natifs — simulation manuelle sans caméra ni GPS
     id: presence-detail-open-scan
 # Android clips an accessibility node to the ScrollView viewport. Its QR node
 # can look fully visible to Maestro while the pixels remain behind the header.
-# Re-enter from the top, as for the initial QR, before decoding the screenshot.
+# Reopen the detail to reset its scroll position. Centering the title at the
+# top boundary can keep scrolling even while the title is already visible.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: "1%, 50%"
+          end: "90%, 50%"
+          duration: 600
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- assertVisible:
+    id: presence-list-scroll
 - scrollUntilVisible:
     element:
-      id: presence-detail-title
-    direction: UP
+      id: presence-mission-demo-presence-b
+    direction: DOWN
     timeout: 15000
     centerElement: true
+- tapOn:
+    id: presence-mission-demo-presence-b
 - assertVisible:
     id: presence-detail-title
     text: Mission B fictive
