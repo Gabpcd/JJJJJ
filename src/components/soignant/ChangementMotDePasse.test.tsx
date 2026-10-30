@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ChangementMotDePasse } from './ChangementMotDePasse';
 
-const m = vi.hoisted(() => ({ login: vi.fn(), update: vi.fn(), audit: vi.fn(), notifier: vi.fn() }));
+const m = vi.hoisted(() => ({ login: vi.fn(), update: vi.fn(), audit: vi.fn(), notifier: vi.fn(), warn: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logger: { warn: m.warn } }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'compte-test', email: 'compte@example.invalid' } }) }));
 vi.mock('@/contexts/NotificationContext', () => ({ useNotification: () => ({ afficherNotification: m.notifier }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: { signInWithPassword: m.login, updateUser: m.update }, rpc: m.audit } }));
@@ -37,4 +38,24 @@ it('une panne réseau ne prétend pas que l’ancien mot de passe est faux et au
   fireEvent.submit(form);
   await waitFor(() => expect(m.notifier).toHaveBeenCalledWith({ type: 'succes', message: 'Mot de passe modifié avec succès.' }));
   expect(m.update).toHaveBeenCalledTimes(1);
+});
+it('confirme le changement et vide les champs sans attendre l’audit, même si celui-ci échoue ensuite', async () => {
+  let rejectAudit!: (reason: Error) => void;
+  m.audit.mockReturnValue(new Promise((_resolve, reject) => { rejectAudit = reject; }));
+  const form = formulaire();
+  fireEvent.submit(form);
+  await waitFor(() => expect(m.notifier).toHaveBeenCalledWith({ type: 'succes', message: 'Mot de passe modifié avec succès.' }));
+  for (const input of form.querySelectorAll('input')) expect(input).toHaveValue('');
+  expect(m.update).toHaveBeenCalledTimes(1);
+  expect(m.audit).toHaveBeenCalledTimes(1);
+  await act(async () => rejectAudit(new Error('CANARI_AUDIT_NON_PUBLIC')));
+  expect(m.notifier).toHaveBeenCalledTimes(1);
+  expect(m.warn).toHaveBeenCalledWith('Audit du changement de mot de passe indisponible — modification conservée.');
+});
+it('conserve la réussite Auth si le journal renvoie une erreur', async () => {
+  m.audit.mockResolvedValue({ error: { code: '57014', message: 'CANARI_AUDIT_NON_PUBLIC' } });
+  fireEvent.submit(formulaire());
+  await waitFor(() => expect(m.notifier).toHaveBeenCalledWith({ type: 'succes', message: 'Mot de passe modifié avec succès.' }));
+  expect(m.warn).toHaveBeenCalledWith('Audit du changement de mot de passe indisponible — modification conservée.');
+  expect(m.notifier).toHaveBeenCalledTimes(1);
 });
