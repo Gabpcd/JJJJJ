@@ -8,6 +8,7 @@ final class NativePilotTests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     private var proofPrefix = "ipad-portrait"
     private var backgroundStates: [UInt] = []
+    private var dismissedDebuggerMigrationBanner = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -1168,8 +1169,42 @@ final class NativePilotTests: XCTestCase {
 
     private func tap(_ identifier: String) {
         let target = element(identifier)
+        if identifier.hasPrefix("tab-") && !visible(target) {
+            dismissDebuggerMigrationBannerIfPresent()
+        }
         require("Control \(identifier) is reachable") { self.visible(target) && target.isEnabled }
         target.tap()
+    }
+
+    private func dismissDebuggerMigrationBannerIfPresent() {
+        // RN 0.86's one-time Debug migration notice can cover the tab bar. Its
+        // grouped accessibility node does not expose the close icon separately.
+        // Close only this identified tooling notice, using its visible X. Keep
+        // the before/after evidence and Metro warnings; never suppress LogBox.
+        let banners = app.otherElements.matching(NSPredicate(
+            format: "label == %@", "!, Open debugger to view warnings."
+        ))
+        guard banners.count == 1, visible(banners.firstMatch) else { return }
+        guard !dismissedDebuggerMigrationBanner else {
+            XCTFail("The one-time Debug migration notice unexpectedly reappeared")
+            return
+        }
+        let banner = banners.firstMatch
+        let frame = banner.frame
+        guard frame.width >= 250, (44...52).contains(frame.height),
+              frame.minY > app.frame.midY, app.frame.contains(frame) else {
+            XCTFail("The identified Debug migration notice has an unexpected layout")
+            return
+        }
+        record("\(proofPrefix)-debugger-migration-before")
+        dismissedDebuggerMigrationBanner = true
+        // Locked RN LogBoxNotification: 12pt right padding + half the 20pt X.
+        banner.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -22, dy: 0)).tap()
+        require("The Debug migration notice is closed before reaching the actual tab") {
+            !banners.firstMatch.exists
+        }
+        record("\(proofPrefix)-debugger-migration-after")
     }
 
     private func text(_ label: String) -> XCUIElement { app.staticTexts.matching(NSPredicate(format: "label == %@", label)).firstMatch }
