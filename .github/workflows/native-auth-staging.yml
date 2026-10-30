@@ -1,0 +1,138 @@
+name: Native Auth — STAGING manuel
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: SHA complet déjà relu, égal à la variable JOLENE_NATIVE_AUTH_REVIEWED_SHA
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-auth-staging-single-cohort
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: mobile-native
+
+jobs:
+  offline-policy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vérifier le SHA revu avant accès au secret
+        env:
+          REQUESTED_SHA: ${{ inputs.reviewed_sha }}
+          REVIEWED_SHA: ${{ vars.JOLENE_NATIVE_AUTH_REVIEWED_SHA }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          node -e 'const e=process.env;if(!/^[a-f0-9]{40}$/.test(e.REQUESTED_SHA)||![e.REVIEWED_SHA,e.GITHUB_SHA,e.GITHUB_WORKFLOW_SHA].every(s=>s===e.REQUESTED_SHA))process.exit(1)'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Contrôles canaris hors réseau
+        run: node --test scripts/auth-staging/policy.node.test.mjs
+
+  auth-ui:
+    if: github.ref == 'refs/heads/main'
+    needs: offline-policy
+    # Configure this protected environment with approval of the exact reviewed
+    # source, not automatic approval of arbitrary workflow_dispatch input.
+    environment: native-staging-auth
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 140
+    strategy:
+      fail-fast: false
+      # The two-account cohort is shared; keep each format's session lifecycle
+      # separate even if the Auth project restricts concurrent user sessions.
+      max-parallel: 1
+      matrix:
+        include:
+          - { format: iphone, os: macos-26 }
+          - { format: ipad-portrait, os: macos-26 }
+          - { format: ipad-landscape, os: macos-26 }
+          - { format: android, os: ubuntu-latest }
+    env:
+      AUTH_SHA: ${{ inputs.reviewed_sha }}
+      AUTH_REVIEWED_SHA: ${{ vars.JOLENE_NATIVE_AUTH_REVIEWED_SHA }}
+      AUTH_PROJECT_REF: mejpriaetwgtcstbgfid
+      AUTH_URL: https://mejpriaetwgtcstbgfid.supabase.co
+      AUTH_PUBLISHABLE_KEY: ${{ vars.JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY }}
+      AUTH_FORMAT: ${{ matrix.format }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - name: Admettre le SHA exact et le projet TEST avant les dépendances et le secret
+        run: node scripts/auth-staging/admit.mjs
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile-native/package-lock.json
+      - run: npm ci
+        timeout-minutes: 8
+      - if: matrix.format == 'android'
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - if: matrix.format == 'android'
+        run: bash scripts/install-maestro-ci.sh
+        timeout-minutes: 10
+      - if: matrix.format == 'android'
+        name: KVM du runner jetable
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm4all"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Canal privé éphémère des deux identités TEST
+        run: node scripts/auth-staging/stage-input.mjs
+        env:
+          JOLENE_NATIVE_AUTH_COHORT: ${{ secrets.JOLENE_NATIVE_AUTH_COHORT_TEMP }}
+      - if: matrix.format != 'android'
+        name: Connexion native iOS réelle en TEST
+        run: node scripts/auth-staging/launch.mjs
+        timeout-minutes: 130
+      - if: matrix.format == 'android'
+        name: Connexion native Android réelle en TEST
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 2048M
+          disk-size: 4096M
+          enable-hw-keyboard: false
+          disable-animations: false
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: cd mobile-native && node scripts/auth-staging/launch.mjs
+      - name: Effacer l’entrée privée même si le driver n’a pas démarré
+        if: always()
+        run: node scripts/auth-staging/stage-input.mjs cleanup
+      - name: Exporter seulement preuves publiques autorisées
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-auth-${{ matrix.format }}-${{ inputs.reviewed_sha }}
+          path: |
+            mobile-native/test-results/native-auth-${{ matrix.format }}/report.json
+            mobile-native/test-results/native-auth-${{ matrix.format }}/auth-A-login.png
+            mobile-native/test-results/native-auth-${{ matrix.format }}/auth-A-restart.png
+            mobile-native/test-results/native-auth-${{ matrix.format }}/auth-B-login.png
+            mobile-native/test-results/native-auth-${{ matrix.format }}/auth-B-restart.png
+          retention-days: 3
+          if-no-files-found: warn

@@ -5,10 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyContractsHomeEvidence } from './contracts-home-oracle.mjs';
 import { readPngDimensions } from './png-dimensions.mjs';
+import { verifyPresenceQrCaptures } from './verify-presence-qr.mjs';
 import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
 import { startNativeEventStream } from './ios-native-event-stream.mjs';
+import { readMetroResponse } from './metro-http.mjs';
+import { IOS_CI_DEVELOPER_DIR, selectIosCiSimulator, verifyIosCiXcode } from './ios-ci-toolchain.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -31,8 +34,10 @@ const iosProject = resolve(project, 'ios-ui-tests', 'NativePilotUITests.xcodepro
 writeFileSync(resolve(output, 'scenario.json'), JSON.stringify(selectedScenario, null, 2));
 const env = {
   ...process.env, CI: '1', EXPO_PUBLIC_JOLENE_MODE: 'demo',
+  ...(platform === 'ios' ? { DEVELOPER_DIR: IOS_CI_DEVELOPER_DIR } : {}),
   EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO: selectedScenario.documentScenarioFlag,
   EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO: selectedScenario.contractScenarioFlag ?? '0',
+  EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO: selectedScenario.presenceScenarioFlag ?? '0',
   EXPO_PUBLIC_SUPABASE_URL: '', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
   EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', MAESTRO_CLI_NO_ANALYTICS: '1',
   MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000',
@@ -110,41 +115,32 @@ async function chooseIosDevice() {
   // A fresh macOS runner may still be initializing CoreSimulator before listing
   // runtimes. Bound that startup separately; do not relax any application assertion.
   const inventory = { timeout: 180_000, logfile: 'simulator-inventory.log' };
+  const toolchain = verifyIosCiXcode((await run('xcodebuild', ['-version'], inventory)).stdout);
+  writeFileSync(resolve(output, 'ios-toolchain.json'), JSON.stringify(toolchain, null, 2));
   const runtimes = JSON.parse((await run('xcrun', ['simctl', 'list', 'runtimes', '--json'], inventory)).stdout).runtimes;
   const devices = JSON.parse((await run('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], inventory)).stdout).devices;
   const family = process.env.IOS_DEVICE_FAMILY || 'iphone';
-  if (!['iphone', 'ipad'].includes(family)) throw new Error('Famille de simulateur iOS invalide.');
-  const ios = runtimes.filter(runtime => runtime.isAvailable && runtime.identifier.includes('.iOS-'))
-    .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
-  for (const runtime of ios) {
-    const candidates = (devices[runtime.identifier] || [])
-      .filter(item => item.isAvailable && (item.deviceTypeIdentifier || item.name).toLowerCase().includes(family))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    if (candidates.length) {
-      const selected = candidates[0];
-      writeFileSync(resolve(output, 'device.json'), JSON.stringify({ platform, family, runtime: runtime.version, name: selected.name, udid: selected.udid }, null, 2));
-      // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
-      await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
-      await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
-      // Cold iOS 26.5 data migrations exceeded four minutes on both source
-      // reference runners, before any app build. Bound simulator preparation
-      // separately; application waits and XCTest allowances remain unchanged.
-      stage = 'ios-boot-readiness';
-      const bootTimeout = 600_000;
-      const bootStarted = new Date().toISOString();
-      const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
-        { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
-      writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
-        phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
-        started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
-        code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
-      }, null, 2));
-      if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
-      await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
-      return selected.udid;
-    }
-  }
-  throw new Error(`Aucun simulateur ${family} disponible : aucun SDK supplémentaire ne sera installé.`);
+  const { runtime, device: selected } = selectIosCiSimulator(runtimes, devices, family);
+  writeFileSync(resolve(output, 'device.json'), JSON.stringify({ platform, family, runtime: runtime.version, name: selected.name, udid: selected.udid }, null, 2));
+  // These are disposable CI simulators; leave only the selected one booted so --ios is unambiguous.
+  await run('xcrun', ['simctl', 'shutdown', 'all'], { logfile: 'simulator.log' });
+  await run('xcrun', ['simctl', 'boot', selected.udid], { logfile: 'simulator.log' });
+  // Cold iOS 26.5 data migrations exceeded four minutes on both source
+  // reference runners, before any app build. Bound simulator preparation
+  // separately; application waits and XCTest allowances remain unchanged.
+  stage = 'ios-boot-readiness';
+  const bootTimeout = 600_000;
+  const bootStarted = new Date().toISOString();
+  const boot = await run('xcrun', ['simctl', 'bootstatus', selected.udid, '-b'],
+    { timeout: bootTimeout, logfile: 'simulator.log', allowFailure: true, captureLimit: 64_000 });
+  writeFileSync(resolve(output, 'simulator-boot-command.json'), JSON.stringify({
+    phase: stage, command: ['xcrun', 'simctl', 'bootstatus', selected.udid, '-b'],
+    started: bootStarted, ended: new Date().toISOString(), timeoutMs: bootTimeout,
+    code: boot.code, signal: boot.signal, expired: boot.expired, durationMs: boot.durationMs,
+  }, null, 2));
+  if (boot.expired || boot.code !== 0 || boot.signal) throw new Error('Le démarrage du simulateur a échoué ; voir simulator-boot-command.json.');
+  await run('defaults', ['write', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard', '-bool', 'false']);
+  return selected.udid;
 }
 
 async function chooseAndroidDevice() {
@@ -305,6 +301,7 @@ async function runIosXCTest(name, directory) {
     copyFileSync(resolve(attachments, matching[0].exportedFileName), resolve(captures, `${name}.png`));
   }
   verifyCaptureOrientation(captures, portrait ? 'PORTRAIT' : 'LANDSCAPE_LEFT', names);
+  if (selectedScenario.name === 'presence') verifyPresenceQrCaptures(captures, names);
   scenarios.push({ name, success: true, driver: 'XCTest' });
   console.log(`Parcours ${iosFamily} ${name} terminé : un test XCTest réussi et ${names.length} captures dans l’orientation attendue.`);
 }
@@ -351,8 +348,8 @@ try {
   metro.once('error', error => { metroError = error; metroLog.write(`${error.message}\n`); });
   await waitUntil('réponse Metro sur IPv4 localhost', async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8090/status', { signal: AbortSignal.timeout(5000) });
-      return response.ok && (await response.text()).includes('packager-status:running');
+      const response = await readMetroResponse('http://127.0.0.1:8090/status', { timeoutMs: 5000, maxBytes: 4096 });
+      return response.ok && response.body.toString('utf8').includes('packager-status:running');
     } catch { return false; }
   }, 180_000);
 
@@ -365,12 +362,12 @@ try {
   }, 360_000);
 
   stage = 'metro-manifest';
-  const response = await fetch('http://127.0.0.1:8090/', {
+  const response = await readMetroResponse('http://127.0.0.1:8090/', {
     headers: { 'expo-platform': platform, accept: 'application/expo+json' },
-    signal: AbortSignal.timeout(120_000),
+    timeoutMs: 120_000, maxBytes: 1024 * 1024,
   });
   if (!response.ok) throw new Error(`Le manifeste Metro retourne ${response.status}.`);
-  const manifest = await response.json();
+  const manifest = JSON.parse(response.body.toString('utf8'));
   const sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
   if (!String(sdk).startsWith('57.')) throw new Error(`Version Expo du manifeste inattendue : ${sdk}.`);
   writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', host: iosHost, appId, expoUrl: compiled ? null : expoUrl }, null, 2));
@@ -380,9 +377,9 @@ try {
   if (bundleUrl.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(bundleUrl.hostname) || bundleUrl.port !== '8090') {
     throw new Error('Le bundle de démonstration doit provenir du serveur Metro local.');
   }
-  const bundle = await fetch(bundleUrl, { signal: AbortSignal.timeout(180_000) });
+  const bundle = await readMetroResponse(bundleUrl, { timeoutMs: 180_000, maxBytes: 128 * 1024 * 1024 });
   if (!bundle.ok) throw new Error(`Le bundle Metro retourne ${bundle.status}.`);
-  const bundleBytes = (await bundle.arrayBuffer()).byteLength;
+  const bundleBytes = bundle.body.byteLength;
   if (!bundleBytes) throw new Error('Le bundle Metro est vide.');
   writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
 
@@ -404,7 +401,7 @@ try {
     nativeEventStream?.bindLaunch(launch.stdout, appId);
     // Expo Go SDK 57 opens --initialUrl after its home controller appears.
     // Temporary NSArgumentDomain defaults prepare the Expo Go host only.
-    // XCTest activates the existing process and requires its overlays absent;
+    // XCTest observes the existing foreground process and requires its overlays absent;
     // every Jolene interaction and assertion remains in the scenario.
     for (const orientation of selectedScenario.orientations) {
       await runIosXCTest(orientation, resolve(output, orientation));
@@ -413,6 +410,7 @@ try {
     await runScenario('portrait', flow, output);
     stage = 'portrait-captures';
     verifyCaptureOrientation(output, 'PORTRAIT', scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
+    if (selectedScenario.name === 'presence') verifyPresenceQrCaptures(output, scenarioCaptureNames(selectedScenario, platform, iosFamily, 'portrait'));
   }
   success = true;
   stage = 'complete';

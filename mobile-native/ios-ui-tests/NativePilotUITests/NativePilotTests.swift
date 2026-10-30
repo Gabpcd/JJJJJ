@@ -8,6 +8,7 @@ final class NativePilotTests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     private var proofPrefix = "ipad-portrait"
     private var backgroundStates: [UInt] = []
+    private var dismissedDebuggerMigrationBanner = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -18,7 +19,7 @@ final class NativePilotTests: XCTestCase {
             XCTFail("The runner must identify the prepared app and its Home icon explicitly")
             return
         }
-        // Each selected consultation, Documents or Contracts scenario has its own bounded budget.
+        // Each selected consultation, Documents, Contracts or Presence scenario has its own bounded budget.
         executionTimeAllowance = 600
     }
 
@@ -57,7 +58,7 @@ final class NativePilotTests: XCTestCase {
         require("\(deviceName) portrait window") { self.app.frame.height > self.app.frame.width }
         assertSignedOutDemo()
         record("\(prefix)-connexion")
-        element("enter-demo").tap()
+        tap("enter-demo")
         assertMissionCount(30)
 
         element("contract-filter-LIBERAL").tap()
@@ -114,7 +115,7 @@ final class NativePilotTests: XCTestCase {
         require("iPad landscape window") { self.app.frame.width > self.app.frame.height }
         assertSignedOutDemo()
         record("ipad-paysage-connexion")
-        element("enter-demo").tap()
+        tap("enter-demo")
         assertMissionCount(30)
         record("ipad-paysage-liste")
         openMissionAndReturn(detailProof: "ipad-paysage-detail", returnProof: "ipad-paysage-retour")
@@ -124,6 +125,188 @@ final class NativePilotTests: XCTestCase {
         runSignup()
     }
 
+
+    // Dedicated synthetic attendance runtime. The manual code, not the previously
+    // opened detail, selects the mission. No physical QR or GPS claim is made.
+    func testPresenceIphonePortrait() throws { runPresence(prefix: "iphone-portrait", landscape: false) }
+    func testPresenceIpadPortrait() throws { runPresence(prefix: "ipad-portrait", landscape: false) }
+    func testPresenceIpadLandscape() throws { runPresence(prefix: "ipad-paysage", landscape: true) }
+
+    private func runPresence(prefix: String, landscape: Bool) {
+        proofPrefix = prefix
+        prepareExpoGo()
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
+        require("Presence starts in the requested orientation") {
+            landscape ? self.app.frame.width > self.app.frame.height : self.app.frame.height > self.app.frame.width
+        }
+        assertSignedOutDemo()
+        tap("enter-demo")
+        assertMissionCount(30)
+        tap("tab-presence")
+        let list = element("presence-list-scroll")
+        let detail = element("presence-detail-scroll")
+        let scan = element("presence-scan-scroll")
+        require("The synthetic presence list is displayed") {
+            self.visible(list) && self.element("presence-demo-notice").exists
+        }
+        scrollTo(element("presence-mission-demo-presence-a"), in: list)
+        XCTAssertTrue(element("presence-mission-demo-presence-a").label.contains("Mission A fictive"))
+        record("\(prefix)-presences-liste")
+        tap("presence-mission-demo-presence-a")
+        require("The chosen detail is mission A") { self.element("presence-detail-title").label == "Mission A fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "0")
+        XCTAssertEqual(element("presence-state-label").label, "Aucune présence ouverte")
+        record("\(prefix)-presences-mission-avant")
+        scrollTo(element("presence-detail-open-scan"), in: detail)
+        tap("presence-detail-open-scan")
+        require("Manual attendance entry is mounted") { self.visible(scan) }
+        XCTAssertFalse(element("presence-open-camera").exists)
+        XCTAssertFalse(element("presence-gps-choice").exists)
+        enterPresenceCode("000000", in: scan)
+        require("A synthetic authentication refusal is explicit") { self.element("presence-rejected").exists }
+        scrollTo(element("presence-rejected"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("La connexion a été refusée avant l’enregistrement du pointage").exists)
+        XCTAssertFalse(element("presence-pending").exists)
+        XCTAssertFalse(element("presence-confirmed").exists)
+        record("\(prefix)-presences-auth-refusee")
+        scrollTo(element("presence-code-input"), in: scan)
+        XCTAssertTrue(element("presence-code-input").isEnabled, "A definitive refusal must not leave an uncertain journal")
+        enterPresenceCode("654321", in: scan)
+        require("The first synthetic write has an explicitly uncertain result") { self.element("presence-unconfirmed").exists }
+        scrollTo(element("presence-unconfirmed"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("Démonstration d’une réponse perdue").exists)
+        record("\(prefix)-presences-confirmation-incertaine")
+        scrollTo(element("presence-submit"), in: scan)
+        XCTAssertFalse(element("presence-submit").isEnabled, "The pending receipt must forbid a second scan")
+
+        tap("tab-explore")
+        require("The separate missions tab is usable") { self.visible(self.element("missions-list")) }
+        tap("tab-presence")
+        require("Tab return retains the attendance route") { self.visible(scan) }
+        XCUIDevice.shared.press(.home)
+        require("Presence actually entered background") {
+            self.app.state == .runningBackground || self.app.state == .runningBackgroundSuspended
+        }
+        app.activate()
+        require("Presence resumes and rereads its pending receipt") { self.visible(scan) && self.element("presence-pending").exists }
+        scrollTo(element("presence-pending"), in: scan, downward: false)
+        XCTAssertFalse(element("presence-confirmed").exists, "Resume must not manufacture a successful scan")
+        XCTAssertTrue(textContaining("Ne saisissez pas de nouveau code").exists)
+        XCTAssertFalse(element("presence-code-input").isEnabled)
+        XCTAssertFalse(element("presence-submit").isEnabled)
+        record("\(prefix)-presences-reprise")
+        scrollTo(element("presence-reconcile"), in: scan)
+        tap("presence-reconcile")
+        require("Read-only reconciliation confirms the existing synthetic arrival") { self.element("presence-confirmed").exists }
+        scrollTo(element("presence-actual-mission"), in: scan, downward: false)
+        XCTAssertEqual(element("presence-actual-mission").label, "Mission B fictive", "The result must identify B despite opening A")
+        XCTAssertTrue(text("Simulation enregistrée").exists)
+        scrollTo(element("presence-confirmed-time"), in: scan)
+        XCTAssertTrue(text("Arrivée").exists)
+        XCTAssertEqual(element("presence-confirmed-time").label, "27 octobre 2026 à 11:00")
+        XCTAssertFalse(element("presence-pending").exists)
+        record("\(prefix)-presences-arrivee-relue")
+        scrollTo(element("presence-open-actual-mission"), in: scan)
+        tap("presence-open-actual-mission")
+        require("The result opens B, not the original A screen") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-state-label").label, "Présence ouverte")
+        XCTAssertEqual(element("presence-scan-count").label, "1", "Reconciliation and resume must not create another proof")
+        record("\(prefix)-presences-ouverte")
+        scrollTo(element("presence-detail-open-scan"), in: detail)
+        tap("presence-detail-open-scan")
+        enterPresenceCode("654321", in: scan)
+        require("The previous code is refused after rotation") { self.element("presence-rejected").exists }
+        scrollTo(element("presence-rejected"), in: scan, downward: false)
+        XCTAssertTrue(textContaining("Ce code fictif est invalide ou a déjà été renouvelé").exists)
+        XCTAssertFalse(element("presence-confirmed").exists)
+        XCTAssertFalse(element("presence-pending").exists)
+        record("\(prefix)-presences-code-obsolete")
+        enterPresenceCode("100001", in: scan)
+        require("The renewed code confirms the synthetic departure") { self.element("presence-confirmed").exists }
+        scrollTo(element("presence-actual-mission"), in: scan, downward: false)
+        XCTAssertEqual(element("presence-actual-mission").label, "Mission B fictive")
+        scrollTo(element("presence-confirmed-time"), in: scan)
+        XCTAssertTrue(text("Départ").exists)
+        XCTAssertEqual(element("presence-confirmed-time").label, "27 octobre 2026 à 11:03")
+        record("\(prefix)-presences-depart-relu")
+        scrollTo(element("presence-open-actual-mission"), in: scan)
+        tap("presence-open-actual-mission")
+        require("Departure links to the same mission B") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-state-label").label, "Aucune présence ouverte")
+        XCTAssertEqual(element("presence-scan-count").label, "2")
+        scrollTo(element("presence-effective-demo-presence-effective-1"), in: detail)
+        XCTAssertTrue(text("27 octobre 2026 à 11:00").exists)
+        XCTAssertTrue(text("27 octobre 2026 à 11:03").exists)
+        XCTAssertFalse(text("Pas encore enregistré").exists)
+        record("\(prefix)-presences-cloturee")
+        signOut()
+        XCTAssertFalse(scan.exists)
+        XCTAssertFalse(detail.exists)
+
+        // The establishment has its own identity. It reads the shared synthetic
+        // mission world, never a fabricated UI-only counter or a real server.
+        scrollTo(element("enter-establishment-demo"), in: element("login-scroll"))
+        tap("enter-establishment-demo")
+        tap("tab-presence")
+        require("Establishment presence list is mounted") { self.visible(list) }
+        XCTAssertFalse(element("presence-open-scan").exists)
+        scrollTo(element("presence-mission-demo-presence-a"), in: list)
+        tap("presence-mission-demo-presence-a")
+        require("The unrelated mission A remains readable") { self.element("presence-detail-title").label == "Mission A fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "0", "Opening A must not attach B's pointages to A")
+        scrollTo(element("presence-establishment-code"), in: detail)
+        XCTAssertEqual(element("presence-establishment-code").label, "Code de pointage 1 2 3 4 5 6")
+        scrollTo(element("presence-establishment-qr"), in: detail)
+        require("The establishment QR is visible") { self.visible(self.element("presence-establishment-qr")) }
+        record("\(prefix)-presences-code-initial")
+        backGesture()
+        require("Return from A restores the establishment list") { self.visible(list) }
+        scrollTo(element("presence-mission-demo-presence-b"), in: list)
+        tap("presence-mission-demo-presence-b")
+        require("The establishment reads its mission B") { self.element("presence-detail-title").label == "Mission B fictive" }
+        scrollTo(element("presence-scan-count"), in: detail)
+        XCTAssertEqual(element("presence-scan-count").label, "2")
+        scrollTo(element("presence-establishment-code"), in: detail)
+        XCTAssertEqual(element("presence-establishment-code").label, "Code de pointage 1 0 0 0 0 2")
+        XCTAssertTrue(text("Code fictif relu en mémoire.").exists)
+        XCTAssertFalse(element("presence-detail-open-scan").exists)
+        scrollTo(element("presence-establishment-qr"), in: detail)
+        require("The renewed establishment QR is visible") { self.visible(self.element("presence-establishment-qr")) }
+        record("\(prefix)-presences-code-renouvele")
+        backGesture()
+        require("The native back gesture returns to the same establishment list position") {
+            self.visible(list) && self.visible(self.element("presence-mission-demo-presence-b"))
+        }
+        XCTAssertTrue(element("presence-mission-demo-presence-b").label.contains("En cours"))
+        record("\(prefix)-presences-retour-etablissement")
+        signOut()
+        XCTAssertFalse(element("presence-establishment-code").exists)
+        XCTAssertFalse(list.exists)
+    }
+
+    private func enterPresenceCode(_ code: String, in scan: XCUIElement) {
+        scrollTo(element("presence-code-input"), in: scan)
+        require("The journal allows a new explicit manual scan") { self.element("presence-code-input").isEnabled }
+        tap("presence-code-input")
+        element("presence-code-input").typeText(code)
+        XCTAssertEqual(element("presence-code-input").value as? String, code)
+        // iOS interactive dismissal follows a downward drag; an upward scroll
+        // does not promise to close its number pad. Use the visible Done action
+        // already provided by this TextInput's returnKeyType, on both devices.
+        let done = app.toolbars.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Done", "Terminé"))
+        require("The native number pad exposes one reachable Done action") {
+            done.count == 1 && self.visible(done.firstMatch) && done.firstMatch.isEnabled
+        }
+        done.firstMatch.tap()
+        require("The native keyboard is dismissed before confirmation") { !self.app.keyboards.firstMatch.exists }
+        XCTAssertEqual(element("presence-code-input").value as? String, code, "Done must preserve the six digits without submitting them")
+        scrollTo(element("presence-submit"), in: scan)
+        tap("presence-submit")
+    }
 
     // Each Contracts scenario starts in a fresh demo runtime with the explicit
     // EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO=1 flag. No provider is contacted.
@@ -231,6 +414,9 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-request-otp"), in: detail)
         tap("contract-request-otp")
+        require("The single caregiver code request rendered its synthetic response before scrolling") {
+            self.element("contract-demo-code").exists
+        }
         scrollTo(element("contract-demo-code"), in: detail)
         XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
@@ -302,6 +488,9 @@ final class NativePilotTests: XCTestCase {
         tap("contract-consent")
         scrollTo(element("contract-request-otp"), in: detail)
         tap("contract-request-otp")
+        require("The single establishment code request rendered its synthetic response before scrolling") {
+            self.element("contract-demo-code").exists
+        }
         scrollTo(element("contract-demo-code"), in: detail)
         XCTAssertTrue(element("contract-demo-code").label.contains("000000"))
         XCTAssertTrue(element("contract-demo-code").label.contains("Aucun SMS envoyé"))
@@ -545,14 +734,36 @@ final class NativePilotTests: XCTestCase {
             self.fullyVisible(input, inside: detail) && input.frame.maxY <= self.keyboardTopIncludingAccessory()
         }
         input.typeText("000000")
+        // typeText can return before UIKit has delivered every original key.
+        // Observe that one input operation for at most five seconds: no second
+        // typing, deletion, focus change or gesture can complete the code here.
+        let started = ProcessInfo.processInfo.systemUptime
+        var observations: [[String: Any]] = []
+        var lastObserved: String?
+        let delivery = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let value = input.exists ? input.value as? String : nil
+            let observed = value ?? "<unavailable>"
+            if observed != lastObserved {
+                observations.append(["elapsedMs": Int((ProcessInfo.processInfo.systemUptime - started) * 1000), "value": observed])
+                lastObserved = observed
+            }
+            return value == "000000"
+        }, object: nil)
+        let delivered = XCTWaiter.wait(for: [delivery], timeout: 5) == .completed
         let originalValue = input.value as? String
-        guard originalValue == "000000" else {
+        if let data = try? JSONSerialization.data(withJSONObject: ["timeoutSeconds": 5, "completed": delivered,
+                "typingOperations": 1, "observations": observations] as [String: Any], options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) {
+            attachText(json, name: "\(proofPrefix)-otp-original-delivery.json")
+        }
+        guard delivered && originalValue == "000000" else {
             // Record the original failure BEFORE the comparison. Continuing is
             // enabled only for this one report, then immediately restored.
             do {
                 let previous = continueAfterFailure
                 continueAfterFailure = true
                 defer { continueAfterFailure = previous }
+                XCTAssertTrue(delivered, "The original typing delivers all six digits within five seconds")
                 XCTAssertEqual(originalValue, "000000", "The six typed digits are exact before any further action")
             }
             diagnoseContractKeypadAfterTypingFailure(input, originalValue: originalValue)
@@ -622,13 +833,12 @@ final class NativePilotTests: XCTestCase {
     }
 
     private func prepareExpoGo() {
-        // simctl already launched the fixed local experience. Activation attaches
-        // XCTest to this running process and waits until it can receive events;
-        // it does not reopen the URL or terminate/relaunch the application.
+        // simctl already launched the fixed local experience. Observe that same
+        // foreground process: activate() unnecessarily asks SpringBoard to open
+        // it again and can time out before any test interaction (iPad CI).
         require("The prepared pilot process is already running") {
             self.app.state == .runningForeground
         }
-        app.activate()
         XCUIDevice.shared.orientation = .portrait
         let continueButton = app.buttons.matching(
             NSPredicate(format: "label MATCHES %@", "Continue|Continuer")
@@ -978,7 +1188,20 @@ final class NativePilotTests: XCTestCase {
         require("The expected scroll container is visible") { self.visible(container) }
         var scrolls = 0
         while !fullyVisible(target, inside: container) && scrolls < 20 {
-            drag(container, fromY: downward ? 0.8 : 0.25, toY: downward ? 0.25 : 0.8)
+            var forward = downward
+            var distance: CGFloat = 0.55
+            if target.exists && !target.frame.isEmpty {
+                let frame = target.frame
+                let viewport = container.frame
+                // A large paragraph can be skipped by a fixed half-screen drag.
+                // Follow its actual frame, including reversing an overshoot,
+                // and use less than the available space around that paragraph.
+                if frame.minY < viewport.minY { forward = false }
+                else if frame.maxY > viewport.maxY { forward = true }
+                distance = min(0.55, max(0.08, (viewport.height - frame.height) * 0.4 / viewport.height))
+            }
+            drag(container, fromY: 0.5 + (forward ? distance : -distance) / 2,
+                 toY: 0.5 - (forward ? distance : -distance) / 2)
             scrolls += 1
         }
         require("The requested control is fully visible after bounded scrolling") { self.fullyVisible(target, inside: container) }
@@ -986,8 +1209,44 @@ final class NativePilotTests: XCTestCase {
 
     private func tap(_ identifier: String) {
         let target = element(identifier)
+        if identifier.hasPrefix("tab-") && !visible(target) {
+            dismissDebuggerMigrationBannerIfPresent()
+        }
         require("Control \(identifier) is reachable") { self.visible(target) && target.isEnabled }
-        target.tap()
+        // One ordinary 200 ms contact. A system touch cancellation still fails
+        // the unchanged navigation assertion; there is no retry or press-on-cancel.
+        target.press(forDuration: 0.2)
+    }
+
+    private func dismissDebuggerMigrationBannerIfPresent() {
+        // RN 0.86's one-time Debug migration notice can cover the tab bar. Its
+        // grouped accessibility node does not expose the close icon separately.
+        // Close only this identified tooling notice, using its visible X. Keep
+        // the before/after evidence and Metro warnings; never suppress LogBox.
+        let banners = app.otherElements.matching(NSPredicate(
+            format: "label == %@", "!, Open debugger to view warnings."
+        ))
+        guard banners.count == 1, visible(banners.firstMatch) else { return }
+        guard !dismissedDebuggerMigrationBanner else {
+            XCTFail("The one-time Debug migration notice unexpectedly reappeared")
+            return
+        }
+        let banner = banners.firstMatch
+        let frame = banner.frame
+        guard frame.width >= 250, (44...52).contains(frame.height),
+              frame.minY > app.frame.midY, app.frame.contains(frame) else {
+            XCTFail("The identified Debug migration notice has an unexpected layout")
+            return
+        }
+        record("\(proofPrefix)-debugger-migration-before")
+        dismissedDebuggerMigrationBanner = true
+        // Locked RN LogBoxNotification: 12pt right padding + half the 20pt X.
+        banner.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -22, dy: 0)).tap()
+        require("The Debug migration notice is closed before reaching the actual tab") {
+            !banners.firstMatch.exists
+        }
+        record("\(proofPrefix)-debugger-migration-after")
     }
 
     private func text(_ label: String) -> XCUIElement { app.staticTexts.matching(NSPredicate(format: "label == %@", label)).firstMatch }

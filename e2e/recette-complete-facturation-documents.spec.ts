@@ -402,7 +402,7 @@ for (const remplacement of [false, true]) for (const surface of ['a-payer', 'det
       'fn_obligations_financieres', 'fn_paiements_etablissement', 'fn_mes_factures',
       'fn_litige_pour_mission', 'fn_presences_detail_mission', 'fn_suivi_escrow_mission', 'fn_lister_copies_bulletins',
       'fn_note_moyenne', 'fn_mode_exercice', 'fn_param_bool', 'fn_onboarding_soignant_statut',
-      'fn_alerte_cddu_repetitif', 'fn_etat_pointage_mission', 'fn_mode_paiement_mission',
+      'fn_alerte_cddu_repetitif', 'fn_etat_pointage_mission', 'fn_contrat_signe_pour_pointage', 'fn_mode_paiement_mission',
       'fn_score_etab_public', 'fn_user_id_pour_etablissement', 'fn_est_bloque', 'fn_interlocuteurs_conversations',
     ]);
     await page.route('**/rest/v1/**', async route => {

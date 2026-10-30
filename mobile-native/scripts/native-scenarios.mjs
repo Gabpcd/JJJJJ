@@ -7,6 +7,11 @@ export const CONTRACT_CAPTURES = Object.freeze([
   'contrats-liste', 'contrats-original', 'contrats-otp-simule', 'contrats-reprise',
   'contrats-signature-incertaine', 'contrats-signature-relue', 'contrats-lecture-seule', 'contrats-deux-signatures',
 ]);
+export const PRESENCE_CAPTURES = Object.freeze([
+  'presences-liste', 'presences-mission-avant', 'presences-auth-refusee', 'presences-confirmation-incertaine', 'presences-reprise',
+  'presences-arrivee-relue', 'presences-ouverte', 'presences-code-obsolete', 'presences-depart-relu', 'presences-cloturee',
+  'presences-code-initial', 'presences-code-renouvele', 'presences-retour-etablissement',
+]);
 const EXTRA_CONSULTATION_CAPTURES = [
   'mission-annulee', 'candidature-confirmee', 'mes-missions', 'dossier-relu', 'profil-relu',
   'etablissement-accueil', 'etablissement-missions', 'etablissement-planning', 'etablissement-retour',
@@ -17,8 +22,27 @@ const EXTRA_CONSULTATION_CAPTURES = [
 export function selectNativeScenario(env, platform, family = 'iphone') {
   if (!['ios', 'android'].includes(platform) || !['iphone', 'ipad'].includes(family)) throw new Error('Format natif invalide.');
   const name = env.NATIVE_PILOT_SCENARIO || 'consultation';
-  if (!['consultation', 'documents', 'contracts'].includes(name)) throw new Error('Scénario natif invalide.');
+  if (!['consultation', 'documents', 'contracts', 'presence'].includes(name)) throw new Error('Scénario natif invalide.');
   if (env.EXPO_PUBLIC_JOLENE_MODE && env.EXPO_PUBLIC_JOLENE_MODE !== 'demo') throw new Error('Ces scénarios sont exclusivement fictifs.');
+  if (name !== 'presence' && (env.EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO === '1' || env.NATIVE_PRESENCE_ORIENTATION)) {
+    throw new Error('La préparation Pointage exige son scénario explicite.');
+  }
+  if (name === 'presence') {
+    if (env.EXPO_PUBLIC_JOLENE_DOCUMENTS_SCENARIO === '1' || env.NATIVE_DOCUMENTS_ORIENTATION
+      || env.EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO === '1' || env.NATIVE_CONTRACTS_ORIENTATION) {
+      throw new Error('Le scénario Pointage doit rester isolé des autres injections fictives.');
+    }
+    const orientation = env.NATIVE_PRESENCE_ORIENTATION || 'portrait';
+    if (!['portrait', 'landscape'].includes(orientation)
+      || (orientation === 'landscape' && (platform !== 'ios' || family !== 'ipad'))) {
+      throw new Error('Pointage paysage exige un simulateur iPad distinct.');
+    }
+    if (env.EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO && env.EXPO_PUBLIC_JOLENE_PRESENCE_SCENARIO !== '1') {
+      throw new Error('Le scénario Pointage nécessite son injection fictive explicite.');
+    }
+    return { name, flowFile: 'presence-run.yaml', documentScenarioFlag: '0', contractScenarioFlag: '0',
+      presenceScenarioFlag: '1', orientations: [orientation] };
+  }
   if (name !== 'contracts' && (env.EXPO_PUBLIC_JOLENE_CONTRACTS_SCENARIO === '1' || env.NATIVE_CONTRACTS_ORIENTATION)) {
     throw new Error('La préparation Contrats exige son scénario explicite.');
   }
@@ -56,6 +80,10 @@ export function selectNativeScenario(env, platform, family = 'iphone') {
 
 export function iosTestMethod(selection, family, orientation) {
   if (!selection.orientations.includes(orientation)) throw new Error('Orientation non sélectionnée.');
+  if (selection.name === 'presence') {
+    return orientation === 'landscape' ? 'testPresenceIpadLandscape'
+      : family === 'ipad' ? 'testPresenceIpadPortrait' : 'testPresenceIphonePortrait';
+  }
   if (selection.name === 'contracts') {
     return orientation === 'landscape' ? 'testContractsIpadLandscape'
       : family === 'ipad' ? 'testContractsIpadPortrait' : 'testContractsIphonePortrait';
@@ -70,7 +98,8 @@ export function iosTestMethod(selection, family, orientation) {
 
 export function scenarioCaptureNames(selection, platform, family, orientation) {
   if (!selection.orientations.includes(orientation)) throw new Error('Orientation non sélectionnée.');
-  const suffixes = selection.name === 'contracts' ? [...CONTRACT_CAPTURES]
+  const suffixes = selection.name === 'presence' ? [...PRESENCE_CAPTURES]
+    : selection.name === 'contracts' ? [...CONTRACT_CAPTURES]
     : selection.name === 'documents' ? [...DOCUMENT_CAPTURES]
     : ['connexion', orientation === 'landscape' ? 'liste' : 'missions', 'detail', 'retour', ...EXTRA_CONSULTATION_CAPTURES];
   if (platform === 'android') return suffixes;

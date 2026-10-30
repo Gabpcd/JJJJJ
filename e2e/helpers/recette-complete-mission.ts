@@ -155,6 +155,10 @@ export function creerMissionSimulee() {
           case 'fn_ecrire_audit_safe': return json(null);
           case 'fn_onboarding_soignant_statut': return json(null);
           case 'fn_litige_pour_mission': return json({exists:false});
+          case 'fn_contrat_signe_pour_pointage':
+            return body?.p_mission_id === ids.mission
+              ? json(state.contratCree && contrat.statut === 'SIGNE_COMPLET')
+              : json({message:'Mission de pointage non autorisée'},403);
           case 'fn_alerte_cddu_repetitif': return json({alerte:false});
           case 'fn_generer_donnees_dpae': return json({success:true,contrat_id:ids.contrat,type_contrat:contrat.type_contrat,
             etablissement:{nom:etablissement.nom,siret:etablissement.siret,adresse_rue:etablissement.adresse_rue,

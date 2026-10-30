@@ -1,15 +1,19 @@
 import { StyleSheet, View } from 'react-native';
 
 /** Small native views, no font download, web image or icon accessibility duplicate. */
-export function TabIcon({ name, color }: { name: 'search' | 'list' | 'person' | 'home'; color: string }) {
+export function TabIcon({ name, color }: { name: 'search' | 'list' | 'person' | 'home' | 'clock'; color: string }) {
   return <View style={styles.box} accessible={false} importantForAccessibility="no-hide-descendants">
-    {name === 'search' ? <><View style={[styles.lens, { borderColor: color }]} /><View style={[styles.handle, { backgroundColor: color }]} /></>
+    {name === 'clock' ? <View style={[styles.clock, { borderColor: color }]}><View style={[styles.hour, { backgroundColor: color }]} /><View style={[styles.minute, { backgroundColor: color }]} /></View>
+      : name === 'search' ? <><View style={[styles.lens, { borderColor: color }]} /><View style={[styles.handle, { backgroundColor: color }]} /></>
       : name === 'person' ? <><View style={[styles.head, { borderColor: color }]} /><View style={[styles.shoulders, { borderColor: color }]} /></>
         : name === 'home' ? <><View style={[styles.roof, { borderColor: color }]} /><View style={[styles.house, { borderColor: color }]} /></>
           : <View style={[styles.sheet, { borderColor: color }]}>{[0, 1, 2].map(i => <View key={i} style={[styles.line, { backgroundColor: color }]} />)}</View>}
   </View>;
 }
 const styles = StyleSheet.create({
+  clock: { position: 'absolute', top: 2, left: 2, width: 22, height: 22, borderWidth: 2, borderRadius: 11 },
+  hour: { position: 'absolute', top: 4, left: 8, width: 2, height: 7, borderRadius: 1 },
+  minute: { position: 'absolute', top: 9, left: 8, width: 6, height: 2, borderRadius: 1 },
   box: { width: 26, height: 26 }, lens: { position: 'absolute', top: 1, left: 2, width: 17, height: 17, borderWidth: 2, borderRadius: 9 },
   handle: { position: 'absolute', top: 18, left: 16, width: 10, height: 2, transform: [{ rotate: '45deg' }] },
   head: { position: 'absolute', top: 1, left: 9, width: 9, height: 9, borderWidth: 2, borderRadius: 5 },

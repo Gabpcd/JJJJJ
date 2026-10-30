@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { logger } from '@/lib/logger';
 
 /**
  * Formulaire changement mot de passe avec vérification ancien + force nouveau (Sprint 5.5 PR 6).
@@ -74,17 +75,21 @@ export function ChangementMotDePasse() {
         return;
       }
 
-      // Étape 3 : Audit trail (best-effort, ne bloque pas)
+      // Auth a confirmé la modification. Le journal ne doit pas retarder sa
+      // confirmation ni laisser les mots de passe affichés pendant son écriture.
+      const auditIndisponible = () => logger.warn('Audit du changement de mot de passe indisponible — modification conservée.');
       try {
-        await supabase.rpc('fn_ecrire_audit_safe' as any, {
+        void Promise.resolve(supabase.rpc('fn_ecrire_audit_safe' as any, {
           p_acteur_id: user.id,
           p_type_acteur: 'SOIGNANT',
           p_action: 'DONNEES_PERSO_MODIFICATION',
           p_type_ressource: 'utilisateur',
           p_id_ressource: user.id,
           p_details: { champ: 'mot_de_passe', horodatage: new Date().toISOString() },
-        });
-      } catch { /* audit best-effort */ }
+        })).then(({ error }) => {
+          if (error) auditIndisponible();
+        }, auditIndisponible);
+      } catch { auditIndisponible(); }
 
       afficherNotification({
         type: 'succes',

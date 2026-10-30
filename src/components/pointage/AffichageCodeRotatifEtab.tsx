@@ -7,7 +7,6 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import {
-  choisirContratPointage,
   creneauxPrevisionnels,
   evaluerDisponibilitePointage,
   FENETRE_OUVERTURE_POINTAGE_MINUTES,
@@ -98,7 +97,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
   const { data: planning, isLoading: planningLoading, isError: planningErreur } = useQuery({
     queryKey: ['planning-pointage-rotatif', missionId],
     queryFn: async () => {
-      const [missionResult, creneauxResult, contratsResult] = await Promise.all([
+      const [missionResult, creneauxResult, signatureResult] = await Promise.all([
         supabase
           .from('missions')
           .select('id, debut_le, fin_le, nb_creneaux')
@@ -111,14 +110,14 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
           .eq('type_creneau', 'PREVISIONNEL')
           .eq('est_pause', false)
           .order('debut', { ascending: true }),
-        supabase
-          .from('contrats_mission')
-          .select('id, mission_id, statut, cree_le')
-          .eq('mission_id', missionId),
+        // Le personnel chargé du pointage n'a pas besoin d'accéder aux contrats.
+        // Le serveur vérifie les permissions et les deux parties de la mission.
+        supabase.rpc('fn_contrat_signe_pour_pointage' as any, { p_mission_id: missionId }),
       ]);
       if (missionResult.error) throw missionResult.error;
       if (creneauxResult.error) throw creneauxResult.error;
-      if (contratsResult.error) throw contratsResult.error;
+      if (signatureResult.error) throw signatureResult.error;
+      if (typeof signatureResult.data !== 'boolean') throw new Error('État de signature indisponible.');
 
       const analysePlanning = analyserCompletudePlanningMission(
         missionResult.data,
@@ -127,7 +126,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
       return {
         creneaux: analysePlanning.creneauxPlanifies,
         planningComplet: analysePlanning.complet,
-        contratStatut: choisirContratPointage(contratsResult.data || [])?.statut ?? null,
+        contratStatut: signatureResult.data ? 'SIGNE_COMPLET' : null,
       };
     },
     staleTime: 60_000,
@@ -280,7 +279,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
 
       {afficherCode && code ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-          <p className="text-4xl font-mono font-black text-foreground tracking-[0.3em]">{formatCode(code)}</p>
+          <p className="whitespace-nowrap text-3xl font-mono font-black text-foreground tracking-[0.15em]">{formatCode(code)}</p>
           <div className="bg-card p-3 rounded-xl">
             <QRCodeSVG value={code} size={150} level="M" />
           </div>

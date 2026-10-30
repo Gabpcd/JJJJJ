@@ -6,12 +6,14 @@ import { AffichageCodeRotatifEtab } from './AffichageCodeRotatifEtab';
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   rpc: vi.fn(),
+  signature: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
-  supabase: { from: mocks.from, rpc: mocks.rpc },
+  supabase: { from: mocks.from, rpc: (name: string, args: unknown) => name === 'fn_contrat_signe_pour_pointage'
+    ? mocks.signature(args) : mocks.rpc(name, args) },
 }));
 
 vi.mock('qrcode.react', () => ({
@@ -52,7 +54,6 @@ function renderCode() {
 describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
   let creneauxBuilder: Record<string, any>;
   let creneaux: unknown[];
-  let contrats: unknown[];
   let nbCreneaux: number;
 
   beforeEach(() => {
@@ -60,12 +61,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     vi.setSystemTime(new Date('2026-07-31T10:00:00+02:00'));
     creneaux = [];
     nbCreneaux = 1;
-    contrats = [{
-      id: 'contrat-1',
-      mission_id: 'mission-1',
-      statut: 'SIGNE_COMPLET',
-      cree_le: '2026-07-01T10:00:00Z',
-    }];
+    mocks.signature.mockReset().mockResolvedValue({ data: true, error: null });
     mocks.from.mockReset();
     mocks.rpc.mockReset();
     mocks.toastError.mockReset();
@@ -89,7 +85,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
           nb_creneaux: nbCreneaux,
         }, true);
       }
-      if (table === 'contrats_mission') return creerBuilder(contrats);
+      if (table === 'contrats_mission') throw new Error('Le rôle pointage ne peut pas lire les contrats.');
       creneauxBuilder = creerBuilder(creneaux);
       return creneauxBuilder;
     });
@@ -135,6 +131,8 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     expect(screen.getByText(/Créneau 1\/1 · vendredi 31 juillet 2026 à 08:00 → 16:00/i)).toBeInTheDocument();
     expect(screen.getByTestId('qr-code')).toHaveTextContent('123456');
     expect(screen.queryByText('Code masqué hors créneau')).not.toBeInTheDocument();
+    expect(mocks.signature).toHaveBeenCalledWith({ p_mission_id: 'mission-1' });
+    expect(mocks.from).not.toHaveBeenCalledWith('contrats_mission');
   });
 
   it('associe un EFFECTIF au shift qui contient son début lorsqu’il y en a deux le même jour', async () => {
@@ -347,12 +345,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
   });
 
   it('masque le code d’arrivée tant que le contrat n’est pas signé', async () => {
-    contrats = [{
-      id: 'contrat-1',
-      mission_id: 'mission-1',
-      statut: 'EN_ATTENTE_SIGNATURES',
-      cree_le: '2026-07-01T10:00:00Z',
-    }];
+    mocks.signature.mockResolvedValue({ data: false, error: null });
     creneaux = [{
       id: 'creneau-1',
       mission_id: 'mission-1',
@@ -367,6 +360,27 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     expect(await screen.findByText('Code masqué — contrat non signé')).toBeInTheDocument();
     expect(screen.getByText(/signé par les deux parties/i)).toBeInTheDocument();
     expect(screen.queryByText('123 456')).not.toBeInTheDocument();
+  });
+
+  it.each([null, 'true', { signed: true }])('refuse une arrivée si la signature renvoie une valeur invalide (%j)', async data => {
+    mocks.signature.mockResolvedValue({ data, error: null });
+    creneaux = [{ id: 'creneau-1', mission_id: 'mission-1', debut: '2026-07-31T08:00:00+02:00',
+      fin: '2026-07-31T16:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' }];
+    renderCode();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Code masqué');
+    expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+  });
+
+  it('permet toujours de terminer un segment déjà ouvert si la lecture de signature échoue', async () => {
+    mocks.signature.mockResolvedValue({ data: null, error: new Error('Lecture refusée') });
+    mocks.rpc.mockResolvedValue({ data: {
+      statut: 'EN_COURS', prochain_type_scan: 'FERMETURE', segment_ouvert: true,
+      segments: [{ id: 'segment-1', debut: '2026-07-31T08:00:00+02:00', fin: null }],
+      code_pointage_actif: '654321',
+    }, error: null });
+    renderCode();
+    expect(await screen.findByText('654 321')).toBeInTheDocument();
+    expect(screen.getByTestId('qr-code')).toHaveTextContent('654321');
   });
 
   it('affiche une erreur actionnable si l’état serveur est indisponible', async () => {

@@ -24,16 +24,22 @@ Le backend et les comptes existants ne sont pas réécrits.
 - Contrats soignant/établissement : liste, lecture native du document serveur vérifié
   et signature OTP selon les permissions et l’admission TEST existantes. Le lecteur
   refuse un format qu’il ne sait pas restituer ; il ne régénère aucun contrat.
+- Pointage soignant : code à six chiffres, scan du QR, consentement GPS et reprise
+  des demandes incertaines sans renvoi automatique. Établissement : affichage
+  du code rotatif selon les permissions de pointage, sans ouvrir le contrat.
 - Navigation à onglets avec une pile native par espace ; les pages conservent leur état.
 - Retour par geste iOS / bouton système Android, conservation du défilement,
   clavier, actualisation et reprise après arrière-plan.
 - Session dans le stockage sécurisé du système ; changement d’identité et
   déconnexion invalident les anciennes lectures.
 
-Ce client ne remplace pas encore l’application publiée. La recette des nouveaux
-parcours Documents et Contrats reste à exécuter en simulation puis en intégration
-STAGING. Pointage, PSC, messagerie/push, revenus/facturation, préparation employeur,
-publication et traitement des candidatures par l’établissement restent à porter. La récupération
+Ce client ne remplace pas encore l’application publiée. Documents et Contrats
+sont intégrés par la PR #1092 ; leurs simulations et leurs limites sont suivies
+dans MIGRATION.md. Le pointage natif et la connexion Auth STAGING des deux comptes
+TEST sont préparés dans ce lot et restent à éprouver dans les quatre formats.
+PSC, messagerie/push, revenus/facturation, préparation employeur, validation et
+contestation des présences, publication et traitement des candidatures par
+l’établissement restent à porter. La récupération
 du mot de passe et le challenge anti-bot natif restent à intégrer si requis par
 la configuration Auth. Aucun parcours financier n’est exercé ici et le contenu
 d’un contrat signé reste protégé. Voir [MIGRATION.md](MIGRATION.md) pour les limites de vérification.
@@ -106,7 +112,11 @@ quatre jobs distincts : iPhone, Android, iPad portrait et iPad paysage. Chaque j
 utilise une démo neuve, sans credentials STAGING, et exige respectivement neuf
 ou huit captures avec les assertions du scénario. Le runner refuse le croisement
 des flags Documents/Contrats. Leur présence dans le dépôt ne prouve pas leur
-réussite : les premières simulations de ce lot restent à exécuter et relire.
+réussite : les résultats du commit réellement livré doivent être contrôlés et
+leurs captures relues. Le workflow `native-presence.yml` ajoute treize captures
+par format pour le pointage fictif, les reprises, la rotation et les deux rôles.
+La connexion Auth réelle en TEST est une campagne manuelle séparée, décrite dans
+[AUTH_STAGING.md](AUTH_STAGING.md).
 
 Les preuves doivent toujours distinguer : données fictives sur simulateur,
 intégration STAGING avec compte réel de test, appareil physique et production.
