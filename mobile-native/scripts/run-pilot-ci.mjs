@@ -10,6 +10,7 @@ import { collectIosFailureDiagnostics } from './ios-failure-diagnostics.mjs';
 import { selectNativeScenario, iosTestMethod, scenarioCaptureNames } from './native-scenarios.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from './ios-compiled-client.mjs';
 import { startNativeEventStream } from './ios-native-event-stream.mjs';
+import { readMetroResponse } from './metro-http.mjs';
 
 // Expo CLI: https://docs.expo.dev/more/expo-cli/
 // Maestro CLI: https://docs.maestro.dev/maestro-cli/maestro-cli-commands-and-options
@@ -354,8 +355,8 @@ try {
   metro.once('error', error => { metroError = error; metroLog.write(`${error.message}\n`); });
   await waitUntil('réponse Metro sur IPv4 localhost', async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8090/status', { signal: AbortSignal.timeout(5000) });
-      return response.ok && (await response.text()).includes('packager-status:running');
+      const response = await readMetroResponse('http://127.0.0.1:8090/status', { timeoutMs: 5000, maxBytes: 4096 });
+      return response.ok && response.body.toString('utf8').includes('packager-status:running');
     } catch { return false; }
   }, 180_000);
 
@@ -368,12 +369,12 @@ try {
   }, 360_000);
 
   stage = 'metro-manifest';
-  const response = await fetch('http://127.0.0.1:8090/', {
+  const response = await readMetroResponse('http://127.0.0.1:8090/', {
     headers: { 'expo-platform': platform, accept: 'application/expo+json' },
-    signal: AbortSignal.timeout(120_000),
+    timeoutMs: 120_000, maxBytes: 1024 * 1024,
   });
   if (!response.ok) throw new Error(`Le manifeste Metro retourne ${response.status}.`);
-  const manifest = await response.json();
+  const manifest = JSON.parse(response.body.toString('utf8'));
   const sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
   if (!String(sdk).startsWith('57.')) throw new Error(`Version Expo du manifeste inattendue : ${sdk}.`);
   writeFileSync(resolve(output, 'manifest-summary.json'), JSON.stringify({ sdkVersion: sdk, platform, mode: 'demo', host: iosHost, appId, expoUrl: compiled ? null : expoUrl }, null, 2));
@@ -383,9 +384,9 @@ try {
   if (bundleUrl.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(bundleUrl.hostname) || bundleUrl.port !== '8090') {
     throw new Error('Le bundle de démonstration doit provenir du serveur Metro local.');
   }
-  const bundle = await fetch(bundleUrl, { signal: AbortSignal.timeout(180_000) });
+  const bundle = await readMetroResponse(bundleUrl, { timeoutMs: 180_000, maxBytes: 128 * 1024 * 1024 });
   if (!bundle.ok) throw new Error(`Le bundle Metro retourne ${bundle.status}.`);
-  const bundleBytes = (await bundle.arrayBuffer()).byteLength;
+  const bundleBytes = bundle.body.byteLength;
   if (!bundleBytes) throw new Error('Le bundle Metro est vide.');
   writeFileSync(resolve(output, 'bundle-summary.json'), JSON.stringify({ platform, bytes: bundleBytes, source: 'localhost' }, null, 2));
 

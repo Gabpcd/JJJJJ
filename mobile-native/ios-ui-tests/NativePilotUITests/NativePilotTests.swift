@@ -293,9 +293,16 @@ final class NativePilotTests: XCTestCase {
         tap("presence-code-input")
         element("presence-code-input").typeText(code)
         XCTAssertEqual(element("presence-code-input").value as? String, code)
-        // A real ScrollView gesture dismisses the number pad; no programmatic UI reset.
-        if app.keyboards.firstMatch.exists { drag(scan, fromY: 0.8, toY: 0.55) }
+        // iOS interactive dismissal follows a downward drag; an upward scroll
+        // does not promise to close its number pad. Use the visible Done action
+        // already provided by this TextInput's returnKeyType, on both devices.
+        let done = app.toolbars.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Done", "Terminé"))
+        require("The native number pad exposes one reachable Done action") {
+            done.count == 1 && self.visible(done.firstMatch) && done.firstMatch.isEnabled
+        }
+        done.firstMatch.tap()
         require("The native keyboard is dismissed before confirmation") { !self.app.keyboards.firstMatch.exists }
+        XCTAssertEqual(element("presence-code-input").value as? String, code, "Done must preserve the six digits without submitting them")
         scrollTo(element("presence-submit"), in: scan)
         tap("presence-submit")
     }

@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { finished } from 'node:stream/promises';
 import { androidFlows } from './android-flow.mjs';
 import { buildCompiledIosClient, COMPILED_APP_ID, requireSimulatorBuildSpace } from '../ios-compiled-client.mjs';
+import { readMetroResponse } from '../metro-http.mjs';
 import { CAPTURES, PHASES, PROJECT_REF, guardRun, parseCohort, privateLogFilter,
   publicEnvironment, publicReport, sensitiveForms, validatePhaseProof, validatePublicDirectory } from './policy.mjs';
 
@@ -127,20 +128,20 @@ async function prepareExpo() {
   let ready = false;
   while (Date.now() < deadline) {
     if (metro.exitCode !== null || metro.signalCode !== null) fail('METRO_STOPPED');
-    try { const response = await fetch('http://127.0.0.1:8090/status', { signal: AbortSignal.timeout(5000) });
-      if (response.ok && (await response.text()).includes('packager-status:running')) { ready = true; break; }
+    try { const response = await readMetroResponse('http://127.0.0.1:8090/status', { timeoutMs: 5000, maxBytes: 4096 });
+      if (response.ok && response.body.toString('utf8').includes('packager-status:running')) { ready = true; break; }
     } catch { /* Bounded Metro startup only, never an Auth retry. */ }
     await delay(2000);
   }
   if (!ready) fail('METRO_STARTUP');
-  const response = await fetch('http://127.0.0.1:8090/', { headers: { 'expo-platform': platform, accept: 'application/expo+json' }, signal: AbortSignal.timeout(120_000) });
+  const response = await readMetroResponse('http://127.0.0.1:8090/', { headers: { 'expo-platform': platform, accept: 'application/expo+json' }, timeoutMs: 120_000, maxBytes: 1024 * 1024 });
   if (!response.ok) fail('METRO_MANIFEST');
-  const manifest = await response.json(), sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
+  const manifest = JSON.parse(response.body.toString('utf8')), sdk = manifest.extra?.expoClient?.sdkVersion ?? manifest.sdkVersion;
   if (!String(sdk).startsWith('57.')) fail('EXPO_SDK');
   const url = new URL(manifest.launchAsset?.url);
   if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname) || url.port !== '8090') fail('METRO_ORIGIN');
-  const bundle = await fetch(url, { signal: AbortSignal.timeout(180_000) });
-  if (!bundle.ok || !(await bundle.arrayBuffer()).byteLength) fail('METRO_BUNDLE');
+  const bundle = await readMetroResponse(url, { timeoutMs: 180_000, maxBytes: 128 * 1024 * 1024 });
+  if (!bundle.ok || !bundle.body.byteLength) fail('METRO_BUNDLE');
 }
 
 async function ios() {
