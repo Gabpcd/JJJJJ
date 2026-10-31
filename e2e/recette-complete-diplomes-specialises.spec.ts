@@ -321,6 +321,7 @@ for (const profession of ['IADE', 'IBODE']) {
     // conversation vide et affichage de l'interlocuteur. Aucune saisie, message,
     // signature ou scan ; les POST de contexte sont tracés, jamais effacés.
     const rpcsContexte = {
+      fn_contrat_signe_pour_pointage: { payload: { p_mission_id: idsEtablissement.mission }, reponse: () => false },
       fn_etat_pointage_mission: { payload: { p_mission_id: idsEtablissement.mission }, reponse: () => ({
         statut: mission.statut, intitule: mission.intitule, prochain_type_scan: 'ARRIVEE', nb_scans: 0,
         segment_ouvert: false, segments: [], code_pointage_actif: null, est_etab: true,
@@ -438,7 +439,11 @@ for (const profession of ['IADE', 'IBODE']) {
     await expect(page.getByRole('alert').filter({ hasText: 'Une partie du suivi n’a pas pu être chargée' })).toHaveCount(0);
     await preuveEtablissement(page, `${profession}-etab-attribution-contrat-simules-recharge`, info);
     expect(lecturesContrat).toBe(2);
-    expect(lecturesPlanningContrat).toBe(1);
+    // Le pointage ne lit plus le contrat complet : il reçoit uniquement la
+    // confirmation de signature, contrôlée côté serveur pour cette mission.
+    expect(lecturesPlanningContrat).toBe(0);
+    expect(appelsContexte.filter(appel => appel.nom === 'fn_contrat_signe_pour_pointage')).toHaveLength(1);
+    await expect(page.getByText('Code masqué — contrat non signé', { exact: true })).toBeVisible();
     expect(lecturesSuiviContrat).toBe(1);
     expect(appelsContexte.filter(appel => appel.nom === 'fn_obtenir_conversation')).toHaveLength(1);
     expect(appelsContexte.some(appel => appel.nom === 'fn_etat_pointage_mission')).toBe(true);

@@ -3,6 +3,37 @@
 Ce registre sépare le code porté de sa validation. Le client Capacitor publié
 reste distinct. Aucune modification de ce dossier n’effectue une livraison mobile.
 
+## Situation au 29 octobre 2026
+
+- La PR [#1092](https://github.com/Gabpcd/JJJJJ/pull/1092) est fusionnée depuis le
+  28 octobre (`bc580c0`). Les états d'échec conservés ci-dessous décrivent les
+  étapes historiques ; ils ne décrivent pas tous le code courant.
+- Sur `main` `46df363`, la consultation native passe dans les quatre formats.
+  Documents passe également dans les quatre formats, après une reprise isolée
+  du job iPhone ; le résultat initial en échec reste conservé. Contrats passe
+  aussi dans les quatre formats, après une reprise isolée du job iPad paysage.
+  Le débogueur Expo avait recouvert les onglets lors du premier échec. Les
+  captures finales de lecture seule et des deux signatures ont été relues. Aucun de ces scénarios n'utilise de SMS réel.
+- La PR [#1093](https://github.com/Gabpcd/JJJJJ/pull/1093) est fusionnée et déployée :
+  spécialité de licence vérifiée, matching exclusif et choix explicite de
+  l'établissement. Soixante simulations web et le témoin PostgreSQL ont passé.
+  Cela ne constitue pas une intégration native authentifiée des admissions.
+- Le présent lot prépare le pointage natif et la campagne Auth STAGING. Le code
+  passe TypeScript et 362 tests de logique ; les 19 tests de confinement Auth
+  passent. Leurs simulations natives et leur intégration restent à exécuter.
+- Le QR web passe dix scénarios, propriétaire et membre pointage seul dans cinq
+  formats : rotation, ancien code rejeté, arrivée/départ et rechargement. Le
+  décodage de l'image est réel ; caméra, permissions et backend sont simulés.
+  Les captures ont révélé un code coupé dans une carte iPad paysage : l'affichage
+  est corrigé et une nouvelle campagne passe avec assertion sur une seule ligne.
+- Les deux comptes Auth TEST créés le 27 octobre sont réutilisés. Le contrôle
+  serveur du 29 octobre confirme leurs marqueurs TEST, emails confirmés et absence
+  de profil, parcours ou appartenance métier. Leur login API historique ne prouve
+  pas le login natif ; la campagne manuelle doit encore le vérifier.
+
+Aucune livraison mobile n'a été lancée. Les preuves de ce lot restent distinctes
+entre simulation, authentification STAGING, fournisseurs TEST et iPhone physique.
+
 ## Premier lot intégré — PR #1091
 
 Les parcours synthétiques ci-dessous ont passé les simulations iPhone, Android,
@@ -24,7 +55,7 @@ Des essais iPhone antérieurs ont échoué sur le retour et le passage en arriè
 Le run final franchit ces étapes sans retrait d’assertion. La collecte de diagnostics
 est conservée ; ce passage ne démontre pas à lui seul la cause de ces échecs intermittents.
 
-## Lot Documents et Contrats en préparation — 27 octobre 2026
+## Historique du lot Documents et Contrats — 27 et 28 octobre 2026
 
 | Domaine | Implémentation intégrée | Preuve encore requise |
 | --- | --- | --- |
@@ -117,7 +148,9 @@ du backend restent nécessaires ; leur vérification réelle est distincte de la
 
 - Vérification RPPS et identité DPAE ; écrans de revue documentaire réservés aux gestionnaires.
 - Préparation employeur et génération du contrat ; les originaux signés ne sont pas réécrits par le client natif.
-- Pointage rotatif, GPS, interruptions, validation et contestation des présences.
+- Validation et contestation des présences côté établissement. Le code rotatif,
+  GPS et les reprises soignant sont préparés dans le présent lot, sans intégration
+  STAGING ni contrôle physique acquis.
 - Revenus, factures/avoirs archivés, mandat, Stripe Connect et paiements établissement.
 - Publication/modification des missions, sélection des candidatures et annulations.
 - Messagerie, notifications, préférences et enregistrement des jetons push natifs.
@@ -125,11 +158,14 @@ du backend restent nécessaires ; leur vérification réelle est distincte de la
   challenge anti-bot selon configuration Auth.
 - Autres fonctions établissement (équipe, RH, réclamations, évaluations, export paie).
 
-Aucun code Pointage préparé séparément n’est intégré à ce lot.
+Le serveur applique désormais l’exclusivité de spécialité et le choix explicite
+de l’établissement pour les internes (PR #1093). Les écrans natifs de publication
+et de traitement des candidatures doivent restituer ces règles lors de leur portage.
 
-Le parcours interne reste à compléter : spécialité de licence vérifiée, matching
-exclusif, acceptation explicite des internes par l’établissement et présentation
-de cette preuve dans la candidature. Sa préparation séparée n’est pas intégrée.
+Le pointage utilise une lecture booléenne de signature lorsque le membre possède
+les droits de pointage sans accès aux contrats. La nouvelle RPC vérifie identité,
+affectation, établissement et permissions ; elle ne révèle pas le document.
+Les demandes de pointage incertaines sont relues, jamais renvoyées automatiquement.
 
 Le pilote accepte seulement les modes démo et STAGING et utilise l’identifiant
 `app.jolene.nativepilot`. Le raccordement contrôlé à la production et la transition
@@ -165,7 +201,8 @@ et les demandes de revue restent accessibles pendant cette vérification.
 Le scénario Contrats conserve le contrôle d’un établissement en lecture seule,
 puis fait signer un établissement autorisé après le soignant. Les deux signatures
 synthétiques sont relues sur le même original ; huit captures sont attendues par
-format. Ces prolongements nécessitent encore leur simulation CI sur ce commit.
+format Android et neuf sur iOS. Voir l’état du 29 octobre en tête de ce registre
+pour le dernier résultat connu ; l’intégration authentifiée reste distincte.
 
 Le scénario Documents inclut aussi l’arrêt synthétique avant enregistrement :
 la relecture clôture le reçu, conserve le justificatif courant et réactive son

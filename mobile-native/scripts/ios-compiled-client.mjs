@@ -14,6 +14,23 @@ export function requireSimulatorBuildSpace(project, minimumGiB = 5) {
   return available;
 }
 
+/** A cold Ruby startup on a hosted runner can exceed the generic 60-second probe. */
+export async function readCocoaPodsVersion({ output, run }) {
+  const timeoutMs = 180_000;
+  const result = await run('pod', ['--version'], {
+    timeout: timeoutMs, logfile: 'compiled-cocoapods-version.log', allowFailure: true, captureLimit: 64_000,
+  });
+  writeFileSync(resolve(output, 'compiled-cocoapods-version-command.json'), JSON.stringify({
+    command: ['pod', '--version'], timeoutMs, code: result.code, signal: result.signal,
+    expired: result.expired, durationMs: result.durationMs,
+  }, null, 2));
+  const version = result.stdout.trim();
+  if (result.expired || result.signal || result.code !== 0 || !/^\d+\.\d+\.\d+(?:[.-][\w.-]+)?$/.test(version)) {
+    throw new Error('Lecture de la version CocoaPods échouée ; voir le reçu et le journal conservés.');
+  }
+  return version;
+}
+
 /** Disposable CI checkout only. No delivery build, dependency upgrade or Expo Go fallback. */
 export async function buildCompiledIosClient({ project, output, device, env, run }) {
   if (env.GITHUB_ACTIONS !== 'true' || process.platform !== 'darwin' || !env.RUNNER_TEMP
@@ -54,7 +71,7 @@ export async function buildCompiledIosClient({ project, output, device, env, run
     RCT_USE_PREBUILT_RNCORE: '0', RCT_USE_RN_DEP: '1' };
   const versions = {
     xcode: (await run('xcodebuild', ['-version'])).stdout.trim(),
-    cocoapods: (await run('pod', ['--version'])).stdout.trim(),
+    cocoapods: await readCocoaPodsVersion({ output, run }),
   };
   await run('pod', ['install', '--project-directory=' + ios],
     { timeout: 900_000, logfile: 'compiled-pods.log', captureLimit: 64_000, extraEnv: nativeEnv });

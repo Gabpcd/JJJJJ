@@ -34,7 +34,9 @@ export async function collectIosFailureDiagnostics({ device, output, started, ru
   // disappeared. Preserve a bounded passive view on this disposable simulator;
   // no gesture, retry, setting or verdict is changed by diagnostic collection.
   try {
-    const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '2m',
+    // XCTest report finalization can take longer than two minutes. Cover the
+    // bounded scenario as well as that finalization, retaining the same byte cap.
+    const result = await run('xcrun', ['simctl', 'spawn', device, 'log', 'show', '--last', '15m',
       '--style', 'ndjson', '--info', '--debug', '--predicate',
       '(process == "backboardd" OR process == "testmanagerd" OR process == "SpringBoard") AND (eventMessage CONTAINS[c] "digitizer" OR eventMessage CONTAINS[c] "HID" OR eventMessage CONTAINS[c] "sender" OR eventMessage CONTAINS[c] "synthesi")'],
     { timeout: 30_000, allowFailure: true, captureLimit: 2_000_001 });

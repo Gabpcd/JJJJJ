@@ -36,7 +36,7 @@ const rpcLecture = new Set([
   'fn_bfa_info', 'fn_capacite_alertes_recherches', 'fn_soignant_pour_etablissement',
   'fn_etablissement_pour_mission', 'fn_mes_soignants_etablissement', 'fn_mode_exercice',
   'fn_litige_pour_mission', 'fn_presences_detail_mission', 'fn_suivi_escrow_mission', 'fn_lister_copies_bulletins',
-  'fn_alerte_cddu_repetitif', 'fn_etat_pointage_mission', 'fn_mode_paiement_mission',
+  'fn_alerte_cddu_repetitif', 'fn_etat_pointage_mission', 'fn_contrat_signe_pour_pointage', 'fn_mode_paiement_mission',
   'fn_score_etab_public', 'fn_interlocuteurs_conversations', 'fn_user_id_pour_etablissement',
 ]);
 const rpcInerte = new Set(['fn_audit_connexion', 'fn_maj_activite_soignant', 'fn_ecrire_audit_safe',

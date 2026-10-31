@@ -13,6 +13,7 @@ import { DEMO_ESTABLISHMENT_CONTEXT } from './src/establishment';
 import { GatewayProvider } from './src/ui/gateway';
 import { LoginScreen } from './src/ui/LoginScreen';
 import { ContractsNavigator } from './src/ui/contracts/ContractsNavigator';
+import { PresenceNavigator } from './src/ui/presence/PresenceNavigator';
 import { readOnlyContractDemo } from './src/contracts/runtime';
 import { MissionListScreen } from './src/ui/MissionListScreen';
 import { MissionDetailScreen } from './src/ui/MissionDetailScreen';
@@ -158,11 +159,13 @@ function AccountNavigator() {
       <Tabs.Screen name="TableauEtablissement" component={EstablishmentHomeNavigator} options={{ title: 'Accueil', tabBarButtonTestID: 'tab-establishment-home', tabBarIcon: ({ color }) => <TabIcon name="home" color={color} /> }} />
       <Tabs.Screen name="SuiviEtablissement" component={EstablishmentMissionsNavigator} options={{ title: 'Missions', tabBarButtonTestID: 'tab-establishment-missions', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
       <Tabs.Screen name="ContratsEtablissement" component={ContractsNavigator} options={{ title: 'Contrats', tabBarButtonTestID: 'tab-contracts', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
+      <Tabs.Screen name="PointageEtablissement" component={PresenceNavigator} options={{ title: 'Présences', tabBarButtonTestID: 'tab-presence', tabBarIcon: ({ color }) => <TabIcon name="clock" color={color} /> }} />
       <Tabs.Screen name="CompteEtablissement" component={EstablishmentProfileNavigator} options={{ title: 'Établissement', tabBarButtonTestID: 'tab-establishment-profile', tabBarIcon: ({ color }) => <TabIcon name="person" color={color} /> }} />
     </> : <>
       <Tabs.Screen name="ExplorationSoignant" component={ExploreNavigator} options={{ title: 'Explorer', tabBarButtonTestID: 'tab-explore', tabBarIcon: ({ color }) => <TabIcon name="search" color={color} /> }} />
       <Tabs.Screen name="SuiviSoignant" component={MyMissionsNavigator} options={{ title: 'Mes missions', tabBarButtonTestID: 'tab-my-missions', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
       <Tabs.Screen name="ContratsSoignant" component={ContractsNavigator} options={{ title: 'Contrats', tabBarButtonTestID: 'tab-contracts', tabBarIcon: ({ color }) => <TabIcon name="list" color={color} /> }} />
+      <Tabs.Screen name="PointageSoignant" component={PresenceNavigator} options={{ title: 'Présences', tabBarButtonTestID: 'tab-presence', tabBarIcon: ({ color }) => <TabIcon name="clock" color={color} /> }} />
       <Tabs.Screen name="CompteSoignant" component={CaregiverProfileNavigator} options={{ title: 'Profil', tabBarButtonTestID: 'tab-profile', tabBarIcon: ({ color }) => <TabIcon name="person" color={color} /> }} />
     </>}
   </Tabs.Navigator>;
