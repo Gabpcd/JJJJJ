@@ -1,40 +1,8 @@
+# GELÉ le 01/11/2026 — pilote React Native archivé (décision 5, docs/mobile-swift/DECISIONS_LOT0.md).
+# Déclenchement manuel uniquement ; aucun travail produit n'est plus accepté sur mobile-native/.
 name: Pilote React Native — démonstration
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mobile-native/**'
-      - 'src/lib/constantes.ts'
-      - 'src/lib/donnees-test.ts'
-      - 'src/lib/geo.ts'
-      - 'src/lib/profession-hierarchy.ts'
-      - 'src/lib/date-heure-paris.ts'
-      - 'src/lib/disponibilite-pointage.ts'
-      - 'src/lib/profil-soignant.ts'
-      - 'src/lib/valider-profil-soignant.ts'
-      - 'src/lib/preferencesModesExercice.ts'
-      - 'src/lib/luhn.ts'
-      - 'src/lib/completude-planning-mission.ts'
-      - 'src/components/planning/planning-candidat.ts'
-      - '.github/workflows/native-pilot.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'mobile-native/**'
-      - 'src/lib/constantes.ts'
-      - 'src/lib/donnees-test.ts'
-      - 'src/lib/geo.ts'
-      - 'src/lib/profession-hierarchy.ts'
-      - 'src/lib/date-heure-paris.ts'
-      - 'src/lib/disponibilite-pointage.ts'
-      - 'src/lib/profil-soignant.ts'
-      - 'src/lib/valider-profil-soignant.ts'
-      - 'src/lib/preferencesModesExercice.ts'
-      - 'src/lib/luhn.ts'
-      - 'src/lib/completude-planning-mission.ts'
-      - 'src/components/planning/planning-candidat.ts'
-      - '.github/workflows/native-pilot.yml'
   workflow_dispatch:
 
 permissions:

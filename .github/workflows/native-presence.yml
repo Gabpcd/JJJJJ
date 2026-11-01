@@ -1,62 +1,8 @@
+# GELÉ le 01/11/2026 — pilote React Native archivé (décision 5, docs/mobile-swift/DECISIONS_LOT0.md).
+# Déclenchement manuel uniquement ; aucun travail produit n'est plus accepté sur mobile-native/.
 name: Pointages React Native — démonstration isolée
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mobile-native/**'
-      - 'src/lib/constantes.ts'
-      - 'src/lib/documents.ts'
-      - 'src/lib/documentUpload.ts'
-      - 'src/lib/donnees-test.ts'
-      - 'src/lib/geo.ts'
-      - 'src/lib/profession-hierarchy.ts'
-      - 'src/lib/date-heure-paris.ts'
-      - 'src/lib/disponibilite-pointage.ts'
-      - 'src/lib/profil-soignant.ts'
-      - 'src/lib/valider-profil-soignant.ts'
-      - 'src/lib/preferencesModesExercice.ts'
-      - 'src/lib/luhn.ts'
-      - 'src/lib/completude-planning-mission.ts'
-      - 'src/components/planning/planning-candidat.ts'
-      - 'src/lib/contratMissionUi.ts'
-      - 'src/lib/signatureSmsStagingAdmission.ts'
-      - 'supabase/functions/_shared/cdd-employeur.ts'
-      - 'supabase/functions/_shared/contrat-liberal.ts'
-      - 'supabase/functions/generate-contrat-mission-pdf/**'
-      - 'tests/admin/security/fixtures/contrat-liberal-master-v3.html'
-      - '.github/workflows/native-presence.yml'
-      - 'scripts/ci/presence-contract-pg17.py'
-      - 'tests/fixtures/presence-contract-live-20261029.json'
-      - 'supabase/migrations/20261030000100_lecture_signature_pour_pointage.sql'
-  push:
-    branches: [main]
-    paths:
-      - 'mobile-native/**'
-      - 'src/lib/constantes.ts'
-      - 'src/lib/documents.ts'
-      - 'src/lib/documentUpload.ts'
-      - 'src/lib/donnees-test.ts'
-      - 'src/lib/geo.ts'
-      - 'src/lib/profession-hierarchy.ts'
-      - 'src/lib/date-heure-paris.ts'
-      - 'src/lib/disponibilite-pointage.ts'
-      - 'src/lib/profil-soignant.ts'
-      - 'src/lib/valider-profil-soignant.ts'
-      - 'src/lib/preferencesModesExercice.ts'
-      - 'src/lib/luhn.ts'
-      - 'src/lib/completude-planning-mission.ts'
-      - 'src/components/planning/planning-candidat.ts'
-      - 'src/lib/contratMissionUi.ts'
-      - 'src/lib/signatureSmsStagingAdmission.ts'
-      - 'supabase/functions/_shared/cdd-employeur.ts'
-      - 'supabase/functions/_shared/contrat-liberal.ts'
-      - 'supabase/functions/generate-contrat-mission-pdf/**'
-      - 'tests/admin/security/fixtures/contrat-liberal-master-v3.html'
-      - '.github/workflows/native-presence.yml'
-      - 'scripts/ci/presence-contract-pg17.py'
-      - 'tests/fixtures/presence-contract-live-20261029.json'
-      - 'supabase/migrations/20261030000100_lecture_signature_pour_pointage.sql'
   workflow_dispatch:
 
 permissions:
