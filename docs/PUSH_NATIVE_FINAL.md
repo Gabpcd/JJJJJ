@@ -1,5 +1,7 @@
 # Push natif iOS et Android — runbook de production
 
+> **PÉRIMÉ (01/11/2026).** Ce document décrit le push de la coquille Capacitor 1.0.x. L'app iOS est réécrite en Swift natif dans `ios-native/` : voir `docs/PLAN_APP_NATIVE_SWIFT.md` et `docs/mobile-swift/DECISIONS_LOT0.md`. Reste valable pour Android (décision 1).
+
 État historique vérifié le 14/07/2026, complété par l'état réel du 10/08/2026.
 
 > Le binaire iOS `1.0 (7)` et l'AAB antérieur ne sont plus des livrables finaux.

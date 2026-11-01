@@ -2,8 +2,9 @@
 
 > Proposition rédigée le 1er novembre 2026 par Claude Code à partir d'une
 > cartographie du dépôt (cinq lecteurs), de trois propositions d'architecture
-> indépendantes et d'un jury contradictoire. Rien n'est engagé : les décisions
-> de la section 10 sont à trancher par Gabrielle avant tout code.
+> indépendantes et d'un jury contradictoire. Les neuf décisions de la section 10
+> ont été tranchées par Gabrielle le 1er novembre 2026 (toutes les
+> recommandations suivies) : voir `docs/mobile-swift/DECISIONS_LOT0.md`.
 
 Document destiné à Gabrielle. Il est rédigé à partir du verdict du jury (approche A retenue, avec greffes des approches B et C) et des cartographies du dépôt. Tous les chemins cités existent dans le dépôt, sauf ceux explicitement marqués « à créer ».
 
@@ -303,7 +304,7 @@ Backend : les points où la coquille « fuit » côté serveur (origines `capaci
 - Comptes établissement legacy exclus par un client qui ne gère que `app_metadata.etablissement_id`. Parade : repli de `useEtablissementScope.ts` porté, test STAGING dédié au lot 5.
 - WebView bornée, si retenue : ne jamais injecter de refresh token côté web, data store non persistant par epoch, projet Playwright « embarqué » et tests vitest sur toute branche de plateforme ajoutée au front.
 
-## 10. Décisions à trancher par vous
+## 10. Décisions (tranchées le 1er novembre 2026, voir `docs/mobile-swift/DECISIONS_LOT0.md`)
 
 1. Android : la coquille Capacitor reste seule sur le Play Store, OTA compris, pendant tout le chantier iOS, sans jumeau Kotlin avant un cycle stable de 2.x ? Recommandation : oui.
 2. Remplacement en place : l'app Swift reprend `app.jolene`, Team `GDU5AA28M9`, App Store ID `6774672845`, en 2.0.0 (build 25 ou plus), et ne remplace 1.0.7 qu'après parité soignant et établissement terrain signées, les autres rôles étant renvoyés vers jolene.app ? Recommandation : oui.
