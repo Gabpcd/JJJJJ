@@ -128,3 +128,39 @@ export async function sendApns(opts: {
   const expired = res.status === 410 || reason === "BadDeviceToken" || reason === "Unregistered";
   return { ok: false, expired, error: `APNs ${res.status}: ${reason || "unknown"}` };
 }
+
+export interface ApnsProbeResult {
+  host: string;
+  status: number;
+  reason: string;
+}
+
+/**
+ * Sonde d'authentification APNs (décision 7 du plan Swift) : envoie une
+ * notification à un device token factice sur l'hôte demandé et renvoie la
+ * réponse brute d'Apple. Un 400 BadDeviceToken ou un 410 prouvent que la clé
+ * .p8, le Key ID et le Team ID sont acceptés pour le topic ; un 403
+ * InvalidProviderToken / TopicDisallowed prouve le contraire. Aucun appareil
+ * réel n'est touché et aucun secret n'est renvoyé.
+ */
+export async function probeApns(opts: { environment: "sandbox" | "production" }): Promise<ApnsProbeResult> {
+  const bundleId = Deno.env.get("APNS_BUNDLE_ID") || "app.jolene";
+  const host = opts.environment === "sandbox" ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+  const jwt = await getApnsJwt();
+  // 64 caractères hexadécimaux : format valide, token inexistant.
+  const fakeToken = "0".repeat(63) + "1";
+  const res = await fetch(`https://${host}/3/device/${fakeToken}`, {
+    method: "POST",
+    headers: {
+      "authorization": `bearer ${jwt}`,
+      "apns-topic": bundleId,
+      "apns-push-type": "alert",
+      "apns-priority": "5",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ aps: { alert: { title: "Sonde Jolene", body: "Vérification de la clé APNs" } } }),
+  });
+  let reason = "";
+  try { reason = (await res.json())?.reason || ""; } catch { /* corps vide sur 200 */ }
+  return { host, status: res.status, reason };
+}
