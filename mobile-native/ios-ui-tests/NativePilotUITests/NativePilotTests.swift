@@ -913,6 +913,7 @@ final class NativePilotTests: XCTestCase {
 
     private func runCaregiverWorkflows() {
         tap("tab-my-missions")
+        XCTAssertEqual(element("tab-my-missions").label, "Missions", "The caregiver tab label must not be truncated")
         scrollTo(element("my-missions-empty"), in: element("my-missions-list"))
         tap("tab-explore")
         require("Switching tabs preserves the exploration position") { self.visible(self.element("mission-card-demo-mission-016")) }
