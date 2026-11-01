@@ -1,0 +1,81 @@
+name: Sonde APNs — clé et Team ID (manuel)
+
+# Décision 7 du plan Swift : prouver que les secrets Supabase APNS_* sont
+# acceptés par Apple pour le topic app.jolene, sans toucher un appareil réel.
+# Appelle l'edge function apns-probe (réservée admin / service_role) sur les
+# deux hôtes APNs et échoue si Apple refuse le jeton fournisseur.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Hôte APNs à sonder
+        type: choice
+        options: [both, sandbox, production]
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apns-probe
+  cancel-in-progress: false
+
+env:
+  SUPABASE_URL: https://flripxtsyegjshnhzjkz.supabase.co
+  SUPABASE_PROJECT_REF: flripxtsyegjshnhzjkz
+
+jobs:
+  sonde:
+    name: Sonde APNs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Résoudre la clé service_role (Management API)
+        env:
+          SB_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FALLBACK_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -e
+          RESP=$(curl -s --max-time 20 \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/api-keys?reveal=true" \
+            -H "Authorization: Bearer $SB_ACCESS_TOKEN" || true)
+          KEY=$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const a=JSON.parse(d);const k=a.find(x=>x.name==="service_role"&&x.api_key)||a.find(x=>x.type==="secret"&&!x.disabled&&x.api_key);process.stdout.write(k&&k.api_key?k.api_key:"")}catch(e){}})')
+          if [ -z "$KEY" ]; then KEY="$FALLBACK_KEY"; echo "::warning::Management API injoignable, repli sur le secret GitHub"; fi
+          echo "::add-mask::$KEY"
+          echo "SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Sonder APNs
+        env:
+          TARGET: ${{ inputs.environment }}
+        run: |
+          set -e
+          mkdir -p sonde
+          echo "## Sonde APNs (topic app.jolene, Team attendu GDU5AA28M9)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Hôte | Statut Apple | Raison | Verdict | Team ID configuré = attendu |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          fail=0
+          for env_name in sandbox production; do
+            if [ "$TARGET" != "both" ] && [ "$TARGET" != "$env_name" ]; then continue; fi
+            HTTP=$(curl -s -o "sonde/$env_name.json" -w '%{http_code}' --max-time 60 \
+              -X POST "$SUPABASE_URL/functions/v1/apns-probe" \
+              -H "Authorization: Bearer $SERVICE_KEY" -H "apikey: $SERVICE_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"environment\":\"$env_name\"}")
+            node -e '
+              const fs=require("fs"); const f=process.argv[1]; const env=process.argv[2]; const http=process.argv[3];
+              let j={}; try{ j=JSON.parse(fs.readFileSync(f,"utf8")); }catch{}
+              const row=`| ${j.host||env} | ${j.apns_status??"-"} | ${j.apns_reason||j.error||"-"} | ${j.verdict||"http "+http} | ${j.team_id_correspond===undefined?"-":(j.team_id_correspond?"oui":"NON")} |`;
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,row+"\n");
+              console.log(env, "->", http, JSON.stringify(j));
+              if (j.verdict!=="auth_ok" || j.team_id_correspond!==true) process.exitCode=1;
+            ' "sonde/$env_name.json" "$env_name" "$HTTP" || fail=1
+          done
+          if [ "$fail" = "1" ]; then echo "::error::Apple refuse le jeton fournisseur ou le Team ID ne correspond pas : voir le résumé"; exit 1; fi
+      - name: Conserver les réponses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonde-apns-${{ github.run_id }}
+          path: sonde/
+          retention-days: 30
