@@ -891,7 +891,11 @@ final class NativePilotTests: XCTestCase {
     private func assertMissionsTabLabelFits() {
         let missionsTab = element("tab-my-missions")
         require("The caregiver missions tab is rendered") { self.visible(missionsTab) }
-        XCTAssertEqual(missionsTab.label, "Missions", "The caregiver tab must expose the short Missions label")
+        // react-navigation 7.21 derives the iOS accessibility label from the rendered
+        // tab label: "<label>, tab, <index> of <count>". Compare the rendered part only.
+        let renderedLabel = missionsTab.label.components(separatedBy: ", tab, ").first ?? missionsTab.label
+        XCTAssertEqual(renderedLabel, "Missions",
+            "The caregiver tab must expose the short Missions label (accessibility label: \(missionsTab.label))")
         let requiredWidth = ("Missions" as NSString).size(withAttributes: [
             .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
         ]).width
