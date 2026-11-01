@@ -6,7 +6,8 @@
     "remote_verify_jwt_false": 71,
     "local_total_after_admin_2fa_retirement": 77,
     "local_total_after_copies_bulletins": 78,
-    "local_verify_jwt_false": 72
+    "local_total_after_apns_probe": 79,
+    "local_verify_jwt_false": 73
   },
   "entries": [
     {"slug":"admin-invoke","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"Gateway JWT Supabase puis garde admin dans la fonction."},
@@ -88,6 +89,15 @@
     {"slug":"import-bmo-acquisition","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Acquisition réservée admin/service et non planifiée au lancement."},
     {"slug":"import-boamp-acquisition","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Acquisition réservée admin/service et non planifiée au lancement."},
     {"slug":"sales-outreach-batch","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Campagne réservée admin/service et non planifiée au lancement."},
-    {"slug":"enrich-prospects-annuaire","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Enrichissement réservé admin/service et non planifié au lancement."}
+    {"slug":"enrich-prospects-annuaire","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole"],"justification":"Enrichissement réservé admin/service et non planifié au lancement."},
+    {
+      "slug": "apns-probe",
+      "verify_jwt": false,
+      "auth_class": "ADMIN_CUSTOM",
+      "guard_all": [
+        "verifyAdminOrServiceRole"
+      ],
+      "justification": "Sonde APNs réservée admin/service_role ; aucun appareil réel, aucun secret renvoyé."
+    }
   ]
 }
