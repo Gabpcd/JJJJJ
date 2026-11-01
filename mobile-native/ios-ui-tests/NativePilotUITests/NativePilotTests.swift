@@ -914,13 +914,16 @@ final class NativePilotTests: XCTestCase {
 
     private func runCaregiverWorkflows() {
         tap("tab-my-missions")
+        let missionsTab = element("tab-my-missions")
         let missionsTabLabel = text("Missions")
         XCTAssertTrue(missionsTabLabel.exists, "The full Missions tab label must be accessible")
+        XCTAssertTrue(missionsTab.frame.insetBy(dx: -1, dy: -1).contains(missionsTabLabel.frame),
+            "The Missions label must belong visually to the caregiver tab")
         let renderedWidth = missionsTabLabel.frame.width
         let requiredWidth = ("Missions" as NSString).size(withAttributes: [
             .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
         ]).width
-        XCTAssertGreaterThanOrEqual(renderedWidth, requiredWidth, "The full Missions label must fit without visual truncation")
+        XCTAssertGreaterThanOrEqual(renderedWidth + 1, requiredWidth, "The full Missions label must fit without visual truncation")
         scrollTo(element("my-missions-empty"), in: element("my-missions-list"))
         tap("tab-explore")
         require("Switching tabs preserves the exploration position") { self.visible(self.element("mission-card-demo-mission-016")) }
