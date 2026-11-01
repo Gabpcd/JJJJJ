@@ -885,6 +885,25 @@ final class NativePilotTests: XCTestCase {
         }
     }
 
+    /// The tab button is an accessible container, so its inner text is never exposed
+    /// to XCTest as a separate static text. The button's accessibility label carries the
+    /// rendered label, and the button width bounds the single-line label's room.
+    private func assertMissionsTabLabelFits() {
+        let missionsTab = element("tab-my-missions")
+        require("The caregiver missions tab is rendered") { self.visible(missionsTab) }
+        XCTAssertEqual(missionsTab.label, "Missions", "The caregiver tab must expose the short Missions label")
+        let requiredWidth = ("Missions" as NSString).size(withAttributes: [
+            .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+        ]).width
+        // react-navigation 7.21 bottom tab item: 5pt padding per side; the wide
+        // beside-icon layout also reserves the 26pt icon and its 5pt/12pt margins.
+        let besideIcon = UIDevice.current.userInterfaceIdiom == .pad
+        let reserved: CGFloat = besideIcon ? 10 + 26 + 5 + 12 : 10
+        let availableWidth = missionsTab.frame.width - reserved
+        XCTAssertGreaterThanOrEqual(availableWidth + 1, requiredWidth,
+            "The Missions label must fit its tab without truncation (available \(availableWidth) pt, required \(requiredWidth) pt)")
+    }
+
     private func openMissionAndReturn(detailProof: String, returnProof: String) {
         let list = element("missions-list")
         let mission = element("mission-card-demo-mission-016")
@@ -914,16 +933,7 @@ final class NativePilotTests: XCTestCase {
 
     private func runCaregiverWorkflows() {
         tap("tab-my-missions")
-        let missionsTab = element("tab-my-missions")
-        let missionsTabLabel = text("Missions")
-        XCTAssertTrue(missionsTabLabel.exists, "The full Missions tab label must be accessible")
-        XCTAssertTrue(missionsTab.frame.insetBy(dx: -1, dy: -1).contains(missionsTabLabel.frame),
-            "The Missions label must belong visually to the caregiver tab")
-        let renderedWidth = missionsTabLabel.frame.width
-        let requiredWidth = ("Missions" as NSString).size(withAttributes: [
-            .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
-        ]).width
-        XCTAssertGreaterThanOrEqual(renderedWidth + 1, requiredWidth, "The full Missions label must fit without visual truncation")
+        assertMissionsTabLabelFits()
         scrollTo(element("my-missions-empty"), in: element("my-missions-list"))
         tap("tab-explore")
         require("Switching tabs preserves the exploration position") { self.visible(self.element("mission-card-demo-mission-016")) }
