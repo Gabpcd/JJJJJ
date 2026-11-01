@@ -18,8 +18,10 @@ test.describe('Flow pool urgence', () => {
     await loginAs(page, 'soignant');
 
     await page.goto('/soignant/parametres');
-    await page.waitForLoadState('networkidle');
-
+    // L'application conserve des connexions Supabase actives (Realtime, rafraîchissements) :
+    // « networkidle » n'est jamais atteint de façon fiable et faisait échouer le test au
+    // premier essai (navigationTimeout 15 s, runs 41351520555 et 41358095141). L'assertion
+    // sur le titre suffit à attendre le rendu de la page.
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
   });
 
