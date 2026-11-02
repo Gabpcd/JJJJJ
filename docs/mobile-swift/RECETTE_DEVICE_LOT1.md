@@ -75,6 +75,11 @@ l'app ne peut relire aucun événement, pas même les siens ; les doublons sont 
 des créneaux ajoutés (`UserDefaults`, par `userId` : `missionId` + identifiant ou rang du créneau + `debut` +
 `fin`), même mécanisme sous iOS 16. N = nombre de créneaux `PREVISIONNEL` hors pause dont `fin` est
 renseignée (1 pour une mission ponctuelle de 24 h au plus sans créneau PREVISIONNEL), comme l'ICS web.
+Implémenté en T5 (`JoleneCore/Calendrier/AjoutCalendrier.swift`, `Jolene/Composition/CalendarWriter.swift`) :
+seul un planning **complet** est exporté (bouton masqué sinon, comme sur l'Accueil) ; titre = intitulé,
+notes « Mission Jolene — {établissement} », lieu = ville seule (`adresse_rue` non lue par la projection du
+lot 0, écart avec l'ICS web) ; journal `jolene.calendrier.journal.<userId>` (purgé par la suppression de
+compte, T8). La CI ne prouve que la démo (calendrier en mémoire, `DemoMesMissionsTests`, `DemoAccueilTests`).
 
 | Étape | Attendu | Observé |
 |---|---|---|
