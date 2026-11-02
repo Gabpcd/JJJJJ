@@ -8,9 +8,11 @@
 --     Vraies routines et vrais triggers ; profils fictifs TEST ; aucun appel
 --     GoTrue, Stripe ou fournisseur ; zéro persistance.
 --
--- Ce qu'il prouve (critère LOT3_PLAN.md §3 B3) :
---   - une contestation passe : paiement CONTESTE, un litige, une notification
---     CONTESTATION_PAIEMENT (le CHECK notifications l'accepte désormais) ;
+-- Ce qu'il prouve (critère LOT3_PLAN.md §3 B3, option D19 du §7) :
+--   - une contestation passe : paiement CONTESTE, un litige, une seule
+--     notification établissement, LITIGE_OUVERT, posée par le trigger
+--     trg_notifier_creation_litige, et aucune notification
+--     CONTESTATION_PAIEMENT (CHECK des notifications laissé intact, non figé ici) ;
 --   - un second appel répond {error} sans second litige ni notification ;
 --   - refus structurés sans aucune écriture : anon (droit EXECUTE), sans
 --     identité, compte suspendu, motif vide/NULL/> 500, paiement inconnu,
@@ -36,9 +38,8 @@ DECLARE
   v_fh constant uuid := 'b3c0a003-0000-4000-8000-000000000001';
   v_inconnu constant uuid := 'b3c0a004-0000-4000-8000-000000000001';
   v_fn constant regprocedure := 'public.fn_contester_paiement_soignant(uuid,text)'::regprocedure;
-  -- Empreintes du candidat (contrôlées aussi par tests/node/contestation-paiement-soignant.node.mjs).
-  v_corps_md5 constant text := 'c992ac5cea41693151dd38df0daf580f';
-  v_check_md5 constant text := '14541c0abd3dd26e884e66e9fda9c3fc';
+  -- Empreinte du corps candidat (contrôlée aussi par tests/node/contestation-paiement-soignant.node.mjs).
+  v_corps_md5 constant text := '368f41ca6e0157cd48ebbf6a638cecae';
   v_motif constant text := 'Montant reçu inférieur au montant déclaré';
   v_debut date := date_trunc('week',current_date)::date - 7;
   v_passe date;
@@ -84,10 +85,6 @@ BEGIN
     OR NOT has_function_privilege('authenticated',v_fn,'EXECUTE')
     OR NOT has_function_privilege('service_role',v_fn,'EXECUTE')
   THEN RAISE EXCEPTION 'B3 contestation : corps, configuration ou droits candidats inattendus'; END IF;
-  IF (SELECT md5(pg_get_constraintdef(c.oid)) FROM pg_constraint c
-      WHERE c.conrelid='public.notifications'::regclass AND c.conname='notifications_type_check'
-        AND c.contype='c' AND c.convalidated) IS DISTINCT FROM v_check_md5
-  THEN RAISE EXCEPTION 'B3 contestation : CHECK notifications candidat inattendu'; END IF;
   IF EXISTS(SELECT 1 FROM private.security_definer_inventory
     WHERE signature IN ('fn_contester_paiement_soignant(uuid,text)','public.fn_contester_paiement_soignant(uuid,text)')
       AND (definition_md5 IS DISTINCT FROM v_corps_md5 OR categorie IS DISTINCT FROM 'MIXTE_TENANT_ADMIN'))
@@ -153,7 +150,8 @@ BEGIN
   VALUES(v_mission,v_soignant,v_etab,v_fh,80,'VIREMENT','B3-CONTESTATION',current_date,'DECLARE',true,false)
   RETURNING id INTO v_ps;
   IF EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=v_mission)
-    OR EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)
+    OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id=v_etab
+      AND type IN ('LITIGE_OUVERT','CONTESTATION_PAIEMENT'))
   THEN RAISE EXCEPTION 'B3 contestation : fixture déjà en litige'; END IF;
   SELECT to_jsonb(p) INTO v_avant FROM public.paiements_soignant p WHERE id=v_ps;
 
@@ -204,7 +202,8 @@ BEGIN
   THEN RAISE EXCEPTION 'B3 contestation : paiement inconnu non refusé : %',v_resultat; END IF;
   IF (SELECT to_jsonb(p) FROM public.paiements_soignant p WHERE id=v_ps) IS DISTINCT FROM v_avant
     OR EXISTS(SELECT 1 FROM public.litiges WHERE mission_id=v_mission OR paiement_soignant_id=v_ps)
-    OR EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)
+    OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id=v_etab
+      AND type IN ('LITIGE_OUVERT','CONTESTATION_PAIEMENT'))
   THEN RAISE EXCEPTION 'B3 contestation : un refus a écrit'; END IF;
 
   -- ── 5. Statuts et collisions, chacun dans un sous-bloc annulé ─────────────
@@ -257,7 +256,8 @@ BEGIN
       OR (SELECT to_jsonb(p) FROM public.paiements_soignant p WHERE id=v_ps) IS DISTINCT FROM v_avant
       OR (SELECT count(*) FROM public.litiges WHERE mission_id=v_mission)<>1
       OR EXISTS(SELECT 1 FROM public.litiges WHERE paiement_soignant_id=v_ps)
-      OR EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)
+      OR EXISTS(SELECT 1 FROM public.notifications WHERE destinataire_id=v_etab
+        AND type IN ('LITIGE_OUVERT','CONTESTATION_PAIEMENT'))
     THEN RAISE EXCEPTION 'B3 contestation : collision de litige mal restituée : %',v_resultat; END IF;
     RAISE EXCEPTION 'B3_SOUS_CAS_ANNULE' USING ERRCODE='JB301';
   EXCEPTION WHEN SQLSTATE 'JB301' THEN IF SQLERRM<>'B3_SOUS_CAS_ANNULE' THEN RAISE; END IF; END;
@@ -303,16 +303,17 @@ BEGIN
       AND initie_par='SOIGNANT' AND statut='OUVERT' AND type_litige='AUTRE' AND facture_id IS NULL
       AND motif='Paiement contesté — '||v_motif)
   THEN RAISE EXCEPTION 'B3 contestation : litige absent ou incorrect'; END IF;
-  IF (SELECT count(*) FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)<>1
-    OR NOT EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT'
+  -- Option D19 : aucune notification CONTESTATION_PAIEMENT ; l'établissement
+  -- reçoit exactement une notification, LITIGE_OUVERT, du trigger historique.
+  IF EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT'
+      AND (destinataire_id=v_etab OR id_ressource=v_litige))
+  THEN RAISE EXCEPTION 'B3 contestation : notification CONTESTATION_PAIEMENT inattendue'; END IF;
+  IF (SELECT count(*) FROM public.notifications WHERE type='LITIGE_OUVERT' AND destinataire_id=v_etab)<>1
+    OR (SELECT count(*) FROM public.notifications WHERE destinataire_id=v_etab AND id_ressource=v_litige)<>1
+    OR NOT EXISTS(SELECT 1 FROM public.notifications WHERE type='LITIGE_OUVERT'
       AND destinataire_id=v_etab AND type_destinataire='ETABLISSEMENT'
-      AND titre='Paiement contesté ⚠️' AND corps='Le soignant conteste un paiement. Motif : '||v_motif
-      AND lien='/etablissement/facturation' AND type_ressource='litige' AND id_ressource=v_litige)
-  THEN RAISE EXCEPTION 'B3 contestation : notification CONTESTATION_PAIEMENT absente ou incorrecte'; END IF;
-  -- Le trigger historique notifie aussi l'établissement de l'ouverture du litige.
-  IF (SELECT count(*) FROM public.notifications WHERE type='LITIGE_OUVERT' AND destinataire_id=v_etab
-      AND id_ressource=v_litige)<>1
-  THEN RAISE EXCEPTION 'B3 contestation : notification LITIGE_OUVERT du trigger absente'; END IF;
+      AND type_ressource='litige' AND id_ressource=v_litige)
+  THEN RAISE EXCEPTION 'B3 contestation : notification établissement LITIGE_OUVERT absente, doublée ou incorrecte'; END IF;
   -- Soignant TEST : la notification admin est écartée par la garde TEST existante.
   IF EXISTS(SELECT 1 FROM public.notifications WHERE type_destinataire='ADMIN' AND id_ressource=v_litige)
   THEN RAISE EXCEPTION 'B3 contestation : notification admin pour un compte TEST'; END IF;
@@ -326,7 +327,8 @@ BEGIN
   THEN RAISE EXCEPTION 'B3 contestation : second appel non refusé : %',v_resultat; END IF;
   IF (SELECT to_jsonb(p) FROM public.paiements_soignant p WHERE id=v_ps) IS DISTINCT FROM v_apres
     OR (SELECT count(*) FROM public.litiges WHERE mission_id=v_mission OR paiement_soignant_id=v_ps)<>1
-    OR (SELECT count(*) FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)<>1
+    OR (SELECT count(*) FROM public.notifications WHERE type='LITIGE_OUVERT' AND destinataire_id=v_etab)<>1
+    OR EXISTS(SELECT 1 FROM public.notifications WHERE type='CONTESTATION_PAIEMENT' AND destinataire_id=v_etab)
   THEN RAISE EXCEPTION 'B3 contestation : le second appel a écrit'; END IF;
 
   PERFORM set_config('request.jwt.claim.sub','',true);

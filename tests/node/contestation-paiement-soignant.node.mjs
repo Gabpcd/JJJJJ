@@ -1,8 +1,11 @@
 // B3 (lot 3 app iOS native, B9) — contestation d'un paiement déclaré exécutable
-// et idempotente. Contrôle statique sans réseau ni base : la migration part de la
-// définition LIVE capturée (tests/fixtures/contestation-paiement-live-20261102.json),
-// l'instantané supabase/schema/public.sql suit exactement le nouveau corps, et la
-// régression SQL (job sql-transaction) attend les mêmes empreintes.
+// et idempotente, option D19 (LOT3_PLAN.md §7 décision 19, §3 B3 corrigé v2) :
+// le CHECK des notifications reste intact et l'INSERT CONTESTATION_PAIEMENT,
+// redondant avec trg_notifier_creation_litige (LITIGE_OUVERT), est retiré.
+// Contrôle statique sans réseau ni base : la migration part de la définition
+// LIVE capturée (tests/fixtures/contestation-paiement-live-20261102.json),
+// l'instantané supabase/schema/public.sql suit exactement le nouveau corps, et
+// la régression SQL (job sql-transaction) attend la même empreinte.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -54,24 +57,17 @@ test('la capture LIVE est fidèle (empreintes Postgres recalculées)', () => {
   assert.equal(live.function.prosrc_md5, LIVE_PROSRC_MD5);
   assert.equal(md5(live.constraint.definition), LIVE_CHECK_MD5);
   assert.equal(definitionCheck(listeLive), live.constraint.definition, 'la liste LIVE se reconstruit à l’identique');
-  assert.equal(listeLive.length, 57);
   assert.ok(!listeLive.includes('CONTESTATION_PAIEMENT'), 'le défaut LIVE : type absent du CHECK');
   assert.match(live.function.definition, /'CONTESTATION_PAIEMENT'/);
   assert.deepEqual(live.function.proconfig, ['search_path=public']);
 });
 
-test('la dernière migration du CHECK dans le dépôt produit la même liste que la production', () => {
-  const source = read('supabase/migrations/20260709210000_presences_audit_sql_notif_validation.sql');
-  const bloc = source.split('ADD CONSTRAINT notifications_type_check CHECK (type = ANY (ARRAY[')[1].split(']))')[0];
-  assert.deepEqual(literaux(bloc), listeLive);
-});
-
 test('une seule migration B3, horodatée après la dernière version distante, sans transaction interne', () => {
   assert.equal(migrations.length, 1, 'exactement un fichier *_contestation_paiement_soignant.sql');
   assert.match(migrationName, /^\d{14}_contestation_paiement_soignant\.sql$/);
+  // Seul l'ordre vis-à-vis du registre distant compte : une migration plus
+  // récente d'une autre PR ne doit jamais faire échouer ce test.
   assert.ok(migrationName.slice(0, 14) > DERNIERE_VERSION_DISTANTE);
-  const toutes = readdirSync(new URL('../../supabase/migrations/', import.meta.url)).filter(n => n.endsWith('.sql')).sort();
-  assert.equal(toutes.at(-1), migrationName, 'la migration B3 est la plus récente du dépôt');
   assert.doesNotMatch(migration, /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im);
   assert.doesNotMatch(migration, /\b(GRANT|REVOKE)\b/, 'ACL conservées par CREATE OR REPLACE');
   assert.doesNotMatch(migration, /\bDROP\s+FUNCTION\b/i);
@@ -85,26 +81,40 @@ test('une seule migration B3, horodatée après la dernière version distante, s
 
 test('le préflight refuse tout départ différent de la définition LIVE', () => {
   const preflight = migration.split('$contestation_preflight$')[1] ?? '';
-  assert.ok(migration.indexOf('$contestation_preflight$') < migration.indexOf('ALTER TABLE public.notifications'));
+  assert.ok(migration.indexOf('$contestation_preflight$') < migration.indexOf('CREATE OR REPLACE FUNCTION'));
   assert.ok(preflight.includes(`'${LIVE_PROSRC_MD5}'`));
-  assert.ok(preflight.includes(`'${LIVE_CHECK_MD5}'`));
   assert.match(preflight, /has_function_privilege\('anon'/);
   assert.match(preflight, /security_definer_inventory/);
 });
 
-test('CHECK notifications = liste LIVE + CONTESTATION_PAIEMENT, sans autre changement', () => {
-  const alter = migration.split('ALTER TABLE public.notifications')[1].split(';')[0];
-  assert.match(alter, /DROP CONSTRAINT notifications_type_check,\s+ADD CONSTRAINT notifications_type_check CHECK \(type = ANY \(ARRAY\[/);
-  const attendue = [...listeLive, 'CONTESTATION_PAIEMENT'];
-  assert.deepEqual(literaux(alter), attendue);
-  const md5Nouveau = md5(definitionCheck(attendue));
+test('option D19 : CHECK des notifications intact, aucune notification CONTESTATION_PAIEMENT', () => {
+  // Aucun DDL sur notifications (ni DROP/ADD CONSTRAINT, ni verrou ACCESS EXCLUSIVE).
+  assert.doesNotMatch(migration, /\bALTER\s+TABLE\b/i);
+  assert.doesNotMatch(migration, /\b(DROP|ADD|VALIDATE)\s+CONSTRAINT\b/i);
+  assert.doesNotMatch(migration, /\bNOT\s+VALID\b/i);
+  const { body } = corpsMigration();
+  assert.doesNotMatch(body, /CONTESTATION_PAIEMENT/, 'INSERT redondant retiré');
+  // Une seule notification explicite : l'alerte admin SYSTEM, type accepté par le CHECK LIVE.
+  assert.equal(body.split('INSERT INTO public.notifications').length - 1, 1);
+  const admin = body.split('INSERT INTO public.notifications')[1].split(';')[0];
+  assert.deepEqual(literaux(admin).filter(t => !['ADMIN', 'ADMIN_PLATEFORME'].includes(t)), ['SYSTEM']);
+  assert.ok(listeLive.includes('SYSTEM'));
+  // L'établissement est notifié par le trigger historique (LITIGE_OUVERT, initie_par SOIGNANT).
+  assert.ok(listeLive.includes('LITIGE_OUVERT'));
+  assert.match(body, /trg_notifier_creation_litige/);
+  assert.match(schema, /CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"\."litiges" FOR EACH ROW EXECUTE FUNCTION "public"\."dec_notifier_creation_litige"\(\);/);
+  const declencheur = corpsDollar(schema, 'CREATE OR REPLACE FUNCTION "public"."dec_notifier_creation_litige"(').body;
+  assert.match(declencheur, /IF NEW\.initie_par = 'SOIGNANT' THEN\s+PERFORM fn_creer_notification\(\s+NEW\.etablissement_id, 'ETABLISSEMENT', 'LITIGE_OUVERT',/);
+  // Postflight : le CHECK est encore la définition LIVE relue.
   const postflight = migration.split('$contestation_postflight$')[1] ?? '';
-  assert.ok(postflight.includes(`'${md5Nouveau}'`), 'postflight : empreinte du nouveau CHECK');
-  assert.ok(sqlTest.includes(`'${md5Nouveau}'`), 'régression SQL : même empreinte du CHECK');
-  // Instantané prod : même liste, format pg_dump.
+  assert.ok(postflight.includes(`'${LIVE_CHECK_MD5}'`), 'postflight : CHECK LIVE inchangé');
+  // Instantané et régression SQL : appartenance seulement, jamais d'égalité stricte du CHECK.
   const ligne = schema.split('\n').find(l => l.includes('CONSTRAINT "notifications_type_check"'));
-  assert.deepEqual(literaux(ligne), attendue);
-  assert.ok(ligne.endsWith(`'CONTESTATION_PAIEMENT'::"text"]))),`));
+  for (const type of ['SYSTEM', 'LITIGE_OUVERT']) assert.ok(ligne.includes(`'${type}'::"text"`), type);
+  assert.ok(!sqlTest.includes(LIVE_CHECK_MD5) && !sqlTest.includes('notifications_type_check'),
+    'la régression SQL ne fige pas le CHECK des notifications');
+  assert.match(sqlTest, /type='CONTESTATION_PAIEMENT'/);
+  assert.match(sqlTest, /type='LITIGE_OUVERT'/);
 });
 
 test('le nouveau corps garde les textes serveur LIVE et ajoute gardes, verrou et idempotence', () => {
@@ -112,10 +122,9 @@ test('le nouveau corps garde les textes serveur LIVE et ajoute gardes, verrou et
   assert.equal(tag, '$fn_contester$');
   const enTete = migration.split('CREATE OR REPLACE FUNCTION public.fn_contester_paiement_soignant(')[1].split(tag)[0];
   assert.match(enTete, /^p_paiement_id uuid, p_motif text\)\s+RETURNS jsonb\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path TO 'public'\s+AS $/);
-  // Textes LIVE conservés à l'identique (litige, notifications, erreurs historiques).
+  // Textes LIVE conservés à l'identique (litige, notification admin, erreurs historiques).
   for (const texte of [
     "'Paiement contesté — ' || v_motif",
-    "'CONTESTATION_PAIEMENT',\n        'Paiement contesté ⚠️',\n        'Le soignant conteste un paiement. Motif : ' || v_motif,\n        '/etablissement/facturation',\n        'ETABLISSEMENT',",
     "SELECT id, 'SYSTEM', 'Paiement contesté ⚠️',\n        'Un soignant conteste un paiement. Motif : ' || v_motif,\n        '/admin/facturation', 'ADMIN',",
     "FROM auth.users WHERE raw_app_meta_data->>'role' = 'ADMIN_PLATEFORME'\n    LIMIT 1;",
     "'error', 'Paiement introuvable'",
@@ -141,10 +150,10 @@ test('le nouveau corps garde les textes serveur LIVE et ajoute gardes, verrou et
     const i = body.indexOf(garde);
     assert.ok(i >= 0 && i < premiereEcriture, `garde ${garde} avant toute écriture`);
   }
-  // UPDATE + INSERT litige dans le même sous-bloc atomique ; notifications après.
+  // UPDATE + INSERT litige dans le même sous-bloc atomique ; notification admin après.
   const sousBloc = body.slice(body.indexOf('    BEGIN\n'), body.indexOf('EXCEPTION WHEN unique_violation'));
   assert.ok(sousBloc.includes('UPDATE public.paiements_soignant') && sousBloc.includes('INSERT INTO public.litiges'));
-  assert.ok(body.indexOf("'CONTESTATION_PAIEMENT'") > body.indexOf('EXCEPTION WHEN unique_violation'));
+  assert.ok(body.indexOf("'SYSTEM'") > body.indexOf('EXCEPTION WHEN unique_violation'));
   assert.doesNotMatch(body, /\$\$|\$[A-Za-z_]+\$/, 'corps sans dollar-quoting imbriqué');
 });
 
