@@ -2,10 +2,13 @@ import XCTest
 
 /// Explorer du lot 1 (T4a) en mode démonstration, sur iPhone, iPad portrait et iPad paysage :
 /// chips rapides, feuille de filtres (rayon, contrat, réinitialisation), compteur, badge du
-/// bouton filtres et carte en lecture seule du détail (aperçu hors ligne : aucune requête).
+/// bouton filtres, état vide (action secondaire du web ET « Actualiser ») et carte en lecture
+/// seule du détail (aperçu hors ligne : aucune requête).
 ///
 /// Les comptes attendus sont prouvés par `MissionsBusinessFiltresTests.testComptesDuMondeDemoParFiltre`
-/// (`DemoExplorerAttendus`, JoleneCoreTests) sur les mêmes fixtures que l'app.
+/// et `testEtatVideDuMondeDemoProposeElargirEtActualiser` (`DemoExplorerAttendus`, JoleneCoreTests)
+/// sur les mêmes fixtures que l'app ; la relecture « mêmes critères » d'« Actualiser » par
+/// `ExplorerModelsTests.testEtatVideActualiserRelitAvecLesMemesCriteres`.
 final class DemoExplorerTests: JoleneUITestCase {
     private enum Attendus {
         static let total = 30
@@ -15,6 +18,8 @@ final class DemoExplorerTests: JoleneUITestCase {
         /// Rayon minimum (5 km) : seul l'établissement à 1,4 km du profil démo reste.
         static let rayonMinimum = 10
         static let cdd = 20
+        /// Rayon minimum + Libéral : 0 ; « Élargir le rayon (+20 km) » → 25 km, 10 missions libérales.
+        static let liberalApresElargissement = 10
         static let premierEtablissement = "Établissement fictif République · 75011 Paris"
     }
 
@@ -67,6 +72,57 @@ final class DemoExplorerTests: JoleneUITestCase {
             (self.element("explorer-filtres-ouvrir").value as? String) == "1 filtre actif"
         }
         record("\(proofPrefix)-explorer-filtres-cdd")
+
+        reinitialiserFiltres()
+        XCTAssertEqual(element("explorer-filtres-ouvrir").value as? String, "Aucun filtre actif")
+    }
+
+    /// Revue T4a (majeur) : dans le cas courant (rayon < 100 km, aucune chip), l'état vide garde
+    /// « Actualiser » à côté de l'action secondaire du web ; l'actualisation conserve les critères.
+    func testEtatVideGardeActualiserACoteDeLActionSecondaire() throws {
+        ouvrirExplorer()
+
+        // Rayon minimum + Libéral : aucune mission démo dans 5 km n'est libérale.
+        ouvrirFiltres()
+        let rayon = app.sliders.matching(identifier: "filtre-rayon").firstMatch
+        scrollTo(rayon, in: feuilleFiltres)
+        rayon.adjust(toNormalizedSliderPosition: 0)
+        require("Le rayon minimum est sélectionné") { self.element("filtre-rayon-valeur").label == "Rayon : 5 km" }
+        let contrat = app.segmentedControls.matching(identifier: "filtre-contrat").firstMatch
+        scrollTo(contrat, in: feuilleFiltres)
+        let liberal = contrat.buttons.element(boundBy: 2)
+        require("Le segment Libéral est atteignable") { self.visible(liberal) }
+        liberal.tap()
+        require("Libéral est sélectionné") { liberal.isSelected }
+        tap("filtres-apply")
+        require("La feuille de filtres est fermée") { !self.element("explorer-filtres").exists }
+
+        attendreEtatVide()
+        let elargir = element("missions-empty-action")
+        let actualiser = element("missions-refresh")
+        require("« Élargir le rayon » et « Actualiser » sont tous deux atteignables") {
+            self.visible(elargir) && self.visible(actualiser)
+        }
+        XCTAssertEqual(elargir.label, "Élargir le rayon (+20 km)")
+        XCTAssertEqual(actualiser.label, "Actualiser")
+        record("\(proofPrefix)-explorer-etat-vide")
+
+        // Actualiser : relecture avec les mêmes critères, l'état vide et le badge demeurent.
+        actualiser.tap()
+        attendreEtatVide()
+        require("Les critères sont conservés par l'actualisation") {
+            (self.element("explorer-filtres-ouvrir").value as? String) == "1 filtre actif"
+        }
+        require("« Actualiser » reste disponible après la relecture") {
+            self.visible(self.element("missions-refresh")) && self.element("missions-refresh").isEnabled
+        }
+        XCTAssertFalse(element("missions-refresh-error").exists, "aucune erreur d'actualisation en démonstration")
+
+        // Élargir le rayon : 25 km atteint le cabinet libéral.
+        tap("missions-empty-action")
+        attendreCompteur(Attendus.liberalApresElargissement)
+        XCTAssertEqual(element("missions-rayon").label, "dans un rayon de 25 km")
+        record("\(proofPrefix)-explorer-etat-vide-elargi")
 
         reinitialiserFiltres()
         XCTAssertEqual(element("explorer-filtres-ouvrir").value as? String, "Aucun filtre actif")
@@ -150,6 +206,13 @@ final class DemoExplorerTests: JoleneUITestCase {
             self.containerVisible(self.element("missions-list")) && count.exists && count.label == libelle
         }
         XCTAssertEqual(count.label, libelle)
+    }
+
+    /// État vide d'Explorer affiché (conteneur seulement : jamais `isHittable` sur un défilement).
+    private func attendreEtatVide() {
+        require("Explorer affiche l'état vide") {
+            self.containerVisible(self.element("missions-empty")) && !self.element("missions-list").exists
+        }
     }
 
     private func basculer(_ chip: String, attendu: Int, selectionnee: Bool) {

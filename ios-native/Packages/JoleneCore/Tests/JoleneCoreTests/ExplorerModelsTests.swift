@@ -2,28 +2,47 @@ import XCTest
 @testable import JoleneCore
 
 /// Modèles Explorer du lot 1 (T4a) : filtres appliqués par le port, chips, réinitialisation,
-/// requêtes concurrentes (la dernière gagne) et lectures du lot 0 bornées à `resolutionTimeout`
+/// requêtes concurrentes (la dernière gagne, les lectures supplantées sont annulées), état vide
+/// rafraîchissable avec les mêmes critères et lectures du lot 0 bornées à `resolutionTimeout`
 /// (décision 14 : une seule constante pour lectures et mutations).
 @MainActor
 final class ExplorerModelsTests: XCTestCase {
     /// Port de missions scripté : enregistre les filtres reçus, peut répondre après un délai,
-    /// ne jamais répondre (attente annulable) ou échouer.
+    /// ne jamais répondre (attente annulable, chaque annulation est comptée) ou échouer.
     private final class PortExplorer: MissionsPort, @unchecked Sendable {
         enum Reponse { case missions([Mission]), mission(Mission?), echec(Error), silence, apres(TimeInterval, [Mission]) }
         private let lock = NSLock()
         private var reponses: [Reponse]
         private var recus: [MissionFilters] = []
         private var appelsDetail = 0
+        private var annules = 0
 
         init(_ reponses: [Reponse]) { self.reponses = reponses }
 
         var filtresRecus: [MissionFilters] { lock.lock(); defer { lock.unlock() }; return recus }
         var nombreAppels: Int { lock.lock(); defer { lock.unlock() }; return recus.count + appelsDetail }
+        /// Attentes muettes (`.silence`) interrompues par une annulation avant leur terme.
+        var annulations: Int { lock.lock(); defer { lock.unlock() }; return annules }
 
         private func suivante(_ filtres: MissionFilters?) -> Reponse {
             lock.lock(); defer { lock.unlock() }
             if let filtres { recus.append(filtres) } else { appelsDetail += 1 }
             return reponses.isEmpty ? .missions([]) : reponses.removeFirst()
+        }
+
+        private func compterAnnulation() {
+            lock.lock(); defer { lock.unlock() }
+            annules += 1
+        }
+
+        /// Attente muette de 30 s : seule une annulation l'interrompt, et elle est comptée.
+        private func silence() async throws {
+            do {
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+            } catch {
+                compterAnnulation()
+                throw error
+            }
         }
 
         func profile(userId: String) async throws -> SoignantProfile? {
@@ -37,7 +56,7 @@ final class ExplorerModelsTests: XCTestCase {
             case let .mission(mission): return mission.map { [$0] } ?? []
             case let .echec(error): throw error
             case .silence:
-                try await Task.sleep(nanoseconds: 30_000_000_000)
+                try await silence()
                 return []
             case let .apres(delai, missions):
                 try await Task.sleep(nanoseconds: UInt64(delai * 1_000_000_000))
@@ -51,7 +70,7 @@ final class ExplorerModelsTests: XCTestCase {
             case let .mission(mission): return mission
             case let .echec(error): throw error
             case .silence:
-                try await Task.sleep(nanoseconds: 30_000_000_000)
+                try await silence()
                 return nil
             case let .apres(delai, missions):
                 try await Task.sleep(nanoseconds: UInt64(delai * 1_000_000_000))
@@ -200,6 +219,95 @@ final class ExplorerModelsTests: XCTestCase {
         XCTAssertEqual(model.state, .loading)
     }
 
+    // MARK: État vide (revue T4a : « Actualiser » toujours disponible)
+
+    func testEtatVideActualiserRelitAvecLesMemesCriteres() async throws {
+        let port = PortExplorer([.missions([]), .missions([mission("publiee")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        XCTAssertEqual(model.state, .loaded([]))
+        // Cas courant : rayon < 100 km et aucune chip → l'action secondaire existe, « Actualiser » aussi.
+        XCTAssertEqual(model.filtres.actionEtatVide, .elargirRayon)
+        let criteres = model.filtres
+        await model.load()
+        XCTAssertEqual(port.filtresRecus, [criteres.missionFilters, criteres.missionFilters],
+                       "actualiser l'état vide relit le serveur avec les critères affichés")
+        XCTAssertEqual(model.filtres, criteres, "actualiser ne touche à aucun critère")
+        XCTAssertEqual(model.missions.map(\.id), ["publiee"], "une mission publiée entre-temps apparaît")
+        XCTAssertFalse(model.isRefreshing)
+        XCTAssertNil(model.refreshError)
+    }
+
+    func testEtatVideAvecChipActualiserGardeLaChip() async throws {
+        let port = PortExplorer([.missions([mission("a")]), .missions([]), .missions([])])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        await model.basculer(ExplorerFiltres.chipsRapides[0])
+        XCTAssertEqual(model.state, .loaded([]))
+        XCTAssertEqual(model.filtres.actionEtatVide, .effacerFiltresRapides)
+        await model.load()
+        XCTAssertEqual(port.filtresRecus.count, 3)
+        XCTAssertEqual(port.filtresRecus[2], port.filtresRecus[1], "mêmes critères : la chip n'est pas effacée par « Actualiser »")
+        XCTAssertEqual(port.filtresRecus[2].urgentesOnly, true)
+        XCTAssertEqual(model.state, .loaded([]))
+    }
+
+    func testEtatVideActualisationEchoueeExposeLErreurSansQuitterLEtatVide() async throws {
+        let port = PortExplorer([.missions([]), .echec(JoleneError(.network, "Connexion impossible."))])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        await model.load()
+        XCTAssertEqual(model.state, .loaded([]), "l'état vide reste affiché pendant et après l'actualisation")
+        XCTAssertEqual(model.refreshError, "Connexion impossible.", "l'échec est exposé, l'écran l'affiche à l'état vide aussi")
+        XCTAssertFalse(model.isRefreshing)
+    }
+
+    // MARK: Lectures supplantées (revue T4a : rafale de chips)
+
+    func testUneLectureSupplanteeEstAnnuleeSansAttendreLeDelai() async throws {
+        let port = PortExplorer([.missions([mission("init")]), .silence, .silence, .missions([mission("derniere")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        let debut = Date()
+        // Rafale de trois chips : les deux premières lectures sont supplantées par la troisième.
+        let premiere = Task { await model.basculer(ExplorerFiltres.chipsRapides[0]) }
+        while port.filtresRecus.count < 2 { await Task.yield() }
+        let seconde = Task { await model.basculer(ExplorerFiltres.chipsRapides[1]) }
+        while port.filtresRecus.count < 3 { await Task.yield() }
+        await model.basculer(ExplorerFiltres.chipsRapides[2])
+        await premiere.value
+        await seconde.value
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 5,
+                          "les lectures supplantées sont annulées, pas laissées courir jusqu'au délai de 15 s")
+        XCTAssertEqual(port.annulations, 2, "chaque lecture supplantée est interrompue côté port (requête annulée)")
+        XCTAssertEqual(model.missions.map(\.id), ["derniere"])
+        XCTAssertEqual(model.filtres.horaire, .nuit)
+        XCTAssertTrue(model.filtres.urgentesOnly)
+        XCTAssertFalse(model.isRefreshing)
+        XCTAssertNil(model.refreshError)
+    }
+
+    func testUnRafraichissementSupplanteParUnFiltreEstAnnule() async throws {
+        let port = PortExplorer([.missions([mission("a")]), .silence, .missions([mission("b")])])
+        let (controller, snapshot) = try await pret(port)
+        let model = MissionsListModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        let debut = Date()
+        let rafraichissement = Task { await model.load() }
+        while port.filtresRecus.count < 2 { await Task.yield() }
+        await model.appliquer(model.filtres.basculantUrgentes())
+        await rafraichissement.value
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 5)
+        XCTAssertEqual(port.annulations, 1)
+        XCTAssertEqual(model.missions.map(\.id), ["b"])
+        XCTAssertNil(model.refreshError, "une lecture supplantée n'est jamais une erreur")
+        XCTAssertFalse(model.isRefreshing)
+    }
+
     // MARK: Lectures bornées (décision 14)
 
     func testListeBorneeAuDelaiDeResolution() async throws {
@@ -244,8 +352,11 @@ final class ExplorerModelsTests: XCTestCase {
         let model = MissionsListModel(controller: controller, snapshot: snapshot)
         let tache = Task { await model.load() }
         while port.filtresRecus.isEmpty { await Task.yield() }
+        let debut = Date()
         tache.cancel()
         await tache.value
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 5, "l'annulation de la vue interrompt la lecture sans attendre le délai")
+        XCTAssertEqual(port.annulations, 1, "la requête en vol est annulée côté port")
         XCTAssertEqual(model.state, .loading, "vue disparue : ni erreur ni message de délai, `.task` relancera")
         XCTAssertNil(model.refreshError)
     }

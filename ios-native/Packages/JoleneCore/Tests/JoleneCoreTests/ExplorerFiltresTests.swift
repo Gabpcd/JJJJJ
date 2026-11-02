@@ -2,8 +2,9 @@ import XCTest
 @testable import JoleneCore
 
 /// État éditable des filtres d'Explorer (lot 1, T4a) : port de `src/pages/RechercheMissions.tsx`
-/// (état initial l.101-109, chips l.335-358, badge l.287-293, état vide l.471-486,
-/// « Réinitialiser » l.609-623, saisie du taux l.574-581).
+/// (état initial l.94-102, chips l.334-356, badge l.271-278, état vide l.431-456 dont l'action
+/// secondaire l.440-455, « Réinitialiser » l.609-626 dont `setTauxMin(0)` l.618, saisie du taux
+/// l.553-565, annonce du rayon l.604-607 ; feuille l.475-637).
 final class ExplorerFiltresTests: XCTestCase {
     typealias S = MissionsTestSupport
 
@@ -54,7 +55,7 @@ final class ExplorerFiltresTests: XCTestCase {
         let remis = modifies.reinitialises(profile: p)
         XCTAssertEqual(remis.ville, "")
         XCTAssertEqual(remis.rayonKm, 15, "rayon du profil (`soignant.rayon_deplacement_km || 50`)")
-        // Web l.614 : `setTauxMin(0)` — le taux minimum du profil n'est PAS rétabli par « Réinitialiser ».
+        // Web l.618 : `setTauxMin(0)` — le taux minimum du profil n'est PAS rétabli par « Réinitialiser ».
         XCTAssertEqual(remis.tauxMin, 0)
         XCTAssertEqual(remis.profession, "")
         XCTAssertFalse(remis.urgentesOnly)
@@ -94,7 +95,7 @@ final class ExplorerFiltresTests: XCTestCase {
     func testNombreFiltresActifsHorsChipsEtRayon() {
         let base = ExplorerFiltres.initiaux(profile: profil())
         XCTAssertEqual(base.nombreFiltresActifs, 0)
-        // Les chips rapides et le rayon ne comptent pas (badge web l.287-293).
+        // Les chips rapides et le rayon ne comptent pas (badge web l.271-278).
         var chips = base.basculantUrgentes().basculantHoraire(.nuit); chips.rayonKm = 5
         XCTAssertEqual(chips.nombreFiltresActifs, 0)
         var tout = base
@@ -139,7 +140,20 @@ final class ExplorerFiltresTests: XCTestCase {
         XCTAssertEqual(ExplorerFiltres.taux(depuisSaisie: "inf"), 0)
         XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: 0), "")
         XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: 25), "25")
-        XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: 25.5), "25.5")
+        // Réaffichage à la réouverture de la feuille : virgule décimale du clavier français.
+        XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: 25.5), "25,5")
+        XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: 0.25), "0,25")
+    }
+
+    func testSaisieDuTauxAllerRetourAvecLaVirgule() {
+        // Saisi « 25,5 » → appliqué → feuille rouverte : « 25,5 » réaffiché, relu à l'identique.
+        for saisie in ["25,5", "25.5", "30", "12,75"] {
+            let taux = ExplorerFiltres.taux(depuisSaisie: saisie)
+            let reaffichee = ExplorerFiltres.saisie(depuisTaux: taux)
+            XCTAssertFalse(reaffichee.contains("."), "« \(saisie) » réaffiché sans point : \(reaffichee)")
+            XCTAssertEqual(ExplorerFiltres.taux(depuisSaisie: reaffichee), taux, "aller-retour de « \(saisie) »")
+        }
+        XCTAssertEqual(ExplorerFiltres.saisie(depuisTaux: ExplorerFiltres.taux(depuisSaisie: "25.5")), "25,5")
     }
 
     func testRayonBornesEtLibelles() {
@@ -148,10 +162,15 @@ final class ExplorerFiltresTests: XCTestCase {
         XCTAssertEqual(ExplorerFiltres.rayonPasKm, 5)
         XCTAssertEqual(ExplorerFiltres.libelleRayon(50), "Rayon : 50 km")
         XCTAssertEqual(ExplorerFiltres.libelleRayon(37), "Rayon : 37 km", "rayon du profil hors pas : affiché tel quel")
-        // Le rayon n'est annoncé que s'il s'applique réellement : position du soignant connue (web l.600-603).
+        // Le rayon n'est annoncé que s'il s'applique réellement : position du soignant connue (web l.604-607).
         XCTAssertTrue(ExplorerFiltres.rayonApplicable(profile: profil()))
         XCTAssertFalse(ExplorerFiltres.rayonApplicable(profile: profil(lat: nil)))
         XCTAssertFalse(ExplorerFiltres.rayonApplicable(profile: profil(lng: nil)))
+        // La condition est l'absence de latitude/longitude, pas d'adresse : une adresse saisie mais
+        // non géocodée a la même conséquence, le message parle donc de la position.
+        XCTAssertEqual(ExplorerFiltres.messageRayonInapplicable,
+                       "Votre position n'est pas connue : la distance des missions ne peut pas être calculée et le rayon ne s'applique pas.")
+        XCTAssertFalse(ExplorerFiltres.messageRayonInapplicable.contains("adresse"))
         XCTAssertEqual(ExplorerFiltres.libelleCompteur(0), "0 mission")
         XCTAssertEqual(ExplorerFiltres.libelleCompteur(1), "1 mission")
         XCTAssertEqual(ExplorerFiltres.libelleCompteur(30), "30 missions")

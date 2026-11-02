@@ -33,7 +33,11 @@ final class CarteMissionTests: XCTestCase {
     }
 
     func testCoordonneesNullesOuInvalidesSontAbsentes() {
-        // Web `DetailMissionSoignant.tsx` l.1111 : `adresse_lat && adresse_lng` (0 est faux en JavaScript).
+        // Parité : carte visible de tous = `CarteMissionsExploration.tsx` l.54-56 (`lat == null || lng == null`,
+        // 0 y est ACCEPTÉ). Écart natif assumé et documenté (`CarteMission.point(pour:)`) : une coordonnée
+        // exactement nulle est traitée comme absente — le point (0, 0) du golfe de Guinée signale un
+        // géocodage manquant, jamais un établissement français. (`DetailMissionSoignant.tsx` l.1111 ne
+        // gouverne que les liens Plans / Maps / Waze du soignant assigné, pas une carte.)
         XCTAssertNil(CarteMission.point(pour: avecEtablissement { $0.adresseLat = 0 }))
         XCTAssertNil(CarteMission.point(pour: avecEtablissement { $0.adresseLng = 0 }))
         XCTAssertNil(CarteMission.point(pour: avecEtablissement { $0.adresseLat = 91 }))

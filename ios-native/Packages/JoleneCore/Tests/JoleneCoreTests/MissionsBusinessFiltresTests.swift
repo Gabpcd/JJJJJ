@@ -100,6 +100,21 @@ final class MissionsBusinessFiltresTests: XCTestCase {
         let remis = try await compteDemo { $0.rayonKm = 5; $0.typeContrat = .liberal; $0 = $0.reinitialises(profile: DemoWorld.context.profile) }
         XCTAssertEqual(remis, 30)
     }
+
+    func testEtatVideDuMondeDemoProposeElargirEtActualiser() async throws {
+        // Rayon minimum + Libéral : seul l'établissement à 1,4 km (SALARIE) est dans le rayon → liste
+        // vide, aucune chip, rayon < 100 km → « Élargir le rayon » ET « Actualiser » (revue T4a).
+        var filtres = ExplorerFiltres.initiaux(profile: DemoWorld.context.profile)
+        filtres.rayonKm = ExplorerFiltres.rayonMinimumKm
+        filtres.typeContrat = .liberal
+        let vide = try await compteDemo { $0 = filtres }
+        XCTAssertEqual(vide, 0)
+        XCTAssertEqual(filtres.actionEtatVide, .elargirRayon)
+        // Élargir (+20 km → 25 km) atteint le cabinet libéral à 6,4 km.
+        XCTAssertEqual(filtres.elargissantRayon().rayonKm, DemoExplorerAttendus.rayonApresElargissement)
+        let elargi = try await compteDemo { $0 = filtres.elargissantRayon() }
+        XCTAssertEqual(elargi, DemoExplorerAttendus.liberalApresElargissement)
+    }
 }
 
 /// Comptes attendus du monde démo (`demo-missions.json`, 30 missions, 3 établissements à 1,4 / 5,6 / 6,4 km
@@ -115,4 +130,8 @@ enum DemoExplorerAttendus {
     static let rayonMinimum = 10
     /// Contrat CDD : les 20 missions SALARIE, les 10 LIBERAL sont exclues.
     static let cdd = 20
+    /// État vide : rayon minimum (5 km) + Libéral → 0 mission ; « Élargir le rayon (+20 km) » → 25 km,
+    /// les 10 missions LIBERAL du cabinet à 6,4 km.
+    static let rayonApresElargissement: Double = 25
+    static let liberalApresElargissement = 10
 }

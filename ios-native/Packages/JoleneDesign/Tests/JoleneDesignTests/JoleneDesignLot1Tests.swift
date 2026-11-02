@@ -547,6 +547,21 @@ final class JoleneDesignLot1Tests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hote.sizeThatFits(in: CGSize(width: 390, height: 1000)).height, 44)
     }
 
+    // MARK: - EmptyState (revue T4a : action secondaire ET « Actualiser »)
+
+    @MainActor
+    func testEmptyStateExposeZeroUneOuDeuxActionsDansLOrdre() {
+        XCTAssertEqual(EmptyState(systemImage: "hourglass", title: "T", message: "M", identifier: "vide").actionIdentifiers, [])
+        XCTAssertEqual(EmptyState(systemImage: "magnifyingglass", title: "T", message: "M", identifier: "missions-empty",
+                                  actionTitle: "Actualiser", actionIdentifier: "missions-refresh") {}.actionIdentifiers,
+                       ["missions-refresh"], "init du lot 0 inchangé : une action")
+        let deux = EmptyState(systemImage: "magnifyingglass", title: "T", message: "M", identifier: "missions-empty",
+                              actionTitle: "Élargir le rayon (+20 km)", actionIdentifier: "missions-empty-action", action: {},
+                              secondaryActionTitle: "Actualiser", secondaryActionIdentifier: "missions-refresh", secondaryAction: {})
+        XCTAssertEqual(deux.actionIdentifiers, ["missions-empty-action", "missions-refresh"],
+                       "l'action secondaire du web d'abord, puis « Actualiser », toutes deux affichées")
+    }
+
     // MARK: - Texte sans fond propre (revue B8 n°2, majeur)
 
     func testTexteSansFondPropreAtteintAASurToutesLesSurfacesOuIlEstPose() {
@@ -720,6 +735,12 @@ final class JoleneDesignLot1Tests: XCTestCase {
             ("squelette", AnyView(SkeletonBlock(size: .lg, identifier: "skeleton"))),
             ("carte squelette", AnyView(SkeletonCard(identifier: "skeleton-card"))),
             ("en-tête", AnyView(SectionHeader("Prochaines missions", identifier: "accueil-prochaines", actionTitle: "Tout voir") {})),
+            ("état vide deux actions", AnyView(EmptyState(systemImage: "magnifyingglass", title: "Aucune mission trouvée",
+                                                          message: "M", identifier: "missions-empty",
+                                                          actionTitle: "Élargir le rayon (+20 km)",
+                                                          actionIdentifier: "missions-empty-action", action: {},
+                                                          secondaryActionTitle: "Actualiser",
+                                                          secondaryActionIdentifier: "missions-refresh", secondaryAction: {}))),
         ]
         for (nom, vue) in vues {
             let hote = UIHostingController(rootView: vue)
