@@ -1,13 +1,21 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Règles extraites des composants pour les vecteurs golden iOS (lot 2 W1,
 // lot 4 W0). L'exporteur `scripts/mobile/export-golden-vectors.mjs` les charge
 // par le type stripping de Node : chaque module (et tout ce qu'il importe) doit
 // rester pur — ni React, ni lucide-react, ni client Supabase, ni syntaxe
-// TypeScript non effaçable.
+// TypeScript non effaçable. Deux gardes complémentaires :
+// - lecture statique de la fermeture des imports : dépendances autorisées,
+//   aucun import à effet de bord, aucun import() dynamique ni require ;
+// - chargement réel sous Node avec la résolution du hook de l'exporteur
+//   (lot 1 T2) : seul ce chargement voit un import d'interface sans `type`
+//   (« does not provide an export named »), que `tsc` laisse passer sans
+//   `verbatimModuleSyntax`, et toute syntaxe non effaçable.
 // Exports attendus de chaque module, triés comme `Object.keys(…).sort()`.
 const MODULES_GOLDEN: Record<string, string[]> = {
   'src/lib/documents-requis.ts': ['documentValidePourExigence', 'filtrerDocumentsRequis'],
@@ -22,10 +30,71 @@ const MODULES_GOLDEN: Record<string, string[]> = {
 };
 
 // Seul module pur hors de `src/lib` déjà chargé par l'exporteur golden (lot 1).
+// Il est atteint par un import relatif (`filtre-paquet-swipe.ts`) : le hook de
+// l'exporteur refuse tout alias `@/components/`. Exception temporaire, à lever
+// quand le hook autorisera exactement ce module (lot 1 T2) ou quand
+// `planning-candidat.ts` sera déplacé sous `src/lib`.
 const PLANNING_CANDIDAT = 'src/components/planning/planning-candidat.ts';
 
 const RACINE = process.cwd();
 const IMPORT = /^\s*(import|export)\s+(type\s+)?[^;]*?\sfrom\s+['"]([^'"]+)['"]/gm;
+const IMPORT_EFFET_DE_BORD = /^\s*import\s*['"]([^'"]+)['"]/gm;
+const IMPORT_DYNAMIQUE = /(^|[^\w$.])import\s*\(/;
+const REQUIRE = /(^|[^\w$.])require\s*\(/;
+// Caractères après lesquels une barre oblique ouvre un motif, pas une division.
+const AVANT_MOTIF = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '\n']);
+
+/**
+ * Retire les commentaires (sauts de ligne conservés). Avec `chaines: false`,
+ * vide aussi le contenu des chaînes, gabarits et motifs : un `import(` ou un
+ * `require(` cité dans un texte n'est pas du code. Les spécificateurs d'import
+ * se lisent sur la version qui garde les chaînes.
+ */
+function sansCommentaires(source: string, { chaines = true } = {}): string {
+  let sortie = '';
+  let precedent = '';
+  let i = 0;
+  const vider = (morceau: string) => morceau.replace(/[^\n]/g, ' ');
+  while (i < source.length) {
+    const c = source[i];
+    const suivant = source[i + 1] ?? '';
+    if (c === '/' && suivant === '*') {
+      const fin = source.indexOf('*/', i + 2);
+      const bloc = source.slice(i, fin < 0 ? source.length : fin + 2);
+      sortie += vider(bloc);
+      i += bloc.length;
+      continue;
+    }
+    if (c === '/' && suivant === '/') {
+      const fin = source.indexOf('\n', i);
+      i = fin < 0 ? source.length : fin;
+      continue;
+    }
+    const motif = c === '/' && AVANT_MOTIF.has(precedent);
+    if (c === "'" || c === '"' || c === '`' || motif) {
+      let j = i + 1;
+      let classe = false;
+      while (j < source.length) {
+        const d = source[j];
+        if (d === '\\') { j += 2; continue; }
+        if (motif && d === '[') classe = true;
+        else if (motif && d === ']') classe = false;
+        else if (d === (motif ? '/' : c) && !classe) break;
+        else if (d === '\n' && c !== '`') break;
+        j += 1;
+      }
+      const litteral = source.slice(i, j + 1);
+      sortie += chaines ? litteral : c + vider(litteral.slice(1, -1)) + litteral.slice(-1);
+      precedent = c === '/' ? 'motif' : 'chaine';
+      i = j + 1;
+      continue;
+    }
+    sortie += c;
+    if (c === '\n' || !/\s/.test(c)) precedent = c;
+    i += 1;
+  }
+  return sortie;
+}
 
 type Lecteur = (module: string) => string | null;
 
@@ -45,11 +114,18 @@ function cible(depuis: string, specifier: string): string | null {
 function anomalies(module: string, lire: Lecteur = lireDisque, vus = new Set<string>()): string[] {
   if (vus.has(module)) return [];
   vus.add(module);
-  const source = lire(module);
-  if (source === null) return [`${module} : introuvable`];
+  const brut = lire(module);
+  if (brut === null) return [`${module} : introuvable`];
+  const source = sansCommentaires(brut);
+  const code = sansCommentaires(brut, { chaines: false });
   const erreurs: string[] = [];
-  if (/^\s*(export\s+)?(declare\s+)?(const\s+)?enum\s/m.test(source)) erreurs.push(`${module} : enum`);
-  if (/^\s*(export\s+)?namespace\s+\w+/m.test(source)) erreurs.push(`${module} : namespace`);
+  if (/^\s*(export\s+)?(declare\s+)?(const\s+)?enum\s/m.test(code)) erreurs.push(`${module} : enum`);
+  if (/^\s*(export\s+)?namespace\s+\w+/m.test(code)) erreurs.push(`${module} : namespace`);
+  if (IMPORT_DYNAMIQUE.test(code)) erreurs.push(`${module} : import() dynamique`);
+  if (REQUIRE.test(code)) erreurs.push(`${module} : require`);
+  for (const [, specifier] of source.matchAll(IMPORT_EFFET_DE_BORD)) {
+    erreurs.push(`${module} : import à effet de bord « ${specifier} »`);
+  }
   for (const [, , typeSeul, specifier] of source.matchAll(IMPORT)) {
     if (typeSeul) continue;
     const fichier = cible(module, specifier);
@@ -66,8 +142,63 @@ function anomalies(module: string, lire: Lecteur = lireDisque, vus = new Set<str
 
 type Chargement = { exports: string[] } | { erreur: string };
 
-function chargerSousNode(_racineSrc: string, _modules: string[]): Record<string, Chargement> {
-  throw new Error('chargement réel sous Node : à implémenter');
+// Résolution du hook de l'exporteur golden (lot 1 T2, `module.register()`) :
+// `@/lib/<module>` → `src/lib/<module>.ts`, tout autre alias `@/` refusé,
+// import relatif sans extension d'un module `.ts` de `src/` complété en `.ts`.
+// Plus strict que l'exporteur : un paquet npm est refusé (aucun n'est attendu
+// dans la fermeture d'une règle golden de ces lots).
+const HOOK_RESOLUTION = `
+let racineSrc = null;
+const AVEC_EXTENSION = /\\.[cm]?[jt]sx?$/;
+export async function initialize(donnees) {
+  racineSrc = donnees.racineSrc;
+}
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('@/')) {
+    if (!specifier.startsWith('@/lib/')) {
+      throw new Error('alias « ' + specifier + ' » refusé depuis ' + context.parentURL);
+    }
+    const cible = new URL(specifier.slice(2) + (AVEC_EXTENSION.test(specifier) ? '' : '.ts'), racineSrc);
+    return nextResolve(cible.href, context);
+  }
+  if (specifier.startsWith('./') || specifier.startsWith('../')) {
+    const parentTs = typeof context.parentURL === 'string'
+      && context.parentURL.startsWith(racineSrc) && context.parentURL.endsWith('.ts');
+    return nextResolve(specifier + (parentTs && !AVEC_EXTENSION.test(specifier) ? '.ts' : ''), context);
+  }
+  if (/^(file|data|node):/.test(specifier)) return nextResolve(specifier, context);
+  throw new Error('paquet « ' + specifier + ' » refusé depuis ' + context.parentURL);
+}
+`;
+
+/** Charge chaque module dans un processus Node neuf (type stripping natif). */
+function chargerSousNode(racineSrc: string, modules: string[]): Record<string, Chargement> {
+  // Chemin réel : Node résout les liens symboliques (`/var` → `/private/var`
+  // sous macOS) avant de passer `parentURL` au hook.
+  const urlRacine = pathToFileURL(`${realpathSync(racineSrc)}/`).href;
+  const programme = `
+    import { register } from 'node:module';
+    register('data:text/javascript,' + encodeURIComponent(${JSON.stringify(HOOK_RESOLUTION)}), {
+      parentURL: ${JSON.stringify(urlRacine)},
+      data: { racineSrc: ${JSON.stringify(urlRacine)} },
+    });
+    const resultats = {};
+    for (const [module, url] of ${JSON.stringify(modules.map((m) => [m, pathToFileURL(m).href]))}) {
+      try {
+        resultats[module] = { exports: Object.keys(await import(url)).sort() };
+      } catch (erreur) {
+        resultats[module] = { erreur: String(erreur?.message ?? erreur) };
+      }
+    }
+    console.log(JSON.stringify(resultats));
+  `;
+  const typeStripping = (process.features as { typescript?: unknown }).typescript ? [] : ['--experimental-strip-types'];
+  const sortie = execFileSync(
+    process.execPath,
+    [...typeStripping, '--no-warnings', '--input-type=module', '-e', programme],
+    { encoding: 'utf8', timeout: 20_000 },
+  );
+  return JSON.parse(sortie.trim().split('\n').pop() ?? '{}');
 }
 
 /** Lecteur de sources en mémoire pour éprouver la garde statique. */

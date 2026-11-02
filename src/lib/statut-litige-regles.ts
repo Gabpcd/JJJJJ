@@ -3,6 +3,12 @@
  * extraite de `statutLitige.ts` sans `lucide-react` pour être partagée avec le
  * port natif (vecteurs golden iOS, lot 4 W0). `statutLitige.ts` la réexporte
  * et associe chaque icône nommée à son composant lucide.
+ *
+ * Périmètre : source unique de `statutBadgeV2` (`statutLitige.ts`) seulement.
+ * `FilDiscussionLitige.tsx` (`STATUT_LABELS`, l.19) et `PanneauContestation.tsx`
+ * (`STATUT_CONFIG`, l.48) gardent leurs propres libellés, classes et icônes,
+ * antérieurs à cette extraction. Le natif (lot 4 T2) réplique `statutBadgeV2`,
+ * sans viser la parité avec ces deux surfaces.
  */
 
 export type StatutLitige =

@@ -20,7 +20,19 @@ export const RAISON_LABELS: Record<string, string> = {
  *  valeur numérique — un tri par points les enterrerait). */
 export const RAISONS_EPINGLEES = ['connaissance_etab', 'paiement_rapide'];
 
-/** « Pourquoi 85 ? » → les 2 contributeurs les plus parlants, en clair. */
+/**
+ * « Pourquoi 85 ? » → les 2 contributeurs les plus parlants, en clair.
+ *
+ * Écart connu, comportement d'origine conservé (W0 ne fait que déplacer) :
+ * `RAISON_LABELS[k]` lit la chaîne de prototype. Une clé de breakdown héritée
+ * d'`Object.prototype` (`constructor`, `toString`, `valueOf`…) de valeur > 0
+ * passerait le filtre et afficherait le source de la fonction. Le breakdown v3
+ * n'émet aucune de ces clés (`fn_calculer_score_matching`,
+ * `supabase/schema/public.sql` l.22708). Les vecteurs golden les excluent et
+ * le port Swift (dictionnaire sans prototype) ne reproduit pas l'écart ; la
+ * correction web (`Object.hasOwn(RAISON_LABELS, k)`) change le comportement :
+ * PR dédiée.
+ */
 export function raisonsScore(breakdown: Record<string, unknown>): string {
   const b = breakdown || {};
   const epinglees = RAISONS_EPINGLEES.filter(
