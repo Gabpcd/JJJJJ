@@ -3,13 +3,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {signatureSmsStagingConfig} from '../../supabase/functions/_shared/signature-sms-staging-test.ts';
 import {sourceClosure,canonical} from '../../scripts/ci/install-sms-staging-closed.mjs';
 import {PROJET,DEPOT,WORKFLOW,WORKFLOW_LOT2,WORKFLOWS_APPELANTS,CONTRAT_INSTALLATION,SECRET_EDGE,AUTRES_CAMPAGNES,FONCTION,VERROU,
  DELAI_PROPAGATION_MS,Refus,verifierProjet,verifierContexte,lireEntrees,configurationEdge,litteral,sqlInstallation,sqlPreconditions,
  sqlAllocation,sqlActivation,sqlEtat,sqlRevocation,IDENTITE_ROUTINE,METADONNEES_ROUTINE,allouerCapacite,attendreSignature,
- revoquerDepuisRecu,resumeRecu,codeSortie,preuveSignature} from '../../scripts/ci/allouer-capacite-sms-signature-staging.mjs';
+ revoquerDepuisRecu,resumeRecu,codeSortie,preuveSignature,corpsRevocation,lireLocal} from '../../scripts/ci/allouer-capacite-sms-signature-staging.mjs';
 
 const lire=chemin=>readFileSync(new URL('../../'+chemin,import.meta.url),'utf8');
 const sha=v=>createHash('sha256').update(v).digest('hex');
@@ -56,7 +59,9 @@ function harnais(o={}){
   horloge:Date.parse('2026-11-02T21:00:00Z'),
   secrets:new Map(Object.entries(o.secrets??{TWILIO_ACCOUNT_SID:SID,TWILIO_AUTH_TOKEN:'jeton-'+CANARI,
    TWILIO_FROM_NUMBER:EXPEDITEUR,SUPABASE_URL:`https://${PROJET}.supabase.co`}))};
- const fichiers=[...sourceClosure(lire)].map(([chemin,contenu])=>({name:`source/${chemin}`,content:o.edge?.(chemin,contenu)??contenu}));
+ // Corps Edge et supplément relus à chaque appel : un redéploiement ou un db push
+ // pendant la séance se simule en changeant l'état `s`.
+ const fichiers=()=>[...sourceClosure(lire)].map(([chemin,contenu])=>({name:`source/${chemin}`,content:o.edge?.(chemin,contenu,s)??contenu}));
  const lireInsertion=q=>{
   const m=INSERTION.exec(q);assert.ok(m,'insertion au format attendu');
   return {id:m[1],runId:m[2],sourceSha:m[3],manifestSha256:m[4],duree:Number(m[5]),telephones:[m[6],m[7]],sid:m[8],expediteur:m[9],
@@ -71,10 +76,15 @@ function harnais(o={}){
   empreinteSignee:n>=2,signee:n>=2}]);
  const statut=o.statutContrat??(n=>n>=2?'SIGNE_SOIGNANT':'EN_ATTENTE_SIGNATURES');
  const sql={
-  installation:()=>({installation:o.installation?.()??{pg17:true,vaultStaging:true,table:true,tableFermee:true,routines:routinesInstallees()}}),
+  installation:()=>({installation:o.installation?.(s)??{pg17:true,vaultStaging:true,table:true,tableFermee:true,routines:routinesInstallees()}}),
   preconditions:()=>({preconditions:{identifiants:{missionId:MISSION,soignantId:SOIGNANT,etablissementId:ETAB,documentSha256:DOC},
    ...PRECONDITIONS_OK,...o.preconditions}}),
-  apercu:q=>{const avant=s.capacite;s.capacite={...lireInsertion(q),enabled:true};
+  apercu:q=>{
+   const avant=s.capacite;s.capacite={...lireInsertion(q),enabled:true};
+   assert.ok(q.includes('PERFORM private.fn_signature_sms_test_scope('),'portée exercée dans l’aperçu');
+   // Même révocation que le mode revoquer, exercée avant l'annulation.
+   assert.equal(REVOCATION.exec(q)?.[1],s.capacite.runId,'aperçu : révocation de la ligne de ce run');
+   if(!o.apercuSansRevocation){s.capacite.enabled=false;s.capacite.revoquee=true;}
    const r={preuve:{capacite:projection(),scopeSoignant:true,capacitesActives:actives()}};s.capacite=avant;return r;},
   insertion:q=>{s.capacite=lireInsertion(q);return {preuve:{capacite:projection(),scopeSoignant:null,capacitesActives:0}};},
   activation:q=>{assert.ok(q.includes(`'${s.capacite.id}'::uuid`));s.capacite.enabled=true;
@@ -111,6 +121,12 @@ function harnais(o={}){
   const injecte=o.reponse?.(url,req,s);
   if(injecte==='transport')throw Error(CANARI);
   if(injecte)return injecte;
+  // Réponse perdue : la requête est appliquée, puis la réponse se perd.
+  const reponse=repondre(url,req,chemin);
+  if(o.perdreHttp?.(url,req,s))throw Error(CANARI);
+  return reponse;
+ };
+ function repondre(url,req,chemin){
   if(url===`${GH}/git/ref/heads/main`)return json({ref:'refs/heads/main',object:{type:'commit',sha:o.main?.(s)??SHA}});
   if(url===API)return json(o.projet??{id:PROJET,status:'ACTIVE_HEALTHY',region:'eu-west-1',
    database:{host:`db.${PROJET}.supabase.co`,postgres_engine:'17'}});
@@ -118,7 +134,7 @@ function harnais(o={}){
    {id:'5e2f040c-7ad2-4d68-8b78-725a5880343d',slug:FONCTION,version:24,status:'ACTIVE',verify_jwt:false,import_map:false,
     import_map_path:null,ezbr_sha256:'b'.repeat(64)},
    {id:id(77),slug:'generate-invoice',version:22,status:'ACTIVE',verify_jwt:false,ezbr_sha256:'c'.repeat(64)}]);
-  if(url===`${API}/functions/${FONCTION}/body`){assert.equal(req.headers.Accept,'multipart/form-data');return json({files:fichiers});}
+  if(url===`${API}/functions/${FONCTION}/body`){assert.equal(req.headers.Accept,'multipart/form-data');return json({files:fichiers()});}
   if(url===`${API}/secrets`){
    if(req.method==='GET')return json([...s.secrets].map(([name,v])=>({name,value:sha(v)})));
    if(req.method==='POST'){for(const x of JSON.parse(req.body)){s.secrets.set(x.name,x.value);s.secretsEcrits.push(x);}
@@ -126,7 +142,7 @@ function harnais(o={}){
    if(req.method==='DELETE'){for(const n of JSON.parse(req.body))s.secrets.delete(n);s.suppressions++;return json({});}
   }
   assert.fail(`appel inattendu ${req.method} ${chemin}`);
- };
+ }
  const attendre=async ms=>{s.attentes.push(ms);s.journal.push(`pause:${ms}`);s.horloge+=ms;o.pendantPause?.(ms,s);};
  return {s,fetchImpl,attendre};
 }
@@ -143,7 +159,7 @@ async function attendreAvec(h,recu,env=ENV_LECTURE,local=LOCAL){
  return {r,etapes};
 }
 const revoquerAvec=(h,recu,o={},env=ENV_LECTURE,local=LOCAL)=>revoquerDepuisRecu({env,local,recu,recuIllisible:o.illisible??false,
- fetchImpl:h.fetchImpl,attendre:h.attendre,delaiMs:1});
+ contratInstallation:Object.hasOwn(o,'contrat')?o.contrat:INSTALLATION,fetchImpl:h.fetchImpl,attendre:h.attendre,delaiMs:1});
 // Séquence du workflow S1 : allouer (verrou), attendre (hors verrou), révoquer (verrou).
 async function seance(o={},env=ENV){
  const a=await lancer(o,env);
@@ -181,7 +197,7 @@ test('tout contexte autre que main exact, dispatch manuel, premier essai et work
   ['workflow lot 2 depuis une branche',{GITHUB_WORKFLOW_REF:`${DEPOT}/${WORKFLOW_LOT2}@refs/heads/feat/x`}],
   ['workflow S1 depuis une étiquette',{GITHUB_WORKFLOW_REF:`${DEPOT}/${WORKFLOW}@refs/tags/v1`}],
   ['workflow d’un autre dépôt',{GITHUB_WORKFLOW_REF:`autre/JJJJJ/${WORKFLOW}@refs/heads/main`}],
-  ['hors Actions',{GITHUB_ACTIONS:undefined}],['checkout sale',{},{clean:false}],['checkout autre SHA',{},{sha:'7'.repeat(40)}],
+  ['hors Actions',{GITHUB_ACTIONS:undefined}],['checkout autre SHA',{},{sha:'7'.repeat(40)}],
  ]){
   const {s,recu}=await lancer({},{...ENV,...env},{...LOCAL,...local});
   assert.equal(recu.code,'MAIN_EXACT_REQUIS',nom);assert.equal(s.appels.length,0,nom);
@@ -403,9 +419,12 @@ test('séance S1 nominale : allouer, attendre la signature du soignant hors verr
  assert.equal(attente.mode,'attendre');assert.equal(attente.status,'succes');assert.equal(codeSortie(attente),0);
  assert.equal(attente.attente.raison,'SIGNATURE_SOIGNANT');assert.equal(attente.preuveFin,true);assert.equal(attente.preuveP5,true);
  assert.equal(attente.finApres,'signature_soignant','fin dérivée du manifeste du reçu, jamais ressaisie');
- assert.deepEqual(s.etapes,['installation','preconditions','apercu','insertion','activation','etat','etat','revocation','etat']);
+ // La révocation relit ensuite, en lecture seule, l'état prouvé à l'allocation (supplément et send-sms).
+ assert.deepEqual(s.etapes,['installation','preconditions','apercu','insertion','activation','etat','etat','revocation','etat','installation']);
  assert.equal(revocation.status,'succes');
- assert.deepEqual(revocation.revocation,{capacite:'revoquee',secret:'absent',confirmee:true,essaisSql:1,essaisSecret:1,autresCapacitesActives:0});
+ assert.deepEqual(revocation.revocation,{capacite:'revoquee',secret:'absent',confirmee:true,essaisSql:1,essaisSecret:1,autresCapacitesActives:0,
+  identite:'confirmee'});
+ assert.deepEqual(revocation.reattestation,{edge:'conforme',supplement:'conforme'});
  assert.equal(revocation.preuveP5,true);assert.equal(revocation.final.signatureSoignant.statut,'signe');
  assert.equal(s.capacite.revoquee,true);assert.equal(s.secrets.has(SECRET_EDGE),false);
  for(const r of [attente,revocation,resumeRecu(attente),resumeRecu(revocation)])sansSecret(r);
@@ -429,8 +448,9 @@ test('attendre lit seulement : aucune écriture SQL ni secret, et refuse tout re
   assert.equal(refus.code,'RECU_REFUSE',nom);assert.equal(refus.status,'echec',nom);assert.equal(h.s.appels.length,0,nom);
   assert.equal(codeSortie(refus),1);
  }
- const sale=harnais();const {r:refusSale}=await attendreAvec(sale,base.recu,ENV_LECTURE,{...LOCAL,clean:false});
- assert.equal(refusSale.code,'MAIN_EXACT_REQUIS');
+ // Sources lues dans le commit HEAD : un arbre de travail modifié n'empêche pas d'attendre.
+ const sale=await lancer();const {r:attenteSale}=await attendreAvec(sale,sale.recu,ENV_LECTURE,{...LOCAL,clean:false});
+ assert.equal(attenteSale.status,'succes');
 });
 
 test('« succes » est réservé à la fin attendue prouvée ; toute autre fin sort en code non nul',async()=>{
@@ -475,6 +495,178 @@ test('la révocation est réessayée puis confirmée, ou déclarée incertaine s
  assert.ok(Date.parse(jamais.recu.expiresAt)>0,'l’échéance serveur reste la borne écrite dans le reçu');
 });
 
+const PANNE_SONDE=(url,req,s)=>url===API&&s.sondeEnPanne?(typeof s.sondeEnPanne==='number'&&s.sondeEnPanne--,s.panne?.()??json({message:'indisponible'},503)):undefined;
+test('révoquer : la sonde d’identité ne conditionne jamais la fermeture ; ratée une fois, elle est réessayée dans la boucle du SQL',async()=>{
+ const statutTransitoire={id:PROJET,status:'COMING_UP',region:'eu-west-1',database:{host:`db.${PROJET}.supabase.co`,postgres_engine:'17'}};
+ for(const [nom,panne] of [['429',()=>json({message:'trop de requêtes'},429)],['503',()=>json({message:'indisponible'},503)],
+  ['délai ou transport',()=>'transport'],['statut transitoire',()=>json(statutTransitoire)]]){
+  const a=await lancer({reponse:PANNE_SONDE});
+  assert.equal(a.recu.status,'active',nom);a.s.sondeEnPanne=1;a.s.panne=panne;
+  const r=await revoquerAvec(a,a.recu);
+  assert.equal(r.status,'succes',nom);assert.equal(r.code,null,nom);assert.equal(r.revocation.identite,'confirmee',nom);
+  assert.equal(r.revocation.capacite,'revoquee',nom);assert.equal(r.revocation.essaisSql,1,nom);assert.equal(a.s.compte.revocation,1,nom);
+  assert.equal(a.s.capacite.revoquee,true,nom);assert.equal(a.s.secrets.has(SECRET_EDGE),false,nom);
+  // La première écriture de révocation part sans attendre la sonde.
+  assert.ok(a.s.journal.indexOf('sql:revocation')<a.s.journal.lastIndexOf('GET /'),nom);
+ }
+});
+
+test('révoquer : sonde d’identité toujours en échec, ligne et secret refermés quand même, statut « incertain », jamais « echec »',async()=>{
+ const a=await lancer({reponse:PANNE_SONDE});a.s.sondeEnPanne=true;
+ const r=await revoquerAvec(a,a.recu);
+ assert.equal(r.status,'incertain');assert.equal(r.code,'PROJET_IDENTITE_NON_CONFIRMEE');assert.equal(codeSortie(r),1);
+ assert.equal(r.revocation.identite,'non_confirmee');assert.equal(r.revocation.confirmee,true,'fermeture confirmée : aucun nettoyage manuel');
+ assert.equal(r.revocation.capacite,'revoquee');assert.equal(r.revocation.secret,'absent');
+ assert.equal(a.s.compte.revocation,1,'SQL de révocation jamais rejoué une fois confirmé');
+ assert.equal(a.s.capacite.revoquee,true);assert.equal(a.s.secrets.has(SECRET_EDGE),false);
+ assert.equal(a.s.appels.filter(x=>x.url===API).length,1+5,'une sonde à l’allocation, cinq essais à la révocation');
+ // Même fonction pour l'étape de repli du job allouer et pour le revoquer always() de T11 (arbre de travail modifié).
+ const t11=await lancer({reponse:PANNE_SONDE},ENV_LOT2);t11.s.sondeEnPanne=true;t11.s.panne=()=>'transport';
+ const r11=await revoquerAvec(t11,t11.recu,{},{...ENV_LECTURE,GITHUB_WORKFLOW_REF:ENV_LOT2.GITHUB_WORKFLOW_REF},{...LOCAL,clean:false});
+ assert.equal(r11.status,'incertain');assert.equal(r11.revocation.confirmee,true);
+ assert.equal(t11.s.capacite.revoquee,true);assert.equal(t11.s.secrets.has(SECRET_EDGE),false);
+ // API de gestion entièrement indisponible : essais faits, statut « incertain ».
+ const panne=await lancer({reponse:(url,req,s)=>s.panneTotale&&url.startsWith(API)?'transport':undefined,
+  erreurSql:{revocation:(n,s)=>s.panneTotale?'transport':undefined}});
+ panne.s.panneTotale=true;
+ const rp=await revoquerAvec(panne,panne.recu);
+ assert.equal(rp.status,'incertain');assert.equal(rp.revocation.confirmee,false);assert.equal(panne.s.compte.revocation,5);
+ for(const x of [r,r11,rp])sansSecret(x);
+});
+
+test('attendre : une sonde d’identité ratée ne clôt pas la séance ; persistante, l’attente échoue sans aucune lecture',async()=>{
+ const a=await lancer({reponse:PANNE_SONDE});a.s.sondeEnPanne=2;
+ const {r}=await attendreAvec(a,a.recu);
+ assert.equal(r.status,'succes');assert.equal(r.attente.raison,'SIGNATURE_SOIGNANT');
+ const b=await lancer({reponse:PANNE_SONDE});b.s.sondeEnPanne=true;b.s.panne=()=>'transport';
+ const {r:refus}=await attendreAvec(b,b.recu);
+ assert.equal(refus.status,'echec');assert.equal(refus.code,'TRANSPORT_INCERTAIN');assert.equal(codeSortie(refus),1);
+ assert.equal(b.s.lectures,0,'aucune lecture sans identité attestée');
+ assert.equal(b.s.appels.filter(x=>x.url===API).length,1+6,'six essais, comme les lectures');
+});
+
+test('révoquer relit l’état prouvé à l’allocation : un redéploiement de send-sms ou un db push pendant la séance n’est jamais « succes »',async()=>{
+ const routineModifiee=s=>s.derive?{pg17:true,vaultStaging:true,table:true,tableFermee:true,
+  routines:routinesInstallees().map(r=>r.signature.startsWith('private.fn_signature_sms_test_scope')?{...r,body_md5:'0'.repeat(31)+'2'}:r)}:undefined;
+ const derive=(ms,s)=>{if(ms===20_000)s.derive=true;};
+ for(const [nom,o,reattestation,code] of [
+  ['send-sms redéployé',{edge:(chemin,contenu,s)=>s.derive&&chemin==='supabase/functions/send-sms/index.ts'?contenu+'\n// redéployé':undefined},
+   {edge:'differente',supplement:'conforme'},'REATTESTATION_DIFFERENTE'],
+  ['supplément réécrit',{installation:routineModifiee},{edge:'conforme',supplement:'different'},'REATTESTATION_DIFFERENTE'],
+  ['send-sms illisible',{reponse:(url,req,s)=>s.derive&&url===`${API}/functions`?json({message:'indisponible'},503):undefined},
+   {edge:'non_relue',supplement:'conforme'},'REATTESTATION_NON_RELUE'],
+ ]){
+  const x=await seance({...o,pendantPause:derive});
+  assert.equal(x.attente.status,'succes',nom);
+  assert.equal(x.revocation.status,'incertain',nom);assert.equal(x.revocation.code,code,nom);assert.equal(codeSortie(x.revocation),1,nom);
+  assert.deepEqual(x.revocation.reattestation,reattestation,nom);
+  assert.equal(x.revocation.revocation.confirmee,true,`${nom} : fermeture confirmée`);assert.equal(x.s.capacite.revoquee,true,nom);
+  assert.equal(x.s.secrets.has(SECRET_EDGE),false,nom);
+  assert.equal(x.revocation.final.signatureSoignant.statut,'signe',nom);assert.equal(x.revocation.preuveP5,false,`${nom} : preuve P5 invalidée`);
+  assert.deepEqual(resumeRecu(x.revocation).reattestation,reattestation,nom);
+ }
+ // Lecture refusée une fois : réessayée, puis conforme.
+ const passager=await seance({reponse:(url,req,s)=>s.derive&&url===`${API}/functions`&&!s.dejaRefuse?(s.dejaRefuse=true,json({},503)):undefined,
+  pendantPause:derive});
+ assert.equal(passager.revocation.status,'succes');assert.deepEqual(passager.revocation.reattestation,{edge:'conforme',supplement:'conforme'});
+ assert.equal(passager.revocation.preuveP5,true);
+ // Contrat d'installation illisible : la fermeture a lieu, la relecture est déclarée non faite.
+ const a=await lancer();const r=await revoquerAvec(a,a.recu,{contrat:null});
+ assert.equal(r.status,'incertain');assert.equal(r.code,'REATTESTATION_NON_RELUE');assert.equal(a.s.capacite.revoquee,true);
+ // Aucune ligne de ce run : rien à relire.
+ const vide=harnais();const rv=await revoquerAvec(vide,null);
+ assert.equal(rv.status,'succes');assert.equal(rv.reattestation,null);
+ assert.equal(vide.s.appels.some(x=>x.url.startsWith(`${API}/functions`)),false);
+});
+
+test('réponse perdue sur l’écriture du secret ou sur l’activation : jamais rejouée, toujours refermée',async()=>{
+ // POST /secrets appliqué, réponse perdue : secret présent, retiré, jamais réécrit.
+ const secret=await lancer({perdreHttp:(url,req)=>url===`${API}/secrets`&&req.method==='POST'});
+ assert.equal(secret.recu.code,'TRANSPORT_INCERTAIN');assert.equal(secret.recu.secretEcritureTentee,true);assert.equal(secret.recu.secretConfirme,false);
+ assert.equal(secret.s.appels.filter(a=>a.url===`${API}/secrets`&&a.methode==='POST').length,1,'aucune seconde écriture');
+ assert.equal(secret.s.secretsEcrits.length,1);assert.equal(secret.s.suppressions,1,'secret présent : retiré');
+ assert.equal(secret.s.secrets.has(SECRET_EDGE),false);assert.equal(secret.s.capacite.revoquee,true);assert.equal(secret.s.compte.activation,undefined);
+ assert.equal(secret.recu.revocation.secret,'absent');assert.equal(secret.recu.status,'echec');assert.equal(codeSortie(secret.recu),1);
+ // POST /secrets jamais arrivé : rien à retirer, jamais réécrit.
+ const jamais=await lancer({reponse:(url,req)=>url===`${API}/secrets`&&req.method==='POST'?'transport':undefined});
+ assert.equal(jamais.recu.secretEcritureTentee,true);assert.equal(jamais.s.secretsEcrits.length,0);
+ assert.equal(jamais.s.appels.filter(a=>a.url===`${API}/secrets`&&a.methode==='POST').length,1);assert.equal(jamais.s.suppressions,0);
+ assert.equal(jamais.recu.revocation.secret,'absent');assert.equal(jamais.s.capacite.revoquee,true);assert.equal(jamais.recu.status,'echec');
+ // Activation appliquée, réponse perdue : aucune seconde activation, ligne révoquée, secret retiré.
+ const activation=await lancer({perdre:{activation:()=>true}});
+ assert.equal(activation.recu.code,'TRANSPORT_INCERTAIN');assert.equal(activation.recu.activationTentee,true);
+ assert.equal(activation.recu.activationConfirmee,false);assert.equal(activation.s.compte.activation,1,'aucune seconde activation');
+ assert.equal(activation.s.capacite.revoquee,true);assert.equal(activation.s.secrets.has(SECRET_EDGE),false);
+ assert.equal(activation.recu.revocation.confirmee,true);assert.equal(activation.recu.status,'echec');
+ for(const x of [secret,jamais,activation])sansSecret(x.recu);
+});
+
+test('l’aperçu annulé exerce aussi la révocation sous le trigger du supplément, avant toute écriture réelle',async()=>{
+ const p={capaciteId:CAPACITE,runId:RUN,sourceSha:SHA,manifestSha256:'a'.repeat(64),dureeMinutes:45,contratId:CONTRAT,
+  missionId:MISSION,soignantId:SOIGNANT,etablissementId:ETAB,documentSha256:DOC,telephoneSoignant:TEL_S,telephoneEtablissement:TEL_E,
+  twilioAccountSid:SID,expediteur:EXPEDITEUR};
+ const apercu=sqlAllocation(p,{apercu:true}),corps=corpsRevocation(RUN);
+ assert.ok(sqlRevocation({runId:RUN}).includes(corps),'même texte que le mode revoquer');
+ const i=apercu.indexOf(corps);
+ assert.ok(i>apercu.indexOf('PERFORM private.fn_signature_sms_test_scope'),'après l’activation et la portée');
+ assert.ok(i<apercu.lastIndexOf("SELECT jsonb_build_object('capacite'"),'avant la preuve');assert.ok(apercu.endsWith('ROLLBACK;'));
+ assert.equal(sqlAllocation(p,{apercu:false}).includes(corps),false);assert.equal(sqlActivation(p).includes(corps),false);
+ // Preuve attendue : ligne fermée et révoquée, aucune capacité active ; sinon arrêt avant l'insertion réelle.
+ const ok=await lancer();assert.equal(ok.recu.status,'active');assert.equal(ok.s.compte.apercu,1);
+ const sans=await lancer({apercuSansRevocation:true});
+ assert.equal(sans.recu.code,'CAPACITE_NON_CONFIRMEE');assert.deepEqual(ecritures(sans.s),[]);assert.equal(sans.recu.insertionTentee,false);
+ for(const code of ['SIGNATURE_SMS_TEST_IMMUTABLE','SMS_CAPACITE_REVOCATION_REFUSEE']){
+  const refus=await lancer({erreurSql:{apercu:()=>erreurSql(`P0001: ${code}`)}});
+  assert.equal(refus.recu.sqlCode,code);assert.deepEqual(ecritures(refus.s),[]);assert.equal(refus.recu.revocation,null);
+ }
+});
+
+test('les sources send-sms et le contrat d’installation sont lus dans le commit HEAD : un arbre de travail modifié n’empêche rien',async()=>{
+ const racine=mkdtempSync(join(tmpdir(),'sms-capacite-'));
+ const g=(...args)=>execFileSync('git',['-C',racine,'-c','user.name=Recette','-c','user.email=recette@exemple.invalid','-c','commit.gpgsign=false',...args],
+  {encoding:'utf8',env:{PATH:process.env.PATH,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1',LC_ALL:'C'}});
+ const source='supabase/functions/send-sms/index.ts';
+ try{
+  g('init','-q');
+  mkdirSync(join(racine,'supabase/functions/send-sms'),{recursive:true});mkdirSync(join(racine,'scripts/ci'),{recursive:true});
+  writeFileSync(join(racine,source),'// commité\n');writeFileSync(join(racine,CONTRAT_INSTALLATION),'{"commite":true}\n');
+  symlinkSync('index.ts',join(racine,'supabase/functions/send-sms/lien.ts'));
+  g('add','-A');g('commit','-q','-m','init');
+  writeFileSync(join(racine,source),'// modifié dans l’arbre de travail\n');
+  writeFileSync(join(racine,'supabase/functions/send-sms/nouveau.ts'),'// non suivi\n');
+  writeFileSync(join(racine,CONTRAT_INSTALLATION),'{"modifie":true}\n');
+  const local=lireLocal(racine);
+  assert.equal(local.sha,g('rev-parse','HEAD').trim());assert.equal(Object.hasOwn(local,'clean'),false,'aucune exigence de propreté');
+  assert.equal(local.lireFichier(source),'// commité\n');assert.equal(local.lireBlob(CONTRAT_INSTALLATION),'{"commite":true}\n');
+  for(const [lecteur,chemin] of [['lireFichier','supabase/functions/send-sms/nouveau.ts'],['lireFichier','supabase/functions/send-sms/lien.ts'],
+   ['lireFichier','supabase/functions/send-sms/../send-sms/index.ts'],['lireFichier',`./${source}`],['lireFichier','supabase/functions/send-sms/index.js'],
+   ['lireFichier',CONTRAT_INSTALLATION],['lireBlob','scripts/ci/autre.json'],['lireBlob','supabase/functions//send-sms/index.ts']])
+   assert.throws(()=>local[lecteur](chemin),e=>e instanceof Refus&&e.code==='SOURCES_LOCALES_REFUSEES',`${lecteur} ${chemin}`);
+ }finally{rmSync(racine,{recursive:true,force:true});}
+ // Allouer et attendre acceptent un arbre de travail modifié (HEAD égal à GITHUB_SHA reste exigé).
+ const sale=await lancer({},ENV,{...LOCAL,clean:false});assert.equal(sale.recu.status,'active');
+ const {r}=await attendreAvec(sale,sale.recu,ENV_LECTURE,{...LOCAL,clean:false});assert.equal(r.status,'succes');
+ // main qui avance entre la provenance et l'insertion : refus avant toute écriture.
+ const deplace=await lancer({main:s=>s.appels.filter(a=>a.url===`${GH}/git/ref/heads/main`).length>1?'6'.repeat(40):SHA});
+ assert.equal(deplace.recu.code,'MAIN_DEPLACE');assert.deepEqual(ecritures(deplace.s),[]);assert.equal(deplace.recu.insertionTentee,false);
+});
+
+test('mode opératoire : exclusivité réelle des campagnes, approbation immédiate, gel des merges, écarts au blueprint',()=>{
+ const doc=lire('docs/recettes/2026-11-02-capacite-sms-signature-staging.md'),wf=lire(WORKFLOW);
+ assert.doesNotMatch(doc,/les autres campagnes STAGING refusent de\s+s'ouvrir/);
+ // Seuls ces lecteurs refusent pendant une séance ; Connect et Invoice ignorent le secret (exclusivité tenue par l'opératrice).
+ for(const f of ['supabase/functions/_shared/honoraires-staging-test.ts','supabase/functions/_shared/invoice-email-staging-test.ts',
+  'scripts/ci/invoice-emails-staging-test.mjs']){assert.ok(lire(f).includes(SECRET_EDGE),f);assert.ok(doc.includes(f.split('/').at(-1)),f);}
+ for(const f of ['supabase/functions/_shared/stripe-connect-staging-test.ts','supabase/functions/_shared/stripe-invoice-staging-test.ts']){
+  assert.equal(lire(f).includes(SECRET_EDGE),false,`${f} : mettre à jour le mode opératoire si la garde est ajoutée`);
+  assert.ok(doc.includes(f.split('/').at(-1)),f);
+ }
+ assert.match(doc,/approuver ou rejeter immédiatement/);assert.match(wf,/approuver ou rejeter immédiatement/);
+ assert.match(doc,/gel des merges/);
+ for(const ecart of ['S1-E1','S1-E2'])assert.ok(doc.includes(ecart),ecart);
+ assert.ok(doc.includes('docs/mobile-swift/DECISIONS_LOT2.md'));
+});
+
 test('une autre capacité active est comptée sans être touchée',async()=>{
  const autre=await seance({autresActives:1});
  assert.equal(autre.revocation.status,'succes');assert.equal(autre.revocation.revocation.autresCapacitesActives,1);
@@ -510,7 +702,7 @@ test('révoquer : capacité de CE run retrouvée par run_id, secret retiré seul
   const x=harnais();const refus=await revoquerAvec(x,recu);
   assert.equal(refus.code,'RECU_REFUSE');assert.equal(x.s.appels.length,0);
  }
- // Un checkout modifié n'empêche jamais de refermer ; il empêche d'ouvrir et d'attendre.
+ // Un arbre de travail modifié n'empêche jamais de refermer (sources lues dans HEAD).
  const sale=await revoquerAvec(base,base.recu,{},ENV_LECTURE,{...LOCAL,clean:false});
  assert.equal(sale.status,'succes');assert.equal(base.s.capacite.revoquee,true);
  for(const r of [r1,r2,r3,r4,sale])sansSecret(r);
