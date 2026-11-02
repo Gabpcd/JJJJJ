@@ -79,11 +79,19 @@ jobs:
               const row=`| ${j.host||env} | ${j.topic||"-"} | ${j.apns_status??"-"} | ${j.apns_reason||j.error||"-"} | ${j.verdict||"http "+http} | ${j.team_id_correspond===undefined?"-":(j.team_id_correspond?"oui":"NON")} |`;
               fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,row+"\n");
               console.log(env, "->", http, JSON.stringify(j));
-              if (temoin) { if (j.verdict!=="topic_refuse") process.exitCode=1; }
+              if (temoin) {
+                if (j.verdict!=="topic_refuse") {
+                  process.exitCode=1;
+                  const detail = j.verdict==="auth_ok"
+                    ? "Apple a accepte le topic inexistant (" + (j.apns_reason||"BadDeviceToken") + ") : la sonde nominale ne prouve que la signature du jeton fournisseur"
+                    : "temoin inexploitable, verdict " + (j.verdict||("http "+http)) + " / " + (j.apns_reason||j.error||"sans raison") + " : voir le resume et les reponses conservees";
+                  console.log("::error::Temoin " + env + " : " + detail);
+                }
+              }
               else if (j.verdict!=="auth_ok" || j.team_id_correspond!==true) process.exitCode=1;
             ' "sonde/$env_name.json" "$env_name" "$HTTP" "$TEMOIN" || fail=1
           done
-          if [ "$fail" = "1" ] && [ "$TEMOIN" = "true" ]; then echo "::error::Témoin non concluant : Apple n'a pas refusé le topic inexistant, la sonde nominale ne prouve que la signature du jeton fournisseur"; exit 1; fi
+          if [ "$fail" = "1" ] && [ "$TEMOIN" = "true" ]; then echo "::error::Témoin non concluant sur au moins un hôte : voir le détail par hôte ci-dessus"; exit 1; fi
           if [ "$fail" = "1" ]; then echo "::error::Apple refuse le jeton fournisseur ou le Team ID ne correspond pas : voir le résumé"; exit 1; fi
       - name: Conserver les réponses
         if: always()
