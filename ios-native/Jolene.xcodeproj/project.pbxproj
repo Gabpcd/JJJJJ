@@ -86,6 +86,7 @@
 		997CBDFDA40AD985E5EE59AD /* DemoCompletionInscriptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98317DBE720E6BEB75883241 /* DemoCompletionInscriptionTests.swift */; };
 		9DE4879FA571EB99B73E9496 /* ConfirmationInscriptionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */; };
 		A10FB98D441023FB1102B6DA /* PushRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A71CD95CD6F4F5866918816 /* PushRegistrar.swift */; };
+		A452FBEA3A333A8B99A343E9 /* FavorisComposants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E5D4EAAD81CBF735EF5CF1 /* FavorisComposants.swift */; };
 		A84F8CB33E48F8365829150D /* ContestationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058CF00FDA45D1C370296CB0 /* ContestationSheet.swift */; };
 		A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4548B776A71B3D851883356 /* EtatNotificationsAppareilRow.swift */; };
 		AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC77CAAD0BCDB6F1C7C4BCD /* CompteSupprimeScreen.swift */; };
@@ -129,6 +130,7 @@
 		D8724D42840055518E70154B /* SignatureOtpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEF552A184B3EC99792D30F7 /* SignatureOtpView.swift */; };
 		DA1C3DDBEDD68FE971327EF4 /* CompteSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211FCF61D550AD7AA0184F99 /* CompteSections.swift */; };
 		DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */; };
+		DEE7ADECA38AC3AA9890204D /* DemoFavorisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C5390FA7A7B5926E52B589 /* DemoFavorisTests.swift */; };
 		DFBE1117A955925C07671E66 /* ThemePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9DEFB3A212A42DCE42A5ED /* ThemePreference.swift */; };
 		E07C1696049562DF1960083E /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D459BCCD9C6F8AA51AF0C4 /* CameraCaptureView.swift */; };
 		E3B89FFC731CC81ED9841E69 /* JustificatifsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C069379F42D5DFB47D39A4B5 /* JustificatifsView.swift */; };
@@ -143,6 +145,7 @@
 		F5C6A799F28E1EE9C19F980C /* ContratsDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01E2478001F6F24CF2412D0 /* ContratsDestination.swift */; };
 		F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38258808A1C110F764DA2B97 /* ShareSheet.swift */; };
 		FAEDA57C217B1DE476251CF5 /* AppareilEnvironnement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B157B0FB088245CF6215DE4 /* AppareilEnvironnement.swift */; };
+		FB025B7501EE97E71A34FB64 /* MesFavorisScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FB327E6E40C91888CFD6A1 /* MesFavorisScreen.swift */; };
 		FF4867F1CDD9CA89D9CDFA66 /* PaiementsDeclaresSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B24FDF8D33F676E7EA256C9 /* PaiementsDeclaresSection.swift */; };
 /* End PBXBuildFile section */
 
@@ -183,10 +186,12 @@
 		25008E8957848F241A595264 /* EtablissementTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtablissementTabView.swift; sourceTree = "<group>"; };
 		2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAccueilTests.swift; sourceTree = "<group>"; };
 		273E684EB7D14269450AAE87 /* HorsLigneBandeau.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorsLigneBandeau.swift; sourceTree = "<group>"; };
+		28FB327E6E40C91888CFD6A1 /* MesFavorisScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MesFavorisScreen.swift; sourceTree = "<group>"; };
 		2954AAE920C8EF8FB1BB4B8B /* BandeauSansGpsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandeauSansGpsView.swift; sourceTree = "<group>"; };
 		2A71CD95CD6F4F5866918816 /* PushRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrar.swift; sourceTree = "<group>"; };
 		2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionsListScreen.swift; sourceTree = "<group>"; };
 		2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		37C5390FA7A7B5926E52B589 /* DemoFavorisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFavorisTests.swift; sourceTree = "<group>"; };
 		38091EDEE76289ABC8378DF1 /* IbanScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IbanScreen.swift; sourceTree = "<group>"; };
 		38120E9CD7A148CE94F22046 /* ServicesPointage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesPointage.swift; sourceTree = "<group>"; };
 		38258808A1C110F764DA2B97 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
@@ -200,6 +205,7 @@
 		571DC69677D4A6FCD64E00CA /* TeleversementSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeleversementSheet.swift; sourceTree = "<group>"; };
 		57522BC17747DB1695651ECD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		58E44CB4507BB6F0010EAE04 /* DemoContratsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoContratsTests.swift; sourceTree = "<group>"; };
+		59E5D4EAAD81CBF735EF5CF1 /* FavorisComposants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavorisComposants.swift; sourceTree = "<group>"; };
 		60699FAD6300F1A017021FE2 /* InscriptionRapideScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InscriptionRapideScreen.swift; sourceTree = "<group>"; };
 		609E02934A0709463B2930B2 /* ConsentementGpsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsentementGpsSheet.swift; sourceTree = "<group>"; };
 		638210FD006E1B4B3AC396BB /* ConsentementGpsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsentementGpsRow.swift; sourceTree = "<group>"; };
@@ -590,7 +596,9 @@
 		BE4B978D5F7B33DE3E893841 /* Explorer */ = {
 			isa = PBXGroup;
 			children = (
+				59E5D4EAAD81CBF735EF5CF1 /* FavorisComposants.swift */,
 				8FF358A28EB5478C49CB891A /* FiltresSheet.swift */,
+				28FB327E6E40C91888CFD6A1 /* MesFavorisScreen.swift */,
 				F3E8673ADB03568DA5632CFC /* MissionMapView.swift */,
 			);
 			path = Explorer;
@@ -643,6 +651,7 @@
 				CC8EAC8C6EA29C51BFB9C6AF /* DemoEtabLiensTests.swift */,
 				DD5F969B97A2D9B96C614046 /* DemoEtabSessionTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
+				37C5390FA7A7B5926E52B589 /* DemoFavorisTests.swift */,
 				9EE8A937FD8CF8A5E89DC738 /* DemoIbanTests.swift */,
 				8CB770AAEE245B16B5B601D7 /* DemoInscriptionTests.swift */,
 				89986889CA66C02C2DCB55BA /* DemoLiensLot2Tests.swift */,
@@ -821,6 +830,7 @@
 				F2871B998E1A56C66481C006 /* EtablissementTabView.swift in Sources */,
 				A90CAD5C43F42E1946238456 /* EtatNotificationsAppareilRow.swift in Sources */,
 				8E4EF3CC792C345645D5E227 /* ExternalFlowPresenter.swift in Sources */,
+				A452FBEA3A333A8B99A343E9 /* FavorisComposants.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
 				0AC7DD7A87882A216DAE706D /* HorsLigneBandeau.swift in Sources */,
 				4CE5695A40C885095CED0D24 /* IbanScreen.swift in Sources */,
@@ -831,6 +841,7 @@
 				BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */,
 				35B21204F757910A731C8D4B /* MainTabView.swift in Sources */,
 				C57E6F7A03CA7DAD53DDFA72 /* MesDocumentsScreen.swift in Sources */,
+				FB025B7501EE97E71A34FB64 /* MesFavorisScreen.swift in Sources */,
 				289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */,
 				C0F675E139EA54FE7CE00DBA /* MissionMapView.swift in Sources */,
 				C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */,
@@ -892,6 +903,7 @@
 				06A46CBD8144AE2B0FC62F6D /* DemoEtabLiensTests.swift in Sources */,
 				B0613EF56E48A98C317BDEC0 /* DemoEtabSessionTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
+				DEE7ADECA38AC3AA9890204D /* DemoFavorisTests.swift in Sources */,
 				B83F10966AC51907CB483818 /* DemoIbanTests.swift in Sources */,
 				B2BBA8856C98FD5860E7103C /* DemoInscriptionTests.swift in Sources */,
 				11933738821F5C7870C4761B /* DemoLiensLot2Tests.swift in Sources */,
