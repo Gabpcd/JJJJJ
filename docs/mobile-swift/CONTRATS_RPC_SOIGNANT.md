@@ -54,7 +54,7 @@ serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 | `fn_get_my_role` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_etablissements_safe` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_mon_profil_soignant_complet` | à venir | 3 (reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_dashboard_soignant_complet` | à venir | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_dashboard_soignant_complet` | consommée lot 1 (T3) | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_confirmer_action_planning_v1` | à venir | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
 | `fn_suggestions_missions_pour_soignant` | à venir | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -150,8 +150,28 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_profil_soignant_complet"() RETURNS "
 
 ## fn_dashboard_soignant_complet
 
-- **Statut natif** : à venir (lot 1).
-- **Usage prévu** : Onglet Accueil : agrégats du tableau de bord, valeurs serveur affichées telles quelles.
+- **Statut natif** : consommée (lot 1, T3) par `JoleneSupabase/Dashboard/SupabaseDashboardGateway.swift`
+  (`DashboardPort`), modèle `JoleneCore/Accueil/AccueilModel.swift` borné à `resolutionTimeout` (15 s).
+- **Usage** : onglet Accueil, valeurs serveur affichées telles quelles. Appel sans paramètre, JWT du soignant.
+  Décodage tolérant (`JoleneCore/Models/Dashboard.swift`, `DashboardCorps`) : section NULL, absente ou qui
+  n'est pas un tableau → vide ; ligne sans `id` (ou sans `intitule`) écartée seule ; corps qui n'est pas un
+  objet → `.contract`. Clés lues : `profil.{prenom, profession, tous_documents_valides, type_exercice}`
+  (état civil, téléphone et numéros RPPS/ADELI du corps jamais décodés ; jamais un contrôle d'accès),
+  `mes_missions`, `missions_ouvertes`, `propositions` (+ `missions` jointe), `documents` (décodés, non
+  affichés au lot 1), `heures_semaine` (décodé, non affiché : `BandeauAlerte48h` exclu, HARD STOP n°4),
+  `gains_mois.nb_missions`, `missions_oubliees_count`, `notifs_non_lues`. `gains_mois.net_total` et
+  `brut_total` ne sont **jamais** décodés (décision 10).
+- **Formes de réponse** (HTTP 200) : `{"error": "Non authentifié"}` (l.27934) → `JoleneError(.unauthorized)`
+  par `RPCResponse.leverSiErreur`, aucune lecture complémentaire ; tout autre `{error}` → `.unknown`, message
+  verbatim ; `PGRST202` / 300-303 → `.contract` sans renvoi ; succès = l'objet `jsonb_build_object` ci-dessus.
+  Un test par forme : `SupabaseDashboardGatewayTests`, `DashboardDecodingTests`.
+- **Lectures complémentaires** (parallèles, rendu partiel sans erreur d'écran, comme le web l.147-215) :
+  fiches `missions` (`MissionQuery.missionSelect`, `id=in.(…)` : `nb_creneaux` pour `CompletudePlanning`) et
+  créneaux PREVISIONNEL hors pause par `MissionSlotPager` (en échec : planning « Planning détaillé à
+  confirmer ») ; noms par `fn_etablissements_safe` (en échec ou ligne absente : `etab_nom`, puis
+  « Établissement ») ; gains du mois relus comme le web (`missions?select=id,type_contrat_applique,
+  type_contrat_recherche,total_brut,net_a_payer,net_estime&soignant_assigne_id=eq.<uid>&statut=eq.TERMINEE&fin_le=gte.<début du mois, Paris>`,
+  sommés par nature selon `montantFinanceAfficheMission`, sans recalcul ; en échec : carte masquée).
 - **Signature SQL** (`supabase/schema/public.sql` l.27920) :
 
 ```sql

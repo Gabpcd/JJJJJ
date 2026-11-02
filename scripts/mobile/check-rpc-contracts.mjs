@@ -54,7 +54,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
   { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3 },
-  { name: 'fn_dashboard_soignant_complet', statut: 'a_venir', lot: 1 },
+  { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
   { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },

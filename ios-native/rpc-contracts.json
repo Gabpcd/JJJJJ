@@ -95,7 +95,7 @@
     },
     {
       "name": "fn_dashboard_soignant_complet",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "never",
