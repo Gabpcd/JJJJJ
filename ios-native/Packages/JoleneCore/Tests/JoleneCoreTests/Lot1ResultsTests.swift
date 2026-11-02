@@ -17,6 +17,18 @@ final class Lot1ResultsTests: XCTestCase {
         XCTAssertEqual(try decode([CreneauConfirmePayload].self, String(decoding: encoded, as: UTF8.self)), [creneau])
     }
 
+    func testCreneauConfirmeMemeContratQueLeTypeDeT2() {
+        // Même forme que `CreneauConfirme` de T2 (`Missions/CreneauxConfirmes.swift` :
+        // `debut`/`fin` String, `init(debut:fin:)`, Codable + Hashable + Sendable) : la PR mergée
+        // en second remplace l'un des deux par un `public typealias`, sans conversion en T6a.
+        let a = CreneauConfirmePayload(debut: "2026-11-03T07:00:00Z", fin: "2026-11-03T15:00:00Z")
+        var b = a
+        b.fin = "2026-11-03T16:00:00Z"
+        let ensemble: Set<CreneauConfirmePayload> = [a, a, b]
+        XCTAssertEqual(ensemble.count, 2)
+        XCTAssertEqual(Set([a, b]), ensemble)
+    }
+
     func testCandidatureToleranteAuxNull() throws {
         let complete = try decode(CandidatureRecord.self, """
         {"id":"c-1","mission_id":"m-1","statut":"EN_ATTENTE","message":"Disponible","type_contrat_choisi":"SALARIE",

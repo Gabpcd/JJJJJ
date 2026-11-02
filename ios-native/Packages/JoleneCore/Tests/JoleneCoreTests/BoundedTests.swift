@@ -81,6 +81,69 @@ final class BoundedTests: XCTestCase {
         XCTAssertEqual(entrees, ["travail annulé"])
     }
 
+    func testLAnnulationDeLAppelantEstUneAnnulationPasUnDelai() async {
+        // Le `.task` d'une vue qui disparaît annule le modèle d'écran : afficher « Le service ne
+        // répond pas » serait faux. `CancellationError` est rendue sans attendre le délai (les
+        // modèles la traitent comme une annulation, `MissionsModelsTests`).
+        let barriere = Gate()
+        let journal = CallLog()
+        let debut = Date()
+        let appel = Task { () -> Error? in
+            do {
+                _ = try await bounded(timeout: 30) { () async throws -> Int in
+                    await journal.record("démarré")
+                    await barriere.wait() // port muet : n'observe jamais l'annulation
+                    return 1
+                }
+                return nil
+            } catch {
+                return error
+            }
+        }
+        for _ in 0..<400 {
+            if await journal.entries.contains("démarré") { break }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        appel.cancel()
+        let erreur = await appel.value
+        XCTAssertTrue(erreur is CancellationError, "attendu : CancellationError, obtenu : \(String(describing: erreur))")
+        XCTAssertNil(erreur as? JoleneError, "jamais le message de délai dépassé")
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 5, "l'annulation rend la main sans attendre le délai de 30 s")
+        await barriere.open()
+    }
+
+    func testUnAppelantDejaAnnuleRecoitUneAnnulationEtLeTravailEstAnnule() async {
+        let depart = Gate()
+        let journal = CallLog()
+        let appel = Task { () -> Error? in
+            await depart.wait() // non annulable : l'appel part d'une tâche déjà annulée
+            do {
+                _ = try await bounded(timeout: 30) { () async throws -> Int in
+                    do {
+                        try await Task.sleep(nanoseconds: 30_000_000_000)
+                    } catch {
+                        await journal.record("travail annulé")
+                        throw error
+                    }
+                    return 1
+                }
+                return nil
+            } catch {
+                return error
+            }
+        }
+        appel.cancel()
+        await depart.open()
+        let erreur = await appel.value
+        XCTAssertTrue(erreur is CancellationError, "attendu : CancellationError, obtenu : \(String(describing: erreur))")
+        for _ in 0..<400 {
+            if await journal.entries.contains("travail annulé") { break }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let entrees = await journal.entries
+        XCTAssertEqual(entrees, ["travail annulé"], "le travail en vol est annulé avec l'appelant")
+    }
+
     func testLeControleurExposeSonDelaiSansIsolation() {
         let socle = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         // `nonisolated` : lisible par un modèle d'écran @MainActor sans `await`.

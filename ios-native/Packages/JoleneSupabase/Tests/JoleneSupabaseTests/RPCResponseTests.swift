@@ -6,8 +6,9 @@ import XCTest
 
 /// Réponses jsonb renvoyées en HTTP 200 (blueprint lot 1 §2.4) : `{error}` seul est une
 /// erreur levée (« Non authentifié » → session expirée, sinon message serveur verbatim) ;
-/// `{success:false|ok:false, …}` est un refus structuré traduit en issue métier ; aucune clé
-/// n'est exigée sauf celles qui conditionnent une action.
+/// `{success:false|ok:false, …}`, `{choix_requis:true, …}` et `{documents_requis_pour, …}` sans
+/// `success:true` sont des refus structurés traduits en issue métier ; aucune clé n'est exigée
+/// sauf celles qui conditionnent une action.
 final class RPCResponseTests: XCTestCase {
     private let registry = StubRegistry.shared
     private let fallback = "Impossible de traiter votre demande. Réessayez."
@@ -151,7 +152,72 @@ final class RPCResponseTests: XCTestCase {
                        .refusee(code: nil, message: fallback, documentsRequisPour: nil))
     }
 
-    func testDocumentsRequisPour() throws {
+    // Vecteurs « documents requis » et « choix de contrat » copiés des RETURN du dump
+    // (`supabase/schema/public.sql`), une RPC par action. Les RPC que
+    // `fn_confirmer_action_planning_v1` délègue au lot 1 (POSTULER, ACCEPTER, PROPOSITION,
+    // l.24274-24312) renvoient ces refus SANS `success` ni `ok` : seuls `documents_requis_pour`
+    // ou `choix_requis` les signalent.
+
+    func testDocumentsRequisPostuler() throws {
+        // POSTULER → `fn_postuler_mission_rate_limited` → `fn_postuler_mission` l.47990-47996.
+        let r = try reponse("""
+        {"error":"Les documents requis pour candidater en libéral sont manquants ou expirés.",
+         "documents_requis_pour":"LIBERAL","lien_documents":"/soignant/mes-documents"}
+        """)
+        XCTAssertNil(r.success)
+        XCTAssertNil(r.ok)
+        XCTAssertTrue(r.estRefus, "documents_requis_pour sans success:true est un refus structuré")
+        XCTAssertFalse(r.estSucces)
+        XCTAssertNil(leve(r), "un refus structuré ne lève pas : il devient une issue métier")
+        XCTAssertEqual(r.string("lien_documents"), "/soignant/mes-documents")
+        XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                       .refusee(code: nil, message: "Les documents requis pour candidater en libéral sont manquants ou expirés.",
+                                documentsRequisPour: "LIBERAL"))
+    }
+
+    func testDocumentsRequisAccepterEtProposition() throws {
+        // ACCEPTER → `fn_accepter_mission` (l.5136-5137, relaie tel quel) et PROPOSITION →
+        // `fn_repondre_proposition` (l.53636-53637, `RETURN v_result` tel quel) : refus de
+        // `fn_finaliser_attribution_mission` l.36757-36763 (`lower(v_choix)` dans le message).
+        for (contrat, minuscule) in [("SALARIE", "salarie"), ("LIBERAL", "liberal")] {
+            let message = "Les documents requis pour une mission \(minuscule) ne sont pas encore validés."
+            let r = try reponse("""
+            {"error":"\(message)","documents_requis_pour":"\(contrat)","lien_documents":"/soignant/mes-documents"}
+            """)
+            XCTAssertTrue(r.estRefus, contrat)
+            XCTAssertFalse(r.estSucces, contrat)
+            XCTAssertNil(leve(r), contrat)
+            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
+                           .refusee(code: nil, message: message, documentsRequisPour: contrat), contrat)
+        }
+    }
+
+    func testSuccesPostulerAvecDocumentsACompleterNEstPasUnRefus() throws {
+        // `fn_postuler_mission` l.48061-48068 : le SUCCÈS porte aussi `documents_requis_pour`
+        // (rappel des documents à compléter). `success:true` prime : jamais un refus.
+        let r = try reponse("""
+        {"success":true,"candidature_id":"c-1","choix_contrat":"SALARIE","profession_requise":"AS",
+         "docs_a_completer":true,"documents_requis_pour":"SALARIE"}
+        """)
+        XCTAssertFalse(r.estRefus)
+        XCTAssertTrue(r.estSucces)
+        XCTAssertNil(leve(r))
+        XCTAssertNil(r.issueCandidatureRefusee(fallback: fallback))
+        XCTAssertEqual(r.documentsRequisPour, "SALARIE")
+        XCTAssertEqual(r.bool("docs_a_completer"), true)
+        XCTAssertEqual(try r.requiredString("candidature_id"), "c-1")
+    }
+
+    func testDocumentsRequisVideNEstPasUnRefus() throws {
+        let r = try reponse(#"{"documents_requis_pour":"  ","nb":1}"#)
+        XCTAssertNil(r.documentsRequisPour, "valeur vide : absente")
+        XCTAssertFalse(r.estRefus)
+        XCTAssertNil(leve(r))
+    }
+
+    func testDocumentsRequisPourUrgenceLot4() throws {
+        // URGENCE, lot 4 (pool urgence, hors lot 1) : `fn_accepter_mission_urgence` l.5178-5183,
+        // seule forme `success:false` + `documents_requis_pour` (sans `lien_documents`).
         let r = try reponse("""
         {"success":false,"error":"Vos documents ne sont pas validés pour cette mission salarie","documents_requis_pour":"SALARIE"}
         """)
@@ -160,9 +226,32 @@ final class RPCResponseTests: XCTestCase {
                                 documentsRequisPour: "SALARIE"))
     }
 
-    func testChoixDeContratRequis() throws {
-        // `fn_resoudre_contrat_mission` l.54551-54563 du dump (ok:false) et sa reprise par
-        // `fn_postuler_mission` (`success:false || resolution`).
+    private let optionsAttendues = [
+        ChoixContratOption(value: "SALARIE", label: "Salarié (CDD / bulletin de paie)"),
+        ChoixContratOption(value: "LIBERAL", label: "Libéral (note d'honoraires)"),
+    ]
+
+    func testChoixDeContratRequisSansDrapeauPostulerAccepterProposition() throws {
+        // `fn_resoudre_contrat_mission` l.54551-54563 renvoie `{ok:false, choix_requis, error,
+        // options}` ; POSTULER (`fn_postuler_mission` l.47969-47970) et ACCEPTER / PROPOSITION
+        // (`fn_finaliser_attribution_mission` l.36752-36753) le relaient en `v_resolution - 'ok'` :
+        // ni `success` ni `ok`.
+        let r = try reponse("""
+        {"choix_requis":true,"error":"Choisissez votre mode de contrat.",
+         "options":[{"value":"SALARIE","label":"Salarié (CDD / bulletin de paie)"},{"value":"LIBERAL","label":"Libéral (note d'honoraires)"}]}
+        """)
+        XCTAssertNil(r.success)
+        XCTAssertNil(r.ok)
+        XCTAssertTrue(r.choixRequis)
+        XCTAssertTrue(r.estRefus)
+        XCTAssertFalse(r.estSucces)
+        XCTAssertNil(leve(r), "le choix de contrat n'est pas une erreur : l'action est rejouée avec l'option choisie")
+        XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback), .choixRequis(optionsAttendues))
+    }
+
+    func testChoixDeContratRequisAvecDrapeauLot4() throws {
+        // Lot 4 seulement : SWIPE_LIKE (`fn_enregistrer_swipe` l.32804-32805, `{ok:false} || …`)
+        // et URGENCE (`fn_accepter_mission_urgence` l.5175-5176, `{success:false} || …`).
         for prefixe in [#""ok":false"#, #""success":false"#] {
             let r = try reponse("""
             {\(prefixe),"choix_requis":true,"error":"Choisissez votre mode de contrat.",
@@ -170,10 +259,8 @@ final class RPCResponseTests: XCTestCase {
                         {"value":null,"label":"illisible"}]}
             """)
             XCTAssertTrue(r.choixRequis)
-            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback), .choixRequis([
-                ChoixContratOption(value: "SALARIE", label: "Salarié (CDD / bulletin de paie)"),
-                ChoixContratOption(value: "LIBERAL", label: "Libéral (note d'honoraires)"),
-            ]), "une option sans valeur est écartée")
+            XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback), .choixRequis(optionsAttendues),
+                           "une option sans valeur est écartée")
         }
     }
 

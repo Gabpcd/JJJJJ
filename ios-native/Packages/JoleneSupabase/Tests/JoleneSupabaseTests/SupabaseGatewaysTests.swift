@@ -47,16 +47,17 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
     }
 
-    /// Ports du lot 1 que leur tranche n'a pas encore câblés : liste identique à
-    /// `DemoWorldTests.portsEnAttenteLot1` (JoleneCore). Chaque PR qui câble un port le retire
-    /// des deux listes ; vides à la clôture du lot (T12).
-    static let portsEnAttenteLot1 = ["dashboard", "candidature", "presence", "favoris", "mesMissions",
-                                     "compte", "recovery", "justificatifs"]
-
+    /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
+    /// exactement ceux du monde démo (`DemoWorld.gateways()`, figés par la source unique
+    /// `DemoWorldTests.portsEnAttenteLot1`). Une PR qui câble un port dans un seul monde fait
+    /// diverger les deux ensembles et rougit ce test ; T12 exige `unwiredPorts.isEmpty`.
     func testAucunPortNonCable() {
-        let gateways = SupabaseGateways.make(client: TestClient.make())
-        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1,
-                       "tout port livré doit être câblé dans SupabaseGateways.make(client:) dans la même PR")
+        let supabase = SupabaseGateways.make(client: TestClient.make()).unwiredPorts
+        let demo = DemoWorld.gateways().unwiredPorts
+        XCTAssertEqual(supabase, demo,
+                       "un port doit être câblé dans SupabaseGateways.make(client:) ET DemoWorld.gateways() dans la même PR")
+        XCTAssertFalse(supabase.contains("audit"), "T1 câble l'audit")
+        XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

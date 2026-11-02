@@ -195,10 +195,12 @@ final class DemoWorldTests: XCTestCase {
 
     // MARK: - Lot 1 (T1)
 
-    /// Ports du lot 1 que leur tranche n'a pas encore câblés. Chaque PR qui câble un port le
-    /// retire de cette liste ET de `SupabaseGatewaysTests.portsEnAttenteLot1` (même PR, les deux
-    /// mondes) ; la liste doit être vide à la clôture du lot (T12). Un port oublié dans un monde
-    /// fait diverger les deux listes et rougit ce test.
+    /// Ports du lot 1 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste. Chaque
+    /// PR qui câble un port le câble dans les deux mondes et le retire d'ici. Le monde Supabase
+    /// n'a pas de liste propre : `SupabaseGatewaysTests.testAucunPortNonCable` compare
+    /// `SupabaseGateways.make(client:).unwiredPorts` à `DemoWorld.gateways().unwiredPorts`, si
+    /// bien qu'un port câblé dans un seul monde rougit l'un des deux tests. Critère de sortie de
+    /// T12 (blueprint §2.2) : liste vide, `unwiredPorts.isEmpty` dans les deux mondes.
     static let portsEnAttenteLot1 = ["dashboard", "candidature", "presence", "favoris", "mesMissions",
                                      "compte", "recovery", "justificatifs"]
 
