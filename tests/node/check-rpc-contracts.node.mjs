@@ -651,6 +651,13 @@ const LOT4 = [
 const LOT4_PARTAGEES = ['fn_ouvrir_litige_rate_limited'];
 // Les 42 RPC consommées par le lot 4 (fiches confrontées au SQL, GRANT, refus 42501).
 const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
+// Reclassées en `lot: 4` par un lot antérieur après le T0 du lot 4 (intégration `feat/ios-lot4`) :
+// `fn_suggestions_missions_pour_soignant` sort du lot 1 à la revue B8 de son T3 (fiche et ligne de la
+// synthèse du lot 1). Hors des 41 RPC propres du blueprint (`LOT4_PLAN.md` §3 T0 ne la cite pas) ; son
+// sort au lot 4 (consommée ou retirée de RPC_SUIVIES) relève de T15 (DECISIONS_LOT4.md, précision 11).
+const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
+/** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
+const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
 
 // RPC du lot 4 absentes de `types.ts` (ou illisibles par `extractTypesSignature`) : `types: null` accepté
 // (précédent du lot 1). `fn_ouvrir_litige_rate_limited` y figure (l.10147) mais en union de surcharges.
@@ -769,9 +776,19 @@ test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l o
   assert.equal(LOT4.length, 41);
   assert.equal(new Set(LOT4_TOUTES).size, 42);
   assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
-  assert.deepEqual(RPC_SUIVIES.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name)).map(r => r.name), LOT4);
+  assert.deepEqual(propresLot4(RPC_SUIVIES).map(r => r.name), LOT4);
   // Les statuts propres au lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
   for (const name of LOT4) assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 });
+  // Reclassées par un lot antérieur : `a_venir`, `lot: 4`, jamais comptées parmi les 42, consignées dans la
+  // synthèse du lot 4 et dans les décisions (précision 11), pour que T15 les statue.
+  const synthese = section(read(CONTRATS_DOC), 'Lot 4 — synthèse');
+  const decisions = read('docs/mobile-swift/DECISIONS_LOT4.md');
+  for (const name of LOT4_RECLASSEES) {
+    assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 }, `${name} : reclassée attendue a_venir lot 4`);
+    assert.ok(!LOT4_TOUTES.includes(name), `${name} : reclassée, hors des 42 RPC du blueprint`);
+    assert.ok(synthese.includes(`\`${name}\``), `synthèse lot 4 : reclassée ${name} non signalée`);
+    assert.ok(decisions.includes(`\`${name}\``), `DECISIONS_LOT4.md : reclassée ${name} non consignée`);
+  }
   // Partagée : une seule entrée, celle du lot antérieur qui la suit (lot 2, statut porté par sa tranche T5b), ou
   // `a_venir` lot 4 par repli ; jamais un lot postérieur au lot 4.
   for (const name of LOT4_PARTAGEES) {
@@ -801,7 +818,7 @@ test('Lot 4 — rpc-contracts.json : définition SQL SECURITY DEFINER, GRANT aut
   });
   const lot4 = actual.rpcs.filter(r => LOT4_TOUTES.includes(r.name));
   assert.equal(lot4.length, 42);
-  assert.deepEqual(actual.rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name)).map(r => r.name), LOT4);
+  assert.deepEqual(propresLot4(actual.rpcs).map(r => r.name), LOT4);
   for (const r of lot4) {
     assert.ok(r.sql.length >= 1, `${r.name} : aucune définition SQL`);
     assert.ok(r.grants.includes('authenticated'), `${r.name} : pas de GRANT authenticated`);
