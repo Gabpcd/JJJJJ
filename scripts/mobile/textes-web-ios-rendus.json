@@ -1,0 +1,598 @@
+{
+  "lisezmoi": [
+    "Zones de rendu des textes de l’app iOS (lot 2, tranche TL) — lues par scripts/mobile/check-textes-juridiques-ios.mjs.",
+    "zones : pour chaque fonction d’assemblage de TextesWeb.swift (HARD STOP n°4) ou de LibellesWeb.swift, le code web qui produit le rendu",
+    "(conditions, ordre, séparateurs), normalisé : lignes coupées aux bords, espaces internes réduites à une, lignes vides retirées.",
+    "La garde retrouve chaque zone par son contenu : à sa ligne, rien ; ailleurs dans le fichier (décalage), avertissement",
+    "(--corriger-lignes réécrit « source ») ; modifiée, disparue ou ambiguë, erreur qui nomme les fonctions Swift à relire.",
+    "Une zone modifiée se recopie ici seulement après relecture de ces fonctions et de leurs tests ; changer TextesWeb.swift",
+    "est une PR HARD STOP n°4 validée par Gabrielle.",
+    "rendus : exemples d’appel et rendu exact, chacun asserté mot pour mot par TextesWebTests.swift ou LibellesWebTests.swift",
+    "(la garde le vérifie) ; ce sont les textes assemblés montrés à Gabrielle (node scripts/mobile/check-textes-juridiques-ios.mjs --liste)."
+  ],
+  "zones": [
+    {
+      "fonctions": [
+        "TextesWeb.ConsentementGps.ceQueNousFaisons"
+      ],
+      "source": "src/components/ConsentementGPS.tsx:35-39",
+      "code": [
+        "<ul className=\"text-xs text-muted-foreground space-y-1 list-disc list-inside\">",
+        "<li>Relevé ponctuel au moment du clic sur « Pointer »</li>",
+        "<li>Comparaison avec l'adresse de l'établissement</li>",
+        "<li>Données conservées 1 an puis supprimées</li>",
+        "</ul>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.ConsentementGps.ceQueNousNeFaisonsPas"
+      ],
+      "source": "src/components/ConsentementGPS.tsx:43-47",
+      "code": [
+        "<ul className=\"text-xs text-muted-foreground space-y-1 list-disc list-inside\">",
+        "<li>Votre position n'est pas suivie en continu</li>",
+        "<li>Aucun traçage en arrière-plan</li>",
+        "<li>Aucun partage avec des tiers</li>",
+        "</ul>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.ProfilConsentementGps.explication"
+      ],
+      "source": "src/components/profil-soignant/SectionPreferences.tsx:134-136",
+      "code": [
+        "{consentementGPS",
+        "? 'Ta position sera capturée uniquement au moment de l\\'arrivée et du départ.'",
+        ": 'Sans GPS, tes pointages seront validés manuellement par l\\'établissement — rien à faire de ton côté.'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.ProfilConsentementGps.retourBascule"
+      ],
+      "source": "src/components/profil-soignant/SectionPreferences.tsx:159-162",
+      "code": [
+        "afficherNotification({",
+        "type: checked ? 'succes' : 'info',",
+        "message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré — tes pointages seront validés manuellement par l\\'établissement.',",
+        "});"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Contestation.libelleStatut"
+      ],
+      "source": "src/components/PanneauContestation.tsx:266",
+      "code": [
+        "{STATUT_CONFIG[litige.statut]?.label || litige.statut}"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.AttestationSante.signeeLe"
+      ],
+      "source": "src/pages/DocumentsSoignant.tsx:118",
+      "code": [
+        "✅ Attestation signée le {format(new Date(signedAt), 'd MMMM yyyy', { locale: fr })}"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Contrat.documentOfficielFige"
+      ],
+      "source": "src/pages/ContratMission.tsx:620-625",
+      "code": [
+        "{contrat.contenu_html_rendu_le && (",
+        "<p className=\"text-[10px] text-muted-foreground mb-2 italic flex items-center gap-1\">",
+        "<Shield className=\"h-3 w-3\" />",
+        "Document officiel figé le {format(new Date(contrat.contenu_html_rendu_le), \"dd/MM/yyyy 'à' HH:mm\", { locale: fr })}",
+        "{contrat.hash_document && ` — empreinte ${contrat.hash_document.slice(0, 8)}…${contrat.hash_document.slice(-4)}`}",
+        "</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Contrat.piedDePage",
+        "TextesWeb.Contrat.MentionPiedDePage.texte"
+      ],
+      "source": "src/pages/ContratMission.tsx:831-837",
+      "code": [
+        "<p className=\"text-[10px] text-muted-foreground/60 italic text-center mt-4\">",
+        "{texteEmployeur ? 'Contrat salarié préparé selon le cadre déclaré par l’employeur. '",
+        ": ['CDD', 'SALARIE'].includes(contrat.type_contrat || '')",
+        "? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '",
+        ": 'Contrat de prestation entre l’établissement et le professionnel libéral. '}",
+        "Signature électronique simple. {!texteEmployeur && 'Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.'}",
+        "</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.SignatureOtp.message"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:46-49",
+      "code": [
+        "function messageDepuisCode(code: string | undefined, fallback: string | undefined): string {",
+        "if (code && MESSAGES_ERREUR[code]) return MESSAGES_ERREUR[code];",
+        "return fallback || 'Une erreur est survenue. Réessayez.';",
+        "}"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.SignatureOtp.message"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:112-114",
+      "code": [
+        "function gererErreur(result: any, fallback: string) {",
+        "const code = result?.error_code;",
+        "const msg = messageDepuisCode(code, result?.error || fallback);"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.SignatureOtp.confirmationSignature"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:195-198",
+      "code": [
+        "setRetour({",
+        "type: 'succes',",
+        "message: `Contrat signé ✅${result.contrat_complet ? ' — Mission confirmée par les 2 parties.' : ''}`,",
+        "});"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.SignatureOtp.confirmationSignature"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:214",
+      "code": [
+        "<p className=\"font-semibold text-emerald-900 dark:text-emerald-200\">{retour?.message || 'Contrat signé ✅'}</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.SignatureOtp.tentativesRestantes"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:322-328",
+      "code": [
+        "{tentativesRestantes != null && tentativesRestantes < 5 && (",
+        "<div className=\"flex items-center gap-1.5 text-xs text-warning\">",
+        "<AlertCircle className=\"h-3.5 w-3.5\" />",
+        "{tentativesRestantes > 0",
+        "? `Code incorrect. ${tentativesRestantes} tentative${tentativesRestantes > 1 ? 's' : ''} restante${tentativesRestantes > 1 ? 's' : ''}.`",
+        ": `Trop de tentatives. Renvoyez un nouveau code SMS.`}",
+        "</div>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.CompteARebours.texte"
+      ],
+      "source": "src/components/Countdown72hSignature.tsx:38-39",
+      "code": [
+        "if (restant <= 0) {",
+        "return ("
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.CompteARebours.texte",
+        "LibellesWeb.CompteARebours.duree"
+      ],
+      "source": "src/components/Countdown72hSignature.tsx:49-56",
+      "code": [
+        "const heures = Math.floor(restant / 3600);",
+        "const minutes = Math.floor((restant % 3600) / 60);",
+        "const secondes = restant % 60;",
+        "let couleur: 'success' | 'warning' | 'destructive';",
+        "if (heures >= 48) couleur = 'success';",
+        "else if (heures >= 24) couleur = 'warning';",
+        "else couleur = 'destructive';"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.CompteARebours.texte",
+        "LibellesWeb.CompteARebours.duree",
+        "LibellesWeb.deuxChiffres"
+      ],
+      "source": "src/components/Countdown72hSignature.tsx:67-73",
+      "code": [
+        "<p className=\"text-xs font-semibold\">",
+        "{couleur === 'destructive'",
+        "? 'Signature urgente — moins de 24h restantes !'",
+        ": 'Signature à finaliser sous'}",
+        "<span className=\"ml-1 tabular-nums font-mono\">",
+        "{heures}h {minutes.toString().padStart(2, '0')}m {secondes.toString().padStart(2, '0')}s",
+        "</span>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Certificat.statut"
+      ],
+      "source": "src/components/CertificatSignature.tsx:121",
+      "code": [
+        "{sig.statut_signature === 'signe' ? '✅ Signé' : sig.statut_signature}"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Certificat.rpps",
+        "TextesWeb.Certificat.psc"
+      ],
+      "source": "src/components/CertificatSignature.tsx:162-165",
+      "code": [
+        "<dt className=\"text-muted-foreground\">RPPS vérifié</dt>",
+        "<dd className=\"text-foreground\">{sig.rpps_verifie ? '✓' : '—'}</dd>",
+        "<dt className=\"text-muted-foreground\">PSC actif</dt>",
+        "<dd className=\"text-foreground\">{sig.psc_session_active ? '✓' : '—'}</dd>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.Certificat.explicationEmpreinte"
+      ],
+      "source": "src/pages/CertificatSignaturePage.tsx:203-208",
+      "code": [
+        "<h3 className=\"font-semibold text-foreground text-sm mb-2\">Empreinte du document signé</h3>",
+        "<p className=\"text-[10px] font-mono text-muted-foreground break-all\">{contrat.hash_document}</p>",
+        "<p className=\"text-[10px] text-muted-foreground mt-2 italic\">",
+        "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké",
+        "(storage_path : <span className=\"font-mono\">{contrat.storage_path || '—'}</span>), vous devez retrouver",
+        "cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature."
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Presences.messageRelance"
+      ],
+      "source": "src/pages/DetailPresencesMission.tsx:120-123",
+      "code": [
+        "if (error) { toast.error(error.message); return; }",
+        "const r = data as any;",
+        "if (r?.success) toast.success(r.message ?? 'Établissement relancé.');",
+        "else toast.error(r?.message ?? r?.error ?? 'Relance impossible.');"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.SignatureOtp.minuteur",
+        "LibellesWeb.deuxChiffres"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:109-110",
+      "code": [
+        "const otpExpire = etape === 'otp_envoye' && secondesRestantes === 0;",
+        "const mmss = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.SignatureOtp.codeEnvoye"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:149-152",
+      "code": [
+        "setRetour({",
+        "type: 'succes',",
+        "message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,",
+        "});"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.SignatureOtp.codeEnvoyeAu",
+        "LibellesWeb.SignatureOtp.smsRestants"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:296-300",
+      "code": [
+        "Code envoyé au <strong>{telMasked || 'numéro masqué'}</strong>",
+        "{smsRestants !== null && (",
+        "<span className=\"ml-2 text-[10px] text-muted-foreground/70\">",
+        "({smsRestants === 0 ? 'dernier envoi possible' : `${smsRestants} envoi${smsRestants > 1 ? 's' : ''} restant${smsRestants > 1 ? 's' : ''}`})",
+        "</span>"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.SignatureOtp.minuteur"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:305",
+      "code": [
+        "{otpExpire ? 'Expiré' : mmss}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.SignatureOtp.renvoi",
+        "LibellesWeb.SignatureOtp.infobulleRenvoi"
+      ],
+      "source": "src/components/SignerContratOtp.tsx:335-339",
+      "code": [
+        "disabled={actionsSuspendues || !nouvelEnvoiAutorise || !documentPret || !hashDocument || loading || smsRestants === 0 || !!erreurBloquante || !accepte}",
+        "title={!nouvelEnvoiAutorise ? 'Aucun nouvel envoi autorisé pour cette recette' : smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}",
+        "className=\"btn-secondary flex-1 disabled:opacity-50\"",
+        ">",
+        "{otpExpire ? 'Recevoir un nouveau code' : 'Renvoyer le code'}"
+      ]
+    },
+    {
+      "fonctions": [
+        "LibellesWeb.Certificat.contrat"
+      ],
+      "source": "src/pages/CertificatSignaturePage.tsx:186",
+      "code": [
+        "<p className=\"text-sm text-muted-foreground\">Contrat {contrat.numero_contrat || contrat.id}</p>"
+      ]
+    }
+  ],
+  "rendus": [
+    {
+      "fonction": "TextesWeb.ProfilConsentementGps.explication",
+      "appel": "explication(consentementActif: true)",
+      "rendu": "Ta position sera capturée uniquement au moment de l'arrivée et du départ."
+    },
+    {
+      "fonction": "TextesWeb.ProfilConsentementGps.explication",
+      "appel": "explication(consentementActif: false)",
+      "rendu": "Sans GPS, tes pointages seront validés manuellement par l'établissement — rien à faire de ton côté."
+    },
+    {
+      "fonction": "TextesWeb.ProfilConsentementGps.retourBascule",
+      "appel": "retourBascule(consentementActif: true)",
+      "rendu": "Consentement GPS activé."
+    },
+    {
+      "fonction": "TextesWeb.ProfilConsentementGps.retourBascule",
+      "appel": "retourBascule(consentementActif: false)",
+      "rendu": "Consentement GPS retiré — tes pointages seront validés manuellement par l'établissement."
+    },
+    {
+      "fonction": "TextesWeb.Contestation.libelleStatut",
+      "appel": "libelleStatut(code: \"RESOLU_FAVEUR_ETAB\")",
+      "rendu": "Résolu en faveur de l’établissement"
+    },
+    {
+      "fonction": "TextesWeb.Contestation.libelleStatut",
+      "appel": "libelleStatut(code: \"STATUT_INCONNU\")",
+      "rendu": "STATUT_INCONNU"
+    },
+    {
+      "fonction": "TextesWeb.AttestationSante.signeeLe",
+      "appel": "signeeLe(dateFormatee: \"2 novembre 2026\")",
+      "rendu": "✅ Attestation signée le 2 novembre 2026"
+    },
+    {
+      "fonction": "TextesWeb.Contrat.MentionPiedDePage.texte",
+      "appel": "MentionPiedDePage.salarieEcrit.texte",
+      "rendu": "Contrat salarié écrit — art. L.1242-12 du Code du travail."
+    },
+    {
+      "fonction": "TextesWeb.Contrat.piedDePage",
+      "appel": "piedDePage(.salarieEcrit)",
+      "rendu": "Contrat salarié écrit — art. L.1242-12 du Code du travail. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires."
+    },
+    {
+      "fonction": "TextesWeb.Contrat.piedDePage",
+      "appel": "piedDePage(.prestationLiberale)",
+      "rendu": "Contrat de prestation entre l’établissement et le professionnel libéral. Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires."
+    },
+    {
+      "fonction": "TextesWeb.Contrat.piedDePage",
+      "appel": "piedDePage(.cadreEmployeur)",
+      "rendu": "Contrat salarié préparé selon le cadre déclaré par l’employeur. Signature électronique simple."
+    },
+    {
+      "fonction": "TextesWeb.Contrat.documentOfficielFige",
+      "appel": "documentOfficielFige(dateFormatee: \"02/11/2026 à 10:00\", empreinte: <64 caractères hexadécimaux>)",
+      "rendu": "Document officiel figé le 02/11/2026 à 10:00 — empreinte 01234567…wxyz"
+    },
+    {
+      "fonction": "TextesWeb.Contrat.documentOfficielFige",
+      "appel": "documentOfficielFige(dateFormatee: \"02/11/2026 à 10:00\", empreinte: nil)",
+      "rendu": "Document officiel figé le 02/11/2026 à 10:00"
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.message",
+      "appel": "message(code: \"OTP_EXPIRE\", erreurServeur: \"texte serveur\", repli: LibellesWeb.SignatureOtp.repliSignature)",
+      "rendu": "Le code SMS a expiré (10 min). Demandez un nouveau code."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.message",
+      "appel": "message(code: \"TROP_DE_SMS_IP\", erreurServeur: \"Message serveur verbatim.\", repli: LibellesWeb.SignatureOtp.repliEnvoi)",
+      "rendu": "Message serveur verbatim."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.message",
+      "appel": "message(code: nil, erreurServeur: nil, repli: \"\")",
+      "rendu": "Une erreur est survenue. Réessayez."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.confirmationSignature",
+      "appel": "confirmationSignature(contratComplet: false)",
+      "rendu": "Contrat signé ✅"
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.confirmationSignature",
+      "appel": "confirmationSignature(contratComplet: true)",
+      "rendu": "Contrat signé ✅ — Mission confirmée par les 2 parties."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.tentativesRestantes",
+      "appel": "tentativesRestantes(n: 4)",
+      "rendu": "Code incorrect. 4 tentatives restantes."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.tentativesRestantes",
+      "appel": "tentativesRestantes(n: 1)",
+      "rendu": "Code incorrect. 1 tentative restante."
+    },
+    {
+      "fonction": "TextesWeb.SignatureOtp.tentativesRestantes",
+      "appel": "tentativesRestantes(n: 0)",
+      "rendu": "Trop de tentatives. Renvoyez un nouveau code SMS."
+    },
+    {
+      "fonction": "TextesWeb.CompteARebours.texte",
+      "appel": "texte(restantSecondes: 0)",
+      "rendu": "⚠️ Délai de signature expiré (72h dépassées)."
+    },
+    {
+      "fonction": "TextesWeb.CompteARebours.texte",
+      "appel": "texte(restantSecondes: 62 h)",
+      "rendu": "Signature à finaliser sous 62h 00m 00s"
+    },
+    {
+      "fonction": "TextesWeb.CompteARebours.texte",
+      "appel": "texte(restantSecondes: 23 h 59 min 59 s)",
+      "rendu": "Signature urgente — moins de 24h restantes ! 23h 59m 59s"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.statut",
+      "appel": "statut(estSigne: true, codeBrut: \"signe\")",
+      "rendu": "✅ Signé"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.statut",
+      "appel": "statut(estSigne: false, codeBrut: \"en_attente\")",
+      "rendu": "en_attente"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.rpps",
+      "appel": "rpps(verifie: true)",
+      "rendu": "✓"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.rpps",
+      "appel": "rpps(verifie: false)",
+      "rendu": "—"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.psc",
+      "appel": "psc(actif: true)",
+      "rendu": "✓"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.psc",
+      "appel": "psc(actif: false)",
+      "rendu": "—"
+    },
+    {
+      "fonction": "TextesWeb.Certificat.explicationEmpreinte",
+      "appel": "explicationEmpreinte(storagePath: \"contrats/2026/c-001.html\")",
+      "rendu": "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : contrats/2026/c-001.html), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature."
+    },
+    {
+      "fonction": "TextesWeb.Certificat.explicationEmpreinte",
+      "appel": "explicationEmpreinte(storagePath: nil)",
+      "rendu": "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : —), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature."
+    },
+    {
+      "fonction": "LibellesWeb.Presences.messageRelance",
+      "appel": "messageRelance(succes: true, message: nil, erreur: nil)",
+      "rendu": "Établissement relancé."
+    },
+    {
+      "fonction": "LibellesWeb.Presences.messageRelance",
+      "appel": "messageRelance(succes: true, message: \"Relance envoyée.\", erreur: nil)",
+      "rendu": "Relance envoyée."
+    },
+    {
+      "fonction": "LibellesWeb.Presences.messageRelance",
+      "appel": "messageRelance(succes: false, message: nil, erreur: \"Déjà relancé.\")",
+      "rendu": "Déjà relancé."
+    },
+    {
+      "fonction": "LibellesWeb.Presences.messageRelance",
+      "appel": "messageRelance(succes: false, message: nil, erreur: nil)",
+      "rendu": "Relance impossible."
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.codeEnvoye",
+      "appel": "codeEnvoye(telephoneMasque: \"06 •• •• •• 12\", minutes: 10)",
+      "rendu": "Code envoyé au 06 •• •• •• 12. Valide 10 min."
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.codeEnvoyeAu",
+      "appel": "codeEnvoyeAu(telephoneMasque: \"06 •• •• •• 12\")",
+      "rendu": "Code envoyé au 06 •• •• •• 12"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.codeEnvoyeAu",
+      "appel": "codeEnvoyeAu(telephoneMasque: nil)",
+      "rendu": "Code envoyé au numéro masqué"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.smsRestants",
+      "appel": "smsRestants(n: 0)",
+      "rendu": "(dernier envoi possible)"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.smsRestants",
+      "appel": "smsRestants(n: 1)",
+      "rendu": "(1 envoi restant)"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.smsRestants",
+      "appel": "smsRestants(n: 2)",
+      "rendu": "(2 envois restants)"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.minuteur",
+      "appel": "minuteur(secondesRestantes: 600)",
+      "rendu": "10:00"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.minuteur",
+      "appel": "minuteur(secondesRestantes: 65)",
+      "rendu": "01:05"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.minuteur",
+      "appel": "minuteur(secondesRestantes: 0)",
+      "rendu": "Expiré"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.renvoi",
+      "appel": "renvoi(otpExpire: true)",
+      "rendu": "Recevoir un nouveau code"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.renvoi",
+      "appel": "renvoi(otpExpire: false)",
+      "rendu": "Renvoyer le code"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.infobulleRenvoi",
+      "appel": "infobulleRenvoi(nouvelEnvoiAutorise: false, smsRestants: 2)",
+      "rendu": "Aucun nouvel envoi autorisé pour cette recette"
+    },
+    {
+      "fonction": "LibellesWeb.SignatureOtp.infobulleRenvoi",
+      "appel": "infobulleRenvoi(nouvelEnvoiAutorise: true, smsRestants: 0)",
+      "rendu": "3 SMS max par 24h atteints"
+    },
+    {
+      "fonction": "LibellesWeb.CompteARebours.duree",
+      "appel": "duree(restantSecondes: 3661)",
+      "rendu": "1h 01m 01s"
+    },
+    {
+      "fonction": "LibellesWeb.CompteARebours.duree",
+      "appel": "duree(restantSecondes: 62 h)",
+      "rendu": "62h 00m 00s"
+    },
+    {
+      "fonction": "LibellesWeb.Certificat.contrat",
+      "appel": "contrat(numero: \"CTR-2026-0001\", id: \"c-001\")",
+      "rendu": "Contrat CTR-2026-0001"
+    },
+    {
+      "fonction": "LibellesWeb.Certificat.contrat",
+      "appel": "contrat(numero: nil, id: \"c-001\")",
+      "rendu": "Contrat c-001"
+    }
+  ]
+}
