@@ -96,3 +96,54 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 - **Lot 4** : parcours secondaires ; renvoi web assumé proposé pour premium, prévoyance, mandat et charges
   sociales (décision 3 : WebView bornée ou Safari, à trancher par Gabrielle).
 - Aucune ligne n'est « abandonné » à l initialisation ; ce statut exige une décision écrite de Gabrielle.
+
+## Lot 4 — statuts proposés (T0, à signer par Gabrielle en T15)
+
+Ajoutée le 2026-11-02 par la tranche T0 du lot 4 (`LOT4_PLAN.md` §1.3, `DECISIONS_LOT4.md` D15 et D16). Ces
+statuts sont des **propositions** : aucune ligne du tableau principal ne change avant sa preuve, et T15 les
+reporte dans le tableau principal, avec la preuve et l'emplacement de signature. Les statuts et les sous-lignes
+ne bougent qu'en T0 et en T15 (`LOT4_PLAN.md` §3) ; une tranche de domaine qui modifie ce fichier est
+refusée en revue.
+
+| Route (`src/App.tsx`) | Statut proposé | Sous-lignes et justification | Preuve prévue |
+|---|---|---|---|
+| `/soignant/swipe-missions` (l.317) | natif (proposé — à signer) | Explorer › vue Swipe (commande segmentée Swipe · Liste · Carte) ; super-like, streaks et célébrations non portés (D3) | `DemoSwipeTests` (T3b) ; STAGING `LIKE` et effets serveur (T14, recommandé) |
+| `/soignant/recherche-missions?vue=swipe` (cible de `RedirectionSwipeMissions`, l.258-260) | natif (proposé — à signer) | même destination que `/soignant/swipe-missions` : onglet Explorer en vue Swipe | `LinksRouterTests` (T1), `DemoNavigationSecondaireTests` (T1c) |
+| `/soignant/disponibilites` (l.321) | natif (proposé — à signer) | grille de 4 semaines, créneaux `JOURNEE` / `NUIT`, sans état optimiste | `DemoDisponibilitesTests` (T5) ; STAGING disponibilité relue (T14, recommandé) |
+| `/soignant/mandat-facturation` (l.326) | renvoi web assumé (proposé — à signer) | signature de mandat, textes CGI et Code civil (`MandatFacturation.tsx` l.382-684), edge `sign-invoicing-mandate` : HARD STOP n°4 et B9 | `DemoRenvoisWebTests` (T13) |
+| `/soignant/score` (l.327) + alias `fiabilite`, `fiabilite-legacy` (l.399-400) | natif (proposé — à signer) | lecture et contestation d'un événement sans justificatif ; sous-ligne « justificatif : renvoi web assumé » (D10) | `DemoEvaluationsScoreTests` (T9) ; STAGING contestation (T14, recommandé) |
+| `/soignant/evaluations` (l.328) | natif (proposé — à signer) | lecture et signalement ; sous-ligne « édition : non portée, chemin mort du web » (D11) | `DemoEvaluationsScoreTests` (T9) ; STAGING double-aveugle N1 / N2 (T14, recommandé) |
+| `/soignant/prevoyance` (l.329) | renvoi web assumé (proposé — à signer) | liste d'attente assurance (`fn_inscrire_liste_attente_prevoyance`) | `DemoRenvoisWebTests` (T13) |
+| `/soignant/attestation-heures` (l.330) | renvoi web assumé (proposé — à signer) | document généré côté client avec audit (`AttestationHeures.tsx` l.87-108) | `DemoRenvoisWebTests` (T13) |
+| `/soignant/passer-en-liberal` (l.331) + alias `parcours-3200h` (l.401) | renvoi web assumé (proposé — à signer) | règles d'installation libérale = restriction de mode d'exercice, HARD STOP n°4 | `DemoRenvoisWebTests` (T13) |
+| `/soignant/exclusions` (l.332) | natif (proposé — à signer) | exclusions envoyées et reçues, retrait | `DemoPoolUrgenceTests` (T11) |
+| `/soignant/premium` (l.333) | renvoi web assumé (proposé — à signer) | liste d'attente (`PremiumSoignant.tsx` l.27) ; si l'offre devient payante, règle Apple 3.1.1 à instruire | `DemoRenvoisWebTests` (T13) |
+| `/soignant/charges` (l.334) | renvoi web assumé (proposé — à signer) | estimations de charges | `DemoRenvoisWebTests` (T13) |
+| `/soignant/parrainage` (l.336) | natif (proposé — à signer) | code, lien, QR, partage, filleuls ; bloc « conditions de la prime » sous HARD STOP n°4 (T6-HS, en attente) | `DemoParrainageTests` (T6) ; recette appareil lien et QR |
+| `/soignant/messagerie` (l.337) | natif (proposé — à signer) | liste, fil, envoi par l'edge, Realtime, blocage et signalement (Apple 1.2) | `DemoMessagerieTests` (T7b) ; STAGING Realtime bidirectionnel (T14, obligatoire) |
+| `/soignant/litiges` (l.338) + alias `reclamations` (l.403) | natif (proposé — à signer) | liste, fil, ouverture `AUTRE`, réclamations générales ; sous-lignes « accords amiables » et « litiges typés facture » : renvoi web assumé (D9) | `DemoLitigesTests`, `DemoReclamationsTests` (T8) ; STAGING litige ouvert et relu (T14, obligatoire) |
+| `/soignant/classement` (l.340) | renvoi web assumé (proposé — à signer) | classement nominatif calculé depuis `soignants.note_moyenne` (table legacy `evaluations.visible`), pas depuis `evaluations_publiees` | `DemoRenvoisWebTests` (T13) |
+| `/soignant/parametres/recherches-sauvegardees` (l.342) | natif (proposé — à signer) | liste, renommage, alerte et fréquence, suppression, « Créer une alerte » depuis Explorer | `DemoFiltresTests` (T4) |
+| `/soignant/pool-urgence` (l.343) | natif (proposé — à signer) | état, activation et rayon, opt-in SMS, missions urgentes, acceptation `URGENCE` | `DemoPoolUrgenceTests` (T11) |
+| `/soignant/missions/serie/:serieId` (l.318) | natif (proposé — à signer) | report de la décision 11 du lot 1 : sélection et acceptation unitaire en boucle | `DemoSerieTests` (T12) |
+| `/soignant/mes-gains?tab=bulletins` (alias `bulletins-paie`, l.397) | natif pour les copies (proposé — à signer) | copies officielles (intégrité SHA-256, partage, signalement) ; sous-ligne « simulations de paie : renvoi web assumé » (D12) | `DemoBulletinsTests` (T10) |
+| `/soignant/mes-gains?tab=avances` (alias `mes-avances`, l.396) | renvoi web assumé (proposé — à signer) | affacturage Defacto, B9 paiements | `DemoRenvoisWebTests` (T13) |
+| `/soignant/missions/:id` (l.319, ligne du lot 1) | sous-lignes natives du lot 4 (proposé — à signer) | « Écrire à l'établissement » (fil de la mission, T7b), « Signaler » (T7b), « Ne plus travailler ensemble » (T11) — D25 | `DemoMessagerieTests` (T7b), `DemoPoolUrgenceTests` (T11) |
+
+### Onze parcours cœur (D16, proposés — validés par la signature de la matrice)
+
+Critère du plan l.207 : zéro ligne « abandonné » sur ces onze parcours ; les renvois web assumés (avances sous
+« revenus ») restent admis. Liste dérivée du périmètre des lots 1 à 3 (plan §5) et de la garde Apple 4.2 du
+lot 6 (pointage, tableau de bord, missions natifs).
+
+1. **Connexion, session et reset du mot de passe** (lot 1).
+2. **Tableau de bord** (lot 1).
+3. **Explorer, détail de mission et candidature** (lot 1 ; vue Swipe au lot 4).
+4. **Mes missions** : annulation et confirmation de présence (lot 1).
+5. **Pointage** (lot 2).
+6. **Documents** (lot 2).
+7. **Contrats et signature OTP** (lot 2).
+8. **Revenus** (lot 3 ; copies de bulletins au lot 4).
+9. **Profil et compte**, suppression de compte comprise (lots 1 et 3).
+10. **Notifications push** (lot 3).
+11. **Messagerie** (lot 4).
