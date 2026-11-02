@@ -319,7 +319,7 @@
     },
     {
       "name": "fn_audit_connexion",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_action: string }",
@@ -348,7 +348,7 @@
     },
     {
       "name": "fn_maj_activite_soignant",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "never",
@@ -435,7 +435,7 @@
     },
     {
       "name": "fn_param_bool",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": null,
       "sql": [

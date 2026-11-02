@@ -62,11 +62,11 @@ serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 | `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_favori_etablissement` | à venir | 1 (T4b, retrait seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_favoris_etablissements` | à venir | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_audit_connexion` | consommée lot 1 (T9) | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_maj_activite_soignant` | consommée lot 1 (T9) | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_param_bool` | consommée lot 1 (T9) | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_pointer_arrivee` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_pointer_depart` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -613,11 +613,18 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 
 ## fn_audit_connexion
 
-- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 5).
-- **Usage prévu** : `p_action = 'CONNEXION'` après un `signIn` explicite réussi (jamais après une restauration de
-  session), `'DECONNEXION'` avant `SessionController.signOut()` — comme `src/contexts/AuthContext.tsx`
-  l.186-210. Best-effort, borné, non bloquant : un échec n'empêche ni `.ready` ni la déconnexion.
-  IP et User-Agent sont capturés côté serveur depuis `request.headers` ; l'app n'envoie rien d'autre.
+- **Statut natif** : consommée (lot 1, T9) — gateway `JoleneSupabase/Audit/SupabaseAuditGateway.swift` (T1),
+  appelée par `JoleneCore/Session/SessionStore.swift` (décision 5).
+- **Usage** : `p_action = 'CONNEXION'` après un `signIn` explicite qui ouvre une session Auth — espace prêt
+  **ou bloqué** (rôle non servi, profil absent : le web journalise toute connexion réussie,
+  `AuthContext.tsx` l.186-191) —, jamais après une restauration de session ni une reprise ; tâche non
+  attendue, la connexion rend la main sans elle. `'DECONNEXION'` avant `SessionController.signOut()`, avec
+  le jeton encore valide (l.202-208), seulement si une identité est ouverte (prêt ou bloqué) ; une seule fois
+  par appui (double appui ignoré). Jamais après la suppression de compte (jeton révoqué) ni sur une session
+  effacée par le SDK. Chaque appel est borné à `resolutionTimeout` (15 s) et best-effort : un échec, un refus
+  ou un délai dépassé n'empêchent ni `.ready` ni la déconnexion, rien n'est affiché ni renvoyé. Preuves
+  niveau 1 : `SessionStoreAuditTests` (10 cas). IP et User-Agent sont capturés côté serveur depuis
+  `request.headers` ; l'app n'envoie rien d'autre.
 - **Signature SQL** (`supabase/schema/public.sql` l.19699) :
 
 ```sql
@@ -638,9 +645,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_audit_connexion"("p_action" "text") RETU
 
 ## fn_maj_activite_soignant
 
-- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 5).
-- **Usage prévu** : `soignants.derniere_activite_le = NOW()` après un `signIn` réussi d'un compte `SOIGNANT`
-  (`AuthContext.tsx` l.195-199). Best-effort, borné, non bloquant.
+- **Statut natif** : consommée (lot 1, T9) — `SupabaseAuditGateway.activite()` (T1), appelée par
+  `SessionStore` (décision 5).
+- **Usage** : `soignants.derniere_activite_le = NOW()` après un `signIn` explicite qui ouvre un espace soignant
+  prêt (`.ready` : rôle SOIGNANT confirmé par le serveur et profil présent ; le web la réserve à
+  `app_metadata.role = 'SOIGNANT'`, `AuthContext.tsx` l.195-199), après l'audit `CONNEXION` et
+  indépendamment de son issue. Best-effort, borné à `resolutionTimeout`, non bloquant.
 - **Signature SQL** (`supabase/schema/public.sql` l.41026) :
 
 ```sql
@@ -712,13 +722,21 @@ CREATE OR REPLACE FUNCTION "public"."fn_supprimer_compte_rate_limited"() RETURNS
 
 ## fn_param_bool
 
-- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 15 et `DECISIONS_LOT0.md` n°9).
-- **Usage prévu** : Drapeaux `ios_natif_{accueil,explorer,missions,revenus,profil}_actif` lus **après `.ready`**
-  et à la reprise (> 30 min) ; `p_defaut = true` ; toute erreur (réseau, 42501, timeout) → `true`
-  (**fail-open**, inversion assumée de la convention web `useParamBool.ts` l.8-9 fail-closed) ; `false` →
-  `RenvoiWebScreen` sur l'onglet concerné. Les 5 lignes `parametres_systeme` n'existent dans aucune
-  migration : sans la PR backend B0, la RPC renvoie `p_defaut` (kill switch inopérant, documenté dans
-  `PORTE_LOT1.md`).
+- **Statut natif** : consommée (lot 1, T9) — gateway `JoleneSupabase/Flags/SupabaseFlagsGateway.swift` (T1),
+  lue par `JoleneCore/Session/EcransNatifs.swift` (`EcransNatifsModel`) pour `SessionStore` (décision 15 et
+  `DECISIONS_LOT0.md` n°9).
+- **Usage** : Drapeaux `ios_natif_{accueil,explorer,missions,revenus,profil}_actif` lus avec la session dès
+  qu'un espace est prêt — connexion, restauration, nouvelle identité ouverte par le SDK — **avant** la
+  publication de `.ready` (un onglet coupé n'est jamais monté), et relus à chaque reprise (> 30 min) ; cinq
+  appels en parallèle, chacun borné à `resolutionTimeout` ; aucune lecture sans session (rôle `anon` refusé)
+  ni pour un epoch périmé ; `p_defaut = true` ; toute erreur (réseau, 42501, PGRST202) ou délai dépassé →
+  `true` (**fail-open**, inversion assumée de la convention web `useParamBool.ts` l.8-9 fail-closed) ; `false`
+  → `RenvoiWebScreen` sur l'onglet concerné (`Jolene/Composition/FeatureFlags.swift`), avec « Se déconnecter »
+  sur l'onglet Profil. Les 5 lignes `parametres_systeme` sont créées par la PR backend B0 (#1109, migration
+  `20261102150000_drapeaux_ios_natif.sql`, `ON CONFLICT (cle) DO NOTHING`, catégorie OPERATIONS) ; sur une
+  base où elles manquent, la RPC renvoie `p_defaut` (kill switch inopérant, fail-open). Démo : surcharges
+  DEBUG `-JOLENE_FLAG_<cle> true|false` (`DrapeauxLancement`, `DemoFlagsGateway`). Preuves niveau 1 :
+  `FeatureFlagsTests`, `SupabaseFlagsGatewayTests` ; niveau 2 : `DemoSessionTests`.
 - **Signature SQL** (`supabase/schema/public.sql` l.47037) :
 
 ```sql

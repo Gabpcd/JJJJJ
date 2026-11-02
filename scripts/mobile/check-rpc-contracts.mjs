@@ -64,11 +64,11 @@ export const RPC_SUIVIES = [
   { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },
   { name: 'fn_toggle_favori_etablissement', statut: 'a_venir', lot: 1 },
   { name: 'fn_mes_favoris_etablissements', statut: 'a_venir', lot: 1 },
-  { name: 'fn_audit_connexion', statut: 'a_venir', lot: 1 },
-  { name: 'fn_maj_activite_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_audit_connexion', statut: 'consommee', lot: 1 }, // T9 : SessionStore → SupabaseAuditGateway
+  { name: 'fn_maj_activite_soignant', statut: 'consommee', lot: 1 }, // T9 : SessionStore → SupabaseAuditGateway
   { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },
   { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
-  { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
+  { name: 'fn_param_bool', statut: 'consommee', lot: 1 }, // T9 : EcransNatifsModel → SupabaseFlagsGateway
   { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
   { name: 'fn_pointer_arrivee', statut: 'a_venir', lot: 2 },
   { name: 'fn_pointer_depart', statut: 'a_venir', lot: 2 },
