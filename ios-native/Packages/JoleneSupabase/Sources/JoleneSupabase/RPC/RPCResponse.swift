@@ -9,11 +9,21 @@ import Supabase
 /// refus dans le corps et non par le statut HTTP. Une gateway qui ne testerait que l'erreur
 /// PostgREST afficherait un faux succès : chaque gateway passe par ce helper unique.
 ///
-/// - `{error}` sans `success:false` / `ok:false` : erreur levée par `leverSiErreur`
-///   (« Non authentifié » → `.unauthorized`, sinon `.unknown` avec le message serveur verbatim).
-/// - `{success:false | ok:false, error?, error_code? | code?, documents_requis_pour?,
-///   choix_requis?, options?}` : refus structuré, traduit en issue métier par l'appelant
-///   (`issueCandidatureRefusee`).
+/// - `{error}` seul (aucun marqueur de refus structuré ci-dessous) : erreur levée par
+///   `leverSiErreur` (« Non authentifié » → `.unauthorized`, sinon `.unknown` avec le message
+///   serveur verbatim).
+/// - Refus structuré (`estRefus`), traduit en issue métier par l'appelant
+///   (`issueCandidatureRefusee`), quelle que soit la forme renvoyée :
+///   - `{success:false | ok:false, error?, error_code? | code?, …}` :
+///     `fn_confirmer_action_planning_v1` elle-même (planning, conflit, accès) ;
+///   - `{choix_requis:true, error, options}` SANS `success` ni `ok` : `fn_resoudre_contrat_mission`
+///     relayé en `v_resolution - 'ok'` par `fn_postuler_mission` (POSTULER) et
+///     `fn_finaliser_attribution_mission` (ACCEPTER via `fn_accepter_mission`, PROPOSITION via
+///     `fn_repondre_proposition`) ;
+///   - `{error, documents_requis_pour, lien_documents}` SANS `success` ni `ok` : mêmes RPC
+///     déléguées (documents requis non validés). `documents_requis_pour` accompagné de
+///     `success:true` n'est PAS un refus (succès de `fn_postuler_mission` avec documents à
+///     compléter).
 /// - Aucun décodeur strict : chaque clé est optionnelle, sauf celles qui conditionnent une
 ///   action (`requiredString`, ex. `candidature_id`, `contrat_id`).
 public struct RPCResponse: Equatable, Sendable {
@@ -79,7 +89,12 @@ public struct RPCResponse: Equatable, Sendable {
     /// `error_code`, sinon `code`.
     public var code: String? { string("error_code") ?? string("code") }
 
-    public var documentsRequisPour: String? { string("documents_requis_pour") }
+    /// Régime dont les documents manquent (`SALARIE`, `LIBERAL`) ; vide ou absent → nil.
+    public var documentsRequisPour: String? {
+        guard let texte = string("documents_requis_pour"),
+              !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return texte
+    }
 
     public var choixRequis: Bool { bool("choix_requis") == true }
 
@@ -93,8 +108,12 @@ public struct RPCResponse: Equatable, Sendable {
         }
     }
 
-    /// Refus structuré annoncé par le serveur.
-    public var estRefus: Bool { success == false || ok == false || choixRequis }
+    /// Refus structuré annoncé par le serveur : drapeau `success:false` / `ok:false`, choix de
+    /// contrat demandé, ou documents requis manquants sans `success:true` (les RPC déléguées
+    /// au lot 1 ne posent aucun drapeau sur ces deux refus).
+    public var estRefus: Bool {
+        success == false || ok == false || choixRequis || (documentsRequisPour != nil && success != true)
+    }
 
     /// Succès annoncé explicitement (`success:true` ou `ok:true`), sans message d'erreur.
     public var estSucces: Bool { !estRefus && erreur == nil && (success == true || ok == true) }
@@ -122,8 +141,11 @@ public struct RPCResponse: Equatable, Sendable {
         if let brute = valeur("error"), brute.stringValue == nil { throw JoleneError(.unknown, fallback) }
     }
 
-    /// Refus de `fn_confirmer_action_planning_v1` (et des RPC qu'elle délègue) traduit en issue ;
-    /// nil si la réponse n'est pas un refus. Messages serveur verbatim (HARD STOP n°4).
+    /// Refus de `fn_confirmer_action_planning_v1` et des RPC qu'elle délègue au lot 1
+    /// (`fn_postuler_mission`, `fn_accepter_mission` → `fn_finaliser_attribution_mission`,
+    /// `fn_repondre_proposition`), drapeau ou non, traduit en issue ; nil si la réponse n'est pas
+    /// un refus structuré (`{error}` seul : `leverSiErreur`). Messages serveur verbatim
+    /// (HARD STOP n°4).
     public func issueCandidatureRefusee(fallback: String) -> CandidatureOutcome? {
         guard estRefus else { return nil }
         if choixRequis { return .choixRequis(options) }

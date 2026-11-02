@@ -17,7 +17,14 @@ public enum ActionPlanning: String, CaseIterable, Sendable {
 
 /// Élément de `p_creneaux_confirmes` : instants ISO 8601 du planning exact affiché. T6a le
 /// produit depuis `creneauxConfirmesPourAction` (port T2), sans jamais recalculer un horaire.
-public struct CreneauConfirmePayload: Codable, Equatable, Sendable {
+///
+/// Doublon assumé, temporaire, de `CreneauConfirme` (T2, `Missions/CreneauxConfirmes.swift`,
+/// mêmes clés `debut`/`fin`, même init, mêmes conformances), que le blueprint §2.3 désigne
+/// comme type du port. Les deux tranches sont développées en parallèle : la PR mergée en
+/// second remplace ce struct par `public typealias CreneauConfirmePayload = CreneauConfirme`
+/// (ou le port par `[CreneauConfirme]`), pour que `CandidaturePort.confirmer` consomme
+/// directement `CreneauxConfirmes.pourAction(_:)` sans conversion en T6a.
+public struct CreneauConfirmePayload: Codable, Hashable, Sendable {
     public var debut: String
     public var fin: String
 

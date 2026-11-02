@@ -36,9 +36,11 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   second init complet ; l'init du lot 0 est conservé.
 - Un port « non câblé » (`Ports/Lot1Ports.swift`) ne rend jamais un état vide plausible :
   il lève `.contract` en citant la tranche qui le livre. `Gateways.unwiredPorts` nomme les
-  ports encore stubs ; les tests de chaque monde (`DemoWorldTests`, `SupabaseGatewaysTests`)
-  figent cette liste, que chaque tranche raccourcit en câblant son port dans les deux mondes
-  dans la même PR. Elle est vide à la clôture du lot.
+  ports encore stubs. La liste attendue n'existe qu'à un endroit
+  (`DemoWorldTests.portsEnAttenteLot1`) ; `SupabaseGatewaysTests` compare le monde Supabase
+  au monde démo, si bien qu'un port câblé dans un seul monde rougit un test. Chaque tranche
+  câble son port dans les deux mondes et le retire de la liste dans la même PR ; elle est
+  vide à la clôture du lot (`unwiredPorts.isEmpty`, T12).
 
 ## 3. Aucun succès fabriqué
 
@@ -88,7 +90,8 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   sans issue. Depuis le lot 1, la borne est le helper public `bounded(timeout:_:)`
   (`Session/Bounded.swift`) et `resolutionTimeout` est public : les modèles d'écran bornent
   leurs lectures et mutations au même délai. Un délai dépassé sur une mutation impose une
-  relecture, jamais un renvoi.
+  relecture, jamais un renvoi. L'annulation de l'appelant (vue qui disparaît) lève
+  `CancellationError`, jamais le message de délai dépassé.
 - Le SDK est observé (`AuthPort.authEvents()` → `SessionController.handleAuthEvent`) : une
   session effacée côté serveur (révocation, déconnexion globale, refresh refusé) avance
   l'epoch et ramène l'écran de connexion sans action de l'utilisateur. Une revalidation
