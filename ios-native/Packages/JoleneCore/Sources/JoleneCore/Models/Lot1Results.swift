@@ -44,10 +44,19 @@ public enum CandidatureOutcome: Equatable, Sendable {
     case confirmed(candidatureId: String?, contratId: String?)
     /// Le serveur demande un mode de contrat : l'action est rejouée avec l'option choisie.
     case choixRequis([ChoixContratOption])
-    /// Refus serveur affiché verbatim (`[CODE DU TRAVAIL]` compris, HARD STOP n°4).
+    /// Refus serveur affiché verbatim (HARD STOP n°4) : refus jsonb (`code` serveur) ou exception
+    /// `[CODE DU TRAVAIL]` d'un trigger, message mot pour mot et `code` =
+    /// `codeRefusCodeDuTravail` (décision 2).
     case refusee(code: String?, message: String, documentsRequisPour: String?)
     /// Le planning a changé : relire la mission et redemander une confirmation, jamais renvoyer.
     case planningAReconfirmer(code: String, message: String)
+
+    /// Code posé par le client sur un refus du Code du travail levé en exception par un trigger
+    /// de `missions` (`dec_verifier_plafond_48h`, `dec_verifier_repos_11h`,
+    /// `dec_verifier_moyenne_44h_12_semaines`, `dec_verifier_repos_hebdo_35h`) : SQLSTATE P0001
+    /// ou 23514, sans code métier. Distinct de tout code jsonb du serveur, il permet à l'écran
+    /// d'afficher le texte légal à part (le web ouvre une modale, `estBlocageCodeTravail`).
+    public static let codeRefusCodeDuTravail = "CODE_DU_TRAVAIL"
 }
 
 /// Ligne `candidatures` relue sous RLS. Seuls `id` et `mission_id` conditionnent une action.

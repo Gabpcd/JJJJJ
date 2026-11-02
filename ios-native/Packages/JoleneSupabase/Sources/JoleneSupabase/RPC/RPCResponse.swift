@@ -13,9 +13,12 @@ import Supabase
 ///   `leverSiErreur` (« Non authentifié » → `.unauthorized`, sinon `.unknown` avec le message
 ///   serveur verbatim).
 /// - Refus structuré (`estRefus`), traduit en issue métier par l'appelant
-///   (`issueCandidatureRefusee`), quelle que soit la forme renvoyée :
-///   - `{success:false | ok:false, error?, error_code? | code?, …}` :
-///     `fn_confirmer_action_planning_v1` elle-même (planning, conflit, accès) ;
+///   (`issueCandidatureRefusee`), quelle que soit la forme renvoyée (formes du dump
+///   `supabase/schema/public.sql`, RPC par RPC) :
+///   - `{success:false, ok:false, error, code?}` : `fn_confirmer_action_planning_v1` elle-même
+///     (accès, action, mission indisponible, planning l.24199 et l.24247, conflit l.24260 dont
+///     REPOS_11H, proposition introuvable) ; `{success:false, error_code, error}` :
+///     `fn_annuler_candidature_soignant` (T7, `codeErreur`) ;
 ///   - `{choix_requis:true, error, options}` SANS `success` ni `ok` : `fn_resoudre_contrat_mission`
 ///     relayé en `v_resolution - 'ok'` par `fn_postuler_mission` (POSTULER) et
 ///     `fn_finaliser_attribution_mission` (ACCEPTER via `fn_accepter_mission`, PROPOSITION via
@@ -23,9 +26,23 @@ import Supabase
 ///   - `{error, documents_requis_pour, lien_documents}` SANS `success` ni `ok` : mêmes RPC
 ///     déléguées (documents requis non validés). `documents_requis_pour` accompagné de
 ///     `success:true` n'est PAS un refus (succès de `fn_postuler_mission` avec documents à
-///     compléter).
+///     compléter) ;
+///   - `{error, code, …}` SANS `success` ni `ok` : `fn_finaliser_attribution_mission`
+///     (ACCEPTER, PROPOSITION), `PLANNING_HEBDOMADAIRE_INDISPONIBLE` l.36788-36793 et
+///     `PLAFOND_48H_HEBDO` l.36811-36825 ;
+///   - exception PostgREST (HTTP 400) dont le message contient `[CODE DU TRAVAIL]` : triggers
+///     `dec_verifier_plafond_48h` (l.4477), `dec_verifier_repos_11h` (l.4615),
+///     `dec_verifier_moyenne_44h_12_semaines` (l.4322) et `dec_verifier_repos_hebdo_35h`
+///     (l.4707), levés par l'`UPDATE public.missions` de `fn_finaliser_attribution_mission`
+///     (l.36840), donc sur ACCEPTER et PROPOSITION. `appeler` la restitue mot pour mot en
+///     `{success:false, ok:false, code: CandidatureOutcome.codeRefusCodeDuTravail, error}`
+///     (décision 2, HARD STOP n°4) au lieu du message générique de `SupabaseErrorMapping`.
 /// - Aucun décodeur strict : chaque clé est optionnelle, sauf celles qui conditionnent une
 ///   action (`requiredString`, ex. `candidature_id`, `contrat_id`).
+///
+/// Les autres RPC du lot 1 (tableau de bord, favoris, présence, annulation, audit, suppression)
+/// ne renvoient pas `{error, code}` sans drapeau dans le dump. Règle pour leurs gateways : tout
+/// `estRefus` est un refus (issue `.refusee`, `.nonEnregistre`…), jamais un succès supposé.
 public struct RPCResponse: Equatable, Sendable {
     /// Codes de `fn_confirmer_action_planning_v1` qui imposent de relire puis reconfirmer le planning.
     public static let codesPlanningAReconfirmer: Set<String> = ["PLANNING_A_RECONFIRMER", "PLANNING_MODIFIE_RECONFIRMER"]
@@ -86,8 +103,18 @@ public struct RPCResponse: Equatable, Sendable {
         return texte
     }
 
-    /// `error_code`, sinon `code`.
-    public var code: String? { string("error_code") ?? string("code") }
+    /// Clé `code` seule, vide ou absente → nil. Jamais de repli sur `error_code` (fiche T0 de
+    /// `fn_confirmer_action_planning_v1` : ni ce corps ni `fn_conflit_planning_soignant` ne la posent).
+    public var code: String? { texteNonVide("code") }
+
+    /// Clé `error_code` (au lot 1, seule `fn_annuler_candidature_soignant` la pose, l.17557-17590 :
+    /// T7) ; vide ou absente → nil.
+    public var codeErreur: String? { texteNonVide("error_code") }
+
+    private func texteNonVide(_ cle: String) -> String? {
+        guard let texte = string(cle), !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return texte
+    }
 
     /// Régime dont les documents manquent (`SALARIE`, `LIBERAL`) ; vide ou absent → nil.
     public var documentsRequisPour: String? {
@@ -109,10 +136,12 @@ public struct RPCResponse: Equatable, Sendable {
     }
 
     /// Refus structuré annoncé par le serveur : drapeau `success:false` / `ok:false`, choix de
-    /// contrat demandé, ou documents requis manquants sans `success:true` (les RPC déléguées
-    /// au lot 1 ne posent aucun drapeau sur ces deux refus).
+    /// contrat demandé, documents requis manquants sans `success:true`, ou `code` + `error` sans
+    /// drapeau vrai (les RPC déléguées au lot 1 ne posent aucun drapeau sur ces trois refus).
     public var estRefus: Bool {
-        success == false || ok == false || choixRequis || (documentsRequisPour != nil && success != true)
+        success == false || ok == false || choixRequis
+            || (documentsRequisPour != nil && success != true)
+            || (code != nil && erreur != nil && success != true && ok != true)
     }
 
     /// Succès annoncé explicitement (`success:true` ou `ok:true`), sans message d'erreur.
@@ -156,25 +185,50 @@ public struct RPCResponse: Equatable, Sendable {
         return .refusee(code: code, message: message, documentsRequisPour: documentsRequisPour)
     }
 
+    // MARK: - Refus du Code du travail (exception PostgREST)
+
+    /// Préfixe des `RAISE EXCEPTION` des triggers du Code du travail.
+    public static let marqueurCodeDuTravail = "[CODE DU TRAVAIL]"
+
+    /// Vrai si le message d'exception contient le marqueur, à l'identique du web
+    /// (`estBlocageCodeTravail`, `src/lib/erreurs.ts` l.586-588 : `includes`, sensible à la casse).
+    public static func estRefusCodeDuTravail(_ message: String) -> Bool {
+        message.contains(marqueurCodeDuTravail)
+    }
+
+    /// Refus structuré équivalent à l'exception : message mot pour mot (préfixe compris, DETAIL
+    /// technique jamais repris), code client `CandidatureOutcome.codeRefusCodeDuTravail`.
+    static func refusCodeDuTravail(_ message: String) -> RPCResponse {
+        RPCResponse(.object([
+            "success": .bool(false),
+            "ok": .bool(false),
+            "code": .string(CandidatureOutcome.codeRefusCodeDuTravail),
+            "error": .string(message),
+        ]))
+    }
+
     // MARK: - Transport
 
     /// Appel RPC sans paramètre ; erreurs de transport traduites par `SupabaseErrorMapping`
-    /// (PGRST202 et 300-303 → `.contract`, refus définitif sans renvoi).
+    /// (PGRST202 et 300-303 → `.contract`, refus définitif sans renvoi), sauf l'exception
+    /// `[CODE DU TRAVAIL]`, restituée en refus structuré (`refusCodeDuTravail`).
     static func appeler(_ client: SupabaseClient, _ fonction: String, fallback: String) async throws -> RPCResponse {
-        do {
-            let valeur: AnyJSON = try await client.rpc(fonction).execute().value
-            return RPCResponse(valeur)
-        } catch {
-            throw SupabaseErrorMapping.map(error, fallback: fallback)
-        }
+        try await executer(fallback: fallback) { try await client.rpc(fonction).execute().value }
     }
 
-    /// Appel RPC à paramètres nommés.
+    /// Appel RPC à paramètres nommés (mêmes règles).
     static func appeler(_ client: SupabaseClient, _ fonction: String, params: JSONObject,
                         fallback: String) async throws -> RPCResponse {
+        try await executer(fallback: fallback) { try await client.rpc(fonction, params: params).execute().value }
+    }
+
+    /// Seul point de traduction des erreurs d'appel : l'interception du Code du travail précède
+    /// `SupabaseErrorMapping.map`, laissé inchangé (lot 0). Une seule requête, aucun renvoi.
+    private static func executer(fallback: String, _ requete: () async throws -> AnyJSON) async throws -> RPCResponse {
         do {
-            let valeur: AnyJSON = try await client.rpc(fonction, params: params).execute().value
-            return RPCResponse(valeur)
+            return RPCResponse(try await requete())
+        } catch let postgrest as PostgrestError where estRefusCodeDuTravail(postgrest.message) {
+            return refusCodeDuTravail(postgrest.message)
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: fallback)
         }

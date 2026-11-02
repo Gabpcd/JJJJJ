@@ -418,7 +418,7 @@ final class RPCResponseTests: XCTestCase {
         }
     }
 
-    func testExceptionCodeDuTravailInterceptéeAussiSansParametre() async throws {
+    func testExceptionCodeDuTravailIntercepteeAussiSansParametre() async throws {
         let message = refusCodeDuTravail[0].message
         registry.add("POST", "/rest/v1/rpc/fn_test_jsonb",
                      respond: .json(400, exceptionPostgREST(sqlstate: "P0001", details: nil, message: message)))

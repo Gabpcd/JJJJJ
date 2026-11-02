@@ -10,8 +10,11 @@ import Supabase
 ///   `p_acteur_id` = utilisateur de la session (le serveur l'impose de toute façon),
 ///   `p_type_acteur` SOIGNANT et `p_navigateur` `jolene-ios/<version>`.
 ///
-/// Best-effort : `{success:false}` (exception avalée par la fonction) n'est pas une erreur,
-/// rien n'est renvoyé automatiquement, et le texte SQL d'un échec n'est jamais conservé.
+/// Best-effort : `{success:false}` (exception avalée par la fonction, « Non authentifié »
+/// compris : `fn_ecrire_audit_safe` l.31815 puis l.31831-31833) n'est pas une erreur et rend
+/// `.nonEnregistre` ; rien n'est renvoyé automatiquement, et le texte SQL d'un échec n'est
+/// jamais conservé. Les erreurs encore levées (transport, contrat) sont avalées par l'appelant
+/// (`AuditPort`).
 /// Jamais d'uuid nul ni invalide dans `p_id_ressource` (CLAUDE.md, « binding uuid cassé ») :
 /// l'audit est refusé avant tout appel réseau.
 public struct SupabaseAuditGateway: AuditPort {
@@ -73,15 +76,14 @@ public struct SupabaseAuditGateway: AuditPort {
         return try Self.resultat(reponse)
     }
 
-    /// `{success:true}` → enregistré ; `{success:false}` → non enregistré (pas une erreur) ;
-    /// `{error}` → erreur levée ; toute autre forme → refus de contrat (jamais un succès supposé).
+    /// `{success:false}` → non enregistré, quel que soit le message joint (pas une erreur, jamais
+    /// « session expirée ») ; `{success:true}` → enregistré ; `{error}` seul → erreur levée ;
+    /// toute autre forme → refus de contrat (jamais un succès supposé).
     static func resultat(_ reponse: RPCResponse) throws -> AuditResultat {
+        if reponse.success == false { return .nonEnregistre }
         try reponse.leverSiErreur(fallback: fallbackMessage)
-        switch reponse.success {
-        case true?: return .enregistre
-        case false?: return .nonEnregistre
-        case nil: throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
-        }
+        guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
+        return .enregistre
     }
 
     /// Uuid canonique en minuscules ; nil pour une valeur vide, invalide ou l'uuid nul.

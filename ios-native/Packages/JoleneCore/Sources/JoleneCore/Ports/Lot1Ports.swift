@@ -59,6 +59,11 @@ public protocol AccountPort: Sendable {
 /// Audit best-effort (décision 5) : `fn_audit_connexion('CONNEXION'|'DECONNEXION')`,
 /// `fn_maj_activite_soignant()` et `fn_ecrire_audit_safe` comme le web — câblé en T1.
 /// L'appelant n'en fait jamais dépendre une connexion ni une déconnexion ; aucun renvoi.
+///
+/// Jamais une erreur utilisateur : un refus du serveur (`{success:false}`, « Non authentifié »
+/// compris) rend `.nonEnregistre`, et l'appelant avale toute erreur levée (transport, contrat,
+/// identifiant invalide) sans l'afficher ni la propager — l'audit qui suit un ACCEPTER réussi ne
+/// doit jamais faire afficher « session expirée » après ce succès.
 public protocol AuditPort: Sendable {
     func connexion() async throws -> AuditResultat
     func deconnexion() async throws -> AuditResultat

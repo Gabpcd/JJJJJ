@@ -18,11 +18,14 @@ import Foundation
 /// Un délai dépassé sur une mutation ne prouve pas que le serveur n'a pas agi : l'appelant relit
 /// l'objet avant d'annoncer quoi que ce soit et ne renvoie jamais la mutation automatiquement
 /// (PRINCIPES §3-§4).
+///
+/// Tout `timeout` est accepté : négatif, nul ou NaN vaut un délai immédiat ; au-delà de
+/// `plafondDelaiNanosecondes` (≈ 292 ans, `.infinity` compris) le délai est plafonné.
 public func bounded<T: Sendable>(
     timeout: TimeInterval,
     _ operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
-    let nanoseconds = UInt64(max(0, timeout) * 1_000_000_000)
+    let nanoseconds = delaiEnNanosecondes(timeout)
     let race = AsyncThrowingStream<T, Error> { continuation in
         let work = Task {
             do {
@@ -48,4 +51,17 @@ public func bounded<T: Sendable>(
     // rend une valeur ou lève, le délai lève) ; `onTermination` a déjà annulé les deux tâches.
     try Task.checkCancellation()
     throw JoleneError(.network, SessionController.timeoutMessage)
+}
+
+/// Plafond du délai de `bounded` : `UInt64.max / 2` ns (≈ 292 ans), jamais atteint en pratique,
+/// et strictement représentable (`Double(UInt64.max)` arrondit à 2^64, hors de `UInt64`).
+let plafondDelaiNanosecondes: UInt64 = UInt64.max / 2
+
+/// Conversion bornée avant `UInt64(_:)`, qui piège sur `.infinity`, NaN ou une valeur hors
+/// plage : `timeout` ≤ 0 ou NaN → 0 ; au-delà du plafond → `plafondDelaiNanosecondes`.
+func delaiEnNanosecondes(_ timeout: TimeInterval) -> UInt64 {
+    guard timeout > 0 else { return 0 } // NaN compris : toute comparaison est fausse
+    let nanosecondes = timeout * 1_000_000_000
+    guard nanosecondes < Double(plafondDelaiNanosecondes) else { return plafondDelaiNanosecondes }
+    return UInt64(nanosecondes)
 }
