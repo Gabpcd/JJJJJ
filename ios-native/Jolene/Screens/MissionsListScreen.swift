@@ -9,7 +9,9 @@ import JoleneDesign
 ///
 /// Lot 1 (T4a) : chips rapides au-dessus de la liste (`explorer-chips`, `chip-*`), bouton
 /// « Filtres » avec le nombre de critères actifs (`explorer-filtres-ouvrir`) ouvrant
-/// `FiltresSheet`, état vide avec l'action secondaire du web (`missions-empty-action`).
+/// `FiltresSheet`, état vide avec l'action secondaire du web (`missions-empty-action`) ET
+/// « Actualiser » (`missions-refresh`, toujours présent), tirer pour actualiser sur l'état vide
+/// comme sur la liste (`usePullToRefresh(recharger)` couvre toute la page web).
 struct MissionRoute: Hashable {
     let id: String
 }
@@ -119,14 +121,45 @@ struct MissionsListScreen: View {
         }
     }
 
-    /// État vide du web : effacer d'abord les chips, sinon élargir le rayon ; à défaut, actualiser.
-    @ViewBuilder private var etatVide: some View {
+    /// État vide : action secondaire du web (effacer d'abord les chips, sinon élargir le rayon)
+    /// puis « Actualiser », toujours présent — le message promet l'apparition des nouvelles
+    /// missions, il faut donc pouvoir relire avec les mêmes critères (revue T4a). Défilable pour
+    /// « tirer pour actualiser », comme la liste ; boutons désactivés pendant la relecture.
+    private var etatVide: some View {
+        GeometryReader { geometrie in
+            ScrollView {
+                VStack(spacing: JoleneSpacing.md) {
+                    if let refreshError = model.refreshError {
+                        Text(refreshError)
+                            .font(JoleneFont.callout)
+                            .foregroundStyle(JoleneColor.rose700)
+                            .multilineTextAlignment(.center)
+                            .padding(JoleneSpacing.md)
+                            .frame(maxWidth: .infinity)
+                            .background(JoleneColor.rose100)
+                            .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
+                            .padding(.horizontal, JoleneSpacing.lg)
+                            .accessibilityIdentifier("missions-refresh-error")
+                    }
+                    etatVideContenu
+                        .disabled(model.isRefreshing)
+                }
+                .frame(maxWidth: .infinity, minHeight: geometrie.size.height)
+            }
+            .refreshable { await model.load() }
+            .accessibilityIdentifier("missions-empty-scroll")
+        }
+    }
+
+    @ViewBuilder private var etatVideContenu: some View {
         let message = "Aucune mission ne correspond à vos critères pour le moment. Les nouvelles missions apparaîtront ici dès leur publication."
         if let action = model.filtres.actionEtatVide {
             EmptyState(systemImage: "magnifyingglass", title: "Aucune mission trouvée", message: message,
-                       identifier: "missions-empty", actionTitle: action.titre, actionIdentifier: "missions-empty-action") {
-                Task { await model.appliquer(model.filtres.appliquant(action)) }
-            }
+                       identifier: "missions-empty",
+                       actionTitle: action.titre, actionIdentifier: "missions-empty-action",
+                       action: { Task { await model.appliquer(model.filtres.appliquant(action)) } },
+                       secondaryActionTitle: "Actualiser", secondaryActionIdentifier: "missions-refresh",
+                       secondaryAction: { Task { await model.load() } })
         } else {
             EmptyState(systemImage: "magnifyingglass", title: "Aucune mission trouvée", message: message,
                        identifier: "missions-empty", actionTitle: "Actualiser", actionIdentifier: "missions-refresh") {

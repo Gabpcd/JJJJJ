@@ -62,6 +62,19 @@ final class CarteMissionTests: XCTestCase {
         XCTAssertEqual(CarteMission.etendueMetres, 1_500)
     }
 
+    func testCleIdentiteSuitLesSeulesCoordonnees() {
+        // `Map(initialPosition:)` n'est lu qu'au premier rendu : la carte est recréée (`.id`) quand la
+        // relecture du détail déplace l'établissement, jamais pour un simple changement de libellé.
+        let point = PointCarte(latitude: 48.8566, longitude: 2.3522, titre: "A", adresse: nil)
+        XCTAssertEqual(CarteMission.cleIdentite(point), "48.8566,2.3522")
+        var renomme = point; renomme.titre = "B"; renomme.adresse = "75011 Paris"
+        XCTAssertEqual(CarteMission.cleIdentite(renomme), CarteMission.cleIdentite(point))
+        var latitude = point; latitude.latitude = 48.867
+        XCTAssertNotEqual(CarteMission.cleIdentite(latitude), CarteMission.cleIdentite(point))
+        var longitude = point; longitude.longitude = 2.363
+        XCTAssertNotEqual(CarteMission.cleIdentite(longitude), CarteMission.cleIdentite(point))
+    }
+
     func testMissionsDemoToutesLocalisees() async throws {
         let missions = try await DemoMissionsGateway().listMissions(context: DemoWorld.context,
                                                                     filters: MissionBusiness.defaultFilters(profile: DemoWorld.context.profile))

@@ -3,10 +3,19 @@ import JoleneCore
 import JoleneDesign
 
 /// Aiguillage racine : garde d'environnement puis état de session.
+///
+/// Lot 1 (T4a, revue) : le fond de carte (`carteTuiles`) est injecté ICI, depuis le mode de
+/// l'environnement, pour que toute surface de la fenêtre en hérite (onglets, feuilles, futur
+/// coordinateur de liens T10). Aucune tuile Apple Plans en démonstration (aucune requête réseau).
 struct RootView: View {
     @ObservedObject var container: AppContainer
 
     var body: some View {
+        aiguillage
+            .environment(\.carteTuiles, CarteTuiles.pour(modeDemo: container.isDemo))
+    }
+
+    @ViewBuilder private var aiguillage: some View {
         if let error = container.environmentError {
             EnvironmentBlockedScreen(error: error, mode: container.environment.mode,
                                      unknownModeRaw: container.environment.unknownModeRaw)

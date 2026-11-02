@@ -60,7 +60,6 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
-        // Lot 1 (T4a) : aucune tuile Apple Plans en démonstration (aucune requête réseau).
-        .environment(\.carteTuiles, container.isDemo ? .horsLigne : .mapKit)
+        // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }
 }

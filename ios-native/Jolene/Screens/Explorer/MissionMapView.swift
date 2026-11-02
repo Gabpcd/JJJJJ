@@ -5,14 +5,26 @@ import JoleneDesign
 
 /// Source du fond de carte. Le mode démonstration n'envoie aucune requête réseau (PRINCIPES §2,
 /// §7 niveau 2) : il affiche un aperçu dessiné localement au lieu des tuiles Apple Plans.
+///
+/// Injectée une seule fois, à la racine (`RootView`, depuis `AppContainer.isDemo`), pour que toute
+/// surface de la fenêtre — onglets, feuilles, futur coordinateur de liens (T10) — en hérite.
 enum CarteTuiles: Equatable, Sendable {
     case mapKit
     case horsLigne
+    /// Valeur par défaut de l'environnement : la surface est montée hors de `RootView`. Gap
+    /// verrouillé (revue T4a) : `assertionFailure` en DEBUG, et en Release le bloc carte n'est pas
+    /// rendu — jamais l'aperçu « démonstration » en production, jamais de tuile en démonstration.
+    case nonInjectee
+
+    /// Choix de la racine : aperçu hors ligne en démonstration, Apple Plans sinon.
+    static func pour(modeDemo: Bool) -> CarteTuiles { modeDemo ? .horsLigne : .mapKit }
+
+    static let messageNonInjectee = "carteTuiles non injecté : MissionMapView monté hors de RootView "
+        + "(injecter `.environment(\\.carteTuiles, CarteTuiles.pour(modeDemo:))` sur la nouvelle racine, revue T4a)."
 }
 
 private struct CarteTuilesKey: EnvironmentKey {
-    /// Défaut prudent : sans réglage explicite (`MainTabView`), aucune tuile n'est demandée.
-    static let defaultValue: CarteTuiles = .horsLigne
+    static let defaultValue: CarteTuiles = .nonInjectee
 }
 
 extension EnvironmentValues {
@@ -33,6 +45,18 @@ struct MissionMapView: View {
     @Environment(\.carteTuiles) private var tuiles
 
     var body: some View {
+        if tuiles == .nonInjectee {
+            // Gap verrouillé : visible en développement, sans effet trompeur en production.
+            Color.clear
+                .frame(height: 0)
+                .accessibilityHidden(true)
+                .onAppear { assertionFailure(CarteTuiles.messageNonInjectee) }
+        } else {
+            bloc
+        }
+    }
+
+    private var bloc: some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.md) {
             Text("Localisation")
                 .font(JoleneFont.headline)
@@ -60,10 +84,13 @@ struct MissionMapView: View {
         switch tuiles {
         case .mapKit:
             CarteMapKit(point: point)
+                // `Map(initialPosition:)` n'est lu qu'au premier rendu : si la relecture du détail
+                // déplace l'établissement, une nouvelle identité recrée la carte centrée sur le repère.
+                .id(CarteMission.cleIdentite(point))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(point.accessibilityLabel)
                 .accessibilityIdentifier("mission-detail-carte-map")
-        case .horsLigne:
+        case .horsLigne, .nonInjectee:
             CarteHorsLigne(point: point)
         }
     }

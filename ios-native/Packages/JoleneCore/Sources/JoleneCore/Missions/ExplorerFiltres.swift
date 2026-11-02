@@ -1,9 +1,10 @@
 import Foundation
 
 /// Critères d'Explorer tels que l'écran les édite (lot 1, T4a), port de l'état de
-/// `src/pages/RechercheMissions.tsx` : état initial (l.101-109), chips rapides (l.335-358),
-/// badge du bouton filtres (l.287-293), action de l'état vide (l.471-486), « Réinitialiser »
-/// (l.609-623) et saisie du taux (l.574-581).
+/// `src/pages/RechercheMissions.tsx` : état initial (l.94-102), chips rapides (l.334-356),
+/// badge du bouton filtres (l.271-278), action secondaire de l'état vide (l.440-455, dans
+/// l'`EmptyState` l.431-456), « Réinitialiser » (l.609-626, `setTauxMin(0)` l.618), saisie du
+/// taux (l.553-565) et annonce du rayon (l.604-607), dans la feuille de filtres (l.475-637).
 ///
 /// Source unique de l'état des filtres (principe « État dérivé ») : les `MissionFilters` envoyés
 /// au port en sont dérivés (`missionFilters`), jamais stockés à côté. Ces critères ne remplacent
@@ -190,6 +191,12 @@ public struct ExplorerFiltres: Equatable, Sendable {
         profile.adresseLat != nil && profile.adresseLng != nil
     }
 
+    /// Note sous le curseur quand `rayonApplicable` est faux. La condition est l'absence de
+    /// latitude/longitude, pas d'adresse : une adresse saisie mais non géocodée y mène aussi,
+    /// d'où « position » (revue T4a).
+    public static let messageRayonInapplicable =
+        "Votre position n'est pas connue : la distance des missions ne peut pas être calculée et le rayon ne s'applique pas."
+
     /// Compteur de la liste (`missions-count`) : « 1 mission », « 30 missions ».
     public static func libelleCompteur(_ nombre: Int) -> String {
         "\(nombre) mission\(nombre > 1 ? "s" : "")"
@@ -204,9 +211,11 @@ public struct ExplorerFiltres: Equatable, Sendable {
         return valeur
     }
 
-    /// `value={tauxMin || ''}` : un taux nul s'affiche comme un champ vide.
+    /// `value={tauxMin || ''}` : un taux nul s'affiche comme un champ vide. Un taux décimal est
+    /// réaffiché avec la virgule du clavier décimal français (« 25,5 », jamais « 25.5 ») ;
+    /// `taux(depuisSaisie:)` relit les deux séparateurs, l'aller-retour est exact.
     public static func saisie(depuisTaux taux: Double) -> String {
-        taux > 0 ? MissionPresentation.nombreJavaScript(taux) : ""
+        taux > 0 ? MissionPresentation.nombreJavaScript(taux).replacingOccurrences(of: ".", with: ",") : ""
     }
 
     // MARK: Options des sélecteurs

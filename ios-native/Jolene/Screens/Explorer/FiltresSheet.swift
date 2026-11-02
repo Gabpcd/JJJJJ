@@ -3,7 +3,7 @@ import JoleneCore
 import JoleneDesign
 
 /// Feuille « Filtres » d'Explorer (lot 1, T4a), port de la feuille de `RechercheMissions.tsx`
-/// (l.506-636) : ville ou code postal, profession, rayon 5 → 100 km par pas de 5, taux horaire
+/// (l.475-637) : ville ou code postal, profession, rayon 5 → 100 km par pas de 5, taux horaire
 /// minimum, type de contrat, horaires, urgentes uniquement. Les critères sont édités sur un
 /// brouillon (`ExplorerFiltres`) et appliqués par « Afficher les missions » ; « Réinitialiser »
 /// remet le brouillon aux valeurs du web (`ExplorerFiltres.reinitialises(profile:)`), « Fermer »
@@ -111,7 +111,7 @@ struct FiltresSheet: View {
             .accessibilityValue("\(MissionPresentation.nombreJavaScript(brouillon.rayonKm)) km")
             .accessibilityIdentifier("filtre-rayon")
             if !ExplorerFiltres.rayonApplicable(profile: profile) {
-                Text("Votre adresse n'est pas renseignée : la distance des missions ne peut pas être calculée et le rayon ne s'applique pas.")
+                Text(ExplorerFiltres.messageRayonInapplicable)
                     .font(JoleneFont.caption)
                     .foregroundStyle(JoleneColor.bubblegum)
                     .fixedSize(horizontal: false, vertical: true)

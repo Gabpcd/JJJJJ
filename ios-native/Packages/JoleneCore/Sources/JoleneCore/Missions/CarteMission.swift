@@ -29,9 +29,20 @@ public enum CarteMission {
     public static let etendueMetres: Double = 1_500
     static let titreParDefaut = "Établissement"
 
-    /// Repère de la mission, ou `nil` sans coordonnées exploitables. Comme le web
-    /// (`DetailMissionSoignant.tsx` l.1111, `adresse_lat && adresse_lng`), une coordonnée nulle
-    /// vaut absente ; une valeur non finie ou hors plage aussi.
+    /// Identité de la vue carte : les seules coordonnées. `Map(initialPosition:)` (iOS 17+) n'est lu
+    /// qu'au premier rendu ; une carte non interactive dont l'établissement bouge à la relecture
+    /// doit être recréée pour recentrer sa caméra, pas pour un changement de nom ou d'adresse.
+    public static func cleIdentite(_ point: PointCarte) -> String {
+        "\(point.latitude),\(point.longitude)"
+    }
+
+    /// Repère de la mission, ou `nil` sans coordonnées exploitables (absentes, non finies ou hors
+    /// plage). Parité : la carte du web visible de tous, `CarteMissionsExploration.tsx` l.54-56,
+    /// n'écarte que `lat == null || lng == null`. **Écart natif assumé** : une coordonnée exactement
+    /// nulle est traitée comme absente (le point 0, 0 du golfe de Guinée signale un géocodage
+    /// manquant, jamais un établissement en France) ; le web, lui, y poserait un repère.
+    /// (`DetailMissionSoignant.tsx` l.1111, `adresse_lat && adresse_lng`, ne gouverne que les liens
+    /// Plans / Maps / Waze du soignant assigné, pas une carte.)
     public static func point(pour mission: Mission) -> PointCarte? {
         guard let etablissement = mission.etablissement,
               let latitude = etablissement.adresseLat, let longitude = etablissement.adresseLng,

@@ -23,8 +23,19 @@ import Combine
 /// - changer de critères (`appliquer`, chips, `reinitialiser`) repasse par `.loading` : une liste
 ///   lue avec d'autres critères n'est jamais présentée sous les nouveaux ; un échec donne `.failed`
 ///   et « Réessayer » (`load`) relit avec les critères affichés ;
-/// - deux lectures qui se chevauchent (chips touchées en rafale) : seule la dernière demandée
-///   publie son résultat, une réponse tardive d'anciens critères est ignorée.
+/// - deux lectures qui se chevauchent (chips touchées en rafale, rafraîchissement puis filtre) :
+///   seule la dernière demandée publie son résultat, et la lecture supplantée est **annulée**
+///   (requête interrompue via `bounded`, jamais laissée courir jusqu'au délai) : une rafale de N
+///   chips ne laisse qu'une lecture en vol sur l'instance partagée ;
+/// - un état vide se relit comme une liste (`load`, « Actualiser », tirer pour actualiser) avec
+///   les critères affichés, sans en effacer aucun.
+///
+/// Point ouvert (revue T4a, mineur, à porter plus tard) : chaque critère relit le serveur
+/// (missions, `fn_etablissements_safe`, créneaux), alors que le web refiltre localement ville,
+/// rayon, contrat et horaire sur la liste chargée (`RechercheMissions.tsx` l.227-263). Cible : ne
+/// relire que si les critères serveur (`MissionQuery.serverFilters` : profession, taux, urgentes,
+/// établissement) changent, refiltrer localement sinon — suppose un port qui rende la liste non
+/// filtrée, hors périmètre de la revue.
 @MainActor
 public final class MissionsListModel: ObservableObject {
     public enum State: Equatable, Sendable {
@@ -46,6 +57,8 @@ public final class MissionsListModel: ObservableObject {
     private let snapshot: SessionSnapshot
     /// Numéro de la dernière lecture demandée : seule celle-ci publie son résultat.
     private var derniereDemande = 0
+    /// Lecture en vol de la dernière demande, annulée dès qu'une nouvelle demande la supplante.
+    private var lectureEnVol: Task<[Mission], Error>?
 
     /// - Parameter filtresInitiaux: critères de la première lecture ; par défaut
     ///   `ExplorerFiltres.initiaux(profile:)`, identiques aux filtres par défaut du lot 0.
@@ -94,17 +107,35 @@ public final class MissionsListModel: ObservableObject {
     private func lire(conserverListe: Bool) async {
         derniereDemande += 1
         let demande = derniereDemande
+        // Revue T4a : la lecture supplantée est annulée tout de suite (requête interrompue), au
+        // lieu de courir jusqu'à sa fin ou jusqu'au délai de `bounded`.
+        lectureEnVol?.cancel()
+        lectureEnVol = nil
         if conserverListe { isRefreshing = true } else { state = .loading; isRefreshing = false }
         refreshError = nil
-        defer { if demande == derniereDemande { isRefreshing = false } }
+        defer {
+            if demande == derniereDemande {
+                isRefreshing = false
+                lectureEnVol = nil
+            }
+        }
 
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        // Supplantée (ou vue disparue) pendant la résolution des gateways : aucune requête.
+        guard demande == derniereDemande, !Task.isCancelled else { return }
         let port = gateways.missions
         let context = snapshot.context
         let criteres = filtres.missionFilters
+        let delai = controller.resolutionTimeout
+        // Tâche propre à la lecture, pour qu'une demande suivante puisse l'annuler ; l'annulation
+        // de l'appelant (`.task` d'une vue qui disparaît) lui est relayée.
+        let lecture = Task { try await bounded(timeout: delai) { try await port.listMissions(context: context, filters: criteres) } }
+        lectureEnVol = lecture
         do {
-            let missions = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.listMissions(context: context, filters: criteres)
+            let missions = try await withTaskCancellationHandler {
+                try await lecture.value
+            } onCancel: {
+                lecture.cancel()
             }
             guard await controller.epoch == snapshot.epoch, demande == derniereDemande else { return }
             sessionExpired = false
