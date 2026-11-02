@@ -80,7 +80,80 @@ export const RPC_SUIVIES = [
   { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
   { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
   { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
+  // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md) : les
+  // 41 RPC propres au lot, dans l'ordre des tranches ; la 42e, partagée avec le lot 2, est dans
+  // `RPC_PARTAGEES_LOT4` ci-dessous. Écart assumé (LOT4_PLAN §3) : ces statuts passent en `consommee` en
+  // une fois par T15, jamais par les onze tranches parallèles qui câblent les gateways.
+  // T3a — swipe
+  { name: 'fn_obtenir_missions_swipe', statut: 'a_venir', lot: 4 },
+  { name: 'fn_enregistrer_swipe', statut: 'a_venir', lot: 4 },
+  { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 4 },
+  { name: 'fn_initialiser_preferences_matching', statut: 'a_venir', lot: 4 },
+  // T4 — filtres sauvegardés et alerte rapide
+  { name: 'fn_lister_mes_filtres_sauvegardes', statut: 'a_venir', lot: 4 },
+  { name: 'fn_creer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
+  { name: 'fn_modifier_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
+  { name: 'fn_supprimer_filtre_sauvegarde', statut: 'a_venir', lot: 4 },
+  // T5 — disponibilités
+  { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
+  // T6 — parrainage
+  { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
+  { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },
+  // T8 — litiges et réclamations générales (`fn_ouvrir_litige_rate_limited` : RPC_PARTAGEES_LOT4)
+  { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
+  { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },
+  // T9 — score, contestation et évaluations
+  { name: 'fn_mon_breakdown_actuel', statut: 'a_venir', lot: 4 },
+  { name: 'fn_mes_evenements_score', statut: 'a_venir', lot: 4 },
+  { name: 'fn_evolution_score_soignant', statut: 'a_venir', lot: 4 },
+  { name: 'fn_lister_notations_recues', statut: 'a_venir', lot: 4 },
+  { name: 'fn_creer_reclamation_score', statut: 'a_venir', lot: 4 },
+  { name: 'fn_mes_notations_recues_avec_stats', statut: 'a_venir', lot: 4 },
+  { name: 'fn_signaler_notation', statut: 'a_venir', lot: 4 },
+  // T7a/T7b — messagerie, blocage, signalement, fil de mission (correction 20)
+  { name: 'fn_lister_conversations_messagerie', statut: 'a_venir', lot: 4 },
+  { name: 'fn_interlocuteurs_conversations', statut: 'a_venir', lot: 4 },
+  { name: 'fn_marquer_messages_lus', statut: 'a_venir', lot: 4 },
+  { name: 'fn_messages_non_lus', statut: 'a_venir', lot: 4 },
+  { name: 'fn_typing_start', statut: 'a_venir', lot: 4 },
+  { name: 'fn_typing_stop', statut: 'a_venir', lot: 4 },
+  { name: 'fn_update_presence', statut: 'a_venir', lot: 4 },
+  { name: 'fn_est_bloque', statut: 'a_venir', lot: 4 },
+  { name: 'fn_bloquer_utilisateur', statut: 'a_venir', lot: 4 },
+  { name: 'fn_debloquer_utilisateur', statut: 'a_venir', lot: 4 },
+  { name: 'fn_signaler_utilisateur', statut: 'a_venir', lot: 4 },
+  { name: 'fn_user_id_pour_etablissement', statut: 'a_venir', lot: 4 },
+  { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 4 },
+  // T10 — copies officielles des bulletins
+  { name: 'fn_lister_copies_bulletins', statut: 'a_venir', lot: 4 },
+  { name: 'fn_signaler_copie_bulletin', statut: 'a_venir', lot: 4 },
+  // T11 — pool urgence et exclusions
+  { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'a_venir', lot: 4 },
+  { name: 'fn_toggle_pool_urgence', statut: 'a_venir', lot: 4 },
+  { name: 'fn_toggle_pool_urgence_sms', statut: 'a_venir', lot: 4 },
+  { name: 'fn_mes_exclusions_recues', statut: 'a_venir', lot: 4 },
+  { name: 'fn_retirer_exclusion', statut: 'a_venir', lot: 4 },
+  { name: 'fn_exclure_utilisateur', statut: 'a_venir', lot: 4 },
 ];
+
+/**
+ * Consommées par le lot 4 mais suivies par un lot antérieur (précédent du T0 du lot 5,
+ * `docs/mobile-swift/DECISIONS_LOT4.md` précision 10) : `fn_ouvrir_litige_rate_limited` est suivie par
+ * le T0 du lot 2 en `lot: 2` (contestation d'une présence, `DESACCORD_HEURES_POINTAGE`, T5b) et appelée
+ * aussi par le lot 4 (T8, litige `AUTRE`). Une seule entrée : celle du lot antérieur garde son lot et son
+ * statut ; elle n'est ajoutée en `a_venir`, `lot: 4` qu'en son absence (branche sans le T0 du lot 2).
+ * Les branches des deux lots se fusionnent donc sans doublon dans `RPC_SUIVIES`.
+ */
+export const RPC_PARTAGEES_LOT4 = Object.freeze(['fn_ouvrir_litige_rate_limited']);
+
+/** Ajoute à `suivies` chaque RPC partagée du lot 4 qu'aucun lot antérieur ne suit encore ; renvoie `suivies`. */
+export function ajouterPartageesLot4(suivies) {
+  for (const name of RPC_PARTAGEES_LOT4) {
+    if (!suivies.some(r => r.name === name)) suivies.push({ name, statut: 'a_venir', lot: 4 });
+  }
+  return suivies;
+}
+ajouterPartageesLot4(RPC_SUIVIES);
 
 /**
  * Jamais suivies (donc jamais appelées par le client Swift) :
@@ -90,7 +163,7 @@ export const RPC_SUIVIES = [
 export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public'];
 
 /**
- * Pas avant le lot 4 (suivie au plus tôt avec `lot: 4`, quand la tranche qui la consomme l'ajoute) :
+ * Pas avant le lot 4 (suivie au plus tôt avec `lot: 4` ; ajoutée par le T0 du lot 4, `LOT4_PLAN.md` §3) :
  *   - `fn_retirer_candidature` (swipe).
  */
 export const RPC_PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
