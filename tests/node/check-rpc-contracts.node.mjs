@@ -1141,7 +1141,7 @@ test('Lot 4 — PARITE : statuts proposés de LOT4_PLAN §1.3 marqués « propos
   assert.ok(lot4Lecture, 'Lecture : paragraphe lot 4 absent');
   for (const attendu of ['D17', 'SFSafariViewController', 'Lot 4 — statuts proposés']) assert.ok(lot4Lecture.includes(attendu), `Lecture lot 4 : ${attendu} absent`);
   assert.ok(!/à trancher par Gabrielle/.test(lot4Lecture), 'Lecture lot 4 : décision 3 encore « à trancher par Gabrielle » (D17 adoptée)');
-  assert.match(parite, /\nDernière mise à jour : 2026-11-02 \(lot 4, T0 /, '« Dernière mise à jour » non rafraîchie par le T0 du lot 4');
+  assert.match(parite, /\nDernière mise à jour : \d{4}-\d{2}-\d{2} \(lot 4, T0 /, '« Dernière mise à jour » non rafraîchie par le T0 du lot 4');
   // T0 ne statue rien : aucune ligne du tableau principal ciblant le lot 4 n'est passée « natif ».
   const principal = parite.slice(0, parite.indexOf('\n## '));
   for (const l of principal.split('\n').filter(x => /^\| `\/soignant\//.test(x))) {

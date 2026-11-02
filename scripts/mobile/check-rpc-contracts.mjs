@@ -78,9 +78,10 @@ export const RPC_SUIVIES = [
   { name: 'fn_signer_contrat_otp', statut: 'a_venir', lot: 2 },
   { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
   { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
-  // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md), dans
-  // l'ordre des tranches. Écart assumé (LOT4_PLAN §3) : ces statuts passent en `consommee` en une fois
-  // par T15, jamais par les onze tranches parallèles qui câblent les gateways.
+  // Lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, fiches « Lot 4 » de CONTRATS_RPC_SOIGNANT.md) : les
+  // 41 RPC propres au lot, dans l'ordre des tranches ; la 42e, partagée avec le lot 2, est dans
+  // `RPC_PARTAGEES_LOT4` ci-dessous. Écart assumé (LOT4_PLAN §3) : ces statuts passent en `consommee` en
+  // une fois par T15, jamais par les onze tranches parallèles qui câblent les gateways.
   // T3a — swipe
   { name: 'fn_obtenir_missions_swipe', statut: 'a_venir', lot: 4 },
   { name: 'fn_enregistrer_swipe', statut: 'a_venir', lot: 4 },
@@ -96,8 +97,7 @@ export const RPC_SUIVIES = [
   // T6 — parrainage
   { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
   { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },
-  // T8 — litiges et réclamations générales
-  { name: 'fn_ouvrir_litige_rate_limited', statut: 'a_venir', lot: 4 },
+  // T8 — litiges et réclamations générales (`fn_ouvrir_litige_rate_limited` : RPC_PARTAGEES_LOT4)
   { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
   { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },
   // T9 — score, contestation et évaluations
@@ -133,6 +133,25 @@ export const RPC_SUIVIES = [
   { name: 'fn_retirer_exclusion', statut: 'a_venir', lot: 4 },
   { name: 'fn_exclure_utilisateur', statut: 'a_venir', lot: 4 },
 ];
+
+/**
+ * Consommées par le lot 4 mais suivies par un lot antérieur (précédent du T0 du lot 5,
+ * `docs/mobile-swift/DECISIONS_LOT4.md` précision 10) : `fn_ouvrir_litige_rate_limited` est suivie par
+ * le T0 du lot 2 en `lot: 2` (contestation d'une présence, `DESACCORD_HEURES_POINTAGE`, T5b) et appelée
+ * aussi par le lot 4 (T8, litige `AUTRE`). Une seule entrée : celle du lot antérieur garde son lot et son
+ * statut ; elle n'est ajoutée en `a_venir`, `lot: 4` qu'en son absence (branche sans le T0 du lot 2).
+ * Les branches des deux lots se fusionnent donc sans doublon dans `RPC_SUIVIES`.
+ */
+export const RPC_PARTAGEES_LOT4 = Object.freeze(['fn_ouvrir_litige_rate_limited']);
+
+/** Ajoute à `suivies` chaque RPC partagée du lot 4 qu'aucun lot antérieur ne suit encore ; renvoie `suivies`. */
+export function ajouterPartageesLot4(suivies) {
+  for (const name of RPC_PARTAGEES_LOT4) {
+    if (!suivies.some(r => r.name === name)) suivies.push({ name, statut: 'a_venir', lot: 4 });
+  }
+  return suivies;
+}
+ajouterPartageesLot4(RPC_SUIVIES);
 
 /**
  * Jamais suivies (donc jamais appelées par le client Swift) :

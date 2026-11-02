@@ -68,14 +68,25 @@ les règles générales.
 
 ## Précisions apportées par les règles générales et par le T0
 
-1. **Nombre de drapeaux (D18 et D-FLAGS).** Les décisions des lots 2 à 5 citent « lot 4 B0-bis (11 clés) »,
-   compte du blueprint v1 ; le blueprint v2 (D18, « corrigé v2 ») en compte **13** en ajoutant
-   `ios_natif_exclusions_actif` et `ios_natif_serie_actif`, sans lesquelles deux écrans natifs du lot 4 ne
-   pourraient pas être coupés (contraire à la décision 9 du lot 0). Retenu : **13**, la règle D-FLAGS portant
-   sur l'unicité de la migration et non sur un nombre. Critère amendé de B0-bis :
-   `SELECT count(*) FROM parametres_systeme WHERE cle LIKE 'ios_natif_%'` = **27** après la migration D-FLAGS
-   (5 du lot 1, 3 du lot 2 `ios_natif_{presences,documents,contrats}_actif`, 13 du lot 4, 6 du lot 5
-   `ios_natif_etab_*`), au lieu de 18.
+1. **Nombre de drapeaux (D18 et D-FLAGS) : aucun écart.** Les décisions des lots 2 à 5 (D-FLAGS) citent
+   « lot 4 B0-bis (13 clés, blueprint v2) », comme D18 : `ios_natif_exclusions_actif` et `ios_natif_serie_actif`
+   comprises, sans lesquelles deux écrans natifs du lot 4 ne pourraient pas être coupés (décision 9 du lot 0).
+   Critère amendé de B0-bis, porté sur les seules clés du lot 4 (le « `cle LIKE 'ios_natif_%'` = 18 » du
+   blueprint compterait aussi les drapeaux des lots 2 et 5 posés par la même migration), sur STAGING puis en
+   production après la migration D-FLAGS :
+   `SELECT count(*) FROM parametres_systeme WHERE cle IN ('ios_natif_swipe_actif', 'ios_natif_recherches_actif',
+   'ios_natif_disponibilites_actif', 'ios_natif_parrainage_actif', 'ios_natif_litiges_actif',
+   'ios_natif_reclamations_actif', 'ios_natif_messagerie_actif', 'ios_natif_bulletins_actif',
+   'ios_natif_evaluations_actif', 'ios_natif_score_actif', 'ios_natif_pool_urgence_actif',
+   'ios_natif_exclusions_actif', 'ios_natif_serie_actif')` = **13**.
+   Total global, pour information : `cle LIKE 'ios_natif_%'` = **28** (5 du lot 1 posés par B0, 3 du lot 2
+   `ios_natif_{presences,documents,contrats}_actif`, 13 du lot 4, 7 du lot 5 `ios_natif_etab_*` dont
+   `ios_natif_etab_pointage_actif`) ; ce total relève des décisions du lot 5 (`LOT5_PLAN.md` v2 D14,
+   `DECISIONS_LOT5.md` amendement 9, `origin/lot5/l5-t0`) et de la garde de la migration D-FLAGS, pas du lot 4.
+   Hors périmètre du T0 (aucune migration ici) : la branche D-FLAGS `origin/feat/drapeaux-ios-natif-lots-2-4-5`
+   ne posait que 20 clés à `3542f7b2` (sans `exclusions`, `serie` ni `etab_pointage`) ; relue à `7aa3a1db`
+   (2 novembre, 23 h 06), elle en pose 23 (28 avec B0, garde `src/lib/__tests__/drapeauxIosNatifMigration.test.ts`) ;
+   à revérifier contre les 13 clés ci-dessus à son merge.
 2. **Exceptions `42501` métier** : le dump en compte six dans les RPC du lot 4, pas trois — `Accès refusé`,
    `Conversation non autorisée`, `COPIE_ACCES_REFUSE`, plus `Non autorisé` (`fn_user_id_pour_etablissement`),
    `NON_AUTORISE` (`fn_typing_start`) et `Compte inactif` (`fn_interlocuteurs_conversations`). La liste
@@ -99,6 +110,24 @@ les règles générales.
    l'accès n'étant pas ouvert à la tranche ; il rejoint le relevé de production (en attente, point 6).
 9. **`LOT1_DECISIONS.md`** n'est pas versionné en double : ses décisions 1 à 19 sont celles de
    `LOT1_PLAN.md` §7, même numérotation.
+10. **RPC partagée avec le lot 2 : `fn_ouvrir_litige_rate_limited`** (écart aux deux blueprints).
+   `LOT4_PLAN.md` §3 T0 la range parmi les « 42 RPC en `a_venir`, `lot: 4` » ; `LOT2_PLAN.md` v2 §3 T0 (l.292,
+   branche `origin/lot2/l2-t0`) la fait suivre par le T0 du lot 2 en `lot: 2` (surcharge à 3 arguments,
+   `DESACCORD_HEURES_POINTAGE`, T5b), avec sa fiche `## fn_ouvrir_litige_rate_limited`. Deux entrées
+   casseraient « noms uniques » de `RPC_SUIVIES`, et deux fiches feraient lire la première à `section()`.
+   Retenu, sur le précédent du T0 du lot 5 (« une RPC déjà suivie par un lot antérieur garde son entrée et son
+   lot ») : le lot 4 suit **41** RPC propres en `lot: 4` ; la 42e figure dans `RPC_PARTAGEES_LOT4`
+   (`scripts/mobile/check-rpc-contracts.mjs`), qui ne l'ajoute en `a_venir`, `lot: 4` qu'en l'absence de
+   l'entrée d'un lot antérieur. La garde admet pour elle `lot ≤ 4` et `a_venir` ou `consommee` (passage en
+   `consommee` par la tranche T5b du lot 2, ou par T15 du lot 4 si l'entrée est la sienne). Fiche unique :
+   l'usage du lot 4 (type `AUTRE`, refus inatteignables avec `AUTRE`) en est la sous-section « Usage du
+   lot 4 ». **Fusion avec le T0 du lot 2, jamais « garder les deux côtés » pour cette fiche** : garder
+   l'en-tête et les sous-fiches par surcharge du lot 2, y déplacer telle quelle la sous-section « Usage du
+   lot 4 », supprimer l'en-tête provisoire du lot 4, puis `node scripts/mobile/check-rpc-contracts.mjs --update`
+   (l'entrée du JSON passe en `lot: 2`) ; la garde exige un seul titre `## fn_ouvrir_litige_rate_limited`.
+   `RPC_SUIVIES` se fusionne sans doublon, le bloc du lot 4 n'y écrivant plus cette RPC ; les autres
+   recouvrements de texte avec les T0 des lots 2, 3 et 5 (synthèses, en-têtes, fin de document) restent des
+   ajouts juxtaposés, et `ios-native/rpc-contracts.json` se régénère après toute fusion.
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 
@@ -116,7 +145,11 @@ les règles générales.
   non bloquant par Gabrielle.
 - **Realtime (plan §4.1 l.106)** : pas d'abonnement `conversations` (absente de la publication versionnée,
   correction 3, D7).
-- **B0-bis** : 13 clés, critère de comptage 27 après la migration D-FLAGS (précision 1).
+- **B0-bis** : 13 clés ; critère `SELECT count(*) FROM parametres_systeme WHERE cle IN (<les 13 clés du
+  lot 4>)` = 13 sur STAGING puis en production, après la migration D-FLAGS (précision 1) ; le total global
+  de 28 drapeaux `ios_natif_%` renvoie aux décisions du lot 5.
+- **T0 (`LOT4_PLAN.md` §3)** : 42 RPC consommées par le lot 4, dont 41 suivies en `lot: 4` et
+  `fn_ouvrir_litige_rate_limited` partagée avec le lot 2 (précision 10).
 
 ## En attente de Gabrielle (blueprint §6)
 

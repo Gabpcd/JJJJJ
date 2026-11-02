@@ -1083,52 +1083,6 @@
       ]
     },
     {
-      "name": "fn_ouvrir_litige_rate_limited",
-      "statut": "a_venir",
-      "lot": 4,
-      "types": null,
-      "sql": [
-        {
-          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_motif\" \"text\")",
-          "returns": "\"jsonb\"",
-          "language": "plpgsql",
-          "security": "DEFINER",
-          "volatility": "VOLATILE",
-          "search_path": "'public'"
-        },
-        {
-          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\")",
-          "returns": "\"jsonb\"",
-          "language": "plpgsql",
-          "security": "DEFINER",
-          "volatility": "VOLATILE",
-          "search_path": "'public'"
-        },
-        {
-          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\", \"p_facture_id\" \"uuid\")",
-          "returns": "\"jsonb\"",
-          "language": "plpgsql",
-          "security": "DEFINER",
-          "volatility": "VOLATILE",
-          "search_path": "'public', 'extensions'"
-        }
-      ],
-      "grants": [
-        "authenticated",
-        "service_role"
-      ],
-      "manifeste": [
-        {
-          "signature": "fn_ouvrir_litige_rate_limited(uuid,text)",
-          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
-        },
-        {
-          "signature": "fn_ouvrir_litige_rate_limited(uuid,type_litige,text)",
-          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
-        }
-      ]
-    },
-    {
       "name": "fn_ajouter_message_litige",
       "statut": "a_venir",
       "lot": 4,
@@ -1956,6 +1910,52 @@
       "manifeste": [
         {
           "signature": "fn_exclure_utilisateur(uuid,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_ouvrir_litige_rate_limited",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\", \"p_facture_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(uuid,type_litige,text)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
       ]

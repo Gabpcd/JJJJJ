@@ -787,10 +787,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 ## Lot 4 — synthèse
 
 Ajoutée par la tranche T0 du lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, décisions
-`docs/mobile-swift/DECISIONS_LOT4.md`) : **quarante-deux RPC** suivies en `a_venir`, `lot: 4`, dans
-l'ordre des tranches (T3a swipe, T4 filtres, T5 disponibilités, T6 parrainage, T8 litiges et réclamations,
-T9 score et évaluations, T7a/T7b messagerie, T10 bulletins, T11 pool urgence et exclusions). Le décompte de
-l'en-tête (vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Écart assumé à la règle
+`docs/mobile-swift/DECISIONS_LOT4.md`) : quarante-deux RPC consommées par le lot 4, soit **quarante et une
+RPC** propres au lot 4, suivies en `a_venir`, `lot: 4`, dans l'ordre des tranches (T3a swipe, T4 filtres,
+T5 disponibilités, T6 parrainage, T8 litiges et réclamations, T9 score et évaluations, T7a/T7b messagerie,
+T10 bulletins, T11 pool urgence et exclusions), et une RPC partagée avec le lot 2,
+`fn_ouvrir_litige_rate_limited` (`RPC_PARTAGEES_LOT4`, précision 10 des décisions) : une seule entrée dans
+`RPC_SUIVIES`, celle du T0 du lot 2 (`lot: 2`) quand il est fusionné, `a_venir`, `lot: 4` à défaut ; une
+seule fiche, dont la sous-section « Usage du lot 4 » porte l'usage `AUTRE`. Le décompte de l'en-tête
+(vingt-sept RPC) couvre les lots 0 et 1 ; ces quarante-deux s'y ajoutent. Écart assumé à la règle
 « statut passé en `consommee` par la PR qui câble la gateway » : les statuts du lot 4 passent en `consommee`
 **en une fois par T15** (onze tranches parallèles ne modifient jamais le même tableau). Fiches propres au lot :
 « lecture des exceptions », actions `SWIPE_LIKE` / `URGENCE`, edges `messagerie-validate` et
@@ -835,7 +839,7 @@ concernée à jour **dans la même PR**.
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_ouvrir_litige_rate_limited` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
+| `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
 | `fn_ajouter_message_litige` | à venir | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_soumettre_reclamation` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mon_breakdown_actuel` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -1129,8 +1133,18 @@ CREATE OR REPLACE FUNCTION "public"."fn_appliquer_parrainage"("p_code" "text") R
 
 ## fn_ouvrir_litige_rate_limited
 
-- **Statut natif** : à venir (lot 4, T8).
-- **Usage prévu** : Ouverture d'un litige de type `AUTRE` sur une mission `EN_COURS` ou `TERMINEE` assignée au soignant (missions contestables = celles-ci moins celles déjà en litige, web l.137-146). L'app appelle **uniquement** la signature canonique à 3 arguments nommés (`p_mission_id`, `p_type_litige = 'AUTRE'`, `p_motif`), équivalente au wrapper déprécié à 2 arguments que le web appelle encore (`LitigesSoignant.tsx` l.172) ; fiche « Surcharges ».
+> **Fiche partagée avec le lot 2** (`DECISIONS_LOT4.md`, précision 10). Le T0 du lot 2 (`origin/lot2/l2-t0`,
+> `LOT2_PLAN.md` §3 T0) suit cette RPC en `lot: 2` (contestation d'une présence validée,
+> `p_type_litige = 'DESACCORD_HEURES_POINTAGE'`, T5b) et pose la fiche de référence, avec une sous-fiche par
+> surcharge. Sur une branche sans ce T0, l'en-tête ci-dessous en tient lieu et `RPC_PARTAGEES_LOT4`
+> (`scripts/mobile/check-rpc-contracts.mjs`) ajoute l'entrée en `a_venir`, `lot: 4`. **Fusion avec le T0 du
+> lot 2, jamais « garder les deux côtés »** : garder l'en-tête et les sous-fiches du lot 2, y déplacer telle
+> quelle la sous-section « Usage du lot 4 » ci-dessous, supprimer le reste de cette fiche, puis relancer
+> `node scripts/mobile/check-rpc-contracts.mjs --update` ; la garde du lot 4 exige un seul titre
+> `## fn_ouvrir_litige_rate_limited` et lit l'usage du lot 4 dans cette sous-section.
+
+- **Statut natif** : à venir (lot 4, T8) tant que l'entrée du lot 2 est absente ; sinon celui de l'entrée du
+  lot 2, portée par sa tranche T5b.
 - **Signature SQL** (`supabase/schema/public.sql` l.46354, l.46379, l.46568) :
 
 ```sql
@@ -1150,6 +1164,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_i
 - **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_ouvrir_litige_rate_limited(uuid,text)` ; `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_ouvrir_litige_rate_limited(uuid,type_litige,text)` — RPC utilisateur : identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
 - **GRANT connu** : 3 surcharges, chacune : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : déclarée l.10147 en union des surcharges à 2 et 3 arguments (`Args: { p_mission_id: string; p_motif: string }` ou `Args: { p_mission_id: string; p_motif: string; p_type_litige: Database["public"]["Enums"]["type_litige"] }`, `Returns: Json`), forme que `extractTypesSignature` ne lit pas : `types: null` dans `rpc-contracts.json`.
+- **Contrat de réponse (HTTP 200)** : succès `{success:true, litige_id, est_informatif, facture_id}` (l.46551-46556) ; refus `{error}` sans `success`, affichés verbatim. Surcharge appelée et refus lus par le lot 4 : sous-section « Usage du lot 4 ».
+
+### Usage du lot 4 (T8, type `AUTRE`)
+
+- **Statut natif (lot 4)** : à venir (lot 4, T8). Aucun statut propre au lot 4 : l'entrée partagée garde celui du lot qui la suit (passage en `consommee` par la tranche T5b du lot 2, ou par T15 du lot 4 si l'entrée est la sienne).
+- **Usage prévu** : Ouverture d'un litige de type `AUTRE` sur une mission `EN_COURS` ou `TERMINEE` assignée au soignant (missions contestables = celles-ci moins celles déjà en litige, web l.137-146). L'app appelle **uniquement** la signature canonique à 3 arguments nommés (`p_mission_id`, `p_type_litige = 'AUTRE'`, `p_motif`), équivalente au wrapper déprécié à 2 arguments que le web appelle encore (`LitigesSoignant.tsx` l.172) ; fiche « Surcharges ».
 - **Contrat de réponse** : 3 arguments (l.46379) : succès `{success:true, litige_id, est_informatif, facture_id}` (l.46551-46556), `litige_id` exigé (`requiredString`) puis relecture de `litiges` par id ; refus `{error}` **sans** `success` (HTTP 200), affichés verbatim (`RPCResponse.leverSiErreur`) : `'Accès refusé'` (l.46400, non authentifié ou compte inactif), `'Le motif doit contenir entre 10 et 2 000 caractères.'` (l.46405), `'Mission introuvable'` (l.46416), `"Vous n'êtes pas partie prenante de cette mission."` (l.46432), `'Un litige de ce type est déjà ouvert pour cette mission.'` (l.46447), `'Trop de litiges ouverts récemment. Réessayez plus tard.'` (l.46469, `rate_limit_litiges_par_heure`, défaut 3), et deux refus inatteignables avec `AUTRE` : `'Aucune facture contestable (ÉMISE, EN RETARD ou PAYÉE) pour cette mission.'` (l.46488, types facture), `'Fenêtre de contestation fermée pour ce type de litige. Contactez le support.'` (l.46518 ; la fenêtre de `AUTRE` est toujours ouverte, `fn_fenetre_contestation_ouverte` l.36596). Wrapper à 2 arguments (l.46354) : `'Accès refusé'` puis délégation en `AUTRE`. Effets : trigger `dec_litige_48h` (l.75396) sans `RAISE`, audit `LITIGE_OUVERTURE` serveur.
 - **Exemple de réponse STAGING** : **obligatoire** dans le run T14 (plan l.209 : litige ouvert et relu ; D20).
 
@@ -1746,7 +1766,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_exclure_utilisateur"("p_exclu_id" "uuid"
 
 - **Règle** (`CLAUDE.md`, « Publication différée = filtre de visibilité centralisé », Finding #3) : une notation non publiée ne transparaît jamais. La source canonique est la vue `evaluations_publiees` (`public.sql` l.69517-69543, `publie_le IS NOT NULL AND masque = false`), mais elle n'est accordée qu'à `service_role` (l.86074) et n'est pas `security_invoker` : le client ne peut pas la lire et ne doit jamais l'obtenir (elle contournerait la RLS).
 - **Sources uniques côté app** : `fn_mes_notations_recues_avec_stats` (cinq lectures de `notations_missions`, toutes filtrées `n.masque = false AND n.publie_le IS NOT NULL`) et `fn_lister_notations_recues` (une lecture, l.40324-40325). La garde compte, dans chaque corps, autant de filtres `publie_le IS NOT NULL` et `masque = false` que de lectures de la table.
-- **Interdits** : aucune requête PostgREST, aucun canal Realtime, aucun littéral Swift égal à `notations_missions`, `evaluations` ou `evaluations_publiees` dans `ios-native/Packages` et `ios-native/Jolene` — garde-fou 18 de `tests/non-regression/guards.sh` et test Swift `EvaluationsSourceGuardTests` (T9), qui construit son motif sans écrire ces noms entre guillemets. `EcranSecondaire.evaluations` garde sa valeur brute implicite et `cleDrapeau` s'écrit `"ios_natif_\(rawValue)_actif"`.
+- **Interdits** : aucune requête PostgREST, aucun canal Realtime, aucun littéral Swift égal à `notations_missions`, `evaluations` ou `evaluations_publiees` dans `ios-native/Packages` et `ios-native/Jolene` — garde-fou 18 de `tests/non-regression/guards.sh` et test Swift `EvaluationsSourceGuardTests` (T9), qui construit son motif sans écrire ces noms entre guillemets. `EcranSecondaire.evaluations` garde sa valeur brute implicite et `cleDrapeau` s'écrit `"ios_natif_\(rawValue)_actif"`. Le garde-fou 18 ne lit que les fichiers `*.swift` : une fixture de démo, un vecteur golden (`LinkRouter`), un catalogue de chaînes ou un xcassets peut porter la valeur brute `evaluations` (nom d'écran ou de route), qui n'est pas un lecteur de table ; un dossier absent ou illisible le fait échouer (code 2 de grep), comme le garde-fou 19.
 - **Surfaces web hors natif** : le classement `/soignant/classement` lit `soignants.note_moyenne`, alimentée par la table legacy `evaluations.visible` (`dec_maj_note_moyenne` l.2226-2268), et non `evaluations_publiees` : renvoi web assumé (`LOT4_PLAN.md` §1.3), aucune surface native.
 - **Preuve STAGING** recommandée (T14) : notation N1 publiée visible, notation N2 non publiée absente des deux RPC.
 
@@ -1759,7 +1779,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_i
 ```
 
 - **2 arguments** (`public.sql` l.46354) : `COMMENT` l.46375 « DEPRECATED + AUDITED (FIX 2). Wrapper rétrocompat 2-arg → 3-arg. … À supprimer en Sub-PR 3. » ; renvoie `'Accès refusé'` ou délègue avec `AUTRE`. Appelée par le web (`src/pages/LitigesSoignant.tsx` l.172) ; jamais appelée par l'app.
-- **3 arguments** (l.46379, `COMMENT` l.46564 « Signature canonique (3 args) ») : **seule surcharge appelée par l'app**, paramètres nommés `p_mission_id`, `p_type_litige = 'AUTRE'`, `p_motif` (fiche `fn_ouvrir_litige_rate_limited`).
+- **3 arguments** (l.46379, `COMMENT` l.46564 « Signature canonique (3 args) ») : **seule surcharge appelée par l'app**, paramètres nommés `p_mission_id`, `p_type_litige`, `p_motif` : `p_type_litige = 'DESACCORD_HEURES_POINTAGE'` au lot 2 (T5b, contestation d'une présence validée) et `p_type_litige = 'AUTRE'` au lot 4 (T8). Une seule fiche `fn_ouvrir_litige_rate_limited` et une seule entrée suivie, partagée entre les deux lots (`RPC_PARTAGEES_LOT4`) ; l'usage du lot 4 est sa sous-section « Usage du lot 4 ».
 - **4 arguments** (l.46568) : litiges typés sur facture (`WizardOuvertureLitige.tsx`, monté par `MesFacturesHonoraires.tsx`), renvoi web assumé (D9 : gel et dégel de facture, `trg_litige_gel_degel_facture` l.76028) ; `p_facture_id` sans valeur par défaut, donc aucune ambiguïté PostgREST avec la 3 arguments ; hors manifeste ; jamais appelée par l'app. Ses refus ne sont pas repris dans la fiche (sans objet).
 - Les trois surcharges sont accordées à `authenticated` et `service_role` et figurent dans `ios-native/rpc-contracts.json` (une dérive de l'une fait échouer la CI). `types.ts` (l.10147) ne déclare que les surcharges à 2 et 3 arguments, en union.
 

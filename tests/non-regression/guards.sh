@@ -225,11 +225,29 @@ echo "── Garde-fou 18 : aucun lecteur natif de notations (double-aveugle, lo
 # Swift qui cherche ces noms construit son motif sans les écrire entre guillemets
 # (docs/mobile-swift/LOT4_PLAN.md §3 T0, CONTRATS_RPC_SOIGNANT.md fiche « Jamais notations_missions »).
 MOTIF_NOTATIONS='"(notations_missions|evaluations|evaluations_publiees)"'
-if grep -rnE "$MOTIF_NOTATIONS" ios-native/Packages ios-native/Jolene --exclude-dir=.build; then
-  echo "   l'app iOS lit une table de notations hors des deux RPC filtrées"
+# Littéral Swift seulement (--include) : une fixture de démo, un vecteur golden, un catalogue de chaînes ou
+# un xcassets peut porter la valeur brute « evaluations » (nom d'écran ou de route) sans lire aucune table.
+# Fail-closed : un dossier absent ou renommé (avec --include, grep ignorerait l'opérande sans erreur),
+# aucun fichier Swift trouvé ou grep en échec (code 2 : illisible) fait échouer la garde au lieu de la
+# rendre muette.
+if [ ! -d ios-native/Packages ] || [ ! -d ios-native/Jolene ]; then
+  echo "   ios-native/Packages ou ios-native/Jolene absent (renommé ?) : garde-fou 18 non vérifié"
+  FAIL=1
+elif [ -z "$(find ios-native/Packages ios-native/Jolene -name '*.swift' -not -path '*/.build/*' -print -quit 2>/dev/null)" ]; then
+  echo "   aucun fichier Swift sous ios-native/Packages et ios-native/Jolene : garde-fou 18 non vérifié"
   FAIL=1
 else
-  echo "   OK"
+  grep -rnE "$MOTIF_NOTATIONS" ios-native/Packages ios-native/Jolene --include='*.swift' --exclude-dir=.build
+  RC18=$?
+  if [ "$RC18" -eq 0 ]; then
+    echo "   l'app iOS lit une table de notations hors des deux RPC filtrées"
+    FAIL=1
+  elif [ "$RC18" -ne 1 ]; then
+    echo "   grep en échec (code $RC18 : dossier absent ou illisible) : garde-fou 18 non vérifié"
+    FAIL=1
+  else
+    echo "   OK"
+  fi
 fi
 
 echo "── Garde-fou 19 : aucun envoi de message natif hors de l'edge messagerie-validate (lot 4)"
@@ -237,8 +255,15 @@ echo "── Garde-fou 19 : aucun envoi de message natif hors de l'edge messager
 # service_role) ; fn_envoyer_message n'est accordée à aucun rôle client et fn_envoyer_message_valide
 # est réservée à l'edge. fn_envoyer_message_contact (formulaire d'aide) n'est pas un envoi de messagerie.
 MOTIF_ENVOI='fn_envoyer_message(_valide)?([^a-z0-9_]|$)'
-if grep -rnE "$MOTIF_ENVOI" ios-native/ --exclude-dir=.build; then
+# Tous les fichiers de ios-native/ (Swift, fixtures, golden). Code 2 de grep (dossier absent ou
+# illisible) : rouge, jamais « OK ».
+grep -rnE "$MOTIF_ENVOI" ios-native/ --exclude-dir=.build
+RC19=$?
+if [ "$RC19" -eq 0 ]; then
   echo "   l'app iOS appelle une fonction d'envoi de message sans passer par l'edge messagerie-validate"
+  FAIL=1
+elif [ "$RC19" -ne 1 ]; then
+  echo "   grep en échec (code $RC19 : ios-native/ absent ou illisible) : garde-fou 19 non vérifié"
   FAIL=1
 else
   echo "   OK"

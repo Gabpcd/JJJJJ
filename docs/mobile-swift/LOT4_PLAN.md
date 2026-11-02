@@ -5,7 +5,10 @@
 > points « En attente de Gabrielle » compris). Les renvois « lot 1 décision n » se lisent dans
 > `docs/mobile-swift/LOT1_PLAN.md` §7 « Décisions (02/11/2026) », mêmes décisions 1 à 19 et même numérotation
 > que `LOT1_DECISIONS.md`, qui n'est donc pas versionné en double. `LOT2_PLAN.md` et `LOT3_PLAN.md`,
-> cités ci-dessous, désignent les blueprints des lots 2 et 3 (hors du présent document).
+> cités ci-dessous, désignent les blueprints des lots 2 et 3 (hors du présent document). Écart au §3 T0
+> consigné dans `DECISIONS_LOT4.md` (précision 10) : des « 42 RPC en `lot: 4` », 41 sont suivies en `lot: 4`
+> et `fn_ouvrir_litige_rate_limited`, déjà suivie par le T0 du lot 2 en `lot: 2`, est partagée (une entrée,
+> une fiche, sous-section « Usage du lot 4 »).
 
 > Préparé le 2026-11-02 en **lecture seule** sur `main` (`d1b0f39c`) et sur les branches lot 1 non mergées `origin/feat/ios-native-lot1-t1-fondation` (`d246a062`), `origin/feat/ios-native-lot1-t1b-design` (`528c49b1`), `origin/feat/ios-native-lot1-t2-golden-planning` (`bda09c20`). (corrigé v2) Contre-relu le même jour contre la branche d'intégration `origin/feat/ios-lot1` (`c509224a` : T0 du lot 1 avec `check-rpc-contracts.mjs`, `tests/node/check-rpc-contracts.node.mjs`, `docs/mobile-swift/LOT1_PLAN.md`), `origin/lot1/t4a`, `origin/lot1/t8`, `origin/feat/b0-drapeaux-ios-natif` et les blueprints `LOT2_PLAN.md` / `LOT3_PLAN.md` ; `LOT1_DECISIONS.md` n'est versionné sur aucune branche : T0 le verse sous `docs/mobile-swift/` pour que les renvois « lot 1 décision n » soient vérifiables.
 > Périmètre : `docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 » (l.202-210). Règles : `docs/mobile-swift/PRINCIPES.md`, `DECISIONS_LOT0.md`, `PARITE_SOIGNANT.md`, blueprint et décisions du lot 1 (`LOT1_PLAN.md`, `LOT1_DECISIONS.md`), `CLAUDE.md` (HARD STOP n°4, B9, « mergé ≠ livré », état dérivé, filtre de visibilité centralisé, documents de santé).

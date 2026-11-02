@@ -36,8 +36,8 @@ Contenu des messages de recette : alphabétique (pas de chiffres, faux positifs 
 
 | Étape | Attendu | Observé |
 |---|---|---|
-| Mode avion pendant que le fil est ouvert, le pair envoie deux messages | état « hors ligne » affiché, aucun envoi accepté | — |
-| Envoi tenté pendant la coupure | « envoi non confirmé », texte conservé, **aucun renvoi automatique** (D8) | — |
+| Mode avion pendant que le fil est ouvert, le pair envoie deux messages | état « hors ligne » affiché ; le composeur reste actif (désactivé seulement pendant un appel en cours ou pour une conversation archivée, `LOT4_PLAN.md` T1b) | — |
+| Envoi tenté pendant la coupure | l'appel à l'edge `messagerie-validate` part et échoue sans réponse : bulle « envoi non confirmé » (`EnvoiOutcome.nonConfirme`), texte conservé dans le composeur, **aucun renvoi automatique** (D8) ; relecture du fil au retour du réseau | — |
 | Réseau rétabli | canal « rejoint » puis relecture : les deux messages apparaissent dans l'ordre | — |
 
 ## 3. Tap d'une notification de message (si le lot 3 a livré le coordinateur push)

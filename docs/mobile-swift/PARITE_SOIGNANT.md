@@ -9,8 +9,9 @@ Critères : lot 1 renseignée à 45 % au moins ; lot 4 100 % statuée, zéro « 
 cœur, matrice signée par Gabrielle. Les routes « redirection » du web sont des alias : natif signifie que le
 routeur de liens (`JoleneCore/Links/LinkRouter.swift`) envoie l'alias vers l écran natif cible.
 
-Dernière mise à jour : 2026-11-02 (lot 1, T0 : sous-lignes Mes missions / Favoris / détail mission,
-cibles alignées sur `LOT1_PLAN.md` §1 et §7 ; aucune ligne statuée « natif » avant les preuves des tranches).
+Dernière mise à jour : 2026-11-03 (lot 4, T0 : section « Lot 4 — statuts proposés », lecture du lot 4 alignée
+sur D17 de `DECISIONS_LOT4.md` ; lot 1, T0 : sous-lignes Mes missions / Favoris / détail mission, cibles
+alignées sur `LOT1_PLAN.md` §1 et §7 ; aucune ligne statuée « natif » avant les preuves des tranches).
 
 Sous-lignes (préfixées `›`) : une route web qui regroupe plusieurs onglets ou vues est détaillée pour que
 chaque preuve soit attribuable ; la ligne de la route passe « natif » quand toutes ses sous-lignes le sont.
@@ -94,7 +95,9 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
   jusque-là, un compte en cours d'inscription est **renvoyé vers le web** (écart assumé,
   `PRINCIPES.md` §5, `DECISIONS_LOT0.md`).
 - **Lot 4** : parcours secondaires ; renvoi web assumé proposé pour premium, prévoyance, mandat et charges
-  sociales (décision 3 : WebView bornée ou Safari, à trancher par Gabrielle).
+  sociales, par `SFSafariViewController` sans transmission de jeton (décision 3 du lot 0 amendée par D17 de
+  `DECISIONS_LOT4.md` : WebView bornée reportée hors lot 4) ; statuts proposés dans la section
+  « Lot 4 — statuts proposés » ci-dessous.
 - Aucune ligne n'est « abandonné » à l initialisation ; ce statut exige une décision écrite de Gabrielle.
 
 ## Lot 4 — statuts proposés (T0, à signer par Gabrielle en T15)
