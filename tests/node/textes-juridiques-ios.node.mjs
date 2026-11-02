@@ -162,6 +162,17 @@ test('TL : toute constante, tout littéral et toute structure de TextesWeb.swift
   // Littéral hors constante annotée (texte glissé dans une fonction).
   r = verifierTextes({ swiftSource: ajout(ancre, '        static func f() -> String { "Texte libre" }\n'), lireWeb });
   assert.ok(r.erreurs.some(e => e.includes('littéral non gardé') && e.includes('Texte libre')), JSON.stringify(r.erreurs));
+  // Littéral contenant « // » : jamais pris pour un commentaire.
+  r = verifierTextes({ swiftSource: ajout(ancre, '        static func g() -> String { "voir https://jolene.app" }\n'), lireWeb });
+  assert.ok(r.erreurs.some(e => e.includes('littéral non gardé') && e.includes('https://jolene.app')), JSON.stringify(r.erreurs));
+  // Une annotation ne passe pas à la constante d'après si une autre déclaration s'intercale.
+  r = verifierTextes({
+    swiftSource: ajout(ancre, '        // source: src/components/ConsentementGPS.tsx:25\n        public static let liste = [titre]\n'
+      + '        public static let orpheline = "Autorisation de géolocalisation"\n'),
+    lireWeb,
+  });
+  assert.ok(r.erreurs.some(e => e.includes('annotation qui ne précède aucune constante')), JSON.stringify(r.erreurs));
+  assert.ok(r.erreurs.some(e => e.includes('ConsentementGps.orpheline') && e.includes('sans annotation')), JSON.stringify(r.erreurs));
   // Interpolation Swift interdite.
   r = verifierTextes({ swiftSource: ajout(ancre, '        // source: src/components/ConsentementGPS.tsx:25\n        public static let gabarit = "Autorisation \\(x)"\n'), lireWeb });
   assert.ok(r.erreurs.some(e => e.includes('ConsentementGps.gabarit') && e.includes('interpolation')), JSON.stringify(r.erreurs));
@@ -222,4 +233,21 @@ test('TL : aucun texte juridique écrit en dur dans les dossiers Swift du lot 2 
   ]);
   assert.equal(fautes.length, 1);
   assert.match(fautes[0], /Exemple\.swift:1/);
+});
+
+test('validate-pr.yml : l’étape « Garde de livraison mobile » (check requis Typecheck + build) exécute cette garde', () => {
+  const wf = read('.github/workflows/validate-pr.yml');
+  const job = wf.indexOf('\n  typecheck-and-build:\n');
+  assert.ok(job >= 0, 'job typecheck-and-build introuvable');
+  const finJob = wf.slice(job + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+  const corps = wf.slice(job, finJob < 0 ? undefined : job + 1 + finJob);
+  const etape = corps.indexOf('\n      - name: Garde de livraison mobile\n');
+  assert.ok(etape >= 0, 'étape « Garde de livraison mobile » absente du job Typecheck + build');
+  const suite = corps.slice(etape + 1);
+  const fin = suite.search(/\n {6}- name: /);
+  const bloc = suite.slice(0, fin < 0 ? undefined : fin);
+  const run = bloc.split('\n').find(l => /^\s+run: /.test(l));
+  assert.ok(run && run.includes('node --test') && run.includes('tests/node/textes-juridiques-ios.node.mjs'),
+    `run: n'exécute pas la garde TL : ${run}`);
+  assert.ok(!/^\s+if: /m.test(bloc) && !bloc.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
 });
