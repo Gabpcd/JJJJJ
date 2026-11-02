@@ -353,8 +353,14 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 `net._http_response` passe par `created` (seule colonne indexée par pg_net) avec
 une fenêtre bornée autour de la demande — jamais sur `id` seul : le contrôleur
 des crons Edge balayait 148 Mo toutes les 5 min, dépassait 120 s et monopolisait
-le CPU partagé (crons en « job startup timeout », RPC CI en 57014). Détail :
-`docs/incidents/2026-11-02-cron-controle-edge-cpu.md`.
+le CPU partagé (crons en « job startup timeout », RPC CI en 57014). Corollaire :
+pg_net purge les réponses après `pg_net.ttl` (6 h) ; une demande plus ancienne
+sans réponse est **non contrôlable**, jamais un échec (verrou dans
+`fn_controler_crons_edge_critiques`, migration `20261102040000`). Trois lecteurs
+live joignent encore sur `id` seul hors boucle 5 min
+(`fn_controler_rappels_notation_j1`, `fn_etat_sondes_crons_edge_critiques`,
+`fn_activer_crons_edge_critiques`) : à borner, pas de nouveau lecteur sur ce
+modèle. Détail : `docs/incidents/2026-11-02-cron-controle-edge-cpu.md`.
 
 **Pattern régime/contrat (Lot 14, gardé par `test:guards` 7)** : sur toute ligne financière/facturation, le régime affiché vient de `missions.type_contrat_applique` (figé à l'assignation) — **jamais** de `soignants.type_exercice` (profil) : un libéral peut faire une mission CDD, afficher le profil crée des chips contradictoires.
 

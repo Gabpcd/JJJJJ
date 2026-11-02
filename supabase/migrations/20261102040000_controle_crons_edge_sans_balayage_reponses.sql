@@ -9,11 +9,20 @@
 -- base réactive en moins d'une minute (0,34 s pour la même requête).
 --
 -- Définition de départ : LIVE (pg_get_functiondef du 02/11/2026), identique à
--- 20260729121442 ; seule la jointure change. Une réponse pg_net est insérée
--- (`created` = now()) après la demande, au plus tard timeout 55 s + file ;
--- le contrôleur attend lui-même 10 min avant de conclure. La fenêtre
--- [demande_le - 1 min, demande_le + 15 min] est donc toujours englobante et
--- permet un parcours par _http_response_created_idx au lieu d'un balayage.
+-- 20260729121442. Deux changements :
+--   1. jointure bornée. Une réponse pg_net est insérée (`created` = now())
+--      après la demande, au plus tard timeout 55 s + file ; le contrôleur
+--      attend lui-même 10 min avant de conclure. La fenêtre
+--      [demande_le - 1 min, demande_le + 15 min) est donc toujours englobante
+--      et permet un parcours par _http_response_created_idx ;
+--   2. verrou du gap TTL (revue B8 de la PR #1105). pg_net purge
+--      net._http_response après `pg_net.ttl` (6 h). Une demande plus ancienne
+--      sans réponse n'est pas un échec de transport, elle est incontrôlable :
+--      elle est marquée explicitement (`erreur_transport` NON_CONTROLABLE,
+--      compteur `non_controlables`), jamais comptée en `echecs` ni remontée en
+--      alerte CRITICAL « aucune réponse ». Sans ce verrou, tout arriéré plus
+--      vieux que le TTL (pause du contrôleur, panne) produirait de fausses
+--      alertes et ferait échouer le gate `.echecs == 0` de deploy-supabase.
 
 CREATE OR REPLACE FUNCTION private.fn_controler_crons_edge_critiques()
 RETURNS jsonb
@@ -26,6 +35,12 @@ DECLARE
   v_ok integer := 0;
   v_echecs integer := 0;
   v_attente integer := 0;
+  v_non_controlables integer := 0;
+  -- Durée de rétention des réponses pg_net (défaut de l'extension : 6 h).
+  v_ttl interval := COALESCE(
+    NULLIF(pg_catalog.current_setting('pg_net.ttl', true), '')::interval,
+    interval '6 hours'
+  );
 BEGIN
   FOR v_run IN
     SELECT l.request_id,
@@ -33,7 +48,8 @@ BEGIN
            l.demande_le,
            r.status_code,
            r.timed_out,
-           r.error_msg
+           r.error_msg,
+           (r.id IS NOT NULL) AS reponse_presente
       FROM private.cron_edge_execution_log l
       -- net._http_response n'a pas d'index sur id : borner `created` autour de
       -- la demande rend la jointure indexable (incident 02/11/2026).
@@ -55,6 +71,23 @@ BEGIN
     IF v_run.status_code IS NULL
        AND v_run.demande_le > now() - interval '10 minutes' THEN
       v_attente := v_attente + 1;
+      CONTINUE;
+    END IF;
+
+    -- Demande plus ancienne que la rétention pg_net et sans réponse : la
+    -- réponse a été purgée, le contrôle est impossible. Marquage explicite,
+    -- sans alerte ni échec (verrou du gap TTL, voir en-tête).
+    IF NOT v_run.reponse_presente
+       AND v_run.demande_le < now() - v_ttl THEN
+      UPDATE private.cron_edge_execution_log
+         SET controle_le = now(),
+             statut_http = NULL,
+             erreur_transport = format(
+               'NON_CONTROLABLE: réponse pg_net purgée (pg_net.ttl = %s), demande antérieure à %s',
+               v_ttl, now() - v_ttl
+             )
+       WHERE request_id = v_run.request_id;
+      v_non_controlables := v_non_controlables + 1;
       CONTINUE;
     END IF;
 
@@ -94,13 +127,62 @@ BEGIN
     'success', v_echecs = 0,
     'ok', v_ok,
     'echecs', v_echecs,
-    'en_attente', v_attente
+    'en_attente', v_attente,
+    'non_controlables', v_non_controlables
   );
 END;
 $function$;
 
 REVOKE ALL ON FUNCTION private.fn_controler_crons_edge_critiques()
   FROM PUBLIC, anon, authenticated;
+
+-- Acquitter l'arriéré accumulé pendant l'incident puis la pause du contrôleur
+-- (job 123 inactif depuis 03:41 UTC) : ~530 lignes au 02/11 07:20 UTC, +90/h.
+-- Contrôlées a posteriori, les plus anciennes auraient perdu leur réponse
+-- (purge pg_net 6 h) → fausses alertes CRITICAL « aucune réponse », et les
+-- 17 échecs réels de la fenêtre d'incident (déjà instruits dans
+-- docs/incidents/2026-11-02-cron-controle-edge-cpu.md) feraient échouer le gate
+-- `.echecs == 0` de deploy-supabase, qui laisse alors les crons critiques en
+-- pause. Le statut HTTP et l'erreur de transport sont conservés quand la
+-- réponse existe encore ; seules les lignes en attente au moment de la
+-- migration sont concernées (les sondes du déploiement sont postérieures).
+DO $arriere$
+DECLARE
+  v_n integer;
+BEGIN
+  IF pg_catalog.to_regclass('private.cron_edge_execution_log') IS NULL
+     OR pg_catalog.to_regclass('net._http_response') IS NULL THEN
+    RETURN;
+  END IF;
+
+  UPDATE private.cron_edge_execution_log l
+     SET controle_le = now(),
+         statut_http = s.status_code,
+         erreur_transport = left(
+           'NON_CONTROLE: contrôleur en pause (incident CPU 02/11/2026), acquitté par 20261102040000'
+           || CASE WHEN s.reponse_presente THEN '' ELSE ' ; réponse pg_net purgée' END
+           || COALESCE(' ; transport=' || s.error_msg, ''),
+           500)
+    FROM (
+      SELECT l2.request_id,
+             r.status_code,
+             r.error_msg,
+             (r.id IS NOT NULL) AS reponse_presente
+        FROM private.cron_edge_execution_log l2
+        LEFT JOIN net._http_response r
+          ON r.id = l2.request_id
+         AND r.created >= l2.demande_le - interval '1 minute'
+         AND r.created <  l2.demande_le + interval '15 minutes'
+       WHERE l2.controle_le IS NULL
+         AND l2.demande_le < now()
+    ) s
+   WHERE s.request_id = l.request_id
+     AND l.controle_le IS NULL;
+
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RAISE NOTICE 'Contrôle des crons Edge : arriéré acquitté, % ligne(s).', v_n;
+END
+$arriere$;
 
 -- Réactiver le contrôle mis en pause pendant l'incident, uniquement là où les
 -- crons Edge critiques sont effectivement activés (prod) : une base de preview

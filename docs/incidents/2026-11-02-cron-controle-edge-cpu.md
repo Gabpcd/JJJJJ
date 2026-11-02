@@ -24,7 +24,7 @@ Symptômes relevés dans l'ordre où ils sont apparus :
 - Mesure directe, base sans autre requête active :
   `select count(*) from private.cron_edge_execution_log` (12 Mo,
   313 lectures disque) = 70,9 s ; `select count(*) from notifications`
-  (5 748 blocs, 100 % en cache) = 27,5 s. Le goulot est le CPU partagé de
+  (5 748 accès tampon `shared hit`, 100 % en cache) = 27,5 s. Le goulot est le CPU partagé de
   l'instance, pas le disque.
 
 ## Cause
@@ -53,11 +53,40 @@ Migration `20261102040000_controle_crons_edge_sans_balayage_reponses.sql` :
 - même fonction (définition de départ : LIVE, identique à
   `20260729121442`), jointure bornée
   `r.created ∈ [demande_le − 1 min, demande_le + 15 min)` → parcours de
-  `_http_response_created_idx`. Mesure en prod sur les 198 lignes en attente :
-  1 444 blocs lus, 5,7 s sous charge (contre > 120 s), ~0,5 s à vide ;
+  `_http_response_created_idx`. Mesure en prod à 03:50 UTC sur les 198 lignes
+  alors en attente : 1 444 blocs lus, 5,7 s sous charge (contre > 120 s),
+  ~0,5 s à vide. EXPLAIN de la revue fraîche : Nested Loop + Index Scan
+  `idx_cron_edge_execution_log_a_controler` + Bitmap Index Scan
+  `_http_response_created_idx`, coût 5 030 contre 19 028 (Seq Scan) ;
+- **verrou du gap TTL** (constat majeur de la revue fraîche B8) : pg_net purge
+  `net._http_response` après `pg_net.ttl` (6 h). Une demande plus ancienne
+  sans réponse n'est pas un échec de transport : la fonction la marque
+  `NON_CONTROLABLE` (`erreur_transport` explicite, compteur `non_controlables`
+  dans le JSON de retour) sans alerte ni `echecs`. Sans ce verrou, tout
+  arriéré plus vieux que 6 h (pause du contrôleur, panne) déclenchait une
+  alerte CRITICAL « aucune réponse » par cron critique et faisait échouer le
+  gate `.success == true and .echecs == 0` de `deploy-supabase.yml`, qui
+  laisse alors les 9 crons Edge critiques et le monitor en pause ;
+- **acquittement de l'arriéré** accumulé pendant l'incident puis la pause du
+  contrôleur : 529 lignes à 07:19 UTC (`demande_le` de 01:29 à 07:19, +≈ 90/h),
+  dont 17 échecs réels de la fenêtre de saturation, 02:15 → 04:57 UTC
+  (9 HTTP 500 `email-cron-hourly-immediate` « Une erreur interne est
+  survenue », 8 timeouts pg_net 55 s : email-cron ×3, escrow-release ×2,
+  jolene_process_externalisations ×2, process-stripe-refunds-15min ×1). Les
+  lignes sont marquées `controle_le` + `erreur_transport = NON_CONTROLE …`,
+  statut HTTP et erreur de transport conservés quand la réponse existe
+  encore ; les sondes du déploiement, postérieures à la migration, ne sont
+  pas concernées. Depuis 05:00 UTC, 0 échec sur ≈ 300 appels Edge (tous les
+  crons, toutes les heures) : les échecs étaient confinés à la saturation ;
 - réactivation du job `jolene-monitor-crons-edge-critiques` uniquement là où
   `email-cron-hourly-immediate` est actif (prod), pour ne pas réveiller une
   base de preview.
+
+Vérification attendue juste avant le déploiement :
+`select count(*) from private.cron_edge_execution_log where controle_le is null`
+puis, après le déploiement, `fn_ops_controler_crons_edge_critiques` à
+`echecs = 0` et le premier passage du job 123 sans alerte
+`CRON_EDGE_HTTP_FAILED` antérieure à la migration.
 
 ## Second foyer : boucle `fn_finaliser_document_verification` (04:10 → 04:30 UTC)
 
@@ -73,15 +102,13 @@ pendant deux jours, sans aucune trace correspondante dans `edge_logs`,
 `function_edge_logs` ni `function_logs` : les requêtes n'ont pas traversé la
 passerelle publique.
 
-Mitigation à 04:28 UTC : `pg_terminate_backend` sur les deux sessions. La même
-requête témoin est passée de 35,9 s à 0,14 s immédiatement ; aucune nouvelle
-session PostgREST active n'a repris la boucle dans la minute qui a suivi.
-Observation en cours (`pgrst.log_level = info` posé sur `authenticator` à
-04:24 UTC pour journaliser l'appelant si la boucle reprend ; à remettre à
-`error` ensuite).
+Mitigation vers 04:25 UTC : `pg_terminate_backend` sur les deux sessions
+(dernières requêtes de la boucle en 503 à 04:25:15). La même requête témoin
+est passée de 35,9 s à 0,14 s immédiatement ; aucune nouvelle session
+PostgREST active n'a repris la boucle dans la minute qui a suivi.
 
-Appelant identifié par le journal PostgREST (`pgrst.log_level = info`, 04:24 → 04:40 UTC,
-remis à `error` ensuite) : `127.0.0.1 - service_role "POST /rpc/fn_finaliser_document_verification"`
+Appelant identifié par le journal PostgREST (`pgrst.log_level = info` posé sur
+`authenticator` de 04:24 à 04:40 UTC, puis remis à `error` — vérifié en prod) : `127.0.0.1 - service_role "POST /rpc/fn_finaliser_document_verification"`
 avec l'agent `Deno/2.1.4 (variant; SupabaseEdgeRuntime/1.77.8; ref=flripxtsyegjshnhzjkz)`.
 Les requêtes viennent donc du runtime Edge Supabase du projet, par le chemin interne
 (`127.0.0.1`), ce qui explique leur absence de `edge_logs`. Les deux dernières ont reçu
@@ -100,10 +127,21 @@ qui mappe ce nouveau code vers 409.
 
 ## Points ouverts (hors périmètre de ce correctif)
 
-- `fn_finaliser_document_verification` lève « Tentative documentaire
-  périmée » (40001) environ une fois par seconde depuis au moins 24 h, via
-  PostgREST en `service_role`, sans trace correspondante dans `edge_logs` ni
-  `function_logs`. Coût ≈ 4 % d'un cœur. L'appelant reste à identifier.
+- Boucle `fn_finaliser_document_verification` (≈ 3 600 erreurs 40001/h
+  pendant deux jours, ≈ 4 % d'un cœur) : appelant identifié (runtime Edge
+  interne, cf. § Second foyer), mécanisme de relance à établir ; correctif du
+  code d'erreur 40001 à instruire (fonction `SECURITY DEFINER`, B9).
+- Trois fonctions live joignent encore `net._http_response` sur `id` seul
+  (Seq Scan, coût borné à quelques secondes car hors boucle 5 min) :
+  `fn_controler_rappels_notation_j1` (run quotidien 05:17 UTC via
+  `email-cron-daily`, 0 ligne à contrôler aujourd'hui),
+  `fn_etat_sondes_crons_edge_critiques` et `fn_activer_crons_edge_critiques`
+  (appelées à chaque déploiement, moy. 0,9 s, max 11,6 s), ainsi que
+  `scripts/ci/f1-cloud-sql.mjs`. À borner sur `created` et à verrouiller par
+  un garde CI (`test:guards`) interdisant toute jointure sur `id` seul.
+- `fn_controler_rappels_notation_j1` contrôle à J+1 des réponses pg_net
+  purgées après 6 h : toute ligne en attente sera classée « réponse absente »
+  (défaut de conception indépendant de l'index, à instruire).
 - Des établissements de test « Clinique Audit Jolene »
   (`playwright-test-etab-<ts>-<rand>@jolene.app`) s'accumulent toutes les
   10 min environ : aucun nettoyage ne les cible (le global setup ne purge que
