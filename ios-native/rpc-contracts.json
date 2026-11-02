@@ -67,7 +67,7 @@
     {
       "name": "fn_mon_profil_soignant_complet",
       "statut": "a_venir",
-      "lot": 1,
+      "lot": 3,
       "types": {
         "args": "never",
         "returns": "Json"
@@ -168,6 +168,322 @@
       "manifeste": [
         {
           "signature": "fn_suggestions_missions_pour_soignant(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_annuler_candidature_soignant",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_candidature_id: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_annuler_candidature_soignant(\"p_candidature_id\" \"uuid\", \"p_motif_categorie\" \"text\", \"p_texte_libre\" \"text\", \"p_justificatif_storage_path\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_annuler_candidature_soignant(uuid,text,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_annuler_mission_soignant",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_mission_id: string; p_motif?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_annuler_mission_soignant(\"p_mission_id\" \"uuid\", \"p_motif\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_annuler_mission_soignant(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_repondre_proposition",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_accepter: boolean; p_candidature_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_repondre_proposition(\"p_candidature_id\" \"uuid\", \"p_accepter\" boolean)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_repondre_proposition(uuid,boolean)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_toggle_favori_etablissement",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_actif: boolean; p_etablissement_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_toggle_favori_etablissement(\"p_etablissement_id\" \"uuid\", \"p_actif\" boolean)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_toggle_favori_etablissement(uuid,boolean)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_favoris_etablissements",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_favoris_etablissements()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_favoris_etablissements()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_audit_connexion",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_action: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_audit_connexion(\"p_action\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_audit_connexion(text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_maj_activite_soignant",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_maj_activite_soignant()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_maj_activite_soignant()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_ecrire_audit_safe",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_acteur_id: string; p_action: string; p_cle_s3?: string; p_details?: Json; p_id_ressource: string; p_ip?: unknown; p_navigateur?: string; p_type_acteur: string; p_type_ressource: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_ecrire_audit_safe(\"p_acteur_id\" \"uuid\", \"p_type_acteur\" \"text\", \"p_action\" \"text\", \"p_type_ressource\" \"text\", \"p_id_ressource\" \"uuid\", \"p_cle_s3\" \"text\" DEFAULT NULL::\"text\", \"p_details\" \"jsonb\" DEFAULT NULL::\"jsonb\", \"p_ip\" \"inet\" DEFAULT NULL::\"inet\", \"p_navigateur\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_supprimer_compte_rate_limited",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_supprimer_compte_rate_limited()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_supprimer_compte_rate_limited()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_param_bool",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_param_bool(\"p_cle\" \"text\", \"p_defaut\" boolean)",
+          "returns": "boolean",
+          "language": "sql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_param_bool(text,boolean)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_confirmer_presence_mission",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_mission_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_confirmer_presence_mission(\"p_mission_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_confirmer_presence_mission(uuid)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
       ]

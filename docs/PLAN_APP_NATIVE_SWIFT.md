@@ -170,7 +170,7 @@ Périmètre : connexion, déconnexion, biométrie, reset mot de passe par Univer
 Critères de sortie :
 - XCUITest démo verts sur trois formats, plans découpés par domaine.
 - STAGING : candidature réelle posée puis relue, annulation relue, proposition acceptée relue, suppression de compte sur un compte TEST jetable vérifiée en SQL.
-- `fn_ecrire_audit_safe` émis pour connexion et candidature, vérifié par requête STAGING.
+- Audit vérifié par requête STAGING (assertions relatives, `journaux_audit` immuable) : connexion et déconnexion via `fn_audit_connexion('CONNEXION' | 'DECONNEXION')` + `fn_maj_activite_soignant()` comme le web (`src/contexts/AuthContext.tsx`) ; candidature via `fn_ecrire_audit_safe` `MISSION_ASSIGNATION` sur ACCEPTER/PROPOSITION comme le web, sans ligne supplémentaire sur POSTULER. *(Amendé le 2026-11-02, décision 5 de `docs/mobile-swift/LOT1_PLAN.md` §7 : la formulation initiale « `fn_ecrire_audit_safe` émis pour connexion et candidature » faisait porter l'audit de connexion par la mauvaise RPC.)*
 - Vecteurs golden planning candidat, sélection de série et complétude verts.
 - Matrice de parité soignant (`docs/mobile-swift/PARITE_SOIGNANT.md`, à créer, une ligne par route de `src/App.tsx` l.309-344 et l.384-418) renseignée à 45 % au moins.
 - TestFlight interne 2.0.0 (25) installé sur un iPhone physique, Universal Link de reset testé et consigné.
