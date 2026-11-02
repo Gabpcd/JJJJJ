@@ -9,9 +9,9 @@ Critères : lot 1 renseignée à 45 % au moins ; lot 4 100 % statuée, zéro « 
 cœur, matrice signée par Gabrielle. Les routes « redirection » du web sont des alias : natif signifie que le
 routeur de liens (`JoleneCore/Links/LinkRouter.swift`) envoie l'alias vers l écran natif cible.
 
-Dernière mise à jour : 2026-11-02 (lot 1, T3 revue B8 : ligne Accueil « en cours », preuve XCUITest 3 formats
-à acquérir ; T0 : sous-lignes Mes missions / Favoris / détail mission, cibles alignées sur `LOT1_PLAN.md` §1
-et §7). Aucune ligne n'est statuée « natif » sans l'URL d'un run vert de `ios-swift-ci.yml` (gate
+Dernière mise à jour : 2026-11-02 (lot 1, T3 revue B8 : ligne Accueil statuée « natif » avec le run
+[41525050437](https://github.com/Gabpcd/JJJJJ/actions/runs/41525050437) ; T0 : sous-lignes Mes missions /
+Favoris / détail mission, cibles alignées sur `LOT1_PLAN.md` §1 et §7). Aucune ligne n'est statuée « natif » sans l'URL d'un run vert de `ios-swift-ci.yml` (gate
 `Passed`, `skipped = 0`, iPhone, iPad portrait et iPad paysage) qui contient sa preuve : « mergé » ou
 « compile » n'est pas « livré » (CLAUDE.md, PRINCIPES §7).
 
@@ -20,7 +20,7 @@ chaque preuve soit attribuable ; la ligne de la route passe « natif » quand to
 
 | Route | Écran web (src/App.tsx) | Statut natif | Lot cible | Preuve |
 |---|---|---|---|---|
-| `/soignant/tableau-de-bord` (l.312) | `DashboardSoignant` | en cours (lot 1 T3, preuve XCUITest 3 formats à acquérir : salutation, mes prochaines missions, missions pour vous, missions proposées, gains du mois relus mission par mission, notifications non lues et oubli de pointage en renvoi web `.safari`, état d'erreur et reprise ; bouton calendrier = point d'extension câblé par T5 ; bandeaux `BandeauAlerte48h` et « cumul d'activité » exclus, HARD STOP ; non portés : checklist d'activation, litiges, documents expirants, parrainage, widget de pointage (lot 2) ; écarts assumés avec le web : une fiche mission non relue ne rend « à confirmer » que sa mission (le web : tout le planning), carte des gains masquée si aucun montant n'est positif (le web : « Ce mois :  sur N missions »)) | 1 | — (prévu : `DemoAccueilTests.testAccueilDemo` et `.testAccueilErreurPuisReprise` sur iphone / ipad-portrait / ipad-landscape, gate `ios-swift-ci.yml` vert avec `skipped = 0`, URL du run à consigner ici ; acquis en unitaire : `DemoDashboardTests`, `AccueilAssemblageTests`, `AccueilModelTests`, `DashboardDecodingTests`, `SupabaseDashboardGatewayTests`) |
+| `/soignant/tableau-de-bord` (l.312) | `DashboardSoignant` | natif (lot 1 T3 : salutation, mes prochaines missions, missions pour vous, missions proposées, gains du mois relus mission par mission, notifications non lues et oubli de pointage en renvoi web `.safari`, état d'erreur et reprise ; bouton calendrier = point d'extension câblé par T5 ; bandeaux `BandeauAlerte48h` et « cumul d'activité » exclus, HARD STOP ; non portés : checklist d'activation, litiges, documents expirants, parrainage, widget de pointage (lot 2) ; écarts assumés avec le web : une fiche mission non relue ne rend « à confirmer » que sa mission (le web : tout le planning), carte des gains masquée si aucun montant n'est positif (le web : « Ce mois :  sur N missions »)) | 1 | `DemoAccueilTests.testAccueilDemo` et `.testAccueilErreurPuisReprise` passés sur iphone / ipad-portrait / ipad-landscape : run `ios-swift-ci.yml` [41525050437](https://github.com/Gabpcd/JJJJJ/actions/runs/41525050437) sur `lot1/t3` @ `2afad001` (workflow_dispatch, 02/11/2026), gate `Passed` sur les trois formats (277 réussis, 0 échoué, 0 ignoré, 277 au total ; 14 captures dans l'orientation attendue), `swift test` JoleneCore et JoleneSupabase verts dans le même run ; unitaires : `DemoDashboardTests`, `AccueilAssemblageTests`, `AccueilModelTests`, `DashboardDecodingTests`, `SupabaseDashboardGatewayTests` |
 | `/soignant/profil` (l.313) | `ProfilSoignant` | à faire (lot 1 : soignant au profil incomplet renvoyé vers le web via Safari, décision 3) | 3 | — |
 | `/soignant/mon-compte` (l.314) | `MonCompteSoignant` | à faire | 1 | — |
 | `/soignant/mon-compte` › Suppression de compte (`SectionConfidentialite`) | edge `delete-account` | à faire (lot 1 T8, Apple 5.1.1 ; texte RGPD verbatim web tant que non validé) | 1 | — (prévu : `DemoCompteTests` + STAGING `soignants.nom = 'Supprimé'` relu, B9 données, décision 13) |
