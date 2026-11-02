@@ -27,6 +27,8 @@ public enum SupabaseGateways {
 
     /// Assemble les ports autour d'un client existant (tests : transport injecté, stockage
     /// en mémoire). Aucune validation d'environnement ici : elle a déjà eu lieu.
+    /// Chaque port du lot 1 est câblé ici dans la même PR que sa tranche ; un port encore stub
+    /// y est nommé explicitement (`SupabaseGatewaysTests.testAucunPortNonCable`).
     public static func make(
         client: SupabaseClient,
         clock: any ClockPort = SystemClock(),
@@ -36,7 +38,17 @@ public enum SupabaseGateways {
             auth: SupabaseAuthGateway(client: client),
             role: SupabaseRoleGateway(client: client),
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
-            clock: clock
+            clock: clock,
+            dashboard: UnwiredDashboardPort(),          // T3
+            candidature: UnwiredCandidaturePort(),      // T6a, T7
+            presence: UnwiredPresencePort(),            // T6c
+            favoris: UnwiredFavorisPort(),              // T4b
+            mesMissions: UnwiredMesMissionsPort(),      // T5
+            compte: UnwiredAccountPort(),               // T8
+            audit: SupabaseAuditGateway(client: client),
+            flags: SupabaseFlagsGateway(client: client),
+            recovery: UnwiredRecoveryPort(),            // T10
+            justificatifs: UnwiredJustificatifStoragePort() // T7
         )
     }
 
