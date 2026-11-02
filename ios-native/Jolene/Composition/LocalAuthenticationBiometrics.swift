@@ -7,7 +7,8 @@ import JoleneCore
 /// partagé entre tâches (type non `Sendable`) : la valeur ne quitte pas la fonction qui la crée.
 ///
 /// - disponibilité : `canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics)` — biométrie
-///   enrôlée ; sinon `.unavailable` (le verrou s'efface, « Non disponible sur cet appareil ») ;
+///   enrôlée, y compris verrouillée après trop d'essais (`biometryLockout`) ; sinon `.unavailable`
+///   (le verrou s'efface, « Non disponible sur cet appareil ») ;
 /// - évaluation : `.deviceOwnerAuthentication` (le code de l'appareil prend le relais après les
 ///   essais biométriques) ; annulation → `.cancelled`, échec → `.failed`, biométrie retirée →
 ///   `.unavailable`.
@@ -18,11 +19,16 @@ struct LocalAuthenticationBiometrics: BiometricPort {
     func availability() async -> BiometricAvailability {
         let context = LAContext()
         var erreur: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &erreur) else { return .unavailable }
+        let evaluable = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &erreur)
+        // Biométrie verrouillée après trop d'essais (`biometryLockout`) : toujours enrôlée, le verrou
+        // reste dû — l'évaluation `.deviceOwnerAuthentication` demande alors le code de l'appareil.
+        // La traiter comme indisponible permettrait de contourner le verrou en échouant exprès.
+        let verrouillee = erreur.map { LAError.Code(rawValue: $0.code) == .biometryLockout } ?? false
+        guard evaluable || verrouillee else { return .unavailable }
         switch context.biometryType {
         case .faceID: return .available(.faceID)
         case .touchID: return .available(.touchID)
-        case .none: return .unavailable
+        case .none: return verrouillee ? .available(.autre) : .unavailable
         default:
             if #available(iOS 17.0, *), context.biometryType == .opticID { return .available(.opticID) }
             return .available(.autre)
