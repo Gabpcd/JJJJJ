@@ -25743,51 +25743,104 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_paiement RECORD;
+    v_uid UUID := auth.uid();
+    v_motif TEXT := btrim(COALESCE(p_motif, ''));
+    v_paiement public.paiements_soignant%ROWTYPE;
     v_litige_id UUID;
+    v_contrainte TEXT;
 BEGIN
-    SELECT * INTO v_paiement FROM paiements_soignant WHERE id = p_paiement_id;
-    IF v_paiement IS NULL THEN RETURN '{"error":"Paiement introuvable"}'::JSONB; END IF;
-    IF v_paiement.soignant_id != auth.uid() THEN RETURN '{"error":"Accès refusé"}'::JSONB; END IF;
+    -- Appelant authentifié dont le compte est actif (ni supprimé ni suspendu).
+    IF v_uid IS NULL OR NOT public.fn_compte_auth_actif() THEN
+        RETURN jsonb_build_object('error', 'Non authentifié ou compte inactif', 'error_code', 'NON_AUTHENTIFIE');
+    END IF;
+    -- Motif obligatoire, borné comme les clients (web maxLength 500, natif).
+    IF v_motif = '' THEN
+        RETURN jsonb_build_object('error', 'Motif requis', 'error_code', 'MOTIF_INVALIDE');
+    END IF;
+    IF char_length(v_motif) > 500 THEN
+        RETURN jsonb_build_object('error', 'Motif trop long (500 caractères maximum)', 'error_code', 'MOTIF_INVALIDE');
+    END IF;
 
-    -- Marquer le paiement contesté
-    UPDATE paiements_soignant SET
-        conteste = TRUE,
-        motif_contestation = p_motif,
-        statut = 'CONTESTE',
-        modifie_le = NOW()
-    WHERE id = p_paiement_id;
+    -- Verrou de ligne : deux contestations simultanées du même paiement sont
+    -- sérialisées ; la seconde relit CONTESTE et s'arrête sans écrire.
+    SELECT * INTO v_paiement
+    FROM public.paiements_soignant
+    WHERE id = p_paiement_id
+    FOR UPDATE;
+    IF v_paiement.id IS NULL THEN
+        RETURN jsonb_build_object('error', 'Paiement introuvable', 'error_code', 'PAIEMENT_INTROUVABLE');
+    END IF;
+    IF v_paiement.soignant_id IS DISTINCT FROM v_uid THEN
+        RETURN jsonb_build_object('error', 'Accès refusé', 'error_code', 'ACCES_REFUSE');
+    END IF;
+    -- Idempotence : un paiement déjà contesté ne crée jamais un second litige.
+    IF v_paiement.statut = 'CONTESTE' OR v_paiement.conteste IS TRUE THEN
+        RETURN jsonb_build_object('error', 'Paiement déjà contesté', 'error_code', 'DEJA_CONTESTE');
+    END IF;
+    IF v_paiement.confirme_par_soignant IS TRUE THEN
+        RETURN jsonb_build_object('error', 'Paiement déjà confirmé', 'error_code', 'DEJA_CONFIRME');
+    END IF;
+    IF v_paiement.statut NOT IN ('DECLARE', 'EN_ATTENTE') THEN
+        RETURN jsonb_build_object(
+            'error', 'Ce paiement ne peut plus être contesté (statut: ' || v_paiement.statut || ')',
+            'error_code', 'STATUT_INVALIDE'
+        );
+    END IF;
 
-    -- Créer automatiquement un litige
-    INSERT INTO litiges (
-        mission_id, soignant_id, etablissement_id, initie_par, motif,
-        statut, paiement_soignant_id
-    ) VALUES (
-        v_paiement.mission_id,
-        v_paiement.soignant_id,
-        v_paiement.etablissement_id,
-        'SOIGNANT',
-        'Paiement contesté — ' || p_motif,
-        'OUVERT',
-        p_paiement_id
-    ) RETURNING id INTO v_litige_id;
+    -- Paiement et litige sont écrits ensemble ou pas du tout.
+    BEGIN
+        -- Marquer le paiement contesté
+        UPDATE public.paiements_soignant SET
+            conteste = TRUE,
+            motif_contestation = v_motif,
+            statut = 'CONTESTE',
+            modifie_le = NOW()
+        WHERE id = p_paiement_id;
+
+        -- Créer automatiquement un litige
+        INSERT INTO public.litiges (
+            mission_id, soignant_id, etablissement_id, initie_par, motif,
+            statut, paiement_soignant_id
+        ) VALUES (
+            v_paiement.mission_id,
+            v_paiement.soignant_id,
+            v_paiement.etablissement_id,
+            'SOIGNANT',
+            'Paiement contesté — ' || v_motif,
+            'OUVERT',
+            p_paiement_id
+        ) RETURNING id INTO v_litige_id;
+    EXCEPTION WHEN unique_violation THEN
+        -- Un litige ouvert sans facture existe déjà sur la mission : le paiement
+        -- reste tel quel (sous-bloc annulé) et l'appelant reçoit un refus net.
+        GET STACKED DIAGNOSTICS v_contrainte = CONSTRAINT_NAME;
+        IF v_contrainte IS DISTINCT FROM 'uq_litige_mission_type_ouvert_legacy' THEN
+            RAISE;
+        END IF;
+        RETURN jsonb_build_object(
+            'error', 'Un litige de ce type est déjà ouvert pour cette mission.',
+            'error_code', 'LITIGE_DEJA_OUVERT'
+        );
+    END;
 
     -- Notifier l'établissement
-    INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+    INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
     VALUES (
         v_paiement.etablissement_id,
         'CONTESTATION_PAIEMENT',
         'Paiement contesté ⚠️',
-        'Le soignant conteste un paiement. Motif : ' || p_motif,
+        'Le soignant conteste un paiement. Motif : ' || v_motif,
         '/etablissement/facturation',
-        'ETABLISSEMENT'
+        'ETABLISSEMENT',
+        'litige',
+        v_litige_id
     );
 
     -- Notifier l'admin
-    INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+    INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
     SELECT id, 'SYSTEM', 'Paiement contesté ⚠️',
-        'Un soignant conteste un paiement. Motif : ' || p_motif,
-        '/admin/facturation', 'ADMIN'
+        'Un soignant conteste un paiement. Motif : ' || v_motif,
+        '/admin/facturation', 'ADMIN', 'litige', v_litige_id
     FROM auth.users WHERE raw_app_meta_data->>'role' = 'ADMIN_PLATEFORME'
     LIMIT 1;
 
@@ -70812,7 +70865,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "email_envoye" boolean DEFAULT false,
     "email_envoye_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text", 'CONTESTATION_PRESENCE'::"text", 'PRESENCE_VALIDEE'::"text"]))),
+    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text", 'CONTESTATION_PRESENCE'::"text", 'PRESENCE_VALIDEE'::"text", 'CONTESTATION_PAIEMENT'::"text"]))),
     CONSTRAINT "notifications_type_destinataire_check" CHECK (("type_destinataire" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'ADMIN'::"text"])))
 );
 
