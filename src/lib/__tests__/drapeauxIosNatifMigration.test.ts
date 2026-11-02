@@ -30,10 +30,18 @@ const ECRANS_LOT4 = [
   'evaluations',
   'score',
   'pool_urgence',
+  'exclusions',
+  'serie',
 ];
-const ECRANS_LOT5 = ['accueil', 'missions', 'publier', 'presences', 'messages', 'compte'].map(
-  (ecran) => `etab_${ecran}`,
-);
+const ECRANS_LOT5 = [
+  'accueil',
+  'missions',
+  'publier',
+  'presences',
+  'pointage',
+  'messages',
+  'compte',
+].map((ecran) => `etab_${ecran}`);
 
 const cle = (ecran: string) => `ios_natif_${ecran}_actif`;
 
@@ -61,40 +69,92 @@ type Insertion = {
 
 const lire = (fichier: string) => readFileSync(`${DOSSIER}/${fichier}`, 'utf8');
 
-const sansCommentaires = (sql: string) =>
-  sql
-    .split('\n')
-    .filter((ligne) => !ligne.trimStart().startsWith('--'))
-    .join('\n');
+// Retire les commentaires SQL `-- …` (en début comme en fin de ligne) et
+// `/* … */` (imbriqués, comme Postgres), sans toucher aux littéraux '…' ni aux
+// identifiants "…" : une clé commentée n'est jamais comptée comme posée.
+// Appelée sur toutes les migrations (détection des fichiers de drapeaux) : elle
+// ne lève jamais ; un littéral non fermé est rendu tel quel jusqu'à la fin, et la
+// garde « rien d'autre que les INSERT du gabarit » le rejette dans un fichier de
+// drapeaux.
+function sansCommentaires(sql: string): string {
+  let sortie = '';
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i];
+    if (c === "'" || c === '"') {
+      let fin = i + 1;
+      while (fin < sql.length) {
+        if (sql[fin] === c && sql[fin + 1] === c) fin += 2;
+        else if (sql[fin] === c) break;
+        else fin += 1;
+      }
+      sortie += sql.slice(i, fin + 1);
+      i = fin + 1;
+    } else if (c === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i += 1;
+    } else if (c === '/' && sql[i + 1] === '*') {
+      let profondeur = 1;
+      i += 2;
+      while (i < sql.length && profondeur > 0) {
+        if (sql[i] === '/' && sql[i + 1] === '*') {
+          profondeur += 1;
+          i += 2;
+        } else if (sql[i] === '*' && sql[i + 1] === '/') {
+          profondeur -= 1;
+          i += 2;
+        } else {
+          i += 1;
+        }
+      }
+      sortie += ' ';
+    } else {
+      sortie += c;
+      i += 1;
+    }
+  }
+  return sortie;
+}
 
 // Découpe la liste VALUES(...) en champs, en respectant les littéraux SQL
 // ('' = apostrophe échappée). Les littéraux sont rendus décodés, sans guillemets.
+// Chaque champ est soit un littéral seul, soit un jeton nu (nombre, true, false) :
+// aucune expression, aucun appel ni aucun `;` ne peut se glisser dans VALUES(...).
 function decouperValeurs(valeurs: string): string[] {
   const champs: string[] = [];
-  let courant = '';
+  let litteral = '';
+  let nu = '';
+  let nbLitteraux = 0;
   let dansLitteral = false;
+  const clore = () => {
+    const forme = nbLitteraux === 0 ? /^\s*(\d+|true|false)\s*$/ : /^\s*$/;
+    expect(nbLitteraux <= 1 && forme.test(nu), `champ hors gabarit dans VALUES : ${nu}`).toBe(true);
+    champs.push(nbLitteraux === 0 ? nu.trim() : litteral);
+    litteral = '';
+    nu = '';
+    nbLitteraux = 0;
+  };
   for (let i = 0; i < valeurs.length; i += 1) {
     const c = valeurs[i];
     if (dansLitteral) {
       if (c === "'" && valeurs[i + 1] === "'") {
-        courant += "'";
+        litteral += "'";
         i += 1;
       } else if (c === "'") {
         dansLitteral = false;
       } else {
-        courant += c;
+        litteral += c;
       }
     } else if (c === "'") {
       dansLitteral = true;
+      nbLitteraux += 1;
     } else if (c === ',') {
-      champs.push(courant.trim());
-      courant = '';
+      clore();
     } else {
-      courant += c;
+      nu += c;
     }
   }
   expect(dansLitteral, `littéral non fermé dans ${valeurs}`).toBe(false);
-  champs.push(courant.trim());
+  clore();
   return champs;
 }
 
@@ -136,6 +196,10 @@ describe('drapeaux ios_natif_* de l’app iOS native', () => {
       const sql = sansCommentaires(lire(fichier));
       const nbCles = sql.match(/'ios_natif_/g)?.length ?? 0;
       expect(insertions(fichier), `${fichier} : toute clé passe par le gabarit`).toHaveLength(nbCles);
+      expect(
+        sql.replace(INSERTION, '').trim(),
+        `${fichier} : hors commentaires, rien d'autre que les INSERT du gabarit`,
+      ).toBe('');
       expect(sql, `${fichier} : pas de BEGIN/COMMIT`).not.toMatch(/^\s*(BEGIN|COMMIT)\s*;/im);
       expect(sql, `${fichier} : pas de dollar-quoting`).not.toMatch(/\$\$|\$[a-z_]+\$/i);
       expect(sql, `${fichier} : aucun GRANT`).not.toMatch(/\bGRANT\b/i);
@@ -180,20 +244,55 @@ describe('drapeaux ios_natif_* de l’app iOS native', () => {
     expect(insertions(FICHIER_B0).map((i) => i.champs[0])).toEqual(ECRANS_LOT1.map(cle));
   });
 
-  it('D-FLAGS pose 3 clés lot 2, 11 clés lot 4 et 6 clés lot 5 ios_natif_etab_*, dans cet ordre', () => {
+  // Blueprints v2 : LOT4_PLAN.md B0-bis et D18 (13 clés, dont exclusions et serie),
+  // LOT5_PLAN.md B5a et D14 (7 clés ios_natif_etab_*, dont pointage : coupe-circuit
+  // du polling 5 s du code rotatif côté établissement).
+  it('D-FLAGS pose 3 clés lot 2, 13 clés lot 4 et 7 clés lot 5 ios_natif_etab_*, dans cet ordre', () => {
     const cles = insertions(fichiersLots245[0]).map((i) => i.champs[0]);
     expect(cles).toEqual([...ECRANS_LOT2, ...ECRANS_LOT4, ...ECRANS_LOT5].map(cle));
-    expect(cles).toHaveLength(20);
-    expect(cles.filter((c) => c.startsWith('ios_natif_etab_'))).toHaveLength(6);
+    expect(cles).toHaveLength(23);
+    expect(cles.filter((c) => c.startsWith('ios_natif_etab_'))).toHaveLength(7);
+    expect(cles).toEqual(expect.arrayContaining(['exclusions', 'serie', 'etab_pointage'].map(cle)));
   });
 
-  it('25 drapeaux distincts au total, libellés distincts', () => {
+  it('28 drapeaux distincts au total, libellés et descriptions distincts', () => {
     const cles = toutesInsertions.map((i) => i.champs[0]);
-    expect(cles).toHaveLength(25);
-    expect(new Set(cles).size).toBe(25);
-    expect(new Set(toutesInsertions.map((i) => i.champs[2])).size).toBe(25);
+    expect(cles).toHaveLength(28);
+    expect(new Set(cles).size).toBe(28);
+    expect(new Set(toutesInsertions.map((i) => i.champs[2])).size).toBe(28);
+    expect(new Set(toutesInsertions.map((i) => i.champs[3])).size).toBe(28);
     expect(new Set(cles)).toEqual(
       new Set([...ECRANS_LOT1, ...ECRANS_LOT2, ...ECRANS_LOT4, ...ECRANS_LOT5].map(cle)),
     );
+  });
+
+  // Un écran natif = un drapeau : la description d'un drapeau ne revendique pas
+  // la surface d'un autre (LOT5_PLAN.md v2 : etab-pointage-screen distinct des
+  // présences ; LOT4_PLAN.md v2 T11 : /soignant/exclusions distinct du pool).
+  it('une surface par drapeau : pointage hors Présences établissement, exclusions hors Pool urgence', () => {
+    const description = (ecran: string) =>
+      toutesInsertions.find((i) => i.champs[0] === cle(ecran))?.champs[3] ?? '';
+    expect(description('etab_pointage')).toMatch(/code de pointage/);
+    expect(description('etab_presences')).not.toMatch(/pointage/i);
+    expect(description('exclusions')).toMatch(/exclu/i);
+    expect(description('pool_urgence')).not.toMatch(/exclu/i);
+  });
+
+  it('les commentaires -- et /* */ ne comptent jamais comme instruction ni comme clé', () => {
+    const sql = [
+      "/* INSERT INTO public.parametres_systeme(cle) VALUES('ios_natif_x_actif') ON CONFLICT (cle) DO NOTHING; */",
+      "SELECT 'a--b', '/* c */'; -- 'ios_natif_y_actif'",
+      '/* externe /* imbriqué */ toujours commentaire */',
+    ].join('\n');
+    const nettoye = sansCommentaires(sql);
+    expect(nettoye).not.toContain('ios_natif_');
+    expect(nettoye.replace(/\s+/g, ' ').trim()).toBe("SELECT 'a--b', '/* c */';");
+  });
+
+  it('VALUES(...) n’admet que des littéraux et des jetons nus', () => {
+    expect(decouperValeurs("'a''b', 1, true")).toEqual(["a'b", '1', 'true']);
+    expect(() => decouperValeurs("'a', pg_sleep(1)")).toThrow();
+    expect(() => decouperValeurs("'a' || 'b', 1")).toThrow();
+    expect(() => decouperValeurs("1); DELETE FROM t; SELECT (1")).toThrow();
   });
 });
