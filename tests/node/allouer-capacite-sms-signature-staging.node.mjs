@@ -759,6 +759,9 @@ test('le workflow S1 : allocation et révocation sous le verrou STAGING, attente
  // Bornes : allocation courte, attente au-delà de 60 min, révocation brève.
  const minutes=t=>[...t.matchAll(/timeout-minutes: ([0-9]+)/g)].map(m=>Number(m[1]));
  assert.ok(minutes(allouer)[0]<=20&&minutes(attendre)[0]>=65&&minutes(revoquer)[0]<=15,JSON.stringify([minutes(allouer),minutes(attendre),minutes(revoquer)]));
+ // La révocation (fermeture, sonde, relecture finale) dispose d'au moins 12 min, le repli de l'allocation d'au moins 8.
+ assert.ok(minutes(revoquer)[1]>=12&&minutes(revoquer)[1]<minutes(revoquer)[0],JSON.stringify(minutes(revoquer)));
+ assert.ok(minutes(allouer).at(-1)>=8,JSON.stringify(minutes(allouer)));
  assert.match(wf,/if-no-files-found: ignore/);
 });
 

@@ -6,7 +6,10 @@
 //    délai de propagation, activation ; rend la main capacité ACTIVE (reçu écrit) ;
 //  - `attendre` (facultatif) : lecture seule jusqu'à la signature ou l'échéance serveur ;
 //  - `revoquer` (étape always()) : révoque la ligne de CE run et retire le secret écrit
-//    par ce run.
+//    par ce run, sans jamais attendre la sonde d'identité ; puis relit, en lecture seule,
+//    l'état prouvé à l'allocation (corps send-sms, routines du supplément).
+// Les fichiers comparés au déployé (fermeture send-sms, contrat d'installation) sont lus
+// dans le commit HEAD (= GITHUB_SHA), jamais dans l'arbre de travail du job appelant.
 // Appelants (liste fermée, sur main) : sms-signature-capacite-staging.yml (séance
 // appareil, T12) et ios-swift-lot2-staging.yml (T11 : allouer, XCUITest d'envoi puis
 // revoquer, dans le même job). Aucune autre écriture : ni profil, ni préférence, ni
@@ -15,7 +18,7 @@
 // un reçu. Mode opératoire : docs/recettes/2026-11-02-capacite-sms-signature-staging.md.
 import {createHash,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {readFileSync,writeFileSync,renameSync,mkdirSync,lstatSync,openSync,fsyncSync,closeSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,renameSync,mkdirSync,openSync,fsyncSync,closeSync,existsSync} from 'node:fs';
 import {resolve,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {checkContract,sourceClosure,checkBody,readResponse,canonical} from './install-sms-staging-closed.mjs';
@@ -88,15 +91,16 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 
 export function verifierProjet(ref){if(ref!==PROJET)refuser('PROJET_REFUSE');return PROJET;}
 
-// Renvoie le workflow appelant (liste fermée, sur main). `propre` : la révocation, qui
-// ne fait que refermer, tourne même si le job appelant a laissé le checkout modifié.
-export function verifierContexte(env,local,{propre=true}={}){
+// Renvoie le workflow appelant (liste fermée, sur main). Aucune exigence de propreté du
+// checkout : seul HEAD, égal à GITHUB_SHA, est lu (lireLocal) ; un job T11 qui a construit
+// ou testé dans son checkout peut allouer, attendre et révoquer.
+export function verifierContexte(env,local){
  verifierProjet(env?.SUPABASE_PROJECT_REF);
  const workflow=WORKFLOWS_APPELANTS.find(w=>env.GITHUB_WORKFLOW_REF===`${DEPOT}/${w}@refs/heads/main`);
  if(env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='workflow_dispatch'||env.GITHUB_REPOSITORY!==DEPOT
    ||env.GITHUB_REF!=='refs/heads/main'||!SHA40.test(env.GITHUB_SHA??'')||env.EXPECTED_SHA!==env.GITHUB_SHA||!workflow
    ||!/^[1-9][0-9]{0,19}$/.test(env.GITHUB_RUN_ID??'')||env.GITHUB_RUN_ATTEMPT!=='1'
-   ||local?.sha!==env.GITHUB_SHA||(propre&&local.clean!==true))refuser('MAIN_EXACT_REQUIS');
+   ||local?.sha!==env.GITHUB_SHA)refuser('MAIN_EXACT_REQUIS');
  return workflow;
 }
 
@@ -263,8 +267,21 @@ SELECT jsonb_build_object(
 ROLLBACK;`;
 }
 
-// L'aperçu insère, active et passe le périmètre puis annule ; l'insertion réelle
-// reste fermée (enabled=false) jusqu'à la confirmation du secret Edge.
+// Révocation de la ligne de CE run, suivie de sa vérification : même texte dans le mode
+// revoquer et dans l'aperçu annulé, qui la fait passer sous le trigger et les CHECK du
+// supplément avant toute écriture réelle.
+export function corpsRevocation(runId){
+ if(typeof runId!=='string'||!RUN.test(runId))refuser('PARAMETRES_REFUSES');
+ const ligne=`FROM ${TABLE} WHERE run_id=${litteral(runId)}`;
+ return `UPDATE ${TABLE} SET enabled=false,revoked_at=clock_timestamp() WHERE run_id=${litteral(runId)} AND revoked_at IS NULL;
+DO $sms_capacite_revocation$ BEGIN
+ IF EXISTS(SELECT 1 ${ligne} AND (enabled OR revoked_at IS NULL))
+ THEN RAISE EXCEPTION 'SMS_CAPACITE_REVOCATION_REFUSEE'; END IF;
+END; $sms_capacite_revocation$;`;
+}
+
+// L'aperçu insère, active, passe le périmètre puis révoque, et annule le tout ;
+// l'insertion réelle reste fermée (enabled=false) jusqu'à la confirmation du secret Edge.
 export function sqlAllocation(p,{apercu}={}){
  verifierParametres(p);if(typeof apercu!=='boolean')refuser('PARAMETRES_REFUSES');
  return `${ecriture(apercu?'apercu':'insertion',uuid(p.contratId))}
@@ -281,7 +298,7 @@ DO $sms_capacite_insertion$ BEGIN
      AND revoked_at IS NULL AND soignant_attempts=0 AND etablissement_attempts=0)<>1
  THEN RAISE EXCEPTION 'SMS_CAPACITE_INSERTION_REFUSEE'; END IF;
 END; $sms_capacite_insertion$;
-${apercu?corpsActivation(p)+'\n':''}${preuveCapacite(p,apercu)};
+${apercu?`${corpsActivation(p)}\n${corpsRevocation(p.runId)}\n`:''}${preuveCapacite(p,apercu)};
 ${apercu?'ROLLBACK':'COMMIT'};`;
 }
 
@@ -312,14 +329,9 @@ ROLLBACK;`;
 // verrou, n'est jamais fermée. Une ligne absente (insertion jamais arrivée) est un
 // état fermé ; les autres capacités actives sont seulement comptées.
 export function sqlRevocation({runId}={}){
- if(typeof runId!=='string'||!RUN.test(runId))refuser('PARAMETRES_REFUSES');
- const ligne=`FROM ${TABLE} WHERE run_id=${litteral(runId)}`;
+ const corps=corpsRevocation(runId),ligne=`FROM ${TABLE} WHERE run_id=${litteral(runId)}`;
  return `${ecriture('revocation',`(SELECT contrat_id ${ligne})`)}
-UPDATE ${TABLE} SET enabled=false,revoked_at=clock_timestamp() WHERE run_id=${litteral(runId)} AND revoked_at IS NULL;
-DO $sms_capacite_revocation$ BEGIN
- IF EXISTS(SELECT 1 ${ligne} AND (enabled OR revoked_at IS NULL))
- THEN RAISE EXCEPTION 'SMS_CAPACITE_REVOCATION_REFUSEE'; END IF;
-END; $sms_capacite_revocation$;
+${corps}
 SELECT jsonb_build_object('presente',EXISTS(SELECT 1 ${ligne}),
  'capacite',(SELECT jsonb_build_object('id',id,'contratId',contrat_id,'documentSha256',document_sha256,'enabled',enabled,
    'revoquee',revoked_at IS NOT NULL) ${ligne}),'capacitesActives',${actives}) AS preuve;
@@ -342,14 +354,16 @@ async function codeSql(reponse){
  return etat?`SQLSTATE_${etat}`:null;
 }
 
-function creerClient({env,fetchImpl}){
+// `delaiRequeteMs` borne chaque requête : 15 s pour la sonde d'identité, 30 s pour la relecture
+// finale, afin que des essais successifs tiennent dans le délai de l'étape appelante.
+function creerClient({env,fetchImpl,delaiRequeteMs=60_000}){
  async function requete(url,{methode='GET',corps,fichiers=false,idDeploiement,sansReponse=false}={}){
   const gestion=url===API||url.startsWith(API+'/');
   if(!gestion&&!url.startsWith(GH+'/'))refuser('DESTINATION_REFUSEE');
   if(!gestion&&!jeton(env.GITHUB_TOKEN))refuser('JETONS_REQUIS');
   let reponse;
   try{
-   reponse=await fetchImpl(url,{method:methode,redirect:'error',signal:AbortSignal.timeout(60_000),
+   reponse=await fetchImpl(url,{method:methode,redirect:'error',signal:AbortSignal.timeout(delaiRequeteMs),
     headers:gestion?{Authorization:`Bearer ${env.STAGING_SUPABASE_ACCESS_TOKEN}`,'Content-Type':'application/json',...(fichiers?{Accept:'multipart/form-data'}:{})}
      :{Authorization:`Bearer ${env.GITHUB_TOKEN}`,Accept:'application/vnd.github+json','User-Agent':'Jolene-capacite-sms-staging'},
     ...(corps===undefined?{}:{body:JSON.stringify(corps)})});
@@ -373,6 +387,16 @@ async function verifierMain(requete,env){
 export function verifierIdentite(x){
  if(x?.id!==PROJET||x.status!=='ACTIVE_HEALTHY'||x.region!=='eu-west-1'||x.database?.host!==`db.${PROJET}.supabase.co`
    ||String(x.database?.postgres_engine)!=='17')refuser('PROJET_IDENTITE_REFUSEE');
+}
+// Sonde réessayée : un 429, un 5xx, un délai ou un statut transitoire (autre que
+// ACTIVE_HEALTHY) n'arrête rien à lui seul. Renvoie null, ou le code du dernier refus.
+async function sonderIdentite(requete,{essais,attendre,delaiMs}){
+ let code=null;
+ for(let i=0;i<essais;i++){
+  try{verifierIdentite(await requete(API));return null;}
+  catch(err){code=err instanceof Refus?err.code:'REFUS_LOCAL';if(i<essais-1)await attendre(delaiMs);}
+ }
+ return code;
 }
 // send-sms déployée = sources send-sms de ce commit (fermeture d'import comprise).
 async function verifierEdge(requete,local){
@@ -447,12 +471,13 @@ function capaciteValide(c){
  return cles(c,CLES_CAPACITE)&&typeof c.enabled==='boolean'&&typeof c.revoquee==='boolean'&&Number.isFinite(Date.parse(c.expiresAt))
   &&[c.tentativesSoignant,c.tentativesEtablissement,c.maxTentatives,c.dureeMinutes].every(entier);
 }
-export function verifierPreuveCapacite(x,p,{enabled,scope}){
+// `revoquee` : vrai pour l'aperçu, qui révoque avant d'annuler.
+export function verifierPreuveCapacite(x,p,{enabled,scope,revoquee=false}){
  if(!cles(x,['capacite','scopeSoignant','capacitesActives']))refuser('REPONSE_SQL_REFUSEE');
  const c=x.capacite;
  if(!capaciteValide(c)||c.id!==p.capaciteId||c.contratId!==p.contratId||c.missionId!==p.missionId||c.soignantId!==p.soignantId
    ||c.etablissementId!==p.etablissementId||c.documentSha256!==p.documentSha256||c.runId!==p.runId||c.sourceSha!==p.sourceSha
-   ||c.manifestSha256!==p.manifestSha256||c.enabled!==enabled||c.revoquee!==false||c.dureeMinutes!==p.dureeMinutes
+   ||c.manifestSha256!==p.manifestSha256||c.enabled!==enabled||c.revoquee!==revoquee||c.dureeMinutes!==p.dureeMinutes
    ||c.tentativesSoignant!==0||c.tentativesEtablissement!==0||c.maxTentatives!==2
    ||x.scopeSoignant!==(scope?true:null)||x.capacitesActives!==(enabled?1:0))refuser('CAPACITE_NON_CONFIRMEE');
  return c;
@@ -509,14 +534,19 @@ async function attendreFin({sql,cible,dureeMinutes,finApres,attendre,intervalleM
  a.raison='LECTURES_EPUISEES';return a;
 }
 
-const revocationInconnue=()=>({capacite:'non_confirmee',secret:'non_confirme',confirmee:false,essaisSql:0,essaisSecret:0,autresCapacitesActives:null});
+const revocationInconnue=()=>({capacite:'non_confirmee',secret:'non_confirme',confirmee:false,essaisSql:0,essaisSecret:0,autresCapacitesActives:null,
+ identite:'non_sondee'});
 // Toujours sûre et rejouable. Capacité : la ligne de CE run, retrouvée par run_id.
 // Secret Edge : retiré seulement si ce run a tenté de l'écrire (`secret: true`, d'après
 // son reçu) ou, sans reçu exploitable (`'si_ligne'`), si la ligne de ce run existe : le
 // secret n'est écrit qu'après l'insertion confirmée, et aucune autre allocation n'est
 // possible tant que cette ligne reste ouverte. Sinon il n'est jamais touché : il peut
 // appartenir à une autre séance, attendue hors verrou.
-async function revoquer({requete,sql,runId,secret,attendre,essais=5,delaiMs=5_000}){
+// Identité (`sonde`, mode revoquer) : jamais une condition de la fermeture. L'URL de
+// gestion fige le ref et chaque écriture reprouve la base STAGING (Vault, PostgreSQL 17,
+// rôle postgres). Ligne et secret d'abord, sonde réessayée ensuite : elle n'atteste que
+// l'identité, et son échec persistant rend le reçu « incertain », jamais « echec ».
+async function revoquer({requete,sql,runId,secret,attendre,essais=5,delaiMs=5_000,sonde=null}){
  const r=revocationInconnue();let ligne=null;
  for(let i=0;i<essais&&r.capacite==='non_confirmee';i++){
   r.essaisSql++;
@@ -543,8 +573,41 @@ async function revoquer({requete,sql,runId,secret,attendre,essais=5,delaiMs=5_00
   }catch{if(i<essais-1)await attendre(delaiMs);}
  }
  r.confirmee=r.capacite!=='non_confirmee'&&['absent','non_touche'].includes(r.secret);
+ if(sonde){
+  r.identite='non_confirmee';
+  for(let i=0;i<essais&&r.identite==='non_confirmee';i++){
+   try{await sonde();r.identite='confirmee';}catch{if(i<essais-1)await attendre(delaiMs);}
+  }
+ }
  return {revocation:r,ligne};
 }
+
+// Codes qui prouvent une dérive de l'état prouvé à l'allocation ; tout autre échec est
+// une lecture non faite (réessayée).
+const DERIVES=new Set(['EDGE_SEND_SMS_REFUSEE','EDGE_SOURCE_DIFFERENTE','BASE_NON_STAGING','SUPPLEMENT_ABSENT','SUPPLEMENT_DIFFERENT']);
+// Lecture seule, après la fermeture : l'attente est hors verrou, si bien qu'un db push
+// (sql-transaction de validate-pr) ou un redéploiement de send-sms pendant la séance doit
+// apparaître dans le reçu. Mêmes contrôles qu'à l'allocation (fermeture send-sms de ce
+// commit, huit routines du supplément). Atteste l'état final, pas chaque instant de la séance.
+async function reattester({requete,sql,local,contratInstallation,attendre,essais=3,delaiMs}){
+ const a={edge:'non_relue',supplement:'non_relu'};
+ let contrat=null;
+ try{checkContract(contratInstallation);contrat=contratInstallation;}catch{/* supplément non relu */}
+ for(let i=0;i<essais&&(a.edge==='non_relue'||(contrat!==null&&a.supplement==='non_relu'));i++){
+  let reessayer=false;
+  if(a.edge==='non_relue'){
+   try{await verifierEdge(requete,local);a.edge='conforme';}
+   catch(err){if(DERIVES.has(err?.code))a.edge='differente';else reessayer=true;}
+  }
+  if(contrat!==null&&a.supplement==='non_relu'){
+   try{verifierInstallation(await sql(sqlInstallation(contrat.afterRoutines.map(x=>x.signature)),'installation'),contrat);a.supplement='conforme';}
+   catch(err){if(DERIVES.has(err?.code))a.supplement='different';else reessayer=true;}
+  }
+  if(reessayer&&i<essais-1)await attendre(delaiMs);
+ }
+ return a;
+}
+const reattestationConforme=a=>a?.edge==='conforme'&&a?.supplement==='conforme';
 
 function recuVierge(){
  return {schemaVersion:1,mode:'allouer',status:'echec',phase:'contexte',code:null,sqlCode:null,projectRef:PROJET,workflow:null,
@@ -557,7 +620,7 @@ function recuVierge(){
 // séance (envoi, signature) a lieu ensuite ; le mode `revoquer` est toujours dû. Un échec
 // après la première mutation referme aussitôt, dans ce même appel.
 export async function allouerCapacite({env,local,contratInstallation,fetchImpl=fetch,attendre=pause,checkpoint=()=>{},
- nouvelId=randomUUID,delaiPropagationMs=DELAI_PROPAGATION_MS,delaiRevocationMs=5_000}){
+ nouvelId=randomUUID,delaiPropagationMs=DELAI_PROPAGATION_MS,delaiRevocationMs=5_000,delaiSondeMs=5_000}){
  const r=recuVierge();
  const sauver=()=>{try{checkpoint(structuredClone(r));}catch{refuser('RECU_NON_ECRIT');}};
  let mutation=false,p=null,client=null;
@@ -569,7 +632,10 @@ export async function allouerCapacite({env,local,contratInstallation,fetchImpl=f
   r.sourceSha=env.GITHUB_SHA;r.runId=identifiantRun(env);r.contratId=e.contratId;sauver();
   client=creerClient({env,fetchImpl});const {requete,sql}=client;
   r.phase='provenance';await verifierMain(requete,env);
-  r.phase='identite';verifierIdentite(await requete(API));
+  // Avant toute écriture : un refus persistant arrête proprement, rien à refermer.
+  r.phase='identite';
+  const identite=await sonderIdentite(creerClient({env,fetchImpl,delaiRequeteMs:15_000}).requete,{essais:3,attendre,delaiMs:delaiSondeMs});
+  if(identite!==null)refuser(identite);
   r.phase='edge';await verifierEdge(requete,local);
   r.phase='secrets_edge';verifierSecretsEdge(await requete(`${API}/secrets`),e);
   r.phase='installation';
@@ -586,7 +652,8 @@ export async function allouerCapacite({env,local,contratInstallation,fetchImpl=f
    twilioAccountSid:e.twilioAccountSid,expediteur:e.expediteur}));
   const config=configurationEdge(p);
   r.capaciteId=p.capaciteId;r.missionId=p.missionId;r.manifeste=manifeste;r.manifestSha256=manifestSha256;
-  r.phase='apercu';verifierPreuveCapacite(await sql(sqlAllocation(p,{apercu:true}),'preuve'),p,{enabled:true,scope:true});
+  // Aperçu annulé : insertion, activation, portée et révocation acceptées par le trigger.
+  r.phase='apercu';verifierPreuveCapacite(await sql(sqlAllocation(p,{apercu:true}),'preuve'),p,{enabled:false,scope:true,revoquee:true});
   r.phase='insertion';await verifierMain(requete,env);
   // Reçu écrit avant chaque mutation ; une réponse perdue n'est jamais rejouée.
   r.insertionTentee=true;sauver();mutation=true;
@@ -648,7 +715,9 @@ export async function attendreSignature({env,local,recu,fetchImpl=fetch,attendre
   const {cible,dureeMinutes,finApres}=verifierRecuAllocation(recu,env,workflow);
   r.runId=recu.runId;r.capaciteId=cible.capaciteId;r.contratId=cible.contratId;r.finApres=finApres;
   const client=creerClient({env,fetchImpl});
-  verifierIdentite(await client.requete(API));
+  // Une sonde ratée ne clôt pas la séance : même tolérance que les lectures d'état.
+  const identite=await sonderIdentite(creerClient({env,fetchImpl,delaiRequeteMs:15_000}).requete,{essais:ECHECS_LECTURE_MAX,attendre,delaiMs:intervalleMs});
+  if(identite!==null)refuser(identite);
   try{checkpoint(structuredClone(r));}catch{refuser('RECU_NON_ECRIT');}
   r.attente=await attendreFin({sql:client.sql,cible,dureeMinutes,finApres,attendre,intervalleMs});
   r.preuveP5=preuveSignature(r.attente.derniere,'signature_soignant');
@@ -660,12 +729,18 @@ export async function attendreSignature({env,local,recu,fetchImpl=fetch,attendre
 }
 
 // Mode `revoquer` (étape always()) : referme la ligne de CE run et, s'il vient de ce
-// run, le secret Edge ; relit l'état final. Un checkout modifié ne l'empêche jamais.
-export async function revoquerDepuisRecu({env,local,recu,recuIllisible=false,fetchImpl=fetch,attendre=pause,delaiMs=5_000}){
- const r={schemaVersion:1,mode:'revoquer',status:'echec',code:null,projectRef:PROJET,runId:null,recuUtilise:false,capaciteId:null,
-  contratId:null,revocation:null,final:null,preuveP5:false};
+// run, le secret Edge, sans attendre la sonde d'identité ; relit l'état final, puis
+// l'état prouvé à l'allocation. « succes » : fermeture confirmée, identité attestée et
+// relecture conforme. « incertain » : l'un des trois manque ; `revocation.confirmee`
+// dit alors si la fermeture, elle, est acquise. Reçu écrit dès la fermeture, puis à la fin.
+export async function revoquerDepuisRecu({env,local,recu,recuIllisible=false,contratInstallation=null,fetchImpl=fetch,attendre=pause,
+ delaiMs=5_000,checkpoint=()=>{}}){
+ const r={schemaVersion:1,mode:'revoquer',status:'echec',phase:'contexte',code:null,projectRef:PROJET,runId:null,recuUtilise:false,
+  capaciteId:null,contratId:null,revocation:null,final:null,reattestation:null,preuveP5:false};
+ const sauver=()=>{try{checkpoint(structuredClone(r));}catch{/* le reçu final le reprend */}};
+ let tentee=false;
  try{
-  verifierContexte(env,local,{propre:false});
+  verifierContexte(env,local);
   if(!jeton(env.STAGING_SUPABASE_ACCESS_TOKEN))refuser('JETONS_REQUIS');
   r.runId=identifiantRun(env);
   if(recu!==null&&!recuIllisible){
@@ -674,44 +749,67 @@ export async function revoquerDepuisRecu({env,local,recu,recuIllisible=false,fet
      ||(recu.capaciteId!==null&&(!UUID.test(String(recu.capaciteId))||!UUID.test(String(recu.contratId)))))refuser('RECU_REFUSE');
    r.recuUtilise=true;
   }
-  const client=creerClient({env,fetchImpl});
-  verifierIdentite(await client.requete(API));
+  const client=creerClient({env,fetchImpl}),sondeur=creerClient({env,fetchImpl,delaiRequeteMs:15_000});
+  r.phase='fermeture';tentee=true;
   const {revocation,ligne}=await revoquer({...client,runId:r.runId,secret:r.recuUtilise?recu.secretEcritureTentee:'si_ligne',
-   attendre,delaiMs});
-  r.revocation=revocation;
+   attendre,delaiMs,sonde:async()=>verifierIdentite(await sondeur.requete(API))});
+  r.revocation=revocation;r.status='incertain';r.phase='attestation';sauver();
   if(ligne&&r.recuUtilise&&recu.capaciteId!==null&&ligne.capaciteId!==recu.capaciteId)r.code='RECU_INCOHERENT';
   const cible=ligne??(r.recuUtilise&&recu.capaciteId!==null&&SHA64.test(recu.manifeste?.documentSha256??'')
    ?{capaciteId:recu.capaciteId,contratId:recu.contratId,documentSha256:recu.manifeste.documentSha256}:null);
   r.capaciteId=cible?.capaciteId??null;r.contratId=cible?.contratId??null;
   if(cible){
-   try{r.final=projectionEtat(verifierEtat(await client.sql(sqlEtat(cible),'preuve')));r.preuveP5=preuveSignature(r.final,'signature_soignant');}
+   try{r.final=projectionEtat(verifierEtat(await client.sql(sqlEtat(cible),'preuve')));}
    catch{r.final=null;}
   }
+  // Une ligne de ce run a existé : l'état prouvé à son allocation est relu.
+  if(ligne)r.reattestation=await reattester({...creerClient({env,fetchImpl,delaiRequeteMs:30_000}),local,contratInstallation,attendre,delaiMs});
+  // P5 : signature relue sur l'empreinte inchangée, dans un état final identique à celui prouvé.
+  r.preuveP5=preuveSignature(r.final,'signature_soignant')&&reattestationConforme(r.reattestation);
+  if(revocation.identite!=='confirmee')r.code=r.code??'PROJET_IDENTITE_NON_CONFIRMEE';
+  if(r.reattestation&&(r.reattestation.edge==='differente'||r.reattestation.supplement==='different'))r.code=r.code??'REATTESTATION_DIFFERENTE';
+  else if(r.reattestation&&!reattestationConforme(r.reattestation))r.code=r.code??'REATTESTATION_NON_RELUE';
   if(recuIllisible)r.code=r.code??'RECU_ILLISIBLE';
   r.status=revocation.confirmee&&r.code===null?'succes':'incertain';
- }catch(err){r.code=err instanceof Refus?err.code:'REFUS_LOCAL';}
+ }catch(err){r.code=err instanceof Refus?err.code:'REFUS_LOCAL';r.status=tentee?'incertain':'echec';}
+ r.phase='termine';sauver();
  return r;
 }
 
 export const resumeRecu=r=>({mode:r?.mode??null,status:r?.status??'echec',phase:r?.phase??null,code:r?.code??null,sqlCode:r?.sqlCode??null,
  raison:r?.attente?.raison??null,preuveFin:r?.preuveFin??null,preuveP5:r?.preuveP5??false,
  preconditionsManquantes:r?.preconditionsManquantes??[],expiresAt:r?.expiresAt??null,
- capacite:r?.revocation?.capacite??null,secret:r?.revocation?.secret??null});
+ capacite:r?.revocation?.capacite??null,secret:r?.revocation?.secret??null,identite:r?.revocation?.identite??null,
+ reattestation:r?.reattestation??null});
 // Seule issue réussie de chaque mode ; tout le reste sort en code non nul.
 const STATUT_REUSSI=Object.freeze({allouer:'active',attendre:'succes',revoquer:'succes'});
 export const codeSortie=r=>objet(r)&&typeof r.mode==='string'&&Object.hasOwn(STATUT_REUSSI,r.mode)&&r.status===STATUT_REUSSI[r.mode]?0:1;
 
-const git=(racine,args)=>execFileSync('git',['-C',racine,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],
- env:{PATH:process.env.PATH,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'}}).trim();
+// Sortie brute (contenu de fichier) : jamais rognée.
+const gitBrut=(racine,args)=>execFileSync('git',['-C',racine,...args],{encoding:'utf8',maxBuffer:16*1024*1024,stdio:['ignore','pipe','pipe'],
+ env:{PATH:process.env.PATH,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'}});
+const SOURCE_EDGE=/^supabase\/functions\/[a-zA-Z0-9_./-]+\.ts$/;
+// Lit dans le commit HEAD, jamais dans l'arbre de travail : les sources send-sms et le
+// contrat d'installation comparés au déployé sont ceux du SHA relu, même si le job
+// appelant (T11) a construit, testé ou modifié son checkout. Fichier ordinaire suivi
+// seulement (mode 100644 ou 100755) : ni lien symbolique, ni sous-module, ni fichier non suivi.
 export function lireLocal(racine){
- return {sha:git(racine,['rev-parse','HEAD']),clean:git(racine,['status','--porcelain','--untracked-files=all'])==='',
-  lireFichier:chemin=>{
-   if(typeof chemin!=='string'||!/^supabase\/functions\/[a-zA-Z0-9_./-]+\.ts$/.test(chemin)||chemin.split('/').includes('..'))
-    refuser('SOURCES_LOCALES_REFUSEES');
-   const fichier=resolve(racine,chemin),etat=lstatSync(fichier);
-   if(etat.isSymbolicLink()||!etat.isFile())refuser('SOURCES_LOCALES_REFUSEES');
-   return readFileSync(fichier,'utf8');
-  }};
+ const sha=gitBrut(racine,['rev-parse','--verify','HEAD^{commit}']).trim();
+ if(!SHA40.test(sha))refuser('SOURCES_LOCALES_REFUSEES');
+ const lire=(chemin,admis)=>{
+  if(typeof chemin!=='string'||!admis(chemin)||chemin.split('/').some(x=>x===''||x==='.'||x==='..'))refuser('SOURCES_LOCALES_REFUSEES');
+  let objetGit;
+  try{
+   const entrees=gitBrut(racine,['ls-tree','-z','--full-tree',sha,'--',chemin]).split('\0').filter(Boolean);
+   const m=entrees.length===1?/^(?:100644|100755) blob ([0-9a-f]{40})\t([^\0]+)$/.exec(entrees[0]):null;
+   if(!m||m[2]!==chemin)refuser('SOURCES_LOCALES_REFUSEES');
+   objetGit=m[1];
+  }catch{refuser('SOURCES_LOCALES_REFUSEES');}
+  try{return gitBrut(racine,['cat-file','blob',objetGit]);}catch{refuser('SOURCES_LOCALES_REFUSEES');}
+ };
+ return {sha,
+  lireFichier:chemin=>lire(chemin,c=>SOURCE_EDGE.test(c)),
+  lireBlob:chemin=>lire(chemin,c=>c===CONTRAT_INSTALLATION||SOURCE_EDGE.test(c))};
 }
 function ecrireAtomique(dossier,nom,valeur){
  const temporaire=resolve(dossier,`${nom}.tmp`);
@@ -731,16 +829,19 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
    if(!existsSync(chemin))return {recu:null,illisible:false};
    try{return {recu:JSON.parse(readFileSync(chemin,'utf8')),illisible:false};}catch{return {recu:null,illisible:true};}
   };
+  const contrat=()=>JSON.parse(local.lireBlob(CONTRAT_INSTALLATION));
   if(mode==='allouer'){
    if(existsSync(chemin))refuser('RECU_DEJA_PRESENT');
-   const contrat=JSON.parse(readFileSync(resolve(racine,CONTRAT_INSTALLATION),'utf8'));
-   rapport=await allouerCapacite({env:process.env,local,contratInstallation:contrat,checkpoint:v=>ecrireAtomique(dossier,'recu.json',v)});
+   rapport=await allouerCapacite({env:process.env,local,contratInstallation:contrat(),checkpoint:v=>ecrireAtomique(dossier,'recu.json',v)});
   }else if(mode==='attendre'){
    const {recu,illisible}=lireRecu();if(illisible)refuser('RECU_ILLISIBLE');
    rapport=await attendreSignature({env:process.env,local,recu,checkpoint:v=>ecrireAtomique(dossier,'attente.json',v)});
   }else{
    const {recu,illisible}=lireRecu();
-   rapport=await revoquerDepuisRecu({env:process.env,local,recu,recuIllisible:illisible});
+   // Contrat illisible : la fermeture a lieu quand même, la relecture est déclarée non faite.
+   let contratInstallation=null;try{contratInstallation=contrat();}catch{/* relecture du supplément non faite */}
+   rapport=await revoquerDepuisRecu({env:process.env,local,recu,recuIllisible:illisible,contratInstallation,
+    checkpoint:v=>ecrireAtomique(dossier,'revocation.json',v)});
    ecrireAtomique(dossier,'revocation.json',rapport);
   }
  }catch(e){rapport={schemaVersion:1,mode:mode??null,status:'echec',code:e instanceof Refus?e.code:'REFUS_LOCAL'};}

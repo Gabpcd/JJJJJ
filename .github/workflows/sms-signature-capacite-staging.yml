@@ -10,7 +10,8 @@ name: Capacité SMS de signature STAGING (manuel, B9)
 #                 workflows STAGING ;
 #  3. revoquer  — verrou STAGING, toujours exécuté après une allocation réussie,
 #                 sans approbation supplémentaire : révoque la ligne de ce run et
-#                 retire le secret écrit par ce run.
+#                 retire le secret écrit par ce run, puis relit l'état prouvé à
+#                 l'allocation (send-sms, supplément).
 # T11 n'appelle pas ce workflow : ios-swift-lot2-staging.yml lance les modes
 # allouer puis revoquer du même script dans son propre job (liste fermée des
 # workflows appelants dans le script).
@@ -53,7 +54,13 @@ jobs:
   allouer:
     name: Allouer et activer la capacité
     if: github.ref == 'refs/heads/main'
-    # Environnement protégé : relecteur requis et branche main seule.
+    # Environnement protégé : relecteur requis et branche main seule. Le job tient le
+    # groupe jolene-supabase-staging-writes dès sa mise en attente d'approbation (règle
+    # retenue, la documentation GitHub ne le précise pas) : un dispatch non approuvé
+    # bloque sql-transaction de validate-pr, les merges sériels et T11. Dispatcher
+    # relectrice présente, puis approuver ou rejeter immédiatement (le rejet ou
+    # l'annulation libère le groupe). Les secrets SMS_RECETTE_* n'étant lisibles que
+    # par un job qui référence l'environnement, l'approbation ne peut pas en sortir.
     environment: staging-sms-signature
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -107,7 +114,7 @@ jobs:
       # même verrou : le job de révocation ne tourne qu'après une allocation réussie.
       - name: Révoquer si l'allocation échoue ou est annulée
         if: (failure() || cancelled()) && steps.contexte.outcome == 'success'
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs revoquer
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
@@ -169,7 +176,7 @@ jobs:
     needs: [allouer, attendre]
     if: always() && needs.allouer.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
       group: jolene-supabase-staging-writes
       queue: max
@@ -198,8 +205,10 @@ jobs:
         with:
           name: sms-signature-capacite-allocation-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/sms-signature-capacite
+      # Fermeture d'abord (jamais conditionnée par la sonde d'identité), puis sonde et
+      # relecture finale du corps send-sms et des routines du supplément (lecture seule).
       - name: Révoquer la ligne de ce run et retirer le secret écrit par ce run
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs revoquer
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
