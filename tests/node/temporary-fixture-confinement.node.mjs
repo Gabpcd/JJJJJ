@@ -219,10 +219,11 @@ test('real transport boundary suppresses exception/HTTP/JSON payload canaries wi
 test('workflow selects one maintenance operation and never combines it with real browser or simulations', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/playwright-e2e.yml', import.meta.url), 'utf8');
   const section = (name) => workflow.split(`\n  ${name}:\n`)[1]?.split(/\n  [a-z][a-z-]+:\n/)[0];
-  const eligible = (name, event, rotate, confine) => {
+  const eligible = (name, event, rotate, confine, toucheWeb = 'true') => {
     const expression = section(name).match(/^    if: (.+)$/m)[1].replace(/^\$\{\{\s*|\s*\}\}$/g, '')
       .replaceAll('github.event_name', JSON.stringify(event)).replaceAll('inputs.rotate_fixture_credentials', String(rotate))
-      .replaceAll('inputs.confine_historical_fixture_cohort', String(confine));
+      .replaceAll('inputs.confine_historical_fixture_cohort', String(confine))
+      .replaceAll('needs.portee.outputs.touche_web', JSON.stringify(toucheWeb));
     return Function(`return Boolean(${expression})`)();
   };
   for (const [rotate, confineFlag] of [[false, true], [true, false], [true, true]]) {
@@ -232,6 +233,15 @@ test('workflow selects one maintenance operation and never combines it with real
     assert.equal(eligible('rotate-fixture-credentials', 'workflow_dispatch', rotate, confineFlag), rotate && !confineFlag);
   }
   assert.equal(eligible('e2e-pr', 'pull_request', false, false), true);
+  // PR purement iOS/docs : le job « portée » renvoie touche_web=false, aucune recette sur la base partagée.
+  assert.equal(eligible('e2e-pr', 'pull_request', false, false, 'false'), false);
+  assert.equal(eligible('simulation-interfaces', 'pull_request', false, false, 'false'), false);
+  assert.equal(eligible('simulation-interfaces', 'pull_request', false, false, 'true'), true);
+  for (const [rotate, confineFlag] of [[false, true], [true, false], [true, true]]) {
+    assert.equal(eligible('portee', 'workflow_dispatch', rotate, confineFlag), false);
+  }
+  assert.match(section('e2e-pr'), /needs: portee/);
+  assert.match(section('simulation-interfaces'), /needs: portee/);
   assert.equal(eligible('e2e-main', 'push', false, false), true);
   assert.equal(eligible('e2e-main', 'workflow_dispatch', false, false), true);
   const maintenance = section('confine-historical-fixture-cohort');
