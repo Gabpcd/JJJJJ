@@ -5,7 +5,12 @@ import XCTest
 /// valeurs attendues sont celles que `DemoDashboardTests` (JoleneCore) affirme sur le port : un
 /// écart entre l'écran et le port fait échouer l'un des deux. Exclusions HARD STOP vérifiées
 /// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer ;
-/// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`).
+/// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`). Gaps verrouillés
+/// (aucun bouton sans effet) : ni bouton calendrier (T5) ni bouton de renvoi web (T10) tant que
+/// leur implémentation n'est pas injectée.
+///
+/// Coût : les recherches de libellé sont limitées aux descendants de `accueil-screen` et faites
+/// en une seule requête, et chaque ligne n'est résolue qu'une fois (borne CI globale, #1104).
 final class DemoAccueilTests: JoleneUITestCase {
     private static let euro = "\u{00A0}€"
 
@@ -56,18 +61,25 @@ final class DemoAccueilTests: JoleneUITestCase {
         XCTAssertEqual(notifications.label, "2 notifications non lues")
 
         // HARD STOP n°4 : ni `BandeauAlerte48h` (web : « Plafond de 48h atteint… », « …plafond de 48h
-        // cette semaine… », sans espace) ni encart « Cumul d'activité » (profil démo MIXTE). Recherche
-        // sur tous les libellés, casse et accents ignorés. La démo planifie 8 h (le web n'afficherait
-        // pas le bandeau, seuil 44 h) : la garde à 50 h planifiées est dans JoleneCore
+        // cette semaine… », sans espace) ni encart « Cumul d'activité » (profil démo MIXTE). Une seule
+        // recherche sur les libellés de l'Accueil, casse et accents ignorés. La démo planifie 8 h (le
+        // web n'afficherait pas le bandeau, seuil 44 h) : la garde à 50 h planifiées est dans JoleneCore
         // (`AccueilAssemblageTests.testAucunTexteNeReprendLAlerte48hNiLeCumulDActivite`).
-        for interdit in ["48h", "48 h", "plafond", "cumul d"] {
-            XCTAssertFalse(libelleContenant(interdit).exists, "« \(interdit) » ne doit apparaître nulle part sur l'Accueil")
-        }
+        let interdit = libelleContenantUnDe(["48h", "48 h", "plafond", "cumul d"], dans: ecran)
+        XCTAssertFalse(interdit.exists, "texte HARD STOP sur l'Accueil : « \(interdit.exists ? interdit.label : "") »")
         // Point d'extension calendrier (décision 18) : aucun bouton tant que T5 n'injecte pas
         // `ajoutCalendrierMission`. T5 remplace cette assertion par la présence du bouton et l'issue
         // `accueil-calendrier-issue` après un tap (LOT1_PLAN.md §3 T5, verrou de clôture T12).
-        XCTAssertFalse(element("accueil-calendrier-demo-assignee-001").exists,
+        XCTAssertFalse(dansEcran("accueil-calendrier-demo-assignee-001", ecran).exists,
                        "bouton calendrier sans implémentation injectée : jamais un bouton sans effet (T5 le câble)")
+        // Renvois web (pointage, notifications) : le compteur reste affiché, mais aucun bouton tant que
+        // T10 n'injecte pas le présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un
+        // chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet. T10 remplace ces
+        // assertions par la présence du bouton et la présentation du renvoi (LOT1_PLAN.md §3 T10, verrou T12 n°2).
+        XCTAssertFalse(dansEcran("accueil-notifications-action", ecran).exists,
+                       "bouton « Voir sur jolene.app » sans présentateur injecté : jamais un bouton sans effet (T10 le câble)")
+        XCTAssertFalse(dansEcran("accueil-oubli-pointage-action", ecran).exists,
+                       "bouton « Vérifier mes présences » sans présentateur injecté (T10 le câble)")
         record("\(proofPrefix)-accueil-bas")
 
         ouvrirProchaineMissionPuisRevenir(ecran)
@@ -105,9 +117,17 @@ final class DemoAccueilTests: JoleneUITestCase {
 
     // MARK: - Étapes
 
-    /// Tout élément dont le libellé contient `fragment`, casse et accents ignorés.
-    private func libelleContenant(_ fragment: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[cd] %@", fragment)).firstMatch
+    /// Premier descendant de `ecran` dont le libellé contient l'un des `fragments`, casse et accents
+    /// ignorés : une seule requête (prédicat OR), limitée à l'Accueil.
+    private func libelleContenantUnDe(_ fragments: [String], dans ecran: XCUIElement) -> XCUIElement {
+        let predicats = fragments.map { NSPredicate(format: "label CONTAINS[cd] %@", $0) }
+        return ecran.descendants(matching: .any).matching(NSCompoundPredicate(orPredicateWithSubpredicates: predicats)).firstMatch
+    }
+
+    /// Élément d'identifiant `identifiant` parmi les descendants de `ecran` (absences : recherche
+    /// limitée à l'Accueil plutôt qu'à toute l'app).
+    private func dansEcran(_ identifiant: String, _ ecran: XCUIElement) -> XCUIElement {
+        ecran.descendants(matching: .any).matching(identifier: identifiant).firstMatch
     }
 
     private func connexionDemo() {
@@ -131,13 +151,15 @@ final class DemoAccueilTests: JoleneUITestCase {
         require("La session démo est prête", timeout: 30) { self.tabBarExists && self.containerVisible(self.element("accueil-screen")) }
     }
 
-    /// Défilement borné jusqu'à la ligne, puis chaque fragment attendu dans son libellé accessible.
+    /// Défilement borné jusqu'à la ligne, puis chaque fragment attendu dans son libellé accessible,
+    /// lu une seule fois (chaque lecture d'attribut résout de nouveau la requête).
     private func verifier(_ identifiant: String, dans ecran: XCUIElement, contient fragments: [String],
                           file: StaticString = #filePath, line: UInt = #line) {
         let ligne = element(identifiant)
         scrollTo(ligne, in: ecran)
+        let libelle = ligne.label
         for fragment in fragments {
-            XCTAssertTrue(ligne.label.contains(fragment), "\(identifiant) : « \(fragment) » absent de « \(ligne.label) »",
+            XCTAssertTrue(libelle.contains(fragment), "\(identifiant) : « \(fragment) » absent de « \(libelle) »",
                           file: file, line: line)
         }
     }

@@ -6,7 +6,7 @@ import XCTest
 /// valeurs attendues sont celles que le XCUITest `DemoAccueilTests` relit à l'écran.
 final class DemoDashboardTests: XCTestCase {
     private func tableau() async throws -> DashboardSnapshot {
-        try await DemoWorld.gateways().dashboard.dashboard(context: DemoWorld.context)
+        try await DemoWorld.gateways().dashboard.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
     }
 
     func testTableauDeBordDemoAssembleSansReseau() async throws {
@@ -48,7 +48,7 @@ final class DemoDashboardTests: XCTestCase {
         autre.userId = "user-1"
         autre.profile.id = "user-1"
         do {
-            _ = try await DemoWorld.gateways().dashboard.dashboard(context: autre)
+            _ = try await DemoWorld.gateways().dashboard.dashboard(context: autre, delaiEcran: delaiEcranTest)
             XCTFail("la démo ne sert aucun autre utilisateur")
         } catch let error as JoleneError {
             XCTAssertEqual(error, JoleneError(.demoOnly, DemoWorld.messageDemoSeulement))
@@ -68,18 +68,36 @@ final class DemoDashboardTests: XCTestCase {
         XCTAssertFalse(liste.contains { $0.id.hasPrefix("demo-assignee-") })
     }
 
+    /// Revue B8 de T3, 2e passe : le détail d'une mission d'Explorer ne lit jamais la fixture du
+    /// tableau de bord ; une fixture `demo-dashboard.json` illisible ne casse donc que les missions
+    /// ASSIGNEE de l'Accueil, et le dit (erreur levée, jamais un « introuvable » silencieux).
+    func testDetailExplorerIndependantDeLaFixtureDuTableauDeBord() async throws {
+        let illisible = JoleneError(.contract, "fixture du tableau de bord illisible")
+        let port = DemoMissionsGateway(missionsAssignees: { throw illisible })
+        let ouverte = try await port.mission(id: "demo-mission-001", context: DemoWorld.context)
+        XCTAssertEqual(ouverte?.id, "demo-mission-001", "le détail Explorer reste lisible")
+        do {
+            _ = try await port.mission(id: "demo-assignee-001", context: DemoWorld.context)
+            XCTFail("une mission assignée de l'Accueil sans fixture lisible n'est jamais un « introuvable » silencieux")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, illisible)
+        }
+        let liste = try await port.listMissions(context: DemoWorld.context, filters: MissionFilters())
+        XCTAssertEqual(liste.count, 30, "Explorer ne lit pas la fixture du tableau de bord")
+    }
+
     // MARK: - Échec forcé (recette de l'état d'erreur dans l'interface, revue B8 de T3)
 
     func testEchecForceAuPremierChargementPuisRepriseSurLeTableauDemo() async throws {
         let port = DemoDashboardEchecGateway()
         do {
-            _ = try await port.dashboard(context: DemoWorld.context)
+            _ = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
             XCTFail("le premier chargement doit échouer")
         } catch let error as JoleneError {
             XCTAssertEqual(error, JoleneError(.network, SessionController.timeoutMessage), "panne simulée = délai dépassé")
         }
-        let reprise = try await port.dashboard(context: DemoWorld.context)
-        let attendu = try await DemoDashboardGateway().dashboard(context: DemoWorld.context)
+        let reprise = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
+        let attendu = try await DemoDashboardGateway().dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
         XCTAssertEqual(reprise, attendu, "« Réessayer » relit le tableau de bord démo")
     }
 
@@ -88,16 +106,16 @@ final class DemoDashboardTests: XCTestCase {
         // Tâche annulée avant l'appel (vue qui disparaît) : l'échec reste dû au chargement suivant.
         let annulee = await Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            return try await port.dashboard(context: DemoWorld.context)
+            return try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
         }.result
         XCTAssertThrowsError(try annulee.get()) { XCTAssertTrue($0 is CancellationError, "\($0)") }
         do {
-            _ = try await port.dashboard(context: DemoWorld.context)
+            _ = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
             XCTFail("l'échec forcé n'a pas été consommé par la tâche annulée")
         } catch let error as JoleneError {
             XCTAssertEqual(error.kind, .network)
         }
-        _ = try await port.dashboard(context: DemoWorld.context)
+        _ = try await port.dashboard(context: DemoWorld.context, delaiEcran: delaiEcranTest)
     }
 
     func testEchecForceRefuseToutAutreUtilisateur() async {
@@ -105,7 +123,7 @@ final class DemoDashboardTests: XCTestCase {
         autre.userId = "user-1"
         autre.profile.id = "user-1"
         do {
-            _ = try await DemoDashboardEchecGateway().dashboard(context: autre)
+            _ = try await DemoDashboardEchecGateway().dashboard(context: autre, delaiEcran: delaiEcranTest)
             XCTFail("la démo ne sert aucun autre utilisateur, même en échec forcé")
         } catch let error as JoleneError {
             XCTAssertEqual(error, JoleneError(.demoOnly, DemoWorld.messageDemoSeulement))

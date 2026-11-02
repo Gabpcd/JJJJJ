@@ -48,7 +48,7 @@ final class Lot1PortsTests: XCTestCase {
     func testChaquePortNonCableRefuseExplicitementEnCitantSaTranche() async {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         let c = contexte
-        await refuse("T3") { _ = try await g.dashboard.dashboard(context: c) }
+        await refuse("T3") { _ = try await g.dashboard.dashboard(context: c, delaiEcran: delaiEcranTest) }
         await refuse("T6a") {
             _ = try await g.candidature.confirmer(action: .postuler, missionId: "m", creneaux: [], message: nil,
                                                   choixContrat: nil, candidatureId: nil, context: c)

@@ -14,6 +14,9 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
     private let registry = StubRegistry.shared
     private let rpcPath = "/rest/v1/rpc/fn_dashboard_soignant_complet"
     private let now = Date(timeIntervalSince1970: 1_795_168_800) // 2026-11-20T10:00:00Z
+    /// Délai de l'écran transmis par l'appelant (en production : `SessionController.resolutionTimeout`,
+    /// passé par `AccueilModel`) : la gateway n'a aucune autre source de ce délai.
+    private static let delaiEcran = SessionController.defaultResolutionTimeout
 
     override func setUp() {
         super.setUp()
@@ -74,7 +77,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
     private func attendreErreur(_ attendue: JoleneError.Kind, message: String? = nil,
                                 file: StaticString = #filePath, line: UInt = #line) async {
         do {
-            _ = try await gateway().dashboard(context: TestClient.context)
+            _ = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
             XCTFail("attendu : erreur \(attendue)", file: file, line: line)
         } catch let error as JoleneError {
             XCTAssertEqual(error.kind, attendue, file: file, line: line)
@@ -88,7 +91,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
 
     func testTableauDeBordCompletRelitFichesCreneauxEtablissementsEtGains() async throws {
         stubNominal()
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
 
         // RPC sans paramètre, JWT du soignant.
         let rpc = try XCTUnwrap(registry.requests(to: rpcPath).first)
@@ -138,7 +141,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
     func testTableauVideNeLitNiFichesNiCreneauxNiEtablissements() async throws {
         registry.add("POST", rpcPath, respond: .json(200, #"{"profil":null,"mes_missions":[],"missions_ouvertes":[],"propositions":[]}"#))
         registry.add("GET", "/rest/v1/missions", where: { $0.query("select") == SupabaseDashboardGateway.gainsSelect }, respond: .json(200, "[]"))
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertEqual(snapshot.prochaines, [])
         XCTAssertEqual(snapshot.pourToi, [])
         XCTAssertEqual(snapshot.gains, GainsDuMois(honoraires: 0, netSalarie: 0, brutIndicatif: 0, nombreMissions: 0))
@@ -150,7 +153,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
 
     func testCreneauxEnEchecRendentLePlanningIndisponible() async throws {
         stubNominal(creneaux: .json(500, #"{"code":"XX000","message":"erreur","details":null,"hint":null}"#))
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertTrue(snapshot.planningIndisponible)
         XCTAssertEqual((snapshot.prochaines + snapshot.pourToi).map(\.planning), [.indisponible, .indisponible])
         XCTAssertEqual(snapshot.prochaines.map(\.id), ["m-2"], "les lignes restent affichées")
@@ -162,7 +165,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
         stubNominal(creneaux: .json(200, """
         [\(TestClient.slotJSON(id: "s-1", missionId: "m-1", debut: "2026-12-01T19:00:00+00:00", fin: "2026-12-02T01:00:00+00:00"))]
         """, headers: ["Content-Range": "0-0/5"]))
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertTrue(snapshot.planningIndisponible)
         XCTAssertEqual(snapshot.pourToi.first?.planning, .indisponible)
     }
@@ -170,21 +173,21 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
     func testFichesEnEchecRendentLePlanningIndisponible() async throws {
         // 500 plutôt qu'une coupure réseau ou un 503 : le SDK rejoue ces GET idempotents (≈ 7 s).
         stubNominal(fiches: .json(500, #"{"code":"XX000","message":"erreur","details":null,"hint":null}"#))
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertTrue(snapshot.planningIndisponible)
         XCTAssertNil(snapshot.prochaines.first?.mission)
     }
 
     func testGainsEnEchecMasquentLaCarteSansErreur() async throws {
         stubNominal(gains: .json(500, #"{"code":"XX000","message":"erreur","details":null,"hint":null}"#))
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertNil(snapshot.gains)
         XCTAssertFalse(snapshot.planningIndisponible)
     }
 
     func testEtablissementsEnEchecRepliSurLeNomDuTableauDeBord() async throws {
         stubNominal(etablissements: .networkFailure())
-        let snapshot = try await gateway().dashboard(context: TestClient.context)
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: Self.delaiEcran)
         XCTAssertEqual(snapshot.pourToi.first?.etablissementNom, "Nom du tableau de bord")
         XCTAssertEqual(snapshot.prochaines.first?.etablissementNom, "Clinique hors cohorte")
         XCTAssertFalse(snapshot.planningIndisponible)
@@ -245,7 +248,7 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
         var contexte = TestClient.context
         contexte.profile.id = "autre-id"
         do {
-            _ = try await gateway().dashboard(context: contexte)
+            _ = try await gateway().dashboard(context: contexte, delaiEcran: Self.delaiEcran)
             XCTFail("profil désynchronisé")
         } catch let error as JoleneError {
             XCTAssertEqual(error.kind, .unauthorized)
@@ -279,12 +282,28 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
         XCTAssertLessThan(sousBudget + SupabaseDashboardGateway.margeEcran, SessionController.defaultResolutionTimeout)
         // RPC rapide : sous-budget entier ; RPC lente : ce qu'il reste du délai de l'écran (15 s) moins la
         // marge, pour que la borne de l'écran ne jette jamais une RPC réussie ; délai épuisé : aucune lecture.
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0), sousBudget)
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0.4), sousBudget)
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 12), 15 - 12 - SupabaseDashboardGateway.margeEcran, accuracy: 1e-9)
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 14.6), 0)
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 30), 0)
-        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 1, sousBudget: 2, budgetEcran: 4), 2)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0, delaiEcran: 15), sousBudget)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0.4, delaiEcran: 15), sousBudget)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 12, delaiEcran: 15), 15 - 12 - SupabaseDashboardGateway.margeEcran,
+                       accuracy: 1e-9)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 14.6, delaiEcran: 15), 0)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 30, delaiEcran: 15), 0)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 1, sousBudget: 2, delaiEcran: 4), 2)
+        // Délai d'écran configuré plus court (contrôleur construit avec un autre `resolutionTimeout`) :
+        // les sous-budgets suivent, jamais une constante propre à la gateway.
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0, delaiEcran: 3), 3 - SupabaseDashboardGateway.margeEcran,
+                       accuracy: 1e-9)
+    }
+
+    func testDelaiDeLEcranEpuiseNEmetAucuneLectureComplementaire() async throws {
+        // Délai de l'écran (transmis par l'appelant) plus court que la marge : aucune lecture
+        // complémentaire n'est émise, ni en parallèle de la RPC ni après ; rendu partiel sans erreur.
+        stubNominal()
+        let snapshot = try await gateway().dashboard(context: TestClient.context, delaiEcran: SupabaseDashboardGateway.margeEcran / 2)
+        XCTAssertEqual(registry.requests.map(\.path), [rpcPath], "seule la RPC part quand l'écran n'a plus de délai")
+        XCTAssertNil(snapshot.gains, "gains non relus : carte masquée")
+        XCTAssertTrue(snapshot.planningIndisponible, "fiches et créneaux non relus : planning « à confirmer »")
+        XCTAssertEqual(snapshot.prochaines.first?.etablissementNom, "Clinique hors cohorte", "repli etab_nom sans fn_etablissements_safe")
     }
 
     func testLectureComplementaireLenteVautIndisponibleAuDepassement() async throws {

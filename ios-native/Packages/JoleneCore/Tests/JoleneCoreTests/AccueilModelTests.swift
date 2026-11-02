@@ -1,41 +1,61 @@
 import XCTest
 @testable import JoleneCore
 
+/// Utilisateur restauré par les ports d'auth de ces tests (hors du main actor : lu par les ports).
+private let utilisateurAccueil = AuthenticatedUser(id: "u-1", email: "u-1@example.invalid",
+                                                   emailConfirmedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                                                   appMetadataRole: "SOIGNANT")
+
 /// Modèle de l'onglet Accueil (lot 1, T3) : mêmes règles que `MissionsListModel` (annulation
 /// jamais affichée en erreur, rafraîchissement sans démontage, session expirée, epoch périmé
-/// ignoré), plus la borne `resolutionTimeout` (décision 14) et la relecture à l'apparition au-delà
-/// de 60 s (`DashboardSoignant.tsx` : `staleTime: 60_000`).
+/// ignoré), plus la borne `resolutionTimeout` (décision 14), transmise au port comme seule source
+/// du délai de l'écran, la relecture à l'apparition au-delà de 60 s (`DashboardSoignant.tsx` :
+/// `staleTime: 60_000`), des chargements sérialisés (seul le plus récent publie) et « Vérifier ma
+/// session », qui relit le tableau quand la session reste valide (revue B8 de T3, 2e passe).
 @MainActor
 final class AccueilModelTests: XCTestCase {
     private struct ModelError: Error {}
 
     /// Port scripté : chaque appel consomme une étape ; `entree` est ouverte dès l'appel, `retenue`
-    /// (si présente) retient la réponse jusqu'à son ouverture par le test.
+    /// (si présente) retient la réponse jusqu'à son ouverture par le test. Une étape `.retenue` a ses
+    /// propres barrières : deux chargements peuvent alors se chevaucher et répondre dans l'ordre
+    /// choisi par le test. `delais` journalise le délai de l'écran reçu à chaque appel.
     private final class ScriptedDashboard: DashboardPort, @unchecked Sendable {
-        enum Step { case snapshot(DashboardSnapshot), failure(Error) }
+        enum Step {
+            case snapshot(DashboardSnapshot), failure(Error)
+            /// `entree` s'ouvre à l'appel ; la réponse attend l'ouverture de `sortie`.
+            case retenue(Result<DashboardSnapshot, Error>, entree: Gate, sortie: Gate)
+        }
         private let lock = NSLock()
         private var steps: [Step]
         private var appels = 0
+        private var delaisRecus: [TimeInterval] = []
         let entree = Gate()
         var retenue: Gate?
 
         init(_ steps: [Step], retenue: Gate? = nil) { self.steps = steps; self.retenue = retenue }
 
         var calls: Int { lock.lock(); defer { lock.unlock() }; return appels }
+        var delais: [TimeInterval] { lock.lock(); defer { lock.unlock() }; return delaisRecus }
 
-        private func next() -> Step {
+        private func next(delai: TimeInterval) -> Step {
             lock.lock(); defer { lock.unlock() }
             appels += 1
+            delaisRecus.append(delai)
             return steps.isEmpty ? .snapshot(DashboardSnapshot()) : steps.removeFirst()
         }
 
-        func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
-            let step = next()
+        func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot {
+            let step = next(delai: delaiEcran)
             await entree.open()
             if let retenue { await retenue.wait() }
             switch step {
             case let .snapshot(snapshot): return snapshot
             case let .failure(error): throw error
+            case let .retenue(issue, entreeEtape, sortie):
+                await entreeEtape.open()
+                await sortie.wait()
+                return try issue.get()
             }
         }
     }
@@ -50,9 +70,17 @@ final class AccueilModelTests: XCTestCase {
     }
 
     private struct PretAuth: AuthPort {
+        func restoreSession() async throws -> AuthenticatedUser? { utilisateurAccueil }
+        func signIn(email: String, password: String) async throws -> AuthenticatedUser { throw ModelError() }
+        func signOut() async throws {}
+    }
+
+    /// Restauration pilotée par le test (`MutableAuthState`) : `restored = nil` = session fermée.
+    private struct AuthPilotee: AuthPort {
+        let etat: MutableAuthState
         func restoreSession() async throws -> AuthenticatedUser? {
-            AuthenticatedUser(id: "u-1", email: "u-1@example.invalid", emailConfirmedAt: Date(timeIntervalSince1970: 1_700_000_000),
-                              appMetadataRole: "SOIGNANT")
+            if let error = await etat.restoreError { throw error }
+            return await etat.restored
         }
         func signIn(email: String, password: String) async throws -> AuthenticatedUser { throw ModelError() }
         func signOut() async throws {}
@@ -76,8 +104,9 @@ final class AccueilModelTests: XCTestCase {
     }
 
     private func pret(_ port: ScriptedDashboard, horloge: ClockPort = FixedClock(DemoWorld.fixedNow),
-                      timeout: TimeInterval = SessionController.defaultResolutionTimeout) async throws -> (SessionController, SessionSnapshot) {
-        var gateways = Gateways(auth: PretAuth(), role: NeutralRole(), missions: PretMissions(), clock: horloge)
+                      timeout: TimeInterval = SessionController.defaultResolutionTimeout,
+                      auth: AuthPort = PretAuth()) async throws -> (SessionController, SessionSnapshot) {
+        var gateways = Gateways(auth: auth, role: NeutralRole(), missions: PretMissions(), clock: horloge)
         gateways.dashboard = port
         let controller = SessionController(gateways: gateways, resolutionTimeout: timeout)
         let state = await controller.start()
@@ -212,5 +241,107 @@ final class AccueilModelTests: XCTestCase {
         XCTAssertEqual(port.calls, 1, "après un échec, « Réessayer » relance ; l'apparition ne boucle pas")
         await model.load()
         XCTAssertEqual(model.tableau?.profil?.prenom, "A")
+    }
+    // MARK: - Revue B8 de T3, 2e passe : délai unique, chargements sérialisés, « Vérifier ma session »
+
+    func testDelaiDeLEcranTransmisAuPortEstCeluiDuControleur() async throws {
+        let port = ScriptedDashboard([.snapshot(tableau("A")), .snapshot(tableau("B"))])
+        let (controller, snapshot) = try await pret(port, timeout: 3)
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        await model.load()
+        XCTAssertEqual(port.delais, [3, 3],
+                       "une seule source : le `resolutionTimeout` du contrôleur borne l'appel et les sous-lectures de la gateway")
+    }
+
+    func testChargementsChevauchesSeulLePlusRecentPublie() async throws {
+        let entreeAncien = Gate(), sortieAncien = Gate(), entreeRecent = Gate(), sortieRecent = Gate()
+        let port = ScriptedDashboard([
+            .snapshot(tableau("A")),
+            .retenue(.success(tableau("Ancien")), entree: entreeAncien, sortie: sortieAncien),
+            .retenue(.success(tableau("Récent")), entree: entreeRecent, sortie: sortieRecent),
+        ])
+        let (controller, snapshot) = try await pret(port)
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        let ancien = Task { await model.load() }  // tirer-pour-rafraîchir
+        await entreeAncien.wait()
+        let recent = Task { await model.load() }  // « Réessayer » ou `.task` pendant la lecture précédente
+        await entreeRecent.wait()
+        XCTAssertTrue(model.isRefreshing)
+
+        await sortieRecent.open()
+        await recent.value
+        XCTAssertEqual(model.tableau?.profil?.prenom, "Récent")
+        XCTAssertFalse(model.isRefreshing, "la lecture la plus récente a répondu")
+
+        await sortieAncien.open()
+        await ancien.value
+        XCTAssertEqual(model.tableau?.profil?.prenom, "Récent",
+                       "la réponse la plus lente d'une lecture dépassée n'écrase jamais un instantané plus récent")
+        XCTAssertFalse(model.isRefreshing)
+        XCTAssertNil(model.refreshError)
+    }
+
+    func testLectureDepasseeNEteintPasLIndicateurNiNAfficheSonEchec() async throws {
+        let entreeAncien = Gate(), sortieAncien = Gate(), entreeRecent = Gate(), sortieRecent = Gate()
+        let port = ScriptedDashboard([
+            .snapshot(tableau("A")),
+            .retenue(.failure(JoleneError(.network, "Connexion impossible.")), entree: entreeAncien, sortie: sortieAncien),
+            .retenue(.success(tableau("Récent")), entree: entreeRecent, sortie: sortieRecent),
+        ])
+        let (controller, snapshot) = try await pret(port)
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        let ancien = Task { await model.load() }
+        await entreeAncien.wait()
+        let recent = Task { await model.load() }
+        await entreeRecent.wait()
+
+        await sortieAncien.open()
+        await ancien.value
+        XCTAssertTrue(model.isRefreshing, "la lecture la plus récente est encore en vol : l'indicateur reste allumé")
+        XCTAssertNil(model.refreshError, "l'échec d'une lecture dépassée n'est jamais affiché")
+        XCTAssertEqual(model.tableau?.profil?.prenom, "A")
+
+        await sortieRecent.open()
+        await recent.value
+        XCTAssertEqual(model.tableau?.profil?.prenom, "Récent")
+        XCTAssertFalse(model.isRefreshing)
+        XCTAssertNil(model.refreshError)
+    }
+
+    func testVerifierMaSessionRelitLeTableauQuandLaSessionResteValide() async throws {
+        let port = ScriptedDashboard([.failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.")),
+                                      .snapshot(tableau("Camille"))])
+        let (controller, snapshot) = try await pret(port)
+        let session = SessionStore(controller: controller)
+        await session.refresh()
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.load()
+        XCTAssertTrue(model.sessionExpired)
+
+        await model.verifierSession(session)
+        XCTAssertEqual(session.state.snapshot?.epoch, snapshot.epoch, "session encore valide : même epoch, espace non démonté")
+        XCTAssertEqual(model.tableau?.profil?.prenom, "Camille",
+                       "sans relecture, l'écran resterait sur « Session à vérifier » (`loadIfStale` ne relance jamais un échec)")
+        XCTAssertFalse(model.sessionExpired)
+        XCTAssertEqual(port.calls, 2)
+    }
+
+    func testVerifierMaSessionFermeeNeRelitRienPourLAncienneIdentite() async throws {
+        let etat = MutableAuthState(restored: utilisateurAccueil, restoreError: nil)
+        let port = ScriptedDashboard([.failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))])
+        let (controller, snapshot) = try await pret(port, auth: AuthPilotee(etat: etat))
+        let session = SessionStore(controller: controller)
+        await session.refresh()
+        let model = AccueilModel(controller: controller, snapshot: snapshot)
+        await model.load()
+
+        await etat.set(restored: nil, restoreError: nil)
+        await model.verifierSession(session)
+        XCTAssertEqual(session.state, .signedOut(message: nil), "la racine affiche la connexion")
+        XCTAssertEqual(port.calls, 1, "aucune lecture pour une identité qui n'est plus active")
+        XCTAssertEqual(model.state, .failed("Votre session a expiré. Reconnectez-vous."))
     }
 }
