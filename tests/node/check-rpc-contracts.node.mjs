@@ -181,7 +181,9 @@ test('diffContracts : un changement de lot ou de statut est une dérive', () => 
 
 test('CONTRATS_RPC_SOIGNANT.md : une fiche par RPC suivie, fiche edge delete-account, interdiction fn_etablissement_public', () => {
   const doc = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
-  for (const r of RPC_SUIVIES) {
+  // Lot 5 (espace établissement) : fiches dans CONTRATS_RPC_ETABLISSEMENT.md, gardées par
+  // tests/node/contrats-etablissement-ios.node.mjs.
+  for (const r of RPC_SUIVIES.filter(x => x.lot !== 5)) {
     assert.ok(doc.includes(`\n## ${r.name}\n`), `fiche manquante pour ${r.name}`);
     assert.ok(doc.includes(`| \`${r.name}\` |`), `ligne de synthèse manquante pour ${r.name}`);
   }

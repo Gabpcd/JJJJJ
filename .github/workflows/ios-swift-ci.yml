@@ -15,6 +15,9 @@ on:
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
       - 'scripts/mobile/check-rpc-contracts.mjs'
+      # Lot 5, T0 : garde des littéraux juridiques du Swift livré (LOT5_PLAN §2.9).
+      - 'scripts/mobile/check-litteraux-juridiques.mjs'
+      - 'scripts/mobile/check-litteraux-juridiques.test.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
@@ -38,6 +41,9 @@ on:
       - 'scripts/mobile/export-golden-vectors.mjs'
       - 'scripts/mobile/export-demo-fixtures.mjs'
       - 'scripts/mobile/check-rpc-contracts.mjs'
+      # Lot 5, T0 : garde des littéraux juridiques du Swift livré (LOT5_PLAN §2.9).
+      - 'scripts/mobile/check-litteraux-juridiques.mjs'
+      - 'scripts/mobile/check-litteraux-juridiques.test.mjs'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
@@ -114,6 +120,15 @@ jobs:
           fi
       - name: Contrats RPC sans dérive (types.ts, public.sql, manifeste)
         run: node scripts/mobile/check-rpc-contracts.mjs
+      # Lot 5, T0 (LOT5_PLAN §2.9) : aucun littéral juridique dans le Swift livré — valeurs des CHECK
+      # de matrice_modes_exercice (public.sql), sources de la matrice (migrations), noms interdits,
+      # « Code du travail », « Légifrance », articles numérotés ; seules exceptions : TextesWeb.swift
+      # et RPCResponse.marqueurCodeDuTravail. Une migration seule ne rejoue pas ce job : un littéral
+      # Swift n'apparaît qu'avec un changement sous ios-native/, qui le déclenche.
+      - name: Littéraux juridiques absents du Swift livré
+        run: node scripts/mobile/check-litteraux-juridiques.mjs
+      - name: Garde des littéraux juridiques — cas négatifs
+        run: node --test scripts/mobile/check-litteraux-juridiques.test.mjs
 
   packages:
     name: Packages — swift test macOS

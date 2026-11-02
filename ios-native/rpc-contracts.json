@@ -33,7 +33,8 @@
           "signature": "fn_get_my_role()",
           "category": "MIXTE_TENANT_ADMIN"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_etablissements_safe",
@@ -344,7 +345,8 @@
           "signature": "fn_audit_connexion(text)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_maj_activite_soignant",
@@ -402,7 +404,8 @@
           "signature": "fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)",
           "category": "MIXTE_TENANT_ADMIN"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_supprimer_compte_rate_limited",
@@ -457,7 +460,8 @@
           "signature": "fn_param_bool(text,boolean)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_confirmer_presence_mission",
@@ -657,7 +661,8 @@
           "signature": "fn_etat_pointage_mission(uuid)",
           "category": "MIXTE_TENANT_ADMIN"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_envoyer_otp_signature",
@@ -686,7 +691,8 @@
           "signature": "fn_envoyer_otp_signature(uuid)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_signer_contrat_otp",
@@ -715,7 +721,8 @@
           "signature": "fn_signer_contrat_otp(uuid,text,text,text)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
-      ]
+      ],
+      "aussi_etablissement": true
     },
     {
       "name": "fn_remplacer_document_soignant",
@@ -769,6 +776,557 @@
         {
           "signature": "fn_upsert_token_push(text,text)",
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_permissions_etab",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_etablissement_id?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_permissions_etab(\"p_etablissement_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'pg_catalog', 'public', 'auth'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_permissions_etab(uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ],
+      "exceptions": []
+    },
+    {
+      "name": "fn_mon_etablissement_complet",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mon_etablissement_complet()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mon_etablissement_complet()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ],
+      "exceptions": []
+    },
+    {
+      "name": "fn_stats_dashboard_etablissement",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_stats_dashboard_etablissement()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_stats_dashboard_etablissement()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ],
+      "exceptions": []
+    },
+    {
+      "name": "fn_soignant_pour_etablissement",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_soignant_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_soignant_pour_etablissement(\"p_soignant_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_soignant_pour_etablissement(uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ],
+      "exceptions": []
+    },
+    {
+      "name": "fn_lire_candidatures_mission_habilitee",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_mission_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_lire_candidatures_mission_habilitee(\"p_mission_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": null,
+      "exceptions": [
+        {
+          "sqlstate": "42501",
+          "message": "Mission indisponible ou accès refusé",
+          "fonction": "fn_lire_candidatures_mission_habilitee"
+        }
+      ]
+    },
+    {
+      "name": "fn_traiter_candidature_planning_v1",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_traiter_candidature_planning_v1(\"p_candidature_id\" \"uuid\", \"p_decision\" \"text\", \"p_creneaux_confirmes\" \"jsonb\" DEFAULT NULL::\"jsonb\", \"p_motif\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null,
+      "exceptions": [
+        {
+          "sqlstate": "P0001",
+          "message": "Notification d'acceptation impossible : %",
+          "fonction": "fn_traiter_candidature"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Cette mission ne peut pas être attribuée : l'établissement doit d'abord configurer un mode de paiement (Paramètres → Facturation).",
+          "fonction": "fn_trg_gate_assignation_paiement",
+          "declencheur": "trg_gate_assignation_paiement"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Cette mission ne peut pas être attribuée : le mandat SEPA de l'établissement n'est pas encore posé (IBAN à ajouter dans Paramètres → Facturation).",
+          "fonction": "fn_trg_gate_assignation_paiement",
+          "declencheur": "trg_gate_assignation_paiement"
+        }
+      ]
+    },
+    {
+      "name": "fn_contrat_signe_pour_pointage",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_contrat_signe_pour_pointage(\"p_mission_id\" \"uuid\")",
+          "returns": "boolean",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": null,
+      "exceptions": [
+        {
+          "sqlstate": "42501",
+          "message": "Lecture du pointage non autorisée.",
+          "fonction": "fn_contrat_signe_pour_pointage"
+        }
+      ]
+    },
+    {
+      "name": "fn_valider_presence",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_presence_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_valider_presence(\"p_presence_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_valider_presence(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement pointage requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_presences"
+        },
+        {
+          "sqlstate": "23503",
+          "message": "Mission introuvable pour cette présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "La présence ne peut être validée avant la fin du dernier créneau planifié.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Le planning détaillé doit être terminé avant validation de la présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Un pointage est encore ouvert pour cette mission.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Aucun pointage terminé ne permet de valider cette présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        }
+      ]
+    },
+    {
+      "name": "fn_valider_presences_lot",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_ids: string[] }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_valider_presences_lot(\"p_ids\" \"uuid\"[])",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_valider_presences_lot(uuid[])",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement pointage requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_presences"
+        },
+        {
+          "sqlstate": "23503",
+          "message": "Mission introuvable pour cette présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "La présence ne peut être validée avant la fin du dernier créneau planifié.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Le planning détaillé doit être terminé avant validation de la présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Un pointage est encore ouvert pour cette mission.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        },
+        {
+          "sqlstate": "P0001",
+          "message": "Aucun pointage terminé ne permet de valider cette présence.",
+          "fonction": "dec_bloquer_validation_presence_avant_fin_planning",
+          "declencheur": "trg_bloquer_validation_presence_avant_fin_planning"
+        }
+      ]
+    },
+    {
+      "name": "fn_contester_presence",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_motif: string; p_presence_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_contester_presence(\"p_presence_id\" \"uuid\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_contester_presence(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "42501",
+          "message": "Permission etablissement pointage requise",
+          "fonction": "fn_enforce_etablissement_rbac_trigger",
+          "declencheur": "trg_p0_rbac_presences"
+        }
+      ]
+    },
+    {
+      "name": "fn_creer_notation_mission",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_commentaire?: string; p_critere_1: number; p_critere_2: number; p_critere_3: number; p_critere_4: number; p_mission_id: string; p_sens: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_creer_notation_mission(\"p_mission_id\" \"uuid\", \"p_sens\" \"text\", \"p_critere_1\" integer, \"p_critere_2\" integer, \"p_critere_3\" integer, \"p_critere_4\" integer, \"p_commentaire\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_creer_notation_mission(uuid,text,integer,integer,integer,integer,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "P0001",
+          "message": "La notation n’a pas pu être enregistrée. Veuillez réessayer.",
+          "fonction": "fn_creer_notation_mission"
+        }
+      ]
+    },
+    {
+      "name": "fn_declarer_fin_retroactive",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_heure_fin: string; p_mission_id: string; p_raison?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_declarer_fin_retroactive(\"p_mission_id\" \"uuid\", \"p_heure_fin\" timestamp with time zone, \"p_raison\" \"text\" DEFAULT 'Oubli de scan'::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_declarer_fin_retroactive(uuid,timestamp with time zone,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "P0002",
+          "message": "Mission % introuvable ou dans un statut incompatible.",
+          "fonction": "fn_declarer_fin_retroactive"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Vous n'êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission.",
+          "fonction": "fn_declarer_fin_retroactive"
+        },
+        {
+          "sqlstate": "P0002",
+          "message": "Aucun créneau effectif ouvert à fermer pour cette mission.",
+          "fonction": "fn_declarer_fin_retroactive"
+        },
+        {
+          "sqlstate": "23514",
+          "message": "L'heure de fin (%) doit être postérieure au début du créneau (%).",
+          "fonction": "fn_declarer_fin_retroactive"
+        }
+      ]
+    },
+    {
+      "name": "fn_creer_mission_multi_jours_v4",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_accepte_internes: boolean; p_accepte_non_specialises: boolean; p_creneaux: Json; p_description: string | null; p_est_urgente: boolean; p_intitule: string; p_mode_attribution: string; p_mode_remuneration: string; p_nature_tva_prestation: string | null; p_niveau_urgence: number; p_profession_requise: Database[\"public\"][\"Enums\"][\"type_profession\"]; p_retrocession_pct: number | null; p_service: string | null; p_specialite_medicale_requise: string | null; p_taux_horaire_base: number; p_type_contrat_recherche: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_creer_mission_multi_jours_v4(\"p_intitule\" \"text\", \"p_description\" \"text\", \"p_profession_requise\" \"public\".\"type_profession\", \"p_service\" \"text\", \"p_taux_horaire_base\" numeric, \"p_est_urgente\" boolean, \"p_niveau_urgence\" integer, \"p_mode_attribution\" \"text\", \"p_specialite_medicale_requise\" \"text\", \"p_accepte_non_specialises\" boolean, \"p_creneaux\" \"jsonb\", \"p_type_contrat_recherche\" \"text\", \"p_mode_remuneration\" \"text\", \"p_retrocession_pct\" numeric, \"p_nature_tva_prestation\" \"text\", \"p_accepte_internes\" boolean)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null,
+      "exceptions": [
+        {
+          "sqlstate": "28000",
+          "message": "Non authentifié",
+          "fonction": "fn_creer_mission_multi_jours_v4"
+        }
+      ]
+    },
+    {
+      "name": "fn_obtenir_conversation",
+      "statut": "a_venir",
+      "lot": 5,
+      "types": {
+        "args": "{ p_autre_id: string; p_mission_id?: string }",
+        "returns": "string"
+      },
+      "sql": [
+        {
+          "signature": "fn_obtenir_conversation(\"p_autre_id\" \"uuid\", \"p_mission_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"uuid\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_obtenir_conversation(uuid,uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ],
+      "exceptions": [
+        {
+          "sqlstate": "28000",
+          "message": "Non authentifié",
+          "fonction": "fn_obtenir_conversation"
+        },
+        {
+          "sqlstate": "22023",
+          "message": "Interlocuteur invalide",
+          "fonction": "fn_obtenir_conversation"
+        },
+        {
+          "sqlstate": "42501",
+          "message": "Conversation non autorisée",
+          "fonction": "fn_obtenir_conversation"
         }
       ]
     }

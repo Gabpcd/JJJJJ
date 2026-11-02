@@ -31,6 +31,10 @@ plus de diff).
 
 **Autres sources lues par la garde.** Outre les vingt-sept RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
 
+**Espace établissement (lot 5).** Les RPC suivies avec `lot: 5` et les RPC soignant consommées aussi par
+l'établissement (`aussi_etablissement` dans le JSON) ont leurs fiches dans `docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md`,
+gardées par `tests/node/contrats-etablissement-ios.node.mjs` (même étape du check requis).
+
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
 définitifs ; aucune RPC `fn_admin_*` n'est embarquée.
@@ -387,7 +391,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_scan_qr"("p_token" "text", "p_la
 ## fn_generer_qr_mission
 
 - **Statut natif** : à venir (lot 2).
-- **Usage prévu** : Génération du QR côté établissement (lot 5) ; listée ici car le soignant en consomme le token.
+- **Usage prévu** : non exposée par le web : son seul appelant, `src/components/etablissement/QRPointageEtab.tsx` (l.88), n'est monté dans aucune page ; le QR réellement affiché à l'établissement encode `missions.code_pointage_actif` (`AffichageCodeRotatifEtab.tsx` l.284, `<QRCodeSVG value={code}>`). L'espace établissement natif ne l'appelle pas (`LOT5_PLAN.md` correction 1, D4) ; elle reste listée tant que le lot 2 la suit.
 - **Signature SQL** (`supabase/schema/public.sql` l.37981) :
 
 ```sql
