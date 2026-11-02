@@ -131,6 +131,7 @@ export async function sendApns(opts: {
 
 export interface ApnsProbeResult {
   host: string;
+  topic: string;
   status: number;
   reason: string;
 }
@@ -138,13 +139,16 @@ export interface ApnsProbeResult {
 /**
  * Sonde d'authentification APNs (décision 7 du plan Swift) : envoie une
  * notification à un device token factice sur l'hôte demandé et renvoie la
- * réponse brute d'Apple. Un 400 BadDeviceToken ou un 410 prouvent que la clé
- * .p8, le Key ID et le Team ID sont acceptés pour le topic ; un 403
- * InvalidProviderToken / TopicDisallowed prouve le contraire. Aucun appareil
- * réel n'est touché et aucun secret n'est renvoyé.
+ * réponse brute d'Apple. Un 403 InvalidProviderToken prouve que la signature
+ * du jeton fournisseur (clé .p8 / Key ID / Team ID) est refusée ; un 400
+ * TopicDisallowed prouve que la clé n'a pas le droit de pousser vers le topic.
+ * Un 400 BadDeviceToken prouve la signature, mais pas le droit sur le topic
+ * tant que l'on ignore si Apple contrôle le topic avant le jeton d'appareil :
+ * `topic` permet un envoi témoin vers un topic inexistant pour le savoir.
+ * Aucun appareil réel n'est touché et aucun secret n'est renvoyé.
  */
-export async function probeApns(opts: { environment: "sandbox" | "production" }): Promise<ApnsProbeResult> {
-  const bundleId = Deno.env.get("APNS_BUNDLE_ID") || "app.jolene";
+export async function probeApns(opts: { environment: "sandbox" | "production"; topic?: string }): Promise<ApnsProbeResult> {
+  const bundleId = opts.topic || Deno.env.get("APNS_BUNDLE_ID") || "app.jolene";
   const host = opts.environment === "sandbox" ? "api.sandbox.push.apple.com" : "api.push.apple.com";
   const jwt = await getApnsJwt();
   // 64 caractères hexadécimaux : format valide, token inexistant.
@@ -162,5 +166,5 @@ export async function probeApns(opts: { environment: "sandbox" | "production" })
   });
   let reason = "";
   try { reason = (await res.json())?.reason || ""; } catch { /* corps vide sur 200 */ }
-  return { host, status: res.status, reason };
+  return { host, topic: bundleId, status: res.status, reason };
 }
