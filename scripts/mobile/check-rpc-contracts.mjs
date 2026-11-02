@@ -37,6 +37,7 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * RPC consommées (ou à consommer) par le client Swift. `statut` :
  *   - `lot0`    : appelée par `JoleneSupabase` dès le lot 0 ;
  *   - `a_venir` : listée dans `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md`, lot cible indiqué.
+ *   - `consommee` : appelée par une gateway Swift livrée (lot indiqué), passée par la PR qui la câble.
  * L'ordre est celui du plan §11 jour 8, puis celui des tranches du lot 1
  * (`docs/mobile-swift/LOT1_PLAN.md` §3 : T3 accueil, T6 candidature/présence, T7 annulation,
  * T4b favoris, T9 audit/drapeaux, T8 compte). Chaque ajout est accompagné de `--update` et

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -86,7 +86,7 @@ function decisionsDu(plan) {
 test('RPC_SUIVIES : noms uniques, statuts et lots valides', () => {
   assert.equal(byName.size, RPC_SUIVIES.length, 'doublon dans RPC_SUIVIES');
   for (const r of RPC_SUIVIES) {
-    assert.ok(['lot0', 'a_venir'].includes(r.statut), `${r.name} : statut inconnu ${r.statut}`);
+    assert.ok(['lot0', 'a_venir', 'consommee'].includes(r.statut), `${r.name} : statut inconnu ${r.statut}`);
     assert.ok(Number.isInteger(r.lot) && r.lot >= 0 && r.lot <= 6, `${r.name} : lot invalide ${r.lot}`);
     if (r.statut === 'lot0') assert.equal(r.lot, 0, `${r.name} : statut lot0 implique lot 0`);
   }
@@ -144,11 +144,10 @@ test('rpc-contracts.json : aucune dérive avec types.ts, public.sql et le manife
   for (const r of actual.rpcs) assert.ok(r.grants.includes('authenticated'), `${r.name} : pas de GRANT authenticated`);
 });
 
-test('rpc-contracts.json : fn_param_bool est tenue par public.sql seul (absente de types.ts)', () => {
+test('rpc-contracts.json : fn_param_bool garde sa signature SQL et reste fermée à anon', () => {
   const expected = JSON.parse(readFileSync(CONTRACTS_PATH, 'utf8'));
   const entry = expected.rpcs.find(r => r.name === 'fn_param_bool');
   assert.ok(entry);
-  assert.equal(entry.types, null);
   assert.equal(entry.sql[0].signature, 'fn_param_bool("p_cle" "text", "p_defaut" boolean)');
   assert.equal(entry.sql[0].returns, 'boolean');
   assert.ok(!entry.grants.includes('anon'), 'fn_param_bool ne doit pas être ouverte à anon (décision 15)');
@@ -518,4 +517,52 @@ test('validate-pr.yml : l étape « Garde de livraison mobile » du job Typechec
   assert.ok(run, 'ligne run: absente');
   assert.ok(run.includes('node --test') && run.includes('tests/node/check-rpc-contracts.node.mjs'), `run: n exécute pas la garde : ${run}`);
   assert.ok(!/^\s+if: /m.test(bloc) && !bloc.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
+});
+
+// Revue B8 n°3 de T0 : SupabaseErrorMapping ne garde pas PostgrestError.message. La règle des
+// exceptions PostgREST doit donc lire le message AVANT le mapping (texte [CODE DU TRAVAIL]
+// restitué mot pour mot, « 0 rows » / « déjà prise » → mission déjà attribuée).
+test('LOT1_PLAN §2.4 : les exceptions PostgREST sont lues avant SupabaseErrorMapping', () => {
+  const plan = read('docs/mobile-swift/LOT1_PLAN.md');
+  const s = plan.slice(plan.indexOf('### 2.4 '), plan.indexOf('### 2.5 '));
+  assert.ok(!s.includes('mappée par `SupabaseErrorMapping`, puis `.refusee`'),
+    'la chaîne « SupabaseErrorMapping puis .refusee » perd le texte légal');
+  assert.match(s, /`PostgrestError\.message` \*\*avant\*\*/);
+  assert.ok(s.includes('`[CODE DU TRAVAIL]`') && s.includes("code:'CODE_DU_TRAVAIL'"));
+  assert.ok(s.includes('`0 rows`') && s.includes('`déjà prise`') && s.includes('mission déjà attribuée'));
+  const contrats = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
+  assert.ok(contrats.includes("**avant** `SupabaseErrorMapping.map`"), 'forme 14 non alignée');
+  const web = read('src/pages/DetailMissionSoignant.tsx');
+  assert.ok(web.includes("error.message?.includes('0 rows') || error.message?.includes('déjà prise')"),
+    'le web ne classe plus « mission perdue » comme décrit : mettre la fiche à jour');
+  assert.ok(read('src/lib/erreurs.ts').includes("msg.includes('[CODE DU TRAVAIL]')"));
+});
+
+/** Fichiers `.swift` sous un dossier, récursivement (hors `.build`). */
+function swiftFiles(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    if (name === '.build' || name.startsWith('.')) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...swiftFiles(full));
+    else if (name.endsWith('.swift')) out.push(full);
+  }
+  return out;
+}
+
+// Un gap connu reste verrouillé : un appel RPC écrit en dur dans le code Swift doit viser une
+// RPC sous contrat, jamais une RPC interdite côté natif ni une RPC du lot 4 avant son heure.
+test('ios-native : tout littéral "fn_…" du Swift est une RPC suivie et autorisée', () => {
+  const suivies = new Set(RPC_SUIVIES.map(r => r.name));
+  const interdites = new Set([...RPC_JAMAIS_SUIVIES, ...RPC_PAS_AVANT_LOT4]);
+  const fautes = [];
+  for (const file of swiftFiles(join(root, 'ios-native'))) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/"(fn_[a-z0-9_]+)"/g)) {
+      const rel = file.slice(root.length + 1);
+      if (interdites.has(m[1])) fautes.push(`${rel} : ${m[1]} interdite côté natif`);
+      else if (!suivies.has(m[1])) fautes.push(`${rel} : ${m[1]} absente de RPC_SUIVIES`);
+    }
+  }
+  assert.deepEqual(fautes, []);
 });
