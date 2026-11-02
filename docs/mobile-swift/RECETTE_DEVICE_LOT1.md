@@ -68,6 +68,7 @@ build apparié au projet émetteur (§0).
 | Changement d'empreinte / nouveau visage | la session reste restaurable (pas de `SecAccessControl biometryCurrentSet`) | — |
 | Appareil sans biométrie enrôlée | « Non disponible sur cet appareil », toggle grisé | — |
 | Reprise après plus de 30 minutes en arrière-plan (T9) | espace masqué (« Déverrouillage de votre espace »), invite Face ID avant la relecture de session ; annulation → connexion avec « Réessayer sans mot de passe », session conservée | — |
+| Face ID bloqué après trop d'essais (`biometryLockout`) puis relance | le verrou reste dû : code de l'appareil demandé, jamais d'ouverture sans vérification | — |
 | Invite au lancement à froid interrompue (appel entrant, verrouillage) | issue `.cancelled` → connexion avec « Réessayer sans mot de passe » ; un nouvel essai rouvre l'invite | — |
 | Arrêt d'urgence d'un onglet (T9, décision 15) : `parametres_systeme.ios_natif_missions_actif = 0` sur STAGING (action Gabrielle, `AdminConfig`, catégorie OPERATIONS) puis reprise > 30 min ou relance | onglet Mes missions remplacé par le renvoi web (`renvoi-web-missions`) ; remis à 1 → écran natif à la reprise suivante | — |
 
