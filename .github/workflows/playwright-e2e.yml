@@ -134,8 +134,41 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  simulation-interfaces:
+  portee:
+    name: Portée de la PR (web ou purement iOS/docs)
     if: ${{ !inputs.rotate_fixture_credentials && !inputs.confine_historical_fixture_cohort }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      touche_web: ${{ steps.portee.outputs.touche_web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: portee
+        name: Classer les fichiers modifiés
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "touche_web=true" >> "$GITHUB_OUTPUT"; echo "Pas une PR : recette web complète."; exit 0
+          fi
+          fichiers=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "$fichiers"
+          # Une PR qui ne touche que l'app iOS native, la doc ou les workflows iOS ne peut pas modifier
+          # le comportement du site : la recette Playwright (base de production partagée) est inutile.
+          hors_web=$(echo "$fichiers" | grep -vE '^(ios-native/|docs/|\.github/workflows/ios-swift-|\.github/workflows/apns-probe\.yml$|[^/]*\.md$|.*/[^/]*\.md$)' || true)
+          if [ -z "$fichiers" ] || [ -n "$hors_web" ]; then
+            echo "touche_web=true" >> "$GITHUB_OUTPUT"; echo "Fichiers web touchés : recette complète."
+          else
+            echo "touche_web=false" >> "$GITHUB_OUTPUT"; echo "PR purement iOS/docs : Playwright ignoré (check marqué « skipped », accepté par la protection de main)."
+          fi
+
+  simulation-interfaces:
+    needs: portee
+    if: ${{ !inputs.rotate_fixture_credentials && !inputs.confine_historical_fixture_cohort && needs.portee.outputs.touche_web == 'true' }}
     name: Simulation interfaces (${{ matrix.project }}, lot ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     container:
@@ -184,7 +217,8 @@ jobs:
   # PR — chromium only (job rapide pour feedback)
   e2e-pr:
     name: Playwright E2E (PR — Chromium)
-    if: github.event_name == 'pull_request'
+    needs: portee
+    if: github.event_name == 'pull_request' && needs.portee.outputs.touche_web == 'true'
     # Verrou détenu par GitHub jusqu'à la fin du job et de son nettoyage.
     # queue:max conserve les jobs en attente au lieu de les remplacer.
     concurrency:
