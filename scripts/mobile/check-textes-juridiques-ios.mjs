@@ -15,8 +15,9 @@
  *   - texte JSX, avec le traitement des espaces de React/Babel (lignes coupées aux bords et jointes
  *     par une espace) et les entités HTML décodées ;
  *   - littéral de chaîne ou fragment de gabarit, décodé (`\'` → `'`).
- * Un texte INCHANGÉ retrouvé une seule fois ailleurs dans le même fichier (décalage de lignes d'une
- * PR web) est toléré avec un avertissement ; un texte modifié, disparu ou ambigu fait rougir la garde.
+ * Un texte INCHANGÉ retrouvé ailleurs dans le même fichier (décalage de lignes d'une PR web) est
+ * toléré avec un avertissement : phrase longue retrouvée une seule fois, ou texte à la place que
+ * donne le décalage de ses voisines gardées ; un texte modifié, disparu ou ambigu fait rougir la garde.
  *
  * Autres annotations :
  *   - `// source-objet: <fichier>:<ligne> <NOM>` avant un `[String: String]` : l'objet littéral
@@ -584,13 +585,23 @@ export function lecteurWeb(lire) {
 const lignesDe = s => (s.debut === s.fin ? `l.${s.debut}` : `l.${s.debut}-${s.fin}`);
 const formatSource = (debut, fin) => (debut === fin ? `${debut}` : `${debut}-${fin}`);
 
+/** Longueur (caractères) à partir de laquelle un texte retrouvé une seule fois ailleurs est tenu pour déplacé. */
+export const TEXTE_LONG = 40;
+
 /**
  * Situe chaque constante dans son fichier web : `exact` (texte à la ligne annoncée), `decale`
- * (texte inchangé retrouvé une seule fois ailleurs, à une place compatible avec le décalage de ses
- * voisines, ou départagé par le décalage commun des textes uniques du même fichier), `modifie`
- * (texte absent, ou copie identique hors de la place de ses voisines : texte modifié à sa ligne
- * alors que le même texte existe ailleurs), `ambigu` (présent plusieurs fois ailleurs), `fichier`
+ * (texte inchangé retrouvé ailleurs, à la place que donne le décalage de ses voisines), `modifie`
+ * (texte absent, ou seule copie identique hors de cette place : le texte a pu changer à sa ligne
+ * alors que le même texte existe ailleurs), `ambigu` (plusieurs copies possibles), `fichier`
  * (fichier introuvable). Chaque occurrence web ne sert qu'à une constante.
+ *
+ * Une PR web qui ajoute ou retire des lignes décale d'autant tous les textes qui suivent : le
+ * décalage d'un texte déplacé est compris entre celui de la voisine gardée qui le précède et celui
+ * de la voisine qui le suit (ou égal à celui de son unique voisine). Les voisines situées servent
+ * d'appui de proche en proche, à partir des textes exacts et des phrases longues (TEXTE_LONG
+ * caractères et plus) retrouvées une seule fois, tenues pour déplacées. Un texte court peut avoir
+ * une copie fortuite (ex. `usePageTitle('Certificat de signature')` l.43 de
+ * CertificatSignaturePage.tsx, copie du titre l.185) : il n'est déplacé que s'il suit ses voisines.
  */
 function localiserConstantes(constantes, lireWeb) {
   const etats = new Map();
@@ -601,45 +612,52 @@ function localiserConstantes(constantes, lireWeb) {
     const u = web.unites.find(x => !prises.has(x) && x.valeur === c.valeur && x.debut === c.source.debut && x.fin === c.source.fin);
     if (u) { prises.add(u); etats.set(c, { statut: 'exact', unite: u }); }
   }
-  const attente = [];
-  const decalages = new Map();
   const libres = c => lireWeb(c.source.fichier).unites.filter(x => !prises.has(x) && x.valeur === c.valeur);
-  const candidats = [];
-  for (const c of constantes) {
-    if (etats.has(c)) continue;
+  const delta = c => etats.get(c).unite.debut - c.source.debut;
+  const situer = (c, u) => { prises.add(u); etats.set(c, { statut: 'decale', unite: u }); };
+  const enAttente = () => constantes.filter(c => !etats.has(c));
+  // Phrases longues retrouvées une seule fois : déplacées.
+  for (const c of enAttente()) {
+    const occurrences = libres(c);
+    if (occurrences.length === 1 && [...c.valeur].length >= TEXTE_LONG) situer(c, occurrences[0]);
+  }
+  // De proche en proche : un texte (ou les textes identiques d'une même ligne, « s » deux fois dans
+  // un gabarit) prend les occurrences dont le décalage suit ses voisines déjà situées.
+  const bornesDe = c => {
+    const voisines = constantes.filter(x => x !== c && etats.get(x)?.unite && x.source.fichier === c.source.fichier);
+    const avant = voisines.filter(x => x.source.debut <= c.source.debut).sort((a, b) => b.source.debut - a.source.debut)[0];
+    const apres = voisines.filter(x => x.source.debut >= c.source.debut).sort((a, b) => a.source.debut - b.source.debut)[0];
+    return [avant, apres].filter(Boolean).map(delta);
+  };
+  const suit = (bornes, d) => bornes.length > 0 && d >= Math.min(...bornes) && d <= Math.max(...bornes);
+  let progres = true;
+  while (progres) {
+    progres = false;
+    for (const c of enAttente()) {
+      if (etats.has(c)) continue;
+      const bornes = bornesDe(c);
+      if (!bornes.length) continue;
+      const soeurs = enAttente().filter(x => x.valeur === c.valeur && x.source.fichier === c.source.fichier
+        && x.source.debut === c.source.debut && x.source.fin === c.source.fin);
+      const places = libres(c).filter(u => suit(bornes, u.debut - c.source.debut) && u.fin - u.debut === c.source.fin - c.source.debut);
+      if (places.length !== soeurs.length) continue;
+      soeurs.forEach((s, i) => situer(s, places[i]));
+      progres = true;
+    }
+  }
+  // Fichier dont aucun texte n'a pu servir d'appui : un texte unique retrouvé une seule fois est déplacé.
+  for (const c of enAttente()) {
+    const autres = constantes.filter(x => x !== c && x.source.fichier === c.source.fichier && etats.get(x)?.unite);
+    const occurrences = libres(c);
+    if (!autres.length && occurrences.length === 1
+      && !constantes.some(x => x !== c && x.source.fichier === c.source.fichier && x.valeur === c.valeur)) {
+      situer(c, occurrences[0]);
+    }
+  }
+  for (const c of enAttente()) {
     const occurrences = libres(c);
     if (!occurrences.length) etats.set(c, { statut: 'modifie' });
-    else if (occurrences.length > 1) attente.push(c);
-    else candidats.push({ c, u: occurrences[0], delta: occurrences[0].debut - c.source.debut });
-  }
-  // Un texte déplacé par une PR web suit le décalage de ses voisines (lignes ajoutées ou retirées
-  // entre elles) : son décalage est compris entre celui de la voisine qui le précède et celui de
-  // celle qui le suit, ou égal à celui de son unique voisine (premier ou dernier texte gardé du
-  // fichier). Une copie identique ailleurs, hors de cette place, ne vaut pas preuve : le texte a pu
-  // changer à sa ligne (ex. `usePageTitle('Certificat de signature')` l.43 de
-  // CertificatSignaturePage.tsx, copie du titre l.185).
-  const deltas = new Map();
-  for (const [c, etat] of etats) if (etat.statut === 'exact') deltas.set(c, 0);
-  for (const k of candidats) deltas.set(k.c, k.delta);
-  for (const k of candidats) {
-    const voisines = [...deltas.keys()].filter(x => x !== k.c && x.source.fichier === k.c.source.fichier);
-    const avant = voisines.filter(x => x.source.debut <= k.c.source.debut).sort((a, b) => b.source.debut - a.source.debut)[0];
-    const apres = voisines.filter(x => x.source.debut >= k.c.source.debut).sort((a, b) => a.source.debut - b.source.debut)[0];
-    const bornes = [avant, apres].filter(Boolean).map(x => deltas.get(x));
-    const coherent = !bornes.length || (k.delta >= Math.min(...bornes) && k.delta <= Math.max(...bornes));
-    if (!coherent || prises.has(k.u)) { etats.set(k.c, { statut: 'modifie', copie: k.u }); continue; }
-    prises.add(k.u);
-    etats.set(k.c, { statut: 'decale', unite: k.u });
-    if (!decalages.has(k.c.source.fichier)) decalages.set(k.c.source.fichier, new Set());
-    decalages.get(k.c.source.fichier).add(k.delta);
-  }
-  for (const c of attente) {
-    const ensemble = decalages.get(c.source.fichier);
-    const d = ensemble && ensemble.size === 1 ? [...ensemble][0] : null;
-    const occurrences = libres(c);
-    const u = d === null ? null
-      : occurrences.find(x => x.debut === c.source.debut + d && x.fin === c.source.fin + d);
-    if (u) { prises.add(u); etats.set(c, { statut: 'decale', unite: u }); }
+    else if (occurrences.length === 1) etats.set(c, { statut: 'modifie', copie: occurrences[0] });
     else etats.set(c, { statut: 'ambigu', occurrences });
   }
   return etats;
@@ -658,9 +676,9 @@ function positionsZone(web, code) {
 }
 
 /**
- * Situe chaque zone de rendu : `exact`, `decale` (une seule fois ailleurs, à une place compatible
- * avec le décalage des textes gardés voisins du même fichier, comme pour les constantes),
- * `modifie` (absente, ou copie hors de cette place), `ambigu`, `fichier`.
+ * Situe chaque zone de rendu : `exact`, `decale` (une seule fois ailleurs ; pour une zone d'une
+ * ligne, à une place compatible avec le décalage des textes gardés voisins du même fichier, comme
+ * pour les textes courts), `modifie` (absente, ou copie hors de cette place), `ambigu`, `fichier`.
  */
 function localiserZones(zones, lireWeb, constantes) {
   const situees = constantes.filter(c => c.etat?.statut === 'exact' || c.etat?.statut === 'decale');
@@ -678,7 +696,9 @@ function localiserZones(zones, lireWeb, constantes) {
     if (!web) return { zone, source, statut: 'fichier' };
     const positions = positionsZone(web, zone.code ?? []);
     if (positions.some(p => p.debut === source.debut && p.fin === source.fin)) return { zone, source, statut: 'exact', position: source };
-    if (positions.length === 1 && coherente(source, positions[0].debut - source.debut)) {
+    // Une zone de plusieurs lignes retrouvée une seule fois est déplacée ; une zone d'une ligne
+    // doit en plus suivre le décalage des textes gardés voisins (copie fortuite possible).
+    if (positions.length === 1 && (zone.code.length >= 2 || coherente(source, positions[0].debut - source.debut))) {
       return { zone, source, statut: 'decale', position: positions[0] };
     }
     return { zone, source, statut: positions.length > 1 ? 'ambigu' : 'modifie', positions, web };
