@@ -142,8 +142,10 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
     # Les 309 scénarios par format sont répartis en trois lots disjoints.
-    # La borne Playwright de 30 min laisse une marge pour déposer les preuves.
-    timeout-minutes: 35
+    # Les lots WebKit (iPad paysage 2/3, iPhone 2/3) durent 27 à 30 min : la
+    # borne Playwright de 45 min évite « Timed out waiting 1800s » (run
+    # 41360517849, 124 passés / 13 non exécutés) et laisse déposer les preuves.
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -167,7 +169,7 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ''
           VITE_ENV: test
       - name: Parcours publics, inscription, connexion et espaces métier
-        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }} --shard=${{ matrix.shard }}/3 --global-timeout=1800000
+        run: npx playwright test --config=e2e/playwright.recette-complete.config.ts --project=${{ matrix.project }} --shard=${{ matrix.shard }}/3 --global-timeout=2700000
         env:
           RECETTE_START_SERVER: '1'
           CI: 'true'
