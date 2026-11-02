@@ -254,4 +254,89 @@ final class AccueilAssemblageTests: XCTestCase {
         XCTAssertNil(AccueilPresentation.texteOubliPointage(0))
         XCTAssertEqual(AccueilPresentation.nombrePourToiAffiches, 2, "le web affiche les deux premières (slice(0, 2))")
     }
+
+    // MARK: - Revue B8 de T3
+
+    func testSectionPropositionsDisparaitQuandToutesOntExpire() throws {
+        // Web : chaque `CarteProposition` échue appelle `onTraitee`, et la section (en-tête « 🚨 Missions
+        // proposées » compris) n'est rendue que si `propositions.length > 0`.
+        func proposition(_ id: String, creeLe: String) -> DashboardProposition {
+            DashboardProposition(id: id, missionId: "o-\(id)", creeLe: creeLe, typeContratChoisi: nil,
+                                 mission: ligne("o-\(id)", statut: nil, urgente: true))
+        }
+        let corps = DashboardCorps(propositions: [
+            proposition("p-1", creeLe: "2026-11-01T23:30:00.000Z"), // échéance 01:30Z
+            proposition("p-2", creeLe: "2026-11-01T22:05:00.000Z"), // échéance 00:05Z
+        ])
+        let propositions = try assembler(corps, lecture: nil).propositions
+        XCTAssertEqual(AccueilPresentation.propositionsAffichees(propositions, maintenant: maintenant).map(\.restant),
+                       ["1h 30min", "0h 05min"])
+        XCTAssertEqual(AccueilPresentation.propositionsAffichees(propositions, maintenant: maintenant + 5 * 60).map(\.id), ["p-1"],
+                       "la carte échue disparaît, l'autre reste")
+        XCTAssertEqual(AccueilPresentation.propositionsAffichees(propositions, maintenant: maintenant + 5 * 60).map(\.restant), ["1h 25min"])
+        XCTAssertEqual(AccueilPresentation.propositionsAffichees(propositions, maintenant: maintenant + 90 * 60), [],
+                       "toutes échues : aucune carte, donc aucune section ni en-tête")
+    }
+
+    func testGainsSansAucunMontantPositifMasquentLaCarte() {
+        // Cas limite où le web afficherait « 💰 Ce mois :  sur 2 missions » : montants serveur nuls.
+        let nuls = GainsDuMois.agreger([
+            MissionGainLigne(id: "t-1", typeContratApplique: "SALARIE", typeContratRecherche: nil, totalBrut: 0, netAPayer: 0, netEstime: 0),
+            MissionGainLigne(id: "t-2", typeContratApplique: "LIBERAL", typeContratRecherche: nil, totalBrut: 0, netAPayer: 0, netEstime: nil),
+        ])
+        XCTAssertEqual(nuls, GainsDuMois(honoraires: 0, netSalarie: 0, brutIndicatif: 0, nombreMissions: 2))
+        XCTAssertNil(AccueilPresentation.texteGains(nuls), "aucune partie à afficher : carte masquée, jamais « Ce mois :  sur N missions »")
+        XCTAssertFalse(AccueilPresentation.afficheNoteNetEstime(nuls))
+        XCTAssertNil(AccueilPresentation.texteGains(GainsDuMois(honoraires: 0, netSalarie: 0, brutIndicatif: 0, nombreMissions: 1)))
+    }
+
+    func testAucunTexteNeReprendLAlerte48hNiLeCumulDActivite() throws {
+        // HARD STOP n°4 (blueprint T3) : à 50 h planifiées, un profil MIXTE verrait sur le web
+        // `BandeauAlerte48h` (« 🛑 Plafond de 48h atteint cette semaine… ») et l'encart « ⚠️ Cumul
+        // d'activité… ». L'Accueil natif n'en reprend rien : `heures_semaine` est décodé, jamais affiché.
+        let corps = try DashboardCorps.decoder(Data("""
+        {"profil":{"prenom":"Camille","profession":"IDE","tous_documents_valides":true,"type_exercice":"MIXTE"},
+         "heures_semaine":50,"missions_oubliees_count":2,"notifs_non_lues":3,"gains_mois":{"nb_missions":1},
+         "mes_missions":[{"id":"m-1","intitule":"Mission m-1","debut_le":"2026-11-05T07:00:00.000Z",
+                          "fin_le":"2026-11-05T15:00:00.000Z","statut":"ASSIGNEE"}],
+         "missions_ouvertes":[{"id":"o-1","intitule":"Mission o-1","debut_le":"2026-11-05T07:00:00.000Z",
+                               "fin_le":"2026-11-05T15:00:00.000Z","taux_horaire_base":25}]}
+        """.utf8))
+        XCTAssertEqual(corps.heuresSemaine, 50)
+        let lecture = LectureMissionsAccueil(records: [record("m-1", nbCreneaux: 1), record("o-1", nbCreneaux: 1)],
+                                             creneaux: [creneau("c-1", "m-1", "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z"),
+                                                        creneau("c-2", "o-1", "2026-11-05T07:00:00.000Z", "2026-11-05T15:00:00.000Z")])
+        let snapshot = try assembler(corps, lecture: lecture, gains: [
+            MissionGainLigne(id: "t-1", typeContratApplique: "SALARIE", typeContratRecherche: nil, totalBrut: 208, netAPayer: 224.6, netEstime: 162.4),
+        ])
+        XCTAssertEqual(snapshot.heuresSemaine, 50, "décodé, conservé, jamais affiché")
+        let gains = try XCTUnwrap(snapshot.gains)
+        let textes = ([
+            AccueilPresentation.salutation(prenom: snapshot.profil?.prenom, maintenant: maintenant),
+            AccueilPresentation.accroche(profil: snapshot.profil, nombreOuvertes: snapshot.pourToi.count),
+            AccueilPresentation.texteOubliPointage(snapshot.missionsOublieesCount),
+            AccueilPresentation.texteNotifications(snapshot.notifsNonLues),
+            AccueilPresentation.texteGains(gains),
+            AccueilPresentation.noteNetEstime,
+        ] + snapshot.prochaines.map { AccueilPresentation.planningProchaine($0.planning) }
+          + snapshot.pourToi.map { AccueilPresentation.planningPourToi($0.planning) }).compactMap { $0 }
+        XCTAssertEqual(textes.count, 8, "chaque texte de l'écran est contrôlé")
+        for texte in textes {
+            for interdit in ["48h", "48 h", "plafond", "cumul d"] {
+                XCTAssertNil(texte.range(of: interdit, options: [.caseInsensitive, .diacriticInsensitive]), "« \(interdit) » dans « \(texte) »")
+            }
+        }
+    }
+
+    func testRenvoisWebDeLAccueilSontDesRoutesSafariCanoniques() throws {
+        // Pointage (lot 2) et notifications (lot 3) : résolus par `LinkRouter`, jamais une URL écrite en dur.
+        XCTAssertEqual(AccueilPresentation.lienPresences, "/soignant/presences")
+        XCTAssertEqual(AccueilPresentation.lienNotifications, "/soignant/notifications")
+        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences),
+                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/presences"))))
+        XCTAssertEqual(AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications),
+                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/notifications"))))
+        XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/missions"), "un écran natif n'est jamais ouvert comme renvoi web")
+        XCTAssertNil(AccueilPresentation.renvoiWeb("https://exemple.invalid/soignant/presences"), "hôte étranger refusé")
+    }
 }

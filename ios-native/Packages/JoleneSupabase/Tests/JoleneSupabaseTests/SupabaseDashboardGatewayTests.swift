@@ -4,10 +4,12 @@ import Supabase
 import XCTest
 @testable import JoleneSupabase
 
-/// Tableau de bord du lot 1 (T3) : `fn_dashboard_soignant_complet` puis, en parallèle, fiches
-/// `missions` + créneaux PREVISIONNEL (pager lot 0), `fn_etablissements_safe` et relecture des
-/// missions TERMINEE du mois (décision 10), comme `DashboardSoignant.tsx` l.104-215. Une lecture
-/// complémentaire en échec dégrade l'écran sans erreur ; `{error}` en HTTP 200 n'est jamais un succès.
+/// Tableau de bord du lot 1 (T3) : `fn_dashboard_soignant_complet` et, en parallèle de la RPC, la
+/// relecture des missions TERMINEE du mois (décision 10) ; puis fiches `missions` + créneaux
+/// PREVISIONNEL (pager lot 0) et `fn_etablissements_safe`, comme `DashboardSoignant.tsx` l.104-215.
+/// Chaque lecture complémentaire a son sous-budget : en échec de transport, de serveur ou de contrat,
+/// ou au dépassement, elle dégrade l'écran sans erreur ; une session expirée et l'annulation sont
+/// propagées. `{error}` en HTTP 200 n'est jamais un succès.
 final class SupabaseDashboardGatewayTests: XCTestCase {
     private let registry = StubRegistry.shared
     private let rpcPath = "/rest/v1/rpc/fn_dashboard_soignant_complet"
@@ -190,10 +192,24 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
 
     // MARK: - Refus
 
+    /// Après un refus de la RPC, aucune lecture qui en dépend (fiches, créneaux, établissements) ;
+    /// seule la relecture des gains, partie en parallèle de la RPC comme dans le `Promise.all` du web
+    /// (l.104-125), a pu être émise, puis annulée et ignorée.
+    private func aucuneLectureDependanteDeLaRPC(file: StaticString = #filePath, line: UInt = #line) {
+        let autres = registry.requests.filter { $0.path != rpcPath && !estGains($0) }
+        XCTAssertTrue(autres.isEmpty, "lectures après un refus : \(autres.map(\.path))", file: file, line: line)
+        XCTAssertEqual(registry.requests(to: rpcPath).count, 1, "aucun renvoi automatique", file: file, line: line)
+    }
+
+    private func stubGainsVides() {
+        registry.add("GET", "/rest/v1/missions", where: { $0.query("select") == SupabaseDashboardGateway.gainsSelect }, respond: .json(200, "[]"))
+    }
+
     func testNonAuthentifieEnHTTP200EstUneSessionExpireeSansAutreRequete() async {
         registry.add("POST", rpcPath, respond: .json(200, #"{"error":"Non authentifié"}"#))
+        stubGainsVides()
         await attendreErreur(.unauthorized, message: SupabaseErrorMapping.unauthorizedMessage)
-        XCTAssertEqual(registry.requests.count, 1, "aucune lecture complémentaire après un refus")
+        aucuneLectureDependanteDeLaRPC()
     }
 
     func testAutreErreurServeurAfficheeVerbatim() async {
@@ -205,8 +221,9 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
         for corps in ["null", "[]", "42"] {
             registry.reset()
             registry.add("POST", rpcPath, respond: .json(200, corps))
+            stubGainsVides()
             await attendreErreur(.contract, message: SupabaseErrorMapping.contractMessage)
-            XCTAssertEqual(registry.requests.count, 1, corps)
+            aucuneLectureDependanteDeLaRPC()
         }
     }
 
@@ -236,5 +253,92 @@ final class SupabaseDashboardGatewayTests: XCTestCase {
             XCTFail("type d'erreur inattendu : \(error)")
         }
         XCTAssertTrue(registry.requests.isEmpty)
+    }
+
+    // MARK: - Lectures complémentaires : sous-budget, session, annulation (revue B8 de T3)
+
+    func testSessionExpireeSurUneLectureComplementaireNestJamaisUnRenduPartiel() async {
+        // JWT refusé sur une lecture complémentaire : l'écran propose « Vérifier ma session », jamais
+        // un tableau partiel qui masquerait l'expiration.
+        let jwtExpire = StubResponse.json(401, #"{"code":"PGRST301","message":"JWT expired","details":null,"hint":null}"#)
+        for lecture in ["gains", "fiches", "créneaux", "établissements"] {
+            registry.reset()
+            switch lecture {
+            case "gains": stubNominal(gains: jwtExpire)
+            case "fiches": stubNominal(fiches: jwtExpire)
+            case "créneaux": stubNominal(creneaux: jwtExpire)
+            default: stubNominal(etablissements: jwtExpire)
+            }
+            await attendreErreur(.unauthorized, message: SupabaseErrorMapping.unauthorizedMessage)
+        }
+    }
+
+    func testSousBudgetDesLecturesComplementairesBorneParLeDelaiDeLEcran() {
+        let sousBudget = SupabaseDashboardGateway.sousBudgetLecture
+        XCTAssertEqual(sousBudget, 5)
+        XCTAssertLessThan(sousBudget + SupabaseDashboardGateway.margeEcran, SessionController.defaultResolutionTimeout)
+        // RPC rapide : sous-budget entier ; RPC lente : ce qu'il reste du délai de l'écran (15 s) moins la
+        // marge, pour que la borne de l'écran ne jette jamais une RPC réussie ; délai épuisé : aucune lecture.
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0), sousBudget)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 0.4), sousBudget)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 12), 15 - 12 - SupabaseDashboardGateway.margeEcran, accuracy: 1e-9)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 14.6), 0)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 30), 0)
+        XCTAssertEqual(SupabaseDashboardGateway.budgetLecture(ecoule: 1, sousBudget: 2, budgetEcran: 4), 2)
+    }
+
+    func testLectureComplementaireLenteVautIndisponibleAuDepassement() async throws {
+        let debut = Date()
+        let valeur: Int? = try await SupabaseDashboardGateway.lectureComplementaire("lente", budget: 0.05) {
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+            return 1
+        }
+        XCTAssertNil(valeur, "lecture lente (pager multi-pages, rejeu SDK) : rendu partiel, jamais une erreur d'écran")
+        XCTAssertLessThan(Date().timeIntervalSince(debut), 2, "le sous-budget borne l'attente")
+
+        let rapide: Int? = try await SupabaseDashboardGateway.lectureComplementaire("rapide", budget: 5) { 7 }
+        XCTAssertEqual(rapide, 7)
+        let sansBudget: Int? = try await SupabaseDashboardGateway.lectureComplementaire("épuisé", budget: 0) {
+            XCTFail("aucune requête quand le délai de l'écran est épuisé")
+            return 1
+        }
+        XCTAssertNil(sansBudget)
+    }
+
+    func testLectureComplementaireReplieSeulementTransportServeurEtContrat() async throws {
+        let replis: [any Error] = [
+            URLError(.timedOut), URLError(.notConnectedToInternet),
+            JoleneError(.network, SupabaseErrorMapping.networkMessage), JoleneError(.contract, SupabaseErrorMapping.contractMessage),
+            JoleneError(.unknown, "erreur serveur"), DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "illisible")),
+        ]
+        for erreur in replis {
+            let valeur: Int? = try await SupabaseDashboardGateway.lectureComplementaire("échec", budget: 5) { throw erreur }
+            XCTAssertNil(valeur, "repli attendu pour \(erreur)")
+        }
+    }
+
+    func testLectureComplementairePropageSessionExpireeEtAnnulation() async {
+        do {
+            let _: Int? = try await SupabaseDashboardGateway.lectureComplementaire("session", budget: 5) {
+                throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
+            }
+            XCTFail("une session expirée n'est jamais un rendu partiel")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage))
+        } catch {
+            XCTFail("type d'erreur inattendu : \(error)")
+        }
+
+        let annulee = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            let valeur: Int? = try await SupabaseDashboardGateway.lectureComplementaire("annulée", budget: 5) {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                return 1
+            }
+            return valeur
+        }.result
+        XCTAssertThrowsError(try annulee.get(), "l'annulation de l'écran n'est jamais un rendu partiel") {
+            XCTAssertTrue($0 is CancellationError, "\($0)")
+        }
     }
 }

@@ -67,4 +67,50 @@ final class DemoDashboardTests: XCTestCase {
         XCTAssertEqual(liste.count, 30, "Explorer ne liste que les missions ouvertes")
         XCTAssertFalse(liste.contains { $0.id.hasPrefix("demo-assignee-") })
     }
+
+    // MARK: - Échec forcé (recette de l'état d'erreur dans l'interface, revue B8 de T3)
+
+    func testEchecForceAuPremierChargementPuisRepriseSurLeTableauDemo() async throws {
+        let port = DemoDashboardEchecGateway()
+        do {
+            _ = try await port.dashboard(context: DemoWorld.context)
+            XCTFail("le premier chargement doit échouer")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.network, SessionController.timeoutMessage), "panne simulée = délai dépassé")
+        }
+        let reprise = try await port.dashboard(context: DemoWorld.context)
+        let attendu = try await DemoDashboardGateway().dashboard(context: DemoWorld.context)
+        XCTAssertEqual(reprise, attendu, "« Réessayer » relit le tableau de bord démo")
+    }
+
+    func testEchecForceNonConsommeParUneTacheAnnulee() async throws {
+        let port = DemoDashboardEchecGateway()
+        // Tâche annulée avant l'appel (vue qui disparaît) : l'échec reste dû au chargement suivant.
+        let annulee = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await port.dashboard(context: DemoWorld.context)
+        }.result
+        XCTAssertThrowsError(try annulee.get()) { XCTAssertTrue($0 is CancellationError, "\($0)") }
+        do {
+            _ = try await port.dashboard(context: DemoWorld.context)
+            XCTFail("l'échec forcé n'a pas été consommé par la tâche annulée")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error.kind, .network)
+        }
+        _ = try await port.dashboard(context: DemoWorld.context)
+    }
+
+    func testEchecForceRefuseToutAutreUtilisateur() async {
+        var autre = DemoWorld.context
+        autre.userId = "user-1"
+        autre.profile.id = "user-1"
+        do {
+            _ = try await DemoDashboardEchecGateway().dashboard(context: autre)
+            XCTFail("la démo ne sert aucun autre utilisateur, même en échec forcé")
+        } catch let error as JoleneError {
+            XCTAssertEqual(error, JoleneError(.demoOnly, DemoWorld.messageDemoSeulement))
+        } catch {
+            XCTFail("type d'erreur inattendu : \(error)")
+        }
+    }
 }

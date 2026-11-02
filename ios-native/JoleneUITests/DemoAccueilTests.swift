@@ -4,7 +4,8 @@ import XCTest
 /// par `DemoDashboardGateway` (`demo-dashboard.json`, horloge fixée 2026-11-02T00:00:00Z). Les
 /// valeurs attendues sont celles que `DemoDashboardTests` (JoleneCore) affirme sur le port : un
 /// écart entre l'écran et le port fait échouer l'un des deux. Exclusions HARD STOP vérifiées
-/// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer.
+/// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer ;
+/// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`).
 final class DemoAccueilTests: JoleneUITestCase {
     private static let euro = "\u{00A0}€"
 
@@ -54,16 +55,60 @@ final class DemoAccueilTests: JoleneUITestCase {
         scrollTo(notifications, in: ecran)
         XCTAssertEqual(notifications.label, "2 notifications non lues")
 
-        // HARD STOP n°4 : ni alerte 48 h ni encart « cumul d'activité » (profil démo MIXTE).
-        XCTAssertFalse(textContaining("Cumul d").exists, "encart cumul d'activité exclu")
-        XCTAssertFalse(textContaining("48 h").exists, "BandeauAlerte48h exclu")
+        // HARD STOP n°4 : ni `BandeauAlerte48h` (web : « Plafond de 48h atteint… », « …plafond de 48h
+        // cette semaine… », sans espace) ni encart « Cumul d'activité » (profil démo MIXTE). Recherche
+        // sur tous les libellés, casse et accents ignorés. La démo planifie 8 h (le web n'afficherait
+        // pas le bandeau, seuil 44 h) : la garde à 50 h planifiées est dans JoleneCore
+        // (`AccueilAssemblageTests.testAucunTexteNeReprendLAlerte48hNiLeCumulDActivite`).
+        for interdit in ["48h", "48 h", "plafond", "cumul d"] {
+            XCTAssertFalse(libelleContenant(interdit).exists, "« \(interdit) » ne doit apparaître nulle part sur l'Accueil")
+        }
+        // Point d'extension calendrier (décision 18) : aucun bouton tant que T5 n'injecte pas
+        // `ajoutCalendrierMission`. T5 remplace cette assertion par la présence du bouton et l'issue
+        // `accueil-calendrier-issue` après un tap (LOT1_PLAN.md §3 T5, verrou de clôture T12).
+        XCTAssertFalse(element("accueil-calendrier-demo-assignee-001").exists,
+                       "bouton calendrier sans implémentation injectée : jamais un bouton sans effet (T5 le câble)")
         record("\(proofPrefix)-accueil-bas")
 
         ouvrirProchaineMissionPuisRevenir(ecran)
         ouvrirExplorerDepuisToutVoir(ecran)
     }
 
+    /// État d'erreur puis reprise (recette CLAUDE.md : états d'erreur dans l'interface) : surcharge
+    /// DEBUG `JOLENE_FORCE_ACCUEIL_ECHEC` (`AppContainer`) → `DemoDashboardEchecGateway`, dont le
+    /// premier chargement échoue comme un délai dépassé ; « Réessayer » relit le tableau de bord démo.
+    func testAccueilErreurPuisReprise() throws {
+        launchDemo(environment: ["JOLENE_FORCE_ACCUEIL_ECHEC": "1"])
+        connexionDemo()
+
+        let ecran = element("accueil-screen")
+        let erreur = element("accueil-error")
+        require("L'Accueil affiche l'état d'erreur", timeout: 30) { self.containerVisible(erreur) }
+        XCTAssertTrue(text("Impossible de charger votre tableau de bord").exists, "titre de l'état d'erreur")
+        XCTAssertTrue(text("Le service ne répond pas. Vérifiez votre connexion puis réessayez.").exists, "message de la panne simulée")
+        XCTAssertFalse(element("accueil-session-expired").exists, "une panne n'est pas une session expirée")
+        XCTAssertFalse(element("accueil-salutation").exists, "aucun tableau de bord fabriqué")
+        record("\(proofPrefix)-accueil-erreur")
+
+        let reessayer = element("accueil-retry")
+        degager(reessayer, dans: ecran)
+        reessayer.tap()
+        let salutation = element("accueil-salutation")
+        require("« Réessayer » relit le tableau de bord démo", timeout: 30) {
+            salutation.exists && !erreur.exists && !self.element("accueil-loading").exists
+        }
+        XCTAssertTrue(["Bonjour, Camille", "Bonsoir, Camille"].contains(salutation.label), "salutation : \(salutation.label)")
+        XCTAssertEqual(element("accueil-accroche").label, "3 missions près de chez vous — vous pouvez déjà postuler.")
+        verifier("accueil-prochaine-demo-assignee-001", dans: ecran, contient: ["Démonstration · Mission assignée 1"])
+        record("\(proofPrefix)-accueil-reprise")
+    }
+
     // MARK: - Étapes
+
+    /// Tout élément dont le libellé contient `fragment`, casse et accents ignorés.
+    private func libelleContenant(_ fragment: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[cd] %@", fragment)).firstMatch
+    }
 
     private func connexionDemo() {
         require("L'écran de connexion est affiché") { self.containerVisible(self.element("login-scroll")) }
