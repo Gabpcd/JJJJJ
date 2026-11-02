@@ -5,10 +5,13 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   CONTRACTS_PATH,
+  RPC_JAMAIS_SUIVIES,
+  RPC_PAS_AVANT_LOT4,
   RPC_SUIVIES,
   SOURCES,
   buildContracts,
   diffContracts,
+  verifierExclusions,
 } from '../../scripts/mobile/check-rpc-contracts.mjs';
 
 // Garde du lot 1, tranche T0 (docs/mobile-swift/LOT1_PLAN.md §3 T0) : les RPC du lot 1 sont
@@ -313,4 +316,206 @@ test('CONTRATS : fn_mes_favoris_etablissements fait un JOIN interne (jamais pré
   assert.ok(!/`fn_mes_favoris_etablissements\.nom`\s*\(LEFT/.test(doc), 'favoris présentés comme LEFT JOIN');
   assert.ok(/`fn_mes_favoris_etablissements\.nom`\s*\(JOIN interne/.test(doc), 'JOIN interne des favoris non consigné');
   assert.ok(/JOIN interne/.test(section(doc, 'fn_mes_favoris_etablissements')), 'fiche favoris : JOIN interne non consigné');
+});
+
+// Revue B8 n°2 de T0 : la règle de décodage `RPCResponse` (LOT1_PLAN §2.4) est normative pour T1 et
+// T6a ; elle est confrontée au SQL des délégués (réponses sans clé `success`). Mêmes exigences pour les
+// chaînes de la confirmation de présence (confrontées au web), le dédoublonnage EventKit, la procédure
+// de re-baseline et l'exécution de cette garde par le check requis « Typecheck + build ».
+
+/** Texte d'une sous-section `### <titre>` d'un document Markdown, jusqu'à la (sous-)section suivante. */
+function sousSection(doc, heading) {
+  const start = doc.indexOf(`\n### ${heading}`);
+  assert.ok(start >= 0, `sous-section « ${heading} » introuvable`);
+  const fins = [doc.indexOf('\n### ', start + 1), doc.indexOf('\n## ', start + 1)].filter(i => i >= 0);
+  return doc.slice(start, fins.length ? Math.min(...fins) : undefined);
+}
+
+const RATE_LIMIT_CANDIDATURE = 'Trop de candidatures en peu de temps. Réessayez plus tard.';
+// Chaînes affichées par le web après `fn_confirmer_presence_mission` (bouton, confirmation, état).
+const WEB_PRESENCE = [
+  '✓ Je confirme ma présence',
+  "Présence confirmée — l'établissement est prévenu. ✓",
+  "✓ Présence confirmée — l'établissement est prévenu",
+];
+
+test('script : listes d exclusion exportées et fail-closed (jamais / pas avant le lot 4)', () => {
+  assert.deepEqual(RPC_JAMAIS_SUIVIES, INTERDITES_NATIF);
+  assert.deepEqual(RPC_PAS_AVANT_LOT4, PAS_AVANT_LOT4);
+  assert.doesNotThrow(() => verifierExclusions(RPC_SUIVIES));
+  assert.throws(
+    () => verifierExclusions([...RPC_SUIVIES, { name: 'fn_etablissement_public', statut: 'a_venir', lot: 1 }]),
+    /jamais/,
+  );
+  assert.throws(
+    () => verifierExclusions([...RPC_SUIVIES, { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 3 }]),
+    /lot 4/,
+  );
+  assert.doesNotThrow(() => verifierExclusions([...RPC_SUIVIES, { name: 'fn_retirer_candidature', statut: 'a_venir', lot: 4 }]));
+  // Le bloc « Jamais suivies » du script ne mélange plus une RPC suivie (lot 3) ni une RPC du lot 4.
+  const source = read('scripts/mobile/check-rpc-contracts.mjs');
+  const debut = source.indexOf('Jamais suivies');
+  const fin = source.indexOf('Pas avant le lot 4');
+  assert.ok(debut >= 0 && fin > debut, 'blocs « Jamais suivies » puis « Pas avant le lot 4 » attendus');
+  const jamais = source.slice(debut, fin);
+  assert.ok(jamais.includes('fn_etablissement_public'));
+  for (const intrus of ['fn_retirer_candidature', 'fn_mon_profil_soignant_complet']) {
+    assert.ok(!jamais.includes(intrus), `« Jamais suivies » cite encore ${intrus}`);
+  }
+});
+
+test('LOT1_PLAN §2.4 : décodage par clés indépendant de `success`, dans l ordre du web, confronté au SQL', () => {
+  const schema = read(SOURCES.schema);
+  const postuler = sqlBody(schema, 'fn_postuler_mission');
+  const finaliser = sqlBody(schema, 'fn_finaliser_attribution_mission');
+  const resoudre = sqlBody(schema, 'fn_resoudre_contrat_mission');
+  // Témoins SQL : les délégués renvoient le choix de contrat et le refus documentaire sans clé `success`.
+  for (const body of [postuler, finaliser]) {
+    assert.match(body, /RETURN v_resolution - 'ok';/);
+    assert.match(body, /'documents_requis_pour', [^\n]+\n\s*'lien_documents', '\/soignant\/mes-documents'/);
+  }
+  assert.match(resoudre, /'ok', false,\s*'choix_requis', true,/);
+  // Le succès POSTULER porte AUSSI `documents_requis_pour` (contrat retenu) : la règle documents exige `error`.
+  assert.match(postuler, /'success', true,[\s\S]*?'documents_requis_pour', v_choix\s*\)/);
+  const codesFinaliser = sqlCodes(finaliser);
+  assert.deepEqual(codesFinaliser, ['PLANNING_HEBDOMADAIRE_INDISPONIBLE', 'PLAFOND_48H_HEBDO']);
+  // Témoin web : `choix_requis` est testé avant `error`, sur POSTULER comme sur ACCEPTER.
+  const tsx = read('src/pages/DetailMissionSoignant.tsx');
+  const choix = [...tsx.matchAll(/data\?\.choix_requis/g)].map(m => m.index);
+  assert.equal(choix.length, 2, 'témoin web : deux tests `data?.choix_requis` attendus');
+  for (const at of choix) {
+    const suite = tsx.slice(at).indexOf('data?.error');
+    assert.ok(suite > 0 && suite < 400, 'témoin web : `data?.error` suit `data?.choix_requis`');
+  }
+
+  const s24 = sousSection(read('docs/mobile-swift/LOT1_PLAN.md'), '2.4 ');
+  assert.ok(s24.includes('indépendante de `success`'), '§2.4 : discrimination indépendante de `success` non énoncée');
+  assert.ok(/`choix_requis[^`]*`[^\n]*sans clé `success`/.test(s24), '§2.4 : choix_requis sans clé `success` non consigné');
+  const regles = ['1. `choix_requis', '2. `code`', '3. `documents_requis_pour`', '4. `success == true`', '5. `error`', '6. '];
+  let precedente = -1;
+  for (const regle of regles) {
+    const at = s24.indexOf(`\n${regle}`);
+    assert.ok(at > precedente, `§2.4 : règle « ${regle} » absente ou hors ordre`);
+    precedente = at;
+  }
+  const regle3 = s24.slice(s24.indexOf('\n3. `documents_requis_pour`'), s24.indexOf('\n4. '));
+  assert.ok(regle3.includes('**et** `error`'), '§2.4 règle 3 : `error` requis (le succès POSTULER porte documents_requis_pour)');
+  assert.ok(regle3.includes('lien_documents'), '§2.4 règle 3 : lien_documents absent');
+  for (const code of [...codesFinaliser, 'PLANNING_A_RECONFIRMER', 'PLANNING_MODIFIE_RECONFIRMER', 'CONFLIT_PLANNING', 'REPOS_11H']) {
+    assert.ok(s24.includes(`\`${code}\``), `§2.4 : code ${code} absent`);
+  }
+  assert.ok(s24.includes(RATE_LIMIT_CANDIDATURE), '§2.4 : rate-limit de candidature (HTTP 200) absent');
+  assert.ok(!s24.includes('429'), '§2.4 : le rate-limit de candidature n est pas un HTTP 429');
+  assert.ok(!s24.includes('`{success:false, error, error_code?, code?, documents_requis_pour?, choix_requis?, options?}` → `CandidatureOutcome`'),
+    '§2.4 : ancienne règle (refus lus seulement sous success:false)');
+  assert.ok(s24.includes('fiche `fn_confirmer_action_planning_v1`'), '§2.4 : renvoi à la fiche absent');
+});
+
+test('LOT1_PLAN T6a : renvoi à la fiche pour les formes de réponse, rate-limit en HTTP 200 (pas un 429)', () => {
+  const rate = sqlBody(read(SOURCES.schema), 'fn_postuler_mission_rate_limited');
+  assert.ok(rate.includes(`RETURN jsonb_build_object('error', '${RATE_LIMIT_CANDIDATURE}');`), 'témoin SQL : rate-limit en {error} HTTP 200');
+  const t6a = sousSection(read('docs/mobile-swift/LOT1_PLAN.md'), 'T6a ');
+  assert.ok(!t6a.includes('429'), 'T6a : « 429 » pour le rate-limit de candidature');
+  assert.ok(!/\b3 formes de réponse\b/.test(t6a), 'T6a : « 3 formes de réponse » alors que la fiche en liste davantage');
+  assert.ok(t6a.includes(`{error:'${RATE_LIMIT_CANDIDATURE}'}`) && t6a.includes('HTTP 200'), 'T6a : rate-limit en {error} HTTP 200 absent');
+  assert.ok(t6a.includes('fiche `fn_confirmer_action_planning_v1`'), 'T6a : renvoi à la fiche absent');
+});
+
+test('CONTRATS : fiche fn_confirmer_action_planning_v1 — délégués sans `success`, lien_documents, plafond 48 h, classe', () => {
+  const schema = read(SOURCES.schema);
+  const finaliser = sqlBody(schema, 'fn_finaliser_attribution_mission');
+  const resoudre = sqlBody(schema, 'fn_resoudre_contrat_mission');
+  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'fn_confirmer_action_planning_v1');
+  // Une forme « documents » par délégué qui la renvoie (POSTULER libéral, ACCEPTER/PROPOSITION), chacune avec lien_documents.
+  const lienSql = "'lien_documents', '/soignant/mes-documents'";
+  const nbSql = [sqlBody(schema, 'fn_postuler_mission'), finaliser].filter(b => b.includes(lienSql)).length;
+  assert.equal(nbSql, 2, 'témoin SQL : deux délégués posent lien_documents');
+  const nbFiche = fiche.split("lien_documents:'/soignant/mes-documents'").length - 1;
+  assert.ok(nbFiche >= nbSql, `clé lien_documents : ${nbFiche} forme(s) dans la fiche pour ${nbSql} délégués`);
+  for (const code of sqlCodes(finaliser)) assert.ok(fiche.includes(`'${code}'`), `code ${code} (fn_finaliser_attribution_mission) absent`);
+  const messageChoix = resoudre.match(/'choix_requis', true,\s*'error', '([^']+)'/)?.[1];
+  assert.ok(messageChoix && fiche.includes(`error:'${messageChoix}'`), 'message du choix de contrat absent');
+  const options = [...resoudre.matchAll(/'value', '([A-Z]+)',\s*'label', '((?:[^']|'')*)'/g)];
+  assert.equal(options.length, 2, 'témoin SQL : deux options de contrat');
+  for (const [, value, label] of options) {
+    assert.ok(fiche.includes(`'${value}'`) && fiche.includes(label.replaceAll("''", "'")), `option ${value} absente de la fiche`);
+  }
+  assert.ok(fiche.includes(RATE_LIMIT_CANDIDATURE), 'rate-limit absent');
+  assert.ok(fiche.includes('sans clé `success`'), 'délégués sans clé `success` non consignés');
+  assert.ok(fiche.includes('`LOT1_PLAN.md` §2.4'), 'renvoi à l ordre de décodage §2.4 absent');
+  const classe = fiche.split('\n').find(l => l.startsWith("- **Classe d'authentification (manifeste)**"));
+  assert.ok(classe, 'ligne « Classe d authentification » absente');
+  assert.ok(!classe.includes('à classer avant consommation'), 'classe : « à classer avant consommation » alors que la décision 6 est prise');
+  assert.ok(classe.includes('`RPC_UTILISATEUR_AUTH_INTERNE`') && classe.includes('décision 6'), 'classe : classement manuel de la décision 6 absent');
+});
+
+test('CONTRATS en-tête : formes polymorphes complètes et procédure de re-baseline (garde dans le check requis)', () => {
+  const doc = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
+  const entete = doc.slice(0, doc.indexOf('\n## Synthèse'));
+  for (const forme of [
+    '`{error}` seul', '`{success:false, ok:false, error, code?}`', '`{success:false, error_code, …}`',
+    '`{choix_requis:true, error, options}`', '`{error, code, …}`', '`{error, documents_requis_pour, lien_documents}`',
+    '`{success:true, …}`',
+  ]) assert.ok(entete.includes(forme), `en-tête : forme ${forme} absente`);
+  assert.ok(entete.includes('sans clé `success`'), 'en-tête : réponses sans clé `success` non signalées');
+  assert.ok(entete.includes('auto/schema-baseline'), 'en-tête : re-baseline automatique non évoquée');
+  assert.ok(entete.includes('PR humaine') && entete.includes('--update'), 'en-tête : procédure « PR humaine + --update + fiche » absente');
+  assert.ok(!/Deux RPC ne sont pas suivies et ne doivent jamais/.test(doc), 'fn_retirer_candidature présentée comme « jamais » suivie');
+});
+
+test('LOT1_PLAN T0 : fn_confirmer_action_planning_v1 classée par la décision 6 (plus de « tant que Q6 »)', () => {
+  const t0 = sousSection(read('docs/mobile-swift/LOT1_PLAN.md'), 'T0 ');
+  assert.ok(!t0.includes("tant que §7 Q6 n'est pas tranchée"), 'T0 : Q6 présentée comme ouverte');
+  assert.ok(t0.includes('décision 6 : classement documentaire, manifeste non régénéré'), 'T0 : décision 6 non citée');
+});
+
+test('Présence : chaînes exactes du web citées, « Je serai là ✓ » réservé au titre du push serveur', () => {
+  const tsx = read('src/pages/DetailMissionSoignant.tsx').replaceAll("\\'", "'");
+  for (const texte of WEB_PRESENCE) assert.ok(tsx.includes(texte), `témoin web : « ${texte} » absent de DetailMissionSoignant.tsx`);
+  const push = sqlBody(read(SOURCES.schema), 'fn_demander_confirmations_presence');
+  assert.ok(push.includes("'Ta mission demain — Je serai là ✓'"), 'témoin SQL : titre du push RAPPEL_MISSION');
+  const plan = read('docs/mobile-swift/LOT1_PLAN.md');
+  const contrats = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
+  const recette = read('docs/mobile-swift/RECETTE_DEVICE_LOT1.md');
+  for (const [nom, texte] of [
+    ['LOT1_PLAN.md T6c', sousSection(plan, 'T6c ')],
+    ['CONTRATS fn_confirmer_presence_mission', section(contrats, 'fn_confirmer_presence_mission')],
+    ['RECETTE §5', section(recette, '5. ')],
+  ]) {
+    for (const web of WEB_PRESENCE) assert.ok(texte.includes(web), `${nom} : « ${web} » absent`);
+  }
+  for (const [nom, texte] of [['LOT1_PLAN.md', plan], ['CONTRATS_RPC_SOIGNANT.md', contrats], ['RECETTE_DEVICE_LOT1.md', recette]]) {
+    for (const ligne of texte.split('\n').filter(l => l.includes('Je serai là'))) {
+      assert.ok(ligne.includes('push'), `${nom} : « Je serai là » cité hors du titre du push : ${ligne.slice(0, 160)}`);
+    }
+  }
+});
+
+test('EventKit : dédoublonnage fixé (journal local, écriture seule iOS 17+), N défini', () => {
+  const recette = section(read('docs/mobile-swift/RECETTE_DEVICE_LOT1.md'), '4. ');
+  assert.ok(!recette.includes('pas de doublon (comportement consigné'), 'promesse « pas de doublon » intenable en écriture seule');
+  assert.ok(!recette.includes('N événements au total'), 'ambiguïté « N événements au total »');
+  for (const [nom, texte] of [['RECETTE §4', recette], ['LOT1_PLAN T5', sousSection(read('docs/mobile-swift/LOT1_PLAN.md'), 'T5 ')]]) {
+    assert.ok(texte.includes('requestWriteOnlyAccessToEvents'), `${nom} : accès en écriture seule non consigné`);
+    assert.ok(texte.includes('journal local'), `${nom} : mécanisme de dédoublonnage (journal local) absent`);
+    assert.ok(texte.includes('N = ') && texte.includes('hors pause'), `${nom} : N non défini (créneaux PREVISIONNEL hors pause)`);
+  }
+});
+
+test('validate-pr.yml : l étape « Garde de livraison mobile » du job Typecheck + build exécute cette garde', () => {
+  const wf = read('.github/workflows/validate-pr.yml');
+  const job = wf.indexOf('\n  typecheck-and-build:\n');
+  assert.ok(job >= 0, 'job typecheck-and-build introuvable');
+  const finJob = wf.slice(job + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+  const corps = wf.slice(job, finJob < 0 ? undefined : job + 1 + finJob);
+  assert.ok(corps.includes('name: Typecheck + build'), 'nom du check requis modifié');
+  const etape = corps.indexOf('\n      - name: Garde de livraison mobile\n');
+  assert.ok(etape >= 0, 'étape « Garde de livraison mobile » absente du job Typecheck + build');
+  const suite = corps.slice(etape + 1);
+  const fin = suite.search(/\n {6}- name: /);
+  const bloc = suite.slice(0, fin < 0 ? undefined : fin);
+  const run = bloc.split('\n').find(l => /^\s+run: /.test(l));
+  assert.ok(run, 'ligne run: absente');
+  assert.ok(run.includes('node --test') && run.includes('tests/node/check-rpc-contracts.node.mjs'), `run: n exécute pas la garde : ${run}`);
+  assert.ok(!/^\s+if: /m.test(bloc) && !bloc.includes('continue-on-error'), 'étape conditionnelle ou non bloquante');
 });
