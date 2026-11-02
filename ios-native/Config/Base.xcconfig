@@ -1,0 +1,17 @@
+// Socle commun des deux schemes. Identité store reprise à l'identique de ios/App (décision 2).
+PRODUCT_BUNDLE_IDENTIFIER = app.jolene
+DEVELOPMENT_TEAM = GDU5AA28M9
+MARKETING_VERSION = 2.0.0
+CURRENT_PROJECT_VERSION = 25
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+TARGETED_DEVICE_FAMILY = 1,2
+SWIFT_VERSION = 5.0
+SWIFT_STRICT_CONCURRENCY = complete
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY =
+CODE_SIGNING_ALLOWED[sdk=iphonesimulator*] = NO
+// Valeurs surchargeables en ligne de commande par la CI (xcodebuild VAR=valeur).
+JOLENE_ENVIRONMENT = staging
+JOLENE_SUPABASE_URL =
+JOLENE_SUPABASE_PUBLISHABLE_KEY =
+APS_ENVIRONMENT = development

@@ -1,0 +1,4687 @@
+[
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2000-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2000-02-29T10:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2000-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2000-plus-365",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2000-02-29T10:00:00.000Z",
+      "jours": 365
+    },
+    "expected": "2001-02-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2024-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-02-29T10:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2024-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2024-plus-365",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-02-29T10:00:00.000Z",
+      "jours": 365
+    },
+    "expected": "2025-02-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2028-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-02-29T10:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2028-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/bissextile-2028-plus-365",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-02-29T10:00:00.000Z",
+      "jours": 365
+    },
+    "expected": "2029-02-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2024-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-03-31T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2024-03-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2024-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-03-31T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2024-03-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2025-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2025-03-30T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2025-03-28T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2025-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2025-03-30T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2025-03-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2026-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2026-03-29T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2026-03-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2026-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2026-03-29T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2027-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-03-28T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2027-03-26T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2027-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-03-28T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2027-03-28T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2028-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-03-26T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2028-03-24T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-mars-2028-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-03-26T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2028-03-26T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2024-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-10-27T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2024-10-25T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2024-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2024-10-27T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2024-10-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2025-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2025-10-26T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2025-10-24T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2025-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2025-10-26T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2025-10-26T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2026-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2026-10-25T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2026-10-23T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2026-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2026-10-25T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2027-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-10-31T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2027-10-29T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2027-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-10-31T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2027-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2028-moins-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-10-29T12:00:00.000Z",
+      "jours": -1
+    },
+    "expected": "2028-10-27T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/dst-octobre-2028-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2028-10-29T12:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2028-10-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/non-bissextile-2027-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-02-28T10:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2027-02-28T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/non-bissextile-2027-plus-365",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2027-02-28T10:00:00.000Z",
+      "jours": 365
+    },
+    "expected": "2028-02-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/non-bissextile-2100-plus-1",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2100-02-28T10:00:00.000Z",
+      "jours": 1
+    },
+    "expected": "2100-02-28T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterJoursCivilsParis/non-bissextile-2100-plus-365",
+    "input": {
+      "fonction": "ajouterJoursCivilsParis",
+      "valeur": "2100-02-28T10:00:00.000Z",
+      "jours": 365
+    },
+    "expected": "2101-02-27T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2000-02-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2000-02-29T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "1998-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2000-02-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2000-02-29T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2000-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2024-02-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2024-02-29T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2022-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2024-02-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2024-02-29T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2024-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-01-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-01-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2024-11-30T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-01-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-01-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-02-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-02-28T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2024-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-02-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-02-28T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-02-28T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-03-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-03-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-02-28T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-03-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-03-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-04-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-04-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-04-30T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-03-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-04-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-04-30T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-05-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-05-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-05-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-04-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-05-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-05-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-06-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-06-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-06-30T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-05-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-06-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-06-30T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-07-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-07-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-07-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-06-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-07-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-07-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-08-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-08-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-08-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-07-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-08-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-08-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-09-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-09-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-09-30T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-08-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-09-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-09-30T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-10-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-10-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-08-31T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-10-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-10-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-11-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-11-30T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-09-30T22:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-11-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-11-30T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-11-30T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-12-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-12-31T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2025-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2026-12-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2026-12-31T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2026-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2028-02-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2028-02-29T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2026-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2028-02-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2028-02-29T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2028-02-29T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2100-02-moins-13",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2100-02-28T22:30:00.000Z",
+      "mois": -13
+    },
+    "expected": "2098-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "ajouterMoisCivilsParis/fin-mois-2100-02-plus-1",
+    "input": {
+      "fonction": "ajouterMoisCivilsParis",
+      "valeur": "2100-02-28T22:30:00.000Z",
+      "mois": 1
+    },
+    "expected": "2100-02-28T23:00:00.000Z"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2000-02",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2000-02-29T22:30:00.000Z"
+    },
+    "expected": "2000-02-29"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2024-02",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2024-02-29T22:30:00.000Z"
+    },
+    "expected": "2024-02-29"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-01",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-01-31T22:30:00.000Z"
+    },
+    "expected": "2026-01-31"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-02",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-02-28T22:30:00.000Z"
+    },
+    "expected": "2026-02-28"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-03",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-03-31T22:30:00.000Z"
+    },
+    "expected": "2026-04-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-04",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-04-30T22:30:00.000Z"
+    },
+    "expected": "2026-05-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-05",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-05-31T22:30:00.000Z"
+    },
+    "expected": "2026-06-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-06",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-06-30T22:30:00.000Z"
+    },
+    "expected": "2026-07-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-07",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-07-31T22:30:00.000Z"
+    },
+    "expected": "2026-08-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-08",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-08-31T22:30:00.000Z"
+    },
+    "expected": "2026-09-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-09",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-09-30T22:30:00.000Z"
+    },
+    "expected": "2026-10-01"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-10",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-10-31"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-11",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-11-30T22:30:00.000Z"
+    },
+    "expected": "2026-11-30"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2026-12",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-12-31"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2028-02",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2028-02-29T22:30:00.000Z"
+    },
+    "expected": "2028-02-29"
+  },
+  {
+    "name": "cleJourParis/fin-mois-2100-02",
+    "input": {
+      "fonction": "cleJourParis",
+      "valeur": "2100-02-28T22:30:00.000Z"
+    },
+    "expected": "2100-02-28"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2000-02",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2000-02-29T22:30:00.000Z"
+    },
+    "expected": "2000-02"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2024-02",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2024-02-29T22:30:00.000Z"
+    },
+    "expected": "2024-02"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-01",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-01-31T22:30:00.000Z"
+    },
+    "expected": "2026-01"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-02",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-02-28T22:30:00.000Z"
+    },
+    "expected": "2026-02"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-03",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-03-31T22:30:00.000Z"
+    },
+    "expected": "2026-04"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-04",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-04-30T22:30:00.000Z"
+    },
+    "expected": "2026-05"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-05",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-05-31T22:30:00.000Z"
+    },
+    "expected": "2026-06"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-06",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-06-30T22:30:00.000Z"
+    },
+    "expected": "2026-07"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-08",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-08-31T22:30:00.000Z"
+    },
+    "expected": "2026-09"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-09",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-09-30T22:30:00.000Z"
+    },
+    "expected": "2026-10"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-10",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-10"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-11",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-11-30T22:30:00.000Z"
+    },
+    "expected": "2026-11"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2026-12",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-12"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2028-02",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2028-02-29T22:30:00.000Z"
+    },
+    "expected": "2028-02"
+  },
+  {
+    "name": "cleMoisParis/fin-mois-2100-02",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2100-02-28T22:30:00.000Z"
+    },
+    "expected": "2100-02"
+  },
+  {
+    "name": "cleMoisParis/vitest-fin-juillet-utc",
+    "input": {
+      "fonction": "cleMoisParis",
+      "valeur": "2026-07-31T22:30:00.000Z"
+    },
+    "expected": "2026-08"
+  },
+  {
+    "name": "cleSemaineParis/bissextile-2000",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2000-02-29T10:00:00.000Z"
+    },
+    "expected": "2000-02-28"
+  },
+  {
+    "name": "cleSemaineParis/bissextile-2024",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2024-02-29T10:00:00.000Z"
+    },
+    "expected": "2024-02-26"
+  },
+  {
+    "name": "cleSemaineParis/bissextile-2028",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2028-02-29T10:00:00.000Z"
+    },
+    "expected": "2028-02-28"
+  },
+  {
+    "name": "cleSemaineParis/non-bissextile-2027",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2027-02-28T10:00:00.000Z"
+    },
+    "expected": "2027-02-22"
+  },
+  {
+    "name": "cleSemaineParis/non-bissextile-2100",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2100-02-28T10:00:00.000Z"
+    },
+    "expected": "2100-02-22"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-23",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-23T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-24",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-24T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-25",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-25T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-26",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-26T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-27",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-27T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-28",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-28T22:30:00.000Z"
+    },
+    "expected": "2026-03-23"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-03-29",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-03-29T22:30:00.000Z"
+    },
+    "expected": "2026-03-30"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-26",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-26T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-27",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-27T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-28",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-28T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-29",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-29T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-30",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-30T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-10-31",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-11-01",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-11-01T22:30:00.000Z"
+    },
+    "expected": "2026-10-26"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-12-28",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-12-28T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-12-29",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-12-29T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-12-30",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-12-30T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2026-12-31",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2027-01-01",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2027-01-01T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2027-01-02",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2027-01-02T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "cleSemaineParis/semaine-2027-01-03",
+    "input": {
+      "fonction": "cleSemaineParis",
+      "valeur": "2027-01-03T22:30:00.000Z"
+    },
+    "expected": "2026-12-28"
+  },
+  {
+    "name": "debutJourParis/dst-mars-2024",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2024-03-31T12:00:00.000Z"
+    },
+    "expected": "2024-03-30T23:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-mars-2025",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2025-03-30T12:00:00.000Z"
+    },
+    "expected": "2025-03-29T23:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-mars-2026",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2026-03-29T12:00:00.000Z"
+    },
+    "expected": "2026-03-28T23:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-mars-2027",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2027-03-28T12:00:00.000Z"
+    },
+    "expected": "2027-03-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-mars-2028",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2028-03-26T12:00:00.000Z"
+    },
+    "expected": "2028-03-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-octobre-2024",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2024-10-27T12:00:00.000Z"
+    },
+    "expected": "2024-10-26T22:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-octobre-2025",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2025-10-26T12:00:00.000Z"
+    },
+    "expected": "2025-10-25T22:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-octobre-2026",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2026-10-25T12:00:00.000Z"
+    },
+    "expected": "2026-10-24T22:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-octobre-2027",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2027-10-31T12:00:00.000Z"
+    },
+    "expected": "2027-10-30T22:00:00.000Z"
+  },
+  {
+    "name": "debutJourParis/dst-octobre-2028",
+    "input": {
+      "fonction": "debutJourParis",
+      "valeur": "2028-10-29T12:00:00.000Z"
+    },
+    "expected": "2028-10-28T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2000-02",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2000-02-29T22:30:00.000Z"
+    },
+    "expected": "2000-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2024-02",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2024-02-29T22:30:00.000Z"
+    },
+    "expected": "2024-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-01",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-01-31T22:30:00.000Z"
+    },
+    "expected": "2025-12-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-02",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-02-28T22:30:00.000Z"
+    },
+    "expected": "2026-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-03",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-03-31T22:30:00.000Z"
+    },
+    "expected": "2026-03-31T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-04",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-04-30T22:30:00.000Z"
+    },
+    "expected": "2026-04-30T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-05",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-05-31T22:30:00.000Z"
+    },
+    "expected": "2026-05-31T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-06",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-06-30T22:30:00.000Z"
+    },
+    "expected": "2026-06-30T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-07",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-07-31T22:30:00.000Z"
+    },
+    "expected": "2026-07-31T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-08",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-08-31T22:30:00.000Z"
+    },
+    "expected": "2026-08-31T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-09",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-09-30T22:30:00.000Z"
+    },
+    "expected": "2026-09-30T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-10",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-09-30T22:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-11",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-11-30T22:30:00.000Z"
+    },
+    "expected": "2026-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2026-12",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-11-30T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2028-02",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2028-02-29T22:30:00.000Z"
+    },
+    "expected": "2028-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutMoisParis/fin-mois-2100-02",
+    "input": {
+      "fonction": "debutMoisParis",
+      "valeur": "2100-02-28T22:30:00.000Z"
+    },
+    "expected": "2100-01-31T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-mars-2024",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2024-03-31T12:00:00.000Z"
+    },
+    "expected": "2024-03-24T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-mars-2025",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2025-03-30T12:00:00.000Z"
+    },
+    "expected": "2025-03-23T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-mars-2026",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-29T12:00:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-mars-2027",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2027-03-28T12:00:00.000Z"
+    },
+    "expected": "2027-03-21T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-mars-2028",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2028-03-26T12:00:00.000Z"
+    },
+    "expected": "2028-03-19T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-octobre-2024",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2024-10-27T12:00:00.000Z"
+    },
+    "expected": "2024-10-20T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-octobre-2025",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2025-10-26T12:00:00.000Z"
+    },
+    "expected": "2025-10-19T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-octobre-2026",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-25T12:00:00.000Z"
+    },
+    "expected": "2026-10-18T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-octobre-2027",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2027-10-31T12:00:00.000Z"
+    },
+    "expected": "2027-10-24T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/dst-octobre-2028",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2028-10-29T12:00:00.000Z"
+    },
+    "expected": "2028-10-22T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-23",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-23T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-24",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-24T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-25",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-25T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-26",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-26T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-27",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-27T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-28",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-28T22:30:00.000Z"
+    },
+    "expected": "2026-03-22T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-03-29",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-03-29T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-26",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-26T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-27",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-27T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-28",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-28T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-29",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-29T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-30",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-30T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-10-31",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-11-01",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-11-01T22:30:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-12-28",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-12-28T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-12-29",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-12-29T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-12-30",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-12-30T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2026-12-31",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2027-01-01",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2027-01-01T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2027-01-02",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2027-01-02T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "debutSemaineParis/semaine-2027-01-03",
+    "input": {
+      "fonction": "debutSemaineParis",
+      "valeur": "2027-01-03T22:30:00.000Z"
+    },
+    "expected": "2026-12-27T23:00:00.000Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2000-02",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2000-02-29T22:30:00.000Z"
+    },
+    "expected": "2000-02-29T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2024-02",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2024-02-29T22:30:00.000Z"
+    },
+    "expected": "2024-02-29T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-01",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-01-31T22:30:00.000Z"
+    },
+    "expected": "2026-01-31T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-02",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-02-28T22:30:00.000Z"
+    },
+    "expected": "2026-02-28T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-03",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-03-31T22:30:00.000Z"
+    },
+    "expected": "2026-04-30T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-04",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-04-30T22:30:00.000Z"
+    },
+    "expected": "2026-05-31T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-05",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-05-31T22:30:00.000Z"
+    },
+    "expected": "2026-06-30T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-06",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-06-30T22:30:00.000Z"
+    },
+    "expected": "2026-07-31T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-07",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-07-31T22:30:00.000Z"
+    },
+    "expected": "2026-08-31T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-08",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-08-31T22:30:00.000Z"
+    },
+    "expected": "2026-09-30T21:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-09",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-09-30T22:30:00.000Z"
+    },
+    "expected": "2026-10-31T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-10",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-10-31T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-11",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-11-30T22:30:00.000Z"
+    },
+    "expected": "2026-11-30T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2026-12",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2026-12-31T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2028-02",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2028-02-29T22:30:00.000Z"
+    },
+    "expected": "2028-02-29T22:59:59.999Z"
+  },
+  {
+    "name": "finMoisParis/fin-mois-2100-02",
+    "input": {
+      "fonction": "finMoisParis",
+      "valeur": "2100-02-28T22:30:00.000Z"
+    },
+    "expected": "2100-02-28T22:59:59.999Z"
+  },
+  {
+    "name": "formatParis/bissextile-2000",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2000-02-29T10:00:00.000Z",
+      "masque": "EEE d MMM yyyy"
+    },
+    "expected": "mar. 29 févr. 2000"
+  },
+  {
+    "name": "formatParis/bissextile-2024",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-02-29T10:00:00.000Z",
+      "masque": "EEE d MMM yyyy"
+    },
+    "expected": "jeu. 29 févr. 2024"
+  },
+  {
+    "name": "formatParis/bissextile-2028",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-02-29T10:00:00.000Z",
+      "masque": "EEE d MMM yyyy"
+    },
+    "expected": "mar. 29 févr. 2028"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 01:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 01:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 03:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 03:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2024-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-03-31T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 mars 2024 · 04:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 01:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 01:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 03:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 03:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2025-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-03-30T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 30 mars 2025 · 04:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2026-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 01:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2026-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2026-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 03:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2026-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 03:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2026-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 04:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 01:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 01:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 03:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 03:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2027-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-03-28T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 28 mars 2027 · 04:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 01:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 01:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 03:30"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 03:59"
+  },
+  {
+    "name": "formatParis/dst-mars-2028-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-03-26T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 mars 2028 · 04:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 02:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2024-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-10-27T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 27 octobre 2024 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 02:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2025-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2025-10-26T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 26 octobre 2025 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 02:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2026-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-25T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 25 octobre 2026 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 02:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2027-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-10-31T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 31 octobre 2027 · 03:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-00h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-00h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T00:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-01h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T01:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 02:00"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-01h30",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T01:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 02:30"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-01h59",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T01:59:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 02:59"
+  },
+  {
+    "name": "formatParis/dst-octobre-2028-utc-02h00",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-10-29T02:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 octobre 2028 · 03:00"
+  },
+  {
+    "name": "formatParis/fin-mois-2000-02-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2000-02-29T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "mardi 29 février 2000"
+  },
+  {
+    "name": "formatParis/fin-mois-2024-02-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2024-02-29T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "jeudi 29 février 2024"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-01-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "samedi 31 janvier 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-02-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-02-28T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "samedi 28 février 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-03-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "mardi 31 mars 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-04-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-04-30T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "jeudi 30 avril 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-05-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-05-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "dimanche 31 mai 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-06-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-06-30T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "mardi 30 juin 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-07-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-07-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "vendredi 31 juillet 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-08-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-08-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "lundi 31 août 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-09-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-09-30T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "mercredi 30 septembre 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-10-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-10-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "samedi 31 octobre 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-11-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-11-30T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "lundi 30 novembre 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2026-12-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-12-31T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "jeudi 31 décembre 2026"
+  },
+  {
+    "name": "formatParis/fin-mois-2028-02-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2028-02-29T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "mardi 29 février 2028"
+  },
+  {
+    "name": "formatParis/fin-mois-2100-02-dernier-jour",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2100-02-28T10:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "dimanche 28 février 2100"
+  },
+  {
+    "name": "formatParis/jetons-0",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "yyyy-MM-dd HH:mm:ss"
+    },
+    "expected": "2026-01-05 08:08:09"
+  },
+  {
+    "name": "formatParis/jetons-1",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "d/M/yyyy H:m:s"
+    },
+    "expected": "5/1/2026 8:8:9"
+  },
+  {
+    "name": "formatParis/jetons-10",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "''"
+    },
+    "expected": ""
+  },
+  {
+    "name": "formatParis/jetons-11",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "d 'o''clock'"
+    },
+    "expected": "5 o'clock"
+  },
+  {
+    "name": "formatParis/jetons-12",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "dd/MM/yyyy"
+    },
+    "expected": "05/01/2026"
+  },
+  {
+    "name": "formatParis/jetons-2",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "EEE d MMM"
+    },
+    "expected": "lun. 5 janv."
+  },
+  {
+    "name": "formatParis/jetons-3",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "EEEE d MMMM yyyy"
+    },
+    "expected": "lundi 5 janvier 2026"
+  },
+  {
+    "name": "formatParis/jetons-4",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "MMMM"
+    },
+    "expected": "janvier"
+  },
+  {
+    "name": "formatParis/jetons-5",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "MMM"
+    },
+    "expected": "janv."
+  },
+  {
+    "name": "formatParis/jetons-6",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "HH'h'mm"
+    },
+    "expected": "08h08"
+  },
+  {
+    "name": "formatParis/jetons-7",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "HH'h'"
+    },
+    "expected": "08h"
+  },
+  {
+    "name": "formatParis/jetons-8",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "'jour' d 'à' HH'h'mm"
+    },
+    "expected": "jour 5 à 08h08"
+  },
+  {
+    "name": "formatParis/jetons-9",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-01-05T07:08:09.000Z",
+      "masque": "yyyy-MM-dd'T'HH:mm"
+    },
+    "expected": "2026-01-05T08:08"
+  },
+  {
+    "name": "formatParis/jetons-ete-14h",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-07-14T12:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy HH:mm"
+    },
+    "expected": "mardi 14 juillet 2026 14:00"
+  },
+  {
+    "name": "formatParis/non-bissextile-2027",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2027-02-28T10:00:00.000Z",
+      "masque": "EEE d MMM yyyy"
+    },
+    "expected": "dim. 28 févr. 2027"
+  },
+  {
+    "name": "formatParis/non-bissextile-2100",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2100-02-28T10:00:00.000Z",
+      "masque": "EEE d MMM yyyy"
+    },
+    "expected": "dim. 28 févr. 2100"
+  },
+  {
+    "name": "formatParis/vitest-legacy-millisecondes",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-08-31T08:00:00.250",
+      "masque": "HH:mm:ss"
+    },
+    "expected": "08:00:00"
+  },
+  {
+    "name": "formatParis/vitest-legacy-sans-offset",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-08-31T08:00:00",
+      "masque": "EEEE d MMMM yyyy 'à' HH:mm"
+    },
+    "expected": "lundi 31 août 2026 à 08:00"
+  },
+  {
+    "name": "formatParis/vitest-lundi-31-aout",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-08-31T06:00:00.000Z",
+      "masque": "EEEE d MMMM yyyy 'à' HH:mm"
+    },
+    "expected": "lundi 31 août 2026 à 08:00"
+  },
+  {
+    "name": "formatParis/vitest-trou-dst-londres",
+    "input": {
+      "fonction": "formatParis",
+      "valeur": "2026-03-29T00:30:00.000Z",
+      "masque": "EEEE d MMMM yyyy · HH:mm"
+    },
+    "expected": "dimanche 29 mars 2026 · 01:30"
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T00:30:00.000Z"
+    },
+    "expected": 1.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T00:59:00.000Z"
+    },
+    "expected": 1.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T01:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T01:30:00.000Z"
+    },
+    "expected": 3.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T01:59:00.000Z"
+    },
+    "expected": 3.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2024-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-03-31T02:00:00.000Z"
+    },
+    "expected": 4
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T00:30:00.000Z"
+    },
+    "expected": 1.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T00:59:00.000Z"
+    },
+    "expected": 1.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T01:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T01:30:00.000Z"
+    },
+    "expected": 3.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T01:59:00.000Z"
+    },
+    "expected": 3.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2025-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-03-30T02:00:00.000Z"
+    },
+    "expected": 4
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T00:30:00.000Z"
+    },
+    "expected": 1.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T00:59:00.000Z"
+    },
+    "expected": 1.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T01:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T01:30:00.000Z"
+    },
+    "expected": 3.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T01:59:00.000Z"
+    },
+    "expected": 3.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2026-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-03-29T02:00:00.000Z"
+    },
+    "expected": 4
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T00:30:00.000Z"
+    },
+    "expected": 1.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T00:59:00.000Z"
+    },
+    "expected": 1.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T01:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T01:30:00.000Z"
+    },
+    "expected": 3.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T01:59:00.000Z"
+    },
+    "expected": 3.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2027-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-03-28T02:00:00.000Z"
+    },
+    "expected": 4
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T00:30:00.000Z"
+    },
+    "expected": 1.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T00:59:00.000Z"
+    },
+    "expected": 1.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T01:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T01:30:00.000Z"
+    },
+    "expected": 3.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T01:59:00.000Z"
+    },
+    "expected": 3.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-mars-2028-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-03-26T02:00:00.000Z"
+    },
+    "expected": 4
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T00:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T00:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T01:00:00.000Z"
+    },
+    "expected": 2
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T01:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T01:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2024-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2024-10-27T02:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T00:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T00:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T01:00:00.000Z"
+    },
+    "expected": 2
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T01:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T01:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2025-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2025-10-26T02:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T00:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T00:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T01:00:00.000Z"
+    },
+    "expected": 2
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T01:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T01:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2026-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2026-10-25T02:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T00:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T00:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T01:00:00.000Z"
+    },
+    "expected": 2
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T01:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T01:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2027-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2027-10-31T02:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-00h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T00:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-00h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T00:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-01h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T01:00:00.000Z"
+    },
+    "expected": 2
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-01h30",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T01:30:00.000Z"
+    },
+    "expected": 2.5
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-01h59",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T01:59:00.000Z"
+    },
+    "expected": 2.9833333333333334
+  },
+  {
+    "name": "heureDecimaleParis/dst-octobre-2028-utc-02h00",
+    "input": {
+      "fonction": "heureDecimaleParis",
+      "valeur": "2028-10-29T02:00:00.000Z"
+    },
+    "expected": 3
+  },
+  {
+    "name": "instantDateHeureParis/29-fevrier-2024",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2024,
+        "mois": 2,
+        "jour": 29,
+        "heure": 23,
+        "minute": 59,
+        "seconde": 59
+      }
+    },
+    "expected": "2024-02-29T22:59:59.000Z"
+  },
+  {
+    "name": "instantDateHeureParis/ambigu-dst",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 10,
+        "jour": 25,
+        "heure": 2,
+        "minute": 59,
+        "seconde": 59
+      }
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDateHeureParis/ete",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 7,
+        "jour": 15,
+        "heure": 8,
+        "minute": 30,
+        "seconde": 15
+      }
+    },
+    "expected": "2026-07-15T06:30:15.000Z"
+  },
+  {
+    "name": "instantDateHeureParis/heure-24-normalisee",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 7,
+        "jour": 15,
+        "heure": 24,
+        "minute": 0,
+        "seconde": 0
+      }
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDateHeureParis/hiver",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 1,
+        "jour": 15,
+        "heure": 8,
+        "minute": 30,
+        "seconde": 0
+      }
+    },
+    "expected": "2026-01-15T07:30:00.000Z"
+  },
+  {
+    "name": "instantDateHeureParis/minuit",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 7,
+        "jour": 15,
+        "heure": 0,
+        "minute": 0,
+        "seconde": 0
+      }
+    },
+    "expected": "2026-07-14T22:00:00.000Z"
+  },
+  {
+    "name": "instantDateHeureParis/trou-dst",
+    "input": {
+      "fonction": "instantDateHeureParis",
+      "parties": {
+        "annee": 2026,
+        "mois": 3,
+        "jour": 29,
+        "heure": 2,
+        "minute": 0,
+        "seconde": 0
+      }
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/29-fevrier-2027-inexistant",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-02-29T10:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/30-fevrier-2026-inexistant",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-02-30T10:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/avec-secondes",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-12-31T23:59:59"
+    },
+    "expected": "2026-12-31T22:59:59.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T01:00"
+    },
+    "expected": "2024-03-31T00:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T01:59"
+    },
+    "expected": "2024-03-31T00:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T02:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T02:30"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T02:59"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T03:00"
+    },
+    "expected": "2024-03-31T01:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T03:30"
+    },
+    "expected": "2024-03-31T01:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2024-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-03-31T04:00"
+    },
+    "expected": "2024-03-31T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T01:00"
+    },
+    "expected": "2025-03-30T00:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T01:59"
+    },
+    "expected": "2025-03-30T00:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T02:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T02:30"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T02:59"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T03:00"
+    },
+    "expected": "2025-03-30T01:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T03:30"
+    },
+    "expected": "2025-03-30T01:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2025-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-03-30T04:00"
+    },
+    "expected": "2025-03-30T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2026-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T01:00"
+    },
+    "expected": "2026-03-29T00:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2026-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T02:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2026-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T02:59"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2026-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T03:30"
+    },
+    "expected": "2026-03-29T01:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2026-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T04:00"
+    },
+    "expected": "2026-03-29T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T01:00"
+    },
+    "expected": "2027-03-28T00:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T01:59"
+    },
+    "expected": "2027-03-28T00:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T02:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T02:30"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T02:59"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T03:00"
+    },
+    "expected": "2027-03-28T01:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T03:30"
+    },
+    "expected": "2027-03-28T01:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2027-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-03-28T04:00"
+    },
+    "expected": "2027-03-28T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T01:00"
+    },
+    "expected": "2028-03-26T00:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T01:59"
+    },
+    "expected": "2028-03-26T00:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T02:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T02:30"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T02:59"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T03:00"
+    },
+    "expected": "2028-03-26T01:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T03:30"
+    },
+    "expected": "2028-03-26T01:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-mars-2028-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-03-26T04:00"
+    },
+    "expected": "2028-03-26T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T01:00"
+    },
+    "expected": "2024-10-26T23:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T01:59"
+    },
+    "expected": "2024-10-26T23:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T02:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T02:30"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T02:59"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T03:00"
+    },
+    "expected": "2024-10-27T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T03:30"
+    },
+    "expected": "2024-10-27T02:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2024-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2024-10-27T04:00"
+    },
+    "expected": "2024-10-27T03:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T01:00"
+    },
+    "expected": "2025-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T01:59"
+    },
+    "expected": "2025-10-25T23:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T02:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T02:30"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T02:59"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T03:00"
+    },
+    "expected": "2025-10-26T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T03:30"
+    },
+    "expected": "2025-10-26T02:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2025-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2025-10-26T04:00"
+    },
+    "expected": "2025-10-26T03:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T01:00"
+    },
+    "expected": "2026-10-24T23:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T01:59"
+    },
+    "expected": "2026-10-24T23:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T02:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T02:59"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T03:00"
+    },
+    "expected": "2026-10-25T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T03:30"
+    },
+    "expected": "2026-10-25T02:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2026-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T04:00"
+    },
+    "expected": "2026-10-25T03:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T01:00"
+    },
+    "expected": "2027-10-30T23:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T01:59"
+    },
+    "expected": "2027-10-30T23:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T02:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T02:30"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T02:59"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T03:00"
+    },
+    "expected": "2027-10-31T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T03:30"
+    },
+    "expected": "2027-10-31T02:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2027-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2027-10-31T04:00"
+    },
+    "expected": "2027-10-31T03:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-01h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T01:00"
+    },
+    "expected": "2028-10-28T23:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-01h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T01:59"
+    },
+    "expected": "2028-10-28T23:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-02h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T02:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-02h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T02:30"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-02h59",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T02:59"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-03h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T03:00"
+    },
+    "expected": "2028-10-29T02:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-03h30",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T03:30"
+    },
+    "expected": "2028-10-29T02:30:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/dst-octobre-2028-04h00",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2028-10-29T04:00"
+    },
+    "expected": "2028-10-29T03:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/format-invalide",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "31/12/2026 10:00"
+    },
+    "expected": {
+      "erreur": "INVALIDE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/mois-13-inexistant",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-13-01T10:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/vitest-31-aout-08h",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-08-31T08:00"
+    },
+    "expected": "2026-08-31T06:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/vitest-ambigue-2026",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-10-25T02:30"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantDepuisSaisieParis/vitest-apres-trou",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T03:00"
+    },
+    "expected": "2026-03-29T01:00:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/vitest-avant-trou",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T01:59"
+    },
+    "expected": "2026-03-29T00:59:00.000Z"
+  },
+  {
+    "name": "instantDepuisSaisieParis/vitest-inexistante-2026",
+    "input": {
+      "fonction": "instantDepuisSaisieParis",
+      "valeur": "2026-03-29T02:30"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/chaine-invalide",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "pas une date"
+    },
+    "expected": {
+      "erreur": "INVALIDE"
+    }
+  },
+  {
+    "name": "instantJolene/date-seule-utc",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31"
+    },
+    "expected": "2026-07-31T00:00:00.000Z"
+  },
+  {
+    "name": "instantJolene/dst-mars-2024-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2024-03-31T02:30:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-mars-2025-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2025-03-30T02:30:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-mars-2026-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-03-29T02:30:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-mars-2027-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2027-03-28T02:30:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-mars-2028-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2028-03-26T02:30:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-octobre-2024-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2024-10-27T02:30:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-octobre-2025-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2025-10-26T02:30:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-octobre-2026-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-10-25T02:30:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-octobre-2027-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2027-10-31T02:30:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/dst-octobre-2028-legacy-02h30",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2028-10-29T02:30:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/legacy-ambigu-dst",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-10-25T02:15:00"
+    },
+    "expected": {
+      "erreur": "AMBIGUE"
+    }
+  },
+  {
+    "name": "instantJolene/legacy-ms-1-chiffre",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31T08:05:07.5"
+    },
+    "expected": "2026-07-31T06:05:07.500Z"
+  },
+  {
+    "name": "instantJolene/legacy-ms-2-chiffres",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31T08:05:07.25"
+    },
+    "expected": "2026-07-31T06:05:07.250Z"
+  },
+  {
+    "name": "instantJolene/legacy-sans-secondes",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31T08:05"
+    },
+    "expected": "2026-07-31T06:05:00.000Z"
+  },
+  {
+    "name": "instantJolene/legacy-trou-dst",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-03-29T02:15:00"
+    },
+    "expected": {
+      "erreur": "INEXISTANTE"
+    }
+  },
+  {
+    "name": "instantJolene/offset-plus-01-hiver",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-01-15T08:00:00+01:00"
+    },
+    "expected": "2026-01-15T07:00:00.000Z"
+  },
+  {
+    "name": "instantJolene/offset-plus-02",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31T08:00:00+02:00"
+    },
+    "expected": "2026-07-31T06:00:00.000Z"
+  },
+  {
+    "name": "instantJolene/offset-postgres-microsecondes",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-07-31T08:00:00.123456+00:00"
+    },
+    "expected": "2026-07-31T08:00:00.123Z"
+  },
+  {
+    "name": "instantJolene/vitest-legacy-sans-offset",
+    "input": {
+      "fonction": "instantJolene",
+      "valeur": "2026-08-31T08:00:00"
+    },
+    "expected": "2026-08-31T06:00:00.000Z"
+  },
+  {
+    "name": "memeJourParis/ete-apres-minuit-paris",
+    "input": {
+      "fonction": "memeJourParis",
+      "a": "2026-07-31T22:00:00.000Z",
+      "b": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeJourParis/ete-avant-minuit-paris",
+    "input": {
+      "fonction": "memeJourParis",
+      "a": "2026-07-31T21:59:59.000Z",
+      "b": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeJourParis/hiver-apres-minuit-paris",
+    "input": {
+      "fonction": "memeJourParis",
+      "a": "2026-01-31T23:00:00.000Z",
+      "b": "2026-01-31T12:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeJourParis/hiver-avant-minuit-paris",
+    "input": {
+      "fonction": "memeJourParis",
+      "a": "2026-01-31T22:59:59.000Z",
+      "b": "2026-01-31T12:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeJourParis/legacy-vs-offset",
+    "input": {
+      "fonction": "memeJourParis",
+      "a": "2026-07-31T23:30:00",
+      "b": "2026-07-31T21:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2000-02-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2000-02-29T22:30:00.000Z",
+      "b": "2000-02-29T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2024-02-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2024-02-29T22:30:00.000Z",
+      "b": "2024-02-29T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-01-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-01-31T22:30:00.000Z",
+      "b": "2026-01-31T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-02-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-02-28T22:30:00.000Z",
+      "b": "2026-02-28T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-03-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-03-31T22:30:00.000Z",
+      "b": "2026-03-31T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-04-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-04-30T22:30:00.000Z",
+      "b": "2026-04-30T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-05-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-05-31T22:30:00.000Z",
+      "b": "2026-05-31T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-06-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-06-30T22:30:00.000Z",
+      "b": "2026-06-30T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-07-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-07-31T22:30:00.000Z",
+      "b": "2026-07-31T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-08-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-08-31T22:30:00.000Z",
+      "b": "2026-08-31T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-09-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-09-30T22:30:00.000Z",
+      "b": "2026-09-30T23:30:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-10-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-10-31T22:30:00.000Z",
+      "b": "2026-10-31T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-11-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-11-30T22:30:00.000Z",
+      "b": "2026-11-30T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2026-12-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2026-12-31T22:30:00.000Z",
+      "b": "2026-12-31T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2028-02-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2028-02-29T22:30:00.000Z",
+      "b": "2028-02-29T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "memeMoisParis/fin-mois-2100-02-22h30-vs-23h30-utc",
+    "input": {
+      "fonction": "memeMoisParis",
+      "a": "2100-02-28T22:30:00.000Z",
+      "b": "2100-02-28T23:30:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "partiesDateHeureParis/dst-mars-2024-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2024-03-31T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2024,
+      "mois": 3,
+      "jour": 31,
+      "heure": 3,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-mars-2025-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2025-03-30T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2025,
+      "mois": 3,
+      "jour": 30,
+      "heure": 3,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-mars-2026-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2026-03-29T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2026,
+      "mois": 3,
+      "jour": 29,
+      "heure": 3,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-mars-2027-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2027-03-28T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2027,
+      "mois": 3,
+      "jour": 28,
+      "heure": 3,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-mars-2028-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2028-03-26T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2028,
+      "mois": 3,
+      "jour": 26,
+      "heure": 3,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-octobre-2024-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2024-10-27T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2024,
+      "mois": 10,
+      "jour": 27,
+      "heure": 2,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-octobre-2025-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2025-10-26T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2025,
+      "mois": 10,
+      "jour": 26,
+      "heure": 2,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-octobre-2026-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2026-10-25T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2026,
+      "mois": 10,
+      "jour": 25,
+      "heure": 2,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-octobre-2027-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2027-10-31T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2027,
+      "mois": 10,
+      "jour": 31,
+      "heure": 2,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/dst-octobre-2028-utc-01h30",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2028-10-29T01:30:45.000Z"
+    },
+    "expected": {
+      "annee": 2028,
+      "mois": 10,
+      "jour": 29,
+      "heure": 2,
+      "minute": 30,
+      "seconde": 45
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/ete",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2026-07-15T06:30:15.000Z"
+    },
+    "expected": {
+      "annee": 2026,
+      "mois": 7,
+      "jour": 15,
+      "heure": 8,
+      "minute": 30,
+      "seconde": 15
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/fin-annee",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2026-12-31T23:30:00.000Z"
+    },
+    "expected": {
+      "annee": 2027,
+      "mois": 1,
+      "jour": 1,
+      "heure": 0,
+      "minute": 30,
+      "seconde": 0
+    }
+  },
+  {
+    "name": "partiesDateHeureParis/hiver",
+    "input": {
+      "fonction": "partiesDateHeureParis",
+      "valeur": "2026-01-15T07:30:00.000Z"
+    },
+    "expected": {
+      "annee": 2026,
+      "mois": 1,
+      "jour": 15,
+      "heure": 8,
+      "minute": 30,
+      "seconde": 0
+    }
+  },
+  {
+    "name": "semaineSuivanteParis/dst-mars-2024",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2024-03-31T12:00:00.000Z"
+    },
+    "expected": "2024-03-31T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-mars-2025",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2025-03-30T12:00:00.000Z"
+    },
+    "expected": "2025-03-30T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-mars-2026",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-29T12:00:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-mars-2027",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2027-03-28T12:00:00.000Z"
+    },
+    "expected": "2027-03-28T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-mars-2028",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2028-03-26T12:00:00.000Z"
+    },
+    "expected": "2028-03-26T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-octobre-2024",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2024-10-27T12:00:00.000Z"
+    },
+    "expected": "2024-10-27T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-octobre-2025",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2025-10-26T12:00:00.000Z"
+    },
+    "expected": "2025-10-26T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-octobre-2026",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-25T12:00:00.000Z"
+    },
+    "expected": "2026-10-25T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-octobre-2027",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2027-10-31T12:00:00.000Z"
+    },
+    "expected": "2027-10-31T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/dst-octobre-2028",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2028-10-29T12:00:00.000Z"
+    },
+    "expected": "2028-10-29T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-23",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-23T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-24",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-24T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-25",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-25T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-26",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-26T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-27",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-27T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-28",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-28T22:30:00.000Z"
+    },
+    "expected": "2026-03-29T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-03-29",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-03-29T22:30:00.000Z"
+    },
+    "expected": "2026-04-05T22:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-26",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-26T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-27",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-27T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-28",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-28T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-29",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-29T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-30",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-30T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-10-31",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-10-31T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-11-01",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-11-01T22:30:00.000Z"
+    },
+    "expected": "2026-11-01T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-12-28",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-12-28T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-12-29",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-12-29T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-12-30",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-12-30T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2026-12-31",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2026-12-31T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2027-01-01",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2027-01-01T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2027-01-02",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2027-01-02T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "semaineSuivanteParis/semaine-2027-01-03",
+    "input": {
+      "fonction": "semaineSuivanteParis",
+      "valeur": "2027-01-03T22:30:00.000Z"
+    },
+    "expected": "2027-01-03T23:00:00.000Z"
+  },
+  {
+    "name": "valeurSaisieDateHeureParis/ete",
+    "input": {
+      "fonction": "valeurSaisieDateHeureParis",
+      "valeur": "2026-07-15T06:05:00.000Z"
+    },
+    "expected": "2026-07-15T08:05"
+  },
+  {
+    "name": "valeurSaisieDateHeureParis/hiver",
+    "input": {
+      "fonction": "valeurSaisieDateHeureParis",
+      "valeur": "2026-01-15T07:05:00.000Z"
+    },
+    "expected": "2026-01-15T08:05"
+  },
+  {
+    "name": "valeurSaisieDateHeureParis/minuit-paris",
+    "input": {
+      "fonction": "valeurSaisieDateHeureParis",
+      "valeur": "2026-07-14T22:00:00.000Z"
+    },
+    "expected": "2026-07-15T00:00"
+  }
+]

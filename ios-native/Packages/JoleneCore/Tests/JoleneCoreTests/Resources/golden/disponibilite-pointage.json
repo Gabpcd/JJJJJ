@@ -1,0 +1,4594 @@
+[
+  {
+    "name": "ajouterRepliMissionPonctuelle/24h-exactes",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-08-01T08:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "id": "mission-ponctuelle-m",
+        "debut": "2026-07-31T08:00:00+02:00",
+        "fin": "2026-08-01T08:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/24h-plus-1s",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-08-01T08:00:01+02:00"
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/date-invalide",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "pas une date",
+        "fin_le": "2026-07-31T08:00:00+02:00"
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/duree-nulle",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T08:00:00+02:00"
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/effectif-seul-ajoute-repli",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": "2026-07-31T10:01:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false,
+          "id": "eff-1"
+        }
+      ],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T16:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "debut": "2026-07-31T06:02:00.000Z",
+        "fin": "2026-07-31T10:01:00.000Z",
+        "type_creneau": "EFFECTIF",
+        "est_pause": false,
+        "id": "eff-1"
+      },
+      {
+        "id": "mission-ponctuelle-m",
+        "debut": "2026-07-31T08:00:00+02:00",
+        "fin": "2026-07-31T16:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/fin-avant-debut",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T16:00:00+02:00",
+        "fin_le": "2026-07-31T08:00:00+02:00"
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/nuit-dst-23h",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-03-28T20:00:00+01:00",
+        "fin_le": "2026-03-29T20:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "id": "mission-ponctuelle-m",
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T20:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/pause-seule-ajoute-repli",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        }
+      ],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T16:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "debut": "2026-07-31T10:00:00.000Z",
+        "fin": "2026-07-31T10:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": true,
+        "id": "pause"
+      },
+      {
+        "id": "mission-ponctuelle-m",
+        "debut": "2026-07-31T08:00:00+02:00",
+        "fin": "2026-07-31T16:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/previsionnel-existant-inchange",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "mission": {
+        "id": "m",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T16:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/sans-id",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T16:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "id": "mission-ponctuelle-2026-07-31T08:00:00+02:00",
+        "debut": "2026-07-31T08:00:00+02:00",
+        "fin": "2026-07-31T16:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/vitest-longue",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "longue",
+        "debut_le": "2026-07-06T08:00:00+02:00",
+        "fin_le": "2026-08-31T16:00:00+02:00"
+      }
+    },
+    "expected": []
+  },
+  {
+    "name": "ajouterRepliMissionPonctuelle/vitest-ponctuelle",
+    "input": {
+      "fonction": "ajouterRepliMissionPonctuelle",
+      "creneaux": [],
+      "mission": {
+        "id": "ponctuelle",
+        "debut_le": "2026-07-31T08:00:00+02:00",
+        "fin_le": "2026-07-31T16:00:00+02:00"
+      }
+    },
+    "expected": [
+      {
+        "id": "mission-ponctuelle-ponctuelle",
+        "debut": "2026-07-31T08:00:00+02:00",
+        "fin": "2026-07-31T16:00:00+02:00",
+        "est_pause": false,
+        "type_creneau": "PREVISIONNEL"
+      }
+    ]
+  },
+  {
+    "name": "choisirContratPointage/cree-le-null-vs-date",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "sans-date",
+          "statut": "EN_ATTENTE_SIGNATURES",
+          "cree_le": null
+        },
+        {
+          "id": "avec-date",
+          "statut": "EN_ATTENTE_SIGNATURES",
+          "cree_le": "2026-07-02T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "avec-date"
+  },
+  {
+    "name": "choisirContratPointage/deux-signes-plus-recent",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "signe-ancien",
+          "statut": "SIGNE_COMPLET",
+          "cree_le": "2026-07-01T10:00:00Z"
+        },
+        {
+          "id": "signe-recent",
+          "statut": "SIGNE_COMPLET",
+          "cree_le": "2026-07-02T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "signe-recent"
+  },
+  {
+    "name": "choisirContratPointage/plus-recent-sans-signature",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "ancien",
+          "statut": "EN_ATTENTE_SIGNATURES",
+          "cree_le": "2026-07-01T10:00:00Z"
+        },
+        {
+          "id": "recent",
+          "statut": "EN_ATTENTE_SIGNATURES",
+          "cree_le": "2026-07-02T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "recent"
+  },
+  {
+    "name": "choisirContratPointage/sans-cree-le-stable",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "premier",
+          "statut": "EN_ATTENTE_SIGNATURES"
+        },
+        {
+          "id": "second",
+          "statut": "EN_ATTENTE_SIGNATURES"
+        }
+      ]
+    },
+    "expected": "premier"
+  },
+  {
+    "name": "choisirContratPointage/signe-ancien-prime-sur-recent-non-signe",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "recent",
+          "statut": "SIGNE_SOIGNANT",
+          "cree_le": "2026-07-31T10:00:00Z"
+        },
+        {
+          "id": "signe",
+          "statut": "SIGNE_COMPLET",
+          "cree_le": "2026-01-01T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "signe"
+  },
+  {
+    "name": "choisirContratPointage/statut-inconnu-conserve",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "x",
+          "statut": "BROUILLON",
+          "cree_le": "2026-07-31T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "x"
+  },
+  {
+    "name": "choisirContratPointage/tous-terminaux",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "a",
+          "statut": "ANNULE"
+        },
+        {
+          "id": "b",
+          "statut": "EXPIRE"
+        },
+        {
+          "id": "c",
+          "statut": "REFUSE"
+        },
+        {
+          "id": "d",
+          "statut": "RUPTURE_ETAB"
+        },
+        {
+          "id": "e",
+          "statut": "RUPTURE_SOIGNANT"
+        }
+      ]
+    },
+    "expected": null
+  },
+  {
+    "name": "choisirContratPointage/vide",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": []
+    },
+    "expected": null
+  },
+  {
+    "name": "choisirContratPointage/vitest-signe-prioritaire",
+    "input": {
+      "fonction": "choisirContratPointage",
+      "contrats": [
+        {
+          "id": "annule",
+          "statut": "ANNULE",
+          "cree_le": "2026-07-31T10:00:00Z"
+        },
+        {
+          "id": "attente",
+          "statut": "EN_ATTENTE_SIGNATURES",
+          "cree_le": "2026-07-30T10:00:00Z"
+        },
+        {
+          "id": "signe",
+          "statut": "SIGNE_COMPLET",
+          "cree_le": "2026-07-01T10:00:00Z"
+        }
+      ]
+    },
+    "expected": "signe"
+  },
+  {
+    "name": "creneauChevauchePeriode/debut-egal-fin-periode",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "debutPeriode": "2026-07-31T04:00:00.000Z",
+      "finPeriode": "2026-07-31T06:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "creneauChevauchePeriode/effectif-ignore",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:02:00.000Z",
+        "fin": "2026-07-31T10:01:00.000Z",
+        "type_creneau": "EFFECTIF",
+        "est_pause": false,
+        "id": "eff-1"
+      },
+      "debutPeriode": "2026-07-31T00:00:00.000Z",
+      "finPeriode": "2026-08-01T00:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "creneauChevauchePeriode/englobe",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "debutPeriode": "2026-07-31T07:00:00.000Z",
+      "finPeriode": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "creneauChevauchePeriode/fin-egale-debut-periode",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "debutPeriode": "2026-07-31T10:00:00.000Z",
+      "finPeriode": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "creneauChevauchePeriode/fin-null-ignore",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:02:00.000Z",
+        "fin": null,
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "ouvert"
+      },
+      "debutPeriode": "2026-07-31T00:00:00.000Z",
+      "finPeriode": "2026-08-01T00:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "creneauChevauchePeriode/inclus",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "debutPeriode": "2026-07-31T00:00:00.000Z",
+      "finPeriode": "2026-08-01T00:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "creneauChevauchePeriode/jour-civil-paris-ete",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T21:30:00.000Z",
+        "fin": "2026-08-01T05:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      },
+      "debutPeriode": "2026-07-30T22:00:00.000Z",
+      "finPeriode": "2026-07-31T22:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "creneauChevauchePeriode/pause-ignoree",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-31T10:00:00.000Z",
+        "fin": "2026-07-31T10:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": true,
+        "id": "pause"
+      },
+      "debutPeriode": "2026-07-31T00:00:00.000Z",
+      "finPeriode": "2026-08-01T00:00:00.000Z"
+    },
+    "expected": false
+  },
+  {
+    "name": "creneauChevauchePeriode/vitest-nuit-chevauche",
+    "input": {
+      "fonction": "creneauChevauchePeriode",
+      "creneau": {
+        "debut": "2026-07-30T20:00:00.000Z",
+        "fin": "2026-07-31T06:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      },
+      "debutPeriode": "2026-07-31T00:00:00.000Z",
+      "finPeriode": "2026-08-01T00:00:00.000Z"
+    },
+    "expected": true
+  },
+  {
+    "name": "creneauxPrevisionnels/ordre-stable-meme-debut",
+    "input": {
+      "fonction": "creneauxPrevisionnels",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "b"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T09:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "a"
+        }
+      ]
+    },
+    "expected": [
+      {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "b"
+      },
+      {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T09:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "a"
+      }
+    ]
+  },
+  {
+    "name": "creneauxPrevisionnels/tri-et-filtrage",
+    "input": {
+      "fonction": "creneauxPrevisionnels",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        },
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": null,
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "ouvert"
+        },
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": "2026-07-31T10:01:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false,
+          "id": "eff-1"
+        }
+      ]
+    },
+    "expected": [
+      {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      }
+    ]
+  },
+  {
+    "name": "creneauxPrevisionnels/vide",
+    "input": {
+      "fonction": "creneauxPrevisionnels",
+      "creneaux": []
+    },
+    "expected": []
+  },
+  {
+    "name": "evaluerClotureAdminMission/aucun-depart-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/aucun-depart-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/aucun-depart-non-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/aucun-depart-non-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/avant-dernier-creneau-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-08-01T08:00:00.000Z",
+            "fin": "2026-08-01T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-08-01T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-08-01T16:00:00.000Z",
+      "clotureAnticipee": true
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/avant-dernier-creneau-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-08-01T08:00:00.000Z",
+            "fin": "2026-08-01T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-08-01T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-08-01T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/avant-dernier-creneau-non-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-08-01T08:00:00.000Z",
+            "fin": "2026-08-01T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-08-01T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-08-01T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/avant-dernier-creneau-non-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-08-01T08:00:00.000Z",
+            "fin": "2026-08-01T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-08-01T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-08-01T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/deja-terminable-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/deja-terminable-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/deja-terminable-non-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/deja-terminable-non-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": "2026-07-31T15:55:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/segment-ouvert-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": null,
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/segment-ouvert-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": null,
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/segment-ouvert-non-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": null,
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/segment-ouvert-non-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-07-31T08:00:00.000Z",
+            "fin": "2026-07-31T16:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-07-31T08:05:00.000Z",
+            "fin": null,
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-07-31T16:00:00.000Z",
+        "maintenant": "2026-07-31T17:00:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-07-31T16:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/vitest-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-09-03T17:00:00.000Z",
+            "fin": "2026-09-03T18:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-04T05:00:00.000Z",
+            "fin": "2026-09-04T17:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-03T17:05:00.000Z",
+            "fin": "2026-09-03T17:25:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-09-04T17:00:00.000Z",
+        "maintenant": "2026-09-03T17:30:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-09-04T17:00:00.000Z",
+      "clotureAnticipee": true
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/vitest-admin-sans-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-09-03T17:00:00.000Z",
+            "fin": "2026-09-03T18:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-04T05:00:00.000Z",
+            "fin": "2026-09-04T17:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-03T17:05:00.000Z",
+            "fin": "2026-09-03T17:25:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-09-04T17:00:00.000Z",
+        "maintenant": "2026-09-03T17:30:00.000Z"
+      },
+      "estAdmin": true,
+      "litigeActif": false
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-09-04T17:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerClotureAdminMission/vitest-non-admin-litige",
+    "input": {
+      "fonction": "evaluerClotureAdminMission",
+      "terminaison": {
+        "creneaux": [
+          {
+            "debut": "2026-09-03T17:00:00.000Z",
+            "fin": "2026-09-03T18:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-04T05:00:00.000Z",
+            "fin": "2026-09-04T17:00:00.000Z",
+            "type_creneau": "PREVISIONNEL",
+            "est_pause": false
+          },
+          {
+            "debut": "2026-09-03T17:05:00.000Z",
+            "fin": "2026-09-03T17:25:00.000Z",
+            "type_creneau": "EFFECTIF",
+            "est_pause": false
+          }
+        ],
+        "finMission": "2026-09-04T17:00:00.000Z",
+        "maintenant": "2026-09-03T17:30:00.000Z"
+      },
+      "estAdmin": false,
+      "litigeActif": true
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-09-04T17:00:00.000Z",
+      "clotureAnticipee": false
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/aucun-creneau-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T10:05:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/aucun-creneau-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T10:05:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "AUCUN_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-exacte-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T16:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-exacte-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T16:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-exacte-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T16:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-moins-1s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T15:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-moins-1s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T15:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-moins-1s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T15:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1h-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1h-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1h-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1ms-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T16:00:00.001Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1ms-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T16:00:00.001Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1ms-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T16:00:00.001Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T16:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T16:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-fin-plus-1s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T16:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-exact-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-exact-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-exact-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-14min-59s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:45:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-14min-59s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:45:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-14min-59s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:45:01.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1ms-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:44:59.999Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1ms-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:44:59.999Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1ms-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:44:59.999Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:44:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:44:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-1s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:44:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-exact-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-exact-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-15min-exact-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-16min-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:44:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-16min-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:44:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-16min-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:44:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-1s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T07:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-1s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T07:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-moins-1s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:59:59.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-plus-1s-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T08:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-plus-1s-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T08:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-h-plus-1s-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T08:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-milieu-attente",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "EN_ATTENTE_SIGNATURES",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-milieu-sans-contrat",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/fenetre-milieu-signe",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "slot-jour"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-apres-journee",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T15:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-avant-matin",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T05:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-deux-segments-ouverts-plus-recent",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false,
+          "id": "eff-ancien"
+        },
+        {
+          "debut": "2026-07-31T10:31:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false,
+          "id": "eff-recent"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "FERMETURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T10:31:00.000Z",
+        "fin": null,
+        "type_creneau": "EFFECTIF",
+        "est_pause": false,
+        "id": "eff-recent"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-effectif-ferme-puis-apres-midi",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        },
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": "2026-07-31T10:01:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false,
+          "id": "eff-1"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-fenetre-apres-midi-dans-pause",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T10:16:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-fenetre-matin",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T05:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-pause-effective-ouverte-ignoree",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": true,
+          "id": "pause-eff"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T10:05:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-pause-seule-aucun-creneau",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T10:10:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "AUCUN_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-pendant-apres-midi",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-pendant-matin",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T06:00:00.000Z",
+        "fin": "2026-07-31T10:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "matin"
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-pendant-pause",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T10:10:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T10:30:00.000Z",
+        "fin": "2026-07-31T14:30:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "apres-midi"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/journee-previsionnel-ouvert-ignore",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T06:02:00.000Z",
+          "fin": null,
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "ouvert"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "AUCUN_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-apres-fin",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-29T06:00:01.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-avant-fenetre",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-28T18:44:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-fin-exacte",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-29T06:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-minuit-paris",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-28T23:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-ouverture-fenetre",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-28T18:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      },
+      "prochainCreneau": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-dst-pendant-saut-dst",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-03-28T20:00:00+01:00",
+          "fin": "2026-03-29T08:00:00+02:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-dst"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-03-29T01:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-03-28T20:00:00+01:00",
+        "fin": "2026-03-29T08:00:00+02:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-dst"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-hiver-fin-exacte",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-hiver"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-10-25T07:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-10-24T20:00:00+02:00",
+        "fin": "2026-10-25T08:00:00+01:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-hiver"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-hiver-heure-repetee-premiere",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-hiver"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-10-25T00:30:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-10-24T20:00:00+02:00",
+        "fin": "2026-10-25T08:00:00+01:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-hiver"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/nuit-hiver-heure-repetee-seconde",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-10-24T20:00:00+02:00",
+          "fin": "2026-10-25T08:00:00+01:00",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "nuit-hiver"
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-10-25T01:30:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-10-24T20:00:00+02:00",
+        "fin": "2026-10-25T08:00:00+01:00",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false,
+        "id": "nuit-hiver"
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/vitest-15-min-avant",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:45:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "OUVERTURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      },
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/vitest-avant-h-moins-15",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T07:44:59.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/vitest-contrat-manquant",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T09:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "CONTRAT",
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": "2026-07-31T16:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/vitest-entre-deux-creneaux",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-06T06:00:00.000Z",
+          "fin": "2026-07-06T14:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-31T06:00:00.000Z",
+          "fin": "2026-08-31T14:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "contratStatut": "SIGNE_COMPLET",
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": false,
+      "action": null,
+      "motif": "HORS_CRENEAU",
+      "creneauCourant": null,
+      "prochainCreneau": {
+        "debut": "2026-08-31T06:00:00.000Z",
+        "fin": "2026-08-31T14:00:00.000Z",
+        "type_creneau": "PREVISIONNEL",
+        "est_pause": false
+      }
+    }
+  },
+  {
+    "name": "evaluerDisponibilitePointage/vitest-segment-ouvert",
+    "input": {
+      "fonction": "evaluerDisponibilitePointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "contratStatut": null,
+      "maintenant": "2026-07-31T18:00:00.000Z"
+    },
+    "expected": {
+      "peutPointer": true,
+      "action": "FERMETURE",
+      "motif": null,
+      "creneauCourant": {
+        "debut": "2026-07-31T08:00:00.000Z",
+        "fin": null,
+        "type_creneau": "EFFECTIF",
+        "est_pause": false
+      },
+      "prochainCreneau": null
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/aucun-depart",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/avant-dernier-creneau",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": "2026-08-01T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-08-01T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-08-01T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/depart-par-presence-legacy",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "presences": [
+        {
+          "pointage_depart_le": "2026-07-31T15:50:00.000Z"
+        }
+      ],
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/fin-reference-exacte",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": "2026-08-01T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-08-01T16:00:00.000Z",
+      "maintenant": "2026-08-01T16:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-08-01T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/fin-reference-max-des-creneaux",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": "2026-08-01T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-01T00:00:00.000Z",
+      "maintenant": "2026-08-01T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-08-01T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/fin-reference-moins-1ms",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": "2026-08-01T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-08-01T16:00:00.000Z",
+      "maintenant": "2026-08-01T15:59:59.999Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": "2026-08-01T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/pause-effective-ouverte-ignoree",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T12:00:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": true
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/pause-previsionnelle-ouverte-ignoree",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T12:00:00.000Z",
+          "fin": null,
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/planning-incomplet-prime",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": null,
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-08-02T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "PLANNING_INCOMPLET",
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/presence-sans-depart",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "presences": [
+        {
+          "pointage_depart_le": null
+        }
+      ],
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/sans-previsionnel-fin-mission",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/sans-previsionnel-fin-mission-invalide",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "pas une date",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AVANT_DERNIER_CRENEAU",
+      "finReference": null
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/vide",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "AUCUN_DEPART",
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/vitest-apres-dernier-creneau",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": "2026-07-31T15:55:00.000Z",
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": true,
+      "motif": null,
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/vitest-segment-ouvert",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-07-31T08:05:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-07-31T16:00:00.000Z",
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-07-31T16:00:00.000Z"
+    }
+  },
+  {
+    "name": "evaluerTerminaisonMission/vitest-segment-ouvert-prioritaire",
+    "input": {
+      "fonction": "evaluerTerminaisonMission",
+      "creneaux": [
+        {
+          "debut": "2026-09-03T17:00:00.000Z",
+          "fin": "2026-09-03T18:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-09-04T05:00:00.000Z",
+          "fin": "2026-09-04T17:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-09-03T17:05:00.000Z",
+          "fin": null,
+          "type_creneau": "EFFECTIF",
+          "est_pause": false
+        }
+      ],
+      "finMission": "2026-09-04T17:00:00.000Z",
+      "maintenant": "2026-09-03T17:30:00.000Z"
+    },
+    "expected": {
+      "peutTerminer": false,
+      "motif": "SEGMENT_OUVERT",
+      "finReference": "2026-09-04T17:00:00.000Z"
+    }
+  },
+  {
+    "name": "filtrerMissionsEnCours/melange",
+    "input": {
+      "fonction": "filtrerMissionsEnCours",
+      "missions": [
+        {
+          "id": "a",
+          "statut": "EN_COURS"
+        },
+        {
+          "id": "b",
+          "statut": "TERMINEE"
+        },
+        {
+          "id": "c",
+          "statut": "ASSIGNEE"
+        },
+        {
+          "id": "d",
+          "statut": "EN_COURS"
+        }
+      ]
+    },
+    "expected": [
+      "a",
+      "d"
+    ]
+  },
+  {
+    "name": "filtrerMissionsEnCours/vide",
+    "input": {
+      "fonction": "filtrerMissionsEnCours",
+      "missions": []
+    },
+    "expected": []
+  },
+  {
+    "name": "filtrerMissionsEnCours/vitest-en-cours-sans-presence",
+    "input": {
+      "fonction": "filtrerMissionsEnCours",
+      "missions": [
+        {
+          "id": "mission-longue",
+          "statut": "EN_COURS"
+        }
+      ]
+    },
+    "expected": [
+      "mission-longue"
+    ]
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-fin-exacte",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T16:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-fin-moins-1s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T15:59:59.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-fin-plus-1h",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T17:00:00.000Z"
+    },
+    "expected": null
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-fin-plus-1ms",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T16:00:00.001Z"
+    },
+    "expected": null
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-fin-plus-1s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T16:00:01.000Z"
+    },
+    "expected": null
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-exact",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-14min-59s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:45:01.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-15min-1ms",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:44:59.999Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-15min-1s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:44:59.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-15min-exact",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:45:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-16min",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:44:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-moins-1s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T07:59:59.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-h-plus-1s",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T08:00:01.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/fenetre-milieu",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T08:00:00.000Z",
+          "fin": "2026-07-31T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "slot-jour"
+        }
+      ],
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T08:00:00.000Z",
+      "fin": "2026-07-31T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "slot-jour"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-apres-journee",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T15:00:00.000Z"
+    },
+    "expected": null
+  },
+  {
+    "name": "prochainCreneauPointage/journee-avant-matin",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T05:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T06:00:00.000Z",
+      "fin": "2026-07-31T10:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "matin"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-fenetre-apres-midi-dans-pause",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T10:16:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T10:30:00.000Z",
+      "fin": "2026-07-31T14:30:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "apres-midi"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-fenetre-matin",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T05:45:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T06:00:00.000Z",
+      "fin": "2026-07-31T10:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "matin"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-pendant-apres-midi",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T10:30:00.000Z",
+      "fin": "2026-07-31T14:30:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "apres-midi"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-pendant-matin",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T08:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T06:00:00.000Z",
+      "fin": "2026-07-31T10:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "matin"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/journee-pendant-pause",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-31T10:30:00.000Z",
+          "fin": "2026-07-31T14:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "apres-midi"
+        },
+        {
+          "debut": "2026-07-31T10:00:00.000Z",
+          "fin": "2026-07-31T10:30:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": true,
+          "id": "pause"
+        },
+        {
+          "debut": "2026-07-31T06:00:00.000Z",
+          "fin": "2026-07-31T10:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false,
+          "id": "matin"
+        }
+      ],
+      "maintenant": "2026-07-31T10:10:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-07-31T10:30:00.000Z",
+      "fin": "2026-07-31T14:30:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false,
+      "id": "apres-midi"
+    }
+  },
+  {
+    "name": "prochainCreneauPointage/vitest-lendemain",
+    "input": {
+      "fonction": "prochainCreneauPointage",
+      "creneaux": [
+        {
+          "debut": "2026-07-30T20:00:00.000Z",
+          "fin": "2026-07-31T06:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        },
+        {
+          "debut": "2026-08-01T08:00:00.000Z",
+          "fin": "2026-08-01T16:00:00.000Z",
+          "type_creneau": "PREVISIONNEL",
+          "est_pause": false
+        }
+      ],
+      "maintenant": "2026-07-31T12:00:00.000Z"
+    },
+    "expected": {
+      "debut": "2026-08-01T08:00:00.000Z",
+      "fin": "2026-08-01T16:00:00.000Z",
+      "type_creneau": "PREVISIONNEL",
+      "est_pause": false
+    }
+  }
+]

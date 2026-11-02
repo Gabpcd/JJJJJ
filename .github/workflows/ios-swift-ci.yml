@@ -1,0 +1,400 @@
+name: iOS Swift — socle natif
+
+# Chaîne de preuve du lot 0 (docs/PLAN_APP_NATIVE_SWIFT.md §4.8, §11 jours 8-10).
+# Trois niveaux : cœur (vecteurs golden, fixtures démo, contrats RPC), packages
+# (swift test macOS, concurrence stricte, 0 avertissement), interface (XCUITest démo plus
+# JoleneCoreTests et JoleneDesignTests exécutés sur le simulateur iOS : iPhone, iPad
+# portrait, iPad paysage ; StagingConnexionTests est réservé à ios-swift-staging.yml).
+# Aucune clé, aucun secret, aucune livraison : tout tourne en mode démo.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios-native/**'
+      - 'scripts/mobile/export-golden-vectors.mjs'
+      - 'scripts/mobile/export-demo-fixtures.mjs'
+      - 'scripts/mobile/check-rpc-contracts.mjs'
+      - 'src/lib/date-heure-paris.ts'
+      - 'src/lib/format-mission.ts'
+      - 'src/lib/heures-hebdomadaires-mission.ts'
+      - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/nativeLinks.ts'
+      - 'src/lib/geo.ts'
+      - 'src/lib/constantes.ts'
+      - 'src/lib/donnees-test.ts'
+      - 'src/lib/profession-hierarchy.ts'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/integrations/supabase/types.ts'
+      - 'supabase/schema/public.sql'
+      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
+      - '.github/workflows/ios-swift-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios-native/**'
+      - 'scripts/mobile/export-golden-vectors.mjs'
+      - 'scripts/mobile/export-demo-fixtures.mjs'
+      - 'scripts/mobile/check-rpc-contracts.mjs'
+      - 'src/lib/date-heure-paris.ts'
+      - 'src/lib/format-mission.ts'
+      - 'src/lib/heures-hebdomadaires-mission.ts'
+      - 'src/lib/disponibilite-pointage.ts'
+      - 'src/lib/nativeLinks.ts'
+      - 'src/lib/geo.ts'
+      - 'src/lib/constantes.ts'
+      - 'src/lib/donnees-test.ts'
+      - 'src/lib/profession-hierarchy.ts'
+      - 'src/components/planning/planning-candidat.ts'
+      - 'src/integrations/supabase/types.ts'
+      - 'supabase/schema/public.sql'
+      - 'supabase/SECURITY_DEFINER_MANIFEST.json'
+      - '.github/workflows/ios-swift-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-swift-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: '1'
+  # Toolchain fixée, identique au pilote (mobile-native/scripts/ios-ci-toolchain.mjs) :
+  # jamais de repli silencieux vers une autre version de Xcode ou de runtime.
+  JOLENE_XCODE_APP: /Applications/Xcode_26.4.1.app
+  JOLENE_XCODE_VERSION_ATTENDUE: 'Xcode 26.4.1'
+  JOLENE_XCODE_BUILD_ATTENDU: '17E202'
+  JOLENE_IOS_RUNTIME: '26.2'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  coeur:
+    name: Cœur — golden et contrats
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+        timeout-minutes: 8
+      - name: Vecteurs golden à jour (export puis diff)
+        run: |
+          if [ ! -f scripts/mobile/export-golden-vectors.mjs ]; then
+            echo "::error::scripts/mobile/export-golden-vectors.mjs est absent : les vecteurs golden du plan §11 jours 3-4 ne sont pas encore exportés. Ce job ne peut pas déclarer les règles portées vérifiées."
+            exit 1
+          fi
+          node scripts/mobile/export-golden-vectors.mjs
+          git diff --exit-code --stat -- ios-native scripts/mobile \
+            || { echo "::error::Les vecteurs golden versionnés diffèrent de l'export : relancez le script et versionnez le résultat."; exit 1; }
+          if [ -n "$(git status --porcelain -- ios-native)" ]; then
+            echo "::error::L'export a créé des fichiers non versionnés sous ios-native/ :"; git status --porcelain -- ios-native; exit 1
+          fi
+      - name: Fixtures démo à jour (export puis diff)
+        run: |
+          node scripts/mobile/export-demo-fixtures.mjs
+          git diff --exit-code --stat -- ios-native \
+            || { echo "::error::Les fixtures démo versionnées diffèrent de l'export (scripts/mobile/export-demo-fixtures.mjs)."; exit 1; }
+          if [ -n "$(git status --porcelain -- ios-native)" ]; then
+            echo "::error::L'export des fixtures a créé des fichiers non versionnés sous ios-native/ :"; git status --porcelain -- ios-native; exit 1
+          fi
+      - name: Contrats RPC sans dérive (types.ts, public.sql, manifeste)
+        run: node scripts/mobile/check-rpc-contracts.mjs
+
+  packages:
+    name: Packages — swift test macOS
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+          swift --version
+      - name: Cache SPM des packages (supabase-swift 2.55.5)
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ios-native/Packages/JoleneCore/.build
+            ios-native/Packages/JoleneSupabase/.build
+          key: spm-packages-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Packages/*/Package.swift', 'ios-native/Packages/*/Package.resolved') }}
+          restore-keys: |
+            spm-packages-${{ runner.os }}-xcode26.4.1-
+      - name: JoleneCore — swift test
+        working-directory: ios-native/Packages/JoleneCore
+        run: |
+          # Contrôle de concurrence strict : `swiftSettings` StrictConcurrency des Package.swift,
+          # redoublé par le drapeau du compilateur (DECISIONS_LOT0). Les cibles du package sont
+          # recompilées à chaque run (le cache SPM ne conserve que les dépendances) pour que
+          # chaque avertissement soit visible ; 0 avertissement exigé hors `.build/checkouts/`.
+          rm -rf .build/debug/JoleneCore.build .build/debug/JoleneCoreTests.build
+          set +e
+          swift build --build-tests -Xswiftc -strict-concurrency=complete > "$RUNNER_TEMP/joleneCore-build.log" 2>&1
+          code=$?
+          set -e
+          tail -n 40 "$RUNNER_TEMP/joleneCore-build.log"
+          [ "$code" -eq 0 ] || { echo "::error::swift build JoleneCore a échoué (code $code)."; exit 1; }
+          avertissements="$(grep -E "^/.*: warning:" "$RUNNER_TEMP/joleneCore-build.log" | grep -v "/.build/checkouts/" | sort -u || true)"
+          if [ -n "$avertissements" ]; then
+            echo "$avertissements"
+            echo "::error::JoleneCore : avertissements de compilation (concurrence stricte) — 0 attendu."; exit 1
+          fi
+          echo "JoleneCore : 0 avertissement en strict-concurrency=complete" | tee -a "$GITHUB_STEP_SUMMARY"
+          set +e
+          swift test -Xswiftc -strict-concurrency=complete > "$RUNNER_TEMP/joleneCore-tests.log" 2>&1
+          code=$?
+          set -e
+          tail -n 60 "$RUNNER_TEMP/joleneCore-tests.log"
+          [ "$code" -eq 0 ] || { echo "::error::swift test JoleneCore a échoué (code $code)."; exit 1; }
+          # Bilan explicite exigé (XCTest ou Swift Testing) : un run sans aucun test n'est pas une preuve.
+          xctest="$(grep -oE "Executed [0-9]+ tests?, with 0 failures" "$RUNNER_TEMP/joleneCore-tests.log" | tail -n 1 | grep -oE "[0-9]+" | head -n 1 || true)"
+          swifttesting="$(grep -oE "Test run with [0-9]+ tests? passed" "$RUNNER_TEMP/joleneCore-tests.log" | tail -n 1 | grep -oE "[0-9]+" || true)"
+          if grep -qE "with [1-9][0-9]* failures|tests? failed" "$RUNNER_TEMP/joleneCore-tests.log"; then echo "::error::JoleneCoreTests : des échecs sont rapportés."; exit 1; fi
+          total=$(( ${xctest:-0} + ${swifttesting:-0} ))
+          [ "$total" -ge 1 ] || { echo "::error::JoleneCoreTests : aucun test exécuté (XCTest ${xctest:-0}, Swift Testing ${swifttesting:-0})."; exit 1; }
+          echo "JoleneCoreTests : $total tests verts (XCTest ${xctest:-0}, Swift Testing ${swifttesting:-0})" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: JoleneSupabase — swift test
+        working-directory: ios-native/Packages/JoleneSupabase
+        run: |
+          # Contrôle de concurrence strict : `swiftSettings` StrictConcurrency des Package.swift,
+          # redoublé par le drapeau du compilateur (DECISIONS_LOT0). Les cibles du package sont
+          # recompilées à chaque run (le cache SPM ne conserve que les dépendances) pour que
+          # chaque avertissement soit visible ; 0 avertissement exigé hors `.build/checkouts/`.
+          rm -rf .build/debug/JoleneSupabase.build .build/debug/JoleneSupabaseTests.build
+          set +e
+          swift build --build-tests -Xswiftc -strict-concurrency=complete > "$RUNNER_TEMP/joleneSupabase-build.log" 2>&1
+          code=$?
+          set -e
+          tail -n 40 "$RUNNER_TEMP/joleneSupabase-build.log"
+          [ "$code" -eq 0 ] || { echo "::error::swift build JoleneSupabase a échoué (code $code)."; exit 1; }
+          avertissements="$(grep -E "^/.*: warning:" "$RUNNER_TEMP/joleneSupabase-build.log" | grep -v "/.build/checkouts/" | sort -u || true)"
+          if [ -n "$avertissements" ]; then
+            echo "$avertissements"
+            echo "::error::JoleneSupabase : avertissements de compilation (concurrence stricte) — 0 attendu."; exit 1
+          fi
+          echo "JoleneSupabase : 0 avertissement en strict-concurrency=complete" | tee -a "$GITHUB_STEP_SUMMARY"
+          set +e
+          swift test -Xswiftc -strict-concurrency=complete > "$RUNNER_TEMP/joleneSupabase-tests.log" 2>&1
+          code=$?
+          set -e
+          tail -n 60 "$RUNNER_TEMP/joleneSupabase-tests.log"
+          [ "$code" -eq 0 ] || { echo "::error::swift test JoleneSupabase a échoué (code $code)."; exit 1; }
+          # Bilan explicite exigé (XCTest ou Swift Testing) : un run sans aucun test n'est pas une preuve.
+          xctest="$(grep -oE "Executed [0-9]+ tests?, with 0 failures" "$RUNNER_TEMP/joleneSupabase-tests.log" | tail -n 1 | grep -oE "[0-9]+" | head -n 1 || true)"
+          swifttesting="$(grep -oE "Test run with [0-9]+ tests? passed" "$RUNNER_TEMP/joleneSupabase-tests.log" | tail -n 1 | grep -oE "[0-9]+" || true)"
+          if grep -qE "with [1-9][0-9]* failures|tests? failed" "$RUNNER_TEMP/joleneSupabase-tests.log"; then echo "::error::JoleneSupabaseTests : des échecs sont rapportés."; exit 1; fi
+          total=$(( ${xctest:-0} + ${swifttesting:-0} ))
+          [ "$total" -ge 1 ] || { echo "::error::JoleneSupabaseTests : aucun test exécuté (XCTest ${xctest:-0}, Swift Testing ${swifttesting:-0})."; exit 1; }
+          echo "JoleneSupabaseTests : $total tests verts (XCTest ${xctest:-0}, Swift Testing ${swifttesting:-0})" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Conserver les journaux swift test
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-packages-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/*-tests.log
+          retention-days: 7
+          if-no-files-found: warn
+
+  ui:
+    name: UI — ${{ matrix.format }}
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { format: iphone, famille: iphone, orientation: portrait }
+          - { format: ipad-portrait, famille: ipad, orientation: portrait }
+          - { format: ipad-landscape, famille: ipad, orientation: landscape }
+    env:
+      JOLENE_UI_FORMAT: ${{ matrix.format }}
+      JOLENE_UI_FAMILLE: ${{ matrix.famille }}
+      JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/${{ matrix.format }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+      - name: Choisir le simulateur iOS 26.2 (iPhone 17 ou iPad (A16)) sans installer de SDK
+        id: simulateur
+        run: |
+          runtimes="$(xcrun simctl list runtimes --json)"
+          devices="$(xcrun simctl list devices available --json)"
+          # Réutilise la politique du pilote (mobile-native/scripts/ios-ci-toolchain.mjs) sans la modifier.
+          udid="$(RUNTIMES="$runtimes" DEVICES="$devices" node --input-type=module -e '
+            import { selectIosCiSimulator } from "./mobile-native/scripts/ios-ci-toolchain.mjs";
+            const { device } = selectIosCiSimulator(JSON.parse(process.env.RUNTIMES).runtimes, JSON.parse(process.env.DEVICES).devices, process.env.JOLENE_UI_FAMILLE);
+            process.stdout.write(device.udid);
+          ')"
+          echo "Simulateur retenu : $udid ($JOLENE_UI_FAMILLE, iOS $JOLENE_IOS_RUNTIME)"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+      - name: Cache des paquets SPM clonés par xcodebuild
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/spm-cloned
+          key: spm-xcodebuild-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'ios-native/Packages/*/Package.swift') }}
+          restore-keys: |
+            spm-xcodebuild-${{ runner.os }}-xcode26.4.1-
+      - name: build-for-testing (scheme Jolene, sans signature) — une fois par job
+        id: build
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+        run: |
+          mkdir -p "$JOLENE_UI_OUTPUT"
+          debut=$(date +%s)
+          set +e
+          xcodebuild build-for-testing \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/build-for-testing.log" 2>&1
+          code=$?
+          set -e
+          duree=$(( $(date +%s) - debut ))
+          grep -E "error: |warning: .*(JOLENE|Jolene)|\*\* TEST BUILD" "$JOLENE_UI_OUTPUT/build-for-testing.log" | tail -n 40 || true
+          echo "duree_build_s=$duree" >> "$GITHUB_OUTPUT"
+          echo "Durée build-for-testing : ${duree}s (mesure pour la porte go/no-go, docs/mobile-swift/PORTE_LOT0.md)"
+          grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing a échoué (code $code). Voir build-for-testing.log dans l'artefact."; exit 1; }
+      - name: test-without-building — JoleneUITests + JoleneCoreTests + JoleneDesignTests (${{ matrix.format }})
+        id: tests
+        # Délai propre à l'étape : un simulateur ou un runner xctest bloqué est interrompu ici,
+        # pas par le timeout du job (60 min), et le xcresult est clos avant le résumé.
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT.xcresult"
+          echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests \
+            -only-testing:JoleneCoreTests \
+            -only-testing:JoleneDesignTests \
+            -skip-testing:JoleneUITests/StagingConnexionTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building : code $code"
+      - name: Résumé xcresult (assertions, pas de succès fabriqué)
+        if: always() && steps.build.outcome == 'success'
+        env:
+          XCRESULT: ${{ steps.tests.outputs.xcresult }}
+          CODE_XCODEBUILD: ${{ steps.tests.outputs.code }}
+        run: |
+          [ -d "$XCRESULT" ] || { echo "::error::Bundle xcresult absent : aucun test n'a produit de résultat."; exit 1; }
+          xcrun xcresulttool get test-results summary --path "$XCRESULT" > "$JOLENE_UI_OUTPUT/xctest-summary.json"
+          xcrun xcresulttool export attachments --path "$XCRESULT" --output-path "$JOLENE_UI_OUTPUT/attachments" || echo "Aucune pièce jointe exportable."
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { readFileSync, readdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { readPngDimensions } from "./mobile-native/scripts/png-dimensions.mjs";
+            const out = process.env.JOLENE_UI_OUTPUT;
+            const s = JSON.parse(readFileSync(join(out, "xctest-summary.json"), "utf8"));
+            const total = s.totalTestCount ?? 0, passed = s.passedTests ?? 0, failed = s.failedTests ?? 0, skipped = s.skippedTests ?? 0;
+            const lignes = [`### UI — ${process.env.JOLENE_UI_FORMAT}`, "",
+              `- xcodebuild : code ${process.env.CODE_XCODEBUILD}`,
+              `- résultat xcresult : ${s.result} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total)`,
+              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors StagingConnexionTests), JoleneCoreTests, JoleneDesignTests`];
+            // Chaque cible doit avoir tourné : un plan qui en oublie une n est pas une preuve.
+            const bundles = (s.testTargets ?? s.testPlanConfigurations ?? []).map(t => t.name ?? t.testTargetName ?? "").filter(Boolean);
+            const attendus = ["JoleneUITests", "JoleneCoreTests", "JoleneDesignTests"];
+            const log = readFileSync(join(out, "test-without-building.log"), "utf8");
+            const manquantes = attendus.filter(cible => !bundles.includes(cible) && !new RegExp(`Test Suite \x27${cible}[^\x27]*\x27 (started|passed)`).test(log));
+            if (manquantes.length) lignes.push(`- cibles sans aucun test exécuté : ${manquantes.join(", ")}`);
+            // Contrôle d orientation des captures (mobile-native/scripts/png-dimensions.mjs repris tel quel).
+            const attachments = join(out, "attachments");
+            const pngs = existsSync(attachments) ? readdirSync(attachments).filter(n => n.toLowerCase().endsWith(".png")) : [];
+            const attendu = process.env.JOLENE_UI_ORIENTATION;
+            const mauvaises = [];
+            const captures = pngs.map(name => {
+              const { width, height } = readPngDimensions(readFileSync(join(attachments, name)));
+              const portrait = width < height;
+              if ((attendu === "portrait") !== portrait) mauvaises.push(`${name} ${width}x${height}`);
+              return { name, width, height };
+            });
+            writeFileSync(join(out, "orientation.json"), JSON.stringify({ requested: attendu, captures, mauvaises }, null, 2));
+            lignes.push(`- captures PNG : ${pngs.length} (orientation attendue ${attendu}${pngs.length ? "" : " — aucune capture exportée : l orientation n est PAS prouvée par ce run"})`);
+            if (mauvaises.length) lignes.push(`- captures dans la mauvaise orientation : ${mauvaises.join(", ")}`);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+            // JoleneCoreTests seul dépasse 100 tests : un total inférieur signifie qu une cible n a pas tourné.
+            const ok = process.env.CODE_XCODEBUILD === "0" && s.result === "Passed" && total >= 100 && failed === 0 && skipped === 0 && passed === total && mauvaises.length === 0 && manquantes.length === 0;
+            if (!ok) { console.error("::error::Tests simulateur non concluants (JoleneUITests, JoleneCoreTests, JoleneDesignTests) : voir le résumé ci-dessus et l artefact xcresult."); process.exit(1); }
+          '
+      - name: Durée de build dans le résumé (mesure porte go/no-go)
+        if: always() && steps.build.outcome == 'success'
+        env:
+          DUREE: ${{ steps.build.outputs.duree_build_s }}
+        run: |
+          echo "- durée build-for-testing : ${DUREE}s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Conserver xcresult, captures et journaux
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-ui-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/ui-${{ matrix.format }}.xcresult
+            ios-native/test-results/${{ matrix.format }}/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Éteindre le simulateur
+        if: always()
+        run: xcrun simctl shutdown all || true

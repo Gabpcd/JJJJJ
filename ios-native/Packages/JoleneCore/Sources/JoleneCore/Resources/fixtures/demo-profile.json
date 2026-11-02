@@ -1,0 +1,17 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "user_id": "demo-soignant",
+  "email": "demonstration@example.invalid",
+  "profile": {
+    "id": "demo-soignant",
+    "profession": "IDE",
+    "adresse_lat": 48.8566,
+    "adresse_lng": 2.3522,
+    "rayon_deplacement_km": 50,
+    "tous_documents_valides": false,
+    "type_contrat": "CDD",
+    "types_contrat_acceptes": "[\"CDD\",\"LIBERAL\"]",
+    "type_exercice": "MIXTE",
+    "taux_horaire_minimum": 0
+  }
+}

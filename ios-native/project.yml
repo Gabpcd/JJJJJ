@@ -1,0 +1,92 @@
+# Projet Xcode généré par XcodeGen (brew install xcodegen ; xcodegen generate).
+# Le .xcodeproj est versionné pour Xcode ; ce fichier reste la source de vérité.
+name: Jolene
+options:
+  bundleIdPrefix: app
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.4"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  defaultConfig: Debug
+  groupSortPosition: top
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Staging.xcconfig
+  Release: Config/Production.xcconfig
+packages:
+  JoleneCore:
+    path: Packages/JoleneCore
+  JoleneSupabase:
+    path: Packages/JoleneSupabase
+  JoleneDesign:
+    path: Packages/JoleneDesign
+targets:
+  Jolene:
+    type: application
+    platform: iOS
+    sources:
+      - path: Jolene
+        excludes:
+          - "Info.plist"
+    dependencies:
+      - package: JoleneCore
+      - package: JoleneSupabase
+      - package: JoleneDesign
+    settings:
+      base:
+        INFOPLIST_FILE: Jolene/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Jolene/Jolene.entitlements
+        ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+  JoleneUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: JoleneUITests
+    dependencies:
+      - target: Jolene
+    settings:
+      base:
+        TEST_TARGET_NAME: Jolene
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.jolene.uitests
+        CODE_SIGN_ENTITLEMENTS: ""
+schemes:
+  Jolene:
+    build:
+      targets:
+        Jolene: all
+        JoleneUITests: [test]
+    run:
+      config: Debug
+      commandLineArguments:
+        "-JOLENE_MODE demo": true
+    test:
+      config: Debug
+      gatherCoverageData: false
+      commandLineArguments:
+        "-JOLENE_MODE demo": true
+      targets:
+        - package: JoleneCore/JoleneCoreTests
+        - package: JoleneSupabase/JoleneSupabaseTests
+        - package: JoleneDesign/JoleneDesignTests
+        - JoleneUITests
+  Jolene-Staging:
+    build:
+      targets:
+        Jolene: all
+        JoleneUITests: [test]
+    run:
+      config: Debug
+      environmentVariables:
+        JOLENE_MODE: staging
+    test:
+      config: Debug
+      environmentVariables:
+        JOLENE_MODE: staging
+      targets:
+        - JoleneUITests

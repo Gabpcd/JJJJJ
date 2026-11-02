@@ -1,0 +1,120 @@
+import Foundation
+
+/// Monde démo (plan §4.6) : un seul jeu de fixtures JSON, une horloge fixée,
+/// aucun réseau. `DemoWorld.gateways()` fournit les ports du mode `-JOLENE_MODE demo`.
+public enum DemoWorld {
+    /// Horloge fixée du monde démo : 2026-11-02T00:00:00Z. Identique à `fixed_now`
+    /// des trois fichiers JSON (vérifié par test). Les 30 missions démarrent entre le
+    /// 03/11/2026 et le 02/12/2026.
+    public static let fixedNow: Date = Date(timeIntervalSince1970: 1_793_577_600)
+
+    /// Copie de `DEMO_CONTEXT` (demoGateway.ts) ; `demo-profile.json` doit lui être égal.
+    public static let context = MissionReadContext(
+        userId: "demo-soignant",
+        email: "demonstration@example.invalid",
+        profile: SoignantProfile(id: "demo-soignant", profession: "IDE", adresseLat: 48.8566, adresseLng: 2.3522,
+                                 rayonDeplacementKm: 50, tousDocumentsValides: false, typeContrat: "CDD",
+                                 typesContratAcceptes: "[\"CDD\",\"LIBERAL\"]", typeExercice: "MIXTE", tauxHoraireMinimum: 0)
+    )
+
+    /// Utilisateur confirmé renvoyé par `DemoAuthGateway.signIn`.
+    public static let user = AuthenticatedUser(id: context.userId, email: context.email, emailConfirmedAt: fixedNow,
+                                               appMetadataRole: UserRole.soignant.rawValue, appMetadataEtablissementId: nil)
+
+    public static let messageDemoSeulement = "Le mode démonstration utilise uniquement son profil fictif."
+
+    /// Un jeu de ports complet, horloge fixée comprise. Chaque appel crée une session
+    /// démo vierge (pas de session restaurée avant `signIn`).
+    public static func gateways() -> Gateways {
+        Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway(), clock: FixedClock(fixedNow))
+    }
+}
+
+/// Session démo en mémoire : rien n'est persisté entre deux lancements.
+actor DemoSessionStore {
+    private var user: AuthenticatedUser?
+
+    func current() -> AuthenticatedUser? { user }
+    func set(_ user: AuthenticatedUser?) { self.user = user }
+}
+
+/// Accepte n'importe quel email et mot de passe non vides et renvoie l'utilisateur démo
+/// confirmé. `restoreSession` renvoie `nil` au premier lancement, puis l'utilisateur
+/// après `signIn`, jusqu'à `signOut`.
+public struct DemoAuthGateway: AuthPort {
+    private let store = DemoSessionStore()
+
+    public init() {}
+
+    public func restoreSession() async throws -> AuthenticatedUser? {
+        await store.current()
+    }
+
+    public func signIn(email: String, password: String) async throws -> AuthenticatedUser {
+        let emailSaisi = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !emailSaisi.isEmpty, !password.isEmpty else {
+            throw JoleneError(.invalidCredentials, "Saisissez votre email et votre mot de passe.")
+        }
+        await store.set(DemoWorld.user)
+        // Relecture après mutation : aucun succès fabriqué.
+        guard let user = await store.current() else {
+            throw JoleneError(.unknown, "La session de démonstration n'a pas pu être ouverte.")
+        }
+        return user
+    }
+
+    public func signOut() async throws {
+        await store.set(nil)
+    }
+}
+
+/// Le compte démo est toujours un soignant sans établissement.
+public struct DemoRoleGateway: RolePort {
+    public init() {}
+
+    public func currentRole() async throws -> RoleResult {
+        RoleResult(role: UserRole.soignant.rawValue, etablissementId: nil)
+    }
+}
+
+/// Missions démo chargées depuis `Bundle.module`, enrichies et filtrées comme le web
+/// (`MissionBusiness`). Refuse tout contexte dont l'identifiant n'est pas celui du
+/// profil fictif : la démo n'est jamais un repli pour un compte réel.
+public struct DemoMissionsGateway: MissionsPort {
+    public init() {}
+
+    public func profile(userId: String) async throws -> SoignantProfile? {
+        userId == DemoWorld.context.userId ? DemoWorld.context.profile : nil
+    }
+
+    public func listMissions(context: MissionReadContext, filters: MissionFilters) async throws -> [Mission] {
+        try check(context)
+        let (missions, etablissements) = try chargerFixtures()
+        return MissionBusiness.filter(missions.map { enrich($0, context: context, etablissements: etablissements) },
+                                      context: context, filters: filters)
+    }
+
+    public func mission(id: String, context: MissionReadContext) async throws -> Mission? {
+        try check(context)
+        let (missions, etablissements) = try chargerFixtures()
+        guard let fixture = missions.first(where: { $0.record.id == id }) else { return nil }
+        return enrich(fixture, context: context, etablissements: etablissements)
+    }
+
+    private func check(_ context: MissionReadContext) throws {
+        try MissionBusiness.validateContext(context)
+        guard context.userId == DemoWorld.context.userId else {
+            throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement)
+        }
+    }
+
+    private func chargerFixtures() throws -> ([DemoFixtures.MissionFixture], [EtablissementSummary]) {
+        (try DemoFixtures.loadMissions().missions, try DemoFixtures.loadEtablissements().etablissements)
+    }
+
+    private func enrich(_ fixture: DemoFixtures.MissionFixture, context: MissionReadContext,
+                        etablissements: [EtablissementSummary]) -> Mission {
+        let etablissement = etablissements.first { $0.id == fixture.record.etablissementId }
+        return MissionBusiness.enrich(record: fixture.record, context: context, etablissement: etablissement, slots: fixture.creneaux)
+    }
+}
