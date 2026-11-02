@@ -45,6 +45,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertEqual(gateways.clock.now(), Date(timeIntervalSince1970: 1))
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
+        XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
@@ -58,6 +59,7 @@ final class SupabaseGatewaysTests: XCTestCase {
                        "un port doit être câblé dans SupabaseGateways.make(client:) ET DemoWorld.gateways() dans la même PR")
         XCTAssertFalse(supabase.contains("audit"), "T1 câble l'audit")
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
+        XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {
