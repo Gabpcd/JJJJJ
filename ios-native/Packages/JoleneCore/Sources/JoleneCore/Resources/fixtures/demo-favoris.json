@@ -1,0 +1,30 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "missions_sauvegardees": [
+    {
+      "id": "demo-sauvegarde-001",
+      "mission_id": "demo-mission-002",
+      "cree_le": "2026-11-01T09:00:00.000Z",
+      "missions": {
+        "id": "demo-mission-002",
+        "intitule": "Démonstration · Soins de suite 2",
+        "debut_le": "2026-11-04T07:00:00.000Z",
+        "fin_le": "2026-11-04T15:00:00.000Z",
+        "duree_heures": 8,
+        "nb_creneaux": 1,
+        "statut": "OUVERTE"
+      }
+    }
+  ],
+  "etablissements_favoris": [
+    {
+      "etablissement_id": "demo-etab-2",
+      "nom": "Établissement fictif des Lilas",
+      "ville": "Les Lilas",
+      "logo_url": null,
+      "type_etablissement": "EHPAD",
+      "nb_missions_ouvertes": 10,
+      "cree_le": "2026-10-15T09:00:00.000Z"
+    }
+  ]
+}
