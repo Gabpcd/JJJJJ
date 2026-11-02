@@ -46,6 +46,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
         XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
         XCTAssertTrue(gateways.compte is SupabaseAccountGateway)
+        XCTAssertTrue(gateways.mesMissions is SupabaseMesMissionsGateway)
     }
 
     /// Aucune liste propre à ce monde : les ports encore stubs côté Supabase doivent être
@@ -61,6 +62,7 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
         XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
         XCTAssertFalse(supabase.contains("compte"), "T8 câble la suppression de compte")
+        XCTAssertFalse(supabase.contains("mesMissions"), "T5 câble Mes missions")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

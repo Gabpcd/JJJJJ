@@ -68,7 +68,11 @@ final class DemoConsultationTests: JoleneUITestCase {
         attachText(tabBarDescription, name: "\(proofPrefix)-onglets.txt")
 
         tabButton("tab-missions", label: "Mes missions").tap()
-        require("Mes missions affiche son état honnête") { self.visible(self.element("placeholder-missions")) }
+        // Lot 1, T5 : l'écran natif remplace l'état « Disponible au lot 1 » (`placeholder-missions`).
+        require("Mes missions affiche ses missions à venir", timeout: 30) {
+            self.containerVisible(self.element("mes-missions-screen")) && self.element("mes-mission-demo-assignee-001").exists
+        }
+        XCTAssertFalse(element("placeholder-missions").exists, "plus d'état d'attente pour Mes missions")
         tabButton("tab-revenus", label: "Revenus").tap()
         require("Revenus affiche son état honnête") { self.visible(self.element("placeholder-revenus")) }
     }

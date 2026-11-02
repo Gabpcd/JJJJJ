@@ -201,7 +201,7 @@ final class DemoWorldTests: XCTestCase {
     /// `SupabaseGateways.make(client:).unwiredPorts` à `DemoWorld.gateways().unwiredPorts`, si
     /// bien qu'un port câblé dans un seul monde rougit l'un des deux tests. Critère de sortie de
     /// T12 (blueprint §2.2) : liste vide, `unwiredPorts.isEmpty` dans les deux mondes.
-    static let portsEnAttenteLot1 = ["candidature", "presence", "favoris", "mesMissions",
+    static let portsEnAttenteLot1 = ["candidature", "presence", "favoris",
                                      "recovery", "justificatifs"]
 
     func testAucunPortNonCable() {
@@ -212,6 +212,7 @@ final class DemoWorldTests: XCTestCase {
         XCTAssertTrue(gateways.flags is DemoFlagsGateway)
         XCTAssertTrue(gateways.dashboard is DemoDashboardGateway, "T3 câble le tableau de bord")
         XCTAssertTrue(gateways.compte is DemoAccountGateway, "T8 câble la suppression de compte")
+        XCTAssertTrue(gateways.mesMissions is DemoMesMissionsGateway, "T5 câble Mes missions")
         XCTAssertEqual(DemoWorld.gateways(drapeaux: [:]).unwiredPorts, Self.portsEnAttenteLot1)
         XCTAssertEqual(gateways.clock.now(), DemoWorld.fixedNow)
     }

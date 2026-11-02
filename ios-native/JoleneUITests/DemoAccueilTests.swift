@@ -5,9 +5,9 @@ import XCTest
 /// valeurs attendues sont celles que `DemoDashboardTests` (JoleneCore) affirme sur le port : un
 /// écart entre l'écran et le port fait échouer l'un des deux. Exclusions HARD STOP vérifiées
 /// (`BandeauAlerte48h`, « cumul d'activité »), puis navigation vers le détail et vers Explorer ;
-/// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`). Gaps verrouillés
-/// (aucun bouton sans effet) : ni bouton calendrier (T5) ni bouton de renvoi web (T10) tant que
-/// leur implémentation n'est pas injectée.
+/// état d'erreur et reprise par « Réessayer » (`testAccueilErreurPuisReprise`). Ajout au calendrier
+/// (T5, décision 18) : bouton des prochaines missions au planning vérifié et son issue. Gap verrouillé
+/// (aucun bouton sans effet) : aucun bouton de renvoi web (T10) tant que le présentateur n'est pas injecté.
 ///
 /// Coût : les recherches de libellé sont limitées aux descendants de `accueil-screen` et faites
 /// en une seule requête, et chaque ligne n'est résolue qu'une fois (borne CI globale, #1104).
@@ -67,11 +67,6 @@ final class DemoAccueilTests: JoleneUITestCase {
         // (`AccueilAssemblageTests.testAucunTexteNeReprendLAlerte48hNiLeCumulDActivite`).
         let interdit = libelleContenantUnDe(["48h", "48 h", "plafond", "cumul d"], dans: ecran)
         XCTAssertFalse(interdit.exists, "texte HARD STOP sur l'Accueil : « \(interdit.exists ? interdit.label : "") »")
-        // Point d'extension calendrier (décision 18) : aucun bouton tant que T5 n'injecte pas
-        // `ajoutCalendrierMission`. T5 remplace cette assertion par la présence du bouton et l'issue
-        // `accueil-calendrier-issue` après un tap (LOT1_PLAN.md §3 T5, verrou de clôture T12).
-        XCTAssertFalse(dansEcran("accueil-calendrier-demo-assignee-001", ecran).exists,
-                       "bouton calendrier sans implémentation injectée : jamais un bouton sans effet (T5 le câble)")
         // Renvois web (pointage, notifications) : le compteur reste affiché, mais aucun bouton tant que
         // T10 n'injecte pas le présentateur `.safari` (`SFSafariViewController`) : un `openURL` d'un
         // chemin `/soignant/*` reviendrait dans l'app par lien universel, sans effet. T10 remplace ces
@@ -82,6 +77,7 @@ final class DemoAccueilTests: JoleneUITestCase {
                        "bouton « Vérifier mes présences » sans présentateur injecté (T10 le câble)")
         record("\(proofPrefix)-accueil-bas")
 
+        ajouterProchaineMissionAuCalendrier(ecran)
         ouvrirProchaineMissionPuisRevenir(ecran)
         ouvrirExplorerDepuisToutVoir(ecran)
     }
@@ -190,6 +186,20 @@ final class DemoAccueilTests: JoleneUITestCase {
             essais += 1
         }
         require("La cible est atteignable hors des barres") { self.visible(cible) && self.barreQuiRecouvre(cible) == nil }
+    }
+
+    /// Décision 18 (T5) : le bouton calendrier d'une prochaine mission au planning vérifié écrit ses
+    /// créneaux (démo : calendrier en mémoire, aucune demande système) et rend son issue sous la section.
+    /// Le même ajout est partagé avec Mes missions (`DemoMesMissionsTests`, journal par session).
+    private func ajouterProchaineMissionAuCalendrier(_ ecran: XCUIElement) {
+        let bouton = element("accueil-calendrier-demo-assignee-001")
+        degager(bouton, dans: ecran)
+        XCTAssertEqual(bouton.label, "Ajouter au calendrier")
+        bouton.tap()
+        let issue = element("accueil-calendrier-issue")
+        require("L'ajout au calendrier rend son issue") { issue.exists && issue.label.contains("1 créneau ajouté à votre calendrier.") }
+        XCTAssertTrue(dansEcran("accueil-calendrier-demo-assignee-002", ecran).exists, "un bouton par prochaine mission au planning vérifié")
+        record("\(proofPrefix)-accueil-calendrier")
     }
 
     private func ouvrirProchaineMissionPuisRevenir(_ ecran: XCUIElement) {
