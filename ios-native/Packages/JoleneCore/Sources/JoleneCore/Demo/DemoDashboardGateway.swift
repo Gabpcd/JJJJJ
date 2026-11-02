@@ -49,3 +49,32 @@ public struct DemoDashboardGateway: DashboardPort {
             gains: fichier.gainsMissions)
     }
 }
+
+/// Tableau de bord démo en échec forcé, pour la recette de l'état d'erreur dans l'interface
+/// (`DemoAccueilTests.testAccueilErreurPuisReprise`) : installé seulement par la surcharge DEBUG
+/// `JOLENE_FORCE_ACCUEIL_ECHEC` de `AppContainer`, jamais en Release. Les `echecs` premiers
+/// chargements non annulés échouent comme un délai dépassé (`SessionController.timeoutMessage`) ;
+/// les suivants délèguent au port démo. Une tâche annulée avant l'appel ne consomme pas d'échec.
+/// Même refus que le port démo pour tout autre utilisateur.
+public actor DemoDashboardEchecGateway: DashboardPort {
+    private let relais: DemoDashboardGateway
+    private var echecsRestants: Int
+
+    public init(echecs: Int = 1, relais: DemoDashboardGateway = DemoDashboardGateway()) {
+        self.echecsRestants = max(0, echecs)
+        self.relais = relais
+    }
+
+    public func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
+        try MissionBusiness.validateContext(context)
+        guard context.userId == DemoWorld.context.userId else {
+            throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement)
+        }
+        try Task.checkCancellation()
+        if echecsRestants > 0 {
+            echecsRestants -= 1
+            throw JoleneError(.network, SessionController.timeoutMessage)
+        }
+        return try await relais.dashboard(context: context)
+    }
+}

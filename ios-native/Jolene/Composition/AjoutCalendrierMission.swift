@@ -7,7 +7,10 @@ import JoleneCore
 /// l'environnement (`.environment(\.ajoutCalendrierMission, …)`) au-dessus des onglets.
 ///
 /// Tant qu'aucune implémentation n'est injectée, l'Accueil n'affiche aucun bouton calendrier :
-/// jamais un bouton sans effet ni un succès fabriqué. EventKit n'est pas `Sendable` : son
+/// jamais un bouton sans effet ni un succès fabriqué. Verrou du gap : `DemoAccueilTests` affirme
+/// aujourd'hui l'absence de `accueil-calendrier-demo-assignee-001` ; T5 remplace cette assertion
+/// par la présence du bouton et l'issue `accueil-calendrier-issue` après un tap, et la clôture T12
+/// vérifie l'injection (`LOT1_PLAN.md` §3 T5 et T12). EventKit n'est pas `Sendable` : son
 /// enveloppe vit sur le main actor, seul le protocole est partagé.
 @MainActor
 protocol AjoutCalendrierMission: AnyObject, Sendable {

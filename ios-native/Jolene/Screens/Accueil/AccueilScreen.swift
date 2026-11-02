@@ -11,9 +11,12 @@ import JoleneDesign
 /// web : pointage au lot 2), mes prochaines missions (+ calendrier, point d'extension T5),
 /// missions pour vous, missions proposées, gains du mois, notifications non lues.
 /// Exclus (HARD STOP n°4) : `BandeauAlerte48h` et l'encart « cumul d'activité ».
+///
+/// Renvois web (pointage, notifications) : routes `.safari` résolues par `LinkRouter`
+/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur.
 struct AccueilScreen: View {
-    static let presencesURL = URL(string: "https://jolene.app/soignant/presences")
-    static let notificationsURL = URL(string: "https://jolene.app/soignant/notifications")
+    static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
+    static let renvoiNotifications = AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications)
 
     @StateObject private var model: AccueilModel
     @ObservedObject private var session: SessionStore
@@ -120,8 +123,8 @@ struct AccueilScreen: View {
     private func oubliPointage(_ texte: String) -> some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
             InlineNotice(texte, title: "Oubli de pointage ?", tone: .warning, identifier: "accueil-oubli-pointage")
-            if let url = Self.presencesURL {
-                JoleneButton("Vérifier mes présences sur jolene.app", style: .secondary) { openURL(url) }
+            if let route = Self.renvoiPresences {
+                JoleneButton("Vérifier mes présences sur jolene.app", style: .secondary) { ouvrir(route) }
                     .accessibilityIdentifier("accueil-oubli-pointage-action")
             }
         }
@@ -213,20 +216,22 @@ struct AccueilScreen: View {
     }
 
     private func propositions(_ propositions: [AccueilProposition]) -> some View {
-        VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
-            SectionHeader("🚨 Missions proposées", identifier: "accueil-section-propositions")
-            ForEach(propositions) { proposition in
-                // Décompte relu toutes les 30 s sur l'horloge des gateways (fixe en démo) ; à
-                // l'échéance la carte disparaît, comme `CarteProposition`.
-                TimelineView(.periodic(from: .now, by: 30)) { _ in
-                    if let restant = AccueilPresentation.tempsRestant(expireLe: proposition.expireLe, maintenant: model.horloge.now()) {
-                        NavigationLink(value: MissionRoute(id: proposition.proposition.missionId)) {
-                            AccueilPropositionCarte(proposition: proposition, restant: restant)
+        // Décompte relu toutes les 30 s sur l'horloge des gateways (fixe en démo). Le filtre est posé
+        // au niveau de la section : une carte disparaît à son échéance, et la section entière (en-tête
+        // compris) quand toutes ont expiré, comme `CarteProposition` + `onTraitee` du web.
+        TimelineView(.periodic(from: .now, by: 30)) { _ in
+            let affichees = AccueilPresentation.propositionsAffichees(propositions, maintenant: model.horloge.now())
+            if !affichees.isEmpty {
+                VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+                    SectionHeader("🚨 Missions proposées", identifier: "accueil-section-propositions")
+                    ForEach(affichees) { affichee in
+                        NavigationLink(value: MissionRoute(id: affichee.proposition.proposition.missionId)) {
+                            AccueilPropositionCarte(proposition: affichee.proposition, restant: affichee.restant)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(AccueilPropositionCarte.texteAccessible(proposition, restant: restant))
+                        .accessibilityLabel(AccueilPropositionCarte.texteAccessible(affichee.proposition, restant: affichee.restant))
                         .accessibilityHint("Ouvre le détail de la mission proposée")
-                        .accessibilityIdentifier("accueil-proposition-\(proposition.id)")
+                        .accessibilityIdentifier("accueil-proposition-\(affichee.id)")
                     }
                 }
             }
@@ -270,8 +275,8 @@ struct AccueilScreen: View {
                 .foregroundStyle(JoleneColor.midnight)
                 .accessibilityIdentifier("accueil-notifications")
             Spacer(minLength: 0)
-            if let url = Self.notificationsURL {
-                Button("Voir sur jolene.app") { openURL(url) }
+            if let route = Self.renvoiNotifications {
+                Button("Voir sur jolene.app") { ouvrir(route) }
                     .font(JoleneFont.callout.weight(.semibold))
                     .foregroundStyle(JoleneColor.rose800)
                     .frame(minHeight: 44)
@@ -282,5 +287,17 @@ struct AccueilScreen: View {
         .padding(.vertical, JoleneSpacing.sm)
         .background(JoleneColor.cloud)
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+    }
+
+    // MARK: - Renvois web
+
+    /// Ouvre une route `.safari` hors de l'app. Point de fusion T10 (`LOT1_PLAN.md` §3 T10) : quand
+    /// `onOpenURL` / `onContinueUserActivity` seront branchés, ce renvoi passera par le présentateur
+    /// `.safari` du `DeepLinkCoordinator` (SFSafariViewController), jamais par `openURL` : ces chemins
+    /// sont couverts par l'AASA `/soignant/*` et reviendraient dans l'app par lien universel, que
+    /// `LinkRouter` renverrait en `.safari` (boucle).
+    private func ouvrir(_ route: JoleneRoute) {
+        guard let url = route.externalURL else { return }
+        openURL(url)
     }
 }

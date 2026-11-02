@@ -5,9 +5,10 @@ import JoleneSupabase
 /// Racine de composition (plan §4.1). Lit l'environnement, choisit le jeu de gateways
 /// et construit la session. Le mode démonstration n'instancie JAMAIS JoleneSupabase.
 ///
-/// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`) et
-/// sentinelle réseau : honorées en build DEBUG uniquement. En Release, seul l'Info.plist
-/// (xcconfig Production) fait foi, et la sentinelle n'existe pas dans le binaire.
+/// Surcharges de lancement (`-JOLENE_MODE`, `JOLENE_MODE`, `JOLENE_FORCE_BAD_KEY`,
+/// `JOLENE_FORCE_ACCUEIL_ECHEC`) et sentinelle réseau : honorées en build DEBUG uniquement. En
+/// Release, seul l'Info.plist (xcconfig Production) fait foi, et la sentinelle n'existe pas dans
+/// le binaire.
 @MainActor
 final class AppContainer: ObservableObject {
     let environment: JoleneEnvironment
@@ -62,7 +63,7 @@ final class AppContainer: ObservableObject {
             NetworkSentinel.install()
             networkSentinel = NetworkSentinel.Monitor.shared
             #endif
-            let gateways = DemoWorld.gateways()
+            let gateways = Self.demoGateways(processEnvironment: processEnvironment)
             clock = gateways.clock
             session = SessionStore(controller: SessionController(gateways: gateways))
             environmentError = nil
@@ -89,6 +90,21 @@ final class AppContainer: ObservableObject {
                 environmentError = JoleneError(.environment, "Configuration de l'application invalide.")
             }
         }
+    }
+
+    /// Ports du monde démo. DEBUG seulement : `JOLENE_FORCE_ACCUEIL_ECHEC=1` (variable d'environnement
+    /// du processus, comme `JOLENE_FORCE_BAD_KEY`) fait échouer le premier chargement de l'Accueil
+    /// (`DemoDashboardEchecGateway`) pour la recette de l'état d'erreur et de la reprise
+    /// (`DemoAccueilTests.testAccueilErreurPuisReprise`). Jamais compilé en Release.
+    private static func demoGateways(processEnvironment: [String: String]) -> Gateways {
+        #if DEBUG
+        if processEnvironment["JOLENE_FORCE_ACCUEIL_ECHEC"] == "1" {
+            var gateways = DemoWorld.gateways()
+            gateways.dashboard = DemoDashboardEchecGateway()
+            return gateways
+        }
+        #endif
+        return DemoWorld.gateways()
     }
 
     private static func refusal(of environment: JoleneEnvironment) -> JoleneError? {

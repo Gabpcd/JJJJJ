@@ -385,7 +385,9 @@ public struct DashboardSnapshot: Equatable, Sendable {
     public var propositions: [AccueilProposition]
     /// Gains relus mission par mission ; `nil` si la relecture a échoué (carte masquée, comme le web).
     public var gains: GainsDuMois?
-    /// `gains_mois.nb_missions` du serveur (missions TERMINEE débutées dans le mois), conservé tel quel.
+    /// `gains_mois.nb_missions` du serveur (missions TERMINEE débutées dans le mois), conservé tel
+    /// quel mais jamais affiché : « sur N missions » compte les missions relues porteuses d'un
+    /// montant (`GainsDuMois.nombreMissions`, comme `gainsCeMois.nb` du web ; décision 10 amendée).
     public var gainsMoisNbMissions: Int
     /// Décodé, jamais affiché au lot 1 (`BandeauAlerte48h` exclu, HARD STOP n°4).
     public var heuresSemaine: Double

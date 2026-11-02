@@ -93,10 +93,30 @@ public enum AccueilPresentation {
         return "\(secondes / 3600)h \(minutes < 10 ? "0" : "")\(minutes)min"
     }
 
+    /// Proposition encore ouverte et son décompte (« 1h 30min »).
+    public struct PropositionAffichee: Equatable, Sendable, Identifiable {
+        public var proposition: AccueilProposition
+        public var restant: String
+        public var id: String { proposition.id }
+    }
+
+    /// Propositions encore ouvertes à `maintenant`, dans l'ordre serveur. Une carte échue disparaît,
+    /// et la section entière (en-tête compris) quand toutes ont expiré : le web retire chaque carte
+    /// par `onTraitee` et ne rend la section que si `propositions.length > 0`.
+    public static func propositionsAffichees(_ propositions: [AccueilProposition], maintenant: Date) -> [PropositionAffichee] {
+        propositions.compactMap { proposition in
+            tempsRestant(expireLe: proposition.expireLe, maintenant: maintenant)
+                .map { PropositionAffichee(proposition: proposition, restant: $0) }
+        }
+    }
+
     // MARK: - Gains et compteurs
 
-    /// « 💰 Ce mois : 162,40 € net salarié estimé* sur 1 mission » (web l.664-678) ; `nil` sans
-    /// mission relue porteuse d'un montant (carte masquée).
+    /// « 💰 Ce mois : 162,40 € net salarié estimé* sur 1 mission » (web l.664-678). « sur N
+    /// missions » compte les missions relues porteuses d'un montant (`gainsCeMois.nb` du web,
+    /// décision 10 amendée), jamais `gains_mois.nb_missions`. `nil` (carte masquée) sans mission
+    /// relue porteuse d'un montant, ou si aucun montant n'est positif : le web afficherait alors
+    /// « Ce mois :  sur N missions » (écart assumé, `PARITE_SOIGNANT.md`).
     public static func texteGains(_ gains: GainsDuMois) -> String? {
         guard gains.nombreMissions > 0 else { return nil }
         let parties = [
@@ -104,6 +124,7 @@ public enum AccueilPresentation {
             gains.netSalarie > 0 ? "\(MissionPresentation.euros(gains.netSalarie)) net salarié estimé*" : nil,
             gains.brutIndicatif > 0 ? "\(MissionPresentation.euros(gains.brutIndicatif)) brut indicatif" : nil,
         ].compactMap { $0 }
+        guard !parties.isEmpty else { return nil }
         let n = gains.nombreMissions
         return "💰 Ce mois : \(parties.joined(separator: " + ")) sur \(n) mission\(n > 1 ? "s" : "")"
     }
@@ -126,6 +147,24 @@ public enum AccueilPresentation {
         return nombre > 1
             ? "\(nombre) missions semblent attendre un pointage de départ. Vérifiez vos présences."
             : "1 mission semble attendre un pointage de départ. Vérifiez vos présences."
+    }
+
+    // MARK: - Renvois web
+
+    /// Pointage (lot 2) : écran web au lot 1.
+    public static let lienPresences = "/soignant/presences"
+    /// Centre de notifications (lot 3) : écran web au lot 1.
+    public static let lienNotifications = "/soignant/notifications"
+
+    /// Route d'un renvoi web de l'Accueil, résolue par `LinkRouter` : `.safari` avec l'URL
+    /// canonique (`JoleneLink.canonicalURL`, `https://jolene.app/...`), jamais une URL écrite en
+    /// dur. `nil` si le lien n'est pas un lien Jolene ou si le routeur le rend natif (le renvoi web
+    /// n'a alors plus lieu d'être). Point de fusion T10 : l'écran ouvre cette route par le
+    /// présentateur `.safari` du `DeepLinkCoordinator`, jamais par un `openURL` qui reviendrait
+    /// dans l'app par lien universel (chemins couverts par l'AASA `/soignant/*`).
+    public static func renvoiWeb(_ lien: String) -> JoleneRoute? {
+        guard let route = LinkRouter.resolve(link: lien), !route.isNative else { return nil }
+        return route
     }
 
     // MARK: - Interne

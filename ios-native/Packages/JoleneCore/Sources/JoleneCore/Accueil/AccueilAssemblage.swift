@@ -48,6 +48,13 @@ public enum AccueilAssemblage {
     /// message serveur verbatim) ; les lectures complémentaires en échec dégradent l'affichage
     /// sans erreur : `lecture == nil` → planning « à confirmer », `gains == nil` → carte masquée,
     /// établissement absent → `etab_nom` puis « Établissement ».
+    ///
+    /// Écart assumé avec le web (consigné dans `PARITE_SOIGNANT.md` et `CONTRATS_RPC_SOIGNANT.md`) :
+    /// une fiche absente de la lecture (RLS, mission retirée) ne rend « à confirmer » que **sa**
+    /// mission, alors que le web met tout le planning « à confirmer » dès que `metas.length !==
+    /// missionIds.length` (`DashboardSoignant.tsx` l.160-162). Chaque autre mission reste vérifiée
+    /// par son propre `nb_creneaux` et par le pager (compte exact) : aucun planning n'est présenté
+    /// comme exact sans vérification.
     public static func snapshot(corps: DashboardCorps, context: MissionReadContext, maintenant: Date,
                                 lecture: LectureMissionsAccueil?, etablissements: [String: EtablissementSummary],
                                 gains: [MissionGainLigne]?) throws -> DashboardSnapshot {
