@@ -1,5 +1,7 @@
 # Capacitor production — état natif iOS et Android
 
+> **PÉRIMÉ (01/11/2026).** Ce document décrit la production de la coquille Capacitor 1.0.x. L'app iOS est réécrite en Swift natif dans `ios-native/` : voir `docs/PLAN_APP_NATIVE_SWIFT.md` et `docs/mobile-swift/DECISIONS_LOT0.md`. Reste valable pour Android (décision 1).
+
 État historique vérifié le 13/07/2026 et configuration revue le 10/08/2026. La source de vérité des versions reste
 `package.json`; `npx cap sync` régénère les fichiers natifs gérés par Capacitor.
 

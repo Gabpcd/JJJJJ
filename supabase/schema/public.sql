@@ -25862,6 +25862,52 @@ $$;
 ALTER FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_mission record;
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Lecture du pointage non autorisée.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT id, etablissement_id, soignant_assigne_id INTO v_mission
+  FROM public.missions WHERE id = p_mission_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Lecture du pointage non autorisée.' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_mission.soignant_assigne_id IS DISTINCT FROM v_uid THEN
+    IF v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+      OR public.fn_a_permission_etablissement('lecture_pointage', v_mission.etablissement_id) IS NOT TRUE
+      OR public.fn_a_permission_etablissement('pointage', v_mission.etablissement_id) IS NOT TRUE THEN
+      RAISE EXCEPTION 'Lecture du pointage non autorisée.' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  -- Match both parties as well as the mission: a prior assignee's signed
+  -- contract cannot make an unsigned replacement eligible.
+  RETURN EXISTS (
+    SELECT 1 FROM public.contrats_mission c
+    WHERE c.mission_id = v_mission.id
+      AND c.etablissement_id = v_mission.etablissement_id
+      AND c.soignant_id = v_mission.soignant_assigne_id
+      AND c.statut = 'SIGNE_COMPLET'
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_id" "uuid") IS 'Lecture seule : signature complète de la mission affectée, sans accès au contrat pour POINTAGE_ONLY.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_contrat_storage_path"("p_contrat_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -82128,6 +82174,11 @@ GRANT ALL ON FUNCTION "public"."fn_contester_paiement_soignant"("p_paiement_id" 
 REVOKE ALL ON FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_id" "uuid") TO "authenticated";
 
 
 

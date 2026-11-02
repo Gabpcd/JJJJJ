@@ -1,5 +1,11 @@
 # Store readiness — préparation App Store et Play Store
 
+> **PÉRIMÉ (vérifié le 01/11/2026).** Ce document décrit l'état d'août 2026.
+> L'application est publiée depuis sur les deux stores sous le compte
+> gabrielle@jolene.app : iOS 1.0.7 (24) READY_FOR_DISTRIBUTION et Android
+> 1.0.7 (24) PUBLISHED d'après le workflow `mobile-store-status` du 07/10/2026,
+> build issu du commit `bf1c0ebf` du 05/10/2026. Voir `docs/PLAN_APP_NATIVE_SWIFT.md`.
+
 ## État réel au 10/08/2026
 
 - Le web, iOS et Android sont configurés en version `1.0 (16)` ; le typecheck,
