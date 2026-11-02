@@ -11,8 +11,12 @@ import {
   SOURCES,
   buildContracts,
   diffContracts,
+  extractTypesSignature,
   verifierExclusions,
 } from '../../scripts/mobile/check-rpc-contracts.mjs';
+// Exports ajoutés par le lot 2 (T0) : lus par espace de noms pour qu'une absence fasse échouer
+// les seuls tests concernés, pas le chargement du fichier.
+import * as contratsRpc from '../../scripts/mobile/check-rpc-contracts.mjs';
 
 // Garde du lot 1, tranche T0 (docs/mobile-swift/LOT1_PLAN.md §3 T0) : les RPC du lot 1 sont
 // sous contrat AVANT toute gateway Swift, le JSON versionné ne dérive pas des sources du dépôt,
@@ -43,9 +47,11 @@ const LOT1 = [
   'fn_confirmer_presence_mission',
 ];
 
-// Jamais côté natif : exclut `est_compte_test = true` (NULL pour tout établissement de recette
-// STAGING) ; le nom d'établissement vient exclusivement de fn_etablissements_safe.
-const INTERDITES_NATIF = ['fn_etablissement_public'];
+// Jamais côté natif : `fn_etablissement_public` exclut `est_compte_test = true` (NULL pour tout
+// établissement de recette STAGING) ; le nom d'établissement vient exclusivement de
+// fn_etablissements_safe. `fn_creer_notification` (lot 2, décision 9) : notification arbitraire
+// écrite par le client, doublon du trigger `trg_notifier_creation_litige`.
+const INTERDITES_NATIF = ['fn_etablissement_public', 'fn_creer_notification'];
 // Lot 4 (swipe) : pas avant.
 const PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
 
@@ -86,9 +92,16 @@ function decisionsDu(plan) {
 test('RPC_SUIVIES : noms uniques, statuts et lots valides', () => {
   assert.equal(byName.size, RPC_SUIVIES.length, 'doublon dans RPC_SUIVIES');
   for (const r of RPC_SUIVIES) {
-    assert.ok(['lot0', 'a_venir', 'consommee'].includes(r.statut), `${r.name} : statut inconnu ${r.statut}`);
+    // `staging_seulement` (lot 2, T0) : RPC de recette définie par un supplément STAGING, jamais en production.
+    assert.ok(['lot0', 'a_venir', 'consommee', 'staging_seulement'].includes(r.statut), `${r.name} : statut inconnu ${r.statut}`);
     assert.ok(Number.isInteger(r.lot) && r.lot >= 0 && r.lot <= 6, `${r.name} : lot invalide ${r.lot}`);
     if (r.statut === 'lot0') assert.equal(r.lot, 0, `${r.name} : statut lot0 implique lot 0`);
+    // Une source hors dump n'est admise que pour une RPC de recette STAGING, et elle est alors obligatoire.
+    if (r.statut === 'staging_seulement') {
+      assert.ok(typeof r.source === 'string' && r.source.startsWith('scripts/ci/'), `${r.name} : source du supplément STAGING absente`);
+    } else {
+      assert.equal(r.source, undefined, `${r.name} : seule une RPC staging_seulement porte une source`);
+    }
   }
 });
 
@@ -119,11 +132,13 @@ test('RPC_SUIVIES : aucune RPC interdite ou prématurée', () => {
   }
 });
 
-test('RPC_SUIVIES : les RPC des lots 2 et 3 du lot 0 sont conservées', () => {
+// Amendé par le lot 2 (T0, décision 1 de DECISIONS_LOT2.md) : les quatre RPC du système de pointage ①
+// que le lot 0 listait (`fn_pointer_arrivee`, `fn_pointer_depart`, `fn_valider_scan_qr`,
+// `fn_generer_qr_mission`) sortent de RPC_SUIVIES ; la liste complète du lot 2 est gardée plus bas.
+test('RPC_SUIVIES : les RPC du lot 2 conservées depuis le lot 0, et celle du lot 3', () => {
   const lot2 = RPC_SUIVIES.filter(r => r.lot === 2).map(r => r.name);
-  assert.deepEqual(lot2, [
-    'fn_pointer_arrivee', 'fn_pointer_depart', 'fn_scanner_code_pointage', 'fn_valider_scan_qr',
-    'fn_generer_qr_mission', 'fn_etat_pointage_mission', 'fn_envoyer_otp_signature',
+  assert.deepEqual(lot2.slice(0, 5), [
+    'fn_scanner_code_pointage', 'fn_etat_pointage_mission', 'fn_envoyer_otp_signature',
     'fn_signer_contrat_otp', 'fn_remplacer_document_soignant',
   ]);
   assert.equal(byName.get('fn_upsert_token_push')?.lot, 3);
@@ -552,17 +567,477 @@ function swiftFiles(dir) {
 
 // Un gap connu reste verrouillé : un appel RPC écrit en dur dans le code Swift doit viser une
 // RPC sous contrat, jamais une RPC interdite côté natif ni une RPC du lot 4 avant son heure.
+// Lot 2 (T0) : le système de pointage ① a son propre message (décision 1 de DECISIONS_LOT2.md).
 test('ios-native : tout littéral "fn_…" du Swift est une RPC suivie et autorisée', () => {
   const suivies = new Set(RPC_SUIVIES.map(r => r.name));
   const interdites = new Set([...RPC_JAMAIS_SUIVIES, ...RPC_PAS_AVANT_LOT4]);
+  const systeme1 = new Set(contratsRpc.RPC_POINTAGE_SYSTEME_1 ?? []);
+  assert.ok(systeme1.size > 0, 'RPC_POINTAGE_SYSTEME_1 non exportée par le script');
   const fautes = [];
   for (const file of swiftFiles(join(root, 'ios-native'))) {
     const src = readFileSync(file, 'utf8');
     for (const m of src.matchAll(/"(fn_[a-z0-9_]+)"/g)) {
       const rel = file.slice(root.length + 1);
-      if (interdites.has(m[1])) fautes.push(`${rel} : ${m[1]} interdite côté natif`);
+      if (systeme1.has(m[1])) fautes.push(`${rel} : ${m[1]} appartient au système de pointage ①, interdit côté natif (DECISIONS_LOT2.md, décision 1)`);
+      else if (interdites.has(m[1])) fautes.push(`${rel} : ${m[1]} interdite côté natif`);
       else if (!suivies.has(m[1])) fautes.push(`${rel} : ${m[1]} absente de RPC_SUIVIES`);
     }
   }
   assert.deepEqual(fautes, []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Lot 2, tranche T0 (docs/mobile-swift/LOT2_PLAN.md §3 T0, docs/mobile-swift/DECISIONS_LOT2.md).
+// Les RPC du lot 2 sont sous contrat avant toute gateway ; le système de pointage ① est interdit
+// côté natif ; chaque forme de réponse citée par les fiches est confrontée à sa source (dump de
+// production, supplément STAGING, edge functions, web). Aucun réseau, aucun secret.
+// ---------------------------------------------------------------------------------------------
+
+// Ordre de RPC_SUIVIES pour le lot 2 : les cinq RPC listées dès le lot 0, puis les dix ajoutées par T0.
+const LOT2_SUIVIES = [
+  'fn_scanner_code_pointage', 'fn_etat_pointage_mission', 'fn_envoyer_otp_signature',
+  'fn_signer_contrat_otp', 'fn_remplacer_document_soignant',
+  'fn_consentir_gps', 'fn_relancer_validation_presence', 'fn_presences_detail_mission',
+  'fn_fenetre_contestation_ouverte', 'fn_ouvrir_litige_rate_limited', 'fn_creer_notation_mission',
+  'fn_demander_revue_document', 'fn_verifier_coherence_documents', 'fn_signer_attestation_sante',
+  'fn_admission_otp_signature_recette',
+];
+// Système de pointage ① (décision 1) : plus monté côté web depuis #664, jamais appelé par le natif.
+const POINTAGE_SYSTEME_1 = [
+  'fn_pointer_arrivee', 'fn_pointer_depart', 'fn_pointer_debut_pause', 'fn_pointer_fin_pause',
+  'fn_valider_scan_qr', 'fn_generer_qr_mission', 'fn_valider_code_secours', 'fn_codes_pointage_mission',
+];
+const SUPPLEMENT_SMS = 'scripts/ci/sms-signature-staging.sql';
+const DOC_CONTRATS = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
+
+/**
+ * Corps d'une fonction du dump, quel que soit son délimiteur (`$$`, `$_$`, …). `entete` est le début
+ * exact de la ligne `CREATE OR REPLACE FUNCTION` (nom seul, ou nom + arguments pour une surcharge).
+ */
+function corpsSql(schema, entete) {
+  const start = schema.indexOf(entete);
+  assert.ok(start >= 0, `définition introuvable : ${entete}`);
+  const as = schema.slice(start).match(/\n\s*AS (\$[A-Za-z_]*\$)\n/);
+  assert.ok(as, `délimiteur de corps introuvable : ${entete}`);
+  const debut = start + as.index + as[0].length;
+  const fin = schema.indexOf(`\n${as[1]};`, debut);
+  assert.ok(fin > debut, `fin de corps introuvable : ${entete}`);
+  return schema.slice(debut, fin);
+}
+const enteteFn = name => `CREATE OR REPLACE FUNCTION "public"."${name}"(`;
+
+// Noms de condition PL/pgSQL employés dans le dump → SQLSTATE renvoyé par PostgREST.
+const CONDITIONS_SQLSTATE = { no_data_found: 'P0002', insufficient_privilege: '42501', check_violation: '23514' };
+/** `RAISE EXCEPTION '<message>' … [USING ERRCODE = '<x>']` d'un corps SQL ; sans ERRCODE : `P0001`. */
+function sqlRaises(body) {
+  return [...body.matchAll(/RAISE EXCEPTION\s+'((?:[^']|'')*)'([^;]*);/g)].map(([, message, suite]) => {
+    const code = suite.match(/ERRCODE = '([A-Za-z0-9_]+)'/)?.[1];
+    return { sqlstate: code ? (CONDITIONS_SQLSTATE[code] ?? code) : 'P0001', message: message.replaceAll("''", "'") };
+  });
+}
+/** Codes `'error_code', 'X'` d'un corps SQL. */
+const sqlErrorCodes = body => [...new Set([...body.matchAll(/'error_code',\s*'([A-Z0-9_]+)'/g)].map(m => m[1]))];
+/** Littéraux `'message', '…'` d'un corps SQL (apostrophes doublées ramenées à la valeur JSON). */
+const sqlMessages = body => [...body.matchAll(/'message',\s*'((?:[^']|'')*)'/g)].map(m => m[1].replaceAll("''", "'"));
+
+/** Fichiers `.ts`/`.tsx` de `src/`, hors tests. */
+function webFiles(dir = join(root, 'src')) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...webFiles(full));
+    else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(full);
+  }
+  return out;
+}
+const relatif = file => file.slice(root.length + 1);
+
+test('RPC_SUIVIES lot 2 : système rotatif, justificatifs, contrats et admission de recette, dans l ordre', () => {
+  const lot2 = RPC_SUIVIES.filter(r => r.lot === 2);
+  assert.deepEqual(lot2.map(r => r.name), LOT2_SUIVIES);
+  for (const r of lot2) {
+    if (r.name === 'fn_admission_otp_signature_recette') {
+      assert.deepEqual(r, { name: r.name, statut: 'staging_seulement', lot: 2, source: SUPPLEMENT_SMS });
+    } else {
+      assert.ok(['a_venir', 'consommee'].includes(r.statut), `${r.name} : statut ${r.statut}`);
+    }
+  }
+});
+
+test('RPC_POINTAGE_SYSTEME_1 : huit RPC du système ①, jamais suivies, présentes au dump, refusées par verifierExclusions', () => {
+  assert.deepEqual(contratsRpc.RPC_POINTAGE_SYSTEME_1, POINTAGE_SYSTEME_1);
+  const schema = read(SOURCES.schema);
+  for (const name of POINTAGE_SYSTEME_1) {
+    assert.ok(!byName.has(name), `${name} ne doit plus figurer dans RPC_SUIVIES (décision 1)`);
+    // Une RPC retirée du dump rend la liste périmée : la retirer d'ici et de la fiche dans la même PR.
+    assert.ok(schema.includes(enteteFn(name)), `${name} absente de public.sql`);
+    assert.throws(
+      () => verifierExclusions([...RPC_SUIVIES, { name, statut: 'a_venir', lot: 2 }]),
+      /système de pointage ①/,
+      `${name} : verifierExclusions doit refuser le système ①`,
+    );
+  }
+  for (const name of POINTAGE_SYSTEME_1) assert.ok(!RPC_JAMAIS_SUIVIES.includes(name), `${name} : liste dédiée, pas RPC_JAMAIS_SUIVIES`);
+});
+
+test('RPC_JAMAIS_SUIVIES : fn_creer_notification refusée (décision 9) et fiche « Interdite côté natif »', () => {
+  assert.ok(RPC_JAMAIS_SUIVIES.includes('fn_creer_notification'));
+  assert.throws(() => verifierExclusions([...RPC_SUIVIES, { name: 'fn_creer_notification', statut: 'a_venir', lot: 2 }]), /jamais/);
+  const schema = read(SOURCES.schema);
+  // Témoins : le trigger notifie déjà l'établissement à l'ouverture d'un litige ; le web appelle encore la RPC.
+  assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"."litiges"'));
+  assert.ok(read('src/components/PanneauContestation.tsx').includes("supabase.rpc('fn_creer_notification'"));
+  const fiche = section(read(DOC_CONTRATS), 'Interdite côté natif : `fn_creer_notification`');
+  for (const temoin of ['trg_notifier_creation_litige', 'CONTESTATION_PRESENCE', 'PanneauContestation.tsx']) {
+    assert.ok(fiche.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
+  }
+});
+
+test('fn_admission_otp_signature_recette : staging_seulement, définie par le supplément STAGING, absente de la production', () => {
+  const supplement = read(SUPPLEMENT_SMS);
+  assert.match(supplement.split('\n')[0], /^-- STAGING-ONLY supplement\. Not a production migration/);
+  assert.ok(!read(SOURCES.schema).includes('fn_admission_otp_signature_recette'), 'présente dans le dump de production');
+  assert.equal(extractTypesSignature(read(SOURCES.types), 'fn_admission_otp_signature_recette'), null);
+  const entry = JSON.parse(readFileSync(CONTRACTS_PATH, 'utf8')).rpcs.find(r => r.name === 'fn_admission_otp_signature_recette');
+  assert.ok(entry, 'absente de rpc-contracts.json');
+  assert.equal(entry.statut, 'staging_seulement');
+  assert.equal(entry.source, SUPPLEMENT_SMS);
+  assert.equal(entry.types, null);
+  assert.equal(entry.manifeste, null);
+  assert.deepEqual(entry.sql, [{
+    signature: 'fn_admission_otp_signature_recette(p_contrat_id uuid)',
+    returns: 'jsonb', language: 'plpgsql', security: 'DEFINER', volatility: 'STABLE', search_path: "''",
+  }]);
+  assert.deepEqual(entry.grants, ['authenticated']);
+  assert.match(supplement, /REVOKE ALL ON FUNCTION public\.fn_admission_otp_signature_recette\(uuid\) FROM PUBLIC,anon,service_role;/);
+  // Réponse : clés de l'objet renvoyé, toutes citées par la fiche ; `{admitted:false}` sur toute erreur.
+  const corps = supplement.slice(supplement.indexOf('CREATE FUNCTION public.fn_admission_otp_signature_recette('), supplement.indexOf('END; $admission$;'));
+  const fiche = section(read(DOC_CONTRATS), 'fn_admission_otp_signature_recette');
+  for (const cle of ['admitted', 'can_send', 'can_validate', 'otp_expires_at', 'expires_at', 'remaining']) {
+    assert.ok(corps.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
+    assert.ok(fiche.includes(`\`${cle}\``), `fiche : clé ${cle} absente`);
+  }
+  assert.match(corps, /EXCEPTION WHEN OTHERS THEN RETURN jsonb_build_object\('admitted',false\);/);
+  // Garde du web : URL STAGING exacte testée avant tout appel.
+  const web = read('src/lib/signatureSmsStagingAdmission.ts');
+  assert.ok(web.includes("const STAGING_URL = 'https://mejpriaetwgtcstbgfid.supabase.co';"));
+  const garde = web.indexOf('url !== STAGING_URL');
+  assert.ok(garde > 0 && garde < web.indexOf("client.rpc('fn_admission_otp_signature_recette'"), 'garde d URL STAGING après l appel');
+  assert.ok(fiche.includes('mejpriaetwgtcstbgfid') && fiche.includes('PGRST202'), 'fiche : garde d environnement non consignée');
+});
+
+test('buildContracts : une RPC staging_seulement présente en production ou absente du supplément fait échouer la CI', () => {
+  const base = {
+    typesSource: read(SOURCES.types),
+    schemaSource: read(SOURCES.schema),
+    manifest: JSON.parse(read(SOURCES.manifest)),
+  };
+  assert.doesNotThrow(() => buildContracts(base));
+  const enProduction = `${base.schemaSource}\nCREATE OR REPLACE FUNCTION "public"."fn_admission_otp_signature_recette"("p_contrat_id" "uuid") RETURNS "jsonb"\n    LANGUAGE "plpgsql"\n    AS $$\n`;
+  assert.throws(() => buildContracts({ ...base, schemaSource: enProduction }), /production/);
+  assert.throws(() => buildContracts({ ...base, lireSource: () => '-- supplément vide\n' }), /supplément/);
+});
+
+test('CONTRATS fn_scanner_code_pointage : exceptions de la RPC et des triggers de la première OUVERTURE, avec leur SQLSTATE', () => {
+  const schema = read(SOURCES.schema);
+  const scanner = sqlRaises(corpsSql(schema, enteteFn('fn_scanner_code_pointage')));
+  assert.deepEqual(scanner, [
+    { sqlstate: 'P0002', message: 'Code de pointage invalide ou expiré.' },
+    { sqlstate: '42501', message: "Vous n'êtes pas assigné(e) à cette mission." },
+    { sqlstate: '23514', message: 'Scan déjà pris en compte. Prochain scan possible dans % secondes.' },
+    { sqlstate: '23514', message: 'Le contrat doit être signé avant le pointage.' },
+    { sqlstate: '23514', message: 'Pointage trop tôt. Mission commence à %. Possible à partir de %.' },
+    { sqlstate: 'P0002', message: 'Aucun créneau effectif ouvert à fermer.' },
+    { sqlstate: '23514', message: 'La fin réelle doit être postérieure au début réel du créneau.' },
+  ]);
+  // Triggers déclenchés par la première OUVERTURE (INSERT presences, UPDATE missions → EN_COURS).
+  assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "dec_fenetre_pointage" BEFORE INSERT ON "public"."presences"'));
+  assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_premier_pointage" BEFORE INSERT OR UPDATE OF "pointage_arrivee_le" ON "public"."presences"'));
+  assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_mission_en_cours" BEFORE UPDATE OF "statut" ON "public"."missions"'));
+  assert.ok(corpsSql(schema, enteteFn('trg_exiger_conformite_premier_pointage')).includes('public.fn_exiger_conformite_demarrage_mission('));
+  const conformite = sqlRaises(corpsSql(schema, enteteFn('fn_exiger_conformite_demarrage_mission')));
+  const fenetre = sqlRaises(corpsSql(schema, enteteFn('dec_fenetre_pointage')));
+  assert.deepEqual(fenetre, [{ sqlstate: 'P0001', message: 'Pointage trop tôt. La mission commence à %.' }]);
+  assert.deepEqual([...new Set(conformite.map(r => r.sqlstate))].sort(), ['22023', '23503', '23514', '42501']);
+  const fiche = section(read(DOC_CONTRATS), 'fn_scanner_code_pointage');
+  for (const { sqlstate, message } of [...scanner, ...conformite, ...fenetre]) {
+    assert.ok(fiche.includes(message), `message absent de la fiche : « ${message} »`);
+    assert.ok(fiche.includes(`\`${sqlstate}\``), `SQLSTATE ${sqlstate} absent de la fiche`);
+  }
+  // L'ensemble déclaré à l'interception (LOT2_PLAN §2.4) est exactement l'union observée.
+  const union = [...new Set([...scanner, ...conformite, ...fenetre].map(r => r.sqlstate))].sort();
+  assert.deepEqual(union, ['22023', '23503', '23514', '42501', 'P0001', 'P0002']);
+  assert.ok(fiche.includes('`["P0001", "P0002", "22023", "23503", "23514", "42501"]`'), 'ensemble exceptionsMetier absent de la fiche');
+  // Surcharge du web pour P0002, reprise en vouvoiement (décision 6).
+  const rotatif = read('src/components/pointage/PointageRotatifSoignant.tsx');
+  assert.ok(rotatif.includes("error.message === 'Code de pointage invalide ou expiré.'"));
+  assert.ok(fiche.includes("Code de pointage invalide ou expiré. Demandez le code actuel à l'établissement."));
+});
+
+test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n est pas mergée, jamais lu par le natif', () => {
+  const body = corpsSql(read(SOURCES.schema), enteteFn('fn_scanner_code_pointage'));
+  // Bascule avec B1 (LOT2_PLAN §3 B1) : la PR B1 met à jour cette garde et la fiche dans la même PR.
+  assert.ok(body.includes("'nouveau_code', v_new_code") && body.includes("'nouveau_hmac', v_new_hmac"),
+    'nouveau_code n est plus renvoyé : B1 mergée, basculer la fiche « nouveau_code jamais lu » et cette garde');
+  const fiche = section(read(DOC_CONTRATS), '`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
+  assert.ok(fiche.includes('B1') && fiche.includes('liste blanche'), 'fiche nouveau_code : B1 / liste blanche absents');
+  for (const cle of ['type_scan_effectue', 'prochain_type_scan', 'creneau_effectif_id', 'horodatage_effectif',
+    'horodatage_arrondi', 'numero_scan', 'validation_etab_requise']) {
+    assert.ok(body.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
+    assert.ok(fiche.includes(`\`${cle}\``), `liste blanche : ${cle} absente de la fiche`);
+  }
+  assert.ok(!read('src/components/pointage/PointageRotatifSoignant.tsx').includes('nouveau_code'), 'le web lit nouveau_code');
+  // Le code des sources Swift ne mentionne jamais ces clés (les tests peuvent les injecter pour prouver qu'elles sont ignorées).
+  const fautes = swiftFiles(join(root, 'ios-native'))
+    .filter(f => !f.includes('/Tests/') && !f.includes('/JoleneUITests/'))
+    .filter(f => /nouveau_code|nouveau_hmac/.test(readFileSync(f, 'utf8')))
+    .map(relatif);
+  assert.deepEqual(fautes, []);
+});
+
+test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, code_pointage_actif jamais décodé', () => {
+  const body = corpsSql(read(SOURCES.schema), enteteFn('fn_etat_pointage_mission'));
+  const fiche = section(read(DOC_CONTRATS), 'fn_etat_pointage_mission');
+  assert.deepEqual(sqlErrors(body), ['Mission introuvable', 'Accès interdit']);
+  for (const message of sqlErrors(body)) assert.ok(fiche.includes(`'${message}'`), `refus absent : ${message}`);
+  for (const cle of ['statut', 'intitule', 'prochain_type_scan', 'nb_scans', 'segment_ouvert', 'segments', 'code_pointage_actif', 'est_etab']) {
+    assert.ok(body.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
+    assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle} absente de la fiche`);
+  }
+  assert.match(body, /'code_pointage_actif', CASE WHEN v_is_etab THEN v_mission\.code_pointage_actif ELSE NULL END/);
+  assert.ok(fiche.includes('jamais décodé'), 'code_pointage_actif : « jamais décodé » absent');
+});
+
+// Une forme de réponse = un test côté Swift : chaque refus, code et message du corps SQL figure dans la fiche.
+const FICHES_CONFRONTEES = [
+  'fn_consentir_gps', 'fn_relancer_validation_presence', 'fn_presences_detail_mission', 'fn_creer_notation_mission',
+  'fn_demander_revue_document', 'fn_verifier_coherence_documents', 'fn_signer_attestation_sante',
+  'fn_envoyer_otp_signature', 'fn_signer_contrat_otp', 'fn_remplacer_document_soignant',
+];
+test('CONTRATS lot 2 : refus, codes, messages et exceptions de chaque RPC confrontés au dump', () => {
+  const schema = read(SOURCES.schema);
+  const doc = read(DOC_CONTRATS);
+  let total = 0;
+  for (const name of FICHES_CONFRONTEES) {
+    const body = corpsSql(schema, enteteFn(name));
+    const fiche = section(doc, name);
+    for (const message of [...sqlErrors(body), ...sqlMessages(body)]) {
+      total++;
+      assert.ok(fiche.includes(message), `${name} : « ${message} » absent de la fiche`);
+    }
+    for (const code of sqlErrorCodes(body)) {
+      total++;
+      assert.ok(fiche.includes(`\`${code}\``), `${name} : error_code ${code} absent de la fiche`);
+    }
+    for (const { sqlstate, message } of sqlRaises(body)) {
+      total++;
+      assert.ok(fiche.includes(message) && fiche.includes(`\`${sqlstate}\``), `${name} : exception ${sqlstate} « ${message} » absente`);
+    }
+    assert.ok(fiche.includes('**Contrat de réponse'), `${name} : section « Contrat de réponse » absente`);
+  }
+  // Témoin : les dix corps réunis portent plus de soixante formes ; une extraction vide passerait sans rien vérifier.
+  assert.ok(total >= 60, `formes confrontées : ${total}`);
+});
+
+test('CONTRATS fn_ouvrir_litige_rate_limited : une sous-fiche par surcharge, appel du web à trois clés exactes', () => {
+  const schema = read(SOURCES.schema);
+  const fiche = section(read(DOC_CONTRATS), 'fn_ouvrir_litige_rate_limited');
+  const surcharges = [
+    ['"p_mission_id" "uuid", "p_motif" "text")', '(uuid, text)'],
+    ['"p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text")', '(uuid, type_litige, text)'],
+    ['"p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid")', '(uuid, type_litige, text, uuid)'],
+  ];
+  for (const [args, titre] of surcharges) {
+    const body = corpsSql(schema, `${enteteFn('fn_ouvrir_litige_rate_limited')}${args}`);
+    const sous = sousSection(fiche, `Surcharge \`${titre}\``);
+    for (const message of sqlErrors(body)) assert.ok(sous.includes(message), `${titre} : « ${message} » absent`);
+  }
+  // La surcharge à deux clés ouvre un litige AUTRE, dont la fenêtre est toujours ouverte.
+  assert.ok(corpsSql(schema, `${enteteFn('fn_ouvrir_litige_rate_limited')}${surcharges[0][0]}`).includes("'AUTRE'::public.type_litige"));
+  assert.match(corpsSql(schema, enteteFn('fn_fenetre_contestation_ouverte')), /IF p_type_litige IN \('SECURITE_DANGER', 'NON_PAIEMENT', 'AUTRE'\) THEN\s+RETURN TRUE;/);
+  // Appel du web : trois clés exactes (surcharge canonique).
+  const panneau = read('src/components/PanneauContestation.tsx');
+  const appel = panneau.slice(panneau.indexOf("supabase.rpc('fn_ouvrir_litige_rate_limited'"), panneau.indexOf('if (error) throw error;', panneau.indexOf("supabase.rpc('fn_ouvrir_litige_rate_limited'")));
+  assert.deepEqual([...appel.matchAll(/\b(p_[a-z_]+):/g)].map(m => m[1]), ['p_mission_id', 'p_type_litige', 'p_motif']);
+  assert.ok(appel.includes("p_type_litige: 'DESACCORD_HEURES_POINTAGE'"));
+  assert.ok(fiche.includes('trois clés exactes') && fiche.includes('PGRST203'), 'fiche : règle des trois clés absente');
+});
+
+test('CONTRATS fn_fenetre_contestation_ouverte : délai lu au serveur (défaut 48 h), aucune constante côté natif', () => {
+  const body = corpsSql(read(SOURCES.schema), enteteFn('fn_fenetre_contestation_ouverte'));
+  assert.match(body, /SELECT COALESCE\(valeur::integer, 48\) INTO v_delai_pointage\s+FROM public\.parametres_litiges WHERE cle = 'delai_contestation_pointage_h';/);
+  assert.match(body, /IF v_presence_validee IS NULL THEN RETURN TRUE; END IF;/);
+  const fiche = section(read(DOC_CONTRATS), 'fn_fenetre_contestation_ouverte');
+  for (const temoin of ['delai_contestation_pointage_h', '48 h', 'INVOKER', 'valide_le', 'fail-closed', 'HARD STOP']) {
+    assert.ok(fiche.includes(temoin), `fiche fenêtre de contestation : ${temoin} absent`);
+  }
+  // Le web garde une constante client de 72 h (écart consigné, décision 9) : la fiche le dit.
+  assert.ok(read('src/components/PanneauContestation.tsx').includes('const DELAI_CONTESTATION_MS = 72 * 60 * 60 * 1000;'));
+  assert.ok(fiche.includes('DELAI_CONTESTATION_MS'));
+});
+
+test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à revoir)', () => {
+  const presences = read('src/pages/PresencesSoignant.tsx');
+  for (const fn of ['pointerArrivee', 'pointerDepart']) {
+    const occurrences = presences.split(fn).length - 1;
+    assert.equal(occurrences, 1, `${fn} : ${occurrences} occurrence(s) dans PresencesSoignant.tsx, définition seule attendue — revoir la décision 1`);
+  }
+  assert.ok(presences.includes('<BlocPointageMission'), 'BlocPointageMission n est plus monté');
+  assert.ok(read('src/components/pointage/BlocPointageMission.tsx')
+    .includes("import { PointageRotatifSoignant } from '@/components/pointage/PointageRotatifSoignant';"));
+  const importeurs = motif => webFiles().filter(f => motif.test(readFileSync(f, 'utf8'))).map(relatif).sort();
+  assert.deepEqual(importeurs(/from '[^']*\/CartePointage'/), [], 'CartePointage (système ①) est de nouveau importé');
+  assert.deepEqual(importeurs(/from '[^']*\/qr-offline-queue'/), ['src/components/CartePointage.tsx']);
+  // Le composant vivant n'appelle que le système rotatif, avec les clés p_metadata reprises par le natif.
+  const rotatif = read('src/components/pointage/PointageRotatifSoignant.tsx');
+  assert.deepEqual([...new Set([...rotatif.matchAll(/rpc\('([a-z0-9_]+)'/g)].map(m => m[1]))].sort(),
+    ['fn_etat_pointage_mission', 'fn_scanner_code_pointage']);
+  assert.ok(rotatif.includes('let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };'));
+  assert.ok(rotatif.includes('meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };'));
+  const fiche = section(read(DOC_CONTRATS), 'Interdit côté natif : système de pointage ①');
+  for (const name of POINTAGE_SYSTEME_1) assert.ok(fiche.includes(`\`${name}\``), `fiche système ① : ${name} absente`);
+  for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', '#664', 'contrat signé']) assert.ok(fiche.includes(temoin), `fiche système ① : ${temoin}`);
+});
+
+test('CONTRATS edge verify-document : chaque statut et chaque message de index.ts, un seul appel par document', () => {
+  const index = read('supabase/functions/verify-document/index.ts');
+  const fiche = section(read(DOC_CONTRATS), 'Edge `verify-document`');
+  const messages = [...index.matchAll(/error:\s*(['"])((?:(?!\1).)+)\1/g)].map(m => m[2]);
+  messages.push(...[...index.matchAll(/e\?\.message \|\| "([^"]+)"/g)].map(m => m[1]));
+  messages.push(...[...index.matchAll(/throw new Error\("([^"$`]+)"\)/g)].map(m => m[1]));
+  assert.ok(messages.length >= 12, `messages lus : ${messages.length}`);
+  for (const message of new Set(messages)) assert.ok(fiche.includes(message), `message absent de la fiche : « ${message} »`);
+  const statuts = new Set([...index.matchAll(/status:\s*(\d{3})/g)].map(m => m[1]));
+  assert.deepEqual([...statuts].sort(), ['429', '500']);
+  for (const statut of ['200', '401', '403', '409', '429', '500', '503']) assert.ok(fiche.includes(`**${statut}**`), `statut ${statut} absent`);
+  for (const verdict of ['VERIFIE', 'REJETE', 'EN_ATTENTE', 'REVUE_MANUELLE_REQUISE']) assert.ok(fiche.includes(`\`${verdict}\``), `verdict ${verdict}`);
+  assert.ok(index.includes('verification_attempt_id') && fiche.includes('verification_attempt_id'));
+  assert.ok(index.includes("applyRateLimit('verify-document', getClientIp(req), { max: 10, windowMs: 60_000 })"));
+  assert.ok(fiche.includes('cleanup_orphan') && fiche.includes('une seule fois'));
+  assert.match(read('supabase/config.toml'), /\[functions\.verify-document\]\nverify_jwt = false/);
+  assert.ok(fiche.includes('verify_jwt = false'));
+});
+
+test('CONTRATS edge generate-contrat-mission-pdf : statuts, messages et codes de index.ts ; HTML, pas PDF', () => {
+  const index = read('supabase/functions/generate-contrat-mission-pdf/index.ts');
+  const fiche = section(read(DOC_CONTRATS), 'Edge `generate-contrat-mission-pdf`');
+  const reponses = [...index.matchAll(/repondre\((\d{3}),\s*\{\s*error:\s*'([^']+)'/g)].map(m => [m[1], m[2]]);
+  assert.ok(reponses.length >= 15, `réponses lues : ${reponses.length}`);
+  for (const [statut, message] of reponses) {
+    assert.ok(fiche.includes(`**${statut}**`), `statut ${statut} absent`);
+    assert.ok(fiche.includes(message), `message absent : « ${message} »`);
+  }
+  for (const [, code] of index.matchAll(/code:\s*'([A-Z_]+)'/g)) assert.ok(fiche.includes(`\`${code}\``), `code ${code} absent`);
+  for (const cle of ['contrat_id', 'storage_path', 'hash_document', 'signed_url', 'ttl_seconds']) assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle}`);
+  assert.ok(index.includes("{ contentType: 'text/html', upsert: false }") && fiche.includes('text/html'));
+  assert.ok(index.includes("createSignedUrl(contrat.storage_path, 24 * 3600)") && fiche.includes('24 h'));
+  assert.ok(fiche.includes('donnees_cdd'), 'fiche : aucun donnees_cdd côté soignant non consigné');
+});
+
+test('CONTRATS Storage du lot 2 : jolene-documents INSERT/SELECT sans UPDATE/DELETE client, contrats-signes SELECT', () => {
+  const dir = join(root, 'supabase', 'migrations');
+  const migrations = readdirSync(dir).filter(n => n.endsWith('.sql')).sort();
+  /** Dernière instruction (CREATE ou DROP) qui vise une politique, par ordre des migrations. */
+  const derniere = politique => {
+    let etat = null;
+    for (const m of migrations) {
+      const sql = readFileSync(join(dir, m), 'utf8');
+      for (const [, verbe] of sql.matchAll(new RegExp(`(CREATE|DROP) POLICY (?:IF EXISTS )?"?${politique}"?\\s+ON\\s+storage\\.objects`, 'g'))) etat = { verbe, m };
+    }
+    return etat;
+  };
+  for (const politique of ['pol_storage_jolene_insert', 'pol_storage_jolene_select', 'pol_contrats_signes_select']) {
+    assert.equal(derniere(politique)?.verbe, 'CREATE', `${politique} : politique absente`);
+  }
+  for (const politique of ['pol_storage_jolene_update', 'pol_storage_jolene_delete']) {
+    const etat = derniere(politique);
+    assert.ok(etat === null || etat.verbe === 'DROP', `${politique} recréée par ${etat?.m} : la fiche Storage est à revoir`);
+  }
+  const fiche = section(read(DOC_CONTRATS), 'Storage du lot 2');
+  for (const temoin of ['jolene-documents', 'contrats-signes', 'pol_storage_jolene_insert', 'pol_storage_jolene_select',
+    'pol_contrats_signes_select', 'upsert: false', 'exists(path:)', '20260729143000']) {
+    assert.ok(fiche.includes(temoin), `fiche Storage : ${temoin} absent`);
+  }
+});
+
+test('CONTRATS : sources lues par la garde du lot 2 listées dans l en-tête', () => {
+  const doc = read(DOC_CONTRATS);
+  const entete = doc.slice(0, doc.indexOf('\n## Synthèse'));
+  for (const source of [
+    'src/components/pointage/PointageRotatifSoignant.tsx', 'src/components/SignerContratOtp.tsx',
+    'src/lib/signatureSmsStagingAdmission.ts', 'scripts/ci/sms-signature-staging.sql',
+    'supabase/functions/verify-document/index.ts', 'supabase/functions/generate-contrat-mission-pdf/index.ts',
+    'src/pages/PresencesSoignant.tsx', 'src/components/PanneauContestation.tsx',
+  ]) assert.ok(entete.includes(source), `en-tête : source ${source} non listée`);
+  // Les MESSAGES_ERREUR du web cités par la fiche OTP existent toujours tels quels.
+  const otp = read('src/components/SignerContratOtp.tsx');
+  const fiche = section(doc, 'fn_envoyer_otp_signature');
+  for (const [, code, message] of otp.slice(otp.indexOf('const MESSAGES_ERREUR'), otp.indexOf('function messageDepuisCode')).matchAll(/([A-Z_]+): '((?:[^'\\]|\\')+)'/g)) {
+    assert.ok(fiche.includes(`\`${code}\``) && fiche.includes(message.replaceAll("\\'", "'")), `MESSAGES_ERREUR ${code} absent de la fiche OTP`);
+  }
+});
+
+test('DECISIONS_LOT2.md : vingt-cinq décisions dans l ordre, D-FLAGS, scission T2/T2b, attente de Gabrielle', () => {
+  const decisions = read('docs/mobile-swift/DECISIONS_LOT2.md');
+  const corps = section(decisions, 'Décisions (§7 du blueprint)');
+  let from = 0;
+  for (let i = 1; i <= 25; i++) {
+    const at = corps.slice(from).search(new RegExp(`\\n${i}\\. \\*\\*`));
+    assert.ok(at >= 0, `décision ${i} absente (ou hors ordre)`);
+    from += at + 1;
+  }
+  assert.ok(!/\n26\. \*\*/.test(corps), 'décision 26 inattendue');
+  const flags = section(decisions, 'D-FLAGS');
+  for (const cle of ['ios_natif_presences_actif', 'ios_natif_documents_actif', 'ios_natif_contrats_actif', '20261102150000', 'fail-open', 'EcranNatif']) {
+    assert.ok(flags.includes(cle), `D-FLAGS : ${cle} absent`);
+  }
+  const t2 = section(decisions, 'Scission T2 / T2b');
+  assert.ok(t2.includes('W1') && t2.includes('documents-requis.ts') && t2.includes('presences-soignant-listes.ts'));
+  const attente = section(decisions, 'En attente de Gabrielle');
+  for (const point of ['HARD STOP n°4', 'B9', 'TL', 'T5b', 'T9b', 'delai_contestation_pointage_h', 'B1', 'S1', 'T11', 'fn_presences_detail_mission']) {
+    assert.ok(attente.includes(point), `En attente de Gabrielle : ${point} absent`);
+  }
+  assert.ok(decisions.includes('LOT2_PLAN.md') && decisions.includes('LOTS_2_5_DECISIONS'), 'renvois au blueprint et au mandat absents');
+});
+
+test('LOT2_PLAN.md versionné : blueprint du 02/11/2026, vingt-cinq questions au §7', () => {
+  const plan = read('docs/mobile-swift/LOT2_PLAN.md');
+  assert.ok(plan.startsWith('# Blueprint du lot 2'), 'titre du blueprint absent');
+  assert.ok(plan.includes('> Préparé le 2026-11-02'), 'en-tête « Préparé le 2026-11-02 » absent');
+  const at = plan.indexOf('\n## 7. Décisions à prendre');
+  assert.ok(at >= 0, '§7 absent');
+  const s7 = plan.slice(at);
+  for (let i = 1; i <= 25; i++) assert.ok(new RegExp(`\\n${i}\\. \\*\\*`).test(s7), `question ${i} absente du §7`);
+});
+
+test('RECETTE_DEVICE_LOT2.md : squelette P8 (QR, GPS, HEIC, caméra, Fichiers, arrêts forcés, OTP)', () => {
+  const recette = read('docs/mobile-swift/RECETTE_DEVICE_LOT2.md');
+  for (const point of ['QR', 'GPS refusé puis accordé', 'Position exacte', 'HEIC', 'caméra', 'Fichiers',
+    'arrêt forcé pendant un scan', 'arrêt forcé pendant un envoi', 'signature OTP', 'npm run dev', 'signatures_contrats']) {
+    assert.ok(recette.includes(point), `RECETTE_DEVICE_LOT2 : ${point} absent`);
+  }
+});
+
+test('PARITE_SOIGNANT.md : lignes et sous-lignes du lot 2', () => {
+  const parite = read('docs/mobile-swift/PARITE_SOIGNANT.md');
+  for (const needle of [
+    '| `/contrat/:id` (l.437) |', '| `/contrat/:id/certificat` (l.438) |',
+    '`/soignant/mes-documents` › Justificatifs', '`/soignant/mes-documents` › Contrats', '`/soignant/mes-documents` › DPAE',
+    '`/soignant/presences/mission/:id` › Récapitulatif financier', '`/soignant/presences` › Réponse et clôture de litige',
+    '`/soignant/missions/:id` › Contrat de travail externe', '`/soignant/missions/:id` › Empêchement impérieux',
+  ]) assert.ok(parite.includes(needle), `PARITE : « ${needle} » absent`);
+  assert.ok(!parite.includes('pointage `fn_pointer_*` lot 2'), 'PARITE : pointage encore décrit par fn_pointer_* (décision 1)');
+});
+
+test('PRINCIPES §4 et plan : file hors ligne QR retirée, critères du lot 2 amendés par renvoi', () => {
+  const principes = read('docs/mobile-swift/PRINCIPES.md');
+  assert.ok(!principes.includes('La file hors-ligne QR garde la sémantique'), 'PRINCIPES §4 : ancienne phrase toujours présente');
+  assert.ok(principes.includes('Aucun scan n\'est mis en file : le code rotatif est horodaté par le serveur ; un scan hors ligne est refusé avant envoi, un scan incertain est réconcilié par relecture de `scans_pointage`'));
+  const plan = read('docs/PLAN_APP_NATIVE_SWIFT.md').split('\n');
+  const amendees = plan.filter(l => l.includes('*(Amendé le 2026-11-02') && l.includes('DECISIONS_LOT2.md'));
+  assert.ok(amendees.length >= 4, `lignes du plan amendées par DECISIONS_LOT2.md : ${amendees.length}`);
+  for (const temoin of ['Le pointage web repose sur deux systèmes', 'Périmètre, pointage :', '- STAGING : scan de code rotatif', '- File hors-ligne testée']) {
+    const ligne = plan.find(l => l.startsWith(temoin) || l.includes(temoin));
+    assert.ok(ligne && ligne.includes('DECISIONS_LOT2.md'), `plan : « ${temoin} » non amendée`);
+  }
 });
