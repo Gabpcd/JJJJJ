@@ -1,9 +1,34 @@
 import SwiftUI
 
-/// Bouton Jolene : primaire (dégradé rose → mauve, texte blanc) ou secondaire (bordure rose).
-/// Calqué sur `BoutonY2K` web ; la couleur seule ne porte jamais l'information (libellé explicite).
+/// Bouton Jolene : primaire (dégradé rose → mauve), secondaire (bordure rose) ou destructif
+/// (dégradé rouge → rose `#FF4D6B → #FF6BBE`, actions irréversibles). Calqué sur `BoutonY2K`
+/// web : tout style plein porte l'encre sombre `#2B183D` (`text-[#2b183d]`), seule à atteindre
+/// 4,5:1 sur les dégradés clairs ; la couleur seule ne porte jamais l'information (libellé explicite).
 public struct JoleneButton: View {
-    public enum Style: Sendable { case primary, secondary }
+    public enum Style: CaseIterable, Sendable {
+        case primary, secondary, destructive
+
+        /// Fond plein (dégradé) ; `false` pour le secondaire (surface claire, bordure rose).
+        public var isFilled: Bool { self != .secondary }
+
+        /// Encre sombre `JoleneColor.onGradient` sur tout fond plein : `BoutonY2K` primary et destructive
+        /// (`text-[#2b183d]`), `.bg-gradient-hero { color: #2b183d }`. Le texte blanc du lot 0 ne faisait que
+        /// 2,59:1 sur le rose et 2,78:1 sur le mauve (revue B8).
+        public var usesDarkTextOnFill: Bool { isFilled }
+
+        /// Arrêts du dégradé de fond (clair et sombre), vérifiés à ≥ 4,5:1 avec l'encre sombre par les
+        /// tests ; vide pour le secondaire.
+        public var fillStops: [JoleneHex] {
+            switch self {
+            case .primary: return JoleneColor.heroGradientStops.flatMap(\.variants)
+            case .destructive: return JoleneColor.destructiveGradientHex.compactMap(JoleneHex.parse)
+            case .secondary: return []
+            }
+        }
+
+        /// Couleur du libellé et de l'indicateur de chargement.
+        var foreground: Color { usesDarkTextOnFill ? JoleneColor.onGradient : JoleneColor.rose700 }
+    }
 
     private let title: String
     private let style: Style
@@ -17,7 +42,7 @@ public struct JoleneButton: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: JoleneSpacing.sm) {
-                if isLoading { ProgressView().tint(style == .primary ? .white : JoleneColor.rose700) }
+                if isLoading { ProgressView().tint(style.foreground) }
                 Text(title).font(JoleneFont.button)
             }
             .frame(maxWidth: .infinity, minHeight: 48)
@@ -34,7 +59,7 @@ struct JoleneButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(style == .primary ? Color.white : JoleneColor.rose700)
+            .foregroundStyle(style.foreground)
             .background(background)
             .overlay(
                 Capsule().strokeBorder(style == .secondary ? JoleneColor.rose : Color.clear, lineWidth: 1.5)
@@ -46,6 +71,10 @@ struct JoleneButtonStyle: ButtonStyle {
     }
 
     @ViewBuilder private var background: some View {
-        if style == .primary { JoleneColor.heroGradient } else { JoleneColor.cloud }
+        switch style {
+        case .primary: JoleneColor.heroGradient
+        case .destructive: JoleneColor.destructiveGradient
+        case .secondary: JoleneColor.cloud
+        }
     }
 }
