@@ -186,7 +186,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_profil_soignant_complet"() RETURNS "
   missions restent vérifiées par leur propre `nb_creneaux` et par le pager (compte exact) ; la carte des
   gains est masquée quand aucun montant relu n'est positif (le web afficherait « 💰 Ce mois :  sur N
   missions »). « sur N missions » compte les missions relues porteuses d'un montant (`gainsCeMois.nb` du
-  web), jamais `gains_mois.nb_missions`, décodé mais non affiché (décision 10 amendée).
+  web), jamais `gains_mois.nb_missions`, décodé mais non affiché (lecture de la décision 10 proposée à Gabrielle, `LOT1_PLAN.md` §7, en attente de son accord).
 - **Signature SQL** (`supabase/schema/public.sql` l.27920) :
 
 ```sql
