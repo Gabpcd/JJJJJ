@@ -110,6 +110,8 @@ porte sur le **lien** d'un push déjà reçu : `data.lien = /soignant/missions/{
 |---|---|---|
 | Saisie « SUPPRIMER » puis confirmation | 200 `{success:true}` → écran « Compte supprimé » → connexion, jamais « Votre session a expiré » | — |
 | Relancement | aucune session restaurée (Keychain purgé) | — |
+| Préférences locales du compte (biométrie T9, journal calendrier T5) | effacées après la suppression confirmée (clés `UserDefaults` dont un segment est le `userId`) | — |
+| Refus serveur (ex. 429 `Demande deja en cours`) | message serveur verbatim sous le champ, session conservée, aucune nouvelle tentative automatique | — |
 | STAGING | `soignants.nom = 'Supprimé'` sur le compte jetable du run (go explicite Gabrielle, décision 13) | — |
 
 ## 8. Signature de clôture
