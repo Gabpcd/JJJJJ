@@ -43,13 +43,11 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * d'une fiche dans CONTRATS_RPC_SOIGNANT.md dans la même PR (LOT1_PLAN §4) ; les statuts
  * passent en consommé au fil des PR qui câblent la gateway.
  *
- * Jamais suivies (donc jamais appelées par le client Swift) :
- *   - `fn_etablissement_public` : exclut `est_compte_test = true` → NULL pour tout établissement
- *     de recette STAGING ; le nom d'établissement vient exclusivement de `fn_etablissements_safe`.
- *   - `fn_retirer_candidature` (swipe) : lot 4.
- *   - `fn_mon_profil_soignant_complet` reste suivie mais reclassée lot 3 (renvoie `numero_secu`,
- *     `siret_liberal`, `iban_last4` ; le soft-gate `peut_candidater` du lot 1 lit `soignants` par
- *     SELECT direct, LOT1_PLAN §2.6).
+ * Reclassement (suivie, mais pas au lot 1) : `fn_mon_profil_soignant_complet` passe en lot 3
+ * (renvoie `numero_secu`, `siret_liberal`, `iban_last4` ; le soft-gate `peut_candidater` du lot 1
+ * lit `soignants` par SELECT direct, LOT1_PLAN §2.6).
+ *
+ * Les deux listes d'exclusion qui suivent sont vérifiées par `verifierExclusions` (fail-closed).
  */
 export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
@@ -80,6 +78,35 @@ export const RPC_SUIVIES = [
   { name: 'fn_remplacer_document_soignant', statut: 'a_venir', lot: 2 },
   { name: 'fn_upsert_token_push', statut: 'a_venir', lot: 3 },
 ];
+
+/**
+ * Jamais suivies (donc jamais appelées par le client Swift) :
+ *   - `fn_etablissement_public` : exclut `est_compte_test = true` → NULL pour tout établissement
+ *     de recette STAGING ; le nom d'établissement vient exclusivement de `fn_etablissements_safe`.
+ */
+export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public'];
+
+/**
+ * Pas avant le lot 4 (suivie au plus tôt avec `lot: 4`, quand la tranche qui la consomme l'ajoute) :
+ *   - `fn_retirer_candidature` (swipe).
+ */
+export const RPC_PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
+
+/**
+ * Refuse une liste de RPC suivies qui contient une RPC interdite côté natif, ou une RPC du lot 4
+ * classée dans un lot antérieur. Appelée par `buildContracts` : la CI échoue au lieu de régénérer
+ * un contrat qui autoriserait l'appel.
+ */
+export function verifierExclusions(suivies) {
+  for (const { name, lot } of suivies) {
+    if (RPC_JAMAIS_SUIVIES.includes(name)) {
+      throw new Error(`${name} ne doit jamais être suivie côté natif (voir CONTRATS_RPC_SOIGNANT.md, « Interdite côté natif »).`);
+    }
+    if (RPC_PAS_AVANT_LOT4.includes(name) && !(Number.isInteger(lot) && lot >= 4)) {
+      throw new Error(`${name} n'est pas suivie avant le lot 4 (lot demandé : ${lot}).`);
+    }
+  }
+}
 
 const read = relative => readFileSync(join(ROOT, relative), 'utf8');
 
@@ -174,6 +201,7 @@ export function manifestCategory(manifest, name) {
 }
 
 export function buildContracts({ typesSource, schemaSource, manifest }) {
+  verifierExclusions(RPC_SUIVIES);
   const rpcs = RPC_SUIVIES.map(({ name, statut, lot }) => {
     const types = extractTypesSignature(typesSource, name);
     const sql = extractSqlDefinitions(schemaSource, name);
