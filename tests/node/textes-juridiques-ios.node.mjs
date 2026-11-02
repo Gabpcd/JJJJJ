@@ -36,12 +36,22 @@ import {
 // fichiers du dépôt.
 
 const read = relative => readFileSync(join(ROOT, relative), 'utf8');
-const swift = read(TEXTES_SWIFT);
-const libelles = read(LIBELLES_SWIFT);
-const zonesTexte = read(ZONES_RENDU_JSON);
-const zonesRendu = JSON.parse(zonesTexte);
 const lireWeb = lecteurWeb(fichier => read(fichier));
+const disque = { swift: read(TEXTES_SWIFT), libelles: read(LIBELLES_SWIFT), zones: read(ZONES_RENDU_JSON) };
+// Référentiel aligné : annotations et zones réalignées EN MÉMOIRE sur le web du dépôt (aucun écart
+// sur cette branche). Une PR web qui ne fait que décaler des lignes laisse ainsi cette suite verte :
+// les tests de lignes ci-dessous raisonnent sur les positions réelles, jamais sur des numéros figés.
+const aligne = corrigerLignes({ swiftSource: disque.swift, libellesSource: disque.libelles, zonesSource: disque.zones, lireWeb });
+const swift = aligne.sources[TEXTES_SWIFT];
+const libelles = aligne.sources[LIBELLES_SWIFT];
+const zonesTexte = aligne.sources[ZONES_RENDU_JSON];
+const zonesRendu = JSON.parse(zonesTexte);
 const resultat = verifierTextes({ swiftSource: swift, libellesSource: libelles, zonesRendu, lireWeb });
+const sourceZone = z => {
+  const m = /^(\S+?):(\d+)(?:-(\d+))?$/.exec(z.source);
+  return { fichier: m[1], debut: Number(m[2]), fin: Number(m[3] ?? m[2]) };
+};
+const lignes = (debut, fin) => (debut === fin ? `${debut}` : `${debut}-${fin}`);
 const { constantes } = resultat;
 const parNom = new Map(constantes.map(c => [c.nomComplet, c]));
 const sourceDe = c => (c.fichierSwift === TEXTES_SWIFT ? swift : libelles);
@@ -87,10 +97,14 @@ function mutations(valeur) {
 }
 
 test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le texte exact du web', t => {
-  assert.deepEqual(resultat.erreurs, []);
+  const surDisque = verifierTextes({ swiftSource: disque.swift, libellesSource: disque.libelles, zonesRendu: JSON.parse(disque.zones), lireWeb });
+  assert.deepEqual(surDisque.erreurs, []);
   // Sur cette branche, chaque annotation est à sa ligne ; un décalage ultérieur du web est toléré
   // (avertissement, voir plus bas) et ne fait pas rougir ce test.
-  for (const a of resultat.avertissements) t.diagnostic(a);
+  for (const a of surDisque.avertissements) t.diagnostic(a);
+  assert.deepEqual(aligne.restantes, []);
+  assert.deepEqual(resultat.erreurs, []);
+  assert.deepEqual(resultat.avertissements, []);
   const hardStop = constantes.filter(c => c.hardStop);
   assert.ok(hardStop.length >= 60, `au moins 60 textes HARD STOP attendus, ${hardStop.length} lus`);
   assert.ok(constantes.length > hardStop.length, 'LibellesWeb.swift ne porte aucun libellé');
@@ -228,14 +242,20 @@ test('TL : TextesWeb.swift (HARD STOP) porte tous les textes listés par le blue
   assert.deepEqual(absents, [], 'textes exigés par LOT2_PLAN §3 TL absents de TextesWeb.swift (noms de constantes : '
     + `${TEST_TABLE})`);
   assert.ok(resultat.objets.some(o => o.fichierSwift === TEXTES_SWIFT && o.source.variable === 'MESSAGES_ERREUR'));
-  // Un décalage de lignes du web (cas de W1 : lignes retirées de PresencesSoignant.tsx avant l.717)
-  // ne fait rougir ni la garde ni cette table.
+  // Un décalage de lignes du web (cas de W1 : lignes retirées de PresencesSoignant.tsx entre les
+  // textes l.101 et l.717 ; seul le dernier texte gardé du fichier se décale) ne fait rougir ni la
+  // garde ni cette table.
   const presences = 'src/pages/PresencesSoignant.tsx';
-  const decale = read(presences).replace('\n  const handleAccepterGPS', '\n\n\n  const handleAccepterGPS');
-  assert.notEqual(decale, read(presences));
-  const r = verifier({ lireWeb: lireAvec(presences, decale) });
+  const bandeau = parNom.get('TextesWeb.Presences.bandeauAValider').source.debut;
+  const refus = parNom.get('TextesWeb.Presences.pointageSansGpsActive').source.debut;
+  const lignesPresences = read(presences).split('\n');
+  const vides = lignesPresences.map((l, i) => i).filter(i => i > refus && i < bandeau - 2 && !lignesPresences[i].trim()).slice(0, 3);
+  assert.equal(vides.length, 3);
+  const retire = lignesPresences.filter((_, i) => !vides.includes(i)).join('\n');
+  const r = verifier({ lireWeb: lireAvec(presences, retire) });
   assert.deepEqual(r.erreurs, []);
-  assert.ok(r.avertissements.some(a => a.includes('TextesWeb.Presences.bandeauAValider') && a.includes('--corriger-lignes')));
+  assert.ok(r.avertissements.some(a => a.includes('TextesWeb.Presences.bandeauAValider') && a.includes(`retrouvé l.${bandeau - 3} `)
+    && a.includes('--corriger-lignes')), JSON.stringify(r.avertissements));
 });
 
 test('TL : libellés et textes complémentaires présents (aucun texte de ces surfaces à écrire)', () => {
@@ -308,7 +328,8 @@ test('TL : la condition de la régularisation des montants (ContratMission.tsx l
   const r = verifier({ lireWeb: lireAvec(fichier, mute) });
   // Toutes les unités restent identiques : seule la zone de rendu le voit.
   assert.ok(!r.erreurs.some(e => e.startsWith('TextesWeb.Contrat.regularisationMontants')), JSON.stringify(r.erreurs));
-  const erreur = r.erreurs.find(e => e.includes('zone de rendu src/pages/ContratMission.tsx l.831-837'));
+  const zone = sourceZone(zonesRendu.zones.find(z => z.fonctions.includes('TextesWeb.Contrat.piedDePage')));
+  const erreur = r.erreurs.find(e => e.includes(`zone de rendu ${fichier} l.${lignes(zone.debut, zone.fin)}`));
   assert.ok(erreur, JSON.stringify(r.erreurs));
   assert.match(erreur, /TextesWeb\.Contrat\.piedDePage/);
   assert.match(erreur, /TextesWeb\.swift \(HARD STOP n°4/);
@@ -339,10 +360,30 @@ test('TL : un décalage de lignes du web est toléré (avertissement) ; texte mo
   assert.deepEqual(r.erreurs, []);
   const titre = r.avertissements.find(a => a.includes('TextesWeb.ConsentementGps.titre'));
   assert.ok(titre, JSON.stringify(r.avertissements));
-  assert.match(titre, /retrouvé l\.26/);
+  assert.ok(titre.includes(`retrouvé l.${parNom.get('TextesWeb.ConsentementGps.titre').source.debut + 1} `), titre);
   assert.match(titre, /--corriger-lignes/);
   assert.match(titre, /TextesWeb\.swift/);
-  assert.ok(r.avertissements.some(a => a.includes('zone de rendu src/components/ConsentementGPS.tsx l.35-39') && a.includes('l.36-40')));
+  const liste = sourceZone(zonesRendu.zones.find(z => z.fonctions.includes('TextesWeb.ConsentementGps.ceQueNousFaisons')));
+  assert.ok(r.avertissements.some(a => a.includes(`zone de rendu ${fichier} l.${lignes(liste.debut, liste.fin)}`)
+    && a.includes(`retrouvée l.${lignes(liste.debut + 1, liste.fin + 1)}`)), JSON.stringify(r.avertissements));
+  // Deux décalages différents dans un même fichier (ligne ajoutée en tête, ligne vide au milieu) :
+  // les textes répétés (« s », « Code envoyé au », « Trop de tentatives… ») sont départagés par
+  // leurs voisines ; --corriger-lignes réaligne tout.
+  const signer = 'src/components/SignerContratOtp.tsx';
+  const lignesOtp = read(signer).split('\n');
+  lignesOtp.splice(302, 0, '');
+  lignesOtp.splice(1, 0, '// ligne ajoutée');
+  const lireDeux = lireAvec(signer, lignesOtp.join('\n'));
+  r = verifier({ lireWeb: lireDeux });
+  assert.deepEqual(r.erreurs, []);
+  assert.ok(r.avertissements.length > 20, JSON.stringify(r.avertissements));
+  const deux = corrigerLignes({ swiftSource: swift, libellesSource: libelles, zonesSource: zonesTexte, lireWeb: lireDeux });
+  assert.deepEqual(deux.restantes, []);
+  const realigne = verifierTextes({
+    swiftSource: deux.sources[TEXTES_SWIFT], libellesSource: deux.sources[LIBELLES_SWIFT],
+    zonesRendu: JSON.parse(deux.sources[ZONES_RENDU_JSON]), lireWeb: lireDeux,
+  });
+  assert.deepEqual([realigne.erreurs, realigne.avertissements], [[], []]);
   // Texte modifié : rouge, avec les fichiers à toucher.
   r = verifier({ lireWeb: lireAvec(fichier, read(fichier).replace('Je refuse', 'Je décline')) });
   const refus = r.erreurs.find(e => e.startsWith('TextesWeb.ConsentementGps.refuser'));
@@ -358,6 +399,14 @@ test('TL : un décalage de lignes du web est toléré (avertissement) ; texte mo
   assert.notEqual(copie, read(otp));
   r = verifier({ lireWeb: lireAvec(otp, copie) });
   assert.ok(r.erreurs.some(e => e.startsWith('LibellesWeb.SignatureOtp.erreurReseauEnvoi') && e.includes('hors de la place de ses voisines')),
+    JSON.stringify(r.erreurs));
+  // Texte court modifié à sa ligne alors qu'une copie fortuite existe plus haut
+  // (`usePageTitle('Certificat de signature')`) : rouge, la copie n'est pas à la place du titre.
+  const page = 'src/pages/CertificatSignaturePage.tsx';
+  const titrePage = read(page).replace('text-foreground">Certificat de signature</h1>', 'text-foreground">Certificat de signature électronique</h1>');
+  assert.notEqual(titrePage, read(page));
+  r = verifier({ lireWeb: lireAvec(page, titrePage) });
+  assert.ok(r.erreurs.some(e => e.startsWith('TextesWeb.Certificat.titrePage') && e.includes('hors de la place de ses voisines')),
     JSON.stringify(r.erreurs));
   // Texte présent deux fois ailleurs, sans décalage commun : ambigu, rouge.
   const double = `${read(otp).replace(`'Erreur réseau. Réessayez.${finEnvoi}`, `'Erreur réseau.${finEnvoi}`)}\nconst x = ['Erreur réseau. Réessayez.'];\nconst y = ['Erreur réseau. Réessayez.'];\n`;
@@ -383,8 +432,10 @@ test('TL : --corriger-lignes suit les décalages (textes, libellés, objets, ens
   });
   assert.deepEqual(apres.erreurs, []);
   assert.deepEqual(apres.avertissements, []);
-  assert.match(sources[TEXTES_SWIFT], /\/\/ source: src\/components\/ConsentementGPS\.tsx:26 \[consentement\]\n\s+public static let titre = /);
-  assert.match(sources[ZONES_RENDU_JSON], /"source": "src\/components\/ConsentementGPS\.tsx:36-40"/);
+  const titre = parNom.get('TextesWeb.ConsentementGps.titre').source;
+  assert.ok(sources[TEXTES_SWIFT].includes(`// source: ${fichier}:${titre.debut + 1} [consentement]\n        public static let titre = `));
+  const liste = sourceZone(zonesRendu.zones.find(z => z.fonctions.includes('TextesWeb.ConsentementGps.ceQueNousFaisons')));
+  assert.ok(sources[ZONES_RENDU_JSON].includes(`"source": "${fichier}:${lignes(liste.debut + 1, liste.fin + 1)}"`));
   // SignerContratOtp : textes des deux fichiers, texte présent deux fois (l.156 et l.202) départagé
   // par le décalage commun, dictionnaire, ensemble et zones suivent.
   const otp = 'src/components/SignerContratOtp.tsx';
@@ -397,10 +448,14 @@ test('TL : --corriger-lignes suit les décalages (textes, libellés, objets, ens
   });
   assert.deepEqual(apresOtp.erreurs, []);
   assert.deepEqual(apresOtp.avertissements, []);
-  assert.match(otpCorrige.sources[TEXTES_SWIFT], /\/\/ source-objet: src\/components\/SignerContratOtp\.tsx:31 MESSAGES_ERREUR\n/);
-  assert.match(otpCorrige.sources[TEXTES_SWIFT], /\/\/ source-ensemble: src\/components\/SignerContratOtp\.tsx:116-120\n/);
-  assert.match(otpCorrige.sources[LIBELLES_SWIFT], /\/\/ source: src\/components\/SignerContratOtp\.tsx:203\n\s+public static let erreurReseauSignature/);
-  assert.match(otpCorrige.sources[ZONES_RENDU_JSON], /"source": "src\/components\/SignerContratOtp\.tsx:196-199"/);
+  const objet = resultat.objets.find(o => o.source.variable === 'MESSAGES_ERREUR').source;
+  const ensemble = resultat.ensembles.find(e => e.source.fichier === otp).source;
+  const reseau = parNom.get('LibellesWeb.SignatureOtp.erreurReseauSignature').source;
+  const confirmation = sourceZone(zonesRendu.zones.find(z => z.fonctions.includes('TextesWeb.SignatureOtp.confirmationSignature')));
+  assert.ok(otpCorrige.sources[TEXTES_SWIFT].includes(`// source-objet: ${otp}:${objet.debut + 1} MESSAGES_ERREUR\n`));
+  assert.ok(otpCorrige.sources[TEXTES_SWIFT].includes(`// source-ensemble: ${otp}:${lignes(ensemble.debut + 1, ensemble.fin + 1)}\n`));
+  assert.ok(otpCorrige.sources[LIBELLES_SWIFT].includes(`// source: ${otp}:${reseau.debut + 1}\n        public static let erreurReseauSignature`));
+  assert.ok(otpCorrige.sources[ZONES_RENDU_JSON].includes(`"source": "${otp}:${lignes(confirmation.debut + 1, confirmation.fin + 1)}"`));
   // Texte modifié : jamais « corrigé », l'erreur reste.
   const lireMute = lireAvec(fichier, read(fichier).replace('Autorisation de géolocalisation', 'Autorisation de la géolocalisation'));
   const r = corrigerLignes({ swiftSource: swift, libellesSource: libelles, zonesSource: zonesTexte, lireWeb: lireMute });
