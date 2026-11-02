@@ -22,6 +22,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { register } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -62,11 +63,50 @@ try {
   process.exit(2);
 }
 
+// ---------------------------------------------------------------------------
+// Alias `@/` de Vite (tsconfig `paths`) et imports relatifs sans extension : les
+// modules du lot 1 (`planning-candidat.ts`, `selection-serie-candidat.ts`,
+// `completude-planning-mission.ts`) importent `@/lib/<x>` et `./<x>`, que le
+// résolveur ESM de Node ne connaît pas. Le hook ne touche qu'aux spécificateurs
+// qui visent `src/` ; tout le reste (date-fns, node:*) suit la résolution normale.
+// ---------------------------------------------------------------------------
+const HOOK_ALIAS_SRC = `
+import { existsSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+let racineSrc = '';
+export async function initialize(data) { racineSrc = data.racineSrc; }
+function fichier(url) {
+  try { return existsSync(fileURLToPath(url)) && statSync(fileURLToPath(url)).isFile(); } catch { return false; }
+}
+export async function resolve(specifier, context, next) {
+  let base = null;
+  if (specifier.startsWith('@/')) {
+    base = new URL(specifier.slice(2), racineSrc).href;
+  } else if ((specifier.startsWith('./') || specifier.startsWith('../')) && context.parentURL?.startsWith(racineSrc)) {
+    base = new URL(specifier, context.parentURL).href;
+  }
+  if (base === null) return next(specifier, context);
+  for (const suffixe of ['', '.ts', '.tsx', '/index.ts']) {
+    const candidat = base + suffixe;
+    if (fichier(candidat)) return next(candidat, context);
+  }
+  throw new Error('export-golden-vectors : alias non résolu « ' + specifier + ' » depuis ' + context.parentURL);
+}
+`;
+register(`data:text/javascript,${encodeURIComponent(HOOK_ALIAS_SRC)}`, {
+  parentURL: import.meta.url,
+  data: { racineSrc: `${pathToFileURL(resolve(RACINE, 'src')).href}/` },
+});
+
 const lib = (nom) => import(pathToFileURL(resolve(RACINE, 'src/lib', nom)).href);
+const composantPlanning = (nom) => import(pathToFileURL(resolve(RACINE, 'src/components/planning', nom)).href);
 const dateHeure = await lib('date-heure-paris.ts');
 const formatMission = await lib('format-mission.ts');
 const hebdo = await lib('heures-hebdomadaires-mission.ts');
 const pointage = await lib('disponibilite-pointage.ts');
+const planningCandidat = await composantPlanning('planning-candidat.ts');
+const selectionSerie = await composantPlanning('selection-serie-candidat.ts');
+const completude = await lib('completude-planning-mission.ts');
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -786,6 +826,325 @@ function vecteursDisponibilitePointage() {
 }
 
 // ---------------------------------------------------------------------------
+// Outils communs du lot 1 (planning candidat, série, complétude)
+// ---------------------------------------------------------------------------
+/** Créneau PostgREST minimal ; `extra` ajoute `id`, `mission_id`, `est_pause`, `type_creneau`. */
+const slotPlanning = (debut, fin, extra = {}) => ({ debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL', ...extra });
+/** Journée 08:00 → 16:00 Paris (+02:00 en été, +01:00 en hiver selon `offset`). */
+const journee = (jour, extra = {}, offset = '+02:00') => slotPlanning(`${jour}T08:00:00${offset}`, `${jour}T16:00:00${offset}`, extra);
+
+/**
+ * Le port Swift est fail-closed là où le web lève (`instantJolene` sur une date
+ * illisible, écart assumé DECISIONS_LOT0) : un vecteur qui capturerait une
+ * exception ne serait pas rejouable et signalerait une grille mal construite.
+ */
+function sansException(regle, nom, valeur) {
+  if (valeur && typeof valeur === 'object' && !Array.isArray(valeur) && 'erreur' in valeur) {
+    throw new Error(`${regle}: « ${nom} » lève côté web (${valeur.erreur}) ; ce cas n'est pas un vecteur golden`);
+  }
+  return valeur;
+}
+
+// ---------------------------------------------------------------------------
+// Règle 5 : planning-candidat (construction, filtres horaires, créneaux confirmés)
+// ---------------------------------------------------------------------------
+function vecteursPlanningCandidat() {
+  const c = new Collecteur('planning-candidat');
+  const planning = (p) => ({
+    creneaux: p.creneaux, exact: p.exact, totalHeures: p.totalHeures, periodeEtendue: p.periodeEtendue, messageBlocage: p.messageBlocage,
+  });
+  const construire = (nom, mission) => c.ajoute(`construirePlanningCandidat/${nom}`, { fonction: 'construirePlanningCandidat', mission },
+    sansException('planning-candidat', nom, capture(() => planning(planningCandidat.construirePlanningCandidat(mission)))));
+  const confirmes = (nom, mission) => c.ajoute(`creneauxConfirmesPourAction/${nom}`, { fonction: 'creneauxConfirmesPourAction', mission },
+    sansException('planning-candidat', nom, capture(() => planningCandidat.creneauxConfirmesPourAction(mission))));
+  const nuit = (nom, creneau) => c.ajoute(`creneauContientNuit/${nom}`, { fonction: 'creneauContientNuit', creneau },
+    sansException('planning-candidat', nom, capture(() => planningCandidat.creneauContientNuit(creneau))));
+  const weekend = (nom, creneau) => c.ajoute(`creneauChevaucheWeekend/${nom}`, { fonction: 'creneauChevaucheWeekend', creneau },
+    sansException('planning-candidat', nom, capture(() => planningCandidat.creneauChevaucheWeekend(creneau))));
+  const filtres = (nom, mission) => {
+    for (const filtre of ['TOUS', 'JOUR', 'NUIT', 'WEEKEND']) {
+      c.ajoute(`planningCorrespondAuFiltre/${nom}-${filtre.toLowerCase()}`, { fonction: 'planningCorrespondAuFiltre', mission, filtre },
+        sansException('planning-candidat', nom, capture(() => planningCandidat.planningCorrespondAuFiltre(mission, filtre))));
+    }
+  };
+
+  // --- Issus des tests vitest (planning-candidat.test.tsx) ------------------
+  const missionLongue = { id: 'mission-longue', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: 2 };
+  const deuxCreneaux = [
+    journee('2026-07-06', { id: 'jour-1', mission_id: 'mission-longue' }),
+    journee('2026-08-31', { id: 'jour-2', mission_id: 'mission-longue' }),
+  ];
+  construire('vitest-deux-journees-exactes', { ...missionLongue, creneaux_planifies: deuxCreneaux });
+  construire('vitest-multi-incomplet', { ...missionLongue, creneaux_planifies: deuxCreneaux.slice(0, 1) });
+  construire('vitest-nb-creneaux-depasse', { ...missionLongue, nb_creneaux: 1, creneaux_planifies: deuxCreneaux });
+  construire('vitest-ponctuelle-repli', { id: 'ponctuelle', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 });
+  const nuitVitest = { id: 'nuit', debut_le: '2026-07-06T20:00:00+02:00', fin_le: '2026-07-07T08:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-07-06T20:00:00+02:00', '2026-07-07T08:00:00+02:00')] };
+  construire('vitest-nuit-lendemain', nuitVitest);
+  const mixte = { ...missionLongue, creneaux_planifies: [slotPlanning('2026-07-11T21:00:00+02:00', '2026-07-12T07:00:00+02:00'), deuxCreneaux[1]] };
+  filtres('vitest-mixte-nuit-weekend-jour', mixte);
+  confirmes('vitest-deux-journees-exactes', { ...missionLongue, creneaux_planifies: deuxCreneaux });
+  confirmes('vitest-multi-incomplet', { ...missionLongue, creneaux_planifies: deuxCreneaux.slice(0, 1) });
+
+  // --- Repli ponctuel (missions legacy sans ligne PREVISIONNEL) ------------
+  const ponctuelle = (nom, debut_le, fin_le, nb_creneaux = 1, extra = {}) => construire(`ponctuelle-${nom}`, { id: 'p', debut_le, fin_le, nb_creneaux, ...extra });
+  ponctuelle('1h', '2026-07-31T08:00:00+02:00', '2026-07-31T09:00:00+02:00');
+  ponctuelle('24h-exactes', '2026-07-31T08:00:00+02:00', '2026-08-01T08:00:00+02:00');
+  ponctuelle('24h-plus-1s', '2026-07-31T08:00:00+02:00', '2026-08-01T08:00:01+02:00');
+  ponctuelle('nb-null', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', null);
+  ponctuelle('nb-0', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', 0);
+  ponctuelle('nb-2-sans-creneau', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', 2);
+  ponctuelle('duree-nulle', '2026-07-31T08:00:00+02:00', '2026-07-31T08:00:00+02:00');
+  ponctuelle('fin-avant-debut', '2026-07-31T16:00:00+02:00', '2026-07-31T08:00:00+02:00');
+  ponctuelle('debut-null', null, '2026-07-31T16:00:00+02:00');
+  ponctuelle('fin-null', '2026-07-31T08:00:00+02:00', null);
+  ponctuelle('debut-vide', '', '2026-07-31T16:00:00+02:00');
+  ponctuelle('sans-id', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', 1, { id: undefined });
+  ponctuelle('mission-id-seul', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', 1, { id: undefined, mission_id: 'via-mission-id' });
+  ponctuelle('erreur-chargement', '2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', 1, { erreur_planning: true });
+  ponctuelle('nuit-dst-mars-11h', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00');
+  ponctuelle('nuit-dst-octobre-13h', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00');
+  ponctuelle('legacy-sans-offset', '2026-08-31T08:00:00', '2026-08-31T16:00:00');
+  ponctuelle('utc-z', '2026-12-01T07:00:00Z', '2026-12-01T15:00:00.000Z');
+  ponctuelle('fin-minuit-paris', '2026-07-31T20:00:00+02:00', '2026-08-01T00:00:00+02:00');
+  ponctuelle('fin-23h59m59', '2026-07-31T20:00:00+02:00', '2026-07-31T23:59:59+02:00');
+
+  // --- Créneaux chargés ----------------------------------------------------
+  const base = { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' };
+  const travail = journee('2026-07-31', { id: 'travail', mission_id: 'm' });
+  const pause = slotPlanning('2026-07-31T12:00:00+02:00', '2026-07-31T12:30:00+02:00', { id: 'pause', mission_id: 'm', est_pause: true });
+  const effectif = slotPlanning('2026-07-31T08:05:00+02:00', '2026-07-31T15:55:00+02:00', { id: 'eff', mission_id: 'm', type_creneau: 'EFFECTIF' });
+  const ouvert = slotPlanning('2026-07-31T08:00:00+02:00', null, { id: 'ouvert', mission_id: 'm' });
+  const charges = (nom, mission) => { construire(`charges-${nom}`, mission); confirmes(`charges-${nom}`, mission); };
+  charges('une-journee', { ...base, nb_creneaux: 1, creneaux_planifies: [travail] });
+  charges('pause-exclue', { ...base, nb_creneaux: 1, creneaux_planifies: [pause, travail] });
+  charges('pause-seule-repli', { ...base, nb_creneaux: 1, creneaux_planifies: [pause] });
+  charges('pause-seule-nb-2', { ...base, nb_creneaux: 2, creneaux_planifies: [pause] });
+  charges('effectif-ignore', { ...base, nb_creneaux: 1, creneaux_planifies: [effectif, travail] });
+  charges('effectif-seul-repli', { ...base, nb_creneaux: 1, creneaux_planifies: [effectif] });
+  charges('fin-null-repli-propose', { ...base, nb_creneaux: 1, creneaux_planifies: [ouvert] });
+  charges('fin-vide-repli-propose', { ...base, nb_creneaux: 1, creneaux_planifies: [{ ...ouvert, fin: '' }] });
+  charges('fin-null-et-travail', { ...base, nb_creneaux: 1, creneaux_planifies: [travail, ouvert] });
+  charges('erreur-chargement', { ...base, nb_creneaux: 1, creneaux_planifies: [travail], erreur_planning: true });
+  charges('nb-null-avec-creneau', { ...base, nb_creneaux: null, creneaux_planifies: [travail] });
+  charges('nb-0-avec-creneau', { ...base, nb_creneaux: 0, creneaux_planifies: [travail] });
+  charges('periode-null-avec-creneau', { ...base, debut_le: null, fin_le: null, nb_creneaux: 1, creneaux_planifies: [travail] });
+  charges('sans-cles-optionnelles', { ...base, nb_creneaux: 1, creneaux_planifies: [slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00')] });
+  const semaine = ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', '2026-08-09'].map((jour, i) => journee(jour, { id: `j${i + 1}`, mission_id: 'serie' }));
+  const serie = { id: 'serie', debut_le: '2026-08-03T08:00:00+02:00', fin_le: '2026-08-09T16:00:00+02:00', nb_creneaux: 7 };
+  charges('serie-7-jours', { ...serie, creneaux_planifies: semaine });
+  charges('serie-7-jours-desordre', { ...serie, creneaux_planifies: [...semaine].reverse() });
+  charges('serie-6-sur-7', { ...serie, creneaux_planifies: semaine.slice(0, 6) });
+  charges('serie-8-sur-7', { ...serie, creneaux_planifies: [...semaine, journee('2026-08-10', { id: 'j8', mission_id: 'serie' })] });
+  charges('meme-debut-ordre-stable', { ...base, nb_creneaux: 2, creneaux_planifies: [
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T12:00:00+02:00', { id: 'b' }),
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T10:00:00+02:00', { id: 'a' }),
+  ] });
+  charges('nuit-minuit-un-creneau', { ...base, debut_le: '2026-07-31T22:00:00+02:00', fin_le: '2026-08-01T06:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-07-31T22:00:00+02:00', '2026-08-01T06:00:00+02:00', { id: 'n' })] });
+  charges('journee-dst-29-mars', { ...base, debut_le: '2026-03-29T08:00:00+02:00', fin_le: '2026-03-29T16:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [journee('2026-03-29', { id: 'd' })] });
+  charges('deux-nuits-dst', { id: 'dst', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-10-25T08:00:00+01:00', nb_creneaux: 2, creneaux_planifies: [
+    slotPlanning('2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00', { id: 'hiver' }),
+    slotPlanning('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00', { id: 'ete' }),
+  ] });
+  charges('melange-formats-iso', { ...base, fin_le: '2026-12-01T15:00:00Z', nb_creneaux: 3, creneaux_planifies: [
+    slotPlanning('2026-12-01T07:00:00Z', '2026-12-01T15:00:00.000Z', { id: 'z' }),
+    slotPlanning('2026-08-31T08:00:00', '2026-08-31T16:00:00', { id: 'legacy' }),
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', { id: 'offset' }),
+  ] });
+  charges('demi-heures-7h30', { ...base, nb_creneaux: 1, creneaux_planifies: [slotPlanning('2026-07-31T06:45:00+02:00', '2026-07-31T14:15:00+02:00', { id: 'h' })] });
+
+  // --- Nuit (20:00 → 07:00 Paris) et week-end, jour civil par jour civil -----
+  const nw = (nom, debut, fin, extra = {}) => { const cr = slotPlanning(debut, fin, extra); nuit(nom, cr); weekend(nom, cr); };
+  nw('mardi-07h-20h', '2026-07-28T07:00:00+02:00', '2026-07-28T20:00:00+02:00');
+  nw('mardi-07h-19h59', '2026-07-28T07:00:00+02:00', '2026-07-28T19:59:00+02:00');
+  nw('mardi-06h59-14h', '2026-07-28T06:59:00+02:00', '2026-07-28T14:00:00+02:00');
+  nw('mardi-06h-07h', '2026-07-28T06:00:00+02:00', '2026-07-28T07:00:00+02:00');
+  nw('mardi-19h59-20h30', '2026-07-28T19:59:00+02:00', '2026-07-28T20:30:00+02:00');
+  nw('mardi-20h-21h', '2026-07-28T20:00:00+02:00', '2026-07-28T21:00:00+02:00');
+  nw('mardi-23h-mercredi-01h', '2026-07-28T23:00:00+02:00', '2026-07-29T01:00:00+02:00');
+  nw('lundi-07h-mardi-20h', '2026-07-27T07:00:00+02:00', '2026-07-28T20:00:00+02:00');
+  nw('fin-null', '2026-07-28T20:00:00+02:00', null);
+  nw('fin-vide', '2026-07-28T20:00:00+02:00', '');
+  nw('utc-ete-05h-18h', '2026-07-28T05:00:00Z', '2026-07-28T18:00:00Z');
+  nw('utc-ete-04h59-18h', '2026-07-28T04:59:00Z', '2026-07-28T18:00:00Z');
+  nw('utc-hiver-06h-19h', '2026-01-13T06:00:00Z', '2026-01-13T19:00:00Z');
+  nw('utc-hiver-05h59-19h', '2026-01-13T05:59:00Z', '2026-01-13T19:00:00Z');
+  nw('legacy-sans-offset-jour', '2026-07-28T07:00:00', '2026-07-28T20:00:00');
+  nw('vendredi-20h-23h59m59', '2026-07-31T20:00:00+02:00', '2026-07-31T23:59:59+02:00');
+  nw('vendredi-20h-samedi-00h00', '2026-07-31T20:00:00+02:00', '2026-08-01T00:00:00+02:00');
+  nw('vendredi-20h-samedi-00h00m01', '2026-07-31T20:00:00+02:00', '2026-08-01T00:00:01+02:00');
+  nw('samedi-08h-16h', '2026-08-01T08:00:00+02:00', '2026-08-01T16:00:00+02:00');
+  nw('dimanche-08h-16h', '2026-08-02T08:00:00+02:00', '2026-08-02T16:00:00+02:00');
+  nw('dimanche-23h-lundi-01h', '2026-08-02T23:00:00+02:00', '2026-08-03T01:00:00+02:00');
+  nw('dimanche-23h-lundi-00h00', '2026-08-02T23:00:00+02:00', '2026-08-03T00:00:00+02:00');
+  nw('lundi-00h-08h', '2026-08-03T00:00:00+02:00', '2026-08-03T08:00:00+02:00');
+  nw('vendredi-08h-lundi-16h', '2026-07-31T08:00:00+02:00', '2026-08-03T16:00:00+02:00');
+  nw('utc-vendredi-22h-ete-samedi-paris', '2026-07-31T22:00:00Z', '2026-07-31T23:00:00Z');
+  nw('utc-vendredi-22h-hiver-vendredi-paris', '2026-01-16T22:00:00Z', '2026-01-16T22:30:00Z');
+  nw('dst-mars-samedi-07h-20h', '2026-03-28T07:00:00+01:00', '2026-03-28T20:00:00+01:00');
+  nw('dst-mars-dimanche-07h-20h', '2026-03-29T07:00:00+02:00', '2026-03-29T20:00:00+02:00');
+  nw('dst-mars-nuit-samedi-dimanche', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00');
+  nw('dst-octobre-dimanche-07h-20h', '2026-10-25T07:00:00+01:00', '2026-10-25T20:00:00+01:00');
+  nw('dst-octobre-nuit-samedi-dimanche', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00');
+  nw('dst-octobre-lundi-07h-20h', '2026-10-26T07:00:00+01:00', '2026-10-26T20:00:00+01:00');
+  nw('pause-nuit', '2026-07-28T22:00:00+02:00', '2026-07-28T22:30:00+02:00', { est_pause: true });
+  nw('effectif-weekend', '2026-08-01T08:00:00+02:00', '2026-08-01T16:00:00+02:00', { type_creneau: 'EFFECTIF' });
+
+  // --- Filtres horaires sur des plannings complets ---------------------------
+  filtres('jour-simple', { ...base, nb_creneaux: 1, creneaux_planifies: [travail] });
+  filtres('nuit-simple', { ...base, debut_le: '2026-07-28T20:00:00+02:00', fin_le: '2026-07-29T07:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-07-28T20:00:00+02:00', '2026-07-29T07:00:00+02:00')] });
+  filtres('weekend-simple', { ...base, debut_le: '2026-08-01T08:00:00+02:00', fin_le: '2026-08-01T16:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [journee('2026-08-01')] });
+  filtres('nuit-de-weekend', { ...base, debut_le: '2026-08-01T20:00:00+02:00', fin_le: '2026-08-02T07:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-08-01T20:00:00+02:00', '2026-08-02T07:00:00+02:00')] });
+  filtres('ponctuelle-repli-jour', { ...base, nb_creneaux: 1 });
+  filtres('inexact-nb-2', { ...base, nb_creneaux: 2, creneaux_planifies: [travail] });
+  filtres('erreur-chargement', { ...base, nb_creneaux: 1, creneaux_planifies: [travail], erreur_planning: true });
+  filtres('serie-7-jours', { ...serie, creneaux_planifies: semaine });
+  filtres('jour-limite-07h-20h', { ...base, debut_le: '2026-07-28T07:00:00+02:00', fin_le: '2026-07-28T20:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-07-28T07:00:00+02:00', '2026-07-28T20:00:00+02:00')] });
+  filtres('journee-longue-nuit-et-jour', { ...base, debut_le: '2026-07-28T06:00:00+02:00', fin_le: '2026-07-28T21:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [slotPlanning('2026-07-28T06:00:00+02:00', '2026-07-28T21:00:00+02:00')] });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 6 : selection-serie-candidat
+// ---------------------------------------------------------------------------
+function vecteursSelectionSerie() {
+  const c = new Collecteur('selection-serie-candidat');
+  const analyse = (nom, missions, idsSelectionnes, idsConflit) => c.ajoute(`analyserSelectionSerie/${nom}`,
+    { fonction: 'analyserSelectionSerie', missions, idsSelectionnes, idsConflit },
+    sansException('selection-serie-candidat', nom, capture(() => {
+      const r = selectionSerie.analyserSelectionSerie(missions, new Set(idsSelectionnes), new Set(idsConflit));
+      return {
+        missionsSelectionnees: r.missionsSelectionnees.map((m) => m.id),
+        idsEnConflit: r.idsEnConflit,
+        idsPlanningInexact: r.idsPlanningInexact,
+        peutAccepter: r.peutAccepter,
+      };
+    })));
+  const missionSerie = (id, extra = {}) => ({
+    id,
+    debut_le: `2026-08-0${id}T08:00:00+02:00`,
+    fin_le: `2026-08-0${id}T16:00:00+02:00`,
+    nb_creneaux: 1,
+    creneaux_planifies: [journee(`2026-08-0${id}`, { id: `c-${id}` })],
+    ...extra,
+  });
+  const sept = Array.from({ length: 7 }, (_, index) => missionSerie(String(index + 1)));
+  const ids = sept.map((m) => m.id);
+
+  // --- Issus des tests vitest ---------------------------------------------
+  analyse('vitest-conflit-conserve', sept, ids, ['7']);
+  analyse('vitest-sous-ensemble-six', sept, ids.slice(0, 6), []);
+  analyse('vitest-planning-inexact', [{ ...missionSerie('1'), nb_creneaux: 2 }], ['1'], []);
+
+  // --- Grille --------------------------------------------------------------
+  analyse('selection-vide', sept, [], []);
+  analyse('aucune-mission-ouverte', [], ['1'], ['1']);
+  analyse('ids-inconnus-ignores', sept, ['42', '1'], ['42']);
+  analyse('ordre-des-missions-ouvertes', sept, ['6', '2', '4'], []);
+  analyse('conflit-hors-selection-ignore', sept, ['1', '2'], ['3']);
+  analyse('conflit-et-inexact-meme-mission', [...sept.slice(0, 2), { ...missionSerie('3'), nb_creneaux: 2 }], ['1', '2', '3'], ['3']);
+  analyse('plusieurs-conflits', sept, ids, ['2', '5', '7']);
+  analyse('erreur-chargement-inexact', [missionSerie('1', { erreur_planning: true }), missionSerie('2')], ['1', '2'], []);
+  analyse('ponctuelle-sans-creneau-repli', [missionSerie('1', { creneaux_planifies: [] })], ['1'], []);
+  analyse('longue-sans-creneau-inexacte', [{ id: 'longue', debut_le: '2026-08-01T08:00:00+02:00', fin_le: '2026-08-07T16:00:00+02:00', nb_creneaux: null, creneaux_planifies: [] }], ['longue'], []);
+  analyse('creneau-sans-fin-inexact', [missionSerie('1', { creneaux_planifies: [slotPlanning('2026-08-01T08:00:00+02:00', null)] })], ['1'], []);
+  analyse('pause-seule-repli', [missionSerie('1', { creneaux_planifies: [slotPlanning('2026-08-01T12:00:00+02:00', '2026-08-01T12:30:00+02:00', { est_pause: true })] })], ['1'], []);
+  analyse('tout-selectionne-sans-conflit', sept, ids, []);
+  analyse('ids-dupliques-dans-ouvertes', [missionSerie('1'), missionSerie('1')], ['1'], []);
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 7 : completude-planning-mission
+// ---------------------------------------------------------------------------
+function vecteursCompletudePlanning() {
+  const c = new Collecteur('completude-planning-mission');
+  const analyse = (nom, mission, creneaux = []) => c.ajoute(`analyserCompletudePlanningMission/${nom}`,
+    { fonction: 'analyserCompletudePlanningMission', mission, creneaux },
+    sansException('completude-planning-mission', nom, capture(() => {
+      const r = completude.analyserCompletudePlanningMission(mission, creneaux);
+      return { complet: r.complet, creneauxPlanifies: r.creneauxPlanifies, nombrePlanifie: r.nombrePlanifie, dureeTotaleHeures: r.dureeTotaleHeures };
+    })));
+
+  // --- Issus des tests vitest ---------------------------------------------
+  const missionLongue = { id: 'mission-1', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: 2 };
+  const creneauxExacts = [journee('2026-07-06', { id: 'creneau-1' }), journee('2026-08-31', { id: 'creneau-2' })];
+  analyse('vitest-nombre-exact', missionLongue, creneauxExacts);
+  analyse('vitest-reponse-tronquee', missionLongue, creneauxExacts.slice(0, 1));
+  analyse('vitest-creneau-invalide', { ...missionLongue, nb_creneaux: 1 }, [{ ...creneauxExacts[0], fin: '2026-07-06T07:59:00+02:00' }]);
+  analyse('vitest-repli-legacy-ponctuelle', { id: 'mission-legacy', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: null });
+  analyse('vitest-longue-legacy-sans-planning', { id: 'mission-longue-legacy', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: null });
+
+  // --- nb_creneaux vérifiable ---------------------------------------------
+  const base = { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' };
+  const travail = journee('2026-07-31', { id: 'travail', mission_id: 'm' });
+  const pause = slotPlanning('2026-07-31T12:00:00+02:00', '2026-07-31T12:30:00+02:00', { id: 'pause', mission_id: 'm', est_pause: true });
+  const effectif = slotPlanning('2026-07-31T08:05:00+02:00', '2026-07-31T15:55:00+02:00', { id: 'eff', mission_id: 'm', type_creneau: 'EFFECTIF' });
+  analyse('nb-1-un-creneau', { ...base, nb_creneaux: 1 }, [travail]);
+  analyse('nb-1-pause-exclue', { ...base, nb_creneaux: 1 }, [pause, travail]);
+  analyse('nb-1-effectif-ignore', { ...base, nb_creneaux: 1 }, [effectif, travail]);
+  analyse('nb-1-effectif-seul', { ...base, nb_creneaux: 1 }, [effectif]);
+  analyse('nb-1-pause-seule', { ...base, nb_creneaux: 1 }, [pause]);
+  analyse('nb-1-aucun-creneau-pas-de-repli', { ...base, nb_creneaux: 1 }, []);
+  analyse('nb-1-fin-null', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-07-31T08:00:00+02:00', null, { id: 'ouvert' })]);
+  analyse('nb-1-fin-vide', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-07-31T08:00:00+02:00', '', { id: 'ouvert' })]);
+  analyse('nb-1-duree-nulle', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T08:00:00+02:00', { id: 'nul' })]);
+  analyse('nb-1-debut-illisible', { ...base, nb_creneaux: 1 }, [slotPlanning('pas une date', '2026-07-31T16:00:00+02:00', { id: 'x' })]);
+  analyse('nb-1-fin-illisible', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-07-31T08:00:00+02:00', 'pas une date', { id: 'x' })]);
+  analyse('nb-2-deux-creneaux-desordre', { ...base, nb_creneaux: 2 }, [creneauxExacts[1], creneauxExacts[0]]);
+  analyse('nb-2-trois-creneaux', { ...base, nb_creneaux: 2 }, [...creneauxExacts, journee('2026-09-01', { id: 'trois' })]);
+  analyse('nb-2-un-valide-un-sans-fin', { ...base, nb_creneaux: 2 }, [creneauxExacts[0], slotPlanning('2026-08-31T08:00:00+02:00', null, { id: 'ouvert' })]);
+  analyse('nb-2-un-valide-un-invalide', { ...base, nb_creneaux: 2 }, [creneauxExacts[0], slotPlanning('2026-08-31T16:00:00+02:00', '2026-08-31T08:00:00+02:00', { id: 'inverse' })]);
+  analyse('nb-2-meme-debut-ordre-stable', { ...base, nb_creneaux: 2 }, [
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T12:00:00+02:00', { id: 'b' }),
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T10:00:00+02:00', { id: 'a' }),
+  ]);
+  analyse('nb-string-2', { ...base, nb_creneaux: '2' }, creneauxExacts);
+  analyse('nb-1-nuit-dst-mars-11h', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00', { id: 'dst' })]);
+  analyse('nb-1-nuit-dst-octobre-13h', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00', { id: 'dst' })]);
+  analyse('nb-3-formats-iso-melanges', { ...base, nb_creneaux: 3 }, [
+    slotPlanning('2026-12-01T07:00:00Z', '2026-12-01T15:00:00.000Z', { id: 'z' }),
+    slotPlanning('2026-08-31T08:00:00', '2026-08-31T16:00:00', { id: 'legacy' }),
+    slotPlanning('2026-07-31T08:00:00+02:00', '2026-07-31T16:00:00+02:00', { id: 'offset' }),
+  ]);
+  analyse('nb-1-demi-heures', { ...base, nb_creneaux: 1 }, [slotPlanning('2026-07-31T06:45:00+02:00', '2026-07-31T14:15:00+02:00', { id: 'h' })]);
+  const semaine = ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', '2026-08-09'].map((jour, i) => journee(jour, { id: `j${i + 1}` }));
+  analyse('nb-7-serie', { id: 'serie', debut_le: '2026-08-03T08:00:00+02:00', fin_le: '2026-08-09T16:00:00+02:00', nb_creneaux: 7 }, semaine);
+  analyse('nb-7-serie-six-recus', { id: 'serie', debut_le: '2026-08-03T08:00:00+02:00', fin_le: '2026-08-09T16:00:00+02:00', nb_creneaux: 7 }, semaine.slice(0, 6));
+
+  // --- Repli legacy (nb_creneaux absent, nul ou non vérifiable) -------------
+  analyse('legacy-nb-null-1h', { ...base, fin_le: '2026-07-31T09:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-nb-absent', { id: 'm', debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00' });
+  analyse('legacy-nb-0', { ...base, nb_creneaux: 0 });
+  analyse('legacy-nb-negatif', { ...base, nb_creneaux: -1 });
+  analyse('legacy-24h-exactes', { ...base, fin_le: '2026-08-01T08:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-24h-plus-1s', { ...base, fin_le: '2026-08-01T08:00:01+02:00', nb_creneaux: null });
+  analyse('legacy-duree-nulle', { ...base, fin_le: '2026-07-31T08:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-fin-avant-debut', { ...base, debut_le: '2026-07-31T16:00:00+02:00', fin_le: '2026-07-31T08:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-date-illisible', { ...base, debut_le: 'pas une date', nb_creneaux: null });
+  analyse('legacy-sans-id', { debut_le: '2026-07-31T08:00:00+02:00', fin_le: '2026-07-31T16:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-nb-0-avec-creneau-recu', { ...base, nb_creneaux: 0 }, [travail]);
+  analyse('legacy-nb-null-avec-creneau-recu', { ...base, nb_creneaux: null }, [travail]);
+  analyse('legacy-pause-seule-repli', { ...base, nb_creneaux: null }, [pause]);
+  analyse('legacy-effectif-seul-repli', { ...base, nb_creneaux: null }, [effectif]);
+  analyse('legacy-nuit-dst-mars-11h', { ...base, debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T08:00:00+02:00', nb_creneaux: null });
+  analyse('legacy-nuit-dst-octobre-13h', { ...base, debut_le: '2026-10-24T20:00:00+02:00', fin_le: '2026-10-25T08:00:00+01:00', nb_creneaux: null });
+  analyse('legacy-sans-offset', { ...base, debut_le: '2026-08-31T08:00:00', fin_le: '2026-08-31T16:00:00', nb_creneaux: null });
+  analyse('legacy-utc-z', { ...base, debut_le: '2026-12-01T07:00:00Z', fin_le: '2026-12-01T15:00:00.000Z', nb_creneaux: null });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -793,6 +1152,10 @@ const fichiers = {
   'format-mission.json': vecteursFormatMission(),
   'heures-hebdomadaires-mission.json': vecteursHeuresHebdomadaires(),
   'disponibilite-pointage.json': vecteursDisponibilitePointage(),
+  // Lot 1 (T2) : règles pures de la candidature.
+  'planning-candidat.json': vecteursPlanningCandidat(),
+  'selection-serie-candidat.json': vecteursSelectionSerie(),
+  'completude-planning-mission.json': vecteursCompletudePlanning(),
 };
 
 let total = 0;

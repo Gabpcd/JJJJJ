@@ -1,0 +1,1430 @@
+[
+  {
+    "name": "analyserSelectionSerie/aucune-mission-ouverte",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": [
+        "1"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/conflit-et-inexact-meme-mission",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 2,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2",
+        "3"
+      ],
+      "idsConflit": [
+        "3"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2",
+        "3"
+      ],
+      "idsEnConflit": [
+        "3"
+      ],
+      "idsPlanningInexact": [
+        "3"
+      ],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/conflit-hors-selection-ignore",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2"
+      ],
+      "idsConflit": [
+        "3"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/creneau-sans-fin-inexact",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": null,
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [
+        "1"
+      ],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/erreur-chargement-inexact",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ],
+          "erreur_planning": true
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [
+        "1"
+      ],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/ids-dupliques-dans-ouvertes",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/ids-inconnus-ignores",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "42",
+        "1"
+      ],
+      "idsConflit": [
+        "42"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/longue-sans-creneau-inexacte",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "longue",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": null,
+          "creneaux_planifies": []
+        }
+      ],
+      "idsSelectionnes": [
+        "longue"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "longue"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [
+        "longue"
+      ],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/ordre-des-missions-ouvertes",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "6",
+        "2",
+        "4"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "2",
+        "4",
+        "6"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/pause-seule-repli",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T12:00:00+02:00",
+              "fin": "2026-08-01T12:30:00+02:00",
+              "est_pause": true,
+              "type_creneau": "PREVISIONNEL"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/plusieurs-conflits",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsConflit": [
+        "2",
+        "5",
+        "7"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsEnConflit": [
+        "2",
+        "5",
+        "7"
+      ],
+      "idsPlanningInexact": [],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/ponctuelle-sans-creneau-repli",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": []
+        }
+      ],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/selection-vide",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/tout-selectionne-sans-conflit",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/vitest-conflit-conserve",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsConflit": [
+        "7"
+      ]
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "idsEnConflit": [
+        "7"
+      ],
+      "idsPlanningInexact": [],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/vitest-planning-inexact",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 2,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [
+        "1"
+      ],
+      "peutAccepter": false
+    }
+  },
+  {
+    "name": "analyserSelectionSerie/vitest-sous-ensemble-six",
+    "input": {
+      "fonction": "analyserSelectionSerie",
+      "missions": [
+        {
+          "id": "1",
+          "debut_le": "2026-08-01T08:00:00+02:00",
+          "fin_le": "2026-08-01T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-01T08:00:00+02:00",
+              "fin": "2026-08-01T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-1"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "debut_le": "2026-08-02T08:00:00+02:00",
+          "fin_le": "2026-08-02T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-02T08:00:00+02:00",
+              "fin": "2026-08-02T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-2"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "debut_le": "2026-08-03T08:00:00+02:00",
+          "fin_le": "2026-08-03T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-03T08:00:00+02:00",
+              "fin": "2026-08-03T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-3"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "debut_le": "2026-08-04T08:00:00+02:00",
+          "fin_le": "2026-08-04T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-04T08:00:00+02:00",
+              "fin": "2026-08-04T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-4"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "debut_le": "2026-08-05T08:00:00+02:00",
+          "fin_le": "2026-08-05T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-05T08:00:00+02:00",
+              "fin": "2026-08-05T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-5"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "debut_le": "2026-08-06T08:00:00+02:00",
+          "fin_le": "2026-08-06T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-06T08:00:00+02:00",
+              "fin": "2026-08-06T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-6"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "debut_le": "2026-08-07T08:00:00+02:00",
+          "fin_le": "2026-08-07T16:00:00+02:00",
+          "nb_creneaux": 1,
+          "creneaux_planifies": [
+            {
+              "debut": "2026-08-07T08:00:00+02:00",
+              "fin": "2026-08-07T16:00:00+02:00",
+              "est_pause": false,
+              "type_creneau": "PREVISIONNEL",
+              "id": "c-7"
+            }
+          ]
+        }
+      ],
+      "idsSelectionnes": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "idsConflit": []
+    },
+    "expected": {
+      "missionsSelectionnees": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "idsEnConflit": [],
+      "idsPlanningInexact": [],
+      "peutAccepter": true
+    }
+  }
+]
