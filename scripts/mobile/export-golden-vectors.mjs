@@ -2,10 +2,13 @@
 /**
  * Export des vecteurs golden pour le port Swift des règles pures (plan §4.1).
  *
- * Lit directement les modules TypeScript de `src/lib` (type stripping natif de
- * Node, aucune dépendance supplémentaire) et écrit, par règle, un JSON de
- * vecteurs `{ name, input, expected }` dans
+ * Lit directement les modules TypeScript de `src/lib` et du planning candidat
+ * (`src/components/planning/planning-candidat.ts`, `selection-serie-candidat.ts`)
+ * par type stripping natif de Node, aucune dépendance supplémentaire, et écrit,
+ * par règle, un JSON de vecteurs `{ name, input, expected }` dans
  * `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden/`.
+ * Un hook `module.register()` résout l'alias `@/lib/<module>` et les imports
+ * relatifs sans extension de ces modules (lot 1, T2).
  *
  * Les vecteurs proviennent des tests vitest existants ET de grilles
  * systématiques (changements d'heure Europe/Paris, fins de mois, années
@@ -22,6 +25,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { register } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -62,11 +66,54 @@ try {
   process.exit(2);
 }
 
+// ---------------------------------------------------------------------------
+// Résolution des imports du planning candidat (lot 1, T2)
+// ---------------------------------------------------------------------------
+// `planning-candidat.ts` et `completude-planning-mission.ts` importent
+// `@/lib/<module>` (alias Vite) ; `selection-serie-candidat.ts` importe
+// './planning-candidat' sans extension. Le chargeur ESM de Node ne connaît ni
+// l'alias ni la résolution sans extension : ce hook les traduit vers le fichier
+// `.ts` réel, qui est le même module que celui chargé par `lib()` ci-dessous
+// (une seule instance de `date-heure-paris`). Tout autre alias `@/` est refusé
+// explicitement : une règle golden reste pure (ni client Supabase ni React).
+const HOOK_RESOLUTION = `
+let racineSrc = null;
+const AVEC_EXTENSION = /\\.[cm]?[jt]sx?$/;
+export async function initialize(donnees) {
+  racineSrc = donnees.racineSrc;
+}
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('@/')) {
+    if (!specifier.startsWith('@/lib/')) {
+      throw new Error('export golden : alias « ' + specifier + ' » refusé depuis ' + context.parentURL
+        + ' (seul @/lib/<module> est résolu : une règle golden reste pure).');
+    }
+    const cible = new URL(specifier.slice(2) + (AVEC_EXTENSION.test(specifier) ? '' : '.ts'), racineSrc);
+    return nextResolve(cible.href, context);
+  }
+  const relatif = specifier.startsWith('./') || specifier.startsWith('../');
+  const parentTs = typeof context.parentURL === 'string'
+    && context.parentURL.startsWith(racineSrc) && context.parentURL.endsWith('.ts');
+  if (relatif && parentTs && !AVEC_EXTENSION.test(specifier)) {
+    return nextResolve(specifier + '.ts', context);
+  }
+  return nextResolve(specifier, context);
+}
+`;
+register(`data:text/javascript,${encodeURIComponent(HOOK_RESOLUTION)}`, {
+  parentURL: import.meta.url,
+  data: { racineSrc: pathToFileURL(`${resolve(RACINE, 'src')}/`).href },
+});
+
 const lib = (nom) => import(pathToFileURL(resolve(RACINE, 'src/lib', nom)).href);
+const planningComposant = (nom) => import(pathToFileURL(resolve(RACINE, 'src/components/planning', nom)).href);
 const dateHeure = await lib('date-heure-paris.ts');
 const formatMission = await lib('format-mission.ts');
 const hebdo = await lib('heures-hebdomadaires-mission.ts');
 const pointage = await lib('disponibilite-pointage.ts');
+const planningCandidat = await planningComposant('planning-candidat.ts');
+const selectionSerie = await planningComposant('selection-serie-candidat.ts');
+const completude = await lib('completude-planning-mission.ts');
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -786,6 +833,407 @@ function vecteursDisponibilitePointage() {
 }
 
 // ---------------------------------------------------------------------------
+// Règles 5 à 7 : planning candidat, sélection de série, complétude (lot 1, T2)
+// ---------------------------------------------------------------------------
+
+/**
+ * `construirePlanningCandidat` lève (`instantJolene`) sur un créneau
+ * PREVISIONNEL à date illisible, et `analyserSelectionSerie` avec lui. Le port
+ * Swift échoue fermé à la place (planning non exact, écart assumé du lot 0
+ * documenté dans `PlanningCandidat.swift` et couvert par `MissionsPlanningTests`).
+ * Ce domaine n'a donc aucun vecteur : un vecteur dont le calcul web lève est
+ * refusé ici, au lieu d'être exporté en `{ erreur }` qu'aucun port ne rejoue.
+ */
+function sansLevee(regle, name, valeur) {
+  if (valeur && typeof valeur === 'object' && !Array.isArray(valeur)
+      && Object.keys(valeur).length === 1 && 'erreur' in valeur) {
+    throw new Error(`${regle}: « ${name} » lève côté web (${valeur.erreur}) : hors domaine golden, le port Swift échoue fermé sur une date illisible.`);
+  }
+  return valeur;
+}
+
+/**
+ * Format filaire natif de `p_creneaux_confirmes` (blueprint lot 1, T2). Le web
+ * envoie les chaînes lues telles quelles ; le port Swift envoie, depuis les
+ * mêmes chaînes, l'instant UTC `yyyy-MM-dd'T'HH:mm:ss'Z'` sans fraction, que
+ * `fn_valider_creneaux_mission_json` accepte (suffixe Z) et que
+ * `fn_confirmer_action_planning_v1` compare en `timestamptz`. Une borne dont la
+ * fraction de seconde n'est pas nulle (même au-delà de la milliseconde, que
+ * `Date` tronque) n'est pas représentable sans changer l'instant comparé : la
+ * liste entière est refusée (null), comme un planning non exact. L'oracle passe
+ * par `instantJolene` du web : il confronte la conversion Swift à `Date`
+ * (décalages, heure d'été, ISO legacy sans offset = heure murale française).
+ */
+function filaireSansFraction(valeur) {
+  const fraction = /\.(\d+)/.exec(valeur);
+  if (fraction && /[1-9]/.test(fraction[1])) return null;
+  return dateHeure.instantJolene(valeur).toISOString().replace(/\.000Z$/, 'Z');
+}
+
+function creneauxFilaires(lus) {
+  if (lus === null) return null;
+  const filaires = lus.map(({ debut, fin }) => ({ debut: filaireSansFraction(debut), fin: filaireSansFraction(fin) }));
+  return filaires.some((creneau) => creneau.debut === null || creneau.fin === null) ? null : filaires;
+}
+
+const resumePlanning = (p) => ({
+  creneaux: p.creneaux,
+  exact: p.exact,
+  totalHeures: p.totalHeures,
+  periodeEtendue: p.periodeEtendue,
+  messageBlocage: p.messageBlocage,
+});
+
+const creneauPlanning = (id, debut, fin, extra = {}) => ({ id, debut, fin, est_pause: false, type_creneau: 'PREVISIONNEL', ...extra });
+const journeePlanning = (id, date, extra = {}) => creneauPlanning(id, `${date}T08:00:00+02:00`, `${date}T16:00:00+02:00`, extra);
+
+// Données des tests vitest, partagées par les trois règles.
+const missionLongueVitest = { id: 'mission-longue', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: 2 };
+const deuxCreneauxVitest = [
+  { id: 'jour-1', mission_id: 'mission-longue', debut: '2026-07-06T08:00:00+02:00', fin: '2026-07-06T16:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' },
+  { id: 'jour-2', mission_id: 'mission-longue', debut: '2026-08-31T08:00:00+02:00', fin: '2026-08-31T16:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' },
+];
+
+// ---------------------------------------------------------------------------
+// Règle 5 : planning-candidat (src/components/planning/planning-candidat.ts)
+// ---------------------------------------------------------------------------
+function vecteursPlanningCandidat() {
+  const c = new Collecteur('planning-candidat');
+  const ajoute = (name, input, calcul) => c.ajoute(name, input, sansLevee('planning-candidat', name, capture(calcul)));
+  const construire = (nom, args) => ajoute(`construirePlanningCandidat/${nom}`, { fonction: 'construirePlanningCandidat', ...args },
+    () => resumePlanning(planningCandidat.construirePlanningCandidat(args.mission, args.creneaux, args.erreur)));
+  const confirmes = (nom, mission) => {
+    ajoute(`creneauxConfirmesPourAction/${nom}`, { fonction: 'creneauxConfirmesPourAction', mission },
+      () => planningCandidat.creneauxConfirmesPourAction(mission));
+    ajoute(`creneauxConfirmesFilaires/${nom}`, { fonction: 'creneauxConfirmesFilaires', mission },
+      () => creneauxFilaires(planningCandidat.creneauxConfirmesPourAction(mission)));
+  };
+  const filtres = (nom, mission) => {
+    for (const filtre of ['TOUS', 'JOUR', 'NUIT', 'WEEKEND']) {
+      ajoute(`planningCorrespondAuFiltre/${nom}-${filtre.toLowerCase()}`, { fonction: 'planningCorrespondAuFiltre', mission, filtre },
+        () => planningCandidat.planningCorrespondAuFiltre(mission, filtre));
+    }
+  };
+  const horaires = (nom, debut, fin) => {
+    const creneau = creneauPlanning('h', debut, fin);
+    ajoute(`creneauContientNuit/${nom}`, { fonction: 'creneauContientNuit', creneau }, () => planningCandidat.creneauContientNuit(creneau));
+    ajoute(`creneauChevaucheWeekend/${nom}`, { fonction: 'creneauChevaucheWeekend', creneau }, () => planningCandidat.creneauChevaucheWeekend(creneau));
+  };
+
+  // --- Issus des tests vitest (planning-candidat.test.tsx) ----------------
+  construire('vitest-deux-journees-eloignees', { mission: { ...missionLongueVitest, creneaux_planifies: deuxCreneauxVitest } });
+  construire('vitest-nuit-lendemain', {
+    mission: {
+      id: 'nuit', debut_le: '2026-07-06T20:00:00+02:00', fin_le: '2026-07-07T08:00:00+02:00', nb_creneaux: 1,
+      creneaux_planifies: [{ debut: '2026-07-06T20:00:00+02:00', fin: '2026-07-07T08:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' }],
+    },
+  });
+  construire('vitest-multi-incomplet', { mission: missionLongueVitest, creneaux: deuxCreneauxVitest.slice(0, 1) });
+  construire('vitest-compteur-depasse', { mission: { ...missionLongueVitest, nb_creneaux: 1 }, creneaux: deuxCreneauxVitest });
+  const ponctuelleVitest = { id: 'ponctuelle', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 };
+  construire('vitest-repli-ponctuel', { mission: ponctuelleVitest });
+  filtres('vitest-nuit-jour-weekend', {
+    ...missionLongueVitest,
+    creneaux_planifies: [
+      { debut: '2026-07-11T21:00:00+02:00', fin: '2026-07-12T07:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' },
+      deuxCreneauxVitest[1],
+    ],
+  });
+  construire('vitest-cible-creneaux-explicites', { mission: missionLongueVitest, creneaux: deuxCreneauxVitest });
+  construire('vitest-entre-deux', { mission: { id: 'entre-deux', debut_le: '2026-07-20T08:00:00+02:00', fin_le: '2026-07-20T16:00:00+02:00', nb_creneaux: 1 } });
+  construire('vitest-repos-court', { mission: { id: 'repos-court', debut_le: '2026-07-05T23:00:00+02:00', fin_le: '2026-07-05T23:30:00+02:00', nb_creneaux: 1 } });
+  confirmes('vitest-recapitulatif-complet', { ...missionLongueVitest, creneaux_planifies: deuxCreneauxVitest });
+  confirmes('vitest-recapitulatif-incomplet', { ...missionLongueVitest, creneaux_planifies: deuxCreneauxVitest.slice(0, 1) });
+
+  // --- Compteur nb_creneaux, repli ponctuel, pauses, EFFECTIF -------------
+  const base = { id: 'm', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00' };
+  const pause = creneauPlanning('pause', '2026-07-06T12:00:00+02:00', '2026-07-06T12:30:00+02:00', { est_pause: true });
+  const effectif = journeePlanning('effectif', '2026-07-06', { type_creneau: 'EFFECTIF' });
+  for (const [libelle, nb] of [['nb-absent', undefined], ['nb-null', null], ['nb-0', 0], ['nb-1', 1]]) {
+    const m = { ...base };
+    if (nb !== undefined) m.nb_creneaux = nb;
+    construire(`repli-sans-ligne-${libelle}`, { mission: m });
+    construire(`une-ligne-${libelle}`, { mission: m, creneaux: [creneauPlanning('l1', '2026-07-06T09:00:00+02:00', '2026-07-06T17:00:00+02:00')] });
+    construire(`pause-seule-${libelle}`, { mission: m, creneaux: [pause] });
+    construire(`effectif-seul-${libelle}`, { mission: m, creneaux: [effectif] });
+    construire(`ligne-sans-fin-${libelle}`, { mission: m, creneaux: [creneauPlanning('ouvert', '2026-07-06T08:00:00+02:00', null)] });
+  }
+  const multi = { id: 'multi', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-08T16:00:00+02:00' };
+  const trois = [journeePlanning('j3', '2026-07-08'), journeePlanning('j1', '2026-07-06'), journeePlanning('j2', '2026-07-07')];
+  for (const nb of [1, 2, 3, 4]) construire(`trois-lignes-nb-${nb}`, { mission: { ...multi, nb_creneaux: nb }, creneaux: trois });
+  construire('trois-lignes-nb-null', { mission: { ...multi, nb_creneaux: null }, creneaux: trois });
+  construire('trois-lignes-plus-pause-et-effectif', { mission: { ...multi, nb_creneaux: 3 }, creneaux: [...trois, pause, effectif] });
+  construire('ligne-sans-fin-parmi-trois', { mission: { ...multi, nb_creneaux: 3 }, creneaux: [trois[0], trois[1], creneauPlanning('ouvert', '2026-07-07T08:00:00+02:00', null)] });
+  construire('ligne-fin-vide-parmi-trois', { mission: { ...multi, nb_creneaux: 3 }, creneaux: [trois[0], trois[1], creneauPlanning('vide', '2026-07-07T08:00:00+02:00', '')] });
+  construire('pause-sans-fin-ignoree', { mission: { ...multi, nb_creneaux: 3 }, creneaux: [...trois, creneauPlanning('pause-ouverte', '2026-07-07T12:00:00+02:00', null, { est_pause: true })] });
+  construire('meme-debut-ordre-stable', {
+    mission: { ...multi, nb_creneaux: 2 },
+    creneaux: [creneauPlanning('b', '2026-07-06T08:00:00+02:00', '2026-07-06T16:00:00+02:00'), creneauPlanning('a', '2026-07-06T08:00:00+02:00', '2026-07-06T12:00:00+02:00')],
+  });
+  construire('fin-avant-debut-zero-heure', { mission: { ...base, nb_creneaux: 1 }, creneaux: [creneauPlanning('inverse', '2026-07-06T16:00:00+02:00', '2026-07-06T08:00:00+02:00')] });
+
+  // --- Erreur de chargement et paramètres explicites ----------------------
+  const exacte = { ...base, nb_creneaux: 1, creneaux_planifies: [journeePlanning('l1', '2026-07-06')] };
+  construire('planifies-de-la-mission', { mission: exacte });
+  construire('erreur-parametre', { mission: exacte, erreur: true });
+  construire('erreur-mission', { mission: { ...exacte, erreur_planning: true } });
+  construire('erreur-mission-levee-par-parametre', { mission: { ...exacte, erreur_planning: true }, erreur: false });
+  construire('creneaux-parametre-vide-remplacent-planifies', { mission: exacte, creneaux: [] });
+  construire('erreur-et-incomplet', { mission: { ...missionLongueVitest, erreur_planning: true }, creneaux: deuxCreneauxVitest.slice(0, 1) });
+
+  // --- Enveloppe : 24 h, dates absentes ou illisibles, sans id ------------
+  construire('repli-24h-exactes', { mission: { id: 'm', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-07T08:00:00+02:00', nb_creneaux: null } });
+  construire('repli-24h-plus-1s', { mission: { id: 'm', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-07T08:00:01+02:00', nb_creneaux: null } });
+  construire('repli-dst-mars-23h', { mission: { id: 'm', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T20:00:00+02:00', nb_creneaux: 1 } });
+  construire('mission-longue-sans-ligne-nb-null', { mission: { ...missionLongueVitest, nb_creneaux: null } });
+  construire('mission-longue-sans-ligne-nb-2', { mission: missionLongueVitest });
+  construire('debut-null', { mission: { id: 'm', debut_le: null, fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 } });
+  construire('fin-null', { mission: { id: 'm', debut_le: '2026-07-06T08:00:00+02:00', fin_le: null, nb_creneaux: 1 } });
+  construire('debut-vide', { mission: { id: 'm', debut_le: '', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 } });
+  construire('repli-sans-id', { mission: { debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 } });
+  construire('repli-enveloppe-illisible', { mission: { id: 'm', debut_le: 'pas une date', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: 1 } });
+
+  // --- Période étendue, heures, formats de date ---------------------------
+  const seul = (nom, debut, fin) => construire(nom, { mission: { id: 'm', debut_le: debut, fin_le: fin, nb_creneaux: 1 }, creneaux: [creneauPlanning('s', debut, fin)] });
+  seul('etendue-nuit-minuit-paris', '2026-07-06T20:00:00+02:00', '2026-07-07T08:00:00+02:00');
+  seul('etendue-meme-jour-utc-minuit-paris', '2026-07-06T21:00:00.000Z', '2026-07-06T22:30:00.000Z');
+  seul('non-etendue-jours-utc-differents-meme-jour-paris', '2026-07-06T22:00:00.000Z', '2026-07-07T01:30:00.000Z');
+  seul('etendue-fin-minuit-exact', '2026-07-06T20:00:00+02:00', '2026-07-07T00:00:00+02:00');
+  seul('non-etendue-debut-minuit-exact', '2026-07-07T00:00:00+02:00', '2026-07-07T06:00:00+02:00');
+  seul('dst-mars-nuit-11h', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00');
+  seul('dst-octobre-nuit-13h', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00');
+  seul('legacy-sans-offset', '2026-07-06T08:00:00', '2026-07-06T15:30:00');
+  seul('legacy-sans-offset-nuit-sans-secondes', '2026-07-06T21:00', '2026-07-07T05:00');
+  seul('postgrest-plus-00-00', '2026-07-06T06:00:00+00:00', '2026-07-06T14:00:00+00:00');
+  seul('duree-tiers-heure', '2026-07-06T08:00:00+02:00', '2026-07-06T15:20:00+02:00');
+  seul('millisecondes', '2026-07-06T08:00:00.250+02:00', '2026-07-06T16:00:00.750+02:00');
+  seul('microsecondes-postgrest', '2026-07-06T06:00:00.123456+00:00', '2026-07-06T14:00:00.654321+00:00');
+  construire('trois-nuits-dst-mars', {
+    mission: { id: 'm', debut_le: '2026-03-27T20:00:00+01:00', fin_le: '2026-03-30T08:00:00+02:00', nb_creneaux: 3 },
+    creneaux: [
+      creneauPlanning('n2', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00'),
+      creneauPlanning('n1', '2026-03-27T20:00:00+01:00', '2026-03-28T08:00:00+01:00'),
+      creneauPlanning('n3', '2026-03-29T20:00:00+02:00', '2026-03-30T08:00:00+02:00'),
+    ],
+  });
+
+  // --- Créneaux confirmés pour l'action (parité web) et format filaire natif
+  confirmes('trois-lignes-desordre-pause-effectif', { ...multi, nb_creneaux: 3, creneaux_planifies: [...trois, pause, effectif] });
+  confirmes('repli-ponctuel-legacy', ponctuelleVitest);
+  confirmes('planifies-de-la-mission', exacte);
+  confirmes('erreur-planning', { ...exacte, erreur_planning: true });
+  confirmes('mission-longue-sans-ligne', { ...missionLongueVitest, nb_creneaux: null });
+  confirmes('ligne-sans-fin', { ...base, nb_creneaux: 1, creneaux_planifies: [creneauPlanning('ouvert', '2026-07-06T08:00:00+02:00', null)] });
+  confirmes('compteur-depasse', { ...base, nb_creneaux: 1, creneaux_planifies: trois });
+  confirmes('fin-avant-debut', { ...base, nb_creneaux: 1, creneaux_planifies: [creneauPlanning('inverse', '2026-07-06T16:00:00+02:00', '2026-07-06T08:00:00+02:00')] });
+  const deuxJours = (nom, format) => confirmes(nom, {
+    ...base, nb_creneaux: 2,
+    creneaux_planifies: [creneauPlanning('b', ...format('2026-07-07')), creneauPlanning('a', ...format('2026-07-06'))],
+  });
+  deuxJours('postgrest-plus-00-00', (d) => [`${d}T06:00:00+00:00`, `${d}T14:00:00+00:00`]);
+  deuxJours('postgrest-fraction-nulle', (d) => [`${d}T06:00:00.000+00:00`, `${d}T14:00:00.000000+00:00`]);
+  deuxJours('postgrest-fraction-milliseconde', (d) => [`${d}T06:00:00.250+00:00`, `${d}T14:00:00+00:00`]);
+  deuxJours('postgrest-fraction-microseconde', (d) => [`${d}T06:00:00+00:00`, `${d}T14:00:00.000500+00:00`]);
+  deuxJours('utc-z', (d) => [`${d}T06:00:00Z`, `${d}T14:00:00.000Z`]);
+  deuxJours('offset-paris-ete', (d) => [`${d}T08:00:00+02:00`, `${d}T16:00:00+02:00`]);
+  deuxJours('offset-negatif', (d) => [`${d}T02:00:00-04:00`, `${d}T10:00:00-04:00`]);
+  deuxJours('legacy-sans-offset', (d) => [`${d}T08:00:00`, `${d}T16:00`]);
+  confirmes('dst-mars-nuit', { id: 'm', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T08:00:00+02:00', nb_creneaux: 1,
+    creneaux_planifies: [creneauPlanning('n', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00')] });
+  confirmes('dst-octobre-nuit', { id: 'm', debut_le: '2026-10-24T20:00:00+02:00', fin_le: '2026-10-25T08:00:00+01:00', nb_creneaux: 1,
+    creneaux_planifies: [creneauPlanning('n', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00')] });
+  confirmes('frontiere-annee', { id: 'm', debut_le: '2026-12-31T20:00:00+01:00', fin_le: '2027-01-01T08:00:00+01:00', nb_creneaux: 1,
+    creneaux_planifies: [creneauPlanning('n', '2026-12-31T20:00:00+01:00', '2027-01-01T08:00:00+01:00')] });
+
+  // --- Filtres horaires sur le planning exact -----------------------------
+  const unCreneau = (debut, fin) => ({ id: 'f', debut_le: debut, fin_le: fin, nb_creneaux: 1, creneaux_planifies: [creneauPlanning('f1', debut, fin)] });
+  filtres('lundi-jour', unCreneau('2026-07-06T08:00:00+02:00', '2026-07-06T16:00:00+02:00'));
+  filtres('mardi-nuit', unCreneau('2026-07-07T21:00:00+02:00', '2026-07-08T07:00:00+02:00'));
+  filtres('samedi-jour', unCreneau('2026-07-11T08:00:00+02:00', '2026-07-11T16:00:00+02:00'));
+  filtres('vendredi-nuit-vers-samedi', unCreneau('2026-07-10T21:00:00+02:00', '2026-07-11T07:00:00+02:00'));
+  filtres('vendredi-soir-jusqua-minuit', unCreneau('2026-07-10T18:00:00+02:00', '2026-07-11T00:00:00+02:00'));
+  filtres('planning-inexact', { ...missionLongueVitest, creneaux_planifies: deuxCreneauxVitest.slice(0, 1) });
+  filtres('repli-ponctuel', ponctuelleVitest);
+  filtres('erreur-planning', { ...exacte, erreur_planning: true });
+  filtres('jour-et-nuit', { ...multi, nb_creneaux: 2, creneaux_planifies: [journeePlanning('j', '2026-07-06'), creneauPlanning('n', '2026-07-07T21:00:00+02:00', '2026-07-08T07:00:00+02:00')] });
+
+  // --- Nuit (20:00 → 07:00 Paris) et week-end, jour civil par jour civil ---
+  horaires('jour-07h-20h-exact', '2026-07-07T07:00:00+02:00', '2026-07-07T20:00:00+02:00');
+  horaires('debut-06h59', '2026-07-07T06:59:00+02:00', '2026-07-07T20:00:00+02:00');
+  horaires('fin-20h01', '2026-07-07T07:00:00+02:00', '2026-07-07T20:01:00+02:00');
+  horaires('soir-19h30-20h30', '2026-07-07T19:30:00+02:00', '2026-07-07T20:30:00+02:00');
+  horaires('nuit-20h-07h', '2026-07-07T20:00:00+02:00', '2026-07-08T07:00:00+02:00');
+  horaires('minuit-01h', '2026-07-08T00:00:00+02:00', '2026-07-08T01:00:00+02:00');
+  horaires('multi-jours-08h-17h', '2026-07-06T08:00:00+02:00', '2026-07-08T17:00:00+02:00');
+  horaires('fin-null', '2026-07-07T08:00:00+02:00', null);
+  horaires('fin-vide', '2026-07-07T08:00:00+02:00', '');
+  horaires('fin-avant-debut', '2026-07-07T16:00:00+02:00', '2026-07-07T08:00:00+02:00');
+  horaires('dst-mars-jour', '2026-03-29T07:00:00+02:00', '2026-03-29T20:00:00+02:00');
+  horaires('dst-mars-saut-1h-4h', '2026-03-29T01:00:00+01:00', '2026-03-29T04:00:00+02:00');
+  horaires('dst-octobre-jour', '2026-10-25T07:00:00+01:00', '2026-10-25T20:00:00+01:00');
+  horaires('dst-octobre-heure-repetee', '2026-10-25T02:30:00+02:00', '2026-10-25T02:30:00+01:00');
+  horaires('vendredi-jusqua-samedi-minuit', '2026-07-10T18:00:00+02:00', '2026-07-11T00:00:00+02:00');
+  horaires('vendredi-jusqua-samedi-minuit-plus-1s', '2026-07-10T18:00:00+02:00', '2026-07-11T00:00:01+02:00');
+  horaires('samedi-jour', '2026-07-11T08:00:00+02:00', '2026-07-11T16:00:00+02:00');
+  horaires('dimanche-vers-lundi', '2026-07-12T22:00:00+02:00', '2026-07-13T06:00:00+02:00');
+  horaires('lundi-depuis-minuit', '2026-07-13T00:00:00+02:00', '2026-07-13T08:00:00+02:00');
+  horaires('utc-dimanche-lundi-paris', '2026-07-12T22:00:00.000Z', '2026-07-13T04:00:00.000Z');
+  horaires('utc-vendredi-samedi-paris', '2026-07-10T21:30:00.000Z', '2026-07-10T22:30:00.000Z');
+  horaires('legacy-sans-offset-samedi', '2026-07-11T08:00:00', '2026-07-11T16:00:00');
+  horaires('semaine-complete', '2026-07-06T00:00:00+02:00', '2026-07-13T00:00:00+02:00');
+  horaires('hiver-utc-07h-20h', '2026-01-12T06:00:00.000Z', '2026-01-12T19:00:00.000Z');
+  horaires('hiver-utc-06h59', '2026-01-12T05:59:00.000Z', '2026-01-12T07:00:00.000Z');
+  horaires('reveillon-annee', '2026-12-31T20:00:00+01:00', '2027-01-01T08:00:00+01:00');
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 6 : selection-serie-candidat (src/components/planning/selection-serie-candidat.ts)
+// ---------------------------------------------------------------------------
+function vecteursSelectionSerie() {
+  const c = new Collecteur('selection-serie-candidat');
+  // `missionsSelectionnees` est un filtre qui conserve l'identité des missions :
+  // l'attendu en garde les `id`, dans l'ordre des missions ouvertes.
+  const analyser = (nom, missionsOuvertes, idsSelectionnes, idsConflit) => {
+    const name = `analyserSelectionSerie/${nom}`;
+    c.ajoute(name, { fonction: 'analyserSelectionSerie', missionsOuvertes, idsSelectionnes, idsConflit },
+      sansLevee('selection-serie-candidat', name, capture(() => {
+        const r = selectionSerie.analyserSelectionSerie(missionsOuvertes, new Set(idsSelectionnes), new Set(idsConflit));
+        return {
+          missionsSelectionnees: r.missionsSelectionnees.map((mission) => mission.id),
+          idsEnConflit: r.idsEnConflit,
+          idsPlanningInexact: r.idsPlanningInexact,
+          peutAccepter: r.peutAccepter,
+        };
+      })));
+  };
+
+  // --- Issus des tests vitest (selection-serie-candidat.test.ts) -----------
+  const mission = (id) => ({
+    id,
+    debut_le: `2026-08-0${id}T08:00:00+02:00`,
+    fin_le: `2026-08-0${id}T16:00:00+02:00`,
+    nb_creneaux: 1,
+    creneaux_planifies: [{ id: `c-${id}`, debut: `2026-08-0${id}T08:00:00+02:00`, fin: `2026-08-0${id}T16:00:00+02:00`, est_pause: false, type_creneau: 'PREVISIONNEL' }],
+  });
+  const sept = Array.from({ length: 7 }, (_, index) => mission(String(index + 1)));
+  const tous = sept.map((m) => m.id);
+  analyser('vitest-conflit-jamais-retire', sept, tous, ['7']);
+  analyser('vitest-six-apres-decochage', sept, tous.slice(0, 6), []);
+  analyser('vitest-planning-exact-absent', [{ ...mission('1'), nb_creneaux: 2 }], ['1'], []);
+
+  // --- Grille --------------------------------------------------------------
+  analyser('selection-vide', sept, [], []);
+  analyser('aucune-mission-ouverte', [], ['1'], ['1']);
+  analyser('id-selectionne-inconnu-ignore', sept.slice(0, 2), ['1', '9'], []);
+  analyser('conflit-non-selectionne-ignore', sept, ['1', '2'], ['3']);
+  analyser('ordre-des-missions-pas-de-la-selection', sept, ['5', '2', '7'], []);
+  analyser('plusieurs-conflits-ordre-des-missions', sept, tous, ['6', '2', '4']);
+  analyser('tout-en-conflit', sept.slice(0, 3), ['1', '2', '3'], ['1', '2', '3']);
+  analyser('conflit-et-inexact', [mission('1'), { ...mission('2'), nb_creneaux: 2 }, mission('3')], ['1', '2', '3'], ['3']);
+  analyser('inexact-non-selectionne-ignore', [mission('1'), { ...mission('2'), nb_creneaux: 2 }], ['1'], []);
+  analyser('erreur-planning-inexacte', [mission('1'), { ...mission('2'), erreur_planning: true }], ['1', '2'], []);
+  analyser('repli-ponctuel-sans-ligne-exact', [{ id: '1', debut_le: '2026-08-01T08:00:00+02:00', fin_le: '2026-08-01T16:00:00+02:00', nb_creneaux: null }], ['1'], []);
+  analyser('mission-longue-sans-ligne-inexacte', [{ id: '1', debut_le: '2026-08-01T08:00:00+02:00', fin_le: '2026-08-07T16:00:00+02:00', nb_creneaux: null }], ['1'], []);
+  analyser('ligne-sans-fin-inexacte', [{ ...mission('1'), creneaux_planifies: [{ ...mission('1').creneaux_planifies[0], fin: null }] }], ['1'], []);
+  analyser('pause-seule-repli-exact', [{ ...mission('1'), creneaux_planifies: [{ ...mission('1').creneaux_planifies[0], est_pause: true }] }], ['1'], []);
+  analyser('mission-dupliquee-conservee', [mission('1'), mission('1')], ['1'], []);
+  analyser('selection-avec-doublons', sept, ['1', '1', '2'], ['2', '2']);
+  analyser('nuits-dst-mars', [
+    { id: 'n1', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T08:00:00+02:00', nb_creneaux: 1,
+      creneaux_planifies: [creneauPlanning('c-n1', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00')] },
+    { id: 'n2', debut_le: '2026-03-29T20:00:00+02:00', fin_le: '2026-03-30T08:00:00+02:00', nb_creneaux: 2,
+      creneaux_planifies: [creneauPlanning('c-n2', '2026-03-29T20:00:00+02:00', '2026-03-30T08:00:00+02:00')] },
+  ], ['n1', 'n2'], []);
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 7 : completude-planning-mission (src/lib/completude-planning-mission.ts)
+// ---------------------------------------------------------------------------
+function vecteursCompletudePlanning() {
+  const c = new Collecteur('completude-planning-mission');
+  const analyser = (nom, mission, creneaux) => {
+    const name = `analyserCompletudePlanningMission/${nom}`;
+    c.ajoute(name, { fonction: 'analyserCompletudePlanningMission', mission, creneaux },
+      sansLevee('completude-planning-mission', name, capture(() => completude.analyserCompletudePlanningMission(mission, creneaux))));
+  };
+
+  // --- Issus des tests vitest (completude-planning-mission.test.ts) --------
+  const missionLongue = { id: 'mission-1', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: 2 };
+  const exacts = [
+    { id: 'creneau-1', debut: '2026-07-06T08:00:00+02:00', fin: '2026-07-06T16:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' },
+    { id: 'creneau-2', debut: '2026-08-31T08:00:00+02:00', fin: '2026-08-31T16:00:00+02:00', est_pause: false, type_creneau: 'PREVISIONNEL' },
+  ];
+  analyser('vitest-nombre-exact', missionLongue, exacts);
+  analyser('vitest-reponse-tronquee', missionLongue, exacts.slice(0, 1));
+  analyser('vitest-creneau-invalide', { ...missionLongue, nb_creneaux: 1 }, [{ ...exacts[0], fin: '2026-07-06T07:59:00+02:00' }]);
+  analyser('vitest-repli-legacy-ponctuel', { id: 'mission-legacy', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00', nb_creneaux: null });
+  analyser('vitest-longue-legacy-sans-planning', { id: 'mission-longue-legacy', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-08-31T16:00:00+02:00', nb_creneaux: null });
+
+  // --- Compteur non vérifiable : repli ponctuel seulement sans ligne -------
+  const ponctuelle = { id: 'p', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00' };
+  const ligne = creneauPlanning('l1', '2026-07-06T09:00:00+02:00', '2026-07-06T17:00:00+02:00');
+  const pause = creneauPlanning('pause', '2026-07-06T12:00:00+02:00', '2026-07-06T12:30:00+02:00', { est_pause: true });
+  const effectif = journeePlanning('effectif', '2026-07-06', { type_creneau: 'EFFECTIF' });
+  for (const [libelle, nb] of [['absent', undefined], ['null', null], ['0', 0], ['moins-1', -1]]) {
+    const m = { ...ponctuelle };
+    if (nb !== undefined) m.nb_creneaux = nb;
+    analyser(`nb-${libelle}-repli-sans-ligne`, m, []);
+    analyser(`nb-${libelle}-une-ligne-aucun-repli`, m, [ligne]);
+    analyser(`nb-${libelle}-pause-seule-repli`, m, [pause]);
+    analyser(`nb-${libelle}-effectif-seul-repli`, m, [effectif]);
+  }
+  analyser('nb-absent-creneaux-absents', { ...ponctuelle }, undefined);
+
+  // --- Compteur vérifiable : nombre exact de lignes valides ----------------
+  const multi = { id: 'multi', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-08T16:00:00+02:00' };
+  const trois = [journeePlanning('j3', '2026-07-08'), journeePlanning('j1', '2026-07-06'), journeePlanning('j2', '2026-07-07')];
+  for (const nb of [1, 2, 3, 4]) analyser(`trois-lignes-nb-${nb}`, { ...multi, nb_creneaux: nb }, trois);
+  analyser('trois-lignes-plus-pause-et-effectif', { ...multi, nb_creneaux: 3 }, [...trois, pause, effectif]);
+  analyser('ligne-sans-fin-comptee-brute', { ...multi, nb_creneaux: 3 }, [trois[0], trois[1], creneauPlanning('ouvert', '2026-07-07T08:00:00+02:00', null)]);
+  analyser('ligne-sans-fin-en-plus', { ...multi, nb_creneaux: 3 }, [...trois, creneauPlanning('ouvert', '2026-07-09T08:00:00+02:00', null)]);
+  analyser('ligne-fin-vide', { ...multi, nb_creneaux: 3 }, [trois[0], trois[1], creneauPlanning('vide', '2026-07-07T08:00:00+02:00', '')]);
+  const une = (nom, debut, fin) => analyser(nom, { ...ponctuelle, nb_creneaux: 1 }, [creneauPlanning('u', debut, fin)]);
+  une('ligne-duree-nulle', '2026-07-06T08:00:00+02:00', '2026-07-06T08:00:00+02:00');
+  une('ligne-fin-avant-debut', '2026-07-06T16:00:00+02:00', '2026-07-06T08:00:00+02:00');
+  une('ligne-debut-illisible', 'pas une date', '2026-07-06T16:00:00+02:00');
+  une('ligne-fin-illisible', '2026-07-06T08:00:00+02:00', 'pas une date');
+  une('ligne-plus-de-24h-valide', '2026-07-06T08:00:00+02:00', '2026-07-07T10:00:00+02:00');
+  une('dst-mars-nuit-11h', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00');
+  une('dst-octobre-nuit-13h', '2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00');
+  une('millisecondes', '2026-07-06T08:00:00.250+02:00', '2026-07-06T16:00:00.750+02:00');
+  une('duree-tiers-heure', '2026-07-06T08:00:00+02:00', '2026-07-06T15:20:00+02:00');
+  une('legacy-sans-offset', '2026-07-06T08:00:00', '2026-07-06T15:30');
+  une('postgrest-plus-00-00', '2026-07-06T06:00:00+00:00', '2026-07-06T14:00:00+00:00');
+  analyser('meme-debut-ordre-stable', { ...multi, nb_creneaux: 2 }, [
+    creneauPlanning('b', '2026-07-06T08:00:00+02:00', '2026-07-06T16:00:00+02:00'), creneauPlanning('a', '2026-07-06T08:00:00+02:00', '2026-07-06T12:00:00+02:00'),
+  ]);
+  analyser('trois-nuits-dst-mars', { id: 'm', debut_le: '2026-03-27T20:00:00+01:00', fin_le: '2026-03-30T08:00:00+02:00', nb_creneaux: 3 }, [
+    creneauPlanning('n2', '2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00'),
+    creneauPlanning('n1', '2026-03-27T20:00:00+01:00', '2026-03-28T08:00:00+01:00'),
+    creneauPlanning('n3', '2026-03-29T20:00:00+02:00', '2026-03-30T08:00:00+02:00'),
+  ]);
+
+  // --- Repli ponctuel : enveloppe de 24 h au plus ---------------------------
+  const repli = (nom, mission) => analyser(nom, { nb_creneaux: null, ...mission }, []);
+  repli('repli-24h-exactes', { id: 'p', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-07T08:00:00+02:00' });
+  repli('repli-24h-plus-1s', { id: 'p', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-07T08:00:01+02:00' });
+  repli('repli-duree-nulle', { id: 'p', debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T08:00:00+02:00' });
+  repli('repli-fin-avant-debut', { id: 'p', debut_le: '2026-07-06T16:00:00+02:00', fin_le: '2026-07-06T08:00:00+02:00' });
+  repli('repli-enveloppe-illisible', { id: 'p', debut_le: 'pas une date', fin_le: '2026-07-06T16:00:00+02:00' });
+  repli('repli-sans-id', { debut_le: '2026-07-06T08:00:00+02:00', fin_le: '2026-07-06T16:00:00+02:00' });
+  repli('repli-legacy-sans-offset', { id: 'p', debut_le: '2026-07-06T08:00:00', fin_le: '2026-07-06T16:00:00' });
+  repli('repli-dates-seules', { id: 'p', debut_le: '2026-07-06', fin_le: '2026-07-07' });
+  repli('repli-dst-mars-23h', { id: 'p', debut_le: '2026-03-28T20:00:00+01:00', fin_le: '2026-03-29T20:00:00+02:00' });
+  repli('repli-dst-octobre-25h', { id: 'p', debut_le: '2026-10-24T20:00:00+02:00', fin_le: '2026-10-25T20:00:00+01:00' });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -793,6 +1241,9 @@ const fichiers = {
   'format-mission.json': vecteursFormatMission(),
   'heures-hebdomadaires-mission.json': vecteursHeuresHebdomadaires(),
   'disponibilite-pointage.json': vecteursDisponibilitePointage(),
+  'planning-candidat.json': vecteursPlanningCandidat(),
+  'selection-serie-candidat.json': vecteursSelectionSerie(),
+  'completude-planning-mission.json': vecteursCompletudePlanning(),
 };
 
 let total = 0;
