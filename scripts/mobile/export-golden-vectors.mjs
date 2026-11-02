@@ -5,6 +5,9 @@
  * Lit directement les modules TypeScript de `src/lib` et du planning candidat
  * (`src/components/planning/planning-candidat.ts`, `selection-serie-candidat.ts`)
  * par type stripping natif de Node, aucune dépendance supplémentaire, et écrit,
+ * (lot 2, T2 : `synthese-presence-mission.ts`, `presencesSoignantUi.ts`,
+ * `documentUpload.ts` rejoué avec `File` de Node, `documents.ts`, `contratMissionUi.ts`,
+ * `signatureSmsStagingAdmission.ts` rejoué avec un client RPC simulé)
  * par règle, un JSON de vecteurs `{ name, input, expected }` dans
  * `ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/Resources/golden/`.
  * Un hook `module.register()` résout l'alias `@/lib/<module>` et les imports
@@ -114,6 +117,17 @@ const pointage = await lib('disponibilite-pointage.ts');
 const planningCandidat = await planningComposant('planning-candidat.ts');
 const selectionSerie = await planningComposant('selection-serie-candidat.ts');
 const completude = await lib('completude-planning-mission.ts');
+// Lot 2, T2 : pointage (synthèse, historique), justificatifs (classement, dispense de
+// diplôme), contrats (affichage, admission OTP de recette STAGING). Les deux règles que la PR
+// web W1 extrait des composants (exigences documentaires `documents-requis.ts`, listes de
+// présences `presences-soignant-listes.ts`) sont vectorisées par la tranche T2b, après W1.
+const synthesePresence = await lib('synthese-presence-mission.ts');
+const presencesUi = await lib('presencesSoignantUi.ts');
+const documentUpload = await lib('documentUpload.ts');
+const documentsRegles = await lib('documents.ts');
+const constantes = await lib('constantes.ts');
+const contratUi = await lib('contratMissionUi.ts');
+const admissionSms = await lib('signatureSmsStagingAdmission.ts');
 
 // ---------------------------------------------------------------------------
 // Outils
@@ -1234,6 +1248,594 @@ function vecteursCompletudePlanning() {
 }
 
 // ---------------------------------------------------------------------------
+// Règles 8 à 13 : lot 2, T2 (pointage, justificatifs, contrats)
+// ---------------------------------------------------------------------------
+// Restent à vectoriser par la tranche T2b, après le merge de la PR web W1 (décision
+// « Lot 2 T2 » de LOTS_2_5_DECISIONS) : `filtrerDocumentsRequis` et
+// `documentValidePourExigence` (`src/lib/documents-requis.ts`), `construireListesPresences`
+// (`src/lib/presences-soignant-listes.ts`). Aujourd'hui enfouies dans `DocumentsSoignant.tsx`
+// et `PresencesSoignant.tsx`, elles ne sont pas exportables sans cette extraction.
+
+// Un créneau porte toujours ses quatre clés (`fin: null` explicite) : l'attendu le recopie
+// tel quel et le port Swift le ré-encode (`MissionSlot.golden`) avec les mêmes clés.
+const creneauLot2 = (debut, fin, type_creneau = 'PREVISIONNEL', extra = {}) => ({ debut, fin, est_pause: false, type_creneau, ...extra });
+
+/** Refuse qu'un résultat web porte une clé que la projection golden ne rejoue pas. */
+function clesExactes(regle, objet, cles) {
+  const obtenues = Object.keys(objet).sort();
+  const attendues = [...cles].sort();
+  if (JSON.stringify(obtenues) !== JSON.stringify(attendues)) {
+    throw new Error(`${regle}: clés ${JSON.stringify(obtenues)} au lieu de ${JSON.stringify(attendues)} : mettre à jour la projection et le port Swift.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Règle 8 : synthese-presence-mission (src/lib/synthese-presence-mission.ts)
+// ---------------------------------------------------------------------------
+function vecteursSynthesePresence() {
+  const c = new Collecteur('synthese-presence-mission');
+  const resume = (s) => {
+    clesExactes('synthese-presence-mission', s, ['previsionnels', 'effectifsFermes', 'effectifsOuverts', 'minutesPlanifiees',
+      'minutesTravaillees', 'dernierPrevisionnelFin', 'planningTermine', 'validationPossible']);
+    return { ...s, dernierPrevisionnelFin: iso(s.dernierPrevisionnelFin) };
+  };
+  const construire = (nom, creneaux, maintenant) => c.ajoute(`construireSynthesePresenceMission/${nom}`,
+    { fonction: 'construireSynthesePresenceMission', creneaux, maintenant },
+    resume(synthesePresence.construireSynthesePresenceMission(creneaux, new Date(maintenant))));
+  const duree = (nom, minutes) => c.ajoute(`formatDureeMinutes/${nom}`, { fonction: 'formatDureeMinutes', minutes },
+    synthesePresence.formatDureeMinutes(minutes));
+
+  // --- Issus des tests vitest (synthese-presence-mission.test.ts) ----------
+  const prevJuillet = creneauLot2('2026-07-06T08:00:00+02:00', '2026-07-06T16:00:00+02:00');
+  const prevAout = creneauLot2('2026-08-31T08:00:00+02:00', '2026-08-31T16:00:00+02:00');
+  construire('vitest-effectifs-fermes-seulement', [
+    prevJuillet, prevAout,
+    creneauLot2('2026-07-06T08:15:00+02:00', '2026-07-06T14:15:00+02:00', 'EFFECTIF'),
+    creneauLot2('2026-07-31T08:00:00+02:00', null, 'EFFECTIF'),
+    creneauLot2('2026-07-06T12:00:00+02:00', '2026-07-06T12:30:00+02:00', 'EFFECTIF', { est_pause: true }),
+  ], '2026-09-01T08:00:00+02:00');
+  const vitestValidation = [prevJuillet, prevAout, creneauLot2('2026-07-06T08:00:00+02:00', '2026-07-06T16:00:00+02:00', 'EFFECTIF')];
+  construire('vitest-avant-dernier-prevu', vitestValidation, '2026-07-31T12:00:00+02:00');
+  construire('vitest-apres-dernier-prevu', vitestValidation, '2026-08-31T16:01:00+02:00');
+
+  // --- Fin du planning : bornes exactes ------------------------------------
+  const prev = creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T14:00:00.000Z', 'PREVISIONNEL', { id: 'prev' });
+  const effFerme = creneauLot2('2026-07-31T06:05:00.000Z', '2026-07-31T13:55:00.000Z', 'EFFECTIF', { id: 'eff' });
+  for (const [nom, maintenant] of [
+    ['avant-fin', '2026-07-31T13:59:59.999Z'], ['fin-exacte', '2026-07-31T14:00:00.000Z'], ['apres-fin', '2026-07-31T14:00:00.001Z'],
+  ]) {
+    construire(`previsionnel-et-effectif-${nom}`, [prev, effFerme], maintenant);
+    construire(`previsionnel-seul-${nom}`, [prev], maintenant);
+    construire(`effectif-ouvert-${nom}`, [prev, effFerme, creneauLot2('2026-07-31T14:30:00.000Z', null, 'EFFECTIF', { id: 'ouvert' })], maintenant);
+  }
+  construire('vide', [], '2026-07-31T12:00:00.000Z');
+  construire('effectif-sans-previsionnel', [effFerme], '2026-08-01T12:00:00.000Z');
+
+  // --- Filtres : pauses, types, fins absentes ou vides ---------------------
+  const apres = '2026-08-01T12:00:00.000Z';
+  construire('pause-previsionnelle-exclue', [prev, creneauLot2('2026-07-31T10:00:00.000Z', '2026-07-31T10:30:00.000Z', 'PREVISIONNEL', { est_pause: true }), effFerme], apres);
+  construire('pause-effective-ouverte-ignoree', [prev, effFerme, creneauLot2('2026-07-31T10:00:00.000Z', null, 'EFFECTIF', { est_pause: true })], apres);
+  construire('previsionnel-sans-fin-ignore', [prev, creneauLot2('2026-08-01T06:00:00.000Z', null), effFerme], apres);
+  construire('previsionnel-fin-vide-ignore', [prev, creneauLot2('2026-08-01T06:00:00.000Z', ''), effFerme], apres);
+  construire('effectif-fin-vide-ouvert', [prev, creneauLot2('2026-07-31T06:05:00.000Z', '', 'EFFECTIF')], apres);
+  construire('type-inconnu-ignore', [prev, effFerme, creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T18:00:00.000Z', 'AUTRE')], apres);
+  construire('identifiants-conserves', [
+    creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T14:00:00.000Z', 'PREVISIONNEL', { id: 'p1', mission_id: 'm1' }),
+    creneauLot2('2026-07-31T06:02:00.000Z', '2026-07-31T14:01:00.000Z', 'EFFECTIF', { id: 'e1', mission_id: 'm1' }),
+  ], apres);
+
+  // --- Tri, dernier prévu par début, durées ---------------------------------
+  construire('previsionnels-desordre', [
+    creneauLot2('2026-08-02T06:00:00.000Z', '2026-08-02T14:00:00.000Z', 'PREVISIONNEL', { id: 'j3' }),
+    creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T14:00:00.000Z', 'PREVISIONNEL', { id: 'j1' }),
+    creneauLot2('2026-08-01T06:00:00.000Z', '2026-08-01T14:00:00.000Z', 'PREVISIONNEL', { id: 'j2' }),
+  ], '2026-08-02T14:00:00.000Z');
+  construire('dernier-prevu-par-debut-pas-par-fin', [
+    creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T20:00:00.000Z', 'PREVISIONNEL', { id: 'long' }),
+    creneauLot2('2026-07-31T08:00:00.000Z', '2026-07-31T10:00:00.000Z', 'PREVISIONNEL', { id: 'court' }),
+    creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T09:00:00.000Z', 'EFFECTIF', { id: 'e' }),
+  ], '2026-07-31T12:00:00.000Z');
+  construire('effectifs-desordre', [
+    prev,
+    creneauLot2('2026-07-31T11:00:00.000Z', '2026-07-31T14:00:00.000Z', 'EFFECTIF', { id: 'apres-midi' }),
+    creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T10:00:00.000Z', 'EFFECTIF', { id: 'matin' }),
+    creneauLot2('2026-07-31T15:00:00.000Z', null, 'EFFECTIF', { id: 'soir-ouvert' }),
+    creneauLot2('2026-07-31T05:00:00.000Z', null, 'EFFECTIF', { id: 'aube-ouvert' }),
+  ], apres);
+  construire('effectif-fin-avant-debut-zero-minute', [prev, creneauLot2('2026-07-31T14:00:00.000Z', '2026-07-31T06:00:00.000Z', 'EFFECTIF')], apres);
+  construire('effectif-duree-nulle', [prev, creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T06:00:00.000Z', 'EFFECTIF')], apres);
+  construire('duree-en-secondes', [prev, creneauLot2('2026-07-31T06:00:00.000Z', '2026-07-31T06:00:30.000Z', 'EFFECTIF'),
+    creneauLot2('2026-07-31T07:00:00.000Z', '2026-07-31T07:00:00.250Z', 'EFFECTIF')], apres);
+  construire('effectif-debut-illisible-zero-minute', [prev, creneauLot2('pas une date', '2026-07-31T14:00:00.000Z', 'EFFECTIF')], apres);
+  construire('previsionnel-fin-illisible', [creneauLot2('2026-07-31T06:00:00.000Z', 'pas une date', 'PREVISIONNEL', { id: 'illisible' })], apres);
+  construire('mission-longue-jours-de-repos', [
+    prevJuillet, prevAout,
+    creneauLot2('2026-07-06T08:00:00+02:00', '2026-07-06T16:10:00+02:00', 'EFFECTIF'),
+    creneauLot2('2026-08-31T07:55:00+02:00', '2026-08-31T15:40:00+02:00', 'EFFECTIF'),
+  ], '2026-09-01T00:00:00+02:00');
+
+  // --- Formats de date et changements d'heure --------------------------------
+  construire('dst-mars-nuit-11h', [
+    creneauLot2('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00'),
+    creneauLot2('2026-03-28T20:00:00+01:00', '2026-03-29T08:00:00+02:00', 'EFFECTIF'),
+  ], '2026-03-29T08:00:00+02:00');
+  construire('dst-octobre-nuit-13h', [
+    creneauLot2('2026-10-24T20:00:00+02:00', '2026-10-25T08:00:00+01:00'),
+    creneauLot2('2026-10-24T20:10:00+02:00', '2026-10-25T07:50:00+01:00', 'EFFECTIF'),
+  ], '2026-10-25T08:00:00+01:00');
+  construire('legacy-sans-offset', [
+    creneauLot2('2026-07-31T08:00:00', '2026-07-31T16:00:00'),
+    creneauLot2('2026-07-31T08:05:00', '2026-07-31T15:45', 'EFFECTIF'),
+  ], '2026-07-31T16:00:00');
+  construire('postgrest-microsecondes', [
+    creneauLot2('2026-07-31T06:00:00+00:00', '2026-07-31T14:00:00+00:00'),
+    creneauLot2('2026-07-31T06:00:00.123456+00:00', '2026-07-31T13:59:59.654321+00:00', 'EFFECTIF'),
+  ], '2026-07-31T14:00:00.000Z');
+
+  // --- formatDureeMinutes ----------------------------------------------------
+  for (const minutes of [0, 1, 9, 10, 59, 60, 61, 90, 450, 480, 600, 660, 780, 1439, 1440, 6000, 100000]) {
+    duree(`entier-${minutes}`, minutes);
+  }
+  for (const [nom, minutes] of [
+    ['0-4', 0.4], ['0-5', 0.5], ['0-6', 0.6], ['59-4', 59.4], ['59-5', 59.5], ['119-6-arrondi-60', 119.6],
+    ['heures-7-33', 7.33 * 60], ['heures-0-1', 0.1 * 60], ['secondes-30', 0.5 + 60],
+    ['un-tiers', 20 / 3], ['negatif-30', -30],
+  ]) {
+    duree(`decimal-${nom}`, minutes);
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 9 : presencesSoignantUi (src/lib/presencesSoignantUi.ts)
+// ---------------------------------------------------------------------------
+function vecteursPresencesSoignantUi() {
+  const c = new Collecteur('presences-soignant-ui');
+  const CLES_LIGNE = ['id', 'mission_id', 'soignant_id', 'pointage_arrivee_le', 'pointage_depart_le', 'valide_par_etablissement',
+    'valide_le', 'methode_pointage_arrivee', 'methode_pointage_depart', 'origine_effectifs_sans_presence', 'missions'];
+  // `missions` recopie la mission lue (`...mission`) : l'attendu n'en garde que l'identifiant,
+  // l'établissement résolu et les créneaux, seuls champs que le modèle natif expose.
+  const projeter = (ligne, missions) => {
+    clesExactes('presences-soignant-ui', ligne, CLES_LIGNE);
+    const source = missions.find((mission) => mission.id === ligne.mission_id);
+    clesExactes('presences-soignant-ui (missions)', ligne.missions, [...Object.keys(source), 'etablissements', 'creneaux']);
+    return {
+      ...ligne,
+      missions: { id: ligne.missions.id, etablissements: ligne.missions.etablissements, creneaux: ligne.missions.creneaux },
+    };
+  };
+  const historique = (nom, args) => c.ajoute(`construireHistoriqueEffectifsSansPresence/${nom}`,
+    { fonction: 'construireHistoriqueEffectifsSansPresence', ...args },
+    presencesUi.construireHistoriqueEffectifsSansPresence(args).map((ligne) => projeter(ligne, args.missions)));
+  const gps = (nom, valeur) => c.ajoute(`mesureGpsDisponible/${nom}`, { fonction: 'mesureGpsDisponible', valeur },
+    presencesUi.mesureGpsDisponible(valeur));
+
+  // --- Issus des tests vitest (presencesSoignantUi.test.ts) ----------------
+  historique('vitest-effectifs-seuls', {
+    missions: [{ id: 'mission-longue', intitule: 'Mission longue', etablissement_id: 'etab-1', statut: 'TERMINEE' }],
+    presences: [],
+    creneauxParMission: {
+      'mission-longue': [
+        creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'PREVISIONNEL', { id: 'prevu' }),
+        creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'EFFECTIF', { id: 'effectif' }),
+      ],
+    },
+    etablissements: { 'etab-1': { nom: 'Clinique Test' } },
+    soignantId: 'soignant-1',
+  });
+  historique('vitest-ni-presence-ni-sans-effectif', {
+    missions: [{ id: 'avec-presence' }, { id: 'sans-effectif' }],
+    presences: [{ mission_id: 'avec-presence' }],
+    creneauxParMission: {
+      'avec-presence': [creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'EFFECTIF')],
+      'sans-effectif': [creneauLot2('2026-07-07T06:00:00Z', '2026-07-07T14:00:00Z')],
+    },
+    etablissements: {},
+    soignantId: 'soignant-1',
+  });
+  for (const [nom, valeur] of [['zero', 0], ['dixieme', 0.2], ['700', 700]]) gps(`vitest-mesure-${nom}`, valeur);
+  for (const [nom, valeur] of [['null', null], ['absente', undefined], ['chaine-vide', ''], ['chaine-zero', '0'], ['faux', false], ['negative', -1]]) {
+    gps(`vitest-invalide-${nom}`, valeur);
+  }
+
+  // --- Grille ----------------------------------------------------------------
+  const base = { presences: [], etablissements: { 'etab-1': { nom: 'Clinique Test', ville: 'Lyon' } }, soignantId: 'soignant-1' };
+  const mission = { id: 'm', etablissement_id: 'etab-1' };
+  const avec = (nom, creneaux, extra = {}) => historique(nom, { ...base, missions: [mission], creneauxParMission: { m: creneaux }, ...extra });
+  avec('arrivee-premier-depart-dernier-par-debut', [
+    creneauLot2('2026-07-07T06:00:00Z', '2026-07-07T10:00:00Z', 'EFFECTIF', { id: 'e2' }),
+    creneauLot2('2026-07-06T06:00:00Z', '2026-07-08T20:00:00Z', 'EFFECTIF', { id: 'e1-long' }),
+    creneauLot2('2026-07-07T12:00:00Z', '2026-07-07T13:00:00Z', 'EFFECTIF', { id: 'e3' }),
+  ]);
+  avec('effectif-ouvert-ignore', [
+    creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'EFFECTIF', { id: 'ferme' }),
+    creneauLot2('2026-07-07T06:00:00Z', null, 'EFFECTIF', { id: 'ouvert' }),
+  ]);
+  avec('seul-effectif-ouvert-aucune-ligne', [creneauLot2('2026-07-07T06:00:00Z', null, 'EFFECTIF')]);
+  avec('effectif-fin-vide-ignore', [creneauLot2('2026-07-07T06:00:00Z', '', 'EFFECTIF')]);
+  avec('pause-effective-ignoree', [
+    creneauLot2('2026-07-06T12:00:00Z', '2026-07-06T12:30:00Z', 'EFFECTIF', { est_pause: true }),
+    creneauLot2('2026-07-06T13:00:00Z', '2026-07-06T15:00:00Z', 'EFFECTIF'),
+  ]);
+  avec('pause-effective-seule-aucune-ligne', [creneauLot2('2026-07-06T12:00:00Z', '2026-07-06T12:30:00Z', 'EFFECTIF', { est_pause: true })]);
+  avec('previsionnel-seul-aucune-ligne', [creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z')]);
+  avec('legacy-sans-offset', [creneauLot2('2026-07-06T08:00:00', '2026-07-06T16:00:00', 'EFFECTIF')]);
+  avec('creneaux-identifiants-conserves', [creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'EFFECTIF', { id: 'c1', mission_id: 'm' })]);
+  const effectifJour = [creneauLot2('2026-07-06T06:00:00Z', '2026-07-06T14:00:00Z', 'EFFECTIF')];
+  avec('presence-mission-id-null-ignoree', effectifJour, { presences: [{ mission_id: null }] });
+  avec('presence-mission-id-vide-ignoree', effectifJour, { presences: [{ mission_id: '' }] });
+  avec('presence-sans-mission-id-ignoree', effectifJour, { presences: [{}] });
+  avec('presence-autre-mission', effectifJour, { presences: [{ mission_id: 'autre' }] });
+  avec('presence-meme-mission-exclut', effectifJour, { presences: [{ mission_id: 'autre' }, { mission_id: 'm' }] });
+  avec('etablissement-inconnu', effectifJour, { etablissements: {} });
+  avec('soignant-propage', effectifJour, { soignantId: 'soignant-42' });
+  const sansEtab = (nom, m) => historique(nom, { ...base, missions: [m], creneauxParMission: { m: effectifJour } });
+  sansEtab('etablissement-id-null', { id: 'm', etablissement_id: null });
+  sansEtab('etablissement-id-vide', { id: 'm', etablissement_id: '' });
+  sansEtab('etablissement-id-absent', { id: 'm' });
+  historique('mission-sans-creneaux', { ...base, missions: [mission], creneauxParMission: {} });
+  historique('plusieurs-missions-ordre-conserve', {
+    ...base,
+    missions: [{ id: 'b', etablissement_id: 'etab-1' }, { id: 'a', etablissement_id: 'etab-2' }, { id: 'c' }],
+    creneauxParMission: {
+      a: [creneauLot2('2026-07-01T06:00:00Z', '2026-07-01T14:00:00Z', 'EFFECTIF')],
+      b: [creneauLot2('2026-07-02T06:00:00Z', '2026-07-02T14:00:00Z', 'EFFECTIF')],
+      c: [creneauLot2('2026-07-03T06:00:00Z', '2026-07-03T14:00:00Z', 'EFFECTIF')],
+    },
+    etablissements: { 'etab-1': { nom: 'Clinique Test' }, 'etab-2': { nom: 'Hôpital Nord' } },
+  });
+  historique('mission-dupliquee-deux-lignes', { ...base, missions: [mission, mission], creneauxParMission: { m: effectifJour } });
+  historique('aucune-mission', { ...base, missions: [], creneauxParMission: { m: effectifJour } });
+
+  for (const [nom, valeur] of [['grande', 12345.678], ['negative-zero-virgule', -0.5], ['chaine-nombre', '12'], ['vrai', true], ['objet', {}], ['tableau', []]]) {
+    gps(`grille-${nom}`, valeur);
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 10 : documentUpload (src/lib/documentUpload.ts)
+// ---------------------------------------------------------------------------
+// `verifierFichierDocument` est rejoué avec le `File` de Node : l'entrée décrit le fichier par
+// son nom, son type déclaré, sa taille et ses premiers octets (le reste vaut zéro). Une
+// `entete` nulle simule une lecture impossible (`slice().arrayBuffer()` rejeté). Le `File`
+// de Node met le type en minuscules et le vide s'il n'est pas ASCII : l'export refuse un type
+// que le constructeur aurait modifié autrement, pour que l'entrée soit celle que la règle lit.
+const octetsTexte = (texte) => [...Buffer.from(texte, 'latin1')];
+const SIGNATURES = {
+  pdf: octetsTexte('%PDF-1.7\n'),
+  jpeg: [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01],
+  png: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d],
+  webp: [...octetsTexte('RIFF'), 0x24, 0x00, 0x00, 0x00, ...octetsTexte('WEBPVP8 ')],
+  heic: [0x00, 0x00, 0x00, 0x18, ...octetsTexte('ftypheic')],
+  gif: octetsTexte('GIF89a'),
+  wave: [...octetsTexte('RIFF'), 0x24, 0x00, 0x00, 0x00, ...octetsTexte('WAVE')],
+  pdfSansTiret: octetsTexte('%PDF1.7'),
+  pngTronque: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a],
+  html: octetsTexte('<html>'),
+};
+const MO = 1024 * 1024;
+
+async function vecteursDocumentUpload() {
+  const c = new Collecteur('document-upload');
+  const classer = (nom, name, type) => c.ajoute(`classerFormatDocument/${nom}`, { fonction: 'classerFormatDocument', name, type },
+    documentUpload.classerFormatDocument({ name, type }));
+  const sanitiser = (nom, name, mime) => c.ajoute(`sanitiserNomFichier/${nom}`, { fonction: 'sanitiserNomFichier', name, mime },
+    documentUpload.sanitiserNomFichier(name, mime));
+  const verifier = async (nom, { name, type, entete, taille = entete === null ? 16 : entete.length, options }) => {
+    if (entete !== null && entete.length > taille) throw new Error(`document-upload: « ${nom} » : en-tête plus long que le fichier`);
+    const contenu = new Uint8Array(taille);
+    if (entete !== null) contenu.set(entete);
+    const FichierIllisible = class extends File {
+      slice() { return { arrayBuffer: () => Promise.reject(new Error('lecture simulée impossible')) }; }
+    };
+    const fichier = entete === null ? new FichierIllisible([contenu], name, { type }) : new File([contenu], name, { type });
+    if (fichier.type !== type.toLowerCase()) throw new Error(`document-upload: « ${nom} » : type « ${type} » modifié par File`);
+    const resultat = await documentUpload.verifierFichierDocument(fichier, options);
+    c.ajoute(`verifierFichierDocument/${nom}`, { fonction: 'verifierFichierDocument', name, type, taille, entete, options }, resultat);
+  };
+
+  // --- Issus des tests vitest (documentUpload.test.ts) ----------------------
+  for (const [name, type] of [['preuve.pdf', 'application/pdf'], ['photo.jpg', 'image/jpeg'], ['photo.png', 'image/png'],
+    ['photo.webp', 'image/webp'], ['scan.PDF', 'application/octet-stream']]) {
+    classer(`vitest-accepte-${name}`, name, type);
+  }
+  for (const [name, type] of [['photo.heic', 'image/heic'], ['photo.heif', 'image/heif'], ['photo.HEIC', '']]) {
+    classer(`vitest-heic-${name}`, name, type);
+  }
+  classer('vitest-extension-image-contredite', 'malware.jpg', 'text/html');
+  classer('vitest-deux-formats-contradictoires', 'piece.jpg', 'application/pdf');
+  await verifier('vitest-signature-binaire', { name: 'piece.pdf', type: 'application/pdf', entete: [0xff, 0xd8, 0xff, 0x00] });
+  await verifier('vitest-pdf-sans-mime', { name: 'SCAN.PDF', type: '', entete: octetsTexte('%PDF-1.7\n') });
+  await verifier('vitest-sous-ensemble-pdf', { name: 'photo.jpg', type: 'image/jpeg', entete: [0xff, 0xd8, 0xff, 0x00], options: { allowedMimes: ['application/pdf'] } });
+  await verifier('vitest-vide', { name: 'vide.pdf', type: 'application/pdf', entete: [] });
+  await verifier('vitest-trop-lourd', { name: 'lourd.pdf', type: 'application/pdf', entete: octetsTexte('%PDF-1.7'), options: { maxBytes: 4 } });
+  sanitiser('vitest-chemin-et-points', '../../Pièce.. finale.jpg', 'application/pdf');
+
+  // --- Classement : grille nom × type déclaré ------------------------------
+  const noms = ['preuve.pdf', 'scan.PDF', 'photo.jpg', 'photo.JPEG', 'photo.jpeg', 'photo.png', 'photo.webp', 'photo.heic', 'photo.HEIF',
+    'photo.gif', 'sans-extension', 'archive.tar.gz', 'dossier/sous/photo.jpg', 'C:\\Users\\x\\scan.pdf', '.pdf', 'photo.',
+    'photo.jpg.exe', 'photo.pdf.jpg', 'dossier.pdf/photo', 'photo.jpé', ''];
+  const types = ['', 'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
+    'application/octet-stream', 'text/html', ' IMAGE/JPEG ', 'image/jpg', 'Image/HEIC', ' '];
+  for (const name of noms) {
+    for (const type of types) classer(`grille/nom=${name}|type=${type}`, name, type);
+  }
+
+  // --- Vérification : signatures, tailles, sous-ensembles, lecture ---------
+  const formats = [
+    ['pdf', 'preuve.pdf', 'application/pdf'], ['jpeg', 'photo.jpg', 'image/jpeg'], ['png', 'photo.png', 'image/png'], ['webp', 'photo.webp', 'image/webp'],
+  ];
+  for (const [format, name, type] of formats) {
+    await verifier(`${format}-mime-exact`, { name, type, entete: SIGNATURES[format] });
+    await verifier(`${format}-mime-absent`, { name, type: '', entete: SIGNATURES[format] });
+    await verifier(`${format}-octet-stream`, { name, type: 'application/octet-stream', entete: SIGNATURES[format] });
+    await verifier(`${format}-mime-majuscules-espaces`, { name, type: ` ${type.toUpperCase()} `, entete: SIGNATURES[format] });
+    await verifier(`${format}-sans-extension`, { name: 'fichier', type, entete: SIGNATURES[format] });
+    await verifier(`${format}-signature-gif`, { name, type, entete: SIGNATURES.gif });
+    await verifier(`${format}-sous-ensemble-images`, { name, type, entete: SIGNATURES[format], options: { allowedMimes: ['image/jpeg', 'image/png', 'image/webp'] } });
+    await verifier(`${format}-sous-ensemble-pdf`, { name, type, entete: SIGNATURES[format], options: { allowedMimes: ['application/pdf'] } });
+    await verifier(`${format}-lecture-impossible`, { name, type, entete: null });
+  }
+  await verifier('jpeg-extension-jpeg', { name: 'photo.JPEG', type: '', entete: SIGNATURES.jpeg });
+  await verifier('png-annonce-jpeg', { name: 'photo.jpg', type: 'image/jpeg', entete: SIGNATURES.png });
+  await verifier('jpeg-annonce-png', { name: 'photo.png', type: 'image/png', entete: SIGNATURES.jpeg });
+  await verifier('pdf-annonce-jpeg-sans-mime', { name: 'photo.jpg', type: '', entete: SIGNATURES.pdf });
+  await verifier('webp-riff-wave', { name: 'photo.webp', type: 'image/webp', entete: SIGNATURES.wave });
+  await verifier('webp-riff-tronque-11-octets', { name: 'photo.webp', type: 'image/webp', entete: SIGNATURES.webp.slice(0, 11) });
+  await verifier('pdf-sans-tiret', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.pdfSansTiret });
+  await verifier('png-tronque', { name: 'photo.png', type: 'image/png', entete: SIGNATURES.pngTronque });
+  await verifier('pdf-tronque-3-octets', { name: 'preuve.pdf', type: 'application/pdf', entete: octetsTexte('%PD') });
+  await verifier('html-annonce-pdf', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.html });
+  await verifier('heic-contenu', { name: 'photo.heic', type: 'image/heic', entete: SIGNATURES.heic });
+  await verifier('heic-sans-mime', { name: 'IMG_0001.HEIC', type: '', entete: SIGNATURES.heic });
+  await verifier('heic-vide', { name: 'photo.heic', type: 'image/heic', entete: [] });
+  await verifier('mime-jpg-non-standard', { name: 'photo.jpg', type: 'image/jpg', entete: SIGNATURES.jpeg });
+  await verifier('mime-texte', { name: 'note.txt', type: 'text/plain', entete: octetsTexte('bonjour') });
+  await verifier('sans-extension-sans-mime', { name: 'scan', type: '', entete: SIGNATURES.pdf });
+  await verifier('mime-pdf-extension-jpg', { name: 'piece.jpg', type: 'application/pdf', entete: SIGNATURES.pdf });
+  await verifier('signature-au-dela-de-12-octets-ignoree', { name: 'preuve.pdf', type: 'application/pdf', entete: [...octetsTexte('xxxxxxxxxxxx'), ...SIGNATURES.pdf] });
+  await verifier('defaut-10-mo-exact', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.pdf, taille: 10 * MO });
+  await verifier('defaut-10-mo-plus-1', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.pdf, taille: 10 * MO + 1 });
+  await verifier('max-5-mo-exact', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.pdf, taille: 5 * MO, options: { maxBytes: 5 * MO } });
+  await verifier('max-5-mo-plus-1', { name: 'preuve.pdf', type: 'application/pdf', entete: SIGNATURES.pdf, taille: 5 * MO + 1, options: { maxBytes: 5 * MO } });
+  await verifier('max-5-octets-message-0-mo', { name: 'photo.png', type: 'image/png', entete: SIGNATURES.png, options: { maxBytes: 5 } });
+  await verifier('trop-lourd-avant-format', { name: 'photo.heic', type: 'image/heic', entete: SIGNATURES.heic, taille: 10 * MO + 1 });
+  await verifier('vide-avant-format', { name: 'note.txt', type: 'text/plain', entete: [] });
+  await verifier('un-octet-pdf', { name: 'preuve.pdf', type: 'application/pdf', entete: [0x25] });
+
+  // --- Nom de fichier assaini : grille nom × MIME ---------------------------
+  const nomsAssainis = [
+    'photo.jpg', 'PHOTO.JPG', 'Carte d’identité recto.pdf', 'Élodie Durand — diplôme.PNG', 'scan', '', '.pdf', '...', '---.jpg',
+    'dossier/sous-dossier/fichier.webp', 'C:\\Users\\Élise\\Documents\\RIB.pdf', 'nom_avec_underscore-et-tiret.jpeg',
+    'emoji 😀 test.png', 'x.tar.gz', `${'a'.repeat(100)}.pdf`, `${'é'.repeat(90)}.jpg`, 'Œuvre ß æ.pdf', 'e\u0301cole.pdf',
+    'ﬁchier.pdf', '한국어.pdf', 'dossier/', 'photo.jpé', '-début-.pdf', ' espace .pdf', 'Ça été ÇA.jpg', 'ñandú.png',
+  ];
+  const mimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  nomsAssainis.forEach((name, index) => {
+    for (const mime of mimes) sanitiser(`grille-${String(index).padStart(2, '0')}/${mime}`, name, mime);
+  });
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 11 : documents (src/lib/documents.ts) — dispense de diplôme
+// ---------------------------------------------------------------------------
+function vecteursDocuments() {
+  const c = new Collecteur('documents');
+  const sansIndefini = (objet) => Object.fromEntries(Object.entries(objet).filter(([, v]) => v !== undefined));
+  const libelle = (v) => (v === undefined ? 'absent' : JSON.stringify(v));
+  const dispense = (profession, rppsVerifie) => c.ajoute(`rppsDispenseDiplome/${libelle(profession)}/${libelle(rppsVerifie)}`,
+    sansIndefini({ fonction: 'rppsDispenseDiplome', profession, rppsVerifie }),
+    documentsRegles.rppsDispenseDiplome(profession, rppsVerifie));
+  const compatible = (profession, professionCertifiee) => c.ajoute(`diplomeCompatibleProfession/${libelle(profession)}/${libelle(professionCertifiee)}`,
+    sansIndefini({ fonction: 'diplomeCompatibleProfession', profession, professionCertifiee }),
+    documentsRegles.diplomeCompatibleProfession(profession, professionCertifiee));
+
+  // La liste elle-même est un vecteur : un ajout côté web rougit le port Swift avant toute grille.
+  c.ajoute('constante/PROFESSIONS_SANS_RPPS', { fonction: 'PROFESSIONS_SANS_RPPS' }, [...constantes.PROFESSIONS_SANS_RPPS]);
+
+  // Les cas vitest (documents.test.ts) sont tous dans ces grilles (professions IADE, IBODE, AS,
+  // AES, AUXILIAIRE_PUERICULTURE, IDE, MEDECIN, KINE, PHARMACIEN ; profession absente).
+  const professions = ['IDE', 'MEDECIN', 'KINE', 'PHARMACIEN', 'SAGE_FEMME', 'DENTISTE', 'IADE', 'IBODE', 'AS', 'AES',
+    'AUXILIAIRE_PUERICULTURE', 'PREPARATEUR_PHARMA', 'ide', 'iade', '', null, undefined];
+  for (const profession of professions) {
+    for (const rpps of [true, false, null, undefined]) dispense(profession, rpps);
+  }
+  const certifiees = ['IADE', 'iade', 'Iade', 'IBODE', 'ibode', 'IDE', 'AS', '', ' IADE', null, undefined, 42, true];
+  for (const profession of ['IADE', 'IBODE', 'IDE', 'AS', 'MEDECIN', 'iade', '', null, undefined]) {
+    for (const certifiee of certifiees) compatible(profession, certifiee);
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 12 : contratMissionUi (src/lib/contratMissionUi.ts)
+// ---------------------------------------------------------------------------
+function vecteursContratMissionUi() {
+  const c = new Collecteur('contrat-mission-ui');
+  const sansIndefini = (objet) => Object.fromEntries(Object.entries(objet).filter(([, v]) => v !== undefined));
+  const variables = (nom, html) => c.ajoute(`contientVariablesContratNonRendues/${nom}`,
+    sansIndefini({ fonction: 'contientVariablesContratNonRendues', html }), contratUi.contientVariablesContratNonRendues(html));
+  const signature = (nom, contrat) => c.ajoute(`contratPossedeSignature/${nom}`,
+    sansIndefini({ fonction: 'contratPossedeSignature', contrat }), contratUi.contratPossedeSignature(contrat));
+  const rendu = (nom, html, storagePath, contrat) => c.ajoute(`contratNecessiteRenduServeur/${nom}`,
+    sansIndefini({ fonction: 'contratNecessiteRenduServeur', html, storagePath, contrat }),
+    contratUi.contratNecessiteRenduServeur(html, storagePath, contrat));
+  const contenu = (nom, contenuServeur, contenuReconstitue, conserverOriginal) => c.ajoute(`choisirContenuContratAffiche/${nom}`,
+    sansIndefini({ fonction: 'choisirContenuContratAffiche', contenuServeur, contenuReconstitue, conserverOriginal }),
+    contratUi.choisirContenuContratAffiche(contenuServeur, contenuReconstitue, conserverOriginal));
+
+  // --- Issus des tests vitest (contratMissionUi.test.ts) --------------------
+  variables('vitest-motif-cdd', '<p>{{motif_cdd}}</p>');
+  contenu('vitest-apercu-si-variables', '<p>{{motif_cdd}}</p>', '<p>Aperçu</p>');
+  rendu('vitest-apercu-sans-stockage', '<p>Aperçu</p>', null);
+  rendu('vitest-stockage-ancien-sans-variable', '<p>10h/jour (L3121-18)</p>', 'contrat/ancien.html');
+  rendu('vitest-stockage-ancien-avec-variable', '<p>{{motif_cdd}}</p>', 'contrat/ancien.html');
+  const preuvesVitest = [['statut-signe-complet', { statut: 'SIGNE_COMPLET' }], ['statut-signe-soignant', { statut: 'SIGNE_SOIGNANT' }],
+    ['signature-soignant', { signature_soignant: true }], ['signature-etablissement', { signature_etablissement: true }],
+    ['signature-soignant-le', { signature_soignant_le: '2026-01-01' }], ['signature-etablissement-le', { signature_etablissement_le: '2026-01-01' }]];
+  for (const [nom, contrat] of preuvesVitest) {
+    signature(`vitest-${nom}`, contrat);
+    rendu(`vitest-preuve-sans-stockage-${nom}`, null, null, contrat);
+  }
+  contenu('vitest-original-absent-conserve', null, '<p>Nouveau template</p>', true);
+  contenu('vitest-original-avec-variable-conserve', '<p>Original {{variable}}</p>', '<p>Nouveau template</p>', true);
+
+  // --- Variables de gabarit non rendues --------------------------------------
+  for (const [nom, html] of [
+    ['espaces', '{{ motif }}'], ['vide', '{{}}'], ['espace-seul', '{{ }}'], ['accolades-espacees', '{ {x} }'],
+    ['fermeture-simple', '{{x}'], ['ouverture-simple', '{x}}'], ['triple', '{{{x}}}'], ['multiligne', '{{a\nb}}'],
+    ['sans-variable', 'texte sans variable'], ['chaine-vide', ''], ['null', null], ['absent', undefined],
+    ['inversees', '}}{{'], ['deux-variables', '{{x}} et {{y}}'], ['accolade-interne', '{{ x } }}'], ['quadruple', '{{{{}}}}'],
+    ['html-attribut', '<a title="{{titre}}">x</a>'], ['accents', '{{prénom_soignant}}'], ['fin-de-texte', 'Signé par {{'],
+  ]) {
+    variables(nom, html);
+  }
+
+  // --- Preuve de signature ----------------------------------------------------
+  for (const [nom, contrat] of [
+    ['null', null], ['absent', undefined], ['vide', {}], ['statut-signe', { statut: 'SIGNE' }], ['statut-minuscules', { statut: 'signe_complet' }],
+    ['statut-non-signe', { statut: 'NON_SIGNE' }], ['statut-en-attente', { statut: 'EN_ATTENTE_SIGNATURES' }], ['statut-null', { statut: null }],
+    ['statut-vide', { statut: '' }], ['statut-espace-signe', { statut: ' SIGNE_COMPLET' }], ['signature-soignant-faux', { signature_soignant: false }],
+    ['signature-soignant-null', { signature_soignant: null }], ['signature-etablissement-faux', { signature_etablissement: false }],
+    ['signature-soignant-le-vide', { signature_soignant_le: '' }], ['signature-soignant-le-null', { signature_soignant_le: null }],
+    ['signature-etablissement-le-iso', { signature_etablissement_le: '2026-01-01T10:00:00Z' }],
+    ['expire-sans-preuve', { statut: 'EXPIRE', signature_soignant: false, signature_etablissement: false, signature_soignant_le: null, signature_etablissement_le: null }],
+    ['annule-avec-date-etablissement', { statut: 'ANNULE', signature_etablissement_le: '2026-01-01' }],
+  ]) {
+    signature(nom, contrat);
+  }
+
+  // --- Rendu serveur nécessaire : grille stockage × contrat × html ignoré -----
+  const stockages = [['stockage-null', null], ['stockage-absent', undefined], ['stockage-vide', ''], ['stockage-present', 'contrat/ancien.html']];
+  const contrats = [['contrat-absent', undefined], ['contrat-null', null], ['en-attente', { statut: 'EN_ATTENTE_SIGNATURES' }],
+    ['signe-soignant', { statut: 'SIGNE_SOIGNANT' }], ['signature-etablissement', { signature_etablissement: true }]];
+  for (const [nomStockage, storagePath] of stockages) {
+    for (const [nomContrat, contrat] of contrats) {
+      for (const [nomHtml, html] of [['apercu', '<p>Aperçu</p>'], ['variables', '<p>{{motif_cdd}}</p>']]) {
+        rendu(`grille/${nomStockage}/${nomContrat}/${nomHtml}`, html, storagePath, contrat);
+      }
+    }
+  }
+
+  // --- Contenu affiché : grille serveur × reconstitué × conservation --------
+  const serveurs = [['original', '<p>Original</p>'], ['original-variable', '<p>Original {{variable}}</p>'], ['vide', ''], ['null', null], ['absent', undefined]];
+  const reconstitues = [['apercu', '<p>Aperçu</p>'], ['vide', ''], ['null', null], ['absent', undefined]];
+  for (const [nomServeur, serveur] of serveurs) {
+    for (const [nomReconstitue, reconstitue] of reconstitues) {
+      for (const [nomConserver, conserver] of [['conserver', true], ['ne-pas-conserver', false], ['conservation-absente', undefined]]) {
+        contenu(`grille/${nomServeur}/${nomReconstitue}/${nomConserver}`, serveur, reconstitue, conserver);
+      }
+    }
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
+// Règle 13 : signatureSmsStagingAdmission (src/lib/signatureSmsStagingAdmission.ts)
+// ---------------------------------------------------------------------------
+// Rejoué avec un client RPC simulé : `reponse` est ce que le client renvoie (`{ data, error }`)
+// ou `{ leve: true }` (transport en erreur). L'attendu consigne les arguments de chaque appel
+// (aucun appel quand l'URL ou l'identifiant est refusé avant) et le résultat, instants en ISO.
+// Domaine des dates : ISO 8601, celui de `to_jsonb(timestamptz)` ; `Date.parse` accepte aussi
+// des formats non ISO (RFC 2822…) que le port Swift refuse (échec fermé), hors vecteurs.
+async function vecteursAdmissionSms() {
+  const c = new Collecteur('signature-sms-staging-admission');
+  const URL_STAGING = 'https://mejpriaetwgtcstbgfid.supabase.co';
+  const CONTRAT = '3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17';
+  const MAINTENANT = '2026-11-02T10:00:00.000Z';
+  const NOM_RPC = 'fn_admission_otp_signature_recette';
+  const plus = (minutes, ms = 0) => new Date(Date.parse(MAINTENANT) + minutes * 60_000 + ms).toISOString();
+  const lire = async (nom, { url = URL_STAGING, contratId = CONTRAT, maintenant = MAINTENANT, reponse }) => {
+    const appels = [];
+    const client = {
+      rpc: async (name, args) => {
+        appels.push({ name, args });
+        if (reponse.leve) throw new Error('transport simulé');
+        return { data: reponse.data, error: reponse.error ?? null };
+      },
+    };
+    const r = await admissionSms.readSignatureSmsStagingAdmission(client, url, contratId, Date.parse(maintenant));
+    if (appels.some((appel) => appel.name !== NOM_RPC)) throw new Error(`signature-sms-staging-admission: « ${nom} » : RPC inattendue`);
+    c.ajoute(`readSignatureSmsStagingAdmission/${nom}`, { fonction: 'readSignatureSmsStagingAdmission', url, contratId, maintenant, reponse }, {
+      appels: appels.map((appel) => appel.args),
+      resultat: r === null ? null : {
+        expiresAt: iso(new Date(r.expiresAt)),
+        canSend: r.canSend,
+        canValidate: r.canValidate,
+        otpExpiresAt: r.otpExpiresAt === null ? null : iso(new Date(r.otpExpiresAt)),
+      },
+    });
+  };
+  const envoi = { admitted: true, can_send: true, can_validate: false, otp_expires_at: null, expires_at: plus(30), remaining: 2 };
+  const validation = { admitted: true, can_send: true, can_validate: true, otp_expires_at: plus(5), expires_at: plus(30), remaining: 1 };
+  const donnees = (nom, data) => lire(nom, { reponse: { data, error: null } });
+
+  // --- Admissions acceptées --------------------------------------------------
+  await donnees('envoi-seul', envoi);
+  await donnees('envoi-et-validation', validation);
+  await donnees('validation-seule-plus-aucun-envoi', { ...validation, can_send: false, remaining: 0 });
+  await donnees('otp-borne-par-capacite', { ...validation, expires_at: plus(3), otp_expires_at: plus(5) });
+  await donnees('capacite-60-min-exactes', { ...envoi, expires_at: plus(60) });
+  await donnees('otp-10-min-exactes', { ...validation, otp_expires_at: plus(10) });
+  await donnees('otp-absent-sans-validation', (({ otp_expires_at: _o, ...reste }) => reste)(envoi));
+  await donnees('dates-postgres-microsecondes', { ...validation, expires_at: '2026-11-02T10:30:00.123456+00:00', otp_expires_at: '2026-11-02T10:05:00.654321+00:00' });
+  await donnees('dates-offset-paris', { ...validation, expires_at: '2026-11-02T11:30:00+01:00', otp_expires_at: '2026-11-02T11:05:00+01:00' });
+  await donnees('dates-legacy-heure-de-paris', { ...envoi, expires_at: '2026-11-02T11:30:00' });
+  await donnees('cles-supplementaires-ignorees', { ...envoi, run_id: 'sms-signature-recette', message: 'ok' });
+  await lire('uuid-majuscules', { contratId: CONTRAT.toUpperCase(), reponse: { data: envoi, error: null } });
+
+  // --- Refus avant tout appel --------------------------------------------------
+  for (const [nom, url] of [
+    ['url-production', 'https://flripxtsyegjshnhzjkz.supabase.co'], ['url-barre-finale', `${URL_STAGING}/`], ['url-http', 'http://mejpriaetwgtcstbgfid.supabase.co'],
+    ['url-majuscules', 'https://MEJPRIAETWGTCSTBGFID.supabase.co'], ['url-vide', ''], ['url-suffixe', `${URL_STAGING}.evil.example`],
+  ]) {
+    await lire(nom, { url, reponse: { data: envoi, error: null } });
+  }
+  for (const [nom, contratId] of [
+    ['contrat-vide', ''], ['contrat-non-uuid', 'contrat-1'], ['contrat-uuid-tronque', CONTRAT.slice(0, 35)], ['contrat-uuid-accolades', `{${CONTRAT}}`],
+    ['contrat-uuid-sans-tirets', CONTRAT.replaceAll('-', '')], ['contrat-uuid-espace', ` ${CONTRAT}`], ['contrat-uuid-hex-invalide', CONTRAT.replace('3f', 'zz')],
+  ]) {
+    await lire(nom, { contratId, reponse: { data: envoi, error: null } });
+  }
+
+  // --- Réponse en erreur ou malformée ----------------------------------------
+  await lire('erreur-rpc', { reponse: { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } } });
+  await lire('erreur-avec-donnees', { reponse: { data: envoi, error: { code: '42501', message: 'permission denied' } } });
+  await lire('transport-leve', { reponse: { leve: true } });
+  for (const [nom, data] of [['null', null], ['absente', undefined], ['tableau', [envoi]], ['chaine', 'admitted'], ['vrai', true], ['zero', 0], ['objet-vide', {}]]) {
+    await lire(`donnees-${nom}`, { reponse: { data, error: null } });
+  }
+  for (const [nom, champs] of [
+    ['admitted-faux', { admitted: false }], ['admitted-chaine', { admitted: 'true' }], ['admitted-un', { admitted: 1 }],
+    ['admitted-absent', { admitted: undefined }], ['expires-at-absent', { expires_at: undefined }], ['expires-at-nombre', { expires_at: Date.parse(plus(30)) }],
+    ['expires-at-illisible', { expires_at: 'demain' }], ['expires-at-null', { expires_at: null }], ['remaining-decimal', { remaining: 1.5 }],
+    ['remaining-negatif', { remaining: -1 }], ['remaining-trois', { remaining: 3 }], ['remaining-chaine', { remaining: '2' }],
+    ['remaining-null', { remaining: null }], ['remaining-zero-envoi-annonce', { remaining: 0 }], ['envoi-refuse-avec-capacite', { can_send: false }],
+    ['can-send-chaine', { can_send: 'true' }], ['can-validate-null', { can_validate: null }], ['can-validate-absent', { can_validate: undefined }],
+    ['capacite-expiree-maintenant', { expires_at: MAINTENANT }], ['capacite-passee', { expires_at: plus(-1) }], ['capacite-60-min-plus-1-ms', { expires_at: plus(60, 1) }],
+    ['otp-chaine-sans-validation', { otp_expires_at: plus(5) }],
+  ]) {
+    await donnees(`envoi/${nom}`, { ...envoi, ...champs });
+  }
+  for (const [nom, champs] of [
+    ['ni-envoi-ni-validation', { can_send: false, can_validate: false, remaining: 0 }], ['otp-absent', { otp_expires_at: undefined }],
+    ['otp-null', { otp_expires_at: null }], ['otp-nombre', { otp_expires_at: Date.parse(plus(5)) }], ['otp-illisible', { otp_expires_at: 'bientôt' }],
+    ['otp-maintenant', { otp_expires_at: MAINTENANT }], ['otp-passe', { otp_expires_at: plus(-1) }], ['otp-10-min-plus-1-ms', { otp_expires_at: plus(10, 1) }],
+  ]) {
+    await donnees(`validation/${nom}`, { ...validation, ...champs });
+  }
+
+  return c.tries();
+}
+
+// ---------------------------------------------------------------------------
 // Écriture
 // ---------------------------------------------------------------------------
 const fichiers = {
@@ -1244,6 +1846,13 @@ const fichiers = {
   'planning-candidat.json': vecteursPlanningCandidat(),
   'selection-serie-candidat.json': vecteursSelectionSerie(),
   'completude-planning-mission.json': vecteursCompletudePlanning(),
+  // Lot 2, T2. T2b (après W1) ajoutera `documents-requis.json` et `presences-soignant-listes.json`.
+  'synthese-presence-mission.json': vecteursSynthesePresence(),
+  'presences-soignant-ui.json': vecteursPresencesSoignantUi(),
+  'document-upload.json': await vecteursDocumentUpload(),
+  'documents.json': vecteursDocuments(),
+  'contrat-mission-ui.json': vecteursContratMissionUi(),
+  'signature-sms-staging-admission.json': await vecteursAdmissionSms(),
 };
 
 let total = 0;

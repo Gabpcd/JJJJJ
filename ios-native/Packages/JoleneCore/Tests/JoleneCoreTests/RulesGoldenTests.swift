@@ -94,7 +94,11 @@ struct VecteurGolden: Decodable {
 enum Golden {
     static let fichiers = ["date-heure-paris", "format-mission", "heures-hebdomadaires-mission", "disponibilite-pointage",
                            // Lot 1, T2 : planning candidat, sélection de série, complétude du planning.
-                           "planning-candidat", "selection-serie-candidat", "completude-planning-mission"]
+                           "planning-candidat", "selection-serie-candidat", "completude-planning-mission",
+                           // Lot 2, T2 : synthèse et historique de présence, justificatifs, contrats.
+                           // T2b (après la PR web W1) ajoutera « documents-requis » et « presences-soignant-listes ».
+                           "synthese-presence-mission", "presences-soignant-ui", "document-upload", "documents",
+                           "contrat-mission-ui", "signature-sms-staging-admission"]
     static let minimumTotal = 200
 
     struct FichierIntrouvable: Error, CustomStringConvertible {
@@ -120,6 +124,32 @@ enum Golden {
             let obtenu: JSONValue?
             do {
                 obtenu = try executer(vecteur)
+            } catch {
+                XCTFail("vecteur « \(vecteur.name) » : erreur inattendue \(error)", file: file, line: line)
+                continue
+            }
+            guard let obtenu else {
+                XCTFail("vecteur « \(vecteur.name) » : fonction « \(vecteur.fonction) » non rejouée", file: file, line: line)
+                continue
+            }
+            rejoues += 1
+            XCTAssertEqual(obtenu, vecteur.expected,
+                           "vecteur « \(vecteur.name) » : attendu \(vecteur.expected), obtenu \(obtenu)",
+                           file: file, line: line)
+        }
+        return rejoues
+    }
+
+    /// Variante asynchrone de `rejouer` (lot 2 : règles qui attendent un appel simulé).
+    static func rejouerAsync(_ fichier: String, file: StaticString = #filePath, line: UInt = #line,
+                             _ executer: (VecteurGolden) async throws -> JSONValue?) async throws -> Int {
+        let vecteurs = try charger(fichier)
+        XCTAssertFalse(vecteurs.isEmpty, "\(fichier).json ne contient aucun vecteur", file: file, line: line)
+        var rejoues = 0
+        for vecteur in vecteurs {
+            let obtenu: JSONValue?
+            do {
+                obtenu = try await executer(vecteur)
             } catch {
                 XCTFail("vecteur « \(vecteur.name) » : erreur inattendue \(error)", file: file, line: line)
                 continue

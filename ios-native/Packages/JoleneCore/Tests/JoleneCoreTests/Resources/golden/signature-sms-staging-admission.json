@@ -1,0 +1,1777 @@
+[
+  {
+    "name": "readSignatureSmsStagingAdmission/capacite-60-min-exactes",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T11:00:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T11:00:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/cles-supplementaires-ignorees",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2,
+          "run_id": "sms-signature-recette",
+          "message": "ok"
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-non-uuid",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "contrat-1",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-uuid-accolades",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "{3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17}",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-uuid-espace",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": " 3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-uuid-hex-invalide",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "zz2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-uuid-sans-tirets",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a105b7d4e219c3a0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-uuid-tronque",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a1",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/contrat-vide",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/dates-legacy-heure-de-paris",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T11:30:00",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/dates-offset-paris",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T11:05:00+01:00",
+          "expires_at": "2026-11-02T11:30:00+01:00",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:05:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/dates-postgres-microsecondes",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:05:00.654321+00:00",
+          "expires_at": "2026-11-02T10:30:00.123456+00:00",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.123Z",
+        "canSend": true,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:05:00.654Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-absente",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-chaine",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": "admitted",
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-null",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": null,
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-objet-vide",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {},
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-tableau",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": [
+          {
+            "admitted": true,
+            "can_send": true,
+            "can_validate": false,
+            "otp_expires_at": null,
+            "expires_at": "2026-11-02T10:30:00.000Z",
+            "remaining": 2
+          }
+        ],
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-vrai",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": true,
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/donnees-zero",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": 0,
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi-et-validation",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:05:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:05:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi-seul",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/admitted-absent",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/admitted-chaine",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": "true",
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/admitted-faux",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": false,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/admitted-un",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": 1,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/can-send-chaine",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": "true",
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/can-validate-absent",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/can-validate-null",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": null,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/capacite-60-min-plus-1-ms",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T11:00:00.001Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/capacite-expiree-maintenant",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:00:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/capacite-passee",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T09:59:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/envoi-refuse-avec-capacite",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": false,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/expires-at-absent",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/expires-at-illisible",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "demain",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/expires-at-nombre",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": 1793615400000,
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/expires-at-null",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": null,
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/otp-chaine-sans-validation",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": "2026-11-02T10:05:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-chaine",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": "2"
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-decimal",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1.5
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-negatif",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": -1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-null",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": null
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-trois",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 3
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/envoi/remaining-zero-envoi-annonce",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 0
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/erreur-avec-donnees",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": {
+          "code": "42501",
+          "message": "permission denied"
+        }
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/erreur-rpc",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": null,
+        "error": {
+          "code": "PGRST202",
+          "message": "Could not find the function"
+        }
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/otp-10-min-exactes",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:10:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:10:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/otp-absent-sans-validation",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/otp-borne-par-capacite",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:05:00.000Z",
+          "expires_at": "2026-11-02T10:03:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:03:00.000Z",
+        "canSend": true,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:03:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/transport-leve",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "leve": true
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-barre-finale",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co/",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-http",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "http://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-majuscules",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://MEJPRIAETWGTCSTBGFID.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-production",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://flripxtsyegjshnhzjkz.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-suffixe",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co.evil.example",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/url-vide",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/uuid-majuscules",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3F2C9A10-5B7D-4E21-9C3A-0D8E6F4B2A17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": false,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 2
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3F2C9A10-5B7D-4E21-9C3A-0D8E6F4B2A17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": true,
+        "canValidate": false,
+        "otpExpiresAt": null
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation-seule-plus-aucun-envoi",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": false,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:05:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 0
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": {
+        "expiresAt": "2026-11-02T10:30:00.000Z",
+        "canSend": false,
+        "canValidate": true,
+        "otpExpiresAt": "2026-11-02T10:05:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/ni-envoi-ni-validation",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": false,
+          "can_validate": false,
+          "otp_expires_at": "2026-11-02T10:05:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 0
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-10-min-plus-1-ms",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:10:00.001Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-absent",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-illisible",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "bientôt",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-maintenant",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T10:00:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-nombre",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": 1793613900000,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-null",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": null,
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  },
+  {
+    "name": "readSignatureSmsStagingAdmission/validation/otp-passe",
+    "input": {
+      "fonction": "readSignatureSmsStagingAdmission",
+      "url": "https://mejpriaetwgtcstbgfid.supabase.co",
+      "contratId": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17",
+      "maintenant": "2026-11-02T10:00:00.000Z",
+      "reponse": {
+        "data": {
+          "admitted": true,
+          "can_send": true,
+          "can_validate": true,
+          "otp_expires_at": "2026-11-02T09:59:00.000Z",
+          "expires_at": "2026-11-02T10:30:00.000Z",
+          "remaining": 1
+        },
+        "error": null
+      }
+    },
+    "expected": {
+      "appels": [
+        {
+          "p_contrat_id": "3f2c9a10-5b7d-4e21-9c3a-0d8e6f4b2a17"
+        }
+      ],
+      "resultat": null
+    }
+  }
+]

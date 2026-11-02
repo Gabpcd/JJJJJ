@@ -1,0 +1,1635 @@
+[
+  {
+    "name": "constante/PROFESSIONS_SANS_RPPS",
+    "input": {
+      "fonction": "PROFESSIONS_SANS_RPPS"
+    },
+    "expected": [
+      "AS",
+      "AES",
+      "AUXILIAIRE_PUERICULTURE"
+    ]
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"AS\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "AS",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": " IADE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "AS"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "IDE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": "ibode"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": 42
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": null
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IADE\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IADE",
+      "professionCertifiee": true
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": " IADE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "AS"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "IADE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "IDE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "Iade"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "iade"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": 42
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE"
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": null
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IBODE\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IBODE",
+      "professionCertifiee": true
+    },
+    "expected": false
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"IDE\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "IDE",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"MEDECIN\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "MEDECIN",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/\"iade\"/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": "iade",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/absent/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\" IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": " IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": ""
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"AS\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "AS"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"IADE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "IADE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"IBODE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "IBODE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"IDE\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "IDE"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"Iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "Iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"iade\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "iade"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/\"ibode\"",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": "ibode"
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/42",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": 42
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/absent",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/null",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": null
+    },
+    "expected": true
+  },
+  {
+    "name": "diplomeCompatibleProfession/null/true",
+    "input": {
+      "fonction": "diplomeCompatibleProfession",
+      "profession": null,
+      "professionCertifiee": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": ""
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AES\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AES"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AES\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AES",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AES\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AES",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AES\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AES",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AS\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AS"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AS\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AS",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AS\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AS",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AS\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AS",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AUXILIAIRE_PUERICULTURE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AUXILIAIRE_PUERICULTURE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AUXILIAIRE_PUERICULTURE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AUXILIAIRE_PUERICULTURE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AUXILIAIRE_PUERICULTURE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AUXILIAIRE_PUERICULTURE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"AUXILIAIRE_PUERICULTURE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "AUXILIAIRE_PUERICULTURE",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"DENTISTE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "DENTISTE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"DENTISTE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "DENTISTE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"DENTISTE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "DENTISTE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"DENTISTE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "DENTISTE",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IADE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IADE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IADE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IADE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IADE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IADE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IADE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IADE",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IBODE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IBODE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IBODE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IBODE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IBODE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IBODE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IBODE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IBODE",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IDE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IDE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IDE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IDE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IDE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IDE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"IDE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "IDE",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"KINE\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "KINE"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"KINE\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "KINE",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"KINE\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "KINE",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"KINE\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "KINE",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"MEDECIN\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "MEDECIN"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"MEDECIN\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "MEDECIN",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"MEDECIN\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "MEDECIN",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"MEDECIN\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "MEDECIN",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PHARMACIEN\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PHARMACIEN"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PHARMACIEN\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PHARMACIEN",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PHARMACIEN\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PHARMACIEN",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PHARMACIEN\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PHARMACIEN",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PREPARATEUR_PHARMA\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PREPARATEUR_PHARMA"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PREPARATEUR_PHARMA\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PREPARATEUR_PHARMA",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PREPARATEUR_PHARMA\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PREPARATEUR_PHARMA",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"PREPARATEUR_PHARMA\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "PREPARATEUR_PHARMA",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"SAGE_FEMME\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "SAGE_FEMME"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"SAGE_FEMME\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "SAGE_FEMME",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"SAGE_FEMME\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "SAGE_FEMME",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"SAGE_FEMME\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "SAGE_FEMME",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"iade\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "iade"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"iade\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "iade",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"iade\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "iade",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"iade\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "iade",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/\"ide\"/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "ide"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"ide\"/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "ide",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"ide\"/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "ide",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/\"ide\"/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": "ide",
+      "rppsVerifie": true
+    },
+    "expected": true
+  },
+  {
+    "name": "rppsDispenseDiplome/absent/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome"
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/absent/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/absent/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/absent/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "rppsVerifie": true
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/null/absent",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/null/false",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": null,
+      "rppsVerifie": false
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/null/null",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": null,
+      "rppsVerifie": null
+    },
+    "expected": false
+  },
+  {
+    "name": "rppsDispenseDiplome/null/true",
+    "input": {
+      "fonction": "rppsDispenseDiplome",
+      "profession": null,
+      "rppsVerifie": true
+    },
+    "expected": false
+  }
+]
