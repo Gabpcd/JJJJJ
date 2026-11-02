@@ -1,6 +1,9 @@
-# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8)
+# Contrats RPC du parcours soignant (lot 0, plan §11 jour 8 ; lot 1, T0)
 
-Document de référence des seize RPC que le client Swift consomme ou consommera. Pour chacune : la
+Document de référence des vingt-sept RPC que le client Swift consomme ou consommera (seize au lot 0,
+onze ajoutées par la tranche T0 du lot 1, `docs/mobile-swift/LOT1_PLAN.md` §3), plus deux fiches hors
+RPC : l'edge function `delete-account` (suppression de compte, Apple 5.1.1) et l'interdiction de
+`fn_etablissement_public` côté natif. Pour chaque RPC : la
 signature SQL exacte extraite de `supabase/schema/public.sql` (dump de production re-baseliné par
 `schema-snapshot.yml`), la classe d'authentification du manifeste `supabase/SECURITY_DEFINER_MANIFEST.json`
 (capture production du 2026-07-29, 422 fonctions), le GRANT connu, la signature TypeScript de
@@ -15,16 +18,34 @@ Règles (plan §4.4) : montants, net estimé et règles juridiques sont des vale
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
 définitifs ; aucune RPC `fn_admin_*` n'est embarquée.
 
+Règles ajoutées au lot 1 (`LOT1_PLAN.md` §2.3-§2.4) : les réponses `jsonb` en HTTP 200 sont polymorphes
+(`{error}` seul, `{success:false, error, error_code}`, `{success:true, …}`, exception PostgREST) et passent
+par un décodeur unique `RPCResponse<T>` ; un gateway qui ne teste que l'erreur PostgREST afficherait un
+faux succès, d'où un test par RPC et par forme de réponse. Chaque appel est borné à
+`SessionController.resolutionTimeout` (15 s) ; un timeout client sur une mutation ne prouve pas que le
+serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
+
 ## Synthèse
 
 | RPC | Statut natif | Lot | Classe manifeste | GRANT | types.ts |
 |---|---|---|---|---|---|
 | `fn_get_my_role` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_etablissements_safe` | consommée lot 0 | 0 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_mon_profil_soignant_complet` | à venir | 1 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_dashboard_soignant_complet` | à venir | 1 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_confirmer_action_planning_v1` | à venir | 1 | hors manifeste | authenticated, service_role | absente |
-| `fn_suggestions_missions_pour_soignant` | à venir | 1 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mon_profil_soignant_complet` | à venir | 3 (reclassée, lot 1 v2 n°4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_dashboard_soignant_complet` | à venir | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_confirmer_action_planning_v1` | à venir | 1 (T6a) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (décision 6) | authenticated, service_role | absente |
+| `fn_suggestions_missions_pour_soignant` | à venir | 1 (T3) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_annuler_mission_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_favori_etablissement` | à venir | 1 (T4b, retrait seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_favoris_etablissements` | à venir | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_supprimer_compte_rate_limited` | à venir | 1 (T8, via edge `delete-account`) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_param_bool` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_confirmer_presence_mission` | à venir | 1 (T6c) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_pointer_arrivee` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_pointer_depart` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_scanner_code_pointage` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -36,12 +57,16 @@ définitifs ; aucune RPC `fn_admin_*` n'est embarquée.
 | `fn_remplacer_document_soignant` | à venir | 2 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_upsert_token_push` | à venir | 3 | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 
-Trois RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_etat_pointage_mission`,
-`fn_remplacer_document_soignant`) : leur contrat est tenu par `public.sql` seul jusqu'à régénération des
-types (`supabase gen types`). Une RPC est hors manifeste (`fn_confirmer_action_planning_v1`, créée après la
-capture du 2026-07-29) : à classer avant consommation (plan §4.4, « les 32 RPC absentes du manifeste sont
-classées avant consommation »). Classement proposé : RPC_UTILISATEUR_AUTH_INTERNE (SECURITY DEFINER,
-`search_path` vide, GRANT authenticated, identité lue via `auth.uid()`) ; à confirmer par lecture du corps avant le lot 1.
+Quatre RPC sont absentes de `types.ts` (`fn_confirmer_action_planning_v1`, `fn_param_bool`,
+`fn_etat_pointage_mission`, `fn_remplacer_document_soignant`) : leur contrat est tenu par `public.sql` seul
+jusqu'à régénération des types (`supabase gen types`) ; le web les appelle déjà avec `as any`
+(`src/hooks/useParamBool.ts` l.18). Une RPC est hors manifeste (`fn_confirmer_action_planning_v1`, créée
+après la capture du 2026-07-29) : **classée manuellement `RPC_UTILISATEUR_AUTH_INTERNE`** par la décision 6
+du lot 1 (`LOT1_PLAN.md` §7), sans régénération du manifeste — voir sa fiche. `ios-native/rpc-contracts.json`
+garde `manifeste: null` pour elle : c'est le fait observé, le classement est documentaire.
+
+Deux RPC ne sont pas suivies et ne doivent jamais l'être côté natif : `fn_etablissement_public` (fiche
+« Interdite côté natif » en fin de document) et `fn_retirer_candidature` (swipe, lot 4).
 
 ## fn_get_my_role
 
@@ -79,8 +104,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_etablissements_safe"("p_ids" "uuid"[]) R
 
 ## fn_mon_profil_soignant_complet
 
-- **Statut natif** : à venir (lot 1).
-- **Usage prévu** : Profil complet du soignant connecté (onglet Profil, pré-requis de candidature).
+- **Statut natif** : à venir (**lot 3**, reclassée par le blueprint du lot 1, correction v2 n°4).
+- **Usage prévu** : Profil complet du soignant connecté (onglet Profil, lot 3). Le soft-gate de candidature
+  `peut_candidater` du lot 1 n'en dépend pas : il lit `prenom, nom, date_naissance, telephone, rpps_verifie,
+  profession` par SELECT direct sur `soignants` (`pol_soig_select`, `profileSelect` étendu, `LOT1_PLAN.md`
+  §2.6). Cette RPC renvoie `numero_secu`, `siret_liberal`, `iban_last4`, `stripe_account_id`, `email` :
+  aucune de ces clés n'est décodée ni journalisée avant le lot 3.
 - **Signature SQL** (`supabase/schema/public.sql` l.44659) :
 
 ```sql
@@ -113,8 +142,22 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
 
 ## fn_confirmer_action_planning_v1
 
-- **Statut natif** : à venir (lot 1).
-- **Usage prévu** : Candidature, acceptation d'une proposition, annulation : toutes les actions de planning côté soignant, avec relecture de la mission après la réponse.
+- **Statut natif** : à venir (lot 1, T6a).
+- **Usage prévu** : Candidature (`POSTULER`, mode `CANDIDATURE`), acceptation directe (`ACCEPTER`, mode
+  `PREMIER_ARRIVE`) et acceptation d'une proposition (`PROPOSITION`, `p_candidature_id` renseigné), avec
+  `p_creneaux_confirmes` strictement égal au planning live (sérialisation ISO 8601 UTC `Z` sans fraction,
+  `CreneauxConfirmes`, T2) et relecture après la réponse : `candidatures` (id retourné) pour POSTULER,
+  `mission(id:)` (`ASSIGNEE`, `soignant_assigne_id == userId`) pour ACCEPTER/PROPOSITION. L'annulation
+  **ne passe pas** par cette RPC (voir `fn_annuler_candidature_soignant` / `fn_annuler_mission_soignant`).
+- **Formes de réponse** (HTTP 200) à décoder par `RPCResponse` : `{success:true, candidature_id?, contrat_id?}` ;
+  `{success:false, ok:false, code:'PLANNING_MODIFIE_RECONFIRMER'}` (relire et redemander, jamais renvoyer) ;
+  `{success:false, choix_requis:true, options:[…]}` → sheet de choix de contrat ; `{error, documents_requis_pour?}` ;
+  exception PostgREST `[CODE DU TRAVAIL] …` / `0 rows` / `déjà prise` → `.refusee(message verbatim)` (HARD STOP n°4 :
+  aucun texte juridique reformulé). Rate-limit 20 candidatures/h (`fn_postuler_mission_rate_limited`) consommé
+  même en `choix_requis`.
+- **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
+  `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24141-24318 du dump) ;
+  manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
 - **Signature SQL** (`supabase/schema/public.sql` l.24141) :
 
 ```sql
@@ -314,6 +357,321 @@ CREATE OR REPLACE FUNCTION "public"."fn_upsert_token_push"("p_token" "text", "p_
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_plateforme?: string; p_token: string }` ; `Returns: undefined`.
 - **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
+
+## fn_annuler_candidature_soignant
+
+- **Statut natif** : à venir (lot 1, T7).
+- **Usage prévu** : Annulation d'une candidature `ACCEPTEE` ou `EN_ATTENTE` avec motif, texte libre et
+  justificatif optionnel (bucket Storage `justificatifs`, chemin `<uid>/annulations-candidature/<candidatureId>/<ts>_<nom>`,
+  précédé d'un reçu Keychain `prepared → started → …`, PRINCIPES §4). Relecture : candidature (`ANNULEE`)
+  puis mission. Web : `src/components/soignant/ModaleAnnulationCandidature.tsx`.
+- **Signature SQL** (`supabase/schema/public.sql` l.17541) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_annuler_candidature_soignant"("p_candidature_id" "uuid", "p_motif_categorie" "text", "p_texte_libre" "text", "p_justificatif_storage_path" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_annuler_candidature_soignant(uuid,text,text,text)` — identité `auth.uid()` lue en interne, appel avec le JWT du soignant.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** (`types.ts`, section `Functions`) : `Args: { p_candidature_id: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : motifs admis `URGENCE_PERSONNELLE`, `URGENCE_MEDICALE`, `DEUIL`,
+  `PROBLEME_TRANSPORT`, `CHANGEMENT_AVIS`, `AUTRE` (sinon `{success:false, error_code:'MOTIF_INVALIDE'}`) ;
+  texte ≥ 10 caractères côté serveur (`TEXTE_REQUIS`), **≥ 20 côté app** (parité web, décision 4) ;
+  `NON_AUTHENTIFIE`, `CANDIDATURE_INTROUVABLE`, `NON_AUTORISE`, `STATUT_INVALIDE`, `MISSION_INTROUVABLE`.
+  Succès `EN_ATTENTE` → `{success:true, libre:true, points:0, message}` ; succès `ACCEPTEE` →
+  `{success:true, points, libre, contestable?, …}` calculés par `fn_calculer_penalite_annulation_soignant(acceptee_a, debut_le, est_asap)`.
+  **Aucun barème côté client** : `points`/`libre`/`contestable` sont affichés tels quels (écart web/serveur
+  -25/-15/-8 vs -8 et `est_urgente` vs `est_asap` consigné hors lot, décision 4). Wording pénalité/rétractation
+  verbatim web ou validation Gabrielle (HARD STOP n°4).
+- **Exemple de réponse STAGING** : à enregistrer en T11, depuis le compte de la cohorte D3, corps JSON anonymisé.
+
+## fn_annuler_mission_soignant
+
+- **Statut natif** : à venir (lot 1, T7).
+- **Usage prévu** : Annulation d'une mission `ASSIGNEE` au soignant **sans ligne `candidatures`** (attribution
+  directe) ; motif texte optionnel. Relecture `mission(id:)` (statut `OUVERTE`, `soignant_assigne_id` nul).
+  Web : `DetailMissionSoignant.tsx` l.890-918 (suivi d'un `fn_ecrire_audit_safe` `MISSION_ANNULATION`
+  côté client ; la RPC écrit déjà `MISSION_ANNULEE_PAR_SOIGNANT` — l'app reproduit l'appel client pour la parité).
+- **Signature SQL** (`supabase/schema/public.sql` l.18355) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_annuler_mission_soignant"("p_mission_id" "uuid", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_annuler_mission_soignant(uuid,text)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_mission_id: string; p_motif?: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}`, `{error:'Cette mission ne vous est pas assignée'}`,
+  `{error:'Annulation impossible dans cet état. Si la mission est en cours, ouvrez un litige.'}` (statut ≠ `ASSIGNEE`) ;
+  succès `{success:true, annulation_tardive:boolean, penalite_score: -8 | 0}` (tardive = `debut_le - now() < 24 h`).
+  Effets serveur : mission remise `OUVERTE`, notification étab `SYSTEM`, audit `MISSION_ANNULEE_PAR_SOIGNANT`,
+  recalcul score si `est_urgente`. Messages `{error}` affichés verbatim.
+- **Exemple de réponse STAGING** : à enregistrer en T11, corps JSON anonymisé.
+
+## fn_repondre_proposition
+
+- **Statut natif** : à venir (lot 1, T6a — **refus uniquement**).
+- **Usage prévu** : Refus d'une proposition `PROPOSEE` depuis l'Accueil (`p_accepter = false`). L'acceptation
+  passe par `fn_confirmer_action_planning_v1` (`PROPOSITION`, comme le web `CarteProposition.tsx` l.268-279) ;
+  `p_accepter = true` n'est pas appelé par l'app au lot 1. Relecture : candidature (`REFUSEE`).
+- **Signature SQL** (`supabase/schema/public.sql` l.53577) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_repondre_proposition(uuid,boolean)` ; exige `candidatures.soignant_id = auth.uid()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_accepter: boolean; p_candidature_id: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Candidature introuvable'}`, `{error:'Accès refusé'}`,
+  `{error:'Cette proposition n’est plus en attente'}`, `{error:'Cette proposition a expiré'}` (créée il y a plus de
+  2 h : la RPC pose `EXPIREE` elle-même) ; refus → `{success:true, message:'Proposition refusée'}` ;
+  acceptation (non utilisée) → résultat de `fn_finaliser_attribution_mission` + `message:'Proposition acceptée'`.
+- **Exemple de réponse STAGING** : à enregistrer en T11 (PROPOSEE créée par `fn_proposer_mission_soignant` avec le JWT étab de la fixture D3, moins de 2 h avant).
+
+## fn_toggle_favori_etablissement
+
+- **Statut natif** : à venir (lot 1, T4b — **retrait uniquement**, `p_actif = false`).
+- **Usage prévu** : Retrait d'un établissement favori depuis `/soignant/mes-favoris`. L'ajout (`p_actif = true`)
+  n'est exposé nulle part sur le web (`BoutonFavoriEtab` non monté) et n'est pas porté (décision 8).
+  Relecture : `fn_mes_favoris_etablissements`. Les favoris **mission** passent par PostgREST direct sur
+  `missions_sauvegardees` (RLS `soignant_id = auth.uid()`), pas par une RPC.
+- **Signature SQL** (`supabase/schema/public.sql` l.61480) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etablissement_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_toggle_favori_etablissement(uuid,boolean)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_actif: boolean; p_etablissement_id: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{success:false, error:'Non authentifié'}`, `{success:false, error:'Établissement introuvable'}` ;
+  succès `{success:true, actif:boolean}` ; audit serveur `FAVORI_AJOUTE` / `FAVORI_RETIRE` via `fn_ecrire_audit_safe`.
+- **Exemple de réponse STAGING** : à enregistrer en T11.
+
+## fn_mes_favoris_etablissements
+
+- **Statut natif** : à venir (lot 1, T4b).
+- **Usage prévu** : Liste des établissements favoris (écran Favoris, onglet Établissements) ; lecture seule,
+  `STABLE`. Chaque élément porte `nb_missions_ouvertes` (valeur serveur, affichée telle quelle) et un bouton
+  « Voir missions ouvertes » → Explorer filtré `etablissementId`.
+- **Signature SQL** (`supabase/schema/public.sql` l.41835) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_mes_favoris_etablissements()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` **ou** un tableau (pas d'objet enveloppe) :
+  `[{etablissement_id, nom, ville, logo_url, type_etablissement, nb_missions_ouvertes, cree_le}]` trié par
+  `cree_le DESC`, `[]` si aucun favori. Le décodeur doit accepter les deux formes (objet d'erreur / tableau).
+  Note : la RPC joint `etablissements` sans filtre de cohorte TEST ; le nom affiché reste celui de
+  `fn_etablissements_safe` quand la ligne existe (règle « nom d'établissement », `LOT1_PLAN.md` §2.6).
+- **Exemple de réponse STAGING** : à enregistrer en T11.
+
+## fn_audit_connexion
+
+- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 5).
+- **Usage prévu** : `p_action = 'CONNEXION'` après un `signIn` explicite réussi (jamais après une restauration de
+  session), `'DECONNEXION'` avant `SessionController.signOut()` — comme `src/contexts/AuthContext.tsx`
+  l.186-210. Best-effort, borné, non bloquant : un échec n'empêche ni `.ready` ni la déconnexion.
+  IP et User-Agent sont capturés côté serveur depuis `request.headers` ; l'app n'envoie rien d'autre.
+- **Signature SQL** (`supabase/schema/public.sql` l.19699) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_audit_connexion"("p_action" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_audit_connexion(text)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_action: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Action non autorisée'}` si `p_action ∉ {CONNEXION, DECONNEXION}` ;
+  `{success:true}` ; `{success:false}` quand l'INSERT dans `journaux_audit` échoue (exception avalée : jamais
+  une erreur utilisateur, journalisée en DEBUG seulement). Ligne écrite : `type_ressource = 'session'`,
+  `details = {horodatage, method:'email_password'}`, `type_acteur = COALESCE(mon_role(), 'SOIGNANT')`.
+- **Preuve STAGING** : `journaux_audit` relu avec assertion **relative** (`n_avant + 1`, table immuable) sur
+  `action = 'CONNEXION'` pour l'acteur du run (critère lot 1 amendé, `docs/PLAN_APP_NATIVE_SWIFT.md` §5).
+
+## fn_maj_activite_soignant
+
+- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 5).
+- **Usage prévu** : `soignants.derniere_activite_le = NOW()` après un `signIn` réussi d'un compte `SOIGNANT`
+  (`AuthContext.tsx` l.195-199). Best-effort, borné, non bloquant.
+- **Signature SQL** (`supabase/schema/public.sql` l.41026) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_maj_activite_soignant"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_maj_activite_soignant()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : toujours `{success:true}` (UPDATE sans garde : 0 ligne touchée pour un
+  compte sans profil `soignants`, sans erreur). Aucune relecture.
+
+## fn_ecrire_audit_safe
+
+- **Statut natif** : à venir (lot 1, T1 gateway, T6a câblage ; décision 5).
+- **Usage prévu** : `MISSION_ASSIGNATION` après `ACCEPTER` / `PROPOSITION` réussis et relus (parité web
+  `DetailMissionSoignant.tsx` l.824-836 : `p_type_ressource = 'mission'`, `p_id_ressource = missionId`,
+  `p_details = {intitule, etablissement, debut, fin}`) ; `MISSION_ANNULATION` après `fn_annuler_mission_soignant`
+  (l.903-914). **Pas de ligne sur POSTULER** (décision 5). Paramètres app : `p_acteur_id = user.id`,
+  `p_type_acteur = 'SOIGNANT'`, `p_cle_s3 = nil`, `p_ip = nil`, `p_navigateur = 'jolene-ios/2.0.0'`.
+  `p_id_ressource` **jamais nul** (binding uuid cassé PostgREST, `CLAUDE.md` « audit escrow »).
+- **Signature SQL** (`supabase/schema/public.sql` l.31802) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_ecrire_audit_safe"("p_acteur_id" "uuid", "p_type_acteur" "text", "p_action" "text", "p_type_ressource" "text", "p_id_ressource" "uuid", "p_cle_s3" "text" DEFAULT NULL::"text", "p_details" "jsonb" DEFAULT NULL::"jsonb", "p_ip" "inet" DEFAULT NULL::"inet", "p_navigateur" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `MIXTE_TENANT_ADMIN` pour `fn_ecrire_audit_safe(uuid,text,text,text,uuid,text,jsonb,inet,text)` — pour un appelant non admin / non service_role, `p_acteur_id` est **écrasé par `auth.uid()`** (anti-impersonation) ; `auth.uid()` nul → exception `28000`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_acteur_id: string; p_action: string; p_cle_s3?: string; p_details?: Json; p_id_ressource: string; p_ip?: unknown; p_navigateur?: string; p_type_acteur: string; p_type_ressource: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{success:true, id}` ou `{success:false, error: SQLERRM}` (toute exception
+  avalée : un `p_action` hors `journaux_audit_action_check` ou un `p_type_acteur` hors
+  `journaux_audit_type_acteur_check` renvoie `success:false` sans erreur PostgREST). `MISSION_ASSIGNATION`,
+  `MISSION_ANNULATION`, `SOIGNANT` figurent dans les CHECK du dump (l.70243-70244). Best-effort : jamais une
+  erreur utilisateur.
+- **Preuve STAGING** : assertion relative `n_avant + 1` sur `action = 'MISSION_ASSIGNATION'` après la
+  proposition acceptée de T11.
+
+## fn_supprimer_compte_rate_limited
+
+- **Statut natif** : à venir (lot 1, T8) — **jamais appelée directement par l'app** : elle est invoquée par
+  l'edge function `delete-account` avec le JWT utilisateur (fiche « Edge `delete-account` »). Listée sous
+  contrat parce que ses réponses `{error}` remontent verbatim dans le 409 de l'edge.
+- **Usage prévu** : Anonymisation du profil soignant (`fn_supprimer_mon_compte`), 1 appel / 24 h
+  (`fn_verifier_rate_limit(uid, 'supprimer_compte', 1, 86400)`), idempotente si déjà anonymisé.
+- **Signature SQL** (`supabase/schema/public.sql` l.59974) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_supprimer_compte_rate_limited"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_supprimer_compte_rate_limited()`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: never` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Non authentifié'}` ; `{success:true, deja_anonymise:true}` ;
+  `{error:'Demande de suppression déjà en cours.'}` (rate-limit) ; sinon le jsonb de `fn_supprimer_mon_compte`
+  (`{success:true, …}` ou `{error}`).
+- **Preuve STAGING** : `soignants.nom = 'Supprimé'` relu en SQL sur le compte jetable de la fixture D3 (B9
+  « données », go explicite de Gabrielle au dispatch de T11, décision 13).
+
+## fn_param_bool
+
+- **Statut natif** : à venir (lot 1, T1 gateway, T9 câblage ; décision 15 et `DECISIONS_LOT0.md` n°9).
+- **Usage prévu** : Drapeaux `ios_natif_{accueil,explorer,missions,revenus,profil}_actif` lus **après `.ready`**
+  et à la reprise (> 30 min) ; `p_defaut = true` ; toute erreur (réseau, 42501, timeout) → `true`
+  (**fail-open**, inversion assumée de la convention web `useParamBool.ts` l.8-9 fail-closed) ; `false` →
+  `RenvoiWebScreen` sur l'onglet concerné. Les 5 lignes `parametres_systeme` n'existent dans aucune
+  migration : sans la PR backend B0, la RPC renvoie `p_defaut` (kill switch inopérant, documenté dans
+  `PORTE_LOT1.md`).
+- **Signature SQL** (`supabase/schema/public.sql` l.47037) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" boolean) RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_param_bool(text,boolean)`.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"` — **pas de
+  GRANT `anon`** (décision 15) : appel impossible avant session.
+- **Signature TypeScript** : absente (types.ts en retard sur le schéma ; le web appelle avec `as any`).
+- **Contrat de réponse (HTTP 200)** : un booléen nu (`true`/`false`), jamais un objet : `valeur <> 0` si la clé
+  existe, sinon `p_defaut`. Aucun `{error}` possible.
+
+## fn_confirmer_presence_mission
+
+- **Statut natif** : à venir (lot 1, T6c ; décision 16).
+- **Usage prévu** : Bloc « Confirme ta présence » d'une mission `ASSIGNEE` au soignant dont le début est à
+  moins de 48 h (`PresenceRules.blocDu(mission:, now:)`, seuil 48 h en dur comme le web
+  `DetailMissionSoignant.tsx` l.1414-1417, alors que le cron lit `confirmation_j1_max_h` = 36 h : écart
+  consigné hors lot). Cible du push `RAPPEL_MISSION` (`/soignant/missions/{id}`, `?relance=1` ignoré).
+  Relecture obligatoire `mission(id:)` → `presence_confirmee_le` non nul ; **jamais de date posée localement**.
+- **Signature SQL** (`supabase/schema/public.sql` l.24608) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+```
+
+- **Classe d'authentification (manifeste)** : `RPC_UTILISATEUR_AUTH_INTERNE` pour `fn_confirmer_presence_mission(uuid)` ; filtre `soignant_assigne_id = auth.uid()` dans le SELECT.
+- **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
+- **Signature TypeScript** : `Args: { p_mission_id: string }` ; `Returns: Json`.
+- **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (inexistante ou non assignée au
+  soignant) ; `{error:'Cette mission n''est plus active.'}` (statut ∉ `ASSIGNEE, EN_COURS`) ; `{success:true}`.
+  **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
+  une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
+  relecture ; bloc limité à `ASSIGNEE` côté app (la RPC accepte aussi `EN_COURS`).
+- **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` relue (T11).
+  Wording « Je serai là ✓ » / « l'établissement est prévenu » verbatim web (HARD STOP n°4).
+
+## Edge `delete-account` (suppression de compte, Apple 5.1.1)
+
+- **Statut natif** : à venir (lot 1, T8). Pas une RPC : `supabase/functions/delete-account/index.ts`, appelée
+  par `client.functions.invoke("delete-account")` (supabase-swift, à vérifier au premier build de T8),
+  comme le web `SectionConfidentialite.tsx` l.86 (`supabase.functions.invoke('delete-account', { body: {} })`).
+- **Transport** : `POST`, corps `{}`, en-tête `Authorization: Bearer <access_token utilisateur>` (jamais la
+  clé service_role : la fonction refuse le service_role en 403 « Suppression self-service uniquement »).
+  `supabase/config.toml` l.148-149 : `verify_jwt = false` — la vérification du JWT est faite **dans** la fonction
+  (`verifyUserOrServiceRole`), pas par l'API Gateway ; le mode `--use-api` du déploiement ne lit pas ce
+  fichier (`CLAUDE.md` « verify_jwt »), donc l'app ne suppose rien de la Gateway et traite un 401 comme
+  un refus quelle qu'en soit l'origine.
+- **Codes HTTP et corps** (lus dans `index.ts`) :
+  - **200** `{success:true, auth_deleted:true, anonymisation:{success:true, deja_anonymise?:boolean, profil_incomplet?:boolean}}` → seul succès admis ; **aucune relecture possible** (refresh tokens révoqués, utilisateur Auth soft-deleted) : purge locale (`signOut(scope: .local)` tolérant) → `SessionController.signOut()` → écran « Compte supprimé » **avant** l'événement SDK (sinon « Votre session a expiré »).
+  - **401** `{error:'Authorization Bearer manquant'}` ou JWT invalide (`_shared/admin-auth.ts`).
+  - **403** `{error:'Suppression self-service uniquement'}` (service_role) ; `{error:'Un compte administrateur doit etre retire par un autre administrateur'}` (rôle ADMIN / ADMIN_PLATEFORME).
+  - **405** `{error:'Methode non autorisee'}` (autre que POST).
+  - **409** `{error, error_code:'ACCOUNT_PROFILE_CONFLICT'}` (profils soignant et établissement simultanés) ; `{error, error_code:'DERNIER_PROPRIETAIRE'|'DERNIER_PROPRIETAIRE_GROUPE'}` ; `{error:<message RPC>}` quand `fn_supprimer_compte_rate_limited` lève une erreur PostgREST ; `{…, success:false, error:<error RPC ou 'Anonymisation non confirmée'>}` quand la RPC répond `{error}` (dont `'Demande de suppression déjà en cours.'`).
+  - **429** `{error:'Demande deja en cours'}` (3 appels / 60 s par `userId:ip`).
+  - **500** `{error:'Configuration serveur incomplete'|'Retrait des equipes impossible'|'Retrait des groupes impossible'|'Erreur interne'}`.
+  - **503** `{error:'Verification du compte impossible'}` ; `{success:false, auth_deleted:false, error:'Anonymisation du profil non confirmée ; suppression Auth non effectuée.', error_code:'ANONYMISATION_NON_CONFIRMEE'}` ; `{error:'Compte bloque et anonymise; suppression Auth en cours de finalisation', error_code:'AUTH_DELETE_PENDING'}` — ces deux derniers cas laissent un compte **banni ou anonymisé** : l'app force aussi la déconnexion locale (`LOT1_PLAN.md` §3 T8).
+- **Règle app** : tout code ≠ 200, ou 200 sans `success === true`, est un refus affiché avec le message
+  serveur verbatim (`DeleteAccountOutcome.refused(message, code)`) ; aucune nouvelle tentative automatique.
+  Texte RGPD de l'écran de confirmation verbatim web (`SectionConfidentialite.tsx` l.155-156, l.171-172,
+  tutoiement) tant que Gabrielle n'a pas validé un wording vouvoyé (HARD STOP n°4).
+- **Preuve STAGING** : compte jetable créé par la fixture du run uniquement (garde équivalente à
+  `createDeletionSafetyGate`), `soignants.nom = 'Supprimé'` relu en SQL ; B9 « données » → go explicite (décision 13).
+
+## Interdite côté natif : `fn_etablissement_public`
+
+- **Statut natif** : **jamais** (non suivie dans `RPC_SUIVIES`, aucun gateway ne doit l'appeler).
+- **Pourquoi** : `fn_etablissement_public(p_etablissement_id uuid)` (`public.sql` l.34969-35000) renvoie le
+  profil public d'un établissement **sauf** si `supprime_le IS NOT NULL` ou si `est_compte_test = true`
+  (`AND e.est_compte_test IS FALSE`, l.34993-34995). Tout établissement de recette STAGING est un compte
+  TEST (cohorte fail-closed, `trg_forcer_compte_test_prelaunch`) : la RPC renvoie `NULL` pour 100 % d'entre
+  eux, et une assertion STAGING sur le nom échouerait ou, pire, passerait sur le repli « Établissement ».
+  Le web l'appelle encore (`DetailMissionSoignant.tsx` l.428, `as any`) : écart assumé, non reproduit.
+- **Source unique du nom d'établissement côté natif** : `fn_etablissements_safe` (fiche ci-dessus ;
+  `MissionQuery.etablissementsRPC`, `SupabaseMissionsGateway.etablissements(ids:)`), qui applique la
+  cohorte et ne renvoie la ligne que si la mission est assignée au soignant ou OUVERTE. Repli d'affichage
+  « Établissement » conservé, mais toute assertion STAGING porte sur l'**égalité** avec le nom de fixture.
+  `fn_dashboard_soignant_complet.mes_missions.etab_nom` et `fn_mes_favoris_etablissements.nom` (LEFT
+  JOIN sans filtre cohorte) ne servent que si la ligne safe manque ; une divergence est un bug de fixture.
+- **Garde** : `tests/node/check-rpc-contracts.node.mjs` échoue si `fn_etablissement_public` entre dans
+  `RPC_SUIVIES` ; un `git grep fn_etablissement_public ios-native/` doit rester vide.
 
 ## Hors périmètre de ce document
 

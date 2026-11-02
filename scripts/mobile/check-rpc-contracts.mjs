@@ -37,15 +37,38 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * RPC consommées (ou à consommer) par le client Swift. `statut` :
  *   - `lot0`    : appelée par `JoleneSupabase` dès le lot 0 ;
  *   - `a_venir` : listée dans `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md`, lot cible indiqué.
- * L'ordre est celui du plan §11 jour 8.
+ * L'ordre est celui du plan §11 jour 8, puis celui des tranches du lot 1
+ * (`docs/mobile-swift/LOT1_PLAN.md` §3 : T3 accueil, T6 candidature/présence, T7 annulation,
+ * T4b favoris, T9 audit/drapeaux, T8 compte). Chaque ajout est accompagné de `--update` et
+ * d'une fiche dans CONTRATS_RPC_SOIGNANT.md dans la même PR (LOT1_PLAN §4) ; les statuts
+ * passent en consommé au fil des PR qui câblent la gateway.
+ *
+ * Jamais suivies (donc jamais appelées par le client Swift) :
+ *   - `fn_etablissement_public` : exclut `est_compte_test = true` → NULL pour tout établissement
+ *     de recette STAGING ; le nom d'établissement vient exclusivement de `fn_etablissements_safe`.
+ *   - `fn_retirer_candidature` (swipe) : lot 4.
+ *   - `fn_mon_profil_soignant_complet` reste suivie mais reclassée lot 3 (renvoie `numero_secu`,
+ *     `siret_liberal`, `iban_last4` ; le soft-gate `peut_candidater` du lot 1 lit `soignants` par
+ *     SELECT direct, LOT1_PLAN §2.6).
  */
 export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
-  { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 1 },
+  { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3 },
   { name: 'fn_dashboard_soignant_complet', statut: 'a_venir', lot: 1 },
   { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
   { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },
+  { name: 'fn_toggle_favori_etablissement', statut: 'a_venir', lot: 1 },
+  { name: 'fn_mes_favoris_etablissements', statut: 'a_venir', lot: 1 },
+  { name: 'fn_audit_connexion', statut: 'a_venir', lot: 1 },
+  { name: 'fn_maj_activite_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },
+  { name: 'fn_supprimer_compte_rate_limited', statut: 'a_venir', lot: 1 },
+  { name: 'fn_param_bool', statut: 'a_venir', lot: 1 },
+  { name: 'fn_confirmer_presence_mission', statut: 'a_venir', lot: 1 },
   { name: 'fn_pointer_arrivee', statut: 'a_venir', lot: 2 },
   { name: 'fn_pointer_depart', statut: 'a_venir', lot: 2 },
   { name: 'fn_scanner_code_pointage', statut: 'a_venir', lot: 2 },
