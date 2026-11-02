@@ -48,6 +48,38 @@ const PAS_AVANT_LOT4 = ['fn_retirer_candidature'];
 
 const byName = new Map(RPC_SUIVIES.map(r => [r.name, r]));
 
+/** Texte d'une section `## <titre>` d'un document Markdown, jusqu'à la section suivante. */
+function section(doc, heading) {
+  const start = doc.indexOf(`\n## ${heading}`);
+  assert.ok(start >= 0, `section « ${heading} » introuvable`);
+  const next = doc.indexOf('\n## ', start + 1);
+  return doc.slice(start, next < 0 ? undefined : next);
+}
+
+/** Corps d'une fonction SQL du dump : de son `CREATE OR REPLACE FUNCTION` au `$$;` qui la ferme. */
+function sqlBody(schema, name) {
+  const start = schema.indexOf(`CREATE OR REPLACE FUNCTION "public"."${name}"(`);
+  assert.ok(start >= 0, `${name} absente de public.sql`);
+  const end = schema.indexOf('\n$$;', start);
+  assert.ok(end > start, `${name} : fin de corps introuvable`);
+  return schema.slice(start, end);
+}
+
+/** Littéraux `'error', '…'` d'un corps SQL, apostrophes doublées ramenées à la valeur JSON réelle. */
+const sqlErrors = body => [...body.matchAll(/'error',\s*'((?:[^']|'')*)'/g)].map(m => m[1].replaceAll("''", "'"));
+/** Codes `'code', 'X'` et `'code', COALESCE(…, 'X')` d'un corps SQL. */
+const sqlCodes = body => [...body.matchAll(/'code',\s*(?:COALESCE\([^,]+,\s*)?'([A-Z0-9_]+)'/g)].map(m => m[1]);
+/** Texte Markdown hors blocs de code clôturés (les signatures SQL y gardent leurs `''`). */
+const horsBlocs = doc => doc.replace(/```[\s\S]*?```/g, '');
+
+const DECISIONS_HEADING = '\n## 7. Décisions (02/11/2026)\n';
+/** Texte du §7 de LOT1_PLAN.md (dernière section), sans le §6 dont les items sont aussi numérotés. */
+function decisionsDu(plan) {
+  const at = plan.indexOf(DECISIONS_HEADING);
+  assert.ok(at >= 0, 'section 7 « Décisions (02/11/2026) » introuvable');
+  return plan.slice(at + DECISIONS_HEADING.length);
+}
+
 test('RPC_SUIVIES : noms uniques, statuts et lots valides', () => {
   assert.equal(byName.size, RPC_SUIVIES.length, 'doublon dans RPC_SUIVIES');
   for (const r of RPC_SUIVIES) {
@@ -145,10 +177,28 @@ test('CONTRATS_RPC_SOIGNANT.md : une fiche par RPC suivie, fiche edge delete-acc
 
 test('LOT1_PLAN.md versionné : §7 = décisions du 02/11/2026, plus aucune question ouverte', () => {
   const plan = read('docs/mobile-swift/LOT1_PLAN.md');
-  assert.ok(plan.includes('\n## 7. Décisions (02/11/2026)\n'), 'section 7 non remplacée par les décisions');
+  assert.ok(plan.includes(DECISIONS_HEADING), 'section 7 non remplacée par les décisions');
   assert.ok(!plan.includes('## 7. Questions ouvertes'), 'la section « Questions ouvertes » subsiste');
-  // Les 19 décisions sont numérotées 1. à 19.
-  for (let i = 1; i <= 19; i++) assert.ok(new RegExp(`\\n${i}\\. \\*\\*`).test(plan), `décision ${i} absente`);
+  const decisions = decisionsDu(plan);
+  assert.ok(!decisions.includes('\n## '), 'le §7 doit rester la dernière section du plan');
+  // Les 19 questions ouvertes du blueprint v2 + la question 20 (exception PRINCIPES §2), dans l'ordre.
+  let from = 0;
+  for (let i = 1; i <= 20; i++) {
+    const at = decisions.slice(from).search(new RegExp(`\\n${i}\\. \\*\\*`));
+    assert.ok(at >= 0, `décision ${i} absente du §7 (ou hors ordre)`);
+    from += at + 1;
+  }
+  assert.ok(!/\n21\. \*\*/.test(decisions), 'décision 21 inattendue');
+});
+
+test('LOT1_PLAN.md : la recherche des décisions est bornée au §7 (le §6 numérote aussi 1. à 10.)', () => {
+  const plan = read('docs/mobile-swift/LOT1_PLAN.md');
+  // Témoin : retirer la décision 3 du §7 laisse un item « 3. ** » au §6 ; seule une recherche
+  // bornée au §7 détecte le retrait.
+  const sans3 = plan.replace('\n3. **Gating profil**', '\n3bis. Gating profil');
+  assert.ok(sans3 !== plan, 'témoin : décision 3 introuvable');
+  assert.ok(/\n3\. \*\*/.test(sans3), 'témoin : le §6 garde un item 3.');
+  assert.ok(!/\n3\. \*\*/.test(decisionsDu(sans3)), 'la recherche bornée au §7 doit échouer');
 });
 
 test('PARITE_SOIGNANT.md : sous-lignes lot 1 (Mes missions, Favoris, détail mission)', () => {
@@ -174,4 +224,93 @@ test('PLAN_APP_NATIVE_SWIFT.md l.~173 : critère d audit amendé (décision 5)',
   assert.ok(plan.includes("`fn_audit_connexion('CONNEXION'"), 'critère lot 1 non amendé vers fn_audit_connexion');
   assert.ok(!plan.includes('- `fn_ecrire_audit_safe` émis pour connexion et candidature, vérifié par requête STAGING.\n'),
     'ancien critère (fn_ecrire_audit_safe pour la connexion) toujours présent tel quel');
+});
+
+// Revue B8 de T0 : les fiches servent de base aux tests « une forme de réponse = un test » de
+// T6a, T6c et T8. Les listes sont donc comparées aux sources (corps SQL du dump, edge function),
+// pas recopiées : une forme ajoutée côté serveur sans fiche fait échouer la garde.
+
+test('CONTRATS : fn_confirmer_action_planning_v1 liste toutes les formes de réponse du corps SQL (clé `code`)', () => {
+  const schema = read(SOURCES.schema);
+  const body = sqlBody(schema, 'fn_confirmer_action_planning_v1');
+  const conflit = sqlBody(schema, 'fn_conflit_planning_soignant');
+  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'fn_confirmer_action_planning_v1');
+  const erreurs = sqlErrors(body);
+  // Témoin : les six refus propres à la RPC (l.24157, 24168, 24181, 24200, 24248 et 24306 du dump).
+  assert.equal(erreurs.length, 6, `refus SQL attendus : 6, lus : ${erreurs.length}`);
+  for (const message of erreurs) assert.ok(fiche.includes(message), `refus SQL absent de la fiche : « ${message} »`);
+  // Repli du conflit de planning : COALESCE(v_conflit->>'message', '<repli>').
+  const repli = body.match(/v_conflit->>'message',\s*'((?:[^']|'')*)'/)?.[1]?.replaceAll("''", "'");
+  assert.ok(repli && fiche.includes(repli), 'message de repli CONFLIT_PLANNING absent de la fiche');
+  const codes = [...new Set([...sqlCodes(body), ...sqlCodes(conflit)])];
+  assert.deepEqual(codes, [
+    'PLANNING_A_RECONFIRMER', 'PLANNING_MODIFIE_RECONFIRMER', 'CONFLIT_PLANNING',
+    'PLANNING_DETAILLE_INDISPONIBLE', 'PLANNING_EXISTANT_INDISPONIBLE', 'REPOS_11H',
+  ]);
+  for (const code of codes) assert.ok(fiche.includes(`'${code}'`) || fiche.includes(`\`${code}\``), `code ${code} absent de la fiche`);
+  // Ni la RPC ni fn_conflit_planning_soignant ne posent `error_code` : le décodeur lit `code`.
+  assert.ok(!body.includes('error_code') && !conflit.includes('error_code'), 'error_code inattendu dans le corps SQL');
+  assert.ok(/clé `code`[^.]*jamais `error_code`/.test(fiche), 'la fiche doit préciser : clé `code`, jamais `error_code`');
+});
+
+test('CONTRATS : fn_confirmer_presence_mission cite ses refus en valeur JSON, sans apostrophe SQL doublée', () => {
+  const doc = read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md');
+  const body = sqlBody(read(SOURCES.schema), 'fn_confirmer_presence_mission');
+  const fiche = section(doc, 'fn_confirmer_presence_mission');
+  const erreurs = sqlErrors(body);
+  assert.deepEqual(erreurs, ['Mission introuvable', "Cette mission n'est plus active."]);
+  for (const message of erreurs) {
+    assert.ok(fiche.includes(`'${message}'`) || fiche.includes(`"${message}"`), `valeur JSON absente : ${message}`);
+  }
+  // Hors blocs SQL, aucune valeur ne garde l'échappement `''` du littéral SQL : un vecteur de test
+  // Swift copié depuis la fiche ne correspondrait pas à la réponse réelle.
+  const doublee = /\p{L}''\p{L}/u;
+  for (const [nom, texte] of [['CONTRATS_RPC_SOIGNANT.md', doc], ['LOT1_PLAN.md', read('docs/mobile-swift/LOT1_PLAN.md')]]) {
+    const trouve = horsBlocs(texte).match(doublee);
+    assert.equal(trouve, null, `${nom} : apostrophe SQL doublée hors bloc de code (« ${trouve?.[0]} »)`);
+  }
+});
+
+test('CONTRATS : fn_ecrire_audit_safe — auth.uid() nul donne {success:false} en HTTP 200, pas une exception', () => {
+  const body = sqlBody(read(SOURCES.schema), 'fn_ecrire_audit_safe');
+  // Témoin SQL : le RAISE 28000 est intercepté par le EXCEPTION WHEN OTHERS de la même fonction.
+  assert.match(body, /RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000'/);
+  assert.match(body, /EXCEPTION WHEN OTHERS THEN\s+RETURN jsonb_build_object\('success', false, 'error', SQLERRM\)/);
+  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'fn_ecrire_audit_safe');
+  assert.ok(!/nul → exception `28000`/.test(fiche), 'la fiche présente encore 28000 comme une erreur PostgREST');
+  assert.ok(fiche.includes("{success:false, error:'Non authentifié'}"), 'réponse réelle (HTTP 200) absente de la fiche');
+});
+
+test('CONTRATS : edge delete-account — chaque statut et chaque message de index.ts et de verifyUserOrServiceRole', () => {
+  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'Edge `delete-account`');
+  const index = read('supabase/functions/delete-account/index.ts');
+  const auth = read('supabase/functions/_shared/admin-auth.ts');
+  const debut = auth.indexOf('export async function verifyUserOrServiceRole');
+  const verify = auth.slice(debut, auth.indexOf('export async function verifyAdminOrServiceRole'));
+  assert.ok(debut >= 0 && verify.length > 0, 'verifyUserOrServiceRole introuvable');
+  const messages = [...index.matchAll(/error:\s*(['"])((?:(?!\1).)+)\1/g)].map(m => m[2]);
+  messages.push(...[...index.matchAll(/\|\|\s*'([^']+)'/g)].map(m => m[1]));
+  const statuts = new Set([...index.matchAll(/\},\s*(\d{3})\);/g)].map(m => m[1]));
+  for (const [, statut, message] of verify.matchAll(/status:\s*(\d{3}),\s*error:\s*'([^']+)'/g)) {
+    statuts.add(statut);
+    messages.push(message);
+  }
+  // Témoins : index.ts émet 405/403/429/500/503/409, verifyUserOrServiceRole 401/500/403.
+  assert.deepEqual([...statuts].sort(), ['401', '403', '405', '409', '429', '500', '503']);
+  assert.ok(messages.length >= 20, `messages lus : ${messages.length}`);
+  for (const statut of ['200', ...statuts]) assert.ok(fiche.includes(`**${statut}**`), `statut ${statut} absent de la fiche`);
+  for (const message of new Set(messages)) assert.ok(fiche.includes(message), `message absent de la fiche : « ${message} »`);
+  for (const [, code] of index.matchAll(/error_code:\s*'([A-Z_]+)'/g)) {
+    assert.ok(fiche.includes(`'${code}'`), `error_code ${code} absent de la fiche`);
+  }
+});
+
+test('CONTRATS : fn_mes_favoris_etablissements fait un JOIN interne (jamais présenté comme LEFT JOIN)', () => {
+  const body = sqlBody(read(SOURCES.schema), 'fn_mes_favoris_etablissements');
+  assert.match(body, /\n\s*JOIN etablissements e ON e\.id = f\.etablissement_id/);
+  assert.doesNotMatch(body, /LEFT\s+JOIN/);
+  const doc = horsBlocs(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'));
+  assert.ok(!/`fn_mes_favoris_etablissements\.nom`\s*\(LEFT/.test(doc), 'favoris présentés comme LEFT JOIN');
+  assert.ok(/`fn_mes_favoris_etablissements\.nom`\s*\(JOIN interne/.test(doc), 'JOIN interne des favoris non consigné');
+  assert.ok(/JOIN interne/.test(section(doc, 'fn_mes_favoris_etablissements')), 'fiche favoris : JOIN interne non consigné');
 });
