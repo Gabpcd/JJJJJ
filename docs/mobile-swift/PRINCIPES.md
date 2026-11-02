@@ -30,7 +30,15 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   de conversion automatique, pour que le contrat se lise ligne à ligne.
 - Les signatures existantes de `Mission.swift`, `Account.swift`, `Ports.swift` et
   `Environment.swift` sont le contrat partagé entre agents : on les étend (nouveaux
-  fichiers, extensions), on ne les change pas.
+  fichiers, extensions), on ne les change pas. Seule exception, consignée au lot 1 :
+  l'ajout additif de champs à `Gateways`, dans le corps du struct (Swift interdit les
+  propriétés stockées en extension), chacun avec un port « non câblé » par défaut, et d'un
+  second init complet ; l'init du lot 0 est conservé.
+- Un port « non câblé » (`Ports/Lot1Ports.swift`) ne rend jamais un état vide plausible :
+  il lève `.contract` en citant la tranche qui le livre. `Gateways.unwiredPorts` nomme les
+  ports encore stubs ; les tests de chaque monde (`DemoWorldTests`, `SupabaseGatewaysTests`)
+  figent cette liste, que chaque tranche raccourcit en câblant son port dans les deux mondes
+  dans la même PR. Elle est vide à la clôture du lot.
 
 ## 3. Aucun succès fabriqué
 
@@ -77,7 +85,10 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
 - Chaque appel de port de la résolution (restauration, rôle, profil) est borné à 15 s
   (`SessionController.resolutionTimeout`, comme le pilote) ; au-delà, l'état est
   récupérable (`.signedOut` avec message générique, epoch inchangé), jamais un chargement
-  sans issue.
+  sans issue. Depuis le lot 1, la borne est le helper public `bounded(timeout:_:)`
+  (`Session/Bounded.swift`) et `resolutionTimeout` est public : les modèles d'écran bornent
+  leurs lectures et mutations au même délai. Un délai dépassé sur une mutation impose une
+  relecture, jamais un renvoi.
 - Le SDK est observé (`AuthPort.authEvents()` → `SessionController.handleAuthEvent`) : une
   session effacée côté serveur (révocation, déconnexion globale, refresh refusé) avance
   l'epoch et ramène l'écran de connexion sans action de l'utilisateur. Une revalidation
