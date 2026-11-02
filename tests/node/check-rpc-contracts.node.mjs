@@ -564,6 +564,17 @@ function swiftFiles(dir) {
   }
   return out;
 }
+/** Sources et fixtures texte (`.swift`, `.json`) d'un dossier, hors `.build` et dossiers cachés. */
+function fichiersTexte(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    if (name === '.build' || name === 'DerivedData' || name.startsWith('.')) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...fichiersTexte(full));
+    else if (/\.(swift|json)$/.test(name)) out.push(full);
+  }
+  return out;
+}
 
 // Un gap connu reste verrouillé : un appel RPC écrit en dur dans le code Swift doit viser une
 // RPC sous contrat, jamais une RPC interdite côté natif ni une RPC du lot 4 avant son heure.
@@ -603,9 +614,12 @@ const LOT2_SUIVIES = [
   'fn_admission_otp_signature_recette',
 ];
 // Système de pointage ① (décision 1) : plus monté côté web depuis #664, jamais appelé par le natif.
+// `fn_generer_code_secours_mission` (générateur du code de secours, `QRPointageEtab`, non monté) y entre par
+// l'amendement de la décision 1 (revue fraîche de T0 : troisième chaîne de pointage à distance).
 const POINTAGE_SYSTEME_1 = [
   'fn_pointer_arrivee', 'fn_pointer_depart', 'fn_pointer_debut_pause', 'fn_pointer_fin_pause',
   'fn_valider_scan_qr', 'fn_generer_qr_mission', 'fn_valider_code_secours', 'fn_codes_pointage_mission',
+  'fn_generer_code_secours_mission',
 ];
 const SUPPLEMENT_SMS = 'scripts/ci/sms-signature-staging.sql';
 const DOC_CONTRATS = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
@@ -668,7 +682,7 @@ test('RPC_SUIVIES lot 2 : système rotatif, justificatifs, contrats et admission
   }
 });
 
-test('RPC_POINTAGE_SYSTEME_1 : huit RPC du système ①, jamais suivies, présentes au dump, refusées par verifierExclusions', () => {
+test('RPC_POINTAGE_SYSTEME_1 : neuf RPC du système ①, jamais suivies, présentes au dump, refusées par verifierExclusions', () => {
   assert.deepEqual(contratsRpc.RPC_POINTAGE_SYSTEME_1, POINTAGE_SYSTEME_1);
   const schema = read(SOURCES.schema);
   for (const name of POINTAGE_SYSTEME_1) {
@@ -798,8 +812,11 @@ test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n es
     'nouveau_code n est plus renvoyé (B1 mergée, dump re-baseliné) : au merge de main dans feat/ios-lot2, basculer la fiche « nouveau_code jamais lu » de CONTRATS_RPC_SOIGNANT.md et cette garde');
   const fiche = sectionContrats('`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
   assert.ok(fiche.includes('B1') && fiche.includes('liste blanche'), 'fiche nouveau_code : B1 / liste blanche absents');
-  // Revue de T0 : une bascule « dans la PR B1 » est irréalisable tant que T0 n'est pas sur `main`.
-  for (const [nom, texte] of [['fiche nouveau_code', fiche], ['DECISIONS_LOT2.md', aplati(read('docs/mobile-swift/DECISIONS_LOT2.md'))]]) {
+  // Revue de T0 : une bascule « dans la PR B1 » est irréalisable tant que T0 n'est pas sur `main`. Le tableau
+  // « Amendements du blueprint » de DECISIONS_LOT2.md cite la formulation amendée : il est exclu du contrôle.
+  const decisions = read('docs/mobile-swift/DECISIONS_LOT2.md');
+  const horsAmendements = aplati(decisions.replace(section(decisions, 'Amendements du blueprint'), ''));
+  for (const [nom, texte] of [['fiche nouveau_code', fiche], ['DECISIONS_LOT2.md', horsAmendements]]) {
     assert.ok(texte.includes('merge de `main` dans `feat/ios-lot2`') && texte.includes('re-baseline'), `${nom} : moment de la bascule B1 absent`);
     assert.ok(!texte.includes('dans la même PR') && !texte.includes('B1 se merge après T0') && !texte.includes('mergée après T0'),
       `${nom} : bascule « dans la PR B1 » irréalisable (B1 vise main)`);
@@ -829,6 +846,24 @@ test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, co
   }
   assert.match(body, /'code_pointage_actif', CASE WHEN v_is_etab THEN v_mission\.code_pointage_actif ELSE NULL END/);
   assert.ok(fiche.includes('jamais décodé'), 'code_pointage_actif : « jamais décodé » absent');
+  // Revue fraîche de T0 : `est_etab` vaut JSON null pour tout compte sans établissement (false OR NULL = NULL),
+  // soignant assigné compris, et jamais false pour lui : un décodage en Bool non optionnel échouerait sur 100 % des
+  // réponses réelles. `est_admin()` rend un booléen non nul (COALESCE), `mon_etablissement_id()` NULL hors établissement.
+  assert.ok(body.includes('v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();'),
+    'fn_etat_pointage_mission : affectation de v_is_etab changée — revoir la fiche (est_etab null côté soignant)');
+  assert.ok(body.includes("'est_etab', v_is_etab"), 'fn_etat_pointage_mission : est_etab n est plus renvoyé tel quel — revoir la fiche');
+  assert.ok(corpsSql(read(SOURCES.schema), enteteFn('est_admin_valide')).includes('SELECT COALESCE(EXISTS ('), 'est_admin_valide : plus de COALESCE');
+  for (const temoin of ['`est_etab` : `null` pour tout compte sans établissement (soignant assigné compris), jamais `false`',
+    'jamais décodé côté soignant', '`Bool?`']) {
+    assert.ok(fiche.includes(temoin), `fiche fn_etat_pointage_mission : « ${temoin} » absent`);
+  }
+  const consignes = aplati(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'Consignes aux tranches suivantes'));
+  assert.ok(consignes.includes('**T3**') && consignes.includes('`est_etab: null`') && consignes.includes('fn_etat_pointage_mission'),
+    'consigne T3 (stubs et fixtures de fn_etat_pointage_mission avec est_etab: null) absente');
+  // Aucun stub ni fixture soignant ne pose `est_etab: false` (forme que le serveur ne renvoie jamais à un soignant).
+  const fixtures = [join(root, 'scripts/mobile/export-demo-fixtures.mjs'), ...fichiersTexte(join(root, 'ios-native'))];
+  const fautes = fixtures.filter(f => /"?est_etab"?\s*[:=]\s*false\b/.test(readFileSync(f, 'utf8'))).map(relatif);
+  assert.deepEqual(fautes, [], 'est_etab: false dans un stub ou une fixture : le serveur renvoie null à un soignant (consigne T3)');
 });
 
 // Une forme de réponse = un test côté Swift : chaque refus, code et message du corps SQL figure dans la fiche.
@@ -939,11 +974,36 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
   }
   assert.deepEqual(usages(/from '[^']*\/horsLigne'/), ['src/components/SyncHorsLigne.tsx', 'src/pages/PresencesSoignant.tsx']);
   assert.deepEqual(usages(/from '[^']*\/SyncHorsLigne'/), ['src/components/LayoutApp.tsx']);
+  // Code de secours (amendement de la décision 1) : le générateur n'est appelé que par `QRPointageEtab` (importé par
+  // aucun écran, seulement par un test) et la saisie que par `SaisieCodeSecours` (montée par `CartePointage`, mort).
+  const appelants = rpc => webFiles().filter(f => readFileSync(f, 'utf8').includes(`rpc('${rpc}'`)).map(relatif).sort();
+  assert.deepEqual(appelants('fn_generer_code_secours_mission'), ['src/components/etablissement/QRPointageEtab.tsx']);
+  assert.deepEqual(appelants('fn_valider_code_secours'), ['src/components/soignant/SaisieCodeSecours.tsx']);
+  assert.deepEqual(importeurs(/from '[^']*\/QRPointageEtab'/), [], 'QRPointageEtab (code de secours, système ①) est de nouveau monté — revoir la décision 1');
+  assert.deepEqual(importeurs(/from '[^']*\/SaisieCodeSecours'/), ['src/components/CartePointage.tsx']);
   const fiche = sectionContrats('Interdit côté natif : système de pointage ①');
   for (const name of POINTAGE_SYSTEME_1) assert.ok(fiche.includes(`\`${name}\``), `fiche système ① : ${name} absente`);
-  for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', 'stockerPointageHorsLigne', '#664', 'contrat signé']) {
+  for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', 'stockerPointageHorsLigne', '#664', 'contrat signé',
+    'QRPointageEtab', 'SaisieCodeSecours']) {
     assert.ok(fiche.includes(temoin), `fiche système ① : ${temoin}`);
   }
+  // Revue fraîche de T0 : ① n'est pas « sans contrôle contrat signé » ; le contrôle n'est pas dans ses RPC, mais le
+  // trigger de première arrivée le fait (fn_exiger_conformite_demarrage_mission : SIGNE_COMPLET, deux signatures).
+  const schema = read(SOURCES.schema);
+  assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_premier_pointage" BEFORE INSERT OR UPDATE OF "pointage_arrivee_le" ON "public"."presences"'));
+  assert.ok(corpsSql(schema, enteteFn('trg_exiger_conformite_premier_pointage')).includes('PERFORM public.fn_exiger_conformite_demarrage_mission('));
+  assert.ok(corpsSql(schema, enteteFn('fn_exiger_conformite_demarrage_mission')).includes("AND cm.statut = 'SIGNE_COMPLET'"));
+  for (const name of ['fn_valider_scan_qr', 'fn_pointer_arrivee', 'fn_valider_code_secours']) {
+    assert.ok(!/SIGNE_COMPLET|fn_exiger_conformite/.test(corpsSql(schema, enteteFn(name))), `${name} contrôle désormais le contrat : revoir la fiche ①`);
+  }
+  assert.match(corpsSql(schema, enteteFn('fn_scanner_code_pointage')),
+    /IF v_mission\.prochain_type_scan = 'OUVERTURE' THEN\s+IF NOT EXISTS \(\s+SELECT 1\s+FROM contrats_mission[\s\S]*?statut = 'SIGNE_COMPLET'/);
+  const decision1 = aplati(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'Décisions (§7 du blueprint)')).split(' 2. **')[0];
+  for (const [nom, texte] of [['fiche ①', fiche], ['décision 1', decision1], ['RPC_POINTAGE_SYSTEME_1 (script)', aplati(read('scripts/mobile/check-rpc-contracts.mjs'))]]) {
+    assert.ok(texte.includes('trg_01_exiger_conformite_premier_pointage'), `${nom} : trigger de première arrivée absent`);
+    assert.ok(!/aucun contrôle « contrat signé »|sans contrôle « contrat signé »/.test(texte), `${nom} : « aucun contrôle contrat signé » inexact (trigger de première arrivée)`);
+  }
+  assert.ok(decision1.includes('fn_generer_code_secours_mission') && decision1.includes('amend'), 'décision 1 : amendement (neuvième RPC ①) absent');
 });
 
 test('CONTRATS edge verify-document : chaque statut et chaque message de index.ts, un seul appel par document', () => {
@@ -1084,6 +1144,10 @@ test('CONTRATS : sources lues par la garde du lot 2 listées dans l en-tête', (
     // Revue fraîche de T0 : rejoueur ①, constats B9, filtres de chemins.
     'src/lib/horsLigne.ts', 'src/components/SyncHorsLigne.tsx', 'src/components/LayoutApp.tsx',
     'docs/audit-fonctionnel-pre-lancement.md', '.github/workflows/ios-swift-ci.yml', 'fn_codes_pointage_mission',
+    // Seconde revue de T0 : code de secours (troisième chaîne), gardes nues, est_etab, fixtures.
+    'fn_generer_code_secours_mission', 'fn_valider_code_secours', 'src/components/etablissement/QRPointageEtab.tsx',
+    'src/components/soignant/SaisieCodeSecours.tsx', 'GRANT `authenticated`', 'mon_etablissement_id()', 'est_admin_valide',
+    'scripts/mobile/export-demo-fixtures.mjs',
   ]) assert.ok(entete.includes(source), `en-tête : source ${source} non listée`);
   // Les MESSAGES_ERREUR du web cités par la fiche OTP existent toujours tels quels.
   const otp = read('src/components/SignerContratOtp.tsx');
@@ -1117,6 +1181,27 @@ test('DECISIONS_LOT2.md : vingt-cinq décisions dans l ordre, D-FLAGS, scission 
     assert.ok(attente.includes(point), `En attente de Gabrielle : ${point} absent`);
   }
   assert.ok(decisions.includes('LOT2_PLAN.md') && decisions.includes('LOTS_2_5_DECISIONS'), 'renvois au blueprint et au mandat absents');
+});
+
+// Revue fraîche de T0 : tout écart au blueprint versionné est déclaré (tableau « Amendements du blueprint »), et la
+// bascule des gardes confrontées à des sources de `main` est décrite pour chaque PR connue, pas seulement pour B1.
+test('DECISIONS_LOT2.md : amendements du blueprint déclarés, bascule des gardes confrontées à main généralisée', () => {
+  const decisions = read('docs/mobile-swift/DECISIONS_LOT2.md');
+  const amendements = aplati(section(decisions, 'Amendements du blueprint'));
+  for (const temoin of ['§3 B1 « Fichiers »', '§4, vague 0', 'B1 vise `main`', '§3 T0', '`RPC_POINTAGE_SYSTEME_1`',
+    'fn_generer_code_secours_mission', 'décision 1']) {
+    assert.ok(amendements.includes(temoin), `Amendements du blueprint : ${temoin} absent`);
+  }
+  // Le blueprint versionné dit toujours le contraire (sinon la ligne d'amendement est à retirer).
+  const plan = aplati(read('docs/mobile-swift/LOT2_PLAN.md'));
+  assert.ok(plan.includes('B1 se merge **après** T0') && plan.includes('B1 **après T0**'), 'LOT2_PLAN.md : formulation amendée introuvable');
+  const ordre = aplati(section(decisions, 'Ordonnancement et branches'));
+  assert.ok(ordre.includes('(amende `LOT2_PLAN.md` §3 B1 « Fichiers » et §4, vague 0)'), 'Ordonnancement : amendement de B1 non déclaré');
+  for (const temoin of ['merge de `main` dans `feat/ios-lot2`', 're-baseline', 'B1', 'REVOKE', 'IS DISTINCT FROM', 'Motif à auditer',
+    'fn_creer_notification', 'PanneauContestation.tsx', 'SyncHorsLigne', 'W1', 'PresencesSoignant.tsx', 'DocumentsSoignant.tsx',
+    'message d\'échec']) {
+    assert.ok(ordre.includes(temoin), `Ordonnancement et branches : bascule généralisée — ${temoin} absent`);
+  }
 });
 
 test('LOT2_PLAN.md versionné : blueprint du 02/11/2026, vingt-cinq questions au §7', () => {
@@ -1163,53 +1248,149 @@ test('PRINCIPES §4 et plan : file hors ligne QR retirée, critères du lot 2 am
 
 // Revue fraîche de T0 : les constats RLS/auth relevés sur le dump sont consignés sous « En attente de Gabrielle › B9 »
 // et confrontés à leurs sources. Chaque témoin SQL rougit quand une PR backend (B9) corrige le constat : basculer
-// alors le constat de DECISIONS_LOT2.md et la fiche concernée de CONTRATS_RPC_SOIGNANT.md.
+// alors le constat de DECISIONS_LOT2.md et la fiche concernée de CONTRATS_RPC_SOIGNANT.md, au moment fixé par
+// DECISIONS_LOT2.md « Ordonnancement et branches » (BASCULE_MAIN ci-dessous).
+const BASCULE_MAIN = 'basculer au merge de main dans feat/ios-lot2 qui amène la re-baseline du dump (ou dans la PR backend elle-même si T0 est déjà sur main) — DECISIONS_LOT2.md « Ordonnancement et branches »';
 test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn_creer_notification) confrontés au dump et consignés', () => {
   const schema = read(SOURCES.schema);
   const grantAuthenticated = name => new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema);
-  // (b) Les huit RPC ① restent appelables par PostgREST.
+  // (b) Les neuf RPC ① restent appelables par PostgREST.
   for (const name of POINTAGE_SYSTEME_1) {
-    assert.ok(grantAuthenticated(name), `${name} : plus de GRANT authenticated au dump (REVOKE appliqué ?) — basculer la fiche ① et le constat B9`);
+    assert.ok(grantAuthenticated(name), `${name} : plus de GRANT authenticated au dump (REVOKE appliqué ?) : fiche ① « Toujours appelables » et constat B9 à ${BASCULE_MAIN}`);
   }
-  // Chaîne « code sans GPS » : garde ternaire de fn_codes_pointage_mission (mon_etablissement_id() NULL pour un
+  // Chaîne 1, « code sans GPS » : garde ternaire de fn_codes_pointage_mission (mon_etablissement_id() NULL pour un
   // soignant), codes rendus et créés ; fn_pointer_arrivee accepte le code avec perimetre_gps_valide = true ;
   // dec_antifraude_presence ne recalcule rien sans coordonnées.
   const codes = corpsSql(schema, enteteFn('fn_codes_pointage_mission'));
-  assert.ok(codes.includes('IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'), 'fn_codes_pointage_mission : garde corrigée');
+  assert.ok(codes.includes('IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'), `fn_codes_pointage_mission : garde corrigée, chaîne 1 du constat B9 à ${BASCULE_MAIN}`);
   assert.ok(codes.includes("'code_arrivee', v_mission.code_arrivee") && codes.includes("'code_depart', v_mission.code_depart") && codes.includes('UPDATE missions SET'));
   assert.match(corpsSql(schema, enteteFn('fn_pointer_arrivee')), /IF p_code_arrivee IS NOT NULL THEN[\s\S]*?v_methode := 'CODE';\s*v_perimetre_ok := true;/);
   assert.ok(corpsSql(schema, enteteFn('dec_antifraude_presence')).includes('IF NEW.pointage_arrivee_le IS NOT NULL AND NEW.arrivee_lat IS NOT NULL THEN'));
-  // Chaîne « jeton auto-généré » : garde ternaire de fn_generer_qr_mission, puis fn_valider_scan_qr (soignant assigné,
-  // GPS non bloquant).
+  // Chaîne 2, « jeton auto-généré » : garde ternaire de fn_generer_qr_mission, puis fn_valider_scan_qr (soignant
+  // assigné, GPS non bloquant).
   assert.ok(corpsSql(schema, enteteFn('fn_generer_qr_mission')).includes('IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'),
-    'fn_generer_qr_mission : garde corrigée');
+    `fn_generer_qr_mission : garde corrigée, chaîne 2 du constat B9 à ${BASCULE_MAIN}`);
   const scan = corpsSql(schema, enteteFn('fn_valider_scan_qr'));
   assert.ok(scan.includes('soignant_assigne_id IS DISTINCT FROM v_uid') && scan.includes('QR = source de vérité'));
+  // Chaîne 3, « code de secours auto-généré » : même garde ternaire dans fn_generer_code_secours_mission, qui rend le
+  // code en clair ; fn_valider_code_secours ne vérifie que l'affectation (aucun contrôle GPS) et insère la présence
+  // CODE_SECOURS.
+  const secours = corpsSql(schema, enteteFn('fn_generer_code_secours_mission'));
+  assert.ok(secours.includes('IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'),
+    `fn_generer_code_secours_mission : garde corrigée, chaîne 3 du constat B9 à ${BASCULE_MAIN}`);
+  assert.ok(secours.includes("'code', v_code") && secours.includes('Retourne le code EN CLAIR'), 'fn_generer_code_secours_mission : code plus rendu en clair');
+  const validation = corpsSql(schema, enteteFn('fn_valider_code_secours'));
+  assert.ok(validation.includes('IF v_mission IS NULL OR v_mission.soignant_assigne_id != v_uid THEN'));
+  assert.ok(validation.includes("p_terminal_id, 'CODE_SECOURS');"), 'fn_valider_code_secours : présence CODE_SECOURS plus insérée');
+  assert.ok(!/perimetre|distance|rayon|p_lat IS (?:NOT )?NULL/i.test(validation), `fn_valider_code_secours contrôle désormais la position : chaîne 3 du constat B9 à ${BASCULE_MAIN}`);
   // (a) fn_creer_notification : tout compte authentifié écrit une notification arbitraire (destinataire, titre,
   // corps, lien) ; seul contrôle : auth.uid() non nul. L'audit pré-lancement la marque « FIXÉ ».
-  assert.ok(grantAuthenticated('fn_creer_notification'), 'fn_creer_notification : plus de GRANT authenticated — basculer le constat B9');
+  assert.ok(grantAuthenticated('fn_creer_notification'), `fn_creer_notification : plus de GRANT authenticated, constat B9 et fiche à ${BASCULE_MAIN}`);
   const notif = corpsSql(schema, enteteFn('fn_creer_notification'));
   assert.ok(notif.includes('IF auth.uid() IS NULL AND NOT fn_est_contexte_cron_ou_admin() THEN'));
   assert.ok(!/p_destinataire_id\s*(?:<>|!=|=|IS DISTINCT FROM|IS NOT DISTINCT FROM)/.test(notif) && notif.includes('p_lien'),
-    'fn_creer_notification contrôle désormais le destinataire : basculer le constat B9');
+    `fn_creer_notification contrôle désormais le destinataire : constat B9 et fiche à ${BASCULE_MAIN}`);
   assert.ok(read('docs/audit-fonctionnel-pre-lancement.md').includes('| 4 | `fn_creer_notification` exposée sans check auth → spam notifications | MAJEUR | ✅ FIXÉ |'));
   // Consignation : DECISIONS_LOT2.md › En attente de Gabrielle › B9, fiche ① et fiche fn_creer_notification.
   const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
     'B9 (PR préparées et poussées, jamais mergées sans go)'));
   for (const temoin of ['fn_creer_notification', 'l.82276', '`auth.uid() IS NULL`', 'FIXÉ', 'docs/audit-fonctionnel-pre-lancement.md',
     'fn_codes_pointage_mission', 'fn_pointer_arrivee', '`perimetre_gps_valide = true`', 'fn_generer_qr_mission', 'fn_valider_scan_qr',
-    'pointer à distance', 'REVOKE EXECUTE', 'FROM authenticated', 'SyncHorsLigne', 'IS DISTINCT FROM', 'COALESCE',
+    'Trois chaînes', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', 'fn_valider_code_secours', '`CODE_SECOURS`',
+    'pointer à distance', 'REVOKE EXECUTE', 'FROM authenticated', 'neuf RPC ①', 'SyncHorsLigne', 'IS DISTINCT FROM', 'COALESCE',
     'un gap connu reste verrouillé', 'définition live', 'PR backend séparée', 'fn_presences_detail_mission', 'fn_etat_pointage_mission']) {
     assert.ok(b9.includes(temoin), `En attente de Gabrielle › B9 : ${temoin} absent`);
   }
+  assert.ok(!/Deux chaînes|huit RPC/.test(b9), 'En attente de Gabrielle › B9 : décompte périmé (trois chaînes, neuf RPC ①)');
+  // Les deux propositions (REVOKE ou gardes) couvrent le générateur du code de secours.
+  const proposition = b9.slice(b9.indexOf('**Proposition**', b9.indexOf('Trois chaînes')));
+  assert.ok(proposition.includes('REVOKE EXECUTE') && proposition.includes('IS DISTINCT FROM'));
+  assert.ok((proposition.slice(0, proposition.indexOf('un gap connu reste verrouillé')).match(/fn_generer_code_secours_mission/g) ?? []).length >= 2,
+    'Proposition B9 : fn_generer_code_secours_mission absente de l une des deux options (REVOKE, gardes)');
   const fiche1 = sectionContrats('Interdit côté natif : système de pointage ①');
-  for (const temoin of ['toujours GRANT `authenticated` en production', 'PostgREST', 'pointer à distance', 'B9', 'REVOKE EXECUTE']) {
+  for (const temoin of ['toujours GRANT `authenticated` en production', 'PostgREST', 'pointer à distance', 'B9', 'REVOKE EXECUTE',
+    'Trois gardes', 'fn_generer_code_secours_mission', 'l.37478', 'l.83013', '`CODE_SECOURS`']) {
     assert.ok(fiche1.includes(temoin), `fiche système ① : ${temoin} absent`);
   }
+  assert.ok(!/Deux gardes|huit RPC|\(huit,/.test(fiche1), 'fiche système ① : décompte périmé (trois gardes, neuf RPC)');
   const ficheNotif = sectionContrats('Interdite côté natif : `fn_creer_notification`');
   for (const temoin of ['GRANT `authenticated`', 'l.82276', '`auth.uid() IS NULL`', 'B9', 'FIXÉ']) {
     assert.ok(ficheNotif.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
   }
+});
+
+// Revue fraîche de T0 : « Motif à auditer » — gardes d'accès des RPC GRANT authenticated dont une comparaison `=`, `!=`
+// ou `<>` à mon_etablissement_id() est nue (ni IS DISTINCT FROM, ni IS NULL) : NULL pour tout compte sans
+// établissement, la garde laisse passer. Méthode reproductible (gardesNuesEtablissement) : conditions `IF`/`ELSIF …
+// THEN` du corps, moins deux exclusions motivées ; plus l'affectation de v_is_etab de fn_etat_pointage_mission.
+const GARDES_NUES_ETAB = [
+  ['fn_activer_garantie_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
+  ['fn_booster_mission', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN'],
+  ['fn_codes_pointage_mission', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'],
+  ['fn_creer_reclamation_score', "IF p_evenement_type = 'ETAB' AND v_proprio_id != mon_etablissement_id() THEN"],
+  ['fn_declarer_honoraires_retrocession', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
+  ['fn_definir_retrocession_mission', 'IF v_m.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
+  ['fn_deposer_chorus', 'IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN'],
+  ['fn_diffuser_pool_urgence', 'OR v_etablissement_id = public.mon_etablissement_id()\n  ) THEN'],
+  ['fn_enregistrer_numero_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN'],
+  ['fn_etablissement_pour_mission', ') AND mon_etablissement_id() != p_etablissement_id AND NOT est_admin() THEN'],
+  ['fn_etat_pointage_mission', 'v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();'],
+  ['fn_generer_code_secours_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'],
+  ['fn_generer_donnees_dpae', 'IF NOT (est_admin() OR v_etab_id = mon_etablissement_id()) THEN'],
+  ['fn_generer_facture', 'IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'],
+  ['fn_generer_qr_mission', 'IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'],
+  ['fn_presences_detail_mission', 'IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin()'],
+  ['fn_rebooker_soignant', 'IF v_m.etablissement_id <> public.mon_etablissement_id() AND NOT public.est_admin() THEN'],
+  ['fn_soignants_urgence', 'IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN'],
+];
+// Relevées par la méthode mais sûres : la comparaison nue est neutralisée par le reste de la condition.
+// Clé : nom de la RPC ; valeur : [début exact de l'en-tête de la surcharge concernée, témoin de la neutralisation].
+const GARDES_NUES_EXCLUES = {
+  // Surcharge « facture » : conjonction avec `fn_a_permission_etablissement('contrats', …) IS TRUE`, faux pour un soignant.
+  fn_ouvrir_litige_rate_limited: [
+    `${enteteFn('fn_ouvrir_litige_rate_limited')}"p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid")`,
+    "v_mission.etablissement_id = public.mon_etablissement_id()\n      AND public.fn_a_permission_etablissement(\n        'contrats', v_mission.etablissement_id\n      ) IS TRUE",
+  ],
+  // Comparaison dans le WHERE d'un NOT EXISTS : NULL ne sélectionne aucune ligne, la garde refuse.
+  fn_soignant_stripe_connect_actif: [enteteFn('fn_soignant_stripe_connect_actif'),
+    'AND NOT EXISTS(SELECT 1 FROM missions m WHERE m.soignant_assigne_id = p_soignant_id AND m.etablissement_id = mon_etablissement_id()'],
+};
+/** RPC GRANT authenticated dont une condition `IF`/`ELSIF … THEN` compare nûment à mon_etablissement_id(). */
+function gardesNuesEtablissement(schema) {
+  const auth = new Set([...schema.matchAll(/\nGRANT ALL ON FUNCTION "public"\."([a-z0-9_]+)"\([^\n]*\) TO "authenticated";\n/g)].map(m => m[1]));
+  const nue = /(?:!=|<>|(?<![:<>!])=)\s*(?:public\.)?mon_etablissement_id\(\)|mon_etablissement_id\(\)\s*(?:!=|<>|=(?!>))/;
+  const out = new Set();
+  for (const bloc of schema.split('\nCREATE OR REPLACE FUNCTION "public"."').slice(1)) {
+    const name = bloc.slice(0, bloc.indexOf('"'));
+    if (!auth.has(name)) continue;
+    const fin = bloc.indexOf('\nALTER FUNCTION ');
+    for (const [, condition] of (fin < 0 ? bloc : bloc.slice(0, fin)).matchAll(/(?<!END )\b(?:IF|ELSIF)\b([\s\S]*?)\bTHEN\b/g)) {
+      if (nue.test(condition) && !/mon_etablissement_id\(\)\s+IS\s+NULL/.test(condition)) out.add(name);
+    }
+  }
+  return [...out].sort();
+}
+test('B9 RLS/auth : « Motif à auditer » — gardes nues à mon_etablissement_id() des RPC authenticated, liste reproductible', () => {
+  const schema = read(SOURCES.schema);
+  for (const [name, garde] of GARDES_NUES_ETAB) {
+    assert.ok(corpsSql(schema, enteteFn(name)).includes(garde), `${name} : garde nue corrigée (« ${garde} ») : liste « Motif à auditer » à ${BASCULE_MAIN}`);
+    assert.ok(new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema), `${name} : plus de GRANT authenticated`);
+  }
+  for (const [name, [entete, temoin]] of Object.entries(GARDES_NUES_EXCLUES)) {
+    assert.ok(corpsSql(schema, entete).includes(temoin), `${name} : exclusion à revoir (témoin « ${temoin} » absent)`);
+  }
+  const attendu = GARDES_NUES_ETAB.map(([n]) => n).filter(n => n !== 'fn_etat_pointage_mission');
+  assert.deepEqual(gardesNuesEtablissement(schema).filter(n => !(n in GARDES_NUES_EXCLUES)), attendu,
+    `gardes nues à mon_etablissement_id() : la liste du dump a changé — mettre à jour GARDES_NUES_ETAB et « Motif à auditer » (${BASCULE_MAIN})`);
+  const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
+    'B9 (PR préparées et poussées, jamais mergées sans go)'));
+  const motif = b9.slice(b9.indexOf('**Motif à auditer'), b9.indexOf('**Remontée**'));
+  assert.ok(motif.length > 0, '« Motif à auditer » absent');
+  assert.ok(motif.includes(`${GARDES_NUES_ETAB.length} RPC`), `« Motif à auditer » : décompte ${GARDES_NUES_ETAB.length} RPC absent`);
+  assert.ok(!motif.includes('18 fois'), '« Motif à auditer » : ancien décompte non reproductible');
+  for (const [name] of GARDES_NUES_ETAB) assert.ok(motif.includes(`\`${name}\``), `« Motif à auditer » : ${name} absente`);
+  for (const name of Object.keys(GARDES_NUES_EXCLUES)) assert.ok(motif.includes(`\`${name}\``), `« Motif à auditer » : exclusion ${name} non motivée`);
+  assert.ok(motif.includes('tests/node/check-rpc-contracts.node.mjs'), '« Motif à auditer » : méthode reproductible non référencée');
 });
 
 // Revue fraîche de T0 : check-rpc-contracts.mjs lit le supplément STAGING (statut `staging_seulement`) ; tant que
