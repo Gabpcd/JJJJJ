@@ -77,11 +77,11 @@ final class DemoExplorerTests: JoleneUITestCase {
         let rows = elements(withPrefix: "mission-row-")
         require("Au moins une cellule mission est visible") { rows.count > 0 && self.visible(rows.firstMatch) }
         rows.firstMatch.tap()
-        // Le conteneur de défilement est requis par son type : jamais un enfant homonyme.
-        let detail = app.scrollViews.matching(identifier: "mission-detail").firstMatch
         require("Le détail de la mission est rendu") {
-            self.containerVisible(detail) && self.visible(self.element("mission-detail-title"))
+            self.containerVisible(self.element("mission-detail")) && self.visible(self.element("mission-detail-title"))
         }
+        // Résolu une fois le détail affiché, pour retenir la `ScrollView` si elle porte l'identifiant.
+        let detail = defilement("mission-detail")
         let legende = element("mission-detail-carte-legende")
         scrollTo(legende, in: detail)
         XCTAssertEqual(legende.label, Attendus.premierEtablissement,
@@ -104,8 +104,15 @@ final class DemoExplorerTests: JoleneUITestCase {
 
     // MARK: Étapes
 
-    /// Défilement de la feuille de filtres, requis par son type (jamais un enfant homonyme).
-    private var feuilleFiltres: XCUIElement { app.scrollViews.matching(identifier: "explorer-filtres").firstMatch }
+    /// Conteneur de défilement : la `ScrollView` portant l'identifiant (le glissement de `scrollTo`
+    /// se fait dans son cadre), sinon la première correspondance, comme `element(_:)` du lot 0.
+    private func defilement(_ identifier: String) -> XCUIElement {
+        let typee = app.scrollViews.matching(identifier: identifier).firstMatch
+        return typee.exists ? typee : element(identifier)
+    }
+
+    /// Défilement de la feuille de filtres.
+    private var feuilleFiltres: XCUIElement { defilement("explorer-filtres") }
 
     /// Connexion démo puis onglet Explorer à 30 missions. N'attend que la barre d'onglets : le
     /// contenu de l'onglet Accueil évolue avec le lot 1 (T3).

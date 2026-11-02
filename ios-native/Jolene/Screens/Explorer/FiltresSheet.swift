@@ -102,14 +102,10 @@ struct FiltresSheet: View {
                 .font(JoleneFont.caption)
                 .foregroundStyle(JoleneColor.bubblegum)
                 .accessibilityIdentifier("filtre-rayon-valeur")
+            // Curseur nu comme le web (ni libellé minimum ni maximum) : un seul élément « Rayon »
+            // pour VoiceOver, sa valeur en kilomètres.
             Slider(value: $brouillon.rayonKm, in: ExplorerFiltres.rayonMinimumKm...ExplorerFiltres.rayonMaximumKm,
-                   step: ExplorerFiltres.rayonPasKm) {
-                Text("Rayon")
-            } minimumValueLabel: {
-                Text("\(MissionPresentation.nombreJavaScript(ExplorerFiltres.rayonMinimumKm)) km").font(JoleneFont.caption)
-            } maximumValueLabel: {
-                Text("\(MissionPresentation.nombreJavaScript(ExplorerFiltres.rayonMaximumKm)) km").font(JoleneFont.caption)
-            }
+                   step: ExplorerFiltres.rayonPasKm)
             .tint(JoleneColor.rose700)
             .accessibilityLabel("Rayon")
             .accessibilityValue("\(MissionPresentation.nombreJavaScript(brouillon.rayonKm)) km")
