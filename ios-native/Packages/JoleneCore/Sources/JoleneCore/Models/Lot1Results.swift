@@ -18,18 +18,12 @@ public enum ActionPlanning: String, CaseIterable, Sendable {
 /// Élément de `p_creneaux_confirmes` : instants ISO 8601 du planning exact affiché. T6a le
 /// produit depuis `creneauxConfirmesPourAction` (port T2), sans jamais recalculer un horaire.
 ///
-/// Doublon assumé, temporaire, de `CreneauConfirme` (T2, `Missions/CreneauxConfirmes.swift`,
-/// mêmes clés `debut`/`fin`, même init, mêmes conformances), que le blueprint §2.3 désigne
-/// comme type du port. Les deux tranches sont développées en parallèle : la PR mergée en
-/// second remplace ce struct par `public typealias CreneauConfirmePayload = CreneauConfirme`
-/// (ou le port par `[CreneauConfirme]`), pour que `CandidaturePort.confirmer` consomme
-/// directement `CreneauxConfirmes.pourAction(_:)` sans conversion en T6a.
-public struct CreneauConfirmePayload: Codable, Hashable, Sendable {
-    public var debut: String
-    public var fin: String
-
-    public init(debut: String, fin: String) { self.debut = debut; self.fin = fin }
-}
+/// Alias de `CreneauConfirme` (T2, `Missions/CreneauxConfirmes.swift`), le type que le
+/// blueprint §2.3 désigne pour le port : le doublon temporaire posé par T1 pendant le
+/// développement parallèle de T1 et T2 est retiré à leur intégration (`feat/ios-lot1`), pour
+/// que `CandidaturePort.confirmer` consomme directement `CreneauxConfirmes.pourAction(_:)`
+/// sans conversion en T6a. Le nom est conservé : les protocoles du lot 1 restent figés.
+public typealias CreneauConfirmePayload = CreneauConfirme
 
 /// Option de contrat proposée par le serveur quand `choix_requis` est vrai (`{value, label}`).
 public struct ChoixContratOption: Codable, Equatable, Sendable {

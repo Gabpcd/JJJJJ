@@ -341,14 +341,18 @@ final class RPCResponseTests: XCTestCase {
     }
 
     // MARK: - Transport
+    //
+    // Nom de RPC fictif, sans préfixe `fn_` : la garde `tests/node/check-rpc-contracts.node.mjs`
+    // exige que tout littéral "fn_…" du Swift soit une RPC suivie (RPC_SUIVIES) ; le transport
+    // testé ici ne dépend pas du nom de la fonction appelée.
 
     func testAppelTransmetLesParametresEtLitLaReponse() async throws {
-        registry.add("POST", "/rest/v1/rpc/fn_test_jsonb", respond: .json(200, #"{"success":true,"id":"x-1"}"#))
-        let r = try await RPCResponse.appeler(TestClient.make(), "fn_test_jsonb",
+        registry.add("POST", "/rest/v1/rpc/rpc_fictive_jsonb", respond: .json(200, #"{"success":true,"id":"x-1"}"#))
+        let r = try await RPCResponse.appeler(TestClient.make(), "rpc_fictive_jsonb",
                                               params: ["p_id": .string("x-1"), "p_actif": .bool(true)], fallback: fallback)
         XCTAssertTrue(r.estSucces)
         XCTAssertEqual(r.string("id"), "x-1")
-        let requete = try XCTUnwrap(registry.requests(to: "/rest/v1/rpc/fn_test_jsonb").first)
+        let requete = try XCTUnwrap(registry.requests(to: "/rest/v1/rpc/rpc_fictive_jsonb").first)
         let corps = try XCTUnwrap(requete.bodyJSON as? [String: Any])
         XCTAssertEqual(corps["p_id"] as? String, "x-1")
         XCTAssertEqual(corps["p_actif"] as? Bool, true)
@@ -356,17 +360,17 @@ final class RPCResponseTests: XCTestCase {
     }
 
     func testAppelPGRST202EstUnRefusDeContratSansRenvoi() async throws {
-        registry.add("POST", "/rest/v1/rpc/fn_test_jsonb", respond: .json(404, """
-        {"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function public.fn_test_jsonb in the schema cache"}
+        registry.add("POST", "/rest/v1/rpc/rpc_fictive_jsonb", respond: .json(404, """
+        {"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function public.rpc_fictive_jsonb in the schema cache"}
         """))
         do {
-            _ = try await RPCResponse.appeler(TestClient.make(), "fn_test_jsonb", fallback: fallback)
+            _ = try await RPCResponse.appeler(TestClient.make(), "rpc_fictive_jsonb", fallback: fallback)
             XCTFail("attendu : erreur de contrat")
         } catch let error as JoleneError {
             XCTAssertEqual(error.kind, .contract)
             XCTAssertFalse(error.message.contains("PGRST"))
         }
-        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_test_jsonb").count, 1)
+        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/rpc_fictive_jsonb").count, 1)
     }
 
     // MARK: - Exception `[CODE DU TRAVAIL]` (HTTP 400)
@@ -420,12 +424,12 @@ final class RPCResponseTests: XCTestCase {
 
     func testExceptionCodeDuTravailIntercepteeAussiSansParametre() async throws {
         let message = refusCodeDuTravail[0].message
-        registry.add("POST", "/rest/v1/rpc/fn_test_jsonb",
+        registry.add("POST", "/rest/v1/rpc/rpc_fictive_jsonb",
                      respond: .json(400, exceptionPostgREST(sqlstate: "P0001", details: nil, message: message)))
-        let r = try await RPCResponse.appeler(TestClient.make(), "fn_test_jsonb", fallback: fallback)
+        let r = try await RPCResponse.appeler(TestClient.make(), "rpc_fictive_jsonb", fallback: fallback)
         XCTAssertEqual(r.issueCandidatureRefusee(fallback: fallback),
                        .refusee(code: CandidatureOutcome.codeRefusCodeDuTravail, message: message, documentsRequisPour: nil))
-        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/fn_test_jsonb").count, 1)
+        XCTAssertEqual(registry.requests(to: "/rest/v1/rpc/rpc_fictive_jsonb").count, 1)
     }
 
     func testExceptionSansMarqueurResteUneErreurGenerique() async throws {
@@ -459,9 +463,9 @@ final class RPCResponseTests: XCTestCase {
     }
 
     func testAppelReseauIndisponible() async throws {
-        registry.add("POST", "/rest/v1/rpc/fn_test_jsonb", respond: .networkFailure())
+        registry.add("POST", "/rest/v1/rpc/rpc_fictive_jsonb", respond: .networkFailure())
         do {
-            _ = try await RPCResponse.appeler(TestClient.make(), "fn_test_jsonb", fallback: fallback)
+            _ = try await RPCResponse.appeler(TestClient.make(), "rpc_fictive_jsonb", fallback: fallback)
             XCTFail("attendu : erreur réseau")
         } catch let error as JoleneError {
             XCTAssertEqual(error.kind, .network)
