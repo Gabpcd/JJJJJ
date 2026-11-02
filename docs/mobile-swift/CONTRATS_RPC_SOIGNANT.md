@@ -15,16 +15,33 @@ Le fichier machine correspondant est `ios-native/rpc-contracts.json`, régénér
 `--update` réécrit le JSON après relecture des gateways Swift. Le présent document est lui-même gardé par
 `tests/node/check-rpc-contracts.node.mjs` (une fiche par RPC suivie, RPC interdites, formes de réponse
 confrontées à `public.sql` et à l'edge `delete-account`), exécuté sur toute PR par l'étape « Garde de
-livraison mobile » de `.github/workflows/validate-pr.yml`.
+livraison mobile » du check requis « Typecheck + build » de `.github/workflows/validate-pr.yml`.
+
+**Re-baseline du schéma (procédure).** Parce que cette garde tourne dans un check requis, une PR
+automatique `auto/schema-baseline` (`schema-snapshot.yml`) qui modifie l'une des vingt-sept RPC suivies
+(signature, GRANT, ou corps dont une fiche cite les réponses) reste bloquée — c'est voulu, fail-closed — et
+`drift-check.yml` reste rouge tant qu'elle n'est pas mergée. Ne jamais corriger sur `auto/schema-baseline` :
+le `git push --force` du run suivant efface tout commit manuel. Procédure : une **PR humaine**, depuis une
+branche dédiée, porte le dump (`supabase/schema/public.sql` de la PR automatique ou de l'artefact
+`schema-public-sql`) ; après relecture de la définition live (`scripts/dump-live-def.sh`) et des gateways
+Swift concernées, elle ajoute `node scripts/mobile/check-rpc-contracts.mjs --update` (nouveau
+`ios-native/rpc-contracts.json`) et la fiche ajustée dans ce document ; CI verte et revue fraîche, merge,
+puis fermeture de la PR automatique devenue sans objet (le run suivant de `schema-snapshot.yml` ne trouve
+plus de diff).
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
 définitifs ; aucune RPC `fn_admin_*` n'est embarquée.
 
-Règles ajoutées au lot 1 (`LOT1_PLAN.md` §2.3-§2.4) : les réponses `jsonb` en HTTP 200 sont polymorphes
-(`{error}` seul, `{success:false, error, error_code}`, `{success:true, …}`, exception PostgREST) et passent
-par un décodeur unique `RPCResponse<T>` ; un gateway qui ne teste que l'erreur PostgREST afficherait un
-faux succès, d'où un test par RPC et par forme de réponse. Chaque appel est borné à
+Règles ajoutées au lot 1 (`LOT1_PLAN.md` §2.3-§2.4) : les réponses `jsonb` en HTTP 200 sont polymorphes —
+`{error}` seul ; `{success:false, ok:false, error, code?}` (refus propres à `fn_confirmer_action_planning_v1`) ;
+`{success:false, error_code, …}` (`fn_annuler_candidature_soignant`) ; réponses des délégués de la
+candidature **sans clé `success`** : `{choix_requis:true, error, options}`, `{error, code, …}` (plafond
+48 h) et `{error, documents_requis_pour, lien_documents}` ; `{success:true, …}` ; exception PostgREST. Elles
+passent par un décodeur unique `RPCResponse` qui les discrimine **par clés, indépendamment de `success`**,
+dans l'ordre du web (`LOT1_PLAN.md` §2.4 : `choix_requis` → `code` → `documents_requis_pour` avec `error` →
+`success:true` → `error` seul → sinon `.contract`) ; un gateway qui ne teste que l'erreur PostgREST
+afficherait un faux succès, d'où un test par RPC et par forme de réponse. Chaque appel est borné à
 `SessionController.resolutionTimeout` (15 s) ; un timeout client sur une mutation ne prouve pas que le
 serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 
@@ -68,8 +85,11 @@ après la capture du 2026-07-29) : **classée manuellement `RPC_UTILISATEUR_AUTH
 du lot 1 (`LOT1_PLAN.md` §7), sans régénération du manifeste — voir sa fiche. `ios-native/rpc-contracts.json`
 garde `manifeste: null` pour elle : c'est le fait observé, le classement est documentaire.
 
-Deux RPC ne sont pas suivies et ne doivent jamais l'être côté natif : `fn_etablissement_public` (fiche
-« Interdite côté natif » en fin de document) et `fn_retirer_candidature` (swipe, lot 4).
+Deux RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
+(`scripts/mobile/check-rpc-contracts.mjs`) fait échouer la CI si l'une d'elles y entre trop tôt :
+**jamais** `fn_etablissement_public` (fiche « Interdite côté natif » en fin de document) ; **pas avant le
+lot 4** `fn_retirer_candidature` (swipe), suivie au plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet`
+reste suivie mais est reclassée lot 3 (voir sa fiche).
 
 ## fn_get_my_role
 
@@ -178,15 +198,44 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
     7. `{success:false, ok:false, error:'Proposition introuvable.'}` — l.24295-24306 : `PROPOSITION` sans
        `p_candidature_id`, ou candidature qui n'est pas `PROPOSEE`, au soignant et pour cette mission.
   - **Réponses des délégués**, renvoyées telles quelles une fois les contrôles passés : `POSTULER` →
-    `fn_postuler_mission_rate_limited` (l.48080) ; `ACCEPTER` → `fn_accepter_mission` (l.5120) →
-    `fn_finaliser_attribution_mission` (l.36703) ; `PROPOSITION` → `fn_repondre_proposition(p_candidature_id, true)`
-    (l.53577). Formes : `{success:true, candidature_id, choix_contrat, profession_requise, docs_a_completer, documents_requis_pour}`
-    (POSTULER) ou `{success:true, contrat_id, …}` (ACCEPTER, PROPOSITION + `message:'Proposition acceptée'`) ;
-    `{choix_requis:true, error:'Choisissez votre mode de contrat.', options:[…]}` **sans clé `success`**
-    (`v_resolution - 'ok'`) → sheet de choix de contrat ; `{error}` seul (dont
-    `'Trop de candidatures en peu de temps. Réessayez plus tard.'` : rate-limit 20 candidatures/h, consommé même
-    en `choix_requis`) ; `{error, documents_requis_pour}` ; exception PostgREST `[CODE DU TRAVAIL] …` / `0 rows` /
-    `déjà prise` → `.refusee(message verbatim)` (HARD STOP n°4 : aucun texte juridique reformulé).
+    `fn_postuler_mission_rate_limited` (l.48080) → `fn_postuler_mission` (l.47889) ; `ACCEPTER` →
+    `fn_accepter_mission` (l.5120) → `fn_finaliser_attribution_mission` (l.36703) ; `PROPOSITION` →
+    `fn_repondre_proposition(p_candidature_id, true)` (l.53577) → `fn_finaliser_attribution_mission`. Hors
+    succès, **aucune ne porte de clé `success`** : le décodeur les discrimine par clés, dans l'ordre normatif
+    du `LOT1_PLAN.md` §2.4 (`choix_requis` → `code` → `documents_requis_pour` avec `error` → `success:true` →
+    `error` seul → sinon `.contract`).
+    8. Succès POSTULER : `{success:true, candidature_id, choix_contrat, profession_requise, docs_a_completer, documents_requis_pour}`
+       — l.48061-48068. `documents_requis_pour` y vaut le contrat retenu (`v_choix`) et `docs_a_completer`
+       signale des documents encore à valider : sans `error`, ce n'est **pas** un refus. Relecture `candidatures`.
+    9. Succès ACCEPTER : `{success:true, contrat_id, contrat_numero, choix_applique, profession_requise, type_paiement, mode_paiement}`
+       — l.36902-36910 ; PROPOSITION : la même réponse + `message:'Proposition acceptée'` (l.53670). Relecture
+       `mission(id:)`.
+    10. Choix de contrat, sans clé `success` (`v_resolution - 'ok'`, l.47970 et l.36753 ; réponse de
+        `fn_resoudre_contrat_mission` l.54551-54565) :
+        `{choix_requis:true, error:'Choisissez votre mode de contrat.', options:[{value:'SALARIE', label:'Salarié (CDD / bulletin de paie)'}, {value:'LIBERAL', label:"Libéral (note d'honoraires)"}]}`
+        → sheet de choix de contrat, action rejouée avec `p_choix_contrat` (le rate-limit a déjà compté l'appel).
+    11. Documents manquants, sans clé `success` → `.refusee(documentsRequisPour:)`, renvoi web vers les
+        documents au lot 1 : POSTULER libéral
+        `{error:'Les documents requis pour candidater en libéral sont manquants ou expirés.', documents_requis_pour:'LIBERAL', lien_documents:'/soignant/mes-documents'}`
+        (l.47991-47996) ; ACCEPTER / PROPOSITION
+        `{error:'Les documents requis pour une mission <salarie|liberal> ne sont pas encore validés.', documents_requis_pour:<contrat retenu>, lien_documents:'/soignant/mes-documents'}`
+        (l.36758-36763, `lower(v_choix)` dans le message).
+    12. Plafond hebdomadaire (ACCEPTER / PROPOSITION), sans clé `success` → `.refusee(code:, message verbatim)`
+        (HARD STOP n°4) :
+        `{error:'Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h.', code:'PLANNING_HEBDOMADAIRE_INDISPONIBLE', creneaux_valides, creneaux_attendus}`
+        (l.36788-36793) ;
+        `{error:'Dépassement du plafond de 48 h pour la semaine du <JJ/MM/AAAA> (… h déjà planifiées + … h pour cette mission + … h ailleurs).', code:'PLAFOND_48H_HEBDO', semaine_du, heures_existantes, heures_mission, heures_externes, total}`
+        (l.36812-36824).
+    13. `{error}` seul → `JoleneError` (`.unauthorized` pour « Non authentifié », sinon `.unknown`, message
+        verbatim) : rate-limit `{error:'Trop de candidatures en peu de temps. Réessayez plus tard.'}` renvoyé en
+        **HTTP 200**, pas en 429 (l.48092 ; 20 candidatures/h, consommé même en `choix_requis`) ;
+        `'Vous avez déjà postulé à cette mission'` (l.47982) ; profession incompatible ; exclusion
+        (`'Accès refusé.'`, `'Accès refusé pour cette mission.'`) ; `"Cette mission n'est plus disponible"` et
+        `'Cette mission nécessite une candidature'` (`fn_accepter_mission`) ; `"Cette mission vient d'être attribuée."`
+        (l.36851) ; refus de `fn_resoudre_contrat_mission` hors `choix_requis` ; refus de `fn_repondre_proposition`
+        (`'Cette proposition a expiré'`, `'Cette proposition n’est plus en attente'`, …).
+    14. Exception PostgREST `[CODE DU TRAVAIL] …` / `0 rows` / `déjà prise` → `.refusee(message verbatim)`
+        (HARD STOP n°4 : aucun texte juridique reformulé).
 - **Classement manuel (décision 6, `LOT1_PLAN.md` §7)** : `RPC_UTILISATEUR_AUTH_INTERNE` — SECURITY DEFINER,
   `search_path` vide, GRANT `authenticated`, identité lue via `auth.uid()` dans le corps (l.24141-24318 du dump) ;
   manifeste non régénéré, `rpc-contracts.json` garde `manifeste: null`.
@@ -198,7 +247,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission
     SET "search_path" TO ''
 ```
 
-- **Classe d'authentification (manifeste)** : **hors manifeste** (à classer avant consommation).
+- **Classe d'authentification (manifeste)** : **hors manifeste** — classée manuellement `RPC_UTILISATEUR_AUTH_INTERNE` (décision 6).
 - **GRANT connu** : `REVOKE ALL … FROM PUBLIC` puis `GRANT ALL … TO "authenticated", "service_role"`.
 - **Signature TypeScript** (`types.ts`, section `Functions`) : absente (types.ts en retard sur le schéma).
 - **Exemple de réponse STAGING** : à enregistrer en semaine 2 (plan §11 jour 8), depuis le compte TEST de la cohorte, corps JSON anonymisé, sans jeton ni identifiant de compte réel.
@@ -662,8 +711,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   **Aucune idempotence ni fenêtre serveur** : chaque appel réécrit `presence_confirmee_le = NOW()` et insère
   une notification étab `SYSTEM` « Présence confirmée ✓ » → bouton désactivé pendant l'appel, masqué après
   relecture ; bloc limité à `ASSIGNEE` côté app (la RPC accepte aussi `EN_COURS`).
-- **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` relue (T11).
-  Wording « Je serai là ✓ » / « l'établissement est prévenu » verbatim web (HARD STOP n°4).
+- **Preuve STAGING** : `missions.presence_confirmee_le` relu + `notifications` étab `SYSTEM` « Présence
+  confirmée ✓ » relue (T11).
+- **Chaînes d'écran** (reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438 ; cibles des
+  assertions XCUITest et de la recette) : bouton « ✓ Je confirme ma présence » ; confirmation après relecture
+  « Présence confirmée — l'établissement est prévenu. ✓ » (toast web) ; état confirmé
+  « ✓ Présence confirmée — l'établissement est prévenu » ; refus : `error` serveur verbatim, sinon
+  « Confirmation impossible. ». Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
+  (décision 9, `LOT1_PLAN.md` §3 T6c).
+- **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
+  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.29924/29934) ; aucune assertion d'écran ne le cherche.
 
 ## Edge `delete-account` (suppression de compte, Apple 5.1.1)
 

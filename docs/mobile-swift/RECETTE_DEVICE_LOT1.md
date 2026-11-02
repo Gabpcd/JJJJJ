@@ -70,12 +70,20 @@ build apparié au projet émetteur (§0).
 
 ## 4. EventKit — ajout au calendrier (T5, décision 18)
 
+Mécanisme fixé en T0 (revue B8, `LOT1_PLAN.md` §3 T5) : avec `requestWriteOnlyAccessToEvents` (iOS 17+),
+l'app ne peut relire aucun événement, pas même les siens ; les doublons sont évités par un **journal local**
+des créneaux ajoutés (`UserDefaults`, par `userId` : `missionId` + identifiant ou rang du créneau + `debut` +
+`fin`), même mécanisme sous iOS 16. N = nombre de créneaux `PREVISIONNEL` hors pause dont `fin` est
+renseignée (1 pour une mission ponctuelle de 24 h au plus sans créneau PREVISIONNEL), comme l'ICS web.
+
 | Étape | Attendu | Observé |
 |---|---|---|
 | Premier tap `calendrier-{id}` (Mes missions › À venir ou Accueil) | demande d'accès système (iOS 16 `requestAccess(to:)`, iOS 17+ `requestWriteOnlyAccessToEvents`) | — |
 | Refus | message, aucun événement, pas de nouvelle demande forcée | — |
-| Accord | un événement par créneau PREVISIONNEL, alarmes -1440 / -60 min, URL `https://jolene.app/soignant/missions/{id}` | — |
-| Second tap | pas de doublon (comportement consigné : N événements au total) | — |
+| Accord | exactement N événements dans Calendrier (N noté avec la mission), un par créneau, alarmes -1440 / -60 min, URL `https://jolene.app/soignant/missions/{id}` | — |
+| Second tap, mêmes horaires | 0 nouvel événement (toujours N dans Calendrier), message d'information de l'app | — |
+| Créneau modifié par l'établissement, puis tap | 1 événement ajouté pour ce créneau ; l'ancien reste (écriture seule : ni relecture ni suppression possibles) — consigné | — |
+| Réinstallation de l'app, puis tap | journal local vide : N doublons possibles, comme un second import du fichier ICS web — consigné | — |
 
 ## 5. Push `RAPPEL_MISSION` reçu par la coquille 1.0.7 → écran natif (T6c)
 
@@ -84,8 +92,9 @@ porte sur le **lien** d'un push déjà reçu : `data.lien = /soignant/missions/{
 
 | Étape | Attendu | Observé |
 |---|---|---|
-| Tap sur la notification (mission ASSIGNEE J-1 de la fixture D3) | `LinkRouter` → `.missionDetail(id)` → écran natif avec le bloc `presence-bloc` | — |
-| Tap `presence-confirmer` | « Je serai là ✓ » / « l'établissement est prévenu » (verbatim web) après relecture `presence_confirmee_le` | — |
+| Notification reçue | titre du push serveur « Ta mission demain — Je serai là ✓ » (`fn_demander_confirmations_presence` l.29924/29934 ; texte de la notification, jamais de l'écran) | — |
+| Tap sur la notification (mission ASSIGNEE J-1 de la fixture D3) | `LinkRouter` → `.missionDetail(id)` → écran natif avec le bloc `presence-bloc` et le bouton « ✓ Je confirme ma présence » | — |
+| Tap `presence-confirmer` | après relecture `presence_confirmee_le` : confirmation « Présence confirmée — l'établissement est prévenu. ✓ », puis état `presence-confirmee` « ✓ Présence confirmée — l'établissement est prévenu » ; bouton masqué (chaînes du web, `DetailMissionSoignant.tsx` l.1427-1438) | — |
 | STAGING | `missions.presence_confirmee_le` non nul + notification étab `SYSTEM` « Présence confirmée ✓ » relues en SQL | — |
 
 ## 6. Arrêt forcé pendant un envoi de justificatif (T7, PRINCIPES §4)
