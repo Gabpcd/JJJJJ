@@ -1,0 +1,460 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "types": "src/integrations/supabase/types.ts",
+    "schema": "supabase/schema/public.sql",
+    "manifest": "supabase/SECURITY_DEFINER_MANIFEST.json"
+  },
+  "rpcs": [
+    {
+      "name": "fn_get_my_role",
+      "statut": "lot0",
+      "lot": 0,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_get_my_role()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'pg_catalog', 'public', 'auth'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_get_my_role()",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_etablissements_safe",
+      "statut": "lot0",
+      "lot": 0,
+      "types": {
+        "args": "{ p_ids: string[] }",
+        "returns": "{ adresse_code_postal: string; adresse_departement: string; adresse_lat: number; adresse_lng: number; adresse_rue: string; adresse_ville: string; couleur_theme: string; finess: string; id: string; logo_url: string; nom: string; taux_majoration_dimanche_pourcent: number; taux_majoration_ferie_pourcent: number; taux_majoration_nuit_pourcent: number; type: string }[]"
+      },
+      "sql": [
+        {
+          "signature": "fn_etablissements_safe(\"p_ids\" \"uuid\"[])",
+          "returns": "TABLE(\"id\" \"uuid\", \"nom\" \"text\", \"adresse_rue\" \"text\", \"adresse_code_postal\" \"text\", \"adresse_ville\" \"text\", \"adresse_departement\" \"text\", \"adresse_lat\" numeric, \"adresse_lng\" numeric, \"type\" \"text\", \"finess\" \"text\", \"taux_majoration_nuit_pourcent\" numeric, \"taux_majoration_dimanche_pourcent\" numeric, \"taux_majoration_ferie_pourcent\" numeric, \"logo_url\" \"text\", \"couleur_theme\" \"text\", \"paiement_rapide\" boolean, \"jour_paie_habituel\" smallint)",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_etablissements_safe(uuid[])",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_mon_profil_soignant_complet",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mon_profil_soignant_complet()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mon_profil_soignant_complet()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_dashboard_soignant_complet",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_dashboard_soignant_complet()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_dashboard_soignant_complet()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_confirmer_action_planning_v1",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_confirmer_action_planning_v1(\"p_mission_id\" \"uuid\", \"p_action\" \"text\", \"p_creneaux_confirmes\" \"jsonb\", \"p_message\" \"text\" DEFAULT NULL::\"text\", \"p_choix_contrat\" \"text\" DEFAULT NULL::\"text\", \"p_candidature_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null
+    },
+    {
+      "name": "fn_suggestions_missions_pour_soignant",
+      "statut": "a_venir",
+      "lot": 1,
+      "types": {
+        "args": "{ p_limit?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_suggestions_missions_pour_soignant(\"p_limit\" integer DEFAULT 5)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_suggestions_missions_pour_soignant(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_pointer_arrivee",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_code_arrivee?: string; p_lat?: number; p_lng?: number; p_mission_id: string; p_modele?: string; p_precision?: number; p_terminal_id?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_pointer_arrivee(\"p_mission_id\" \"uuid\", \"p_lat\" numeric DEFAULT NULL::numeric, \"p_lng\" numeric DEFAULT NULL::numeric, \"p_precision\" numeric DEFAULT NULL::numeric, \"p_terminal_id\" \"text\" DEFAULT NULL::\"text\", \"p_modele\" \"text\" DEFAULT NULL::\"text\", \"p_code_arrivee\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_pointer_arrivee(uuid,numeric,numeric,numeric,text,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_pointer_depart",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_code_depart?: string; p_lat?: number; p_lng?: number; p_modele?: string; p_precision?: number; p_presence_id: string; p_terminal_id?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_pointer_depart(\"p_presence_id\" \"uuid\", \"p_lat\" numeric DEFAULT NULL::numeric, \"p_lng\" numeric DEFAULT NULL::numeric, \"p_precision\" numeric DEFAULT NULL::numeric, \"p_terminal_id\" \"text\" DEFAULT NULL::\"text\", \"p_modele\" \"text\" DEFAULT NULL::\"text\", \"p_code_depart\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_pointer_depart(uuid,numeric,numeric,numeric,text,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_scanner_code_pointage",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_code: string; p_metadata?: Json }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_scanner_code_pointage(\"p_code\" \"text\", \"p_metadata\" \"jsonb\" DEFAULT NULL::\"jsonb\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_scanner_code_pointage(text,jsonb)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_valider_scan_qr",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_lat?: number; p_lng?: number; p_precision?: number; p_terminal_id?: string; p_token: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_valider_scan_qr(\"p_token\" \"text\", \"p_lat\" numeric DEFAULT NULL::numeric, \"p_lng\" numeric DEFAULT NULL::numeric, \"p_precision\" numeric DEFAULT NULL::numeric, \"p_terminal_id\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_valider_scan_qr(text,numeric,numeric,numeric,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_generer_qr_mission",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_mission_id: string; p_type?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_generer_qr_mission(\"p_mission_id\" \"uuid\", \"p_type\" \"text\" DEFAULT 'UNIVERSEL'::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_generer_qr_mission(uuid,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_etat_pointage_mission",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_etat_pointage_mission(\"p_mission_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_etat_pointage_mission(uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_envoyer_otp_signature",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_contrat_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_envoyer_otp_signature(\"p_contrat_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_envoyer_otp_signature(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_signer_contrat_otp",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": {
+        "args": "{ p_contrat_id: string; p_hash_document?: string; p_otp_code: string; p_signature_image?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_signer_contrat_otp(\"p_contrat_id\" \"uuid\", \"p_otp_code\" \"text\", \"p_hash_document\" \"text\" DEFAULT NULL::\"text\", \"p_signature_image\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_signer_contrat_otp(uuid,text,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_remplacer_document_soignant",
+      "statut": "a_venir",
+      "lot": 2,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_remplacer_document_soignant(\"p_type_document\" \"text\", \"p_libelle\" \"text\", \"p_s3_cle\" \"text\", \"p_nom_fichier\" \"text\", \"p_type_mime\" \"text\", \"p_taille_octets\" bigint)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_remplacer_document_soignant(text,text,text,text,text,bigint)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_upsert_token_push",
+      "statut": "a_venir",
+      "lot": 3,
+      "types": {
+        "args": "{ p_plateforme?: string; p_token: string }",
+        "returns": "undefined"
+      },
+      "sql": [
+        {
+          "signature": "fn_upsert_token_push(\"p_token\" \"text\", \"p_plateforme\" \"text\" DEFAULT 'WEB'::\"text\")",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'pg_catalog', 'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_upsert_token_push(text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    }
+  ]
+}

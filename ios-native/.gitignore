@@ -1,0 +1,14 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.build/
+*.xcresult
+# SwiftPM (les Package.resolved du workspace sont versionnés)
+Packages/*/.swiftpm/
+Packages/*/.build/
+# Secrets injectés par la CI
+Config/Local.xcconfig
+# Sorties des jobs UI (xcresult, captures, journaux) : artefacts CI, jamais versionnés
+test-results/

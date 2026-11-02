@@ -1,0 +1,316 @@
+name: iOS Swift — STAGING manuel
+
+# Première preuve STAGING du lot 0 (docs/PLAN_APP_NATIVE_SWIFT.md §4.8, §11 jours 6-7,
+# décision 6 de docs/mobile-swift/DECISIONS_LOT0.md). Reprend le mécanisme réel de
+# native-auth-staging.yml : dispatch manuel sur main avec SHA relu, environnement
+# protégé `native-staging-auth`, clé publishable STAGING en variable de dépôt
+# (vars.JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY), cohorte de deux identités TEST en
+# secret d'environnement (secrets.JOLENE_NATIVE_AUTH_COHORT_TEMP) validée par
+# mobile-native/scripts/auth-staging/policy.mjs. Aucune valeur n'est écrite dans le
+# dépôt : URL et clé sont surchargées sur la ligne de commande xcodebuild.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: SHA complet déjà relu, égal à la variable JOLENE_NATIVE_AUTH_REVIEWED_SHA
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Même groupe que native-auth-staging.yml : la cohorte TEST est partagée, un seul
+# cycle de session à la fois.
+concurrency:
+  group: native-auth-staging-single-cohort
+  cancel-in-progress: false
+
+env:
+  CI: '1'
+  JOLENE_XCODE_APP: /Applications/Xcode_26.4.1.app
+  JOLENE_XCODE_VERSION_ATTENDUE: 'Xcode 26.4.1'
+  JOLENE_XCODE_BUILD_ATTENDU: '17E202'
+  AUTH_PROJECT_REF: mejpriaetwgtcstbgfid
+  AUTH_URL: https://mejpriaetwgtcstbgfid.supabase.co
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  politique:
+    name: Politique — SHA relu et tests Swift présents
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vérifier le SHA relu avant tout accès à l'environnement protégé
+        env:
+          REQUESTED_SHA: ${{ inputs.reviewed_sha }}
+          REVIEWED_SHA: ${{ vars.JOLENE_NATIVE_AUTH_REVIEWED_SHA }}
+        run: |
+          node -e 'const e=process.env;if(!/^[a-f0-9]{40}$/.test(e.REQUESTED_SHA)||![e.REVIEWED_SHA,e.GITHUB_SHA,e.GITHUB_WORKFLOW_SHA].every(s=>s===e.REQUESTED_SHA)){console.error("SHA demandé, relu, dispatché et du workflow doivent être identiques.");process.exit(1)}'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Contrôles canaris hors réseau de la politique de cohorte
+        working-directory: mobile-native
+        run: node --test scripts/auth-staging/policy.node.test.mjs
+      - name: Les tests StagingConnexionTests doivent exister (lot 0 semaine 2)
+        run: |
+          if ! grep -rqE "final class StagingConnexionTests\s*:\s*XCTestCase" ios-native/JoleneUITests/; then
+            echo "::error::ios-native/JoleneUITests ne contient pas « final class StagingConnexionTests: XCTestCase ». Les tests de connexion STAGING (plan §11 jours 6-7) ne sont pas encore écrits : ce workflow refuse de tourner à vide plutôt que de passer silencieusement."
+            exit 1
+          fi
+          echo "StagingConnexionTests trouvés :"
+          grep -rlE "final class StagingConnexionTests\s*:\s*XCTestCase" ios-native/JoleneUITests/
+
+  connexion:
+    name: Connexion STAGING — iPhone (XCUITest)
+    if: github.ref == 'refs/heads/main'
+    needs: politique
+    # Environnement protégé : approbation humaine de la source exacte relue.
+    environment: native-staging-auth
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      AUTH_SHA: ${{ inputs.reviewed_sha }}
+      AUTH_REVIEWED_SHA: ${{ vars.JOLENE_NATIVE_AUTH_REVIEWED_SHA }}
+      AUTH_PUBLISHABLE_KEY: ${{ vars.JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY }}
+      AUTH_FORMAT: iphone
+      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/staging-iphone
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Admettre le SHA exact, le projet TEST et la clé publishable (policy.mjs)
+        working-directory: mobile-native
+        run: node scripts/auth-staging/admit.mjs
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+      - name: Choisir le simulateur iPhone 17 iOS 26.2
+        id: simulateur
+        run: |
+          runtimes="$(xcrun simctl list runtimes --json)"
+          devices="$(xcrun simctl list devices available --json)"
+          udid="$(RUNTIMES="$runtimes" DEVICES="$devices" node --input-type=module -e '
+            import { selectIosCiSimulator } from "./mobile-native/scripts/ios-ci-toolchain.mjs";
+            const { device } = selectIosCiSimulator(JSON.parse(process.env.RUNTIMES).runtimes, JSON.parse(process.env.DEVICES).devices, "iphone");
+            process.stdout.write(device.udid);
+          ')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+      - name: Cache des paquets SPM clonés par xcodebuild
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/spm-cloned
+          key: spm-xcodebuild-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'ios-native/Packages/*/Package.swift') }}
+          restore-keys: |
+            spm-xcodebuild-${{ runner.os }}-xcode26.4.1-
+      - name: build-for-testing Jolene-Staging (URL et clé surchargées en ligne de commande)
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+        run: |
+          mkdir -p "$JOLENE_UI_OUTPUT"
+          set +e
+          xcodebuild build-for-testing \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene-Staging \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            JOLENE_ENVIRONMENT=staging \
+            "JOLENE_SUPABASE_URL=$AUTH_URL" \
+            "JOLENE_SUPABASE_PUBLISHABLE_KEY=$AUTH_PUBLISHABLE_KEY" \
+            > "$JOLENE_UI_OUTPUT/build-for-testing.log" 2>&1
+          code=$?
+          set -e
+          grep -E "error: |\*\* TEST BUILD" "$JOLENE_UI_OUTPUT/build-for-testing.log" | tail -n 40 || true
+          grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing Jolene-Staging a échoué (code $code)."; exit 1; }
+      - name: Canal privé éphémère des deux identités TEST (validation policy.mjs, fichier 0600)
+        working-directory: mobile-native
+        run: node scripts/auth-staging/stage-input.mjs
+        env:
+          JOLENE_NATIVE_AUTH_COHORT: ${{ secrets.JOLENE_NATIVE_AUTH_COHORT_TEMP }}
+      - name: Connexion réelle STAGING — StagingConnexionTests
+        id: tests
+        # Délai propre à l'étape (xcodebuild bloqué interrompu ici, xcresult clos avant les assertions).
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+        run: |
+          fichier="$RUNNER_TEMP/jolene-native-auth-input.private.json"
+          [ -f "$fichier" ] || { echo "::error::Cohorte privée absente."; exit 1; }
+          # Masque chaque forme des identifiants (policy.sensitiveForms) avant toute sortie xcodebuild.
+          # shellcheck disable=SC2016
+          FICHIER="$fichier" node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { parseCohort, sensitiveForms } from "./mobile-native/scripts/auth-staging/policy.mjs";
+            const cohort = parseCohort(readFileSync(process.env.FICHIER));
+            for (const form of sensitiveForms(cohort)) process.stdout.write(`::add-mask::${form}\n`);
+          '
+          cohorte="$(cat "$fichier")"
+          rm -f "$fichier"
+          resultat="$RUNNER_TEMP/staging-iphone.xcresult"
+          echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          set +e
+          # Préfixe TEST_RUNNER_ : xcodebuild le retire et expose JOLENE_* au runner XCUITest
+          # (mêmes noms que inject-xctestrun.py du pilote). Jamais dans l'environnement de l'app.
+          TEST_RUNNER_JOLENE_MODE=staging \
+          TEST_RUNNER_JOLENE_AUTH_FORMAT="$AUTH_FORMAT" \
+          TEST_RUNNER_JOLENE_AUTH_COHORT_JSON="$cohorte" \
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene-Staging \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/StagingConnexionTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            JOLENE_ENVIRONMENT=staging \
+            "JOLENE_SUPABASE_URL=$AUTH_URL" \
+            "JOLENE_SUPABASE_PUBLISHABLE_KEY=$AUTH_PUBLISHABLE_KEY" \
+            > "$RUNNER_TEMP/staging-test.private.log" 2>&1
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Seules les lignes de bilan XCTest sont publiées, après rédaction (policy.redact).
+          LOG="$RUNNER_TEMP/staging-test.private.log" OUT="$JOLENE_UI_OUTPUT" node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { redact } from "./mobile-native/scripts/auth-staging/policy.mjs";
+            const lignes = readFileSync(process.env.LOG, "utf8").split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: /.test(l));
+            const texte = redact(lignes.join("\n"), []);
+            writeFileSync(process.env.OUT + "/xctest-excerpt.redacted.log", texte + "\n");
+            console.log(texte);
+          '
+          rm -f "$RUNNER_TEMP/staging-test.private.log"
+          echo "xcodebuild test-without-building : code $code"
+      - name: Assertions sur le résumé xcresult (aucun succès fabriqué)
+        if: always() && steps.tests.outputs.xcresult != ''
+        env:
+          XCRESULT: ${{ steps.tests.outputs.xcresult }}
+          CODE_XCODEBUILD: ${{ steps.tests.outputs.code }}
+        run: |
+          [ -d "$XCRESULT" ] || { echo "::error::Bundle xcresult absent."; exit 1; }
+          xcrun xcresulttool get test-results summary --path "$XCRESULT" > "$JOLENE_UI_OUTPUT/xctest-summary.json"
+          # Le bundle complet (captures, journaux) peut contenir l'email de cohorte : il reste privé.
+          rm -rf "$XCRESULT"
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            const s = JSON.parse(readFileSync(process.env.JOLENE_UI_OUTPUT + "/xctest-summary.json", "utf8"));
+            const total = s.totalTestCount ?? 0, passed = s.passedTests ?? 0, failed = s.failedTests ?? 0, skipped = s.skippedTests ?? 0;
+            const lignes = ["### Connexion STAGING — iPhone", "",
+              `- xcodebuild : code ${process.env.CODE_XCODEBUILD}`,
+              `- xcresult : ${s.result} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total)`,
+              "- périmètre : connexion, écran Accueil, rôle fn_get_my_role, déconnexion ; aucune valeur saisie publiée"];
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+            const ok = process.env.CODE_XCODEBUILD === "0" && s.result === "Passed" && total >= 1 && failed === 0 && skipped === 0 && passed === total;
+            if (!ok) { console.error("::error::StagingConnexionTests non concluants."); process.exit(1); }
+          '
+      - name: Effacer l'entrée privée même si le driver n'a pas démarré
+        if: always()
+        working-directory: mobile-native
+        run: node scripts/auth-staging/stage-input.mjs cleanup
+      - name: Exporter seulement le résumé et l'extrait rédigé
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-staging-iphone-${{ inputs.reviewed_sha }}
+          path: |
+            ios-native/test-results/staging-iphone/xctest-summary.json
+            ios-native/test-results/staging-iphone/xctest-excerpt.redacted.log
+          retention-days: 3
+          if-no-files-found: warn
+      - name: Éteindre le simulateur
+        if: always()
+        run: xcrun simctl shutdown all || true
+
+  signup-sans-captcha:
+    name: signUp sans captchaToken — STAGING (décision 6)
+    if: github.ref == 'refs/heads/main'
+    needs: politique
+    environment: native-staging-auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AUTH_PUBLISHABLE_KEY: ${{ vars.JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Appeler /auth/v1/signup avec un email jetable et sans captchaToken
+        run: |
+          mkdir -p ios-native/test-results/signup-sans-captcha
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { writeFileSync, appendFileSync } from "node:fs";
+            import { randomUUID, randomBytes } from "node:crypto";
+            import { redact } from "./mobile-native/scripts/auth-staging/policy.mjs";
+            const url = process.env.AUTH_URL, key = process.env.AUTH_PUBLISHABLE_KEY, ref = process.env.AUTH_PROJECT_REF;
+            if (!/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(key)) { console.error("Clé publishable STAGING absente ou invalide."); process.exit(1); }
+            if (url !== `https://${ref}.supabase.co` || ref !== "mejpriaetwgtcstbgfid") { console.error("Seul STAGING est autorisé."); process.exit(1); }
+            const email = `signup-captcha-probe-${randomUUID()}@example.invalid`;
+            const password = ["Nt!", randomBytes(36).toString("base64url")].join("");
+            const started = new Date().toISOString();
+            const response = await fetch(`${url}/auth/v1/signup`, {
+              method: "POST", signal: AbortSignal.timeout(30_000),
+              headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", "X-Client-Info": "jolene-ios-signup-probe" },
+              body: JSON.stringify({ email, password }),
+            });
+            const raw = await response.text();
+            let body; try { body = JSON.parse(raw); } catch { body = { texte: raw }; }
+            // Jamais de jeton dans un artefact : GoTrue renvoie une session si la confirmation email est désactivée.
+            for (const k of ["access_token", "refresh_token", "provider_token", "provider_refresh_token"]) if (k in body) body[k] = "[PRIVATE]";
+            const sortie = JSON.parse(redact(JSON.stringify(body), [password]));
+            const resultat = { schemaVersion: 1, scenario: "signup-sans-captcha-staging", decision: "DECISIONS_LOT0 n°6", projectRef: ref,
+              endpoint: "/auth/v1/signup", captchaToken: "absent", email, startedAt: started, httpStatus: response.status,
+              captchaRefuse: response.status === 400 || response.status === 422 ? /captcha/i.test(raw) : false, body: sortie,
+              note: "Compte jetable éventuellement créé sur STAGING : à supprimer depuis le tableau de bord Auth STAGING. Production : exécution manuelle par Gabrielle, jamais depuis ce workflow." };
+            writeFileSync("ios-native/test-results/signup-sans-captcha/signup-sans-captcha.json", JSON.stringify(resultat, null, 2) + "\n");
+            const lignes = ["### signUp sans captchaToken — STAGING", "", `- HTTP ${response.status}`,
+              `- captcha refusé explicitement : ${resultat.captchaRefuse}`, `- email jetable : ${email}`, "- corps complet (jetons retirés) dans l artefact signup-sans-captcha"];
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+          '
+      - name: Consigner le code HTTP et le corps (jetons retirés)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-signup-sans-captcha-${{ inputs.reviewed_sha }}
+          path: ios-native/test-results/signup-sans-captcha/signup-sans-captcha.json
+          retention-days: 30
+          if-no-files-found: error
