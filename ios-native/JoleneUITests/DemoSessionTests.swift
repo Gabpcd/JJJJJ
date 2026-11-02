@@ -60,9 +60,12 @@ final class DemoSessionTests: JoleneUITestCase {
         require("L'Accueil est natif") { self.containerVisible(self.element("accueil-screen")) }
         XCTAssertEqual(elements(withPrefix: "renvoi-web-").count, 0, "Accueil : aucun drapeau coupé (fail-open)")
         tabButton("tab-revenus", label: "Revenus").tap()
-        // Le titre de navigation est posé par l'écran natif comme par le renvoi : il prouve que
-        // l'onglet est rendu avant de constater l'absence de renvoi.
-        require("L'onglet Revenus est affiché") { self.app.navigationBars["Revenus"].exists }
+        // L'onglet est rendu (écran natif OU renvoi) avant de constater l'absence de renvoi : Revenus
+        // reste un `PlaceholderScreen` au lot 1 (`placeholder-revenus`, `LOT1_PLAN.md` §1.2).
+        require("L'onglet Revenus est affiché") {
+            self.element("placeholder-revenus").exists || self.element("renvoi-web-revenus").exists
+        }
+        XCTAssertTrue(element("placeholder-revenus").exists, "Revenus : écran natif du socle")
         XCTAssertEqual(elements(withPrefix: "renvoi-web-").count, 0, "Revenus : aucun renvoi (fail-open)")
         tabButton("tab-profil", label: "Profil").tap()
         require("Le profil natif est affiché") { self.containerVisible(self.element("profile-list")) }
