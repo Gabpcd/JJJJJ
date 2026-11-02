@@ -59,6 +59,35 @@ Migration `20261102040000_controle_crons_edge_sans_balayage_reponses.sql` :
   `email-cron-hourly-immediate` est actif (prod), pour ne pas réveiller une
   base de preview.
 
+## Second foyer : boucle `fn_finaliser_document_verification` (04:10 → 04:30 UTC)
+
+Après la pause du cron, la base est repartie (0,34 s) puis s'est de nouveau
+effondrée (35 s) alors qu'aucune matrice CI ne tournait. `pg_stat_database`
+mesure 2,1 s de temps actif par seconde écoulée, portés par deux sessions
+PostgREST (pids 4119164 et 4119173, ouvertes le 31/10 à 03:02 UTC) qui
+rejouaient sans interruption `fn_finaliser_document_verification` avec le rôle
+`service_role` ; chaque appel échoue en `40001 Tentative documentaire périmée`
+(ligne 28 de la fonction). Les journaux Postgres montrent ce motif à cadence
+métronomique (1,000 s) depuis le 31/10 03:02:38, soit ~3 600 erreurs/heure
+pendant deux jours, sans aucune trace correspondante dans `edge_logs`,
+`function_edge_logs` ni `function_logs` : les requêtes n'ont pas traversé la
+passerelle publique.
+
+Mitigation à 04:28 UTC : `pg_terminate_backend` sur les deux sessions. La même
+requête témoin est passée de 35,9 s à 0,14 s immédiatement ; aucune nouvelle
+session PostgREST active n'a repris la boucle dans la minute qui a suivi.
+Observation en cours (`pgrst.log_level = info` posé sur `authenticator` à
+04:24 UTC pour journaliser l'appelant si la boucle reprend ; à remettre à
+`error` ensuite).
+
+Piste principale : la fonction utilise l'ERRCODE `40001`
+(`serialization_failure`) pour un refus métier définitif. Ce code est celui
+que les couches de transport considèrent comme rejouable ; un client ou un
+intermédiaire qui rejoue sur 40001 boucle donc indéfiniment sur une tentative
+documentaire périmée. Correctif à instruire (fonction `SECURITY DEFINER`,
+catégorie B9) : code d'erreur non rejouable pour ce refus, et `verify-document`
+qui mappe ce nouveau code vers 409.
+
 ## Points ouverts (hors périmètre de ce correctif)
 
 - `fn_finaliser_document_verification` lève « Tentative documentaire
