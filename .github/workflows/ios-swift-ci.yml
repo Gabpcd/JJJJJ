@@ -19,6 +19,11 @@ on:
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      # Lot 5, T3 : dérivation de planning (golden) et messages repris des écrans établissement (gardes Swift).
+      - 'src/lib/planning-derive.ts'
+      - 'src/components/FormulaireRecurrence.tsx'
+      - 'src/components/ListeCandidatures.tsx'
+      - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
@@ -42,6 +47,11 @@ on:
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
       - 'src/lib/disponibilite-pointage.ts'
+      # Lot 5, T3 : dérivation de planning (golden) et messages repris des écrans établissement (gardes Swift).
+      - 'src/lib/planning-derive.ts'
+      - 'src/components/FormulaireRecurrence.tsx'
+      - 'src/components/ListeCandidatures.tsx'
+      - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
