@@ -135,6 +135,24 @@ public actor SessionController {
         return currentState
     }
 
+    /// Fin de session locale après la suppression du compte (lot 1, T8) : comme `signOut()`, l'identité
+    /// est retirée (epoch avancé, état `.signedOut(nil)`) AVANT la purge, si bien que l'événement
+    /// `.signedOut` que le SDK émet ensuite est ignoré par `handleAuthEvent` : jamais « Votre session a
+    /// expiré » après une suppression. La purge passe par `AuthPort.signOutLocally()`, sans révocation
+    /// globale (l'edge `delete-account` a déjà révoqué les sessions), bornée à `resolutionTimeout` et
+    /// tolérée en échec (le port retire la session locale avant tout appel réseau).
+    public func signOutLocally() async -> SessionState {
+        bumpEpoch()
+        activeUserId = nil
+        restoreRetryable = false
+        currentState = .signedOut(message: nil)
+        let signedOutAt = currentEpoch
+        let auth = configured.auth
+        _ = try? await bounded(timeout: resolutionTimeout) { await auth.signOutLocally() }
+        guard signedOutAt == currentEpoch else { return currentState }
+        return currentState
+    }
+
     /// Événement d'auth reçu du SDK hors de tout appel de l'app.
     /// - `.signedOut` pendant qu'une identité est active (session révoquée, déconnexion
     ///   globale depuis le web, refresh refusé) : l'epoch avance, tous les caches sont

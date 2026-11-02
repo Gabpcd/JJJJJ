@@ -44,7 +44,7 @@ public enum SupabaseGateways {
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
             mesMissions: UnwiredMesMissionsPort(),      // T5
-            compte: UnwiredAccountPort(),               // T8
+            compte: SupabaseAccountGateway(client: client),
             audit: SupabaseAuditGateway(client: client),
             flags: SupabaseFlagsGateway(client: client),
             recovery: UnwiredRecoveryPort(),            // T10

@@ -79,8 +79,27 @@ struct FakeMesMissions: MesMissionsPort {
     }
 }
 
+/// Appels reçus par `FakeAccount` (preuve « un seul appel, aucun renvoi »).
+actor AccountCalls {
+    private(set) var count = 0
+    func record() { count += 1 }
+}
+
+/// Suppression de compte (T8) : issue ou erreur scriptée, barrière optionnelle pour faire changer
+/// l'identité pendant l'appel. Sans scénario, le double refuse (`nonScripte`).
 struct FakeAccount: AccountPort {
-    func deleteAccount(context: MissionReadContext) async throws -> DeleteAccountOutcome { throw nonScripte }
+    var outcome: DeleteAccountOutcome?
+    var erreur: Error?
+    var gate: Gate?
+    var appels = AccountCalls()
+
+    func deleteAccount(context: MissionReadContext) async throws -> DeleteAccountOutcome {
+        await appels.record()
+        if let gate { await gate.wait() }
+        if let erreur { throw erreur }
+        guard let outcome else { throw nonScripte }
+        return outcome
+    }
 }
 
 /// Journal des écritures d'audit (ordre d'appel), pour les preuves « une fois par connexion ».

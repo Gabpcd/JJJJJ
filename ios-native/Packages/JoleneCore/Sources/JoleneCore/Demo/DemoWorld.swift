@@ -43,7 +43,7 @@ public enum DemoWorld {
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
             mesMissions: UnwiredMesMissionsPort(),      // T5
-            compte: UnwiredAccountPort(),               // T8
+            compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
             recovery: UnwiredRecoveryPort(),            // T10
