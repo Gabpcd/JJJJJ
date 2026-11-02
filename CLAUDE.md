@@ -349,6 +349,13 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
 2. **Tout `cron.schedule` posé via MCP doit être recapturé en migration** (garde `pg_extension pg_cron` pour les branches preview) — le cron d'auto-validation 72h tournait en prod sans exister dans le repo : un rebuild l'aurait perdu, et l'« auto-72h » CGU §4.6 avec lui.
 
+**Pattern backend (incident 02/11/2026, CPU cron Edge)** : toute jointure sur
+`net._http_response` passe par `created` (seule colonne indexée par pg_net) avec
+une fenêtre bornée autour de la demande — jamais sur `id` seul : le contrôleur
+des crons Edge balayait 148 Mo toutes les 5 min, dépassait 120 s et monopolisait
+le CPU partagé (crons en « job startup timeout », RPC CI en 57014). Détail :
+`docs/incidents/2026-11-02-cron-controle-edge-cpu.md`.
+
 **Pattern régime/contrat (Lot 14, gardé par `test:guards` 7)** : sur toute ligne financière/facturation, le régime affiché vient de `missions.type_contrat_applique` (figé à l'assignation) — **jamais** de `soignants.type_exercice` (profil) : un libéral peut faire une mission CDD, afficher le profil crée des chips contradictoires.
 
 **Patterns escrow (3 bugs recette, gardés par `test:guards` 4-6)** :
