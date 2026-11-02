@@ -38,7 +38,7 @@ public enum DemoWorld {
             role: DemoRoleGateway(),
             missions: DemoMissionsGateway(),
             clock: FixedClock(fixedNow),
-            dashboard: UnwiredDashboardPort(),          // T3
+            dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: UnwiredCandidaturePort(),      // T6a, T7
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
@@ -119,7 +119,9 @@ public struct DemoMissionsGateway: MissionsPort {
     public func mission(id: String, context: MissionReadContext) async throws -> Mission? {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
-        guard let fixture = missions.first(where: { $0.record.id == id }) else { return nil }
+        // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
+        let assignees = try DemoFixtures.loadDashboard().missionsAssignees
+        guard let fixture = (missions + assignees).first(where: { $0.record.id == id }) else { return nil }
         return enrich(fixture, context: context, etablissements: etablissements)
     }
 

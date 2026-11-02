@@ -91,16 +91,9 @@ public enum PresenceOutcome: Equatable, Sendable {
 
 // MARK: - Tableau de bord (T3)
 
-/// Instantané de `fn_dashboard_soignant_complet`. T3 y ajoute les sections (profil, missions,
-/// propositions, gains, documents) avec un décodage tolérant ; les montants restent serveur.
-public struct DashboardSnapshot: Equatable, Sendable {
-    public var notifsNonLues: Int
-    public var missionsOublieesCount: Int
-
-    public init(notifsNonLues: Int = 0, missionsOublieesCount: Int = 0) {
-        self.notifsNonLues = notifsNonLues; self.missionsOublieesCount = missionsOublieesCount
-    }
-}
+// `DashboardSnapshot` et le corps de `fn_dashboard_soignant_complet` : `Models/Dashboard.swift`
+// (déplacés par T3 avec leurs sections ; l'init `DashboardSnapshot(notifsNonLues:missionsOublieesCount:)`
+// de T1 est conservé).
 
 // MARK: - Favoris (T4b)
 
