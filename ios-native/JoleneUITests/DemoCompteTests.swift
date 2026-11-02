@@ -59,11 +59,15 @@ final class DemoCompteTests: JoleneUITestCase {
         openDeletion()
 
         tap("compte-supprimer-cancel")
+        // La liste a été amenée en bas pour ouvrir l'écran : c'est la section de suppression qui
+        // réapparaît (l'email, en tête de liste, peut être hors écran sur iPhone).
         require("Le profil est de retour, la session intacte") {
-            self.visible(self.element("profile-email")) && !self.element("compte-supprimer").exists
+            self.containerVisible(self.element("profile-list")) && self.visible(self.element("compte-supprimer-ouvrir"))
+                && !self.element("compte-supprimer").exists
         }
         XCTAssertTrue(tabBarExists, "La session reste ouverte")
-        XCTAssertTrue(element("profile-email").label.contains(Self.demoEmail))
+        XCTAssertFalse(element("compte-supprime").exists, "Rien n'a été supprimé")
+        XCTAssertEqual(element("compte-suppression-info").label, Self.avertissementSection)
         record("\(proofPrefix)-compte-annulation")
     }
 

@@ -42,10 +42,18 @@ final class CompteModelTests: XCTestCase {
         var log: CallLog
         var events: AuthEventEmitter
         var appels: AccountCalls
+        var preferences: UserDefaults
+    }
+
+    /// Domaine de préférences propre au test (jamais `UserDefaults.standard`) ; rien n'est écrit sur
+    /// disque tant que le test n'y pose pas de clé.
+    private func preferencesIsolees() -> UserDefaults {
+        UserDefaults(suiteName: "jolene.tests.compte.\(UUID().uuidString)")!
     }
 
     private func scenario(compte: FakeAccount = FakeAccount(), timeout: TimeInterval = SessionController.defaultResolutionTimeout,
-                          purgeGate: Gate? = nil) async throws -> Scenario {
+                          purgeGate: Gate? = nil, preferences: UserDefaults? = nil) async throws -> Scenario {
+        let preferences = preferences ?? preferencesIsolees()
         let log = CallLog()
         let events = AuthEventEmitter()
         let auth = CompteAuth(restored: utilisateur, connecte: autreUtilisateur, log: log, events: events, purgeGate: purgeGate)
@@ -59,8 +67,8 @@ final class CompteModelTests: XCTestCase {
         let snapshot = try XCTUnwrap(store.state.snapshot, "session prête attendue, obtenu \(store.state)")
         let avis = AvisFinDeCompte()
         return Scenario(store: store, snapshot: snapshot, avis: avis,
-                        model: CompteModel(session: store, snapshot: snapshot, avis: avis),
-                        log: log, events: events, appels: compte.appels)
+                        model: CompteModel(session: store, snapshot: snapshot, avis: avis, preferences: preferences),
+                        log: log, events: events, appels: compte.appels, preferences: preferences)
     }
 
     // MARK: - Succès
@@ -107,6 +115,39 @@ final class CompteModelTests: XCTestCase {
         await purge.open()
         await suppression.value
         XCTAssertEqual(s.store.state, .signedOut(message: nil))
+    }
+
+    func testSuppressionConfirmeePurgeLesPreferencesLocalesDuCompteSeulement() async throws {
+        // LOT1_PLAN l.252 : journal calendrier (T5) et préférence biométrie (T9), une clé par userId.
+        let nom = "jolene.tests.compte.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: nom))
+        defer { preferences.removePersistentDomain(forName: nom) }
+        preferences.set(["m-1"], forKey: "jolene.calendrier.journal.u-1")
+        preferences.set(true, forKey: "jolene.biometrie.activee.u-1")
+        preferences.set(true, forKey: "jolene.biometrie.activee.u-2")
+        preferences.set(true, forKey: "jolene.menu-1")
+        let s = try await scenario(compte: FakeAccount(outcome: .deleted), preferences: preferences)
+
+        await s.model.supprimer()
+
+        XCTAssertNil(preferences.object(forKey: "jolene.calendrier.journal.u-1"))
+        XCTAssertNil(preferences.object(forKey: "jolene.biometrie.activee.u-1"))
+        XCTAssertEqual(preferences.bool(forKey: "jolene.biometrie.activee.u-2"), true, "un autre compte n'est pas touché")
+        XCTAssertEqual(preferences.bool(forKey: "jolene.menu-1"), true, "segment entier exigé : « menu-1 » n'est pas « u-1 »")
+    }
+
+    func testUnRefusNePurgeAucunePreference() async throws {
+        let nom = "jolene.tests.compte.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: nom))
+        defer { preferences.removePersistentDomain(forName: nom) }
+        preferences.set(true, forKey: "jolene.biometrie.activee.u-1")
+        for issue in [DeleteAccountOutcome.refused(code: "ACCOUNT_PROFILE_CONFLICT", message: "M"),
+                      .refused(code: "ANONYMISATION_NON_CONFIRMEE", message: "M")] {
+            let s = try await scenario(compte: FakeAccount(outcome: issue), preferences: preferences)
+            await s.model.supprimer()
+            XCTAssertEqual(preferences.bool(forKey: "jolene.biometrie.activee.u-1"), true,
+                           "suppression non confirmée : préférences conservées (\(issue))")
+        }
     }
 
     // MARK: - Refus serveur
@@ -184,7 +225,7 @@ final class CompteModelTests: XCTestCase {
 
     func testDelaiDepasseBorneAResolutionTimeoutSansRenvoi() async throws {
         let jamais = Gate()
-        let s = try await scenario(compte: FakeAccount(outcome: .deleted, gate: jamais), timeout: 0.05)
+        let s = try await scenario(compte: FakeAccount(outcome: .deleted, gate: jamais), timeout: 0.2)
         await s.model.supprimer()
         XCTAssertEqual(s.model.etat, .refuse(message: CompteSuppression.confirmationIndisponibleMessage),
                        "un délai dépassé ne prouve pas que le serveur n'a pas agi")
@@ -287,7 +328,7 @@ final class CompteModelTests: XCTestCase {
 
     func testSignOutLocallyEstBorneQuandLaPurgeNeRendPasLaMain() async throws {
         let jamais = Gate()
-        let s = try await scenario(timeout: 0.05, purgeGate: jamais)
+        let s = try await scenario(timeout: 0.2, purgeGate: jamais)
         let etat = await s.store.controller.signOutLocally()
         XCTAssertEqual(etat, .signedOut(message: nil), "une purge muette ne retient pas la déconnexion")
         await jamais.open()
@@ -340,6 +381,23 @@ final class CompteSuppressionTests: XCTestCase {
         XCTAssertEqual(CompteSuppression.fin(pour: .refused(code: "AUTH_DELETE_PENDING", message: "M")), .deconnecte(message: "M"))
         XCTAssertNil(CompteSuppression.fin(pour: .refused(code: "ACCOUNT_PROFILE_CONFLICT", message: "M")))
         XCTAssertNil(CompteSuppression.fin(pour: .refused(code: nil, message: "Demande deja en cours")))
+    }
+
+    func testPurgeDesPreferencesParSegmentDIdentifiant() throws {
+        let nom = "jolene.tests.compte.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: nom))
+        defer { preferences.removePersistentDomain(forName: nom) }
+        let uid = "0b4d2b8e-4a9f-4b1c-9e0a-7f3c1d2e5a66"
+        for cle in ["jolene.biometrie.activee.\(uid)", "jolene.calendrier:\(uid.uppercased())", "\(uid)/journal",
+                    "jolene.biometrie.activee.autre", "jolene.\(uid)x", "jolene.x\(uid)"] {
+            preferences.set(1, forKey: cle)
+        }
+        let purgees = CompteSuppression.purgerPreferencesLocales(userId: uid, defaults: preferences)
+        XCTAssertEqual(Set(purgees), ["jolene.biometrie.activee.\(uid)", "jolene.calendrier:\(uid.uppercased())", "\(uid)/journal"])
+        for cle in ["jolene.biometrie.activee.autre", "jolene.\(uid)x", "jolene.x\(uid)"] {
+            XCTAssertNotNil(preferences.object(forKey: cle), "\(cle) conservée")
+        }
+        XCTAssertEqual(CompteSuppression.purgerPreferencesLocales(userId: "  ", defaults: preferences), [], "identifiant vide : rien")
     }
 
     func testTextesDeLEcranDeFin() {
