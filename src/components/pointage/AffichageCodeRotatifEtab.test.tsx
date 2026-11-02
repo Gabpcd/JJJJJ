@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   signature: vi.fn(),
   permissions: vi.fn(),
+  // Référence stable : useEtabPermissions relit les droits quand l'utilisateur change.
+  utilisateur: { id: 'membre-1' },
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
 }));
@@ -20,7 +22,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'membre-1' } }),
+  useAuth: () => ({ user: mocks.utilisateur }),
 }));
 
 // Matrice de fn_a_permission_etablissement (supabase/schema/public.sql

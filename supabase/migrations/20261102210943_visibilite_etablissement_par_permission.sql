@@ -1,5 +1,4 @@
--- B9 (lot 5 B5b) — visibilité établissement par permission. NE PAS MERGER sans
--- le go explicite de Gabrielle (SECURITY DEFINER).
+-- Lot 5 B5b (B9, SECURITY DEFINER) — visibilité établissement par permission.
 --
 -- Sources : pg_get_functiondef PROD relu en lecture seule le 02/11/2026 ; les
 -- md5(prosrc) LIVE sont identiques à supabase/schema/public.sql (re-baseline du
@@ -13,9 +12,11 @@
 -- 2. fn_stats_dashboard_etablissement : commissions_cumulees et
 --    commissions_impayees à null sans lecture_paiement ni paiement ;
 --    candidatures_recentes à null sans lecture_candidatures.
--- 3. fn_mon_etablissement_complet : stripe_customer_id, stripe_account_id et
---    iban_last4 à null sans lecture_paiement ni paiement.
+-- 3. fn_mon_etablissement_complet : stripe_customer_id et stripe_account_id à
+--    null sans paiement ; iban_last4 à null sans lecture_paiement ni paiement.
 -- Les rôles habilités reçoivent exactement les mêmes réponses qu'avant.
+-- Étage RLS (lecture PostgREST directe des tables) hors périmètre : voir
+-- docs/VISIBILITE_ETABLISSEMENT_PERMISSION.md.
 
 DO $preflight_b5b$
 DECLARE
@@ -257,17 +258,20 @@ AS $etablissement_complet$
 DECLARE
   v_etab_id uuid := public.mon_etablissement_id();
   v_result jsonb;
+  v_paiement boolean;
   v_lecture_finances boolean;
 BEGIN
   IF v_etab_id IS NULL THEN
     RETURN jsonb_build_object('error', 'Etablissement introuvable');
   END IF;
 
-  -- B5b : identifiants Stripe et suffixe IBAN réservés à la lecture financière
-  -- (lecture_paiement ou paiement, comme canReadFinance du web). Les clés
-  -- restent présentes et valent null ; rib_s3_key est inchangé (voir PR).
-  v_lecture_finances := public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE
-    OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;
+  -- B5b : identifiants Stripe réservés à la permission paiement (aucun écran
+  -- ne les lit) ; suffixe IBAN réservé à la lecture financière (lecture_paiement
+  -- ou paiement, comme canReadFinance du web : Paramètres › Facturation). Les
+  -- clés restent présentes et valent null ; rib_s3_key est inchangé.
+  v_paiement := public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;
+  v_lecture_finances := v_paiement
+    OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE;
 
   SELECT row_to_json(e)::jsonb
   INTO v_result
@@ -276,8 +280,8 @@ BEGIN
       et.id, et.nom, et.siret, et.finess, et.type::text, et.groupe_sante_id,
       et.adresse_rue, et.adresse_ville, et.adresse_code_postal, et.adresse_departement,
       et.adresse_lat, et.adresse_lng, et.email_contact, et.telephone_contact,
-      CASE WHEN v_lecture_finances THEN et.stripe_customer_id END AS stripe_customer_id,
-      CASE WHEN v_lecture_finances THEN et.stripe_account_id END AS stripe_account_id,
+      CASE WHEN v_paiement THEN et.stripe_customer_id END AS stripe_customer_id,
+      CASE WHEN v_paiement THEN et.stripe_account_id END AS stripe_account_id,
       et.taux_commission_negocie,
       COALESCE(et.taux_commission_negocie, gs.taux_commission_negocie, 15) AS taux_commission_effectif,
       et.mode_facturation, et.mode_paiement_commission,
@@ -327,7 +331,7 @@ BEGIN
     SELECT * FROM (VALUES
       (1, 'fn_etat_pointage_mission(uuid)', '3fe46580ddb6d871b4331e41a31a9e05', '1188abb6a94766bbc7f7a8dc6d48c1ff', 's', ARRAY['search_path=public']::text[], 'MIXTE_TENANT_ADMIN'),
       (2, 'fn_stats_dashboard_etablissement()', '3b6e1d770f15c3d788236f2b57b77a9a', '1d66498685ed0ee237625b8e1975c0a3', 'v', ARRAY['search_path=public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE'),
-      (3, 'fn_mon_etablissement_complet()', 'adec3cf8c4d9bc8c317500222ed2675d', '3aebe891df768a48ac72145b2c9db9a5', 'v', ARRAY['search_path=pg_catalog, public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE')
+      (3, 'fn_mon_etablissement_complet()', 'adec3cf8c4d9bc8c317500222ed2675d', '920d2ebe12cabe2bab4dd92bedd818b8', 'v', ARRAY['search_path=pg_catalog, public']::text[], 'RPC_UTILISATEUR_AUTH_INTERNE')
     ) AS t(ordre, signature, ancien_md5, nouveau_md5, volatilite, config, categorie)
     ORDER BY ordre
   LOOP
