@@ -153,6 +153,19 @@ public actor SessionController {
         return currentState
     }
 
+    /// Verrou biométrique refusé (lot 1, T9, décision 1 ; `BiometricGate`) : l'espace se ferme sans
+    /// qu'aucun port ne soit appelé — ni `restoreSession`, ni `signOut` : la session persistée
+    /// (Keychain) reste intacte. Une identité active (reprise après 30 minutes) est retirée (epoch
+    /// avancé, caches invalidés) ; `canRetryRestore` devient vrai : « Réessayer sans mot de passe »
+    /// relance `start()`, donc le verrou. Une connexion par mot de passe reste possible.
+    public func lockForBiometrics() -> SessionState {
+        if activeUserId != nil { bumpEpoch() }
+        activeUserId = nil
+        restoreRetryable = true
+        currentState = .signedOut(message: nil)
+        return currentState
+    }
+
     /// Événement d'auth reçu du SDK hors de tout appel de l'app.
     /// - `.signedOut` pendant qu'une identité est active (session révoquée, déconnexion
     ///   globale depuis le web, refresh refusé) : l'epoch avance, tous les caches sont

@@ -11,6 +11,9 @@ import JoleneDesign
 /// suivants la barre est rendue en haut de l'écran sans élément `TabBar`. Les XCUITest
 /// (`JoleneUITestCase.tabButton`) résolvent les deux cas ; ne pas renommer ces symboles
 /// sans mettre à jour `tabSymbols` dans `UITestSupport.swift`.
+///
+/// Lot 1, T9 : chaque onglet est piloté par son drapeau `ios_natif_<ecran>_actif`
+/// (`.ecranNatif`, `Composition/FeatureFlags.swift`) ; coupé, il affiche `RenvoiWebScreen`.
 struct MainTabView: View {
     enum Tab: Hashable { case accueil, explorer, missions, revenus, profil }
 
@@ -24,6 +27,7 @@ struct MainTabView: View {
             NavigationStack {
                 AccueilScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
+            .ecranNatif(.accueil, ecrans: session.ecrans)
             .tabItem { Label("Accueil", systemImage: "house") }
             .tag(Tab.accueil)
             .accessibilityIdentifier("tab-accueil")
@@ -31,6 +35,7 @@ struct MainTabView: View {
             NavigationStack {
                 MissionsListScreen(session: session, snapshot: snapshot)
             }
+            .ecranNatif(.explorer, ecrans: session.ecrans)
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
             .tag(Tab.explorer)
             .accessibilityIdentifier("tab-explorer")
@@ -39,6 +44,7 @@ struct MainTabView: View {
                 PlaceholderScreen(titre: "Mes missions", identifier: "placeholder-missions",
                                   description: "Candidatures, missions à venir et passées arrivent au lot 1.")
             }
+            .ecranNatif(.missions, ecrans: session.ecrans)
             .tabItem { Label("Mes missions", systemImage: "list.clipboard") }
             .tag(Tab.missions)
             .accessibilityIdentifier("tab-missions")
@@ -47,6 +53,7 @@ struct MainTabView: View {
                 PlaceholderScreen(titre: "Revenus", identifier: "placeholder-revenus",
                                   description: "Vos gains, factures et bulletins arrivent au lot 1.")
             }
+            .ecranNatif(.revenus, ecrans: session.ecrans)
             .tabItem { Label("Revenus", systemImage: "banknote") }
             .tag(Tab.revenus)
             .accessibilityIdentifier("tab-revenus")
@@ -54,6 +61,7 @@ struct MainTabView: View {
             NavigationStack {
                 ProfileScreen(container: container, session: session, snapshot: snapshot)
             }
+            .ecranNatif(.profil, ecrans: session.ecrans) { Task { await session.signOut() } }
             .tabItem { Label("Profil", systemImage: "person") }
             .tag(Tab.profil)
             .accessibilityIdentifier("tab-profil")

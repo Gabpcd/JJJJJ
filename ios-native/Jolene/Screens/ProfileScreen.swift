@@ -3,7 +3,8 @@ import JoleneCore
 import JoleneDesign
 
 /// Onglet Profil du lot 0 : identité minimale, déconnexion, diagnostic démo ; suppression de compte
-/// (lot 1, T8, `SuppressionCompteSection`). Identifiant de la liste : `profile-list`.
+/// (lot 1, T8, `SuppressionCompteSection`) ; Sécurité (lot 1, T9, `profile-securite` → `SecuriteScreen`).
+/// Identifiant de la liste : `profile-list`.
 struct ProfileScreen: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
@@ -28,6 +29,15 @@ struct ProfileScreen: View {
                 .accessibilityIdentifier("logout-button")
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+            }
+            // Lot 1, T9 : déverrouillage biométrique (décision 1).
+            Section("Sécurité") {
+                NavigationLink {
+                    SecuriteScreen(session: session, snapshot: snapshot)
+                } label: {
+                    Label("Déverrouillage biométrique", systemImage: "faceid")
+                }
+                .accessibilityIdentifier("profile-securite")
             }
             Section("Application") {
                 LabeledContent("Version", value: "\(JoleneCore.version) · \(container.environment.mode.rawValue)")

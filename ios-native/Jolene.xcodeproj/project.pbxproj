@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		068E217463D119CC11263F61 /* DemoSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6196ED22AEE5C4FBF4B2144C /* DemoSessionTests.swift */; };
 		0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */ = {isa = PBXBuildFile; productRef = 321C808452B052BEA85F8CB7 /* JoleneCore */; };
 		12E6B9193B807F15C95D84AE /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8871298678DD982E3D6C3C26 /* RootView.swift */; };
 		1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */; };
@@ -14,16 +15,20 @@
 		2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */; };
 		2E1E6FD113EBB416CEBC2582 /* DemoAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */; };
 		35B21204F757910A731C8D4B /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57522BC17747DB1695651ECD /* MainTabView.swift */; };
+		456F81D60F0D88536EF7EB47 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A87344E4D4A5D8EBBD6E087 /* FeatureFlags.swift */; };
 		496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B12ED2CF03F5935EB224B9A /* AppContainer.swift */; };
 		4BB07F8A188E0551BB6B7248 /* AjoutCalendrierMission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */; };
 		55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F564268833C084BE055A9D3 /* ResumePolicy.swift */; };
 		5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
+		68B7B1CF09D502431D3B6192 /* SecuriteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C058613E47DB73CEAB3174A3 /* SecuriteScreen.swift */; };
 		6A2FA992EC44B425AB4036F2 /* AccueilLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */; };
+		76FBD6C60F2BEE854DB62443 /* LocalAuthenticationBiometrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4FC1682ABA956900779277 /* LocalAuthenticationBiometrics.swift */; };
 		78268B78D4B307017EBE8941 /* JoleneSupabase in Frameworks */ = {isa = PBXBuildFile; productRef = 1711BDF2D3665B719A9D26AE /* JoleneSupabase */; };
 		7D1B8941C12710BA10806436 /* AccueilScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60887A94696AA6108F556C2 /* AccueilScreen.swift */; };
 		7D9EC7EEACF825A03C5D6935 /* JoleneDesign in Frameworks */ = {isa = PBXBuildFile; productRef = AD05F490DB7A1E31B77DE468 /* JoleneDesign */; };
 		7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */; };
+		8CD752B6B306E9A8E13C0912 /* RenvoiWebScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E67C660D758CDAE79CF2E4B /* RenvoiWebScreen.swift */; };
 		8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07388306B298067BAF72F868 /* DemoConsultationTests.swift */; };
 		8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */; };
 		AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC77CAAD0BCDB6F1C7C4BCD /* CompteSupprimeScreen.swift */; };
@@ -64,10 +69,14 @@
 		2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAccueilTests.swift; sourceTree = "<group>"; };
 		2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionsListScreen.swift; sourceTree = "<group>"; };
 		2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		3E67C660D758CDAE79CF2E4B /* RenvoiWebScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenvoiWebScreen.swift; sourceTree = "<group>"; };
 		3F564268833C084BE055A9D3 /* ResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumePolicy.swift; sourceTree = "<group>"; };
 		41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoExplorerTests.swift; sourceTree = "<group>"; };
 		57522BC17747DB1695651ECD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		5A87344E4D4A5D8EBBD6E087 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		5D4FC1682ABA956900779277 /* LocalAuthenticationBiometrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthenticationBiometrics.swift; sourceTree = "<group>"; };
+		6196ED22AEE5C4FBF4B2144C /* DemoSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSessionTests.swift; sourceTree = "<group>"; };
 		65406E8F54F9DFF36EF8782E /* JoleneSupabase */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneSupabase; path = Packages/JoleneSupabase; sourceTree = SOURCE_ROOT; };
 		6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingConnexionTests.swift; sourceTree = "<group>"; };
 		6F98E168F9C28FBB06551D7B /* Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Production.xcconfig; sourceTree = "<group>"; };
@@ -83,6 +92,7 @@
 		ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccueilLignes.swift; sourceTree = "<group>"; };
 		B5C216B466C241777BFC4541 /* JoleneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoleneApp.swift; sourceTree = "<group>"; };
+		C058613E47DB73CEAB3174A3 /* SecuriteScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecuriteScreen.swift; sourceTree = "<group>"; };
 		CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentGuardTests.swift; sourceTree = "<group>"; };
 		D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileScreen.swift; sourceTree = "<group>"; };
@@ -118,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				9CC77CAAD0BCDB6F1C7C4BCD /* CompteSupprimeScreen.swift */,
+				C058613E47DB73CEAB3174A3 /* SecuriteScreen.swift */,
 				1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */,
 			);
 			path = Compte;
@@ -128,6 +139,8 @@
 			children = (
 				92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */,
 				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
+				5A87344E4D4A5D8EBBD6E087 /* FeatureFlags.swift */,
+				5D4FC1682ABA956900779277 /* LocalAuthenticationBiometrics.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
 				0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */,
 				3F564268833C084BE055A9D3 /* ResumePolicy.swift */,
@@ -148,6 +161,7 @@
 				2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */,
 				2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */,
 				E98C75CA1BDE25BD8822BDE0 /* ProfileScreen.swift */,
+				3E67C660D758CDAE79CF2E4B /* RenvoiWebScreen.swift */,
 				8871298678DD982E3D6C3C26 /* RootView.swift */,
 			);
 			path = Screens;
@@ -229,6 +243,7 @@
 				95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */,
 				07388306B298067BAF72F868 /* DemoConsultationTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
+				6196ED22AEE5C4FBF4B2144C /* DemoSessionTests.swift */,
 				CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */,
 				6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */,
 				23E960FB56B5063137621FDF /* UITestSupport.swift */,
@@ -347,8 +362,10 @@
 				496EB218D427D36B5164DC14 /* AppContainer.swift in Sources */,
 				AA33BE43A88764C0D2AEC169 /* CompteSupprimeScreen.swift in Sources */,
 				B3446B6871D7FBE2076E8D6B /* EnvironmentBlockedScreen.swift in Sources */,
+				456F81D60F0D88536EF7EB47 /* FeatureFlags.swift in Sources */,
 				EB4448BA06429EF4C7504957 /* FiltresSheet.swift in Sources */,
 				D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */,
+				76FBD6C60F2BEE854DB62443 /* LocalAuthenticationBiometrics.swift in Sources */,
 				BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */,
 				35B21204F757910A731C8D4B /* MainTabView.swift in Sources */,
 				289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */,
@@ -358,8 +375,10 @@
 				2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */,
 				D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */,
 				7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */,
+				8CD752B6B306E9A8E13C0912 /* RenvoiWebScreen.swift in Sources */,
 				55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */,
 				12E6B9193B807F15C95D84AE /* RootView.swift in Sources */,
+				68B7B1CF09D502431D3B6192 /* SecuriteScreen.swift in Sources */,
 				634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -372,6 +391,7 @@
 				1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */,
 				8F1F3B7AC29459F237E608AE /* DemoConsultationTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
+				068E217463D119CC11263F61 /* DemoSessionTests.swift in Sources */,
 				8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */,
 				5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */,
 				C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */,

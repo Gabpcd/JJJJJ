@@ -68,6 +68,18 @@ private struct SessionRootView: View {
                     .id(snapshot.epoch)
             }
         }
+        // Lot 1, T9 : pendant l'invite biométrique (reprise après 30 minutes), l'espace est masqué.
+        .overlay {
+            if session.deverrouillageEnCours {
+                ZStack {
+                    JoleneColor.softGradient.ignoresSafeArea()
+                    ProgressView("Déverrouillage de votre espace")
+                        .tint(JoleneColor.rose700)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("session-deverrouillage")
+            }
+        }
         .task { if case .idle = session.state { await session.start() } }
     }
 }
