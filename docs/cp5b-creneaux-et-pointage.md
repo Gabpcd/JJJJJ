@@ -212,8 +212,11 @@ Flux :
    c. UPDATE mission SET code_pointage_actif=new, code_pointage_hmac=new_hmac
 
 8. Retourner :
-   { nouveau_code, nouveau_hmac, type_scan_effectue, prochain_type_scan,
-     creneau_effectif_id, horodatage_arrondi }
+   { type_scan_effectue, prochain_type_scan, creneau_effectif_id,
+     horodatage_effectif, horodatage_arrondi, numero_scan, validation_etab_requise }
+   (depuis la migration *_scanner_code_sans_code_suivant.sql : plus de
+   nouveau_code / nouveau_hmac renvoyés au soignant ; l'établissement relit le
+   code courant par fn_etat_pointage_mission)
 ```
 
 **Arrondi au quart d'heure :**

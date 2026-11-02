@@ -55869,8 +55869,6 @@ BEGIN
   WHERE id = v_mission.id;
 
   RETURN jsonb_build_object(
-    'nouveau_code', v_new_code,
-    'nouveau_hmac', v_new_hmac,
     'type_scan_effectue', v_mission.prochain_type_scan,
     'prochain_type_scan', CASE
       WHEN v_mission.prochain_type_scan = 'OUVERTURE' THEN 'FERMETURE'
