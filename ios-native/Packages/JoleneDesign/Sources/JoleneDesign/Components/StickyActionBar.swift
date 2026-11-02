@@ -7,8 +7,9 @@ import SwiftUI
 /// formatées par le cœur (`MissionPresentation`) : valeurs serveur, jamais recalculées ici.
 /// À monter avec `.stickyActionBar(…)` (`safeAreaInset`) pour ne pas masquer le bas de page,
 /// équivalent de l'espaceur `h-16` du web. Le montant n'est jamais tronqué : en ligne quand tout
-/// tient, sinon (et toujours aux tailles Dynamic Type d'accessibilité) montant au-dessus et CTA
-/// pleine largeur.
+/// tient (`ViewThatFits`), sinon (et toujours aux tailles Dynamic Type d'accessibilité) montant
+/// au-dessus et CTA pleine largeur. La bascule est mesurée par les tests dans un hébergeur UIKit ;
+/// la priorité de largeur du montant en ligne (`layoutPriority`) ne l'est pas.
 public struct StickyActionBar: View {
     /// Disposition imposée par la taille de texte ; `.horizontal` reste soumis à `ViewThatFits`
     /// (repli en colonne si le montant et le CTA ne tiennent pas sur une ligne).
@@ -18,7 +19,7 @@ public struct StickyActionBar: View {
         public var montant: String
         public var precision: String?
         public var actionTitle: String
-        /// Identifiant racine ; le résumé reçoit `-montant`, le CTA `-action` sauf identifiant imposé.
+        /// Identifiant racine ; le résumé reçoit `-amount`, le CTA `-action` sauf identifiant imposé.
         public var identifier: String
         private var customActionIdentifier: String?
 
@@ -30,7 +31,7 @@ public struct StickyActionBar: View {
 
         public var accessibilitySummary: String { [montant, precision].compactMap { $0 }.joined(separator: ", ") }
         /// Porté par l'élément combiné montant + précision (les enfants combinés ne sont pas exposés).
-        public var montantIdentifier: String { "\(identifier)-montant" }
+        public var amountIdentifier: String { "\(identifier)-amount" }
         public var actionIdentifier: String { customActionIdentifier ?? "\(identifier)-action" }
     }
 
@@ -51,23 +52,38 @@ public struct StickyActionBar: View {
     private let content: Content
     private let isLoading: Bool
     private let isDisabled: Bool
+    private let layoutOverride: Layout?
     private let action: () -> Void
 
     public init(_ content: Content, isLoading: Bool = false, isDisabled: Bool = false, action: @escaping () -> Void) {
-        self.content = content; self.isLoading = isLoading; self.isDisabled = isDisabled; self.action = action
+        self.init(content, isLoading: isLoading, isDisabled: isDisabled, layoutOverride: nil, action: action)
+    }
+
+    /// Disposition imposée, sans `ViewThatFits` : réservé aux tests (mesure de la bascule).
+    init(_ content: Content, isLoading: Bool = false, isDisabled: Bool = false, layoutOverride: Layout?,
+         action: @escaping () -> Void) {
+        self.content = content; self.isLoading = isLoading; self.isDisabled = isDisabled
+        self.layoutOverride = layoutOverride; self.action = action
     }
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public var body: some View {
         Group {
-            switch Self.layout(for: dynamicTypeSize) {
-            case .vertical:
-                vertical
-            case .horizontal:
-                ViewThatFits(in: .horizontal) {
-                    horizontal
+            if let layoutOverride {
+                switch layoutOverride {
+                case .horizontal: horizontal
+                case .vertical: vertical
+                }
+            } else {
+                switch Self.layout(for: dynamicTypeSize) {
+                case .vertical:
                     vertical
+                case .horizontal:
+                    ViewThatFits(in: .horizontal) {
+                        horizontal
+                        vertical
+                    }
                 }
             }
         }
@@ -115,7 +131,7 @@ public struct StickyActionBar: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(content.accessibilitySummary)
-        .accessibilityIdentifier(content.montantIdentifier)
+        .accessibilityIdentifier(content.amountIdentifier)
     }
 
     private var actionButton: some View {

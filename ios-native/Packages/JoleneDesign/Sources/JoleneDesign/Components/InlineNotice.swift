@@ -7,10 +7,24 @@ import UIKit
 /// le texte 4,5:1, en clair comme en sombre. Le message serveur est affiché verbatim (PRINCIPES §3).
 ///
 /// Annonce VoiceOver : `role="alert"` est lu à l'apparition sur le web, pas sur iOS. Un écran qui
-/// affiche l'encart **après une action** (erreur serveur, refus, planning bloqué) passe
-/// `announcesOnAppear: true` ; un encart présent dès le chargement de l'écran reste lu dans
-/// l'ordre de lecture, sans annonce (pas de double lecture).
+/// affiche l'encart **après une action** (erreur serveur, refus, planning bloqué — via
+/// `SlotList(…, announcesBlocked:)`) passe `announcesOnAppear: true` ; un encart présent dès le
+/// chargement de l'écran reste lu dans l'ordre de lecture, sans annonce (pas de double lecture).
+///
+/// Une annonce est identifiée par son texte ET par `announcementID`, jeton fourni par l'écran
+/// (ex. numéro de tentative) : une même erreur qui revient alors que l'encart reste affiché n'est
+/// réannoncée que si l'écran change le jeton. Une clé déjà annoncée par cette vue ne l'est plus,
+/// y compris quand l'encart réapparaît dans un conteneur paresseux (`List`, `LazyVStack`) tant que
+/// SwiftUI conserve son identité ; un encart recréé avec une nouvelle identité (`.id(…)`) repart de zéro.
 public struct InlineNotice: View {
+    /// Annonce à émettre : texte vocalisé + jeton de l'appelant.
+    public struct AnnouncementKey: Equatable, Sendable {
+        public var text: String
+        public var id: Int
+
+        public init(text: String, id: Int) { self.text = text; self.id = id }
+    }
+
     public enum Tone: CaseIterable, Sendable {
         case info, success, warning, error
 
@@ -67,6 +81,19 @@ public struct InlineNotice: View {
         announcesOnAppear ? accessibilityLabel(tone: tone, title: title, message: message) : nil
     }
 
+    /// Clé d'annonce (texte + jeton), `nil` sans annonce demandée.
+    nonisolated public static func announcementKey(tone: Tone, title: String?, message: String, announcesOnAppear: Bool,
+                                                   announcementID: Int = 0) -> AnnouncementKey? {
+        announcement(tone: tone, title: title, message: message, announcesOnAppear: announcesOnAppear)
+            .map { AnnouncementKey(text: $0, id: announcementID) }
+    }
+
+    /// Annoncer `key`, sauf si cette vue l'a déjà annoncée (réapparition, recalcul du corps).
+    nonisolated public static func shouldAnnounce(_ key: AnnouncementKey?, lastAnnounced: AnnouncementKey?) -> Bool {
+        guard let key else { return false }
+        return key != lastAnnounced
+    }
+
     /// Délai avant l'annonce : laisse VoiceOver terminer le changement d'écran ou de focus.
     nonisolated static let announcementDelayNanoseconds: UInt64 = 300_000_000
 
@@ -75,15 +102,19 @@ public struct InlineNotice: View {
     private let tone: Tone
     private let identifier: String?
     private let announcesOnAppear: Bool
+    private let announcementID: Int
+    @State private var lastAnnounced: AnnouncementKey?
 
+    /// - Parameter announcementID: jeton de l'écran ; le changer réannonce un même texte (nouvelle tentative).
     public init(_ message: String, title: String? = nil, tone: Tone = .info, identifier: String? = nil,
-                announcesOnAppear: Bool = false) {
+                announcesOnAppear: Bool = false, announcementID: Int = 0) {
         self.message = message; self.title = title; self.tone = tone; self.identifier = identifier
-        self.announcesOnAppear = announcesOnAppear
+        self.announcesOnAppear = announcesOnAppear; self.announcementID = announcementID
     }
 
     public var body: some View {
-        let annonce = Self.announcement(tone: tone, title: title, message: message, announcesOnAppear: announcesOnAppear)
+        let cle = Self.announcementKey(tone: tone, title: title, message: message, announcesOnAppear: announcesOnAppear,
+                                       announcementID: announcementID)
         HStack(alignment: .top, spacing: JoleneSpacing.sm) {
             Image(systemName: tone.systemImage)
                 .font(JoleneFont.headline)
@@ -110,12 +141,16 @@ public struct InlineNotice: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Self.accessibilityLabel(tone: tone, title: title, message: message))
         .accessibilityIdentifier(identifier ?? "")
-        .task(id: annonce) {
-            // Relancée à chaque nouveau contenu ; annulée si l'encart disparaît avant le délai.
-            guard let annonce else { return }
+        .task(id: cle) {
+            // Relancée à chaque nouvelle clé et à chaque réapparition ; annulée si l'encart disparaît
+            // avant le délai. Une clé déjà annoncée par cette vue est ignorée.
+            guard Self.shouldAnnounce(cle, lastAnnounced: lastAnnounced), let cle else { return }
             try? await Task.sleep(nanoseconds: Self.announcementDelayNanoseconds)
             guard !Task.isCancelled else { return }
-            await MainActor.run { UIAccessibility.post(notification: .announcement, argument: annonce) }
+            await MainActor.run {
+                UIAccessibility.post(notification: .announcement, argument: cle.text)
+                lastAnnounced = cle
+            }
         }
     }
 }

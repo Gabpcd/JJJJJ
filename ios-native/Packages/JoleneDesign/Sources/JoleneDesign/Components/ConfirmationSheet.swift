@@ -7,6 +7,11 @@ import SwiftUI
 /// exact) et de la saisie « SUPPRIMER » de `SectionConfidentialite.tsx` (égalité stricte).
 /// Aucune règle métier : la vue appelante décide quand l'action est confirmée et ne déclare
 /// jamais un succès avant relecture serveur. Les textes juridiques arrivent verbatim de l'appelant.
+///
+/// Textes par défaut (vouvoiement) réservés aux confirmations sans portée juridique. La suppression
+/// de compte (T8, HARD STOP n°4) passe `message`, `phrasePrompt` et `phrasePlaceholder` tels que sur
+/// le web (`SectionConfidentialite.tsx` l.171-172 « Tape SUPPRIMER pour confirmer », l.178
+/// placeholder « Tape SUPPRIMER »), en tutoiement, tant que Gabrielle n'a pas validé un autre wording.
 public struct ConfirmationSheet: View {
     public enum Variant: Equatable, Sendable { case primary, danger }
 
@@ -23,12 +28,15 @@ public struct ConfirmationSheet: View {
         public var requiredPhrase: String?
         /// Libellé du champ de saisie ; par défaut « Saisissez <phrase> pour confirmer ».
         public var phrasePrompt: String?
+        /// Exemple affiché dans le champ vide (placeholder) ; par défaut la phrase exigée.
+        public var phrasePlaceholder: String?
 
         public init(title: String, message: String, confirmTitle: String = "Confirmer", cancelTitle: String = "Annuler",
-                    variant: Variant = .primary, identifier: String, requiredPhrase: String? = nil, phrasePrompt: String? = nil) {
+                    variant: Variant = .primary, identifier: String, requiredPhrase: String? = nil, phrasePrompt: String? = nil,
+                    phrasePlaceholder: String? = nil) {
             self.title = title; self.message = message; self.confirmTitle = confirmTitle; self.cancelTitle = cancelTitle
             self.variant = variant; self.identifier = identifier
-            self.requiredPhrase = requiredPhrase; self.phrasePrompt = phrasePrompt
+            self.requiredPhrase = requiredPhrase; self.phrasePrompt = phrasePrompt; self.phrasePlaceholder = phrasePlaceholder
         }
 
         public var confirmButtonStyle: JoleneButton.Style { variant == .danger ? .destructive : .primary }
@@ -42,6 +50,12 @@ public struct ConfirmationSheet: View {
         public var resolvedPhrasePrompt: String? {
             guard let requiredPhrase else { return nil }
             return phrasePrompt ?? "Saisissez \(requiredPhrase) pour confirmer"
+        }
+
+        /// Exemple du champ, `nil` quand aucune phrase n'est exigée.
+        public var resolvedPhrasePlaceholder: String? {
+            guard let requiredPhrase else { return nil }
+            return phrasePlaceholder ?? requiredPhrase
         }
 
         /// `RecapitulatifCandidatureDialog` : `disabled={chargement || !planning.exact}` ;
@@ -102,8 +116,8 @@ public struct ConfirmationSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier(configuration.messageIdentifier)
                 if let extra { extra }
-                if let prompt = configuration.resolvedPhrasePrompt, let phrase = configuration.requiredPhrase {
-                    phraseField(prompt: prompt, placeholder: phrase)
+                if let prompt = configuration.resolvedPhrasePrompt, let placeholder = configuration.resolvedPhrasePlaceholder {
+                    phraseField(prompt: prompt, placeholder: placeholder)
                 }
                 VStack(spacing: JoleneSpacing.sm) {
                     JoleneButton(configuration.confirmTitle, style: configuration.confirmButtonStyle, isLoading: isLoading) {

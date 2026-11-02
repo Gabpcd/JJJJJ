@@ -3,7 +3,9 @@ import SwiftUI
 /// Bloc de chargement, port de `src/components/ui/skeleton.tsx` (`role="status"` → élément
 /// d'accessibilité explicite libellé « Chargement en cours », `aria-busy` → trait
 /// `.updatesFrequently` ; tailles `h-3` / `h-4` / `h-6`). Pulsation d'opacité coupée quand
-/// « Réduire les animations » est actif, y compris si le réglage change pendant l'affichage.
+/// « Réduire les animations » est actif, y compris si le réglage change pendant l'affichage
+/// (`onChange`). Seule la règle `animates(reduceMotion:)` est testée : la réaction en cours
+/// d'affichage ne l'est pas (environnement `accessibilityReduceMotion` en lecture seule).
 /// Un squelette n'est jamais un contenu : il disparaît dès la réponse serveur (succès ou
 /// erreur), il ne remplace pas un message d'erreur.
 public struct SkeletonBlock: View {
