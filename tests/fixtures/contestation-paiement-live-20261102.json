@@ -1,0 +1,23 @@
+{
+  "$commentaire": "Définitions LIVE de production relues en lecture seule le 02/11/2026 (MCP Supabase execute_sql, projet flripxtsyegjshnhzjkz : pg_get_functiondef, md5(prosrc), proacl, proconfig, pg_get_constraintdef). Point de départ obligatoire de la migration B3 (garde-fou 9.0 n°2). Identiques à supabase/schema/public.sql avant B3 (empreintes vérifiées).",
+  "captured_at": "2026-11-02",
+  "project_ref": "flripxtsyegjshnhzjkz",
+  "function": {
+    "signature": "public.fn_contester_paiement_soignant(uuid,text)",
+    "definition": "CREATE OR REPLACE FUNCTION public.fn_contester_paiement_soignant(p_paiement_id uuid, p_motif text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n    v_paiement RECORD;\n    v_litige_id UUID;\nBEGIN\n    SELECT * INTO v_paiement FROM paiements_soignant WHERE id = p_paiement_id;\n    IF v_paiement IS NULL THEN RETURN '{\"error\":\"Paiement introuvable\"}'::JSONB; END IF;\n    IF v_paiement.soignant_id != auth.uid() THEN RETURN '{\"error\":\"Accès refusé\"}'::JSONB; END IF;\n\n    -- Marquer le paiement contesté\n    UPDATE paiements_soignant SET\n        conteste = TRUE,\n        motif_contestation = p_motif,\n        statut = 'CONTESTE',\n        modifie_le = NOW()\n    WHERE id = p_paiement_id;\n\n    -- Créer automatiquement un litige\n    INSERT INTO litiges (\n        mission_id, soignant_id, etablissement_id, initie_par, motif,\n        statut, paiement_soignant_id\n    ) VALUES (\n        v_paiement.mission_id,\n        v_paiement.soignant_id,\n        v_paiement.etablissement_id,\n        'SOIGNANT',\n        'Paiement contesté — ' || p_motif,\n        'OUVERT',\n        p_paiement_id\n    ) RETURNING id INTO v_litige_id;\n\n    -- Notifier l'établissement\n    INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)\n    VALUES (\n        v_paiement.etablissement_id,\n        'CONTESTATION_PAIEMENT',\n        'Paiement contesté ⚠️',\n        'Le soignant conteste un paiement. Motif : ' || p_motif,\n        '/etablissement/facturation',\n        'ETABLISSEMENT'\n    );\n\n    -- Notifier l'admin\n    INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)\n    SELECT id, 'SYSTEM', 'Paiement contesté ⚠️',\n        'Un soignant conteste un paiement. Motif : ' || p_motif,\n        '/admin/facturation', 'ADMIN'\n    FROM auth.users WHERE raw_app_meta_data->>'role' = 'ADMIN_PLATEFORME'\n    LIMIT 1;\n\n    RETURN jsonb_build_object('success', true, 'litige_id', v_litige_id);\nEND;\n$function$\n",
+    "definition_md5": "dba3ad2b65e08e731189cade270a2734",
+    "prosrc_md5": "fbd951f42e23cf3d8ea13b47bb442325",
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "inventory_categorie": "MIXTE_TENANT_ADMIN"
+  },
+  "constraint": {
+    "table": "public.notifications",
+    "name": "notifications_type_check",
+    "convalidated": true,
+    "definition": "CHECK ((type = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::text, 'CANDIDATURE_REFUSEE'::text, 'CANDIDATURE_PROPOSEE'::text, 'CANDIDATURE_RECUE'::text, 'MISSION_ACCEPTEE'::text, 'MISSION_ANNULEE'::text, 'MISSION_TERMINEE'::text, 'MISSION_URGENTE'::text, 'MISSION_NON_POURVUE'::text, 'MISSION_ASSIGNEE'::text, 'MISSION_A_POURVOIR'::text, 'CONTRAT_A_SIGNER'::text, 'CONTRAT_SIGNE'::text, 'FACTURE_EMISE'::text, 'FACTURE_PAYEE'::text, 'DOCUMENT_EXPIRANT'::text, 'RAPPEL_DOCUMENTS'::text, 'DOCUMENT_VERIFIE'::text, 'DOCUMENT_REJETE'::text, 'MESSAGE_RECU'::text, 'MESSAGE_ADMIN'::text, 'POINTAGE_ARRIVEE'::text, 'POINTAGE_DEPART'::text, 'EVALUATION_RECUE'::text, 'PARRAINAGE'::text, 'CREDIT_PARRAINAGE'::text, 'PARRAINAGE_PRIME_VERSEE'::text, 'RAPPEL_MISSION'::text, 'RAPPEL_CANDIDATURES'::text, 'POOL_URGENCE'::text, 'POOL_URGENCE_ACCEPTATION'::text, 'SYSTEM'::text, 'LITIGE_OUVERT'::text, 'LITIGE_REPONSE'::text, 'LITIGE_RESOLU'::text, 'LITIGE_MEDIATION'::text, 'LITIGE_RESOLU_AJUSTE'::text, 'LITIGE_ESCALADE_ADMIN'::text, 'LITIGE_MEDIATION_PRIORITAIRE'::text, 'LITIGE_RAPPEL_J1'::text, 'LITIGE_RAPPEL_J3'::text, 'LITIGE_RAPPEL_J5'::text, 'CHORUS_DEPOSEE'::text, 'CHORUS_MISE_A_DISPOSITION'::text, 'CHORUS_PAIEMENT_EN_COURS'::text, 'CHORUS_PAIEMENT_COMPTABILISE'::text, 'CHORUS_REJETEE'::text, 'FAVORI_NOUVELLE_MISSION'::text, 'AVOIR_EMIS'::text, 'COMMISSION_AJUSTEE'::text, 'REMBOURSEMENT_MANUEL_A_FAIRE'::text, 'REMBOURSEMENT_CONFIRME'::text, 'MATCHING_SUPER_LIKE'::text, 'FAVORI_MISSION_EXPIRE'::text, 'RAPPEL_VALIDATION_PRESENCE'::text, 'CONTESTATION_PRESENCE'::text, 'PRESENCE_VALIDEE'::text])))",
+    "definition_md5": "9abaa9884a7cba5a880244fb4a877d8c"
+  }
+}
