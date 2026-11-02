@@ -28692,7 +28692,15 @@ BEGIN
   v_caller_is_etab_admin := est_admin_etablissement()
     AND mon_etablissement_id() = v_mission.etablissement_id;
 
-  IF NOT (v_caller_is_soignant OR v_caller_is_etab_admin OR est_admin()) THEN
+  -- Logique ternaire : pour un compte authentifié sans lien avec la mission
+  -- (soignant non assigné, compte sans établissement), est_admin_etablissement()
+  -- et mon_etablissement_id() valent NULL ; NOT (false OR NULL OR false) vaut
+  -- NULL et ce IF laissait passer l'appel. Le contexte système (auth.uid() NULL :
+  -- service_role, tests SQL) reste inchangé.
+  IF auth.uid() IS NOT NULL
+     AND NOT (COALESCE(v_caller_is_soignant, false)
+              OR COALESCE(v_caller_is_etab_admin, false)
+              OR COALESCE(est_admin(), false)) THEN
     RAISE EXCEPTION 'Vous n''êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission.'
       USING ERRCODE = 'insufficient_privilege';
   END IF;

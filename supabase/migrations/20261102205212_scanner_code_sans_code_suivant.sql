@@ -29,12 +29,26 @@
 --     identique au corps de 20261017165819 ;
 --   * fn_declarer_fin_retroactive : MD5 845c6a3fd6dd3aa4ef7b2fcd19108d88,
 --     identique au corps de 20260903194000 ;
--- toutes deux identiques à supabase/schema/public.sql. Seule différence pour
--- chacune : retrait des deux clés du jsonb_build_object final. Rotation du
--- code, HMAC stocké dans missions.code_pointage_hmac, horodatage, contrôles,
--- exceptions, journal d'audit, propriétaire et ACL inchangés (CREATE OR
--- REPLACE, aucun GRANT). Toutes les gardes « avant » précèdent la première
--- redéfinition : une seule source divergente refuse la migration entière.
+-- toutes deux identiques à supabase/schema/public.sql. Différences, et seules
+-- différences :
+--   1. pour les deux RPC, retrait des deux clés du jsonb_build_object final ;
+--   2. pour fn_declarer_fin_retroactive, verrou de sa garde d'autorisation.
+--      `IF NOT (v_caller_is_soignant OR v_caller_is_etab_admin OR est_admin())`
+--      vaut NULL pour un compte authentifié sans lien avec la mission
+--      (est_admin_etablissement() et mon_etablissement_id() renvoient NULL,
+--      définitions LIVE identiques au dump) et un IF NULL ne lève pas : un
+--      autre soignant pouvait fermer le segment ouvert du soignant assigné à
+--      l'heure de son choix (heures réelles, facturation), recevoir le code
+--      suivant, et l'audit le classait ADMIN_PLATEFORME. Les NULL valent
+--      désormais false ; le contexte système (auth.uid() NULL : service_role,
+--      tests SQL) garde le comportement LIVE. Aucun appelant légitime ne
+--      change : soignant assigné, propriétaire/ADMIN_GROUPE/RH de
+--      l'établissement de la mission, administrateur plateforme.
+-- Rotation du code, HMAC stocké dans missions.code_pointage_hmac, horodatage,
+-- contrôles, exceptions, journal d'audit, propriétaire et ACL inchangés
+-- (CREATE OR REPLACE, aucun GRANT). Toutes les gardes « avant » précèdent la
+-- première redéfinition : une seule source divergente refuse la migration
+-- entière.
 -- Banc : scripts/ci/scanner-code-sans-code-suivant-pg17.py.
 DO $scanner_avant$
 DECLARE p record;
@@ -390,7 +404,15 @@ BEGIN
   v_caller_is_etab_admin := est_admin_etablissement()
     AND mon_etablissement_id() = v_mission.etablissement_id;
 
-  IF NOT (v_caller_is_soignant OR v_caller_is_etab_admin OR est_admin()) THEN
+  -- Logique ternaire : pour un compte authentifié sans lien avec la mission
+  -- (soignant non assigné, compte sans établissement), est_admin_etablissement()
+  -- et mon_etablissement_id() valent NULL ; NOT (false OR NULL OR false) vaut
+  -- NULL et ce IF laissait passer l'appel. Le contexte système (auth.uid() NULL :
+  -- service_role, tests SQL) reste inchangé.
+  IF auth.uid() IS NOT NULL
+     AND NOT (COALESCE(v_caller_is_soignant, false)
+              OR COALESCE(v_caller_is_etab_admin, false)
+              OR COALESCE(est_admin(), false)) THEN
     RAISE EXCEPTION 'Vous n''êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission.'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -548,7 +570,7 @@ DECLARE p record;
 BEGIN
   SELECT * INTO p FROM pg_catalog.pg_proc
   WHERE oid = pg_catalog.to_regprocedure('public.fn_declarer_fin_retroactive(uuid,timestamp with time zone,text)');
-  IF NOT FOUND OR pg_catalog.md5(p.prosrc) <> 'ce323a366172f276cf66479c21efe561'
+  IF NOT FOUND OR pg_catalog.md5(p.prosrc) <> '2e238a0d6cea02bce6802c77835defe2'
     OR p.prosecdef IS DISTINCT FROM true OR p.provolatile <> 'v'
     OR p.proconfig IS DISTINCT FROM ARRAY['search_path=public']::text[]
     OR pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
