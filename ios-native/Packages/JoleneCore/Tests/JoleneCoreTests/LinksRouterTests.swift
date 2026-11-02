@@ -104,6 +104,14 @@ final class LinksRouterTests: XCTestCase {
         XCTAssertEqual(route("https://jolene.app/soignant/profil"), .profil)
         XCTAssertEqual(route("https://jolene.app/soignant/mon-compte"), .monCompte, "hub séparé de l'édition (lot 3, T3)")
         XCTAssertEqual(route("https://jolene.app/soignant/score"), .monCompte, "page score au lot 4 : hub en attendant")
+        // Lot 1, T4b : « Mes favoris » est natif (onglet Explorer).
+        XCTAssertEqual(route("https://jolene.app/soignant/mes-favoris"), .favoris)
+        XCTAssertEqual(route("https://www.jolene.app/soignant/mes-favoris/"), .favoris)
+        XCTAssertEqual(LinkRouter.resolve(link: "/soignant/mes-favoris?onglet=etablissements"), .favoris)
+        XCTAssertTrue(JoleneRoute.favoris.isNative)
+        XCTAssertNil(JoleneRoute.favoris.externalURL)
+        XCTAssertEqual(route("https://jolene.app/etablissement/mes-favoris"),
+                       .etablissement(URL(string: "https://jolene.app/etablissement/mes-favoris")!), "favoris établissement : lot 5")
     }
 
     func testDetailsMissionEtSerie() {
