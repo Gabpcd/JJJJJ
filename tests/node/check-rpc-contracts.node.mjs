@@ -622,6 +622,8 @@ const POINTAGE_SYSTEME_1 = [
   'fn_generer_code_secours_mission',
 ];
 const SUPPLEMENT_SMS = 'scripts/ci/sms-signature-staging.sql';
+// Suffixe des messages d'échec des gardes confrontées à des sources de `main` (dump, web) : où et quand basculer.
+const BASCULE_MAIN = 'basculer au merge de main dans feat/ios-lot2 qui amène la re-baseline du dump ou la PR web (ou dans cette PR elle-même si T0 est déjà sur main) — DECISIONS_LOT2.md « Ordonnancement et branches »';
 const DOC_CONTRATS = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
 
 /**
@@ -704,7 +706,8 @@ test('RPC_JAMAIS_SUIVIES : fn_creer_notification refusée (décision 9) et fiche
   const schema = read(SOURCES.schema);
   // Témoins : le trigger notifie déjà l'établissement à l'ouverture d'un litige ; le web appelle encore la RPC.
   assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"."litiges"'));
-  assert.ok(read('src/components/PanneauContestation.tsx').includes("supabase.rpc('fn_creer_notification'"));
+  assert.ok(read('src/components/PanneauContestation.tsx').includes("supabase.rpc('fn_creer_notification'"),
+    `le web n appelle plus fn_creer_notification : fiche « Interdite côté natif : fn_creer_notification » et constat B9 à ${BASCULE_MAIN}`);
   const fiche = sectionContrats('Interdite côté natif : `fn_creer_notification`');
   for (const temoin of ['trg_notifier_creation_litige', 'CONTESTATION_PRESENCE', 'PanneauContestation.tsx']) {
     assert.ok(fiche.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
@@ -850,8 +853,8 @@ test('CONTRATS fn_etat_pointage_mission : clés de réponse et refus du dump, co
   // soignant assigné compris, et jamais false pour lui : un décodage en Bool non optionnel échouerait sur 100 % des
   // réponses réelles. `est_admin()` rend un booléen non nul (COALESCE), `mon_etablissement_id()` NULL hors établissement.
   assert.ok(body.includes('v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id();'),
-    'fn_etat_pointage_mission : affectation de v_is_etab changée — revoir la fiche (est_etab null côté soignant)');
-  assert.ok(body.includes("'est_etab', v_is_etab"), 'fn_etat_pointage_mission : est_etab n est plus renvoyé tel quel — revoir la fiche');
+    `fn_etat_pointage_mission : affectation de v_is_etab changée — fiche (est_etab null côté soignant), consigne T3 et « Motif à auditer » : ${BASCULE_MAIN}`);
+  assert.ok(body.includes("'est_etab', v_is_etab"), `fn_etat_pointage_mission : est_etab n est plus renvoyé tel quel — fiche et consigne T3 : ${BASCULE_MAIN}`);
   assert.ok(corpsSql(read(SOURCES.schema), enteteFn('est_admin_valide')).includes('SELECT COALESCE(EXISTS ('), 'est_admin_valide : plus de COALESCE');
   for (const temoin of ['`est_etab` : `null` pour tout compte sans établissement (soignant assigné compris), jamais `false`',
     'jamais décodé côté soignant', '`Bool?`']) {
@@ -961,7 +964,7 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
     'stockerPointageHorsLigne : nouvel importeur — revoir la décision 1');
   const corpsFleche = nom => {
     const debut = presences.indexOf(`\n  const ${nom} = async (`);
-    assert.ok(debut >= 0, `${nom} introuvable dans PresencesSoignant.tsx`);
+    assert.ok(debut >= 0, `${nom} introuvable dans PresencesSoignant.tsx (extraction W1 ou retrait du code mort ?) : garde et fiche ① à ${BASCULE_MAIN}`);
     const fin = presences.indexOf('\n  };\n', debut);
     assert.ok(fin > debut, `${nom} : fin de corps introuvable`);
     return [debut, fin];
@@ -972,8 +975,10 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
   for (const at of appels) {
     assert.ok(bornes.some(([d, f]) => at > d && at < f), 'stockerPointageHorsLigne appelée hors de pointerArrivee / pointerDepart — revoir la décision 1');
   }
-  assert.deepEqual(usages(/from '[^']*\/horsLigne'/), ['src/components/SyncHorsLigne.tsx', 'src/pages/PresencesSoignant.tsx']);
-  assert.deepEqual(usages(/from '[^']*\/SyncHorsLigne'/), ['src/components/LayoutApp.tsx']);
+  assert.deepEqual(usages(/from '[^']*\/horsLigne'/), ['src/components/SyncHorsLigne.tsx', 'src/pages/PresencesSoignant.tsx'],
+    `importeurs de horsLigne changés (retrait du rejoueur ① ?) : fiche ①, constat B9 et « Points consignés hors lot 2 » à ${BASCULE_MAIN}`);
+  assert.deepEqual(usages(/from '[^']*\/SyncHorsLigne'/), ['src/components/LayoutApp.tsx'],
+    `SyncHorsLigne n est plus monté par LayoutApp : fiche ① et constat B9 à ${BASCULE_MAIN}`);
   // Code de secours (amendement de la décision 1) : le générateur n'est appelé que par `QRPointageEtab` (importé par
   // aucun écran, seulement par un test) et la saisie que par `SaisieCodeSecours` (montée par `CartePointage`, mort).
   const appelants = rpc => webFiles().filter(f => readFileSync(f, 'utf8').includes(`rpc('${rpc}'`)).map(relatif).sort();
@@ -993,9 +998,11 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
   assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_premier_pointage" BEFORE INSERT OR UPDATE OF "pointage_arrivee_le" ON "public"."presences"'));
   assert.ok(corpsSql(schema, enteteFn('trg_exiger_conformite_premier_pointage')).includes('PERFORM public.fn_exiger_conformite_demarrage_mission('));
   assert.ok(corpsSql(schema, enteteFn('fn_exiger_conformite_demarrage_mission')).includes("AND cm.statut = 'SIGNE_COMPLET'"));
-  for (const name of ['fn_valider_scan_qr', 'fn_pointer_arrivee', 'fn_valider_code_secours']) {
+  for (const name of ['fn_valider_scan_qr', 'fn_valider_code_secours']) {
     assert.ok(!/SIGNE_COMPLET|fn_exiger_conformite/.test(corpsSql(schema, enteteFn(name))), `${name} contrôle désormais le contrat : revoir la fiche ①`);
   }
+  // fn_pointer_arrivee, elle, le vérifie dans la RPC (la fiche le dit).
+  assert.ok(corpsSql(schema, enteteFn('fn_pointer_arrivee')).includes("SELECT * INTO v_contrat FROM contrats_mission WHERE mission_id = p_mission_id AND statut = 'SIGNE_COMPLET';"));
   assert.match(corpsSql(schema, enteteFn('fn_scanner_code_pointage')),
     /IF v_mission\.prochain_type_scan = 'OUVERTURE' THEN\s+IF NOT EXISTS \(\s+SELECT 1\s+FROM contrats_mission[\s\S]*?statut = 'SIGNE_COMPLET'/);
   const decision1 = aplati(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'Décisions (§7 du blueprint)')).split(' 2. **')[0];
@@ -1199,7 +1206,7 @@ test('DECISIONS_LOT2.md : amendements du blueprint déclarés, bascule des garde
   assert.ok(ordre.includes('(amende `LOT2_PLAN.md` §3 B1 « Fichiers » et §4, vague 0)'), 'Ordonnancement : amendement de B1 non déclaré');
   for (const temoin of ['merge de `main` dans `feat/ios-lot2`', 're-baseline', 'B1', 'REVOKE', 'IS DISTINCT FROM', 'Motif à auditer',
     'fn_creer_notification', 'PanneauContestation.tsx', 'SyncHorsLigne', 'W1', 'PresencesSoignant.tsx', 'DocumentsSoignant.tsx',
-    'message d\'échec']) {
+    'messages d\'échec', 'BASCULE_MAIN']) {
     assert.ok(ordre.includes(temoin), `Ordonnancement et branches : bascule généralisée — ${temoin} absent`);
   }
 });
@@ -1249,8 +1256,7 @@ test('PRINCIPES §4 et plan : file hors ligne QR retirée, critères du lot 2 am
 // Revue fraîche de T0 : les constats RLS/auth relevés sur le dump sont consignés sous « En attente de Gabrielle › B9 »
 // et confrontés à leurs sources. Chaque témoin SQL rougit quand une PR backend (B9) corrige le constat : basculer
 // alors le constat de DECISIONS_LOT2.md et la fiche concernée de CONTRATS_RPC_SOIGNANT.md, au moment fixé par
-// DECISIONS_LOT2.md « Ordonnancement et branches » (BASCULE_MAIN ci-dessous).
-const BASCULE_MAIN = 'basculer au merge de main dans feat/ios-lot2 qui amène la re-baseline du dump (ou dans la PR backend elle-même si T0 est déjà sur main) — DECISIONS_LOT2.md « Ordonnancement et branches »';
+// DECISIONS_LOT2.md « Ordonnancement et branches » (BASCULE_MAIN).
 test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn_creer_notification) confrontés au dump et consignés', () => {
   const schema = read(SOURCES.schema);
   const grantAuthenticated = name => new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema);

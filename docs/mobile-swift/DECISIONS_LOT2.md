@@ -23,13 +23,19 @@
 ## Décisions (§7 du blueprint)
 
 1. **Système de pointage ① : non porté.** `fn_pointer_*`, `fn_valider_scan_qr`, `fn_generer_qr_mission`,
-   `fn_valider_code_secours`, `fn_codes_pointage_mission` et `qr-offline-queue.ts` ne sont jamais appelés par le
-   Swift : liste `RPC_POINTAGE_SYSTEME_1` refusée par `verifierExclusions` et par la garde des littéraux `"fn_…"`
-   (T0). Motifs : plus monté côté web depuis la PR #664, aucun contrôle « contrat signé » côté `fn_valider_scan_qr`,
-   missions multi-jours bloquées. Critères amendés : P2 (QR rotatif décodé, niveau 1, puis scanné sur iPhone,
-   niveau 5) remplace « QR `fn_generer_qr_mission` accepté par `fn_valider_scan_qr` » ; P6 (« aucun scan mis en
-   file ni rejoué ») remplace « QR expiré jamais remis en file ». Une garde Node rougit si le web rappelle le
-   système ① (la décision est alors à revoir). Le commentaire de `Rules/DisponibilitePointage.swift` l.106-107, qui
+   `fn_valider_code_secours`, `fn_codes_pointage_mission`, `fn_generer_code_secours_mission` et
+   `qr-offline-queue.ts` ne sont jamais appelés par le Swift : liste `RPC_POINTAGE_SYSTEME_1` (neuf RPC) refusée par
+   `verifierExclusions` et par la garde des littéraux `"fn_…"` (T0). **Amendement** (seconde revue fraîche de T0) :
+   `fn_generer_code_secours_mission`, absente de la liste du blueprint (`LOT2_PLAN.md` §3 T0), y entre ; c'est le
+   générateur du code de secours que consomme `fn_valider_code_secours`, appelé seulement par `QRPointageEtab`
+   (monté par aucun écran) et troisième chaîne de pointage à distance du constat B9 (« En attente de Gabrielle »).
+   Motifs : plus monté côté web depuis la PR #664 ; contrôle « contrat signé » absent de `fn_valider_scan_qr` et
+   de `fn_valider_code_secours` elles-mêmes (`fn_pointer_arrivee` et `fn_scanner_code_pointage` le font), assuré
+   pour elles seulement par le trigger de première arrivée `trg_01_exiger_conformite_premier_pointage`
+   (`fn_exiger_conformite_demarrage_mission`) ; missions multi-jours bloquées. Critères amendés : P2 (QR rotatif
+   décodé, niveau 1, puis scanné sur iPhone, niveau 5) remplace « QR `fn_generer_qr_mission` accepté par
+   `fn_valider_scan_qr` » ; P6 (« aucun scan mis en file ni rejoué ») remplace « QR expiré jamais remis en file ».
+   Une garde Node rougit si le web rappelle le système ① (la décision est alors à revoir). Le commentaire de `Rules/DisponibilitePointage.swift` l.106-107, qui
    cite encore `fn_pointer_arrivee` / `fn_pointer_depart`, est corrigé par T3 (T0 n'écrit aucune ligne Swift).
 2. **Hors connexion : aucune file pour le code rotatif.** Bouton désactivé et bandeau hors ligne ; reçu `not_sent` ;
    réponse perdue → réconciliation par relecture de `scans_pointage` (verdict « non reçu » seulement ≥ 8 s après le
@@ -135,11 +141,39 @@
 
 ## Ordonnancement et branches
 
-- **T0** (cette tranche) est préalable à toutes les autres. **B1** vise `main` et n'attend pas T0 ; tant que le lot 2
-  n'est pas sur `main`, la fiche « `nouveau_code` jamais lu » de `CONTRATS_RPC_SOIGNANT.md` et sa garde n'existent
-  que sur `feat/ios-lot2`. Elles basculent donc au **merge de `main` dans `feat/ios-lot2`** qui suit la re-baseline
-  du dump après B1 : la garde rougit à ce merge, et le commit de merge (ou celui qui le suit sur `feat/ios-lot2`)
-  met à jour la fiche et la garde. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
+- **T0** (cette tranche) est préalable à toutes les autres. **B1** vise `main` et n'attend pas T0 (amende
+  `LOT2_PLAN.md` §3 B1 « Fichiers » et §4, vague 0), voir « Amendements du blueprint » ; tant que le lot 2 n'est
+  pas sur `main`, la fiche « `nouveau_code` jamais lu » de `CONTRATS_RPC_SOIGNANT.md` et sa garde n'existent que
+  sur `feat/ios-lot2`. Elles basculent donc au **merge de `main` dans `feat/ios-lot2`** qui suit la re-baseline du
+  dump après B1 : la garde rougit à ce merge, et le commit de merge (ou celui qui le suit sur `feat/ios-lot2`) met à
+  jour la fiche et la garde. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
+- **Bascule des gardes confrontées à `main` (règle générale, B1 en est un cas).** Les gardes de
+  `tests/node/check-rpc-contracts.node.mjs` relisent des sources que des PR de `main` peuvent changer avant que le
+  lot 2 y soit : le dump `supabase/schema/public.sql` (re-baseliné après chaque PR backend) et le web `src/`. Tant
+  que T0 n'est que sur `feat/ios-lot2`, une telle PR ne peut pas mettre à jour ces gardes ni les fiches : elles
+  rougissent au **merge de `main` dans `feat/ios-lot2`** qui l'amène (après la re-baseline du dump pour une PR
+  backend), et ce commit de merge, ou celui qui le suit sur `feat/ios-lot2`, bascule la garde, la fiche de
+  `CONTRATS_RPC_SOIGNANT.md` et le constat de ce mémo. Si T0 est déjà sur `main`, la PR elle-même les bascule.
+  Cas connus :
+  - **B1** (`nouveau_code` retiré) : garde « `nouveau_code` renvoyé tant que B1 n'est pas mergée », fiche
+    « `nouveau_code` jamais lu ».
+  - **PR backend B9 des constats ci-dessous** : `REVOKE` des neuf RPC ① ou correction des gardes ternaires
+    (`IS DISTINCT FROM`, `COALESCE`) de `fn_codes_pointage_mission`, `fn_generer_qr_mission`,
+    `fn_generer_code_secours_mission`, `fn_presences_detail_mission`, `fn_etat_pointage_mission` et des autres RPC
+    du « Motif à auditer » ; `REVOKE` de `fn_creer_notification` ou contrôle de son destinataire. Gardes « B9
+    RLS/auth » (constats et « Motif à auditer ») et « `fn_etat_pointage_mission` » ; fiches ①, `fn_creer_notification`,
+    `fn_etat_pointage_mission`, `fn_presences_detail_mission` ; sous-section B9 de ce mémo.
+  - **PR web des propositions B9** : retrait de l'appel `fn_creer_notification` de `PanneauContestation.tsx` (garde
+    « `RPC_JAMAIS_SUIVIES` : `fn_creer_notification` », témoin de l'appel web, et gardes qui relisent ce fichier :
+    trois clés de `fn_ouvrir_litige_rate_limited`, constante 72 h ; fiche `fn_creer_notification`) ; retrait de
+    `SyncHorsLigne` / `src/lib/horsLigne.ts` (garde « Web : le système ① reste mort », fiche ①, « Points consignés
+    hors lot 2 »).
+  - **W1** (extraction dans `PresencesSoignant.tsx` et `DocumentsSoignant.tsx`) : garde « Web : le système ① reste
+    mort », qui lit `PresencesSoignant.tsx` (`pointerArrivee`, `pointerDepart`, `stockerPointageHorsLigne`,
+    `<BlocPointageMission`), et numéros de ligne de ces deux fichiers cités par les fiches et par la scission T2/T2b.
+  Les messages d'échec des témoins concernés (constats B9, « Motif à auditer », `est_etab`, appel web de
+  `fn_creer_notification`, rejoueur ①, `nouveau_code`) nomment la fiche ou le constat à basculer et renvoient à ce
+  paragraphe (suffixe `BASCULE_MAIN` de la garde).
 - **T1** attend l'intégration du journal de reçus de lot 1 T7 (décision 23) : vague 1.
 - Branche d'intégration `feat/ios-lot2`, créée depuis `origin/feat/ios-lot1` ; elle reprend `main` puis `feat/ios-lot1`
   par merge (jamais de rebase ni de force-push). Aucune PR n'est ouverte sur cette branche avant la fin du lot 1
@@ -153,7 +187,21 @@
   `fn_admission_otp_signature_recette` (statut `staging_seulement`). D'ici là, la garde Node de `validate-pr.yml`
   couvre une modification du supplément ; `tests/node/check-rpc-contracts.node.mjs` exige cette consigne tant que le
   filtre manque.
+- **T3** : stubs de test et fixtures de démo de `fn_etat_pointage_mission` avec `est_etab: null` (forme réelle de
+  la réponse pour tout soignant, assigné compris : `false OR NULL`, `public.sql` l.35165 et l.35189), jamais
+  `false` ; `est_etab` n'est pas décodé (ou `Bool?` ignoré), comme `code_pointage_actif` (fiche
+  `fn_etat_pointage_mission` de `CONTRATS_RPC_SOIGNANT.md`). La garde rougit si une fixture ou un stub de
+  `ios-native/` ou `scripts/mobile/export-demo-fixtures.mjs` pose `est_etab: false`.
 - **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
+
+## Amendements du blueprint (`LOT2_PLAN.md`)
+
+Le blueprint versionné n'est pas réécrit ; ces écarts font foi.
+
+| Passage du blueprint | Formulation initiale | Retenu | Motif |
+|---|---|---|---|
+| §3 B1 « Fichiers » ; §4, vague 0 | fiche « `nouveau_code` jamais lu » et garde de T0 « basculées dans la même PR » ; « B1 se merge **après** T0 », « B1 **après T0** » | B1 vise `main` et n'attend pas T0 ; fiche et garde basculent au merge de `main` dans `feat/ios-lot2` (« Ordonnancement et branches ») | revue fraîche de T0 : tant que le lot 2 n'est pas sur `main`, la PR B1 ne peut pas modifier deux fichiers qui n'y existent pas |
+| §3 T0 (`RPC_POINTAGE_SYSTEME_1`) ; §1.2 « Système de pointage ① » | huit RPC | neuf RPC : + `fn_generer_code_secours_mission` | seconde revue fraîche de T0 : générateur du code de secours de ①, troisième chaîne de pointage à distance (décision 1 amendée) |
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -202,10 +250,10 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   (B9) doit le confirmer sur la définition live et corriger la garde. Le natif n'appelle ces RPC que pour ses
   missions et n'en dépend pas.
 - **Constat T0 (nouveau, RLS/auth) — système ① toujours appelable, pointage à distance** (revue fraîche de T0 ;
-  constat sur le dump `public.sql`, à confirmer sur la définition live par une PR backend séparée, B9) : les huit RPC
-  de `RPC_POINTAGE_SYSTEME_1` ne sont plus montées côté web, mais gardent le `GRANT … TO authenticated` en
-  production (l.81953, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495, l.85523) : PostgREST les sert à tout
-  compte connecté. Deux chaînes permettent à un soignant de **pointer à distance** :
+  constat sur le dump `public.sql`, à confirmer sur la définition live par une PR backend séparée, B9) : les neuf RPC ①
+  de `RPC_POINTAGE_SYSTEME_1` (décision 1 amendée) ne sont plus montées côté web, mais gardent le `GRANT … TO
+  authenticated` en production (l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495, l.85523) :
+  PostgREST les sert à tout compte connecté. Trois chaînes permettent à un soignant de **pointer à distance** :
   1. `fn_codes_pointage_mission` (l.23784) garde l'accès par `NOT est_admin() AND v_mission.etablissement_id !=
      mon_etablissement_id()` (l.23799) ; `mon_etablissement_id()` vaut NULL pour un soignant, la condition vaut
      NULL et la garde laisse passer : la RPC renvoie `code_arrivee` et `code_depart` de n'importe quelle mission
@@ -217,13 +265,23 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
      mon_etablissement_id())` (l.38006), qui vaut aussi NULL pour un soignant : le soignant assigné génère son propre
      jeton, que `fn_valider_scan_qr` (l.65545) accepte (affectation vérifiée, GPS non bloquant : « QR = source de
      vérité »).
+  3. `fn_generer_code_secours_mission` (l.37455, seconde revue fraîche de T0) garde l'accès par la même condition
+     `NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id())` (l.37478), NULL pour un soignant, et
+     reste GRANT `authenticated` (l.83013) : elle rend au soignant un code de secours **en clair** (`'code', v_code`,
+     l.37510-37517), pour n'importe quelle mission. `fn_valider_code_secours` (l.64991) l'accepte en ne vérifiant que
+     l'affectation (l.65012), sans contrôle de position dans la RPC (coordonnées facultatives, enregistrées telles
+     quelles ; sans coordonnées, `dec_antifraude_presence` ne recalcule rien, l.646), et inscrit la présence
+     `CODE_SECOURS` à l'arrivée comme au départ (l.65067-65072, l.65085-65091). Le REVOKE de la seule
+     `fn_valider_code_secours` fermerait la chaîne, mais laisserait le générateur rendre des codes en clair.
   L'anti-triche du pointage est contournée, et les heures ainsi pointées faussent en aval la paie, la facturation et
   l'escrow. Les fiches ① de `CONTRATS_RPC_SOIGNANT.md` les décrivent comme mortes côté web : elles restent appelables.
   **Proposition** (PR backend séparée, B9, depuis la définition live, garde-fou 9.0 n°2) : `REVOKE EXECUTE ON
-  FUNCTION … FROM authenticated` sur les huit RPC ①, après vérification que `SyncHorsLigne` (monté par
-  `LayoutApp.tsx`, rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`) ne porte plus aucun pointage réel ; à
-  défaut, des gardes `IS DISTINCT FROM` / `COALESCE` qui refusent quand `mon_etablissement_id()` est NULL. Dans les
-  deux cas, un rejet explicite qui renvoie à ce constat (principe « un gap connu reste verrouillé »).
+  FUNCTION … FROM authenticated` sur les neuf RPC ①, `fn_generer_code_secours_mission` comprise, après vérification
+  que `SyncHorsLigne` (monté par `LayoutApp.tsx`, rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`) ne porte
+  plus aucun pointage réel ; à défaut, des gardes `IS DISTINCT FROM` / `COALESCE` qui refusent quand
+  `mon_etablissement_id()` est NULL, dans `fn_codes_pointage_mission`, `fn_generer_qr_mission` et
+  `fn_generer_code_secours_mission`. Dans les deux cas, un rejet explicite qui renvoie à ce constat (principe « un
+  gap connu reste verrouillé »).
 - **Constat T0 (nouveau, RLS/auth) — `fn_creer_notification`** (revue fraîche de T0) : tout compte authentifié peut
   écrire une notification arbitraire (destinataire, type, titre, corps, `lien`) à n'importe quel destinataire :
   fonction `SECURITY DEFINER` (l.27450-27475), `GRANT … TO authenticated` (l.82276), seul contrôle
@@ -233,9 +291,27 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
   `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
   destinataire et le type, avec un rejet explicite.
-- **Motif à auditer par ces PR backend** : la comparaison nue à `mon_etablissement_id()` (`!=` ou `=` sans
-  `IS DISTINCT FROM`) apparaît 18 fois au dump, dont `fn_generer_facture` (l.37629, hors lot 2) ; audit croisé sur
-  les définitions live.
+- **Motif à auditer par ces PR backend** : garde d'accès dont une comparaison `=`, `!=` ou `<>` à
+  `mon_etablissement_id()` n'est protégée ni par `IS DISTINCT FROM` ni par `IS NULL` : elle vaut NULL pour tout
+  compte sans établissement et la garde laisse passer. Au dump, 18 RPC `GRANT … TO authenticated` en ont une
+  (méthode reproductible : `gardesNuesEtablissement` de `tests/node/check-rpc-contracts.node.mjs`, conditions
+  `IF`/`ELSIF … THEN` de chaque RPC `authenticated`, plus l'affectation de `v_is_etab` ; la garde rougit si la liste
+  change) : `fn_activer_garantie_mission` (l.5494), `fn_booster_mission` (l.20964), `fn_codes_pointage_mission`
+  (l.23799), `fn_creer_reclamation_score` (l.27534), `fn_declarer_honoraires_retrocession` (l.29085),
+  `fn_definir_retrocession_mission` (l.29754), `fn_deposer_chorus` (l.30155), `fn_diffuser_pool_urgence`
+  (l.31426-31429), `fn_enregistrer_numero_dpae` (l.32360), `fn_etablissement_pour_mission` (l.34899-34903),
+  `fn_etat_pointage_mission` (affectation l.35165, garde l.35168), `fn_generer_code_secours_mission` (l.37478),
+  `fn_generer_donnees_dpae` (l.37547), `fn_generer_facture` (l.37629), `fn_generer_qr_mission` (l.38006),
+  `fn_presences_detail_mission` (l.48920-48921), `fn_rebooker_soignant` (l.51626), `fn_soignants_urgence`
+  (l.57324). Relevées par la méthode mais neutralisées par le reste de la condition (exclues) :
+  `fn_ouvrir_litige_rate_limited` (surcharge à `p_facture_id`, l.46602-46610 : conjonction avec
+  `fn_a_permission_etablissement('contrats', …) IS TRUE`, faux pour un soignant) et
+  `fn_soignant_stripe_connect_actif` (l.57262-57266 : comparaison dans le `WHERE` d'un `NOT EXISTS`, NULL → refus).
+  Hors RPC `authenticated`, cinq conditions de même forme sont à auditer avec leurs appelants : triggers
+  `dec_valider_paiement_facture` (l.3826), `fn_protect_paiement_soignant` (l.50566),
+  `fn_verrouiller_proposition_litige_en_attente` (l.66800-66816), fonctions `fn_generer_facture_mensuelle_internal_20260801`
+  (l.37797) et `fn_modifier_reference_paiement_internal_20260801` (l.44195). Hors lot 2 sauf les cinq RPC des
+  constats ci-dessus ; audit croisé sur les définitions live, exploitabilité à établir RPC par RPC.
 - **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
   de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).
 

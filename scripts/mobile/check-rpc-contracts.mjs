@@ -109,8 +109,12 @@ export const RPC_JAMAIS_SUIVIES = ['fn_etablissement_public', 'fn_creer_notifica
 
 /**
  * Système de pointage ① (lot 2, décision 1) : plus monté côté web depuis la PR #664 (seul
- * `PointageRotatifSoignant` l'est), sans contrôle « contrat signé » côté `fn_valider_scan_qr` et
- * bloquant pour les missions multi-jours. Jamais suivi, donc jamais appelé par le client Swift.
+ * `PointageRotatifSoignant` l'est), contrat signé non contrôlé par `fn_valider_scan_qr` ni par
+ * `fn_valider_code_secours` (seul le trigger de première arrivée
+ * `trg_01_exiger_conformite_premier_pointage` le vérifie pour elles) et bloquant pour les missions
+ * multi-jours. Jamais suivi, donc jamais appelé par le client Swift.
+ * `fn_generer_code_secours_mission` (générateur du code de secours, appelé seulement par
+ * `QRPointageEtab`, non monté) y entre par l'amendement de la décision 1 (seconde revue de T0).
  */
 export const RPC_POINTAGE_SYSTEME_1 = [
   'fn_pointer_arrivee',
@@ -121,6 +125,7 @@ export const RPC_POINTAGE_SYSTEME_1 = [
   'fn_generer_qr_mission',
   'fn_valider_code_secours',
   'fn_codes_pointage_mission',
+  'fn_generer_code_secours_mission',
 ];
 
 /**

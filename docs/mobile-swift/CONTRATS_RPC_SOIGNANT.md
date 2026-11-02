@@ -34,7 +34,7 @@ plus de diff).
 
 **Autres sources lues par la garde.** Outre les trente-trois RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
 
-**Sources ajoutées par le lot 2 (T0).** Les corps de `fn_exiger_conformite_demarrage_mission`, `trg_exiger_conformite_premier_pointage` et `dec_fenetre_pointage` (exceptions de la première OUVERTURE) et les triggers `dec_fenetre_pointage`, `trg_01_exiger_conformite_premier_pointage`, `trg_01_exiger_conformite_mission_en_cours`, `trg_notifier_creation_litige` ; le supplément `scripts/ci/sms-signature-staging.sql` (`fn_admission_otp_signature_recette`, statut `staging_seulement`) ; le web `src/components/pointage/PointageRotatifSoignant.tsx` (RPC appelées, clés `p_metadata`, surcharge du message `P0002`), `src/pages/PresencesSoignant.tsx` et `src/components/pointage/BlocPointageMission.tsx` (système ① non appelé), `src/components/CartePointage.tsx` et `src/lib/qr-offline-queue.ts` (importeurs), `src/components/PanneauContestation.tsx` (trois clés, `fn_creer_notification`, constante 72 h), `src/components/SignerContratOtp.tsx` (`MESSAGES_ERREUR`) et `src/lib/signatureSmsStagingAdmission.ts` (garde d'URL STAGING) ; les edges `supabase/functions/verify-document/index.ts` et `supabase/functions/generate-contrat-mission-pdf/index.ts` et leur ligne `verify_jwt` de `supabase/config.toml` ; toutes les politiques `storage.objects` de `supabase/migrations/*.sql` (état final, quel que soit leur nom) ; aucun `nouveau_code` dans les sources Swift. Ajouts de la revue fraîche de T0 : les corps de `fn_codes_pointage_mission`, `fn_pointer_arrivee`, `dec_antifraude_presence`, `fn_generer_qr_mission`, `fn_valider_scan_qr` et `fn_creer_notification`, et les GRANT `authenticated` des huit RPC ① et de `fn_creer_notification` (constats B9 de `DECISIONS_LOT2.md`) ; `docs/audit-fonctionnel-pre-lancement.md` (statut « FIXÉ » de `fn_creer_notification`) ; le rejoueur ① `src/lib/horsLigne.ts` (`stockerPointageHorsLigne`), `src/components/SyncHorsLigne.tsx` et `src/components/LayoutApp.tsx` (importeurs) ; les filtres de chemins de `.github/workflows/ios-swift-ci.yml` (supplément SMS, consigne pour T2).
+**Sources ajoutées par le lot 2 (T0).** Les corps de `fn_exiger_conformite_demarrage_mission`, `trg_exiger_conformite_premier_pointage` et `dec_fenetre_pointage` (exceptions de la première OUVERTURE) et les triggers `dec_fenetre_pointage`, `trg_01_exiger_conformite_premier_pointage`, `trg_01_exiger_conformite_mission_en_cours`, `trg_notifier_creation_litige` ; le supplément `scripts/ci/sms-signature-staging.sql` (`fn_admission_otp_signature_recette`, statut `staging_seulement`) ; le web `src/components/pointage/PointageRotatifSoignant.tsx` (RPC appelées, clés `p_metadata`, surcharge du message `P0002`), `src/pages/PresencesSoignant.tsx` et `src/components/pointage/BlocPointageMission.tsx` (système ① non appelé), `src/components/CartePointage.tsx` et `src/lib/qr-offline-queue.ts` (importeurs), `src/components/PanneauContestation.tsx` (trois clés, `fn_creer_notification`, constante 72 h), `src/components/SignerContratOtp.tsx` (`MESSAGES_ERREUR`) et `src/lib/signatureSmsStagingAdmission.ts` (garde d'URL STAGING) ; les edges `supabase/functions/verify-document/index.ts` et `supabase/functions/generate-contrat-mission-pdf/index.ts` et leur ligne `verify_jwt` de `supabase/config.toml` ; toutes les politiques `storage.objects` de `supabase/migrations/*.sql` (état final, quel que soit leur nom) ; aucun `nouveau_code` dans les sources Swift. Ajouts de la revue fraîche de T0 : les corps de `fn_codes_pointage_mission`, `fn_pointer_arrivee`, `dec_antifraude_presence`, `fn_generer_qr_mission`, `fn_valider_scan_qr` et `fn_creer_notification`, et les GRANT `authenticated` des RPC ① et de `fn_creer_notification` (constats B9 de `DECISIONS_LOT2.md`) ; `docs/audit-fonctionnel-pre-lancement.md` (statut « FIXÉ » de `fn_creer_notification`) ; le rejoueur ① `src/lib/horsLigne.ts` (`stockerPointageHorsLigne`), `src/components/SyncHorsLigne.tsx` et `src/components/LayoutApp.tsx` (importeurs) ; les filtres de chemins de `.github/workflows/ios-swift-ci.yml` (supplément SMS, consigne pour T2). Ajouts de la seconde revue fraîche de T0 : les corps de `fn_generer_code_secours_mission` et `fn_valider_code_secours` (troisième chaîne de pointage à distance) et le GRANT `authenticated` du générateur ; les importeurs et appelants de `src/components/etablissement/QRPointageEtab.tsx` et `src/components/soignant/SaisieCodeSecours.tsx` (code de secours non monté) ; les gardes d'accès de toutes les RPC GRANT `authenticated` qui comparent nûment à `mon_etablissement_id()` (« Motif à auditer » de `DECISIONS_LOT2.md`) ; le corps de `est_admin_valide` (booléen non nul : `est_etab` de `fn_etat_pointage_mission` vaut `null` pour un soignant) ; `scripts/mobile/export-demo-fixtures.mjs` et les fixtures `.json`/`.swift` de `ios-native/` (aucun `est_etab: false`).
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
@@ -121,7 +121,7 @@ surcharge `fn_ouvrir_litige_rate_limited(uuid, type_litige, text, uuid)` est abs
 Plusieurs RPC ne sont pas suivies, pour des raisons différentes, et `verifierExclusions`
 (`scripts/mobile/check-rpc-contracts.mjs`) fait échouer la CI si l'une d'elles y entre :
 **jamais** `fn_etablissement_public` et `fn_creer_notification` (`RPC_JAMAIS_SUIVIES`, fiches « Interdite côté
-natif » en fin de document) ; **jamais** les huit RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`, fiche
+natif » en fin de document) ; **jamais** les neuf RPC du système de pointage ① (`RPC_POINTAGE_SYSTEME_1`, fiche
 « Interdit côté natif : système de pointage ① ») ; **pas avant le lot 4** `fn_retirer_candidature` (swipe),
 suivie au plus tôt avec `lot: 4`. À part, `fn_mon_profil_soignant_complet` reste suivie mais est reclassée
 lot 3 (voir sa fiche).
@@ -399,15 +399,25 @@ CREATE OR REPLACE FUNCTION "public"."fn_etat_pointage_mission"("p_mission_id" "u
 - **Contrat de réponse (HTTP 200)** : `{error:'Mission introuvable'}` (l.35162) ; `{error:'Accès interdit'}`
   (l.35169) ; succès `{statut, intitule, prochain_type_scan, nb_scans, segment_ouvert, segments, code_pointage_actif, est_etab}`
   (l.35180-35190) : `statut`, `intitule`, `prochain_type_scan` (`OUVERTURE`/`FERMETURE`), `nb_scans`,
-  `segment_ouvert`, `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés par début), `code_pointage_actif`
-  (non nul pour l'établissement seulement, l.35188), `est_etab`. Décodeur en liste blanche : **`code_pointage_actif`
-  jamais décodé** côté soignant, même présent. `{error}` → refus verbatim (parité `PointageRotatifSoignant.tsx` l.81-92).
+  `segment_ouvert` (`COALESCE(…, false)`, jamais nul), `segments` (`[{id, debut, fin}]`, créneaux `EFFECTIF` triés
+  par début), `code_pointage_actif` (non nul pour l'établissement seulement, l.35188), `est_etab`. Décodeur en
+  liste blanche : **`code_pointage_actif` jamais décodé** côté soignant, même présent. `{error}` → refus verbatim
+  (parité `PointageRotatifSoignant.tsx` l.81-92).
+- **`est_etab` : `null` pour tout compte sans établissement (soignant assigné compris), jamais `false`.**
+  `v_is_etab := est_admin() OR v_mission.etablissement_id = mon_etablissement_id()` (l.35165) : `est_admin()` rend
+  un booléen non nul (`est_admin_valide`, `COALESCE(EXISTS …)`, l.4852), `mon_etablissement_id()` vaut NULL hors
+  établissement (l.67092), donc `false OR NULL` = NULL, renvoyé tel quel (`'est_etab', v_is_etab`, l.35189) : JSON
+  `null`. Seul un compte d'un **autre** établissement reçoit `false` (il passe la garde quand
+  `soignant_assigne_id` est NULL). `est_etab` n'est jamais décodé côté soignant (à défaut, `Bool?` ignoré) : un
+  décodage en `Bool` non optionnel échouerait sur toutes les réponses réelles, alors qu'un stub `false` passerait.
+  Stubs et fixtures de T3 : `est_etab: null` (`DECISIONS_LOT2.md`, « Consignes aux tranches suivantes ») ; garde
+  `tests/node/check-rpc-contracts.node.mjs` sur l.35165 et l.35189, et aucune fixture `est_etab: false`.
 - **Écart constaté (hors lot 2, B9 RLS/auth)** : la garde d'accès (l.35165-35170) est en logique ternaire.
   Pour un utilisateur sans établissement, `mon_etablissement_id()` vaut NULL, donc `v_is_etab` vaut NULL et
   `NOT v_is_etab AND NOT v_is_soignant` vaut NULL : le refus « Accès interdit » n'est jamais renvoyé à un
   soignant **non assigné**, qui lit statut, intitulé et segments (le code reste masqué). Constat sur le dump
-  `public.sql` (#1097), à confirmer sur la définition live par une PR backend séparée (B9) ; le natif n'appelle
-  la RPC que pour ses missions et n'en dépend pas.
+  `public.sql` (#1097), à confirmer sur la définition live par une PR backend séparée (B9, « Motif à auditer » de
+  `DECISIONS_LOT2.md`) ; le natif n'appelle la RPC que pour ses missions et n'en dépend pas.
 - **Preuve STAGING** : T11 (relecture après OUVERTURE et FERMETURE).
 
 ## fn_envoyer_otp_signature
@@ -1285,10 +1295,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
 - **Statut natif** : **jamais** (`RPC_POINTAGE_SYSTEME_1`, `scripts/mobile/check-rpc-contracts.mjs` ;
   `DECISIONS_LOT2.md` décision 1). `verifierExclusions` refuse toute entrée de `RPC_SUIVIES` qui en fait partie et la
   garde des littéraux `"fn_…"` du Swift la signale avec un message dédié.
-- **RPC concernées** (huit, toutes présentes au dump, la garde échoue si l'une disparaît sans mise à jour de cette
+- **RPC concernées** (neuf, toutes présentes au dump, la garde échoue si l'une disparaît sans mise à jour de cette
   fiche) : `fn_pointer_arrivee` (l.47421), `fn_pointer_depart` (l.47563), `fn_pointer_debut_pause` (l.47529),
   `fn_pointer_fin_pause` (l.47620), `fn_valider_scan_qr` (l.65545), `fn_generer_qr_mission` (l.37981),
-  `fn_valider_code_secours` (l.64991), `fn_codes_pointage_mission` (l.23784).
+  `fn_valider_code_secours` (l.64991), `fn_codes_pointage_mission` (l.23784) et, par l'amendement de la décision 1
+  (seconde revue fraîche de T0), `fn_generer_code_secours_mission` (l.37455), générateur du code de secours que
+  `fn_valider_code_secours` consomme.
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_pointer_arrivee"("p_mission_id" "uuid", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text", "p_modele" "text" DEFAULT NULL::"text", "p_code_arrivee" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -1299,19 +1311,28 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_scan_qr"("p_token" "text", "p_la
 CREATE OR REPLACE FUNCTION "public"."fn_generer_qr_mission"("p_mission_id" "uuid", "p_type" "text" DEFAULT 'UNIVERSEL'::"text") RETURNS "jsonb"
 CREATE OR REPLACE FUNCTION "public"."fn_valider_code_secours"("p_mission_id" "uuid", "p_code" "text", "p_lat" numeric DEFAULT NULL::numeric, "p_lng" numeric DEFAULT NULL::numeric, "p_precision" numeric DEFAULT NULL::numeric, "p_terminal_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
 CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission_id" "uuid", "p_type" "text" DEFAULT 'UNIVERSEL'::"text") RETURNS "jsonb"
 ```
 
-- **Toujours appelables** (revue fraîche de T0) : « mortes » côté web, les huit RPC sont toujours GRANT
-  `authenticated` en production (`public.sql` l.81953, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495,
-  l.85523) : PostgREST les sert à tout compte connecté. Deux gardes d'accès en logique ternaire
+- **Toujours appelables** (revue fraîche de T0) : « mortes » côté web, les neuf RPC sont toujours GRANT
+  `authenticated` en production (`public.sql` l.81953, l.83013, l.83079, l.83997, l.84003, l.84009, l.84015,
+  l.85495, l.85523) : PostgREST les sert à tout compte connecté. Trois gardes d'accès en logique ternaire
   (`mon_etablissement_id()` NULL pour un soignant) permettent à un soignant de pointer à distance :
-  `fn_codes_pointage_mission` (l.23799) lui rend `code_arrivee` et `code_depart`, que `fn_pointer_arrivee` et
-  `fn_pointer_depart` acceptent sans GPS avec `perimetre_gps_valide = true` (l.47449-47455, l.47577-47582) ;
-  `fn_generer_qr_mission` (l.38006) laisse le soignant assigné générer son propre jeton, que `fn_valider_scan_qr`
-  accepte (GPS non bloquant). Constat B9 de `DECISIONS_LOT2.md` (« En attente de Gabrielle »), à confirmer sur la
-  définition live par une PR backend séparée ; proposition : `REVOKE EXECUTE … FROM authenticated` sur les huit RPC
-  après vérification de `SyncHorsLigne`, ou gardes `IS DISTINCT FROM`, avec un rejet explicite. Le natif n'en
-  dépend pas.
+  1. `fn_codes_pointage_mission` (l.23799) lui rend `code_arrivee` et `code_depart`, que `fn_pointer_arrivee` et
+     `fn_pointer_depart` acceptent sans GPS avec `perimetre_gps_valide = true` (l.47449-47455, l.47577-47582) ;
+  2. `fn_generer_qr_mission` (l.38006) laisse le soignant assigné générer son propre jeton, que `fn_valider_scan_qr`
+     accepte (GPS non bloquant) ;
+  3. `fn_generer_code_secours_mission` (garde l.37478, `NOT (est_admin() OR v_mission.etablissement_id =
+     mon_etablissement_id())`, GRANT l.83013) rend au soignant un code de secours **en clair** (l.37510-37517), que
+     `fn_valider_code_secours` (l.64991) accepte en ne vérifiant que l'affectation (l.65012), sans contrôle de
+     position dans la RPC (coordonnées facultatives, enregistrées telles quelles ; sans coordonnées,
+     `dec_antifraude_presence` ne recalcule rien, l.646), et inscrit la présence `CODE_SECOURS` (l.65067-65072,
+     l.65085-65091).
+  Constat B9 de `DECISIONS_LOT2.md` (« En attente de Gabrielle »), à confirmer sur la définition live par une PR
+  backend séparée ; proposition : `REVOKE EXECUTE … FROM authenticated` sur les neuf RPC (générateur du code de
+  secours compris) après vérification de `SyncHorsLigne`, ou gardes `IS DISTINCT FROM` sur
+  `fn_codes_pointage_mission`, `fn_generer_qr_mission` et `fn_generer_code_secours_mission`, avec un rejet
+  explicite. Le natif n'en dépend pas.
 - **Pourquoi** (`LOT2_PLAN.md` corrections 1 à 3) : depuis la PR #664 (22/06/2026), le seul composant de pointage
   monté côté soignant est `PointageRotatifSoignant` (via `BlocPointageMission`, `PresencesSoignant.tsx`), qui
   n'appelle que `fn_etat_pointage_mission` et `fn_scanner_code_pointage`. `pointerArrivee` et `pointerDepart`
@@ -1321,9 +1342,16 @@ CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "
   `src/lib/horsLigne.ts`, alimenté seulement par `stockerPointageHorsLigne`, appelée uniquement dans les fonctions
   mortes `pointerArrivee` / `pointerDepart` : résidu web, non reproduit. Côté
   établissement, le QR affiché par `AffichageCodeRotatifEtab` encode `code_pointage_actif`, pas un jeton de
-  `fn_generer_qr_mission`. Porter ① ajouterait un chemin sans contrôle « contrat signé » (`fn_valider_scan_qr`
-  ne le vérifie pas, contrairement à `fn_scanner_code_pointage`), bloquant pour les missions multi-jours, et une file
-  hors ligne qui rejoue automatiquement (contraire à `PRINCIPES.md` §4).
+  `fn_generer_qr_mission` ; `QRPointageEtab` (seul appelant de `fn_generer_code_secours_mission` et de
+  `fn_generer_qr_mission`) n'est monté par aucun écran (seul un test l'importe) et `SaisieCodeSecours` (seul appelant
+  de `fn_valider_code_secours`) n'est monté que par `CartePointage`. Porter ① ajouterait deux chemins dont le contrôle
+  « contrat signé » n'est pas dans la RPC elle-même (`fn_valider_scan_qr` et `fn_valider_code_secours` ne le
+  vérifient pas, alors que `fn_pointer_arrivee` le fait, l.47439-47440, et `fn_scanner_code_pointage` à chaque
+  OUVERTURE, l.55670-55678) : seul le trigger de première arrivée le fait (`trg_01_exiger_conformite_premier_pointage`,
+  `BEFORE INSERT OR UPDATE OF pointage_arrivee_le ON presences`, l.75592, fonction l.67759 →
+  `fn_exiger_conformite_demarrage_mission`, l.35858 : `SIGNE_COMPLET` et les deux signatures, l.35910-35921) ; ①
+  reste bloquant pour les missions multi-jours, et sa file hors ligne rejoue automatiquement (contraire à
+  `PRINCIPES.md` §4).
 - **Équivalents natifs** : pauses = FERMETURE puis OUVERTURE de `fn_scanner_code_pointage` ; code de secours =
   saisie manuelle des six chiffres du code rotatif ; « pointage sans téléphone » = déclaration de fin
   rétroactive côté établissement (web).
@@ -1331,9 +1359,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "
   redevient appelé dans `PresencesSoignant.tsx`, si `CartePointage` est de nouveau importé, si
   `qr-offline-queue` gagne un importeur, si `stockerPointageHorsLigne` gagne un importeur ou un appel hors de
   `pointerArrivee` / `pointerDepart` (le rejoueur `SyncHorsLigne` reprendrait du service), ou si
-  `PointageRotatifSoignant` appelle une autre RPC : la décision 1 est alors à revoir. Elle échoue aussi quand une
-  PR backend retire le GRANT `authenticated` de l'une des huit RPC : basculer alors le paragraphe « Toujours
-  appelables » et le constat B9.
+  `PointageRotatifSoignant` appelle une autre RPC, si `QRPointageEtab` est de nouveau monté ou si `SaisieCodeSecours`
+  gagne un importeur : la décision 1 est alors à revoir. Elle échoue aussi quand une PR backend retire le GRANT
+  `authenticated` de l'une des neuf RPC ou corrige l'une des trois gardes : basculer alors le paragraphe « Toujours
+  appelables » et le constat B9, au moment fixé par `DECISIONS_LOT2.md` « Ordonnancement et branches ».
 
 ## Interdite côté natif : `fn_creer_notification`
 
