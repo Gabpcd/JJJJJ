@@ -26,7 +26,29 @@ public enum DemoWorld {
     /// Un jeu de ports complet, horloge fixée comprise. Chaque appel crée une session
     /// démo vierge (pas de session restaurée avant `signIn`).
     public static func gateways() -> Gateways {
-        Gateways(auth: DemoAuthGateway(), role: DemoRoleGateway(), missions: DemoMissionsGateway(), clock: FixedClock(fixedNow))
+        gateways(drapeaux: [:])
+    }
+
+    /// Variante avec surcharges de drapeaux (`DemoFlagsGateway`). Chaque port du lot 1 est
+    /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
+    /// (`DemoWorldTests.testAucunPortNonCable`).
+    public static func gateways(drapeaux: [String: Bool]) -> Gateways {
+        Gateways(
+            auth: DemoAuthGateway(),
+            role: DemoRoleGateway(),
+            missions: DemoMissionsGateway(),
+            clock: FixedClock(fixedNow),
+            dashboard: UnwiredDashboardPort(),          // T3
+            candidature: UnwiredCandidaturePort(),      // T6a, T7
+            presence: UnwiredPresencePort(),            // T6c
+            favoris: UnwiredFavorisPort(),              // T4b
+            mesMissions: UnwiredMesMissionsPort(),      // T5
+            compte: UnwiredAccountPort(),               // T8
+            audit: DemoAuditGateway(),
+            flags: DemoFlagsGateway(surcharges: drapeaux),
+            recovery: UnwiredRecoveryPort(),            // T10
+            justificatifs: UnwiredJustificatifStoragePort() // T7
+        )
     }
 }
 
