@@ -771,6 +771,1194 @@
           "category": "RPC_UTILISATEUR_AUTH_INTERNE"
         }
       ]
+    },
+    {
+      "name": "fn_obtenir_missions_swipe",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_limit?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_obtenir_missions_swipe(\"p_limit\" integer DEFAULT 20)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_obtenir_missions_swipe(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_enregistrer_swipe",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_direction: string; p_mission_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_enregistrer_swipe(\"p_mission_id\" \"uuid\", \"p_direction\" \"text\", \"p_choix_contrat\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_enregistrer_swipe(uuid,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_retirer_candidature",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_retirer_candidature(\"p_candidature_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_retirer_candidature(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_initialiser_preferences_matching",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_initialiser_preferences_matching(\"p_pref_nuit\" numeric, \"p_pref_jour\" numeric, \"p_pref_weekend\" numeric, \"p_pref_semaine\" numeric)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_initialiser_preferences_matching(numeric,numeric,numeric,numeric)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_lister_mes_filtres_sauvegardes",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_audience?: Database[\"public\"][\"Enums\"][\"filtre_audience\"] }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_lister_mes_filtres_sauvegardes(\"p_audience\" \"public\".\"filtre_audience\" DEFAULT NULL::\"public\".\"filtre_audience\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_lister_mes_filtres_sauvegardes(filtre_audience)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_creer_filtre_sauvegarde",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_alerte_active?: boolean; p_audience: Database[\"public\"][\"Enums\"][\"filtre_audience\"]; p_filtres: Json; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_nom: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_creer_filtre_sauvegarde(\"p_nom\" \"text\", \"p_audience\" \"public\".\"filtre_audience\", \"p_filtres\" \"jsonb\", \"p_alerte_active\" boolean DEFAULT false, \"p_frequence_alerte\" \"public\".\"filtre_frequence_alerte\" DEFAULT 'QUOTIDIENNE'::\"public\".\"filtre_frequence_alerte\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_creer_filtre_sauvegarde(text,filtre_audience,jsonb,boolean,filtre_frequence_alerte)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_modifier_filtre_sauvegarde",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_alerte_active?: boolean; p_frequence_alerte?: Database[\"public\"][\"Enums\"][\"filtre_frequence_alerte\"]; p_id: string; p_nom?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_modifier_filtre_sauvegarde(\"p_id\" \"uuid\", \"p_nom\" \"text\" DEFAULT NULL::\"text\", \"p_alerte_active\" boolean DEFAULT NULL::boolean, \"p_frequence_alerte\" \"public\".\"filtre_frequence_alerte\" DEFAULT NULL::\"public\".\"filtre_frequence_alerte\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_modifier_filtre_sauvegarde(uuid,text,boolean,filtre_frequence_alerte)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_supprimer_filtre_sauvegarde",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_supprimer_filtre_sauvegarde(\"p_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_supprimer_filtre_sauvegarde(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_definir_disponibilite",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_definir_disponibilite(\"p_jour\" \"date\", \"p_creneau\" \"text\", \"p_disponible\" boolean)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_definir_disponibilite(date,text,boolean)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_obtenir_mes_parrainages",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_obtenir_mes_parrainages()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_obtenir_mes_parrainages()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_appliquer_parrainage",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_code: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_appliquer_parrainage(\"p_code\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_appliquer_parrainage(text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_ouvrir_litige_rate_limited",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(\"p_mission_id\" \"uuid\", \"p_type_litige\" \"public\".\"type_litige\", \"p_motif\" \"text\", \"p_facture_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        },
+        {
+          "signature": "fn_ouvrir_litige_rate_limited(uuid,type_litige,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_ajouter_message_litige",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_contenu: string; p_litige_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_ajouter_message_litige(\"p_litige_id\" \"uuid\", \"p_contenu\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_ajouter_message_litige(uuid,text)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_soumettre_reclamation",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_categorie: string; p_details: string; p_mission_id?: string; p_sujet: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_soumettre_reclamation(\"p_categorie\" \"text\", \"p_sujet\" \"text\", \"p_details\" \"text\", \"p_mission_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_soumettre_reclamation(text,text,text,uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mon_breakdown_actuel",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mon_breakdown_actuel()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mon_breakdown_actuel()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_evenements_score",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_limit?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_evenements_score(\"p_limit\" integer DEFAULT 20)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_evenements_score(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_evolution_score_soignant",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_limit?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_evolution_score_soignant(\"p_limit\" integer DEFAULT 6)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_evolution_score_soignant(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_lister_notations_recues",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_limit?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_lister_notations_recues(\"p_limit\" integer DEFAULT 20)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_lister_notations_recues(integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_creer_reclamation_score",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_evenement_id: string; p_evenement_type: string; p_justificatif_storage_path?: string; p_motif_categorie: string; p_texte_libre: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_creer_reclamation_score(\"p_evenement_id\" \"uuid\", \"p_evenement_type\" \"text\", \"p_motif_categorie\" \"text\", \"p_texte_libre\" \"text\", \"p_justificatif_storage_path\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_creer_reclamation_score(uuid,text,text,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_notations_recues_avec_stats",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_etablissement_id?: string; p_limit?: number; p_note_min?: number; p_offset?: number; p_periode?: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_notations_recues_avec_stats(\"p_periode\" \"text\" DEFAULT 'TOUT'::\"text\", \"p_note_min\" integer DEFAULT NULL::integer, \"p_etablissement_id\" \"uuid\" DEFAULT NULL::\"uuid\", \"p_limit\" integer DEFAULT 50, \"p_offset\" integer DEFAULT 0)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_notations_recues_avec_stats(text,integer,uuid,integer,integer)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_signaler_notation",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_motif?: string; p_notation_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_signaler_notation(\"p_notation_id\" \"uuid\", \"p_motif\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_signaler_notation(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_lister_conversations_messagerie",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_lister_conversations_messagerie(\"p_avant\" timestamp with time zone DEFAULT NULL::timestamp with time zone, \"p_avant_id\" \"uuid\" DEFAULT NULL::\"uuid\", \"p_limite\" integer DEFAULT 100)",
+          "returns": "TABLE(\"id\" \"uuid\", \"participant_1_id\" \"uuid\", \"participant_2_id\" \"uuid\", \"mission_id\" \"uuid\", \"etablissement_id\" \"uuid\", \"soignant_id\" \"uuid\", \"dernier_message_le\" timestamp with time zone, \"cree_le\" timestamp with time zone, \"archived_at\" timestamp with time zone, \"autre_id\" \"uuid\", \"dernier_contenu\" \"text\", \"non_lus\" bigint, \"mission_intitule\" \"text\", \"ordre_le\" timestamp with time zone)",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_lister_conversations_messagerie(timestamp with time zone,uuid,integer)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_interlocuteurs_conversations",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_conversation_ids: string[] }",
+        "returns": "{ avatar_url: string | null; conversation_id: string; est_jolene: boolean; nom: string; participant_id: string; prenom: string }[]"
+      },
+      "sql": [
+        {
+          "signature": "fn_interlocuteurs_conversations(\"p_conversation_ids\" \"uuid\"[])",
+          "returns": "TABLE(\"conversation_id\" \"uuid\", \"participant_id\" \"uuid\", \"prenom\" \"text\", \"nom\" \"text\", \"avatar_url\" \"text\", \"est_jolene\" boolean)",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_interlocuteurs_conversations(uuid[])",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_marquer_messages_lus",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_conversation_id: string }",
+        "returns": "undefined"
+      },
+      "sql": [
+        {
+          "signature": "fn_marquer_messages_lus(\"p_conversation_id\" \"uuid\")",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_marquer_messages_lus(uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_messages_non_lus",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "number"
+      },
+      "sql": [
+        {
+          "signature": "fn_messages_non_lus()",
+          "returns": "integer",
+          "language": "sql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_messages_non_lus()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_typing_start",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_conversation_id: string }",
+        "returns": "undefined"
+      },
+      "sql": [
+        {
+          "signature": "fn_typing_start(\"p_conversation_id\" \"uuid\")",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_typing_start(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_typing_stop",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_conversation_id: string }",
+        "returns": "undefined"
+      },
+      "sql": [
+        {
+          "signature": "fn_typing_stop(\"p_conversation_id\" \"uuid\")",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_typing_stop(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_update_presence",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "undefined"
+      },
+      "sql": [
+        {
+          "signature": "fn_update_presence()",
+          "returns": "\"void\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_update_presence()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_est_bloque",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_est_bloque(\"p_cible_id\" \"uuid\")",
+          "returns": "boolean",
+          "language": "sql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_est_bloque(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_bloquer_utilisateur",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_bloquer_utilisateur(\"p_cible_id\" \"uuid\", \"p_motif\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_bloquer_utilisateur(uuid,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_debloquer_utilisateur",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_debloquer_utilisateur(\"p_cible_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_debloquer_utilisateur(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_signaler_utilisateur",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_categorie: string; p_cible_id: string; p_cible_type: string; p_mission_id?: string; p_motif: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_signaler_utilisateur(\"p_cible_id\" \"uuid\", \"p_cible_type\" \"text\", \"p_categorie\" \"text\", \"p_motif\" \"text\", \"p_mission_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_signaler_utilisateur(uuid,text,text,text,uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_user_id_pour_etablissement",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_etablissement_id: string }",
+        "returns": "string"
+      },
+      "sql": [
+        {
+          "signature": "fn_user_id_pour_etablissement(\"p_etablissement_id\" \"uuid\")",
+          "returns": "\"uuid\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_user_id_pour_etablissement(uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_obtenir_conversation",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_autre_id: string; p_mission_id?: string }",
+        "returns": "string"
+      },
+      "sql": [
+        {
+          "signature": "fn_obtenir_conversation(\"p_autre_id\" \"uuid\", \"p_mission_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"uuid\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_obtenir_conversation(uuid,uuid)",
+          "category": "MIXTE_TENANT_ADMIN"
+        }
+      ]
+    },
+    {
+      "name": "fn_lister_copies_bulletins",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_lister_copies_bulletins(\"p_etablissement_id\" \"uuid\" DEFAULT NULL::\"uuid\", \"p_mission_id\" \"uuid\" DEFAULT NULL::\"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": null
+    },
+    {
+      "name": "fn_signaler_copie_bulletin",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_signaler_copie_bulletin(\"p_copie_id\" \"uuid\", \"p_motif\" \"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated"
+      ],
+      "manifeste": null
+    },
+    {
+      "name": "fn_pool_urgence_missions_pour_soignant",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_pool_urgence_missions_pour_soignant()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_pool_urgence_missions_pour_soignant()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_toggle_pool_urgence",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_toggle_pool_urgence(\"p_actif\" boolean, \"p_rayon_km\" integer DEFAULT 15, \"p_creneaux\" \"jsonb\" DEFAULT NULL::\"jsonb\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_toggle_pool_urgence(boolean,integer,jsonb)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_toggle_pool_urgence_sms",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_actif: boolean }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_toggle_pool_urgence_sms(\"p_actif\" boolean)",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public', 'extensions'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_toggle_pool_urgence_sms(boolean)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_mes_exclusions_recues",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "never",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_mes_exclusions_recues()",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_mes_exclusions_recues()",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_retirer_exclusion",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_exclu_id: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_retirer_exclusion(\"p_exclu_id\" \"uuid\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_retirer_exclusion(uuid)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
+    },
+    {
+      "name": "fn_exclure_utilisateur",
+      "statut": "a_venir",
+      "lot": 4,
+      "types": {
+        "args": "{ p_exclu_id: string; p_motif?: string; p_type: string }",
+        "returns": "Json"
+      },
+      "sql": [
+        {
+          "signature": "fn_exclure_utilisateur(\"p_exclu_id\" \"uuid\", \"p_type\" \"text\", \"p_motif\" \"text\" DEFAULT NULL::\"text\")",
+          "returns": "\"jsonb\"",
+          "language": "plpgsql",
+          "security": "DEFINER",
+          "volatility": "VOLATILE",
+          "search_path": "'public'"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": [
+        {
+          "signature": "fn_exclure_utilisateur(uuid,text,text)",
+          "category": "RPC_UTILISATEUR_AUTH_INTERNE"
+        }
+      ]
     }
   ]
 }

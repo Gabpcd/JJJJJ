@@ -867,7 +867,7 @@ test('Lot 4 — CONTRATS : surcharges de fn_ouvrir_litige_rate_limited, seule la
 });
 
 test('Lot 4 — CONTRATS : classement manuel des RPC hors manifeste (modèle lot 1 décision 6), synthèse complète', () => {
-  const expected = JSON.parse(readFileSync(CONTRATS_PATH, 'utf8'));
+  const expected = JSON.parse(readFileSync(CONTRACTS_PATH, 'utf8'));
   const doc = read(CONTRATS_DOC);
   for (const name of ['fn_lister_copies_bulletins', 'fn_signaler_copie_bulletin']) {
     assert.equal(expected.rpcs.find(r => r.name === name)?.manifeste, null, `${name} : le JSON garde le fait observé (hors manifeste)`);

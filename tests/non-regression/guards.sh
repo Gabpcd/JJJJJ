@@ -217,8 +217,35 @@ else
   echo "   OK"
 fi
 
+echo "── Garde-fou 18 : aucun lecteur natif de notations (double-aveugle, lot 4)"
+# Publication différée des notations (CLAUDE.md, filtre de visibilité centralisé) : l'app iOS ne lit
+# les notes reçues que par fn_mes_notations_recues_avec_stats et fn_lister_notations_recues, qui
+# répliquent le filtre de evaluations_publiees (publie_le IS NOT NULL AND masque = false). Aucun
+# littéral Swift ne vaut exactement le nom d'une table de notations (PostgREST, Realtime) ; un test
+# Swift qui cherche ces noms construit son motif sans les écrire entre guillemets
+# (docs/mobile-swift/LOT4_PLAN.md §3 T0, CONTRATS_RPC_SOIGNANT.md fiche « Jamais notations_missions »).
+MOTIF_NOTATIONS='"(notations_missions|evaluations|evaluations_publiees)"'
+if grep -rnE "$MOTIF_NOTATIONS" ios-native/Packages ios-native/Jolene --exclude-dir=.build; then
+  echo "   l'app iOS lit une table de notations hors des deux RPC filtrées"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
+echo "── Garde-fou 19 : aucun envoi de message natif hors de l'edge messagerie-validate (lot 4)"
+# L'envoi d'un message passe par l'edge messagerie-validate (anti-fuite puis insertion atomique en
+# service_role) ; fn_envoyer_message n'est accordée à aucun rôle client et fn_envoyer_message_valide
+# est réservée à l'edge. fn_envoyer_message_contact (formulaire d'aide) n'est pas un envoi de messagerie.
+MOTIF_ENVOI='fn_envoyer_message(_valide)?([^a-z0-9_]|$)'
+if grep -rnE "$MOTIF_ENVOI" ios-native/ --exclude-dir=.build; then
+  echo "   l'app iOS appelle une fonction d'envoi de message sans passer par l'edge messagerie-validate"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 17 garde-fous passent."
+echo "✓ guards.sh : les 19 garde-fous passent."
