@@ -97,46 +97,8 @@ public enum PresenceOutcome: Equatable, Sendable {
 
 // MARK: - Favoris (T4b)
 
-/// Ligne `missions_sauvegardees` (RLS `soignant_id = auth.uid()`).
-public struct MissionSauvegardee: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var missionId: String
-    public var creeLe: String?
-
-    public init(id: String, missionId: String, creeLe: String?) { self.id = id; self.missionId = missionId; self.creeLe = creeLe }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case missionId = "mission_id"
-        case creeLe = "cree_le"
-    }
-}
-
-/// Élément de `fn_mes_favoris_etablissements`. Seul `etablissement_id` conditionne une action.
-public struct EtablissementFavori: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var nom: String?
-    public var ville: String?
-    public var logoUrl: String?
-    public var typeEtablissement: String?
-    public var nbMissionsOuvertes: Int?
-    public var creeLe: String?
-
-    public init(id: String, nom: String?, ville: String?, logoUrl: String?, typeEtablissement: String?,
-                nbMissionsOuvertes: Int?, creeLe: String?) {
-        self.id = id; self.nom = nom; self.ville = ville; self.logoUrl = logoUrl
-        self.typeEtablissement = typeEtablissement; self.nbMissionsOuvertes = nbMissionsOuvertes; self.creeLe = creeLe
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id = "etablissement_id"
-        case nom, ville
-        case logoUrl = "logo_url"
-        case typeEtablissement = "type_etablissement"
-        case nbMissionsOuvertes = "nb_missions_ouvertes"
-        case creeLe = "cree_le"
-    }
-}
+// `MissionSauvegardee` (avec la mission jointe) et `EtablissementFavori` : `Models/Favoris.swift`
+// (déplacés par T4b avec leur décodage tolérant ; les inits de T1 sont conservés).
 
 // MARK: - Mes missions (T5)
 

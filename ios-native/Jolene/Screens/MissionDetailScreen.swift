@@ -12,12 +12,15 @@ struct MissionDetailScreen: View {
     private let snapshot: SessionSnapshot
     private let ouvrirOnglet: ((MainTabView.Tab) -> Void)?
     @State private var horloge: (any ClockPort)?
+    /// Lot 1 (T4b) : modèle des favoris d'Explorer (étoile du détail) ; `nil` hors Explorer (Accueil).
+    private let favoris: FavorisModel?
 
     init(route: MissionRoute, initial: Mission?, session: SessionStore, snapshot: SessionSnapshot,
-         ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil) {
+         ouvrirOnglet: ((MainTabView.Tab) -> Void)? = nil, favoris: FavorisModel? = nil) {
         self.session = session
         self.snapshot = snapshot
         self.ouvrirOnglet = ouvrirOnglet
+        self.favoris = favoris
         _model = StateObject(wrappedValue: MissionDetailModel(missionId: route.id, initial: initial,
                                                               controller: session.controller, snapshot: snapshot))
     }
@@ -61,7 +64,9 @@ struct MissionDetailScreen: View {
                     .accessibilityIdentifier("mission-detail-title")
                 Spacer(minLength: JoleneSpacing.sm)
                 if mission.record.estUrgente { JoleneBadge("Urgente", tone: .warning) }
+                if let favoris { BoutonFavoriMission(favoris: favoris, missionId: mission.id) }
             }
+            if let favoris { AvisFavoris(favoris: favoris, identifier: "favoris-action-erreur") }
             card {
                 detailRow("Établissement", value: mission.etablissement?.nom ?? "Établissement", identifier: "mission-detail-etablissement")
                 if let lieu = lieu(mission) { detailRow("Adresse", value: lieu, identifier: "mission-detail-lieu") }

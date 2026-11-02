@@ -41,7 +41,7 @@ public enum DemoWorld {
             dashboard: DemoDashboardGateway(clock: FixedClock(fixedNow)),
             candidature: UnwiredCandidaturePort(),      // T6a, T7
             presence: UnwiredPresencePort(),            // T6c
-            favoris: UnwiredFavorisPort(),              // T4b
+            favoris: DemoFavorisGateway(clock: FixedClock(fixedNow)),
             mesMissions: UnwiredMesMissionsPort(),      // T5
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
