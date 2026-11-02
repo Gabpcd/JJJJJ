@@ -136,6 +136,14 @@ les règles générales.
    `ios-native/rpc-contracts.json` se régénère (`--update`) après toute fusion, jamais à la main. Ainsi
    résolues, les fusions d'essai passent : lot 2, 75 tests de `check-rpc-contracts.node.mjs`, une seule fiche,
    entrée `lot: 2` ; lot 3, 52 + 27 tests ; lot 5, seul le JSON en conflit, 52 + 20 tests.
+11. **RPC reclassée en lot 4 par le lot 1 : `fn_suggestions_missions_pour_soignant`** (relevé à l'intégration
+   `feat/ios-lot4`, 3 novembre). La revue B8 du T3 du lot 1 l'a sortie du lot 1 et suivie en `a_venir`,
+   `lot: 4` (son seul appelant web, `src/components/dashboard/SuggestionsMissions.tsx`, n'est monté par
+   aucune page ; l'Accueil natif ne la consomme pas), après l'écriture de ce T0. Elle n'est pas l'une des
+   42 RPC du blueprint et aucune tranche de `LOT4_PLAN.md` ne la cite : la garde du lot 4 la tient hors
+   des 41 RPC propres (`LOT4_RECLASSEES` de `tests/node/check-rpc-contracts.node.mjs`), sans fiche confrontée
+   au SQL du lot 4 (sa fiche reste celle du lot 1). Son sort au lot 4, consommée par une tranche ou retirée de
+   `RPC_SUIVIES`, est statué en T15 avec les autres statuts.
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 

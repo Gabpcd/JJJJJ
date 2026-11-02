@@ -857,6 +857,13 @@ seule fiche, dont la sous-section « Usage du lot 4 » porte l'usage `AUTRE`. Le
 « lecture des exceptions », actions `SWIPE_LIKE` / `URGENCE`, edges `messagerie-validate` et
 `copies-bulletins`, Realtime, double-aveugle et surcharges du litige, en fin de section.
 
+Une entrée de plus porte `lot: 4` sans appartenir à ces quarante-deux : `fn_suggestions_missions_pour_soignant`,
+reclassée du lot 1 vers le lot 4 par la revue B8 du T3 du lot 1 (son seul appelant web,
+`SuggestionsMissions.tsx`, n'est monté par aucune page ; fiche et ligne dans la synthèse du lot 1), après
+l'écriture du T0 du lot 4. `LOT4_PLAN.md` ne la cite dans aucune tranche : elle reste `a_venir`, `lot: 4`,
+hors du tableau ci-dessous, et son sort (consommée ou retirée de `RPC_SUIVIES`) est statué en T15
+(`DECISIONS_LOT4.md`, précision 11).
+
 Toutes les RPC du lot 4 sont `SECURITY DEFINER` et accordées à `authenticated` ; dix ne le sont pas à
 `service_role` (`fn_lister_conversations_messagerie`, `fn_interlocuteurs_conversations`,
 `fn_marquer_messages_lus`, `fn_messages_non_lus`, `fn_typing_start`, `fn_typing_stop`, `fn_update_presence`,
