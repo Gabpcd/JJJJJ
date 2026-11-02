@@ -11,7 +11,7 @@ struct RootView: View {
             EnvironmentBlockedScreen(error: error, mode: container.environment.mode,
                                      unknownModeRaw: container.environment.unknownModeRaw)
         } else if let session = container.session {
-            SessionRootView(container: container, session: session)
+            SessionRootView(container: container, session: session, finDeCompte: container.finDeCompte)
         } else {
             EnvironmentBlockedScreen(error: JoleneError(.environment, "Configuration de l'application invalide."),
                                      mode: container.environment.mode)
@@ -22,6 +22,9 @@ struct RootView: View {
 private struct SessionRootView: View {
     let container: AppContainer
     @ObservedObject var session: SessionStore
+    /// Lot 1, T8 : signalé avant que la suppression de compte ne retire la session ; tant qu'il n'est
+    /// pas acquitté, l'écran de fin remplace la connexion (jamais « Votre session a expiré »).
+    @ObservedObject var finDeCompte: AvisFinDeCompte
     @State private var loginEmail = ""
 
     var body: some View {
@@ -35,9 +38,13 @@ private struct SessionRootView: View {
                         .accessibilityIdentifier("session-loading")
                 }
             case let .signedOut(message):
-                LoginScreen(email: $loginEmail, errorMessage: message, isDemo: container.isDemo,
-                            retryRestore: session.canRetryRestore ? { await session.start() } : nil) { email, password in
-                    await session.signIn(email: email, password: password)
+                if let fin = finDeCompte.issue {
+                    CompteSupprimeScreen(fin: fin) { finDeCompte.acquitter() }
+                } else {
+                    LoginScreen(email: $loginEmail, errorMessage: message, isDemo: container.isDemo,
+                                retryRestore: session.canRetryRestore ? { await session.start() } : nil) { email, password in
+                        await session.signIn(email: email, password: password)
+                    }
                 }
             case let .blocked(access):
                 BlockingScreen(

@@ -16,6 +16,8 @@ final class AppContainer: ObservableObject {
     let environmentError: JoleneError?
     let session: SessionStore?
     let clock: ClockPort
+    /// Lot 1, T8 : avis de fin de compte partagé entre l'écran de suppression et la racine.
+    let finDeCompte = AvisFinDeCompte()
     #if DEBUG
     let networkSentinel: NetworkSentinel.Monitor?
     #endif
