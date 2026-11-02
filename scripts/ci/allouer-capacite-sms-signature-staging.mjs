@@ -1,11 +1,18 @@
 // STAGING seulement (projet mejpriaetwgtcstbgfid, tout autre ref est refusé avant le
 // réseau). Lot 2 S1 : alloue UNE capacité de signature OTP par SMS pour un contrat
-// TEST (private.signature_sms_test_capacities, supplément sms-signature-staging.sql),
-// écrit le secret Edge SIGNATURE_SMS_STAGING_TEST_RUN, active la capacité, attend la
-// signature puis révoque capacité et secret. Aucune autre écriture : ni profil, ni
-// préférence, ni contrat, ni signature, ni appel fournisseur. Téléphones et
-// identifiants Twilio viennent de secrets d'environnement et ne sont jamais
-// journalisés ni recopiés dans un reçu.
+// TEST (private.signature_sms_test_capacities, supplément sms-signature-staging.sql).
+// Trois modes, chacun une étape distincte du job appelant :
+//  - `allouer` : preuves, insertion fermée, secret Edge SIGNATURE_SMS_STAGING_TEST_RUN,
+//    délai de propagation, activation ; rend la main capacité ACTIVE (reçu écrit) ;
+//  - `attendre` (facultatif) : lecture seule jusqu'à la signature ou l'échéance serveur ;
+//  - `revoquer` (étape always()) : révoque la ligne de CE run et retire le secret écrit
+//    par ce run.
+// Appelants (liste fermée, sur main) : sms-signature-capacite-staging.yml (séance
+// appareil, T12) et ios-swift-lot2-staging.yml (T11 : allouer, XCUITest d'envoi puis
+// revoquer, dans le même job). Aucune autre écriture : ni profil, ni préférence, ni
+// contrat, ni signature, ni appel fournisseur. Téléphones et identifiants Twilio
+// viennent de secrets d'environnement et ne sont jamais journalisés ni recopiés dans
+// un reçu. Mode opératoire : docs/recettes/2026-11-02-capacite-sms-signature-staging.md.
 import {createHash,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,renameSync,mkdirSync,lstatSync,openSync,fsyncSync,closeSync,existsSync} from 'node:fs';
@@ -17,12 +24,30 @@ import {functionsMetadata} from './refresh-generate-invoice-staging.mjs';
 export const PROJET='mejpriaetwgtcstbgfid';
 export const DEPOT='Gabpcd/JJJJJ';
 export const WORKFLOW='.github/workflows/sms-signature-capacite-staging.yml';
+export const WORKFLOW_LOT2='.github/workflows/ios-swift-lot2-staging.yml';
+export const WORKFLOWS_APPELANTS=Object.freeze([WORKFLOW,WORKFLOW_LOT2]);
 export const CONTRAT_INSTALLATION='scripts/ci/install-sms-staging-closed.contract.json';
 export const SECRET_EDGE='SIGNATURE_SMS_STAGING_TEST_RUN';
+// Campagnes STAGING exclusives : mêmes noms que _shared/honoraires-staging-test.ts et
+// _shared/invoice-email-staging-test.ts, qui exigent l'absence de SECRET_EDGE.
+export const AUTRES_CAMPAGNES=Object.freeze(['CONNECT_STAGING_TEST_RUN','INVOICE_STAGING_TEST_RUN',
+ 'HONORAIRES_STAGING_TEST_RUN','INVOICE_EMAIL_STAGING_TEST_RUN']);
 export const FONCTION='send-sms';
 export const VERROU='pg_advisory_xact_lock(184731,1018)';
 export const FINS=Object.freeze(['signature_soignant','signature_complete']);
+// Seules fins qui valent « succes » pour le mode attendre (preuve relue en plus).
+export const FINS_ATTENDUES=Object.freeze({signature_soignant:Object.freeze(['SIGNATURE_SOIGNANT','SIGNATURE_COMPLETE']),
+ signature_complete:Object.freeze(['SIGNATURE_COMPLETE'])});
 export const DUREE_MIN=10,DUREE_MAX=60;
+// Délai borné entre la confirmation du secret Edge et l'activation : tant que la
+// capacité reste fermée, l'admission refuse l'envoi, si bien qu'aucun
+// sms_envoyes_count (3 par 24 h) n'est consommé sur une instance Edge qui ne lit pas
+// encore le secret. Heuristique bornée, pas une preuve de propagation.
+export const DELAI_PROPAGATION_MS=60_000;
+// Hors verrou, une transaction concurrente (migrations annulées de validate-pr) peut
+// tenir des verrous quelques dizaines de secondes : six échecs consécutifs (environ
+// 2 min) avant de clore l'attente.
+const ECHECS_LECTURE_MAX=6;
 const API=`https://api.supabase.com/v1/projects/${PROJET}`;
 const GH=`https://api.github.com/repos/${DEPOT}`;
 const URL_STAGING=`https://${PROJET}.supabase.co`;
@@ -39,8 +64,15 @@ export const CODES_SQL=Object.freeze(['SMS_CAPACITE_CONTEXTE_LECTURE','SMS_CAPAC
 const PRECONDITIONS_REQUISES=Object.freeze(['contrat','missionCoherente','statutSignable','documentRendu','empreinteCoherente',
  'soignantNonSigne','comptesTest','authTest','telephoneSoignant','telephoneEtablissement','canalSmsSoignant',
  'aucuneCapaciteContrat','aucuneCapaciteActive']);
-// L'établissement peut signer autrement : sa préférence SMS est seulement relevée.
-const PRECONDITIONS_INFORMATIVES=Object.freeze(['canalSmsEtablissement']);
+const PRECONDITIONS_TOUTES=Object.freeze([...PRECONDITIONS_REQUISES,'canalSmsEtablissement']);
+// La portée du supplément (sms-signature-staging.sql l.115) exige canal_sms pour
+// l'acteur qui envoie. Fin
+// « signature_complete » : l'établissement envoie aussi, sa préférence est exigée.
+// Fin « signature_soignant » : seul le soignant envoie, la préférence de
+// l'établissement est relevée sans bloquer (écart déclaré au blueprint S1).
+export const preconditionsRequises=finApres=>finApres==='signature_complete'?PRECONDITIONS_TOUTES:PRECONDITIONS_REQUISES;
+const CLES_MANIFESTE=['schemaVersion','projectRef','runId','sourceSha','workflow','workflowRunId','contratId','missionId','soignantId',
+ 'etablissementId','documentSha256','dureeMinutes','finApres','maxTentativesParActeur','installationManifestSha256'];
 const CLES_CAPACITE=['id','contratId','missionId','soignantId','etablissementId','documentSha256','runId','sourceSha','manifestSha256',
  'enabled','revoquee','dureeMinutes','expiresAt','tentativesSoignant','tentativesEtablissement','maxTentatives'];
 
@@ -56,13 +88,16 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 
 export function verifierProjet(ref){if(ref!==PROJET)refuser('PROJET_REFUSE');return PROJET;}
 
-export function verifierContexte(env,local){
+// Renvoie le workflow appelant (liste fermée, sur main). `propre` : la révocation, qui
+// ne fait que refermer, tourne même si le job appelant a laissé le checkout modifié.
+export function verifierContexte(env,local,{propre=true}={}){
  verifierProjet(env?.SUPABASE_PROJECT_REF);
+ const workflow=WORKFLOWS_APPELANTS.find(w=>env.GITHUB_WORKFLOW_REF===`${DEPOT}/${w}@refs/heads/main`);
  if(env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='workflow_dispatch'||env.GITHUB_REPOSITORY!==DEPOT
-   ||env.GITHUB_REF!=='refs/heads/main'||!SHA40.test(env.GITHUB_SHA??'')||env.EXPECTED_SHA!==env.GITHUB_SHA
-   ||env.GITHUB_WORKFLOW_REF!==`${DEPOT}/${WORKFLOW}@refs/heads/main`
+   ||env.GITHUB_REF!=='refs/heads/main'||!SHA40.test(env.GITHUB_SHA??'')||env.EXPECTED_SHA!==env.GITHUB_SHA||!workflow
    ||!/^[1-9][0-9]{0,19}$/.test(env.GITHUB_RUN_ID??'')||env.GITHUB_RUN_ATTEMPT!=='1'
-   ||local?.sha!==env.GITHUB_SHA||local.clean!==true)refuser('MAIN_EXACT_REQUIS');
+   ||local?.sha!==env.GITHUB_SHA||(propre&&local.clean!==true))refuser('MAIN_EXACT_REQUIS');
+ return workflow;
 }
 
 export function lireEntrees(env){
@@ -84,7 +119,8 @@ const identifiantRun=env=>`sms-signature-gh-${env.GITHUB_RUN_ID}-${env.GITHUB_RU
 
 // Manifeste publiable : aucun téléphone, identifiant Twilio ni dérivé de ceux-ci.
 export function construireManifeste(p){
- const manifeste={schemaVersion:1,projectRef:PROJET,runId:p.runId,sourceSha:p.sourceSha,workflow:WORKFLOW,workflowRunId:p.workflowRunId,
+ if(!WORKFLOWS_APPELANTS.includes(p.workflow))refuser('PARAMETRES_REFUSES');
+ const manifeste={schemaVersion:1,projectRef:PROJET,runId:p.runId,sourceSha:p.sourceSha,workflow:p.workflow,workflowRunId:p.workflowRunId,
   contratId:p.contratId,missionId:p.missionId,soignantId:p.soignantId,etablissementId:p.etablissementId,documentSha256:p.documentSha256,
   dureeMinutes:p.dureeMinutes,finApres:p.finApres,maxTentativesParActeur:2,installationManifestSha256:p.installationManifestSha256};
  return {manifeste,manifestSha256:sha256(JSON.stringify(canonical(manifeste)))};
@@ -127,7 +163,7 @@ DO $sms_capacite_lecture$ BEGIN
 END; $sms_capacite_lecture$;`;
 // Chaque écriture reprouve la base STAGING (Vault) et suit l'ordre des verrous du
 // supplément : contrat, puis capacité, puis signature.
-const ecriture=(etape,contratId)=>`-- sms-capacite:${etape}
+const ecriture=(etape,contratSql)=>`-- sms-capacite:${etape}
 BEGIN; ${prelude}
 SET LOCAL statement_timeout='30s'; SET LOCAL lock_timeout='5s';
 DO $sms_capacite_ecriture$ BEGIN
@@ -137,8 +173,8 @@ DO $sms_capacite_ecriture$ BEGIN
    OR (SELECT count(*) FROM vault.decrypted_secrets WHERE name='supabase_url')<>1
    OR (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='supabase_url') IS DISTINCT FROM ${litteral(URL_STAGING)}
  THEN RAISE EXCEPTION 'SMS_CAPACITE_CONTEXTE_ECRITURE'; END IF;
- PERFORM ${VERROU};${contratId===null?'':`
- PERFORM 1 FROM public.contrats_mission WHERE id=${uuid(contratId)} FOR UPDATE;`}
+ PERFORM ${VERROU};
+ PERFORM 1 FROM public.contrats_mission WHERE id=${contratSql} FOR UPDATE;
 END; $sms_capacite_ecriture$;`;
 const projectionCapacite=capaciteId=>`(SELECT jsonb_build_object('id',k.id,'contratId',k.contrat_id,'missionId',k.mission_id,
   'soignantId',k.soignant_id,'etablissementId',k.etablissement_id,'documentSha256',k.document_sha256,'runId',k.run_id,
@@ -147,6 +183,11 @@ const projectionCapacite=capaciteId=>`(SELECT jsonb_build_object('id',k.id,'cont
   'tentativesSoignant',k.soignant_attempts,'tentativesEtablissement',k.etablissement_attempts,'maxTentatives',k.max_attempts_per_actor)
  FROM ${TABLE} k WHERE k.id=${uuid(capaciteId)})`;
 const actives=`(SELECT count(*) FROM ${TABLE} WHERE enabled AND revoked_at IS NULL)`;
+function verifierCible(c){
+ if(!objet(c)||![c.capaciteId,c.contratId].every(v=>typeof v==='string'&&UUID.test(v))||!SHA64.test(c.documentSha256??''))
+  refuser('PARAMETRES_REFUSES');
+ return c;
+}
 const preuveCapacite=(p,scope)=>`SELECT jsonb_build_object('capacite',${projectionCapacite(p.capaciteId)},
  'scopeSoignant',${scope?'true':'null'},'capacitesActives',${actives}) AS preuve`;
 const corpsActivation=p=>`UPDATE ${TABLE} SET enabled=true
@@ -226,7 +267,7 @@ ROLLBACK;`;
 // reste fermée (enabled=false) jusqu'à la confirmation du secret Edge.
 export function sqlAllocation(p,{apercu}={}){
  verifierParametres(p);if(typeof apercu!=='boolean')refuser('PARAMETRES_REFUSES');
- return `${ecriture(apercu?'apercu':'insertion',p.contratId)}
+ return `${ecriture(apercu?'apercu':'insertion',uuid(p.contratId))}
 WITH t AS (SELECT clock_timestamp() AS maintenant)
 INSERT INTO ${TABLE}(id,project_ref,run_id,source_sha,manifest_sha256,enabled,installed_at,expires_at,
  mission_id,contrat_id,document_sha256,soignant_id,etablissement_id,soignant_phone,etablissement_phone,twilio_account_sid,sender_phone,
@@ -246,14 +287,14 @@ ${apercu?'ROLLBACK':'COMMIT'};`;
 
 export function sqlActivation(p){
  verifierParametres(p);
- return `${ecriture('activation',p.contratId)}
+ return `${ecriture('activation',uuid(p.contratId))}
 ${corpsActivation(p)}
 ${preuveCapacite(p,true)};
 COMMIT;`;
 }
 
-export function sqlEtat(p){
- verifierParametres(p);
+export function sqlEtat(cible){
+ const p=verifierCible(cible);
  return `${lecture('etat')}
 SELECT jsonb_build_object('maintenant',clock_timestamp(),'capacite',${projectionCapacite(p.capaciteId)},
  'contrat',(SELECT jsonb_build_object('statut',statut,'signatureSoignant',signature_soignant IS TRUE,
@@ -266,29 +307,22 @@ SELECT jsonb_build_object('maintenant',clock_timestamp(),'capacite',${projection
 ROLLBACK;`;
 }
 
-// Idempotente : une capacité absente (insertion jamais arrivée) est un état fermé.
-// Une autre capacité active éventuelle est seulement comptée : elle n'annule jamais
-// la révocation de celle-ci (au plus une active par projet, index unique).
-export function sqlRevocation({capaciteId,contratId}){
- if(![capaciteId,contratId].every(v=>typeof v==='string'&&UUID.test(v)))refuser('PARAMETRES_REFUSES');
- const ligne=`FROM ${TABLE} WHERE id=${uuid(capaciteId)}`;
- return `${ecriture('revocation',contratId)}
-UPDATE ${TABLE} SET enabled=false,revoked_at=clock_timestamp() WHERE id=${uuid(capaciteId)} AND revoked_at IS NULL;
+// Idempotente. La ligne visée est celle de CE run (run_id UNIQUE, dérivé du run
+// GitHub), jamais « toute capacité active » : une séance d'un autre run, attendue hors
+// verrou, n'est jamais fermée. Une ligne absente (insertion jamais arrivée) est un
+// état fermé ; les autres capacités actives sont seulement comptées.
+export function sqlRevocation({runId}={}){
+ if(typeof runId!=='string'||!RUN.test(runId))refuser('PARAMETRES_REFUSES');
+ const ligne=`FROM ${TABLE} WHERE run_id=${litteral(runId)}`;
+ return `${ecriture('revocation',`(SELECT contrat_id ${ligne})`)}
+UPDATE ${TABLE} SET enabled=false,revoked_at=clock_timestamp() WHERE run_id=${litteral(runId)} AND revoked_at IS NULL;
 DO $sms_capacite_revocation$ BEGIN
  IF EXISTS(SELECT 1 ${ligne} AND (enabled OR revoked_at IS NULL))
  THEN RAISE EXCEPTION 'SMS_CAPACITE_REVOCATION_REFUSEE'; END IF;
 END; $sms_capacite_revocation$;
-SELECT jsonb_build_object('presente',EXISTS(SELECT 1 ${ligne}),'enabled',(SELECT enabled ${ligne}),
- 'revoquee',(SELECT revoked_at IS NOT NULL ${ligne}),'capacitesActives',${actives}) AS preuve;
-COMMIT;`;
-}
-
-// Reçu illisible : on ferme toute capacité encore active (une seule possible par
-// projet, index signature_sms_test_one_active_run), direction toujours sûre.
-export function sqlRevocationActives(){
- return `${ecriture('revocation',null)}
-UPDATE ${TABLE} SET enabled=false,revoked_at=clock_timestamp() WHERE enabled AND revoked_at IS NULL;
-SELECT jsonb_build_object('presente',false,'enabled',null,'revoquee',null,'capacitesActives',${actives}) AS preuve;
+SELECT jsonb_build_object('presente',EXISTS(SELECT 1 ${ligne}),
+ 'capacite',(SELECT jsonb_build_object('id',id,'contratId',contrat_id,'documentSha256',document_sha256,'enabled',enabled,
+   'revoquee',revoked_at IS NOT NULL) ${ligne}),'capacitesActives',${actives}) AS preuve;
 COMMIT;`;
 }
 
@@ -363,16 +397,25 @@ function empreintes(lignes){
   return d;
  };
 }
-// Reproduit les conditions de signatureSmsStagingConfig sur les seules empreintes.
+// Reproduit les conditions de signatureSmsStagingConfig sur les seules empreintes, et
+// l'exclusivité des assistants voisins (OTHER_CAPACITY_STILL_OPEN de
+// invoice-emails-staging-test.mjs) : aucune autre campagne STAGING ouverte.
 export function verifierSecretsEdge(lignes,e){
  const empreinte=empreintes(lignes),vide=sha256('');
  if(empreinte(SECRET_EDGE)!==null)refuser('CAPACITE_EDGE_DEJA_OUVERTE');
+ if(AUTRES_CAMPAGNES.some(nom=>empreinte(nom)!==null))refuser('AUTRE_CAPACITE_OUVERTE');
  const url=empreinte('SUPABASE_URL'),envEdge=empreinte('SUPABASE_ENV');
  if((url!==null&&url!==sha256(URL_STAGING))||(envEdge!==null&&![sha256('staging'),sha256('test')].includes(envEdge)))refuser('ENV_EDGE_NON_CONFORME');
  const de=empreinte('TWILIO_FROM_NUMBER'),jetonTwilio=empreinte('TWILIO_AUTH_TOKEN');
  const expediteur=de!==null&&de!==vide?de:empreinte('TWILIO_PHONE_NUMBER');
  if(empreinte('TWILIO_ACCOUNT_SID')!==sha256(e.twilioAccountSid)||jetonTwilio===null||jetonTwilio===vide||expediteur!==sha256(e.expediteur))
   refuser('TWILIO_EDGE_NON_CONFORME');
+}
+// Relecture après le délai de propagation, juste avant l'activation.
+export function verifierSecretsAvantActivation(lignes,config){
+ const empreinte=empreintes(lignes);
+ if(empreinte(SECRET_EDGE)!==sha256(config))refuser('SECRET_EDGE_NON_CONFIRME');
+ if(AUTRES_CAMPAGNES.some(nom=>empreinte(nom)!==null))refuser('AUTRE_CAPACITE_OUVERTE');
 }
 const secretPresent=lignes=>empreintes(lignes)(SECRET_EDGE)!==null;
 
@@ -389,10 +432,11 @@ export function verifierInstallation(i,contrat){
  }
 }
 
-export function verifierPreconditions(x){
- const toutes=[...PRECONDITIONS_REQUISES,...PRECONDITIONS_INFORMATIVES];
+export function verifierPreconditions(x,finApres){
+ if(!FINS.includes(finApres))refuser('PARAMETRES_REFUSES');
+ const toutes=PRECONDITIONS_TOUTES;
  if(!cles(x,['identifiants',...toutes])||toutes.some(k=>typeof x[k]!=='boolean'))refuser('REPONSE_SQL_REFUSEE');
- const manquantes=PRECONDITIONS_REQUISES.filter(k=>x[k]!==true),ids=x.identifiants;
+ const manquantes=preconditionsRequises(finApres).filter(k=>x[k]!==true),ids=x.identifiants;
  if(!manquantes.length&&(!cles(ids,['missionId','soignantId','etablissementId','documentSha256'])
    ||![ids.missionId,ids.soignantId,ids.etablissementId].every(v=>typeof v==='string'&&UUID.test(v))||!SHA64.test(ids.documentSha256??'')))
   refuser('REPONSE_SQL_REFUSEE');
@@ -443,34 +487,52 @@ export function raisonFin(e,finApres){
  if(Date.parse(e.maintenant)>=Date.parse(c.expiresAt))return 'ECHEANCE';
  return null;
 }
-async function attendreFin({sql,p,finApres,attendre,intervalleMs}){
+const signeeSur=s=>s?.statut==='signe'&&s.signee===true&&s.empreinteSignee===true;
+// Preuve relue : signature(s) attendue(s) sur l'empreinte inchangée du document.
+// « signature_soignant » est la preuve P5 du blueprint (signature OTP du soignant).
+export function preuveSignature(etat,finApres){
+ if(!objet(etat)||etat.empreinteInchangee!==true||!signeeSur(etat.signatureSoignant))return false;
+ return finApres!=='signature_complete'||(etat.contratStatut==='SIGNE_COMPLET'&&signeeSur(etat.signatureEtablissement));
+}
+
+async function attendreFin({sql,cible,dureeMinutes,finApres,attendre,intervalleMs}){
  const a={raison:null,lectures:0,echecsLecture:0,derniere:null};
- const maximum=Math.ceil((p.dureeMinutes+2)*60_000/intervalleMs)+3;
+ const maximum=Math.ceil((dureeMinutes+2)*60_000/intervalleMs)+3;
  let echecs=0;
  for(let i=0;i<maximum;i++){
   let etat=null;
-  try{etat=verifierEtat(await sql(sqlEtat(p),'preuve'));a.lectures++;echecs=0;}
-  catch{a.echecsLecture++;if(++echecs>=3){a.raison='LECTURES_EN_ECHEC';return a;}}
+  try{etat=verifierEtat(await sql(sqlEtat(cible),'preuve'));a.lectures++;echecs=0;}
+  catch{a.echecsLecture++;if(++echecs>=ECHECS_LECTURE_MAX){a.raison='LECTURES_EN_ECHEC';return a;}}
   if(etat){a.derniere=projectionEtat(etat);const raison=raisonFin(etat,finApres);if(raison){a.raison=raison;return a;}}
   await attendre(intervalleMs);
  }
  a.raison='LECTURES_EPUISEES';return a;
 }
 
-// Toujours sûre et rejouable : capacité révoquée (ou absente), puis secret Edge absent.
-async function revoquer({requete,sql,capaciteId,contratId,toutes=false,attendre,essais=5,delaiMs=5_000}){
- const r={capacite:capaciteId||toutes?'non_confirmee':'sans_objet',secret:'non_confirme',confirmee:false,essaisSql:0,essaisSecret:0,
-  autresCapacitesActives:null};
+const revocationInconnue=()=>({capacite:'non_confirmee',secret:'non_confirme',confirmee:false,essaisSql:0,essaisSecret:0,autresCapacitesActives:null});
+// Toujours sûre et rejouable. Capacité : la ligne de CE run, retrouvée par run_id.
+// Secret Edge : retiré seulement si ce run a tenté de l'écrire (`secret: true`, d'après
+// son reçu) ou, sans reçu exploitable (`'si_ligne'`), si la ligne de ce run existe : le
+// secret n'est écrit qu'après l'insertion confirmée, et aucune autre allocation n'est
+// possible tant que cette ligne reste ouverte. Sinon il n'est jamais touché : il peut
+// appartenir à une autre séance, attendue hors verrou.
+async function revoquer({requete,sql,runId,secret,attendre,essais=5,delaiMs=5_000}){
+ const r=revocationInconnue();let ligne=null;
  for(let i=0;i<essais&&r.capacite==='non_confirmee';i++){
   r.essaisSql++;
   try{
-   const x=await sql(capaciteId?sqlRevocation({capaciteId,contratId}):sqlRevocationActives(),'preuve');
-   if(!cles(x,['presente','enabled','revoquee','capacitesActives'])||!entier(x.capacitesActives)||(toutes&&x.capacitesActives!==0)
-     ||(x.presente!==false&&(x.presente!==true||x.enabled!==false||x.revoquee!==true)))refuser('REVOCATION_NON_CONFIRMEE');
-   r.capacite=toutes?'actives_revoquees':x.presente?'revoquee':'absente';r.autresCapacitesActives=x.capacitesActives;
+   const x=await sql(sqlRevocation({runId}),'preuve'),c=x?.capacite;
+   if(!cles(x,['presente','capacite','capacitesActives'])||typeof x.presente!=='boolean'||!entier(x.capacitesActives)
+     ||(x.presente?!cles(c,['id','contratId','documentSha256','enabled','revoquee'])||c.enabled!==false||c.revoquee!==true
+       ||![c.id,c.contratId].every(v=>typeof v==='string'&&UUID.test(v))||!SHA64.test(c.documentSha256??''):c!==null))
+    refuser('REVOCATION_NON_CONFIRMEE');
+   r.capacite=x.presente?'revoquee':'absente';r.autresCapacitesActives=x.capacitesActives;
+   ligne=x.presente?{capaciteId:c.id,contratId:c.contratId,documentSha256:c.documentSha256}:null;
   }catch{if(i<essais-1)await attendre(delaiMs);}
  }
- for(let i=0;i<essais&&r.secret==='non_confirme';i++){
+ const gerer=secret===true||(secret==='si_ligne'&&r.capacite==='revoquee');
+ if(!gerer&&!(secret==='si_ligne'&&r.capacite==='non_confirmee'))r.secret='non_touche';
+ for(let i=0;gerer&&i<essais&&r.secret==='non_confirme';i++){
   r.essaisSecret++;
   try{
    if(secretPresent(await requete(`${API}/secrets`))){
@@ -480,24 +542,27 @@ async function revoquer({requete,sql,capaciteId,contratId,toutes=false,attendre,
    r.secret='absent';
   }catch{if(i<essais-1)await attendre(delaiMs);}
  }
- r.confirmee=r.capacite!=='non_confirmee'&&r.secret==='absent';
- return r;
+ r.confirmee=r.capacite!=='non_confirmee'&&['absent','non_touche'].includes(r.secret);
+ return {revocation:r,ligne};
 }
 
 function recuVierge(){
- return {schemaVersion:1,mode:'allouer',status:'echec',phase:'contexte',code:null,sqlCode:null,projectRef:PROJET,sourceSha:null,runId:null,
-  capaciteId:null,contratId:null,missionId:null,manifestSha256:null,manifeste:null,preconditions:null,preconditionsManquantes:[],
-  insertionTentee:false,insertionConfirmee:false,secretEcritureTentee:false,secretConfirme:false,activationTentee:false,
-  activationConfirmee:false,expiresAt:null,attente:null,revocation:null,final:null,preuveP5:false,appelFournisseur:false};
+ return {schemaVersion:1,mode:'allouer',status:'echec',phase:'contexte',code:null,sqlCode:null,projectRef:PROJET,workflow:null,
+  sourceSha:null,runId:null,capaciteId:null,contratId:null,missionId:null,manifestSha256:null,manifeste:null,preconditions:null,
+  preconditionsManquantes:[],insertionTentee:false,insertionConfirmee:false,secretEcritureTentee:false,secretConfirme:false,
+  activationTentee:false,activationConfirmee:false,expiresAt:null,revocation:null,appelFournisseur:false};
 }
 
+// Mode `allouer` : rend la main capacité active (status « active », reçu écrit). La
+// séance (envoi, signature) a lieu ensuite ; le mode `revoquer` est toujours dû. Un échec
+// après la première mutation referme aussitôt, dans ce même appel.
 export async function allouerCapacite({env,local,contratInstallation,fetchImpl=fetch,attendre=pause,checkpoint=()=>{},
- nouvelId=randomUUID,intervalleMs=20_000,delaiRevocationMs=5_000}){
+ nouvelId=randomUUID,delaiPropagationMs=DELAI_PROPAGATION_MS,delaiRevocationMs=5_000}){
  const r=recuVierge();
  const sauver=()=>{try{checkpoint(structuredClone(r));}catch{refuser('RECU_NON_ECRIT');}};
  let mutation=false,p=null,client=null;
  try{
-  verifierContexte(env,local);
+  r.workflow=verifierContexte(env,local);
   const e=lireEntrees(env);
   if(!jeton(env.STAGING_SUPABASE_ACCESS_TOKEN)||!jeton(env.GITHUB_TOKEN))refuser('JETONS_REQUIS');
   try{checkContract(contratInstallation);}catch{refuser('CONTRAT_INSTALLATION_REFUSE');}
@@ -510,11 +575,11 @@ export async function allouerCapacite({env,local,contratInstallation,fetchImpl=f
   r.phase='installation';
   verifierInstallation(await sql(sqlInstallation(contratInstallation.afterRoutines.map(x=>x.signature)),'installation'),contratInstallation);
   r.phase='preconditions';
-  const pre=verifierPreconditions(await sql(sqlPreconditions(e),'preconditions'));
+  const pre=verifierPreconditions(await sql(sqlPreconditions(e),'preconditions'),e.finApres);
   r.preconditions=pre.etat;r.preconditionsManquantes=pre.manquantes;sauver();
   if(pre.manquantes.length)refuser('PRECONDITIONS_NON_REMPLIES');
-  const {manifeste,manifestSha256}=construireManifeste({runId:r.runId,sourceSha:env.GITHUB_SHA,workflowRunId:env.GITHUB_RUN_ID,
-   contratId:e.contratId,...pre.identifiants,dureeMinutes:e.dureeMinutes,finApres:e.finApres,
+  const {manifeste,manifestSha256}=construireManifeste({workflow:r.workflow,runId:r.runId,sourceSha:env.GITHUB_SHA,
+   workflowRunId:env.GITHUB_RUN_ID,contratId:e.contratId,...pre.identifiants,dureeMinutes:e.dureeMinutes,finApres:e.finApres,
    installationManifestSha256:contratInstallation.manifestSha256});
   p=verifierParametres(Object.freeze({capaciteId:nouvelId(),runId:r.runId,sourceSha:env.GITHUB_SHA,manifestSha256,dureeMinutes:e.dureeMinutes,
    contratId:e.contratId,...pre.identifiants,telephoneSoignant:e.telephoneSoignant,telephoneEtablissement:e.telephoneEtablissement,
@@ -532,50 +597,109 @@ export async function allouerCapacite({env,local,contratInstallation,fetchImpl=f
   const ecrit=empreintes(await requete(`${API}/secrets`))(SECRET_EDGE);
   if(ecrit!==sha256(config))refuser('SECRET_EDGE_NON_CONFIRME');
   r.secretConfirme=true;
+  r.phase='propagation';sauver();
+  await attendre(delaiPropagationMs);
+  verifierSecretsAvantActivation(await requete(`${API}/secrets`),config);
   r.phase='activation';r.activationTentee=true;sauver();
   const active=verifierPreuveCapacite(await sql(sqlActivation(p),'preuve'),p,{enabled:true,scope:true});
   r.activationConfirmee=true;r.expiresAt=active.expiresAt;
-  r.phase='attente';sauver();
-  r.attente=await attendreFin({sql,p,finApres:e.finApres,attendre,intervalleMs});
+  r.status='active';r.phase='active';sauver();
+  return r;
  }catch(err){r.code=err instanceof Refus?err.code:'REFUS_LOCAL';r.sqlCode=err instanceof Refus?err.sqlCode:null;}
+ r.status='echec';
  if(mutation){
   r.phase='revocation';
   try{sauver();}catch{/* la révocation passe avant le reçu */}
-  try{r.revocation=await revoquer({...client,capaciteId:p.capaciteId,contratId:p.contratId,attendre,delaiMs:delaiRevocationMs});}
-  catch{r.revocation={capacite:'non_confirmee',secret:'non_confirme',confirmee:false,essaisSql:0,essaisSecret:0,autresCapacitesActives:null};}
-  try{
-   const fin=projectionEtat(verifierEtat(await client.sql(sqlEtat(p),'preuve')));r.final=fin;
-   r.preuveP5=fin.signatureSoignant?.statut==='signe'&&fin.signatureSoignant.empreinteSignee===true&&fin.empreinteInchangee===true;
-  }catch{r.final=null;}
+  try{r.revocation=(await revoquer({...client,runId:r.runId,secret:r.secretEcritureTentee,attendre,delaiMs:delaiRevocationMs})).revocation;}
+  catch{r.revocation=revocationInconnue();}
+  if(r.revocation.confirmee!==true)r.status='incertain';
  }
- r.status=!mutation?'echec':r.revocation?.confirmee!==true?'incertain':r.code?'echec':'succes';
  r.phase='termine';
  try{sauver();}catch{r.code=r.code??'RECU_NON_ECRIT';}
  return r;
 }
 
-export async function revoquerDepuisRecu({env,local,recu,recuIllisible=false,fetchImpl=fetch,attendre=pause,delaiMs=5_000}){
- const r={schemaVersion:1,mode:'revoquer',status:'echec',code:null,projectRef:PROJET,capaciteId:null,contratId:null,revocation:null};
+// Reçu d'allocation de CE run, capacité active : seule entrée des modes suivants.
+function verifierRecuAllocation(recu,env,workflow){
+ const runId=identifiantRun(env),m=recu?.manifeste;
+ if(!objet(recu)||recu.schemaVersion!==1||recu.mode!=='allouer'||recu.status!=='active'||recu.projectRef!==PROJET
+   ||recu.runId!==runId||recu.sourceSha!==env.GITHUB_SHA||recu.workflow!==workflow
+   ||recu.secretConfirme!==true||recu.activationConfirmee!==true
+   ||![recu.capaciteId,recu.contratId,recu.missionId].every(v=>typeof v==='string'&&UUID.test(v))
+   ||!cles(m,CLES_MANIFESTE)||!SHA64.test(recu.manifestSha256??'')||sha256(JSON.stringify(canonical(m)))!==recu.manifestSha256
+   ||m.projectRef!==PROJET||m.runId!==runId||m.sourceSha!==env.GITHUB_SHA||m.workflow!==workflow
+   ||m.contratId!==recu.contratId||m.missionId!==recu.missionId||!FINS.includes(m.finApres)
+   ||!Number.isSafeInteger(m.dureeMinutes)||m.dureeMinutes<DUREE_MIN||m.dureeMinutes>DUREE_MAX||!SHA64.test(m.documentSha256??''))
+  refuser('RECU_REFUSE');
+ // État dérivé : fin et durée viennent du manifeste haché, jamais d'une seconde saisie.
+ return {cible:{capaciteId:recu.capaciteId,contratId:recu.contratId,documentSha256:m.documentSha256},
+  dureeMinutes:m.dureeMinutes,finApres:m.finApres};
+}
+
+// Mode `attendre` : lecture seule (aucun verrou STAGING requis), horloge du serveur.
+// « succes » seulement pour la fin attendue ET prouvée ; toute autre fin vaut
+// « termine_sans_preuve » (code de sortie non nul). Ne révoque jamais.
+export async function attendreSignature({env,local,recu,fetchImpl=fetch,attendre=pause,intervalleMs=20_000,checkpoint=()=>{}}){
+ const r={schemaVersion:1,mode:'attendre',status:'echec',code:null,projectRef:PROJET,runId:null,capaciteId:null,contratId:null,
+  finApres:null,attente:null,preuveFin:false,preuveP5:false};
  try{
-  verifierContexte(env,local);
+  const workflow=verifierContexte(env,local);
   if(!jeton(env.STAGING_SUPABASE_ACCESS_TOKEN))refuser('JETONS_REQUIS');
-  if(recu!==null){
-   if(!objet(recu)||recu.schemaVersion!==1||recu.mode!=='allouer'||recu.projectRef!==PROJET
+  const {cible,dureeMinutes,finApres}=verifierRecuAllocation(recu,env,workflow);
+  r.runId=recu.runId;r.capaciteId=cible.capaciteId;r.contratId=cible.contratId;r.finApres=finApres;
+  const client=creerClient({env,fetchImpl});
+  verifierIdentite(await client.requete(API));
+  try{checkpoint(structuredClone(r));}catch{refuser('RECU_NON_ECRIT');}
+  r.attente=await attendreFin({sql:client.sql,cible,dureeMinutes,finApres,attendre,intervalleMs});
+  r.preuveP5=preuveSignature(r.attente.derniere,'signature_soignant');
+  r.preuveFin=preuveSignature(r.attente.derniere,finApres);
+  r.status=FINS_ATTENDUES[finApres].includes(r.attente.raison)&&r.preuveFin?'succes':'termine_sans_preuve';
+ }catch(err){r.code=err instanceof Refus?err.code:'REFUS_LOCAL';}
+ try{checkpoint(structuredClone(r));}catch{r.code=r.code??'RECU_NON_ECRIT';r.status='echec';}
+ return r;
+}
+
+// Mode `revoquer` (étape always()) : referme la ligne de CE run et, s'il vient de ce
+// run, le secret Edge ; relit l'état final. Un checkout modifié ne l'empêche jamais.
+export async function revoquerDepuisRecu({env,local,recu,recuIllisible=false,fetchImpl=fetch,attendre=pause,delaiMs=5_000}){
+ const r={schemaVersion:1,mode:'revoquer',status:'echec',code:null,projectRef:PROJET,runId:null,recuUtilise:false,capaciteId:null,
+  contratId:null,revocation:null,final:null,preuveP5:false};
+ try{
+  verifierContexte(env,local,{propre:false});
+  if(!jeton(env.STAGING_SUPABASE_ACCESS_TOKEN))refuser('JETONS_REQUIS');
+  r.runId=identifiantRun(env);
+  if(recu!==null&&!recuIllisible){
+   if(!objet(recu)||recu.schemaVersion!==1||recu.mode!=='allouer'||recu.projectRef!==PROJET||recu.runId!==r.runId
+     ||typeof recu.secretEcritureTentee!=='boolean'
      ||(recu.capaciteId!==null&&(!UUID.test(String(recu.capaciteId))||!UUID.test(String(recu.contratId)))))refuser('RECU_REFUSE');
-   r.capaciteId=recu.capaciteId;r.contratId=recu.capaciteId?recu.contratId:null;
+   r.recuUtilise=true;
   }
   const client=creerClient({env,fetchImpl});
   verifierIdentite(await client.requete(API));
-  r.revocation=await revoquer({...client,capaciteId:r.capaciteId,contratId:r.contratId,toutes:recuIllisible,attendre,delaiMs});
-  r.status=r.revocation.confirmee&&!recuIllisible?'succes':'incertain';
-  if(recuIllisible)r.code='RECU_ILLISIBLE';
+  const {revocation,ligne}=await revoquer({...client,runId:r.runId,secret:r.recuUtilise?recu.secretEcritureTentee:'si_ligne',
+   attendre,delaiMs});
+  r.revocation=revocation;
+  if(ligne&&r.recuUtilise&&recu.capaciteId!==null&&ligne.capaciteId!==recu.capaciteId)r.code='RECU_INCOHERENT';
+  const cible=ligne??(r.recuUtilise&&recu.capaciteId!==null&&SHA64.test(recu.manifeste?.documentSha256??'')
+   ?{capaciteId:recu.capaciteId,contratId:recu.contratId,documentSha256:recu.manifeste.documentSha256}:null);
+  r.capaciteId=cible?.capaciteId??null;r.contratId=cible?.contratId??null;
+  if(cible){
+   try{r.final=projectionEtat(verifierEtat(await client.sql(sqlEtat(cible),'preuve')));r.preuveP5=preuveSignature(r.final,'signature_soignant');}
+   catch{r.final=null;}
+  }
+  if(recuIllisible)r.code=r.code??'RECU_ILLISIBLE';
+  r.status=revocation.confirmee&&r.code===null?'succes':'incertain';
  }catch(err){r.code=err instanceof Refus?err.code:'REFUS_LOCAL';}
  return r;
 }
 
 export const resumeRecu=r=>({mode:r?.mode??null,status:r?.status??'echec',phase:r?.phase??null,code:r?.code??null,sqlCode:r?.sqlCode??null,
- raison:r?.attente?.raison??null,preuveP5:r?.preuveP5??false,preconditionsManquantes:r?.preconditionsManquantes??[],
+ raison:r?.attente?.raison??null,preuveFin:r?.preuveFin??null,preuveP5:r?.preuveP5??false,
+ preconditionsManquantes:r?.preconditionsManquantes??[],expiresAt:r?.expiresAt??null,
  capacite:r?.revocation?.capacite??null,secret:r?.revocation?.secret??null});
+// Seule issue réussie de chaque mode ; tout le reste sort en code non nul.
+const STATUT_REUSSI=Object.freeze({allouer:'active',attendre:'succes',revoquer:'succes'});
+export const codeSortie=r=>objet(r)&&typeof r.mode==='string'&&Object.hasOwn(STATUT_REUSSI,r.mode)&&r.status===STATUT_REUSSI[r.mode]?0:1;
 
 const git=(racine,args)=>execFileSync('git',['-C',racine,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],
  env:{PATH:process.env.PATH,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'}}).trim();
@@ -599,21 +723,27 @@ function ecrireAtomique(dossier,nom,valeur){
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const mode=process.argv[2];let rapport;
  try{
-  if(process.argv.length!==3||!['allouer','revoquer'].includes(mode))refuser('ARGUMENTS_REFUSES');
+  if(process.argv.length!==3||typeof mode!=='string'||!Object.hasOwn(STATUT_REUSSI,mode))refuser('ARGUMENTS_REFUSES');
   if(!process.env.RUNNER_TEMP||!isAbsolute(process.env.RUNNER_TEMP))refuser('DOSSIER_RECU_REQUIS');
   const dossier=resolve(process.env.RUNNER_TEMP,'sms-signature-capacite');mkdirSync(dossier,{recursive:true,mode:0o700});
   const racine=process.cwd(),local=lireLocal(racine),chemin=resolve(dossier,'recu.json');
+  const lireRecu=()=>{
+   if(!existsSync(chemin))return {recu:null,illisible:false};
+   try{return {recu:JSON.parse(readFileSync(chemin,'utf8')),illisible:false};}catch{return {recu:null,illisible:true};}
+  };
   if(mode==='allouer'){
    if(existsSync(chemin))refuser('RECU_DEJA_PRESENT');
    const contrat=JSON.parse(readFileSync(resolve(racine,CONTRAT_INSTALLATION),'utf8'));
    rapport=await allouerCapacite({env:process.env,local,contratInstallation:contrat,checkpoint:v=>ecrireAtomique(dossier,'recu.json',v)});
+  }else if(mode==='attendre'){
+   const {recu,illisible}=lireRecu();if(illisible)refuser('RECU_ILLISIBLE');
+   rapport=await attendreSignature({env:process.env,local,recu,checkpoint:v=>ecrireAtomique(dossier,'attente.json',v)});
   }else{
-   let recu=null,recuIllisible=false;
-   if(existsSync(chemin)){try{recu=JSON.parse(readFileSync(chemin,'utf8'));}catch{recuIllisible=true;}}
-   rapport=await revoquerDepuisRecu({env:process.env,local,recu,recuIllisible});
+   const {recu,illisible}=lireRecu();
+   rapport=await revoquerDepuisRecu({env:process.env,local,recu,recuIllisible:illisible});
    ecrireAtomique(dossier,'revocation.json',rapport);
   }
  }catch(e){rapport={schemaVersion:1,mode:mode??null,status:'echec',code:e instanceof Refus?e.code:'REFUS_LOCAL'};}
  console.log(JSON.stringify(resumeRecu(rapport)));
- if(rapport.status!=='succes')process.exitCode=1;
+ process.exitCode=codeSortie(rapport);
 }

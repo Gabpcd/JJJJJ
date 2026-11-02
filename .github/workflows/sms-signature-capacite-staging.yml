@@ -1,16 +1,24 @@
 name: Capacité SMS de signature STAGING (manuel, B9)
 
 # Lot 2 S1 (blueprint du lot 2 §3, correction 8) : rend exécutable la preuve P5,
-# signature OTP réelle sur STAGING. Alloue UNE ligne
-# private.signature_sms_test_capacities pour un contrat TEST, écrit le secret Edge
-# SIGNATURE_SMS_STAGING_TEST_RUN, active, attend la signature puis révoque la
-# capacité et retire le secret, y compris en cas d'échec ou d'annulation.
+# signature OTP réelle sur STAGING, pour la séance appareil (T12). Trois jobs :
+#  1. allouer   — verrou STAGING : UNE ligne private.signature_sms_test_capacities
+#                 pour un contrat TEST, secret Edge SIGNATURE_SMS_STAGING_TEST_RUN,
+#                 délai de propagation, activation ; rend la main capacité active ;
+#  2. attendre  — hors verrou, lecture seule : la séance de signature ne bloque ni
+#                 les merges (sql-transaction de validate-pr) ni les autres
+#                 workflows STAGING ;
+#  3. revoquer  — verrou STAGING, toujours exécuté après une allocation réussie,
+#                 sans approbation supplémentaire : révoque la ligne de ce run et
+#                 retire le secret écrit par ce run.
+# T11 n'appelle pas ce workflow : ios-swift-lot2-staging.yml lance les modes
+# allouer puis revoquer du même script dans son propre job (liste fermée des
+# workflows appelants dans le script).
 # Projet mejpriaetwgtcstbgfid seulement : le script refuse tout autre ref.
 # Téléphones et identifiants Twilio : secrets de l'environnement protégé
-# `staging-sms-signature`, jamais dans le dépôt ni dans un reçu.
-# Prérequis : supplément installé (install-sms-staging-closed.yml ou sa reprise),
-# identifiants Twilio de recette posés en secrets Edge du projet, comptes TEST
-# portant ces téléphones avec canal_sms activé dans l'interface.
+# `staging-sms-signature`, lus par le seul job d'allocation, jamais dans le dépôt
+# ni dans un reçu. Mode opératoire :
+# docs/recettes/2026-11-02-capacite-sms-signature-staging.md.
 
 on:
   workflow_dispatch:
@@ -20,7 +28,7 @@ on:
         type: string
         required: true
       contrat_id:
-        description: UUID du contrat TEST à signer (mission C de la fixture D4)
+        description: UUID du contrat TEST à signer (fixture appareil du lot 2)
         type: string
         required: true
       duree_minutes:
@@ -29,7 +37,7 @@ on:
         options: ['15', '30', '45', '60']
         default: '45'
       fin_apres:
-        description: Révoquer après la signature du soignant ou du contrat complet
+        description: Fin attendue de la séance (signature du soignant ou contrat complet)
         type: choice
         options: [signature_soignant, signature_complete]
         default: signature_soignant
@@ -37,25 +45,26 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: jolene-supabase-staging-writes
-  queue: max
-  cancel-in-progress: false
+env:
+  EXPECTED_SHA: ${{ inputs.expected_sha }}
+  SUPABASE_PROJECT_REF: mejpriaetwgtcstbgfid
 
 jobs:
-  capacite:
-    name: Allouer, activer, attendre puis révoquer
+  allouer:
+    name: Allouer et activer la capacité
     if: github.ref == 'refs/heads/main'
     # Environnement protégé : relecteur requis et branche main seule.
     environment: staging-sms-signature
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 20
+    concurrency:
+      group: jolene-supabase-staging-writes
+      queue: max
+      cancel-in-progress: false
     env:
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
       CONTRAT_ID: ${{ inputs.contrat_id }}
       DUREE_MINUTES: ${{ inputs.duree_minutes }}
       FIN_APRES: ${{ inputs.fin_apres }}
-      SUPABASE_PROJECT_REF: mejpriaetwgtcstbgfid
     steps:
       - name: Refuser tout contexte autre que main exact avant credentials
         id: contexte
@@ -75,8 +84,8 @@ jobs:
           node-version: '24.14.0'
       - name: Tester l'allocateur sans réseau ni secret
         run: node --test tests/node/allouer-capacite-sms-signature-staging.node.mjs
-      - name: Allouer, activer, attendre la signature puis révoquer
-        timeout-minutes: 70
+      - name: Allouer et activer (rend la main une fois la capacité active)
+        timeout-minutes: 10
         run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs allouer
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -85,20 +94,121 @@ jobs:
           SMS_RECETTE_TELEPHONE_ETABLISSEMENT: ${{ secrets.SMS_RECETTE_TELEPHONE_ETABLISSEMENT }}
           SMS_RECETTE_TWILIO_ACCOUNT_SID: ${{ secrets.SMS_RECETTE_TWILIO_ACCOUNT_SID }}
           SMS_RECETTE_TWILIO_EXPEDITEUR: ${{ secrets.SMS_RECETTE_TWILIO_EXPEDITEUR }}
-      - name: Révoquer la capacité et retirer le secret Edge (toujours)
+      - name: Publier le reçu d'allocation, sans téléphone ni identifiant Twilio
         if: always() && steps.contexte.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sms-signature-capacite-allocation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite/recu.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: false
+      # Une allocation qui échoue (ou un reçu non publié) referme aussitôt, sous le
+      # même verrou : le job de révocation ne tourne qu'après une allocation réussie.
+      - name: Révoquer si l'allocation échoue ou est annulée
+        if: (failure() || cancelled()) && steps.contexte.outcome == 'success'
         timeout-minutes: 5
         run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs revoquer
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
-      - name: Publier seulement les reçus, sans téléphone ni identifiant Twilio
-        if: always()
+      - name: Publier le reçu de révocation de l'allocation
+        if: (failure() || cancelled()) && steps.contexte.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: sms-signature-capacite-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/sms-signature-capacite/recu.json
-            ${{ runner.temp }}/sms-signature-capacite/revocation.json
+          name: sms-signature-capacite-revocation-allocation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite/revocation.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: false
+
+  attendre:
+    name: Attendre la signature (lecture seule, hors verrou)
+    needs: allouer
+    if: needs.allouer.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Refuser tout contexte autre que main exact avant credentials
+        id: contexte
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != 'Gabpcd/JJJJJ' || "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' || ! "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ || "$GITHUB_SHA" != "$EXPECTED_SHA" || "$GITHUB_RUN_ATTEMPT" != '1' || "$SUPABASE_PROJECT_REF" != 'mejpriaetwgtcstbgfid' ]]; then
+            echo 'EXACT_TRUSTED_MAIN_REQUIRED'
+            exit 1
+          fi
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      - name: Récupérer le reçu d'allocation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sms-signature-capacite-allocation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite
+      - name: Attendre la signature ou l'échéance serveur (aucune écriture)
+        timeout-minutes: 70
+        run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs attendre
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Publier le reçu d'attente
+        if: always() && steps.contexte.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sms-signature-capacite-attente-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite/attente.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: false
+
+  revoquer:
+    name: Révoquer la capacité et retirer le secret Edge (toujours)
+    needs: [allouer, attendre]
+    if: always() && needs.allouer.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: jolene-supabase-staging-writes
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - name: Refuser tout contexte autre que main exact avant credentials
+        id: contexte
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != 'Gabpcd/JJJJJ' || "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' || ! "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ || "$GITHUB_SHA" != "$EXPECTED_SHA" || "$GITHUB_RUN_ATTEMPT" != '1' || "$SUPABASE_PROJECT_REF" != 'mejpriaetwgtcstbgfid' ]]; then
+            echo 'EXACT_TRUSTED_MAIN_REQUIRED'
+            exit 1
+          fi
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24.14.0'
+      # Sans reçu, la révocation retrouve la ligne de ce run par son run_id.
+      - name: Récupérer le reçu d'allocation (facultatif)
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sms-signature-capacite-allocation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite
+      - name: Révoquer la ligne de ce run et retirer le secret écrit par ce run
+        timeout-minutes: 5
+        run: node scripts/ci/allouer-capacite-sms-signature-staging.mjs revoquer
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      - name: Publier le reçu de révocation
+        if: always() && steps.contexte.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sms-signature-capacite-revocation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sms-signature-capacite/revocation.json
           if-no-files-found: ignore
           retention-days: 7
           include-hidden-files: false

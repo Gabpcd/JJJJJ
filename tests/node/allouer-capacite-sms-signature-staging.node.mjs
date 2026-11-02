@@ -389,6 +389,14 @@ test('secret Edge non confirmé ou activation refusée : la capacité et le secr
  assert.equal(activation.s.secrets.has(SECRET_EDGE),false);assert.equal(activation.recu.status,'echec');sansSecret(activation.recu);
 });
 
+test('un reçu « active » qui ne s’écrit pas referme aussitôt la capacité et le secret',async()=>{
+ const h=harnais();
+ const recu=await allouerCapacite({env:ENV,local:LOCAL,contratInstallation:INSTALLATION,fetchImpl:h.fetchImpl,attendre:h.attendre,
+  checkpoint:v=>{if(v.phase==='active')throw Error('disque plein');},nouvelId:()=>CAPACITE,delaiRevocationMs:1});
+ assert.equal(recu.code,'RECU_NON_ECRIT');assert.equal(recu.status,'echec');assert.equal(codeSortie(recu),1);
+ assert.equal(h.s.capacite.revoquee,true);assert.equal(h.s.secrets.has(SECRET_EDGE),false);
+});
+
 test('séance S1 nominale : allouer, attendre la signature du soignant hors verrou, puis révoquer',async()=>{
  const {s,recu,attente,revocation}=await seance();
  assert.equal(recu.status,'active');
