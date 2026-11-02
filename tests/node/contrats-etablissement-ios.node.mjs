@@ -117,6 +117,9 @@ const ATTENDUES = {
   fn_soignant_pour_etablissement: [],
 };
 
+/** Texte Markdown aplati : les retours à la ligne d'un paragraphe sont des espaces au rendu. */
+const plat = texte => texte.replace(/\s+/g, ' ');
+
 /** Texte d'une section `## <titre>` d'un document Markdown, jusqu'à la section suivante. */
 function section(doc, heading) {
   const start = doc.indexOf(`\n## ${heading}`);
@@ -303,7 +306,7 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : une fiche et une ligne de synthèse par RP
     assert.ok(synthese.includes(`| \`${name}\` |`), `ligne de synthèse manquante pour ${name}`);
   }
   for (const name of LOT5) {
-    const fiche = section(doc, `${name}\n`);
+    const fiche = plat(section(doc, `${name}\n`));
     const sql = contratParNom.get(name).sql[0];
     assert.ok(fiche.includes(`"public"."${name}"(`), `${name} : signature SQL absente`);
     assert.ok(fiche.includes(sql.returns), `${name} : type de retour ${sql.returns} absent`);
@@ -333,9 +336,11 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : 18 clés du tableau de bord, montants et i
   assert.equal(cles.length, 18);
   const fiche = section(doc, 'fn_stats_dashboard_etablissement\n');
   for (const cle of cles) assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle} absente de la fiche`);
-  const profil = section(doc, 'fn_mon_etablissement_complet\n');
+  const profil = plat(section(doc, 'fn_mon_etablissement_complet\n'));
+  const exclus = profil.slice(profil.indexOf('**Jamais décodé**'));
+  assert.ok(exclus.length < profil.length, 'rubrique « Jamais décodé » absente');
   for (const champ of ['stripe_customer_id', 'stripe_account_id', 'iban_last4', 'rib_s3_key', 'siret']) {
-    assert.ok(profil.includes(`\`${champ}\``) && /jamais décodé/.test(profil), `${champ} : exclusion non consignée`);
+    assert.ok(exclus.includes(`\`${champ}\``), `${champ} : exclusion non consignée`);
   }
 });
 
@@ -346,7 +351,7 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : RPC jamais appelées par l espace établis
     'fn_annuler_mission_etablissement', 'fn_ouvrir_litige_rate_limited', 'notations_missions']) {
     assert.ok(jamais.includes(`\`${nom}\``), `${nom} absente de la fiche « jamais »`);
   }
-  const traiter = section(doc, 'fn_traiter_candidature_planning_v1\n');
+  const traiter = plat(section(doc, 'fn_traiter_candidature_planning_v1\n'));
   assert.ok(traiter.includes('D26') && traiter.includes('pourAction'), 'écart D26 avec CreneauxConfirmes.pourAction non consigné');
   for (const code of ['CADRE_ETUDIANT_A_CONFIRMER', 'CADRE_ETUDIANT_PROFESSION_INVALIDE', 'CADRE_ETUDIANT_SALARIAT_REQUIS',
     'CADRE_ETUDIANT_STRUCTURE_INELIGIBLE', 'PLANNING_A_RECONFIRMER', 'PLANNING_MODIFIE_RECONFIRMER']) {
@@ -354,8 +359,20 @@ test('CONTRATS_RPC_ETABLISSEMENT.md : RPC jamais appelées par l espace établis
     assert.ok(corpsFonction(schema, 'fn_traiter_candidature_planning_v1').corps.includes(code)
       || corpsFonction(schema, 'fn_traiter_candidature_planning_v1_internal_20260810').corps.includes(code), `${code} absent du dump`);
   }
-  const fin = section(doc, 'fn_declarer_fin_retroactive\n');
+  const fin = plat(section(doc, 'fn_declarer_fin_retroactive\n'));
   assert.ok(fin.includes('sans clé `success`') && fin.includes('`nouveau_code`'), 'succès sans `success` et nouveau_code non consignés');
+});
+
+test('CONTRATS_RPC_ETABLISSEMENT.md : chaque code de fn_blocage_publication_etab avec son message (correction 8)', () => {
+  const fiche = plat(section(read('docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md'), 'fn_creer_mission_multi_jours_v4\n'));
+  const corps = corpsFonction(schema, 'fn_blocage_publication_etab').corps;
+  const codes = [...corps.matchAll(/'error', '([A-Z_]+)',\s*'message', '((?:[^']|'')*)'/g)]
+    .map(m => ({ code: m[1], message: m[2].replaceAll("''", "'") }));
+  assert.equal(codes.length, 5, 'codes de blocage lus dans le dump');
+  for (const { code, message } of codes) {
+    assert.ok(fiche.includes(`\`${code}\` (« ${message} »)`), `${code} : code ou message absent de la fiche`);
+  }
+  assert.ok(fiche.includes('`message` prioritaire') && fiche.includes('CREATION_MISSION_INDISPONIBLE'));
 });
 
 test('CONTRATS_RPC_SOIGNANT.md : fn_generer_qr_mission non exposée par le web (correction 1 du lot 5)', () => {

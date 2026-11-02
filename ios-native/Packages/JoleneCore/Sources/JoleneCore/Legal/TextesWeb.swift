@@ -448,6 +448,55 @@ public enum TextesWeb {
         public static let mention = "Signature électronique sécurisée Jolene — conforme art. 1366-1367 Code civil (signature électronique simple/avancée renforcée par OTP SMS + horodatage + IP). Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié."
     }
 
+    // MARK: - Lot 5 — espace établissement (LOT5_PLAN §2.9, tranche T0, D30)
+    //
+    // Repris verbatim du web pour les écrans T4, T6 et T9 ; chaque écran exige la validation de
+    // Gabrielle (HARD STOP n°4, LOT5_PLAN §6.4). La mention de l'écran de signature OTP
+    // établissement (« Conforme art. 1366-1367 Code civil », T10) est `Contrat.otpDescription`.
+
+    /// Revue des candidatures (`ListeCandidatures.tsx` l.386-398, T6, D10) : rappel des conditions
+    /// de non-contournement avant l'acceptation, lien vers l'article 8 des CGV ouvert dans Safari.
+    public enum CandidaturesEtablissement {
+        // source: src/components/ListeCandidatures.tsx:393
+        public static let cgvAvantLien = "Avant d’accepter un candidat, consultez les conditions de"
+
+        // source: src/components/ListeCandidatures.tsx:394
+        public static let cgvCheminLien = "/cgv#art8"
+
+        // source: src/components/ListeCandidatures.tsx:395
+        public static let cgvLien = "non-contournement et de recrutement direct — CGV art. 8"
+
+        // source: src/components/ListeCandidatures.tsx:397
+        public static let cgvApresLien = ". Elles précisent les situations concernées, les durées applicables et le calcul des frais de recrutement."
+
+        /// Mention rendue par React : texte, `{' '}`, lien, puis la suite collée au lien.
+        public static var cgvMention: String { cgvAvantLien + " " + cgvLien + cgvApresLien }
+    }
+
+    /// Blocages de publication de l'Accueil (T4) : titre du bandeau de suspension automatique
+    /// (`BandeauBlocageAuto.tsx` l.60-62, montants non portés) et bandeau de vérification
+    /// (`DashboardEtablissement.tsx` l.564-565, `peut_publier_missions == false`).
+    public enum BlocageEtablissement {
+        // source: src/components/BandeauBlocageAuto.tsx:61
+        public static let publicationSuspendue = "Publication de missions suspendue"
+
+        // source: src/pages/DashboardEtablissement.tsx:564
+        public static let verificationEnCoursTitre = "Votre compte est en cours de vérification"
+
+        // source: src/pages/DashboardEtablissement.tsx:565
+        public static let verificationEnCoursDetail = "Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier."
+    }
+
+    /// Récapitulatif de publication (T9, D8) : seule l'option « Salarié » est publiée en natif ;
+    /// sa description est celle du web (`FormulaireMission.tsx` l.766).
+    public enum PublicationEtablissement {
+        // source: src/components/FormulaireMission.tsx:766
+        public static let optionSalarieLibelle = "Salarié"
+
+        // source: src/components/FormulaireMission.tsx:766
+        public static let optionSalarieDescription = "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -543,5 +592,14 @@ public enum TextesWeb {
         .init(cle: "Certificat.rppsVerifie", texte: Certificat.rppsVerifie),
         .init(cle: "Certificat.pscActif", texte: Certificat.pscActif),
         .init(cle: "Certificat.mention", texte: Certificat.mention),
+        .init(cle: "CandidaturesEtablissement.cgvAvantLien", texte: CandidaturesEtablissement.cgvAvantLien),
+        .init(cle: "CandidaturesEtablissement.cgvCheminLien", texte: CandidaturesEtablissement.cgvCheminLien),
+        .init(cle: "CandidaturesEtablissement.cgvLien", texte: CandidaturesEtablissement.cgvLien),
+        .init(cle: "CandidaturesEtablissement.cgvApresLien", texte: CandidaturesEtablissement.cgvApresLien),
+        .init(cle: "BlocageEtablissement.publicationSuspendue", texte: BlocageEtablissement.publicationSuspendue),
+        .init(cle: "BlocageEtablissement.verificationEnCoursTitre", texte: BlocageEtablissement.verificationEnCoursTitre),
+        .init(cle: "BlocageEtablissement.verificationEnCoursDetail", texte: BlocageEtablissement.verificationEnCoursDetail),
+        .init(cle: "PublicationEtablissement.optionSalarieLibelle", texte: PublicationEtablissement.optionSalarieLibelle),
+        .init(cle: "PublicationEtablissement.optionSalarieDescription", texte: PublicationEtablissement.optionSalarieDescription),
     ]
 }

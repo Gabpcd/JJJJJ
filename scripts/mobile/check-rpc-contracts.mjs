@@ -109,6 +109,289 @@ export function verifierExclusions(suivies) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Lot 5 — espace établissement (docs/mobile-swift/LOT5_PLAN.md §3 T0 ; fiches dans
+// docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md, gardées par tests/node/contrats-etablissement-ios.node.mjs).
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * RPC de l'espace établissement, suivies en `a_venir` lot 5. L'ajout est dédoublonné : une RPC déjà
+ * suivie par un lot antérieur (le lot 2 suit `fn_creer_notation_mission`, le lot 4
+ * `fn_obtenir_conversation`, LOT2_PLAN/LOT4_PLAN §3 T0) garde son entrée et son lot, et devient
+ * « partagée » (`aussi_etablissement`). Les branches parallèles se fusionnent donc sans doublon.
+ */
+export const RPC_SUIVIES_ETABLISSEMENT = [
+  { name: 'fn_mes_permissions_etab', statut: 'a_venir', lot: 5 },
+  { name: 'fn_mon_etablissement_complet', statut: 'a_venir', lot: 5 },
+  { name: 'fn_stats_dashboard_etablissement', statut: 'a_venir', lot: 5 },
+  { name: 'fn_soignant_pour_etablissement', statut: 'a_venir', lot: 5 },
+  { name: 'fn_lire_candidatures_mission_habilitee', statut: 'a_venir', lot: 5 },
+  { name: 'fn_traiter_candidature_planning_v1', statut: 'a_venir', lot: 5 },
+  { name: 'fn_contrat_signe_pour_pointage', statut: 'a_venir', lot: 5 },
+  { name: 'fn_valider_presence', statut: 'a_venir', lot: 5 },
+  { name: 'fn_valider_presences_lot', statut: 'a_venir', lot: 5 },
+  { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },
+  { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 5 },
+  { name: 'fn_declarer_fin_retroactive', statut: 'a_venir', lot: 5 },
+  { name: 'fn_creer_mission_multi_jours_v4', statut: 'a_venir', lot: 5 },
+  { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 5 },
+];
+
+/**
+ * Déjà suivies par un lot soignant et consommées aussi par l'établissement (LOT5_PLAN §2.2, §2.8,
+ * T0) : annotées `aussi_etablissement` dans le JSON, jamais dupliquées.
+ */
+export const RPC_PARTAGEES_ETABLISSEMENT = Object.freeze([
+  'fn_get_my_role', 'fn_audit_connexion', 'fn_ecrire_audit_safe', 'fn_param_bool',
+  'fn_etat_pointage_mission', 'fn_envoyer_otp_signature', 'fn_signer_contrat_otp',
+]);
+
+for (const rpc of RPC_SUIVIES_ETABLISSEMENT) {
+  if (!RPC_SUIVIES.some(r => r.name === rpc.name)) RPC_SUIVIES.push(rpc);
+}
+
+/**
+ * Exceptions PostgREST que l'espace établissement intercepte avant `SupabaseErrorMapping`
+ * (LOT5_PLAN §2.5, D12) : liste blanche extraite du dump pour chaque RPC de
+ * `RPC_SUIVIES_ETABLISSEMENT`, dans son corps, puis dans les fonctions qu'elle appelle et les
+ * fonctions de trigger qu'elle atteint, nommées ici par RPC. Un `%` est instancié par l'argument du
+ * trigger quand le message le formate depuis `TG_ARGV[n]` ; sinon il reste un joker non vide.
+ * Toute modification serveur d'un message ou d'un SQLSTATE rougit le contrat.
+ */
+export const EXCEPTIONS_ETABLISSEMENT = {
+  // fn_traiter_candidature lève P0001 (notification) ; l'UPDATE missions de
+  // fn_finaliser_attribution_mission déclenche la garde de paiement (LOT5_PLAN correction 16).
+  fn_traiter_candidature_planning_v1: {
+    fonctions: ['fn_traiter_candidature'],
+    declencheurs: ['trg_gate_assignation_paiement'],
+  },
+  // UPDATE presences : RBAC `pointage` (correction 4) puis garde de fin de planning.
+  fn_valider_presence: {
+    declencheurs: ['trg_p0_rbac_presences', 'trg_bloquer_validation_presence_avant_fin_planning'],
+  },
+  fn_valider_presences_lot: {
+    declencheurs: ['trg_p0_rbac_presences', 'trg_bloquer_validation_presence_avant_fin_planning'],
+  },
+  // UPDATE presences.motif_litige : RBAC seulement (valide_par_etablissement inchangé).
+  fn_contester_presence: { declencheurs: ['trg_p0_rbac_presences'] },
+};
+
+/** SQLSTATE des noms de condition PL/pgSQL employés par `USING ERRCODE` (PostgreSQL, annexe A). */
+const CONDITIONS_SQLSTATE = {
+  raise_exception: 'P0001', no_data_found: 'P0002', too_many_rows: 'P0003', assert_failure: 'P0004',
+  insufficient_privilege: '42501', invalid_authorization_specification: '28000',
+  check_violation: '23514', foreign_key_violation: '23503', unique_violation: '23505',
+  not_null_violation: '23502', restrict_violation: '23001', invalid_parameter_value: '22023',
+  data_exception: '22000', invalid_text_representation: '22P02', invalid_datetime_format: '22007',
+  numeric_value_out_of_range: '22003', object_not_in_prerequisite_state: '55000',
+  lock_not_available: '55P03', serialization_failure: '40001', feature_not_supported: '0A000',
+};
+
+/**
+ * Corps de la définition unique d'une fonction publique du dump : texte entre `AS $tag$` et la
+ * ligne `$tag$;`. Lève si la fonction est absente ou surchargée (liste blanche ambiguë).
+ */
+export function corpsFonction(schemaSource, name) {
+  const lines = schemaSource.split('\n');
+  const prefix = `CREATE OR REPLACE FUNCTION "public"."${name}"(`;
+  const debuts = lines.flatMap((l, i) => (l.startsWith(prefix) ? [i] : []));
+  if (debuts.length !== 1) {
+    throw new Error(`${name} : ${debuts.length} définition(s) dans public.sql, une seule attendue pour extraire ses exceptions.`);
+  }
+  for (let i = debuts[0] + 1; i < lines.length; i++) {
+    const as = /^\s*AS (\$[A-Za-z_]*\$)\s*$/.exec(lines[i]);
+    if (!as) continue;
+    const fin = lines.indexOf(`${as[1]};`, i + 1);
+    if (fin < 0) throw new Error(`${name} : fin de corps ${as[1]}; introuvable.`);
+    return { corps: lines.slice(i + 1, fin).join('\n'), ligne: i + 2 };
+  }
+  throw new Error(`${name} : ligne « AS $tag$ » introuvable.`);
+}
+
+/** Littéraux SQL simples d'un fragment (`'…'`, `''` → `'`). */
+function litterauxSql(fragment) {
+  return [...fragment.matchAll(/'((?:[^']|'')*)'/g)].map(m => m[1].replaceAll("''", "'"));
+}
+
+/** Trigger du dump : table visée, fonction exécutée et arguments littéraux. Lève s'il est absent. */
+export function declencheur(schemaSource, nom) {
+  const re = new RegExp(`^CREATE OR REPLACE TRIGGER "${nom}" .* ON "public"\\."(\\w+)" .*EXECUTE FUNCTION "public"\\."(\\w+)"\\((.*)\\);$`, 'm');
+  const m = re.exec(schemaSource);
+  if (!m) throw new Error(`Trigger ${nom} introuvable dans public.sql : liste blanche impossible.`);
+  return { table: m[1], fonction: m[2], arguments: litterauxSql(m[3]) };
+}
+
+/**
+ * Masque un corps PL/pgSQL : commentaires retirés, chaînes remplacées par `\u0000<n>\u0000`
+ * (valeurs décodées dans `chaines`). Lève sur une chaîne `E'…'` (échappements non pris en charge).
+ */
+function masquerSql(corps) {
+  const chaines = [];
+  let sortie = '';
+  for (let i = 0; i < corps.length; i++) {
+    const c = corps[i];
+    if (c === '-' && corps[i + 1] === '-') { while (i < corps.length && corps[i] !== '\n') i++; sortie += '\n'; continue; }
+    if (c === '/' && corps[i + 1] === '*') { const fin = corps.indexOf('*/', i + 2); i = fin < 0 ? corps.length : fin + 1; sortie += ' '; continue; }
+    if (c === '$') {
+      const tag = /^\$[A-Za-z_]*\$/.exec(corps.slice(i));
+      if (tag) { const fin = corps.indexOf(tag[0], i + tag[0].length); i = (fin < 0 ? corps.length : fin + tag[0].length) - 1; sortie += ' '; continue; }
+    }
+    if (c === "'") {
+      // Chaîne E'…' : la barre oblique échappe ; repérée pour être refusée si un RAISE l'emploie.
+      const echappee = /(^|\W)[Ee]$/.test(sortie);
+      if (echappee) sortie = sortie.slice(0, -1);
+      let valeur = '';
+      let j = i + 1;
+      for (; j < corps.length; j++) {
+        if (echappee && corps[j] === '\\') { valeur += corps[j] + (corps[j + 1] ?? ''); j++; continue; }
+        if (corps[j] === "'" && corps[j + 1] === "'") { valeur += "'"; j++; } else if (corps[j] === "'") break; else valeur += corps[j];
+      }
+      chaines.push(echappee ? { echappee: valeur } : valeur);
+      sortie += `\u0000${chaines.length - 1}\u0000`;
+      i = j;
+      continue;
+    }
+    sortie += c;
+  }
+  return { masque: sortie, chaines };
+}
+
+/** Découpe un fragment masqué sur les virgules de premier niveau (hors parenthèses). */
+function virgulesHautes(fragment) {
+  const parts = [];
+  let profondeur = 0;
+  let courant = '';
+  for (const c of fragment) {
+    if (c === '(' || c === '[') profondeur++;
+    if (c === ')' || c === ']') profondeur--;
+    if (c === ',' && profondeur === 0) { parts.push(courant.trim()); courant = ''; } else courant += c;
+  }
+  if (courant.trim()) parts.push(courant.trim());
+  return parts;
+}
+
+const chaineMasquee = (fragment, chaines) => {
+  const m = /^\u0000(\d+)\u0000$/.exec(fragment.trim());
+  if (!m) return null;
+  const valeur = chaines[Number(m[1])];
+  if (typeof valeur !== 'string') throw new Error("chaîne E'' non prise en charge dans un RAISE (échappements).");
+  return valeur;
+};
+
+/**
+ * Exceptions levées par un corps PL/pgSQL (`RAISE EXCEPTION`, formes `'fmt'[, args] [USING …]` et
+ * `USING ERRCODE = …, MESSAGE = '…'`). `RAISE NOTICE/WARNING/…` et `RAISE;` sont ignorés ; sans
+ * `ERRCODE`, le SQLSTATE est `P0001`. `argumentsDeclencheur` instancie les `%` formatés depuis
+ * `TG_ARGV[n]` (directement ou via une variable initialisée par `TG_ARGV[n]`). Fail-closed : message
+ * entièrement dynamique, condition inconnue, `%%`, chaîne `E''` ou forme inconnue lèvent.
+ */
+export function exceptionsDuCorps(corps, { fonction, declencheur: nomDeclencheur, argumentsDeclencheur = null }) {
+  const { masque, chaines } = masquerSql(corps);
+  const variablesArgv = new Map([...masque.matchAll(/\b(\w+)\s+\w+(?:\s*\([^)]*\))?\s*:=\s*TG_ARGV\[(\d+)\]/g)].map(m => [m[1], Number(m[2])]));
+  const sorties = [];
+  for (const m of masque.matchAll(/\bRAISE\b([^;]*);/gi)) {
+    let reste = m[1].trim();
+    const niveau = /^(EXCEPTION|NOTICE|WARNING|INFO|LOG|DEBUG)\b/i.exec(reste);
+    if (niveau && niveau[1].toUpperCase() !== 'EXCEPTION') continue;
+    if (niveau) reste = reste.slice(niveau[0].length).trim();
+    if (!reste) continue; // RAISE; (relance dans un bloc EXCEPTION)
+    const using = /\bUSING\b/i.exec(reste);
+    const tete = (using ? reste.slice(0, using.index) : reste).trim();
+    const options = using ? virgulesHautes(reste.slice(using.index + using[0].length)) : [];
+    let message = null;
+    let args = [];
+    if (tete) {
+      const [format, ...suite] = virgulesHautes(tete);
+      message = chaineMasquee(format, chaines);
+      if (message === null) throw new Error(`${fonction} : forme RAISE non prise en charge « RAISE EXCEPTION ${tete} ».`);
+      args = suite;
+    }
+    let sqlstate = 'P0001';
+    for (const option of options) {
+      const o = /^(\w+)\s*=\s*([\s\S]+)$/.exec(option);
+      if (!o) throw new Error(`${fonction} : option USING illisible « ${option} ».`);
+      const nom = o[1].toUpperCase();
+      const valeur = chaineMasquee(o[2], chaines);
+      if (nom === 'ERRCODE') {
+        const code = valeur ?? o[2].trim();
+        if (/^[0-9A-Z]{5}$/.test(code)) sqlstate = code;
+        else if (CONDITIONS_SQLSTATE[code.toLowerCase()]) sqlstate = CONDITIONS_SQLSTATE[code.toLowerCase()];
+        else throw new Error(`${fonction} : condition ${code} inconnue (table CONDITIONS_SQLSTATE).`);
+      } else if (nom === 'MESSAGE') {
+        if (valeur === null) throw new Error(`${fonction} : message entièrement dynamique (MESSAGE = ${o[2].trim()}) : liste blanche impossible.`);
+        message = valeur;
+      }
+    }
+    if (message === null) throw new Error(`${fonction} : RAISE EXCEPTION sans message.`);
+    if (message.includes('%%')) throw new Error(`${fonction} : %% non pris en charge dans « ${message} ».`);
+    let rang = 0;
+    message = message.replace(/%/g, () => {
+      const arg = (args[rang++] ?? '').trim();
+      const direct = /^TG_ARGV\[(\d+)\]$/.exec(arg);
+      const index = direct ? Number(direct[1]) : variablesArgv.get(arg);
+      if (argumentsDeclencheur && index !== undefined && argumentsDeclencheur[index] !== undefined) return argumentsDeclencheur[index];
+      return '%';
+    });
+    if (!message.replace(/%/g, '').trim()) throw new Error(`${fonction} : message entièrement dynamique « ${message} » : liste blanche impossible.`);
+    const entree = { sqlstate, message, fonction };
+    if (nomDeclencheur) entree.declencheur = nomDeclencheur;
+    if (!sorties.some(e => JSON.stringify(e) === JSON.stringify(entree))) sorties.push(entree);
+  }
+  return sorties;
+}
+
+/** Liste blanche d'une RPC : son corps, puis `config.fonctions`, puis `config.declencheurs`. */
+export function extraireExceptions(schemaSource, name, config = {}) {
+  const sorties = [];
+  const ajouter = liste => {
+    for (const e of liste) if (!sorties.some(x => JSON.stringify(x) === JSON.stringify(e))) sorties.push(e);
+  };
+  for (const fonction of [name, ...(config.fonctions ?? [])]) {
+    ajouter(exceptionsDuCorps(corpsFonction(schemaSource, fonction).corps, { fonction }));
+  }
+  for (const nom of config.declencheurs ?? []) {
+    const t = declencheur(schemaSource, nom);
+    ajouter(exceptionsDuCorps(corpsFonction(schemaSource, t.fonction).corps, {
+      fonction: t.fonction, declencheur: nom, argumentsDeclencheur: t.arguments,
+    }));
+  }
+  return sorties;
+}
+
+/**
+ * Matrice rôle × permission de l'espace établissement, lue dans le dump : les 11 clés exposées par
+ * `fn_mes_permissions_etab`, les rôles du CHECK `membres_etablissement_role_check` et le `CASE` de
+ * `fn_a_permission_etablissement` (LOT5_PLAN §2.7). Documentation et fixtures démo seulement : le
+ * natif lit les booléens servis, il n'écrit jamais cette correspondance.
+ */
+export function matricePermissionsEtablissement(schemaSource) {
+  const permissions = corpsFonction(schemaSource, 'fn_mes_permissions_etab').corps;
+  const cles = [...permissions.matchAll(/'(\w+)', public\.fn_a_permission_etablissement\('\1', v_etab_id\)/g)].map(m => m[1]);
+  const check = /CONSTRAINT "membres_etablissement_role_check" CHECK \(\("role" = ANY \(ARRAY\[(.*)\]\)\)\)/.exec(schemaSource);
+  if (!check || cles.length === 0) throw new Error('Matrice des permissions établissement illisible dans public.sql.');
+  const roles = litterauxSql(check[1]);
+  const casSql = corpsFonction(schemaSource, 'fn_a_permission_etablissement').corps;
+  const branches = new Map([...casSql.matchAll(/^\s*WHEN '(\w+)' THEN (.+)$/gm)].map(m => [m[1], m[2].trim()]));
+  const accorde = (expr, role) => {
+    if (expr === 'true') return true;
+    if (expr === 'false') return false;
+    let m = /^v_role = '(\w+)'$/.exec(expr);
+    if (m) return role === m[1];
+    m = /^v_role <> '(\w+)'$/.exec(expr);
+    if (m) return role !== m[1];
+    m = /^v_role IN \((.+)\)$/.exec(expr);
+    if (m) return litterauxSql(m[1]).includes(role);
+    throw new Error(`fn_a_permission_etablissement : branche illisible « ${expr} ».`);
+  };
+  return {
+    cles,
+    roles: Object.fromEntries(roles.map(role => [role, Object.fromEntries(cles.map(cle => {
+      if (!branches.has(cle)) throw new Error(`fn_a_permission_etablissement : clé ${cle} sans branche WHEN.`);
+      return [cle, accorde(branches.get(cle), role)];
+    }))])),
+  };
+}
+
 const read = relative => readFileSync(join(ROOT, relative), 'utf8');
 
 /** Retourne l'indice de l'accolade fermante équilibrée à partir de `open` (indice d'un `{`). */
@@ -209,7 +492,7 @@ export function buildContracts({ typesSource, schemaSource, manifest }) {
     if (types === null && sql.length === 0) {
       throw new Error(`RPC ${name} absente de types.ts ET de public.sql : contrat introuvable.`);
     }
-    return {
+    const contrat = {
       name,
       statut,
       lot,
@@ -219,6 +502,14 @@ export function buildContracts({ typesSource, schemaSource, manifest }) {
       grants: extractGrants(schemaSource, name),
       manifeste: manifestCategory(manifest, name),
     };
+    // Lot 5 : liste blanche des exceptions interceptées, annotation des RPC partagées.
+    if (RPC_SUIVIES_ETABLISSEMENT.some(r => r.name === name)) {
+      contrat.exceptions = extraireExceptions(schemaSource, name, EXCEPTIONS_ETABLISSEMENT[name]);
+    }
+    if (RPC_PARTAGEES_ETABLISSEMENT.includes(name) || (lot < 5 && RPC_SUIVIES_ETABLISSEMENT.some(r => r.name === name))) {
+      contrat.aussi_etablissement = true;
+    }
+    return contrat;
   });
   return { schema_version: 1, sources: SOURCES, rpcs };
 }
@@ -233,7 +524,7 @@ export function diffContracts(expected, actual) {
     const after = actualByName.get(name);
     if (!before) { problems.push(`+ ${name} : nouvelle RPC suivie, absente du JSON versionné.`); continue; }
     if (!after) { problems.push(`- ${name} : présente dans le JSON versionné mais plus suivie par le script.`); continue; }
-    for (const field of ['statut', 'lot', 'types', 'sql', 'grants', 'manifeste']) {
+    for (const field of ['statut', 'lot', 'types', 'sql', 'grants', 'manifeste', 'exceptions', 'aussi_etablissement']) {
       const a = JSON.stringify(before[field] ?? null);
       const b = JSON.stringify(after[field] ?? null);
       if (a !== b) problems.push(`~ ${name}.${field}\n    versionné : ${a}\n    actuel    : ${b}`);

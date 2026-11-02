@@ -56,6 +56,9 @@ test('TL : chaque constante de TextesWeb.swift est le texte exact du web à la l
   assert.deepEqual(resultat.erreurs, []);
   assert.ok(constantes.length >= 60, `au moins 60 textes attendus, ${constantes.length} lus`);
   const fichiers = new Set(constantes.map(c => c.source.fichier));
+  // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
+  const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
+    'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/BandeauSansGPS.tsx',
     'src/components/CertificatSignature.tsx',
@@ -67,7 +70,7 @@ test('TL : chaque constante de TextesWeb.swift est le texte exact du web à la l
     'src/pages/DetailPresencesMission.tsx',
     'src/pages/DocumentsSoignant.tsx',
     'src/pages/PresencesSoignant.tsx',
-  ]);
+  ].concat(lot5).sort());
 });
 
 // Lignes exigées par LOT2_PLAN §3 TL (relues dans le dépôt au 2 novembre 2026).

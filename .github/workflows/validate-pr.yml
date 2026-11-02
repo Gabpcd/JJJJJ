@@ -62,7 +62,10 @@ jobs:
         # textes-juridiques-ios.node.mjs (lot 2, TL, HARD STOP n°4) : chaque texte juridique de
         # TextesWeb.swift égale le texte du web à la ligne annoncée ; rougit aussi sur une PR web
         # qui modifie ou déplace l'un de ces textes.
-        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs
+        # contrats-etablissement-ios.node.mjs (lot 5, T0) : RPC de l'espace établissement, listes
+        # blanches d'exceptions extraites du dump, fiches CONTRATS_RPC_ETABLISSEMENT.md, matrice de
+        # parité des routes établissement, textes du lot 5 dans TextesWeb.swift.
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/contrats-etablissement-ios.node.mjs
 
       - name: Gardes de la recette financière isolée
         run: node --test tests/node/recette-escrow-safety.node.mjs
