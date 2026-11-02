@@ -4,8 +4,8 @@
  *
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
- * fixée, puis écrit trois fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway) et par les XCUITest.
+ * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -107,11 +107,136 @@ export function buildDemoMissions(now = new Date(FIXED_NOW)) {
   return missions;
 }
 
+/** Instant UTC `jours` jours après `now`, à `heure`:00 (même arithmétique que buildDemoMissions). */
+function instantDemo(now, jours, heure) {
+  const day = new Date(now);
+  day.setUTCDate(day.getUTCDate() + jours);
+  day.setUTCHours(heure, 0, 0, 0);
+  return day;
+}
+
+/**
+ * Tableau de bord démo (lot 1, T3) : corps de `fn_dashboard_soignant_complet` (clés et ordre
+ * des colonnes du dump `supabase/schema/public.sql` l.27920) pour le profil fictif, plus :
+ *   - `missions_assignees` : fiches et créneaux des deux missions ASSIGNEE de `mes_missions`,
+ *     lisibles en détail (DemoMissionsGateway.mission) mais jamais listées dans Explorer ;
+ *   - `gains_missions` : missions TERMINEE du mois relues comme le web (décision 10).
+ * `missions_ouvertes` = les trois premières missions démo (ORDER BY debut_le LIMIT 3) ; la
+ * proposition PROPOSEE vise demo-mission-011 et date de 30 minutes avant l'horloge fixée.
+ * `gains_mois.net_total` reste présent dans le corps (contrat serveur) mais n'est jamais affiché.
+ */
+export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDemoMissions(now)) {
+  const nomEtab = (id) => DEMO_ETABLISSEMENTS.find((e) => e.id === id).nom;
+  const assignee = (rang, service, etablissementId, taux, contrat, jours) => {
+    const id = `demo-assignee-${String(rang).padStart(3, '0')}`;
+    const creneaux = jours.map((jour, index) => {
+      const debut = instantDemo(now, jour, 7);
+      const fin = new Date(debut.getTime() + 8 * 3_600_000);
+      return { id: `${id}-slot-${index + 1}`, mission_id: id, debut: debut.toISOString(), fin: fin.toISOString(), est_pause: false, type_creneau: 'PREVISIONNEL' };
+    });
+    return {
+      id,
+      intitule: `Démonstration · Mission assignée ${rang}`,
+      description: 'Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.',
+      service,
+      profession_requise: 'IDE',
+      specialite_medicale_requise: null,
+      accepte_non_specialises: null,
+      debut_le: creneaux[0].debut,
+      fin_le: creneaux[creneaux.length - 1].fin,
+      duree_heures: 8 * creneaux.length,
+      nb_creneaux: creneaux.length,
+      taux_horaire_base: taux,
+      taux_rist_plafonne: null,
+      rist_plafond_applique: false,
+      total_brut: null,
+      net_a_payer: null,
+      est_urgente: false,
+      niveau_urgence: 0,
+      statut: 'ASSIGNEE',
+      etablissement_id: etablissementId,
+      type_contrat_recherche: contrat,
+      boostee_le: null,
+      mode_remuneration: 'HORAIRE',
+      retrocession_pct: null,
+      soignant_assigne_id: DEMO_PROFILE.user_id,
+      presence_confirmee_le: null,
+      creneaux,
+    };
+  };
+  const missionsAssignees = [
+    assignee(1, 'Médecine polyvalente', 'demo-etab-1', 27, 'SALARIE', [3]),
+    assignee(2, 'Soins de suite', 'demo-etab-2', 30, 'LIBERAL', [7, 8]),
+  ];
+  const ouvertes = missions.slice(0, 3);
+  const proposee = missions.find((m) => m.id === 'demo-mission-011');
+  const termineeDebut = instantDemo(now, -1, 7);
+  const lundi = instantDemo(now, 0, 0); // 2026-11-02 est un lundi
+  const semaine = missionsAssignees.filter((m) => {
+    const debut = new Date(m.debut_le).getTime();
+    return debut >= lundi.getTime() && debut < lundi.getTime() + 7 * 86_400_000;
+  });
+  const dashboard = {
+    profil: {
+      prenom: 'Camille', nom: 'Démo', telephone: null, date_naissance: null,
+      profession: DEMO_PROFILE.profile.profession, type_contrat: DEMO_PROFILE.profile.type_contrat,
+      numero_rpps: null, numero_adeli: null, rpps_verifie: false,
+      adresse_lat: DEMO_PROFILE.profile.adresse_lat, adresse_lng: DEMO_PROFILE.profile.adresse_lng,
+      tous_documents_valides: DEMO_PROFILE.profile.tous_documents_valides, identite_verifiee: false,
+      score_fiabilite: null, total_missions_terminees: 1, heures_cumulees: 8, eligible_conversion_3200h: false,
+      type_exercice: DEMO_PROFILE.profile.type_exercice, mandat_facturation_signe: false,
+    },
+    missions_ouvertes: ouvertes.map((m) => ({
+      id: m.id, intitule: m.intitule, service: m.service, debut_le: m.debut_le, fin_le: m.fin_le,
+      duree_heures: m.duree_heures, nb_creneaux: m.nb_creneaux, taux_horaire_base: m.taux_horaire_base,
+      total_brut: m.total_brut, net_a_payer: m.net_a_payer, net_estime: null,
+      est_urgente: m.est_urgente, etablissement_id: m.etablissement_id, profession_requise: m.profession_requise,
+      type_contrat_recherche: m.type_contrat_recherche, accepte_non_specialises: m.accepte_non_specialises,
+      specialite_medicale_requise: m.specialite_medicale_requise, etab_nom: nomEtab(m.etablissement_id),
+    })),
+    mes_missions: missionsAssignees.map((m) => ({
+      id: m.id, intitule: m.intitule, debut_le: m.debut_le, fin_le: m.fin_le, duree_heures: m.duree_heures,
+      statut: m.statut, etablissement_id: m.etablissement_id, etab_nom: nomEtab(m.etablissement_id),
+    })),
+    documents: [
+      { id: 'demo-document-001', type_document: 'CARTE_IDENTITE', valide_jusqua: '2030-06-30', statut_verification: 'VERIFIE' },
+    ],
+    heures_semaine: semaine.reduce((total, m) => total + m.duree_heures, 0),
+    gains_mois: { net_total: 224.6, brut_total: 208, nb_missions: 1 },
+    gains_6mois: [{ mois: termineeDebut.toISOString().slice(0, 7), net: 224.6 }],
+    missions_semaine_cal: semaine.map((m) => ({ debut_le: m.debut_le, statut: m.statut })),
+    propositions: [{
+      id: 'demo-proposition-001',
+      mission_id: proposee.id,
+      cree_le: new Date(now.getTime() - 30 * 60_000).toISOString(),
+      type_contrat_choisi: null,
+      missions: {
+        id: proposee.id, intitule: proposee.intitule, debut_le: proposee.debut_le, fin_le: proposee.fin_le,
+        duree_heures: proposee.duree_heures, taux_horaire_base: proposee.taux_horaire_base, net_estime: null,
+        type_contrat_recherche: proposee.type_contrat_recherche, etablissement_id: proposee.etablissement_id,
+        est_urgente: proposee.est_urgente, etab_nom: nomEtab(proposee.etablissement_id),
+      },
+    }],
+    heures_totales_terminees: 8,
+    missions_oubliees_count: 0,
+    notifs_non_lues: 2,
+  };
+  return {
+    fixed_now: now.toISOString(),
+    dashboard,
+    missions_assignees: missionsAssignees,
+    gains_missions: [
+      { id: 'demo-terminee-001', type_contrat_applique: 'SALARIE', type_contrat_recherche: 'SALARIE', total_brut: 208, net_a_payer: 224.6, net_estime: 162.4 },
+    ],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
+    'demo-dashboard.json': buildDemoDashboard(),
   };
 }
 

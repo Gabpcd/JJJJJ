@@ -44,9 +44,11 @@ export const CONTRACTS_PATH = join(ROOT, 'ios-native', 'rpc-contracts.json');
  * d'une fiche dans CONTRATS_RPC_SOIGNANT.md dans la même PR (LOT1_PLAN §4) ; les statuts
  * passent en consommé au fil des PR qui câblent la gateway.
  *
- * Reclassement (suivie, mais pas au lot 1) : `fn_mon_profil_soignant_complet` passe en lot 3
+ * Reclassements (suivies, mais pas au lot 1) : `fn_mon_profil_soignant_complet` passe en lot 3
  * (renvoie `numero_secu`, `siret_liberal`, `iban_last4` ; le soft-gate `peut_candidater` du lot 1
- * lit `soignants` par SELECT direct, LOT1_PLAN §2.6).
+ * lit `soignants` par SELECT direct, LOT1_PLAN §2.6) ; `fn_suggestions_missions_pour_soignant`
+ * passe en lot 4 (revue B8 de T3 : son seul appelant web, `SuggestionsMissions.tsx`, n'est monté
+ * par aucune page ; l'Accueil natif ne la consomme pas).
  *
  * Les deux listes d'exclusion qui suivent sont vérifiées par `verifierExclusions` (fail-closed).
  */
@@ -54,9 +56,9 @@ export const RPC_SUIVIES = [
   { name: 'fn_get_my_role', statut: 'lot0', lot: 0 },
   { name: 'fn_etablissements_safe', statut: 'lot0', lot: 0 },
   { name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3 },
-  { name: 'fn_dashboard_soignant_complet', statut: 'a_venir', lot: 1 },
+  { name: 'fn_dashboard_soignant_complet', statut: 'consommee', lot: 1 }, // T3 : SupabaseDashboardGateway
   { name: 'fn_confirmer_action_planning_v1', statut: 'a_venir', lot: 1 },
-  { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 1 },
+  { name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4 }, // reclassée (revue B8 de T3)
   { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },

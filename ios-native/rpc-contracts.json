@@ -95,7 +95,7 @@
     },
     {
       "name": "fn_dashboard_soignant_complet",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "never",
@@ -146,7 +146,7 @@
     {
       "name": "fn_suggestions_missions_pour_soignant",
       "statut": "a_venir",
-      "lot": 1,
+      "lot": 4,
       "types": {
         "args": "{ p_limit?: number }",
         "returns": "Json"

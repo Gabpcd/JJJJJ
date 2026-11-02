@@ -26,10 +26,12 @@ const LOT0 = ['fn_get_my_role', 'fn_etablissements_safe'];
 
 // Ordre et contenu attendus pour le lot 1 (blueprint §3 T0 + décision 5 : audit via
 // fn_audit_connexion / fn_maj_activite_soignant, et fn_ecrire_audit_safe pour MISSION_ASSIGNATION).
+// Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute à LOT1_CONSOMMEES.
+const LOT1_CONSOMMEES = ['fn_dashboard_soignant_complet']; // T3
+// `fn_suggestions_missions_pour_soignant` en est sortie (revue B8 de T3) : reclassée lot 4.
 const LOT1 = [
   'fn_dashboard_soignant_complet',
   'fn_confirmer_action_planning_v1',
-  'fn_suggestions_missions_pour_soignant',
   'fn_annuler_candidature_soignant',
   'fn_annuler_mission_soignant',
   'fn_repondre_proposition',
@@ -98,11 +100,12 @@ test('RPC_SUIVIES : les deux RPC du lot 0 restent consommées lot 0', () => {
   }
 });
 
-test('RPC_SUIVIES : toutes les RPC du lot 1 sont suivies en a_venir lot 1', () => {
+test('RPC_SUIVIES : toutes les RPC du lot 1 sont suivies en lot 1, a_venir sauf celles déjà câblées', () => {
   for (const name of LOT1) {
     const entry = byName.get(name);
     assert.ok(entry, `${name} absente de RPC_SUIVIES (lot 1, T0)`);
-    assert.equal(entry.statut, 'a_venir', `${name} : statut attendu a_venir`);
+    const attendu = LOT1_CONSOMMEES.includes(name) ? 'consommee' : 'a_venir';
+    assert.equal(entry.statut, attendu, `${name} : statut attendu ${attendu}`);
     assert.equal(entry.lot, 1, `${name} : lot attendu 1`);
   }
 });
@@ -111,6 +114,20 @@ test('RPC_SUIVIES : fn_mon_profil_soignant_complet est reclassée lot 3 (correct
   assert.deepEqual(byName.get('fn_mon_profil_soignant_complet'), {
     name: 'fn_mon_profil_soignant_complet', statut: 'a_venir', lot: 3,
   });
+});
+
+test('RPC_SUIVIES : fn_suggestions_missions_pour_soignant est reclassée lot 4 (revue B8 de T3)', () => {
+  assert.deepEqual(byName.get('fn_suggestions_missions_pour_soignant'), {
+    name: 'fn_suggestions_missions_pour_soignant', statut: 'a_venir', lot: 4,
+  });
+  // Motif : son seul appelant web n'est monté par aucune page ; l'Accueil natif ne la consomme pas.
+  const appelant = read('src/components/dashboard/SuggestionsMissions.tsx');
+  assert.ok(appelant.includes("'fn_suggestions_missions_pour_soignant'"), 'appelant web attendu : SuggestionsMissions.tsx');
+  const dashboard = read('src/pages/DashboardSoignant.tsx');
+  assert.ok(!dashboard.includes('SuggestionsMissions'),
+    'DashboardSoignant monte désormais SuggestionsMissions : revoir le reclassement (parité de l Accueil)');
+  const fiche = section(read('docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md'), 'fn_suggestions_missions_pour_soignant');
+  assert.ok(fiche.includes('à venir (lot 4)'), 'fiche : statut « à venir (lot 4) » attendu');
 });
 
 test('RPC_SUIVIES : aucune RPC interdite ou prématurée', () => {

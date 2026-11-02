@@ -58,6 +58,7 @@ final class SupabaseGatewaysTests: XCTestCase {
                        "un port doit être câblé dans SupabaseGateways.make(client:) ET DemoWorld.gateways() dans la même PR")
         XCTAssertFalse(supabase.contains("audit"), "T1 câble l'audit")
         XCTAssertFalse(supabase.contains("flags"), "T1 câble les drapeaux")
+        XCTAssertFalse(supabase.contains("dashboard"), "T3 câble le tableau de bord")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {

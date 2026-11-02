@@ -29,11 +29,15 @@ struct NeutralMissions: MissionsPort {
 /// Erreur renvoyée par un double non scripté : un test qui l'atteint a oublié son scénario.
 let nonScripte = JoleneError(.unknown, "double non scripté")
 
+/// Délai de l'écran transmis au port tableau de bord par les tests qui appellent un port
+/// directement (en production : `SessionController.resolutionTimeout`, via `AccueilModel`).
+let delaiEcranTest = SessionController.defaultResolutionTimeout
+
 // MARK: - Ports du lot 1
 
 struct FakeDashboard: DashboardPort {
     var snapshot = DashboardSnapshot()
-    func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot { snapshot }
+    func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot { snapshot }
 }
 
 struct FakeCandidature: CandidaturePort {

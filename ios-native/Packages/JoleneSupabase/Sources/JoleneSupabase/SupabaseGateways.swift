@@ -39,7 +39,7 @@ public enum SupabaseGateways {
             role: SupabaseRoleGateway(client: client),
             missions: SupabaseMissionsGateway(client: client, clock: clock, enrich: enrich),
             clock: clock,
-            dashboard: UnwiredDashboardPort(),          // T3
+            dashboard: SupabaseDashboardGateway(client: client, clock: clock),
             candidature: UnwiredCandidaturePort(),      // T6a, T7
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
