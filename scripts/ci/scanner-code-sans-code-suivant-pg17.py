@@ -19,6 +19,13 @@ fn_etat_pointage_mission (définition du dump), exceptions inchangées, journal
 d'audit de la fin rétroactive inchangé, ACL et inventaire préservés, rejeu
 refusé.
 
+Verrou d'autorisation de la fin rétroactive (seconde différence de son corps) :
+la condition LIVE `NOT (soignant OR admin_etab OR est_admin())` vaut NULL pour
+un compte authentifié sans lien avec la mission (est_admin_etablissement() et
+mon_etablissement_id() NULL) et un IF NULL ne lève pas : témoin LIVE annulé
+(un autre soignant ferme le segment, reçoit le code suivant, audit classé
+ADMIN_PLATEFORME), refus 42501 après B1, contexte système inchangé.
+
 Hors périmètre, gap connu nommé dans l'en-tête de la migration : la colonne
 `missions.code_pointage_actif` reste lisible par le soignant assigné en
 PostgREST direct (GRANT SELECT de table + RLS pol_mission_select) ; fermeture
@@ -43,7 +50,7 @@ MIGRATIONS = ROOT / 'supabase/migrations'
 SCANNER_LIVE_MD5 = 'a2af098e60488cbef102c80594b74d10'
 SCANNER_B1_MD5 = '4568c8a01be5be24587cffa9bdd9c1c3'
 FIN_LIVE_MD5 = '845c6a3fd6dd3aa4ef7b2fcd19108d88'
-FIN_B1_MD5 = 'ce323a366172f276cf66479c21efe561'
+FIN_B1_MD5 = '2e238a0d6cea02bce6802c77835defe2'
 # Plancher statique : dernière version du registre distant relue le 02/11/2026
 # (list_migrations, lecture seule). Il ne prouve pas l'ordre réel de la file de
 # merge : avant le merge, relire list_migrations (CLAUDE.md, règles migrations
@@ -52,6 +59,20 @@ FIN_B1_MD5 = 'ce323a366172f276cf66479c21efe561'
 DERNIERE_VERSION_DISTANTE = '20261102150000'
 B9_EN_ATTENTE_ANTERIEURES = ['20261102204450', '20261102204820']
 RETIRE = "    'nouveau_code', v_new_code,\n    'nouveau_hmac', v_new_hmac,\n"
+# Verrou d'autorisation de la fin rétroactive (seconde et dernière différence
+# de son corps) : la condition LIVE vaut NULL pour un compte authentifié sans
+# lien avec la mission, et un IF NULL ne lève pas.
+IF_FIN_LIVE = "  IF NOT (v_caller_is_soignant OR v_caller_is_etab_admin OR est_admin()) THEN\n"
+IF_FIN_B1 = (
+    "  -- Logique ternaire : pour un compte authentifié sans lien avec la mission\n"
+    "  -- (soignant non assigné, compte sans établissement), est_admin_etablissement()\n"
+    "  -- et mon_etablissement_id() valent NULL ; NOT (false OR NULL OR false) vaut\n"
+    "  -- NULL et ce IF laissait passer l'appel. Le contexte système (auth.uid() NULL :\n"
+    "  -- service_role, tests SQL) reste inchangé.\n"
+    "  IF auth.uid() IS NOT NULL\n"
+    "     AND NOT (COALESCE(v_caller_is_soignant, false)\n"
+    "              OR COALESCE(v_caller_is_etab_admin, false)\n"
+    "              OR COALESCE(est_admin(), false)) THEN\n")
 CLES_SCANNER = {'type_scan_effectue', 'prochain_type_scan', 'creneau_effectif_id', 'horodatage_effectif',
                 'horodatage_arrondi', 'numero_scan', 'validation_etab_requise'}
 CLES_FIN = {'creneau_effectif_id', 'debut_creneau', 'fin_declaree', 'horodatage_arrondi',
@@ -119,14 +140,19 @@ assert definitions == {
 ROTATION = (MIGRATIONS / '20261017165819_garantir_rotation_code_pointage.sql').read_text(encoding='utf-8')
 HEURES = (MIGRATIONS / '20260903194000_preserver_heures_reelles_pointage.sql').read_text(encoding='utf-8')
 DUMP = (ROOT / 'supabase/schema/public.sql').read_text(encoding='utf-8')
-for nom, source, en_tete_fn, live, attendu in [
-        ('fn_scanner_code_pointage', ROTATION, EN_TETE_SCANNER, SCANNER_LIVE_MD5, SCANNER_B1_MD5),
-        ('fn_declarer_fin_retroactive', HEURES, EN_TETE_FIN, FIN_LIVE_MD5, FIN_B1_MD5)]:
+for nom, source, en_tete_fn, live, attendu, remplacements in [
+        ('fn_scanner_code_pointage', ROTATION, EN_TETE_SCANNER, SCANNER_LIVE_MD5, SCANNER_B1_MD5, [(RETIRE, '')]),
+        ('fn_declarer_fin_retroactive', HEURES, EN_TETE_FIN, FIN_LIVE_MD5, FIN_B1_MD5,
+         [(RETIRE, ''), (IF_FIN_LIVE, IF_FIN_B1)])]:
     corps_live = corps(source, en_tete_fn, '$function$')
     assert md5(corps_live) == live, f'SOURCE_DU_DEPOT_DIFFERENTE_DU_LIVE : {nom}'
     corps_b1 = corps(MIGRATION, en_tete_fn, '$function$')
     assert en_tete(MIGRATION, en_tete_fn) == en_tete(source, en_tete_fn), f'SIGNATURE_OU_QUALIFICATEURS_MODIFIES : {nom}'
-    assert corps_live.count(RETIRE) == 1 and corps_b1 == corps_live.replace(RETIRE, ''), f'DIFF_AUTRE_QUE_LES_DEUX_CLES : {nom}'
+    attendu_corps = corps_live
+    for avant_texte, apres_texte in remplacements:
+        assert attendu_corps.count(avant_texte) == 1, f'SOURCE_SANS_LE_FRAGMENT_ATTENDU : {nom}'
+        attendu_corps = attendu_corps.replace(avant_texte, apres_texte)
+    assert corps_b1 == attendu_corps, f'DIFF_AUTRE_QUE_CELLES_DECLAREES : {nom}'
     assert md5(corps_b1) == attendu, f'MD5_B1_INATTENDU : {nom}'
     assert 'nouveau_code' not in corps_b1 and 'nouveau_hmac' not in corps_b1, nom
     assert MIGRATION.count(f"'{live}'") >= 2 and MIGRATION.count(f"'{attendu}'") >= 1, f'GARDES_MD5_ABSENTES : {nom}'
@@ -364,6 +390,16 @@ reponse_fin_live, etat_fin_live = json.loads(temoin_fin[1]), json.loads(temoin_f
 assert reponse_fin_live['nouveau_code'] == etat_fin_live['code']
 assert reponse_fin_live['nouveau_hmac'] == etat_fin_live['hmac'] and etat_fin_live['hmac_ok'] is True
 assert set(reponse_fin_live) == CLES_FIN | {'nouveau_code', 'nouveau_hmac'}, 'TEMOIN_DEFAUT_FIN_NON_REPRODUIT'
+# Témoin LIVE du contournement d'autorisation, annulé : un autre soignant, sans
+# lien avec la mission, ferme le segment ouvert du soignant assigné à l'heure de
+# son choix, reçoit le code suivant, et l'audit le classe ADMIN_PLATEFORME.
+temoin_intrus = sql("BEGIN;" + SECRET_HMAC + as_user(S, f"SELECT public.fn_scanner_code_pointage('{C0}', NULL)::text;")
+                    + as_user(O, appel_fin("now() + interval '10 hours'", 'Intrus'))
+                    + "RESET ROLE; SELECT type_acteur || '|' || acteur_id FROM public.journaux_audit;"
+                    + CODE_ET_HMAC + "ROLLBACK;").splitlines()
+reponse_intrus = json.loads(temoin_intrus[1])
+assert reponse_intrus['nouveau_code'] == json.loads(temoin_intrus[3])['code'], 'TEMOIN_CONTOURNEMENT_NON_REPRODUIT'
+assert temoin_intrus[2] == f'ADMIN_PLATEFORME|{O}', 'TEMOIN_CONTOURNEMENT_AUDIT'
 assert sql("SELECT count(*) FROM public.scans_pointage") == '0' and sql("SELECT count(*) FROM public.journaux_audit") == '0'
 
 # Une seule source divergente (ici l'inventaire de la fin rétroactive) refuse la
@@ -463,6 +499,8 @@ assert (r3['type_scan_effectue'], r3['numero_scan']) == ('OUVERTURE', 3) and len
 
 # Refus de la fin rétroactive inchangés, sans mutation.
 empreinte = sql(ETAT_TABLES)
+refused(as_user(O, appel_fin("now() + interval '10 hours'", 'Intrus')), '42501',
+        'autorisé(e) à déclarer une fin rétroactive sur cette mission.')
 refused(as_user(M, appel_fin('now()')), '42501', 'autorisé(e) à déclarer une fin rétroactive sur cette mission.')
 refused(as_user(S, appel_fin("now() - interval '1 day'")), '23514', 'doit être postérieure au début du créneau')
 refused(as_user(S, appel_fin('now()', mission=INCONNUE)), 'P0002', 'introuvable ou dans un statut incompatible.')
@@ -508,6 +546,18 @@ assert sql("SELECT count(*) FROM public.journaux_audit WHERE type_acteur = 'ADMI
            f"AND acteur_id = '{A}'") == '1'
 assert lire_etat(A)['code_pointage_actif'] == C6 and lire_etat(S)['code_pointage_actif'] is None
 
+# Contexte système (auth.uid() NULL, aucun rôle authenticated) : comportement
+# inchangé par le verrou, l'appel passe et l'audit garde le classement LIVE.
+r7, e7 = scanner(S, C6, avant=VIEILLIR_SCANS)
+assert (r7['type_scan_effectue'], r7['numero_scan']) == ('OUVERTURE', 7)
+lignes = sql("BEGIN;" + RECULER_SEGMENT_OUVERT + SECRET_HMAC + appel_fin("now() - interval '5 minutes'", 'Système')
+             + CODE_ET_HMAC + "COMMIT;").splitlines()
+r8, e8 = json.loads(lignes[0]), json.loads(lignes[1])
+reponse_sans_code(r8, e8, CLES_FIN)
+assert r8['numero_scan'] == 8
+assert sql("SELECT count(*) FROM public.journaux_audit WHERE acteur_id IS NULL AND type_acteur = 'ADMIN_PLATEFORME' "
+           "AND details->>'raison' = 'Système'") == '1'
+
 # ACL et classement préservés ; le rejeu de B1 est refusé avant toute redéfinition.
 assert json.loads(sql(ETAT_SCANNER)) == apres and json.loads(sql(ETAT_FIN)) == apres_fin
 refused(MIGRATION, 'POINTAGE_SANS_CODE_SUIVANT_SOURCE_AVANT_OU_INVENTAIRE_DIVERGENT')
@@ -517,13 +567,15 @@ print(json.dumps({**statique, 'postgres': 17,
                   'chaine_reelle': ['20260903194000', '20261017165819', VERSION_B1],
                   'defaut_live_reproduit': ['fn_scanner_code_pointage', 'fn_declarer_fin_retroactive'],
                   'refus_atomique_si_une_source_derive': True,
+                  'contournement_autorisation_fin_retroactive': {'live': 'reproduit (témoin annulé)', 'b1': 'refusé 42501',
+                                                                  'contexte_systeme': 'inchangé'},
                   'cles_reponse': {'fn_scanner_code_pointage': sorted(CLES_SCANNER),
                                    'fn_declarer_fin_retroactive': sorted(CLES_FIN)},
                   'rotation_conservee': True, 'hmac_stocke_non_renvoye': True,
                   'code_relu_par_etablissement': True, 'code_jamais_lu_par_soignant_via_rpc': True,
                   'audit_fin_retroactive_inchange': ['SOIGNANT', 'ADMIN_ETABLISSEMENT'],
                   'refus_inchanges': {'fn_scanner_code_pointage': ['P0002', '42501', '23514', 'anon 42501'],
-                                      'fn_declarer_fin_retroactive': ['P0002 sans segment',
+                                      'fn_declarer_fin_retroactive': ['P0002 sans segment', '42501 autre soignant',
                                                                       '42501 membre POINTAGE_ONLY', '23514',
                                                                       'P0002 mission inconnue', 'anon 42501']},
                   'acl_et_inventaire_preserves': True, 'rejeu_refuse': True}))
