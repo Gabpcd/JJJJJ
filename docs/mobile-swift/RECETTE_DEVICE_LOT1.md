@@ -2,7 +2,7 @@
 
 > Créé le 2026-11-02 par la tranche T0 (`docs/mobile-swift/LOT1_PLAN.md` §3 T0) pour que les réglages
 > **non versionnables** (Dashboard Supabase Auth) et les preuves **appareil** aient une trace dès le début
-> du lot. Rempli au fil des tranches T9, T10, T5, T6c et T12 ; signé par Gabrielle à la clôture du lot 1.
+> du lot. Rempli au fil des tranches T4a, T9, T10, T5, T6c et T12 ; signé par Gabrielle à la clôture du lot 1.
 > Niveau 5 de `PRINCIPES.md` §7 : caméra, GPS, Keychain, Face ID, push, arrêt forcé. **Aucun niveau ne
 > prouve les autres** : la CI (niveaux 1-2) prouve la navigation, STAGING (niveau 3) les mutations relues,
 > cet appareil prouve ce qu'un simulateur ne peut pas (Mail iOS, AASA via CDN Apple, LocalAuthentication
@@ -112,7 +112,25 @@ porte sur le **lien** d'un push déjà reçu : `data.lien = /soignant/missions/{
 | Relancement | aucune session restaurée (Keychain purgé) | — |
 | STAGING | `soignants.nom = 'Supprimé'` sur le compte jetable du run (go explicite Gabrielle, décision 13) | — |
 
-## 8. Signature de clôture
+## 8. Carte MapKit du détail mission (T4a, revue du 2026-11-02)
+
+Ligne ajoutée le 2026-11-02 par la revue de T4a : la carte Apple Plans réelle (`CarteMapKit`, la seule que
+verront les utilisateurs) n'est exercée par aucun test automatique — la démonstration montre l'aperçu hors
+ligne (`mission-detail-carte-demo`, aucune requête), et `StagingConnexionTests` n'ouvre aucun détail (la
+cohorte lot 0 n'a pas de profil `soignants`, `LOT1_PLAN.md` §3 T11). Cette ligne est **préalable** au passage
+de `/soignant/recherche-missions` à « natif » dans `PARITE_SOIGNANT.md` ; l'assertion équivalente
+(`mission-detail-carte-map` présent, `mission-detail-carte-demo` absent) est à reprendre dans
+`StagingParcoursTests` (T11, fixture D3).
+
+| Étape (build Staging ou Production, §0) | Attendu | Observé (texte exact, date, build, projet) |
+|---|---|---|
+| Explorer › une mission dont l'établissement a des coordonnées non nulles › détail | bloc « Localisation » `mission-detail-carte` avec la carte Apple Plans `mission-detail-carte-map` (tuiles chargées) ; **aucun** `mission-detail-carte-demo` ni texte « Aperçu de démonstration, sans fond de carte » | — (à faire) |
+| Repère et cadrage | un repère rose centré sur l'établissement, étendue ≈ 1,5 km ; légende `mission-detail-carte-legende` = « nom · code postal ville » (valeurs `fn_etablissements_safe`) | — (à faire) |
+| Lecture seule | ni déplacement ni zoom au geste ; aucune demande d'autorisation de localisation | — (à faire) |
+| VoiceOver | un seul élément « Carte de la mission : nom, code postal ville » | — (à faire) |
+| iOS 16 et iOS 17+ (si deux appareils) | iOS 16 : `Map(coordinateRegion:)` + `MapMarker` ; iOS 17+ : `Map(initialPosition:)` + `Marker` — même cadrage | — (à faire) |
+
+## 9. Signature de clôture
 
 | Élément | Valeur |
 |---|---|
