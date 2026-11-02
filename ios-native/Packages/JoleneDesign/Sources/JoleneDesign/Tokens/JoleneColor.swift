@@ -27,6 +27,18 @@ public struct JoleneHex: Equatable, Sendable {
         let a = hasAlpha ? Double(value & 0xFF) / 255 : 1
         return JoleneHex(red: r, green: g, blue: b, alpha: a)
     }
+
+    /// Luminance relative WCAG 2.x (composantes sRGB linéarisées, alpha ignoré).
+    public var relativeLuminance: Double {
+        func lineaire(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        return 0.2126 * lineaire(red) + 0.7152 * lineaire(green) + 0.0722 * lineaire(blue)
+    }
+
+    /// Rapport de contraste WCAG 2.x, de 1 à 21, symétrique. Seuil AA du texte courant : 4,5.
+    public func contrastRatio(with other: JoleneHex) -> Double {
+        let (clair, sombre) = (max(relativeLuminance, other.relativeLuminance), min(relativeLuminance, other.relativeLuminance))
+        return (clair + 0.05) / (sombre + 0.05)
+    }
 }
 
 /// Conversion HSL (notation CSS `H S% L%` de `src/index.css`) vers sRGB.
@@ -119,4 +131,10 @@ public enum JoleneColor {
     public static let destructiveGradientHex = ["#FF4D6B", "#FF6BBE"]
     public static let destructiveGradient = LinearGradient(
         colors: destructiveGradientHex.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    /// Texte posé sur un dégradé clair (destructif, pastille de filtre active) : `text-[#2b183d]` de
+    /// `BoutonY2K` web, fixe en clair comme en sombre. Contraste ≥ 4,5:1 (AA) sur le dégradé destructif
+    /// et sur le dégradé hero, là où le blanc plafonne à ~3:1 (`JoleneDesignLot1Tests`).
+    public static let onGradientHex = "#2B183D"
+    public static let onGradient = Color(hex: onGradientHex)
 }

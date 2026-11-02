@@ -19,6 +19,9 @@ public struct SkeletonBlock: View {
 
     nonisolated public static let accessibilityLabel = "Chargement en cours"
 
+    /// `src/index.css` (`prefers-reduced-motion`) : `.animate-pulse { animation: none }`.
+    nonisolated public static func animates(reduceMotion: Bool) -> Bool { !reduceMotion }
+
     private let size: Size
     private let width: CGFloat?
     private let cornerRadius: CGFloat
@@ -37,7 +40,7 @@ public struct SkeletonBlock: View {
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
             .opacity(dimmed ? 0.45 : 1)
             .onAppear {
-                guard !reduceMotion else { return }
+                guard Self.animates(reduceMotion: reduceMotion) else { return }
                 withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dimmed = true }
             }
             .accessibilityLabel(Self.accessibilityLabel)

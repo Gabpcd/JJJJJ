@@ -1,14 +1,25 @@
 import SwiftUI
 
 /// Bouton Jolene : primaire (dégradé rose → mauve, texte blanc), secondaire (bordure rose) ou
-/// destructif (dégradé rouge → rose `#FF4D6B → #FF6BBE`, texte blanc, actions irréversibles).
-/// Calqué sur `BoutonY2K` web ; la couleur seule ne porte jamais l'information (libellé explicite).
+/// destructif (dégradé rouge → rose `#FF4D6B → #FF6BBE`, texte sombre `#2B183D`, actions
+/// irréversibles). Calqué sur `BoutonY2K` web ; la couleur seule ne porte jamais l'information
+/// (libellé explicite).
 public struct JoleneButton: View {
     public enum Style: CaseIterable, Sendable {
         case primary, secondary, destructive
 
-        /// Fond plein (dégradé) et texte blanc ; `false` pour le secondaire (surface claire, bordure rose).
+        /// Fond plein (dégradé) ; `false` pour le secondaire (surface claire, bordure rose).
         public var isFilled: Bool { self != .secondary }
+
+        /// Texte sombre `JoleneColor.onGradient` sur le dégradé (`text-[#2b183d]` de `BoutonY2K`,
+        /// contraste AA). Le primaire garde le texte blanc du lot 0, non modifié au lot 1.
+        public var usesDarkTextOnFill: Bool { self == .destructive }
+
+        /// Couleur du libellé et de l'indicateur de chargement.
+        var foreground: Color {
+            if usesDarkTextOnFill { return JoleneColor.onGradient }
+            return isFilled ? .white : JoleneColor.rose700
+        }
     }
 
     private let title: String
@@ -23,7 +34,7 @@ public struct JoleneButton: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: JoleneSpacing.sm) {
-                if isLoading { ProgressView().tint(style.isFilled ? .white : JoleneColor.rose700) }
+                if isLoading { ProgressView().tint(style.foreground) }
                 Text(title).font(JoleneFont.button)
             }
             .frame(maxWidth: .infinity, minHeight: 48)
@@ -40,7 +51,7 @@ struct JoleneButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(style.isFilled ? Color.white : JoleneColor.rose700)
+            .foregroundStyle(style.foreground)
             .background(background)
             .overlay(
                 Capsule().strokeBorder(style == .secondary ? JoleneColor.rose : Color.clear, lineWidth: 1.5)
