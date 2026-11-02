@@ -42,7 +42,7 @@ public enum DemoWorld {
             candidature: UnwiredCandidaturePort(),      // T6a, T7
             presence: UnwiredPresencePort(),            // T6c
             favoris: UnwiredFavorisPort(),              // T4b
-            mesMissions: UnwiredMesMissionsPort(),      // T5
+            mesMissions: DemoMesMissionsGateway(clock: FixedClock(fixedNow)),
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
@@ -103,14 +103,15 @@ public struct DemoRoleGateway: RolePort {
 /// (`MissionBusiness`). Refuse tout contexte dont l'identifiant n'est pas celui du
 /// profil fictif : la démo n'est jamais un repli pour un compte réel.
 public struct DemoMissionsGateway: MissionsPort {
-    /// Source des missions ASSIGNEE ouvrables en détail depuis l'Accueil (T3 : fiches de
-    /// `demo-dashboard.json`). Lue seulement pour un identifiant absent de `demo-missions.json` :
-    /// une fixture de tableau de bord illisible ne casse jamais le détail Explorer. Point de fusion
-    /// T5 : cette source devient celle des missions ASSIGNEE de Mes missions (`LOT1_PLAN.md` §3 T5).
+    /// Source des missions du soignant ouvrables en détail hors Explorer : missions ASSIGNEE de
+    /// l'Accueil (T3 : fiches de `demo-dashboard.json`, aussi « À venir » de Mes missions) puis
+    /// missions passées de Mes missions (T5 : `demo-mes-missions.json`). Lue seulement pour un
+    /// identifiant absent de `demo-missions.json` : une fixture illisible ne casse jamais le détail
+    /// Explorer.
     private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
-        try DemoFixtures.loadDashboard().missionsAssignees
+        try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
     }) {
         self.missionsAssignees = missionsAssignees
     }

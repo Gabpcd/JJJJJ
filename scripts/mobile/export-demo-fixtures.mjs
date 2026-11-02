@@ -5,7 +5,7 @@
  * Reproduit à l'identique l'algorithme de `mobile-native/src/data/demoGateway.ts`
  * (30 missions, 3 établissements fictifs, profil DEMO_CONTEXT) avec une horloge
  * fixée, puis écrit les fichiers JSON à clés snake_case (contrat PostgREST),
- * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway) et par les XCUITest.
+ * lus par `JoleneCore` (DemoMissionsGateway, DemoDashboardGateway, DemoMesMissionsGateway) et par les XCUITest.
  *
  * Horloge fixée : 2026-11-02T00:00:00Z. Les missions démarrent donc du
  * 2026-11-03 au 2026-12-02 (07:00 UTC, ou 20:00 UTC une mission sur quatre).
@@ -231,12 +231,89 @@ export function buildDemoDashboard(now = new Date(FIXED_NOW), missions = buildDe
   };
 }
 
+/**
+ * Mes missions démo (lot 1, T5) : candidatures EN_ATTENTE du profil fictif et missions passées.
+ *   - `candidatures` : lignes `candidatures` (clés de la requête du web, `MissionsSoignant.tsx`
+ *     l.181-184) sur deux missions ouvertes de `demo-missions.json` ; la seconde porte un message
+ *     « super-like » (pastille « ★ Priorité historique ») et un choix de contrat libéral ;
+ *   - `passees` : missions TERMINEE / ANNULEE_PAR_ETABLISSEMENT du soignant avec leurs créneaux et
+ *     leurs colonnes financières (`net_estime`, `type_contrat_applique`). `demo-terminee-001` porte
+ *     les montants de `gains_missions` de `demo-dashboard.json` (même mission, mêmes valeurs).
+ * Les missions « À venir » sont les `missions_assignees` du tableau de bord : jamais recopiées ici.
+ */
+export function buildDemoMesMissions(now = new Date(FIXED_NOW), missions = buildDemoMissions(now)) {
+  const candidature = (rang, missionId, heuresAvant, typeContrat, message) => {
+    if (!missions.some((m) => m.id === missionId)) throw new Error(`mission démo absente : ${missionId}`);
+    return {
+      id: `demo-candidature-${String(rang).padStart(3, '0')}`,
+      statut: 'EN_ATTENTE',
+      message,
+      type_contrat_choisi: typeContrat,
+      cree_le: new Date(now.getTime() - heuresAvant * 3_600_000).toISOString(),
+      mission_id: missionId,
+    };
+  };
+  const passee = (id, intitule, service, etablissementId, statut, contrat, jours, heure, montants) => {
+    const creneaux = jours.map((jour, index) => {
+      const debut = instantDemo(now, jour, heure);
+      const fin = new Date(debut.getTime() + 8 * 3_600_000);
+      return { id: `${id}-slot-${index + 1}`, mission_id: id, debut: debut.toISOString(), fin: fin.toISOString(), est_pause: false, type_creneau: 'PREVISIONNEL' };
+    });
+    return {
+      id,
+      intitule,
+      description: 'Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.',
+      service,
+      profession_requise: 'IDE',
+      specialite_medicale_requise: null,
+      accepte_non_specialises: null,
+      debut_le: creneaux[0].debut,
+      fin_le: creneaux[creneaux.length - 1].fin,
+      duree_heures: 8 * creneaux.length,
+      nb_creneaux: creneaux.length,
+      taux_horaire_base: montants.taux,
+      taux_rist_plafonne: null,
+      rist_plafond_applique: false,
+      total_brut: montants.total_brut,
+      net_a_payer: montants.net_a_payer,
+      est_urgente: false,
+      niveau_urgence: 0,
+      statut,
+      etablissement_id: etablissementId,
+      type_contrat_recherche: contrat,
+      boostee_le: null,
+      mode_remuneration: 'HORAIRE',
+      retrocession_pct: null,
+      soignant_assigne_id: DEMO_PROFILE.user_id,
+      type_contrat_applique: montants.type_contrat_applique,
+      net_estime: montants.net_estime,
+      creneaux,
+    };
+  };
+  return {
+    fixed_now: now.toISOString(),
+    candidatures: [
+      candidature(1, 'demo-mission-004', 6, 'SALARIE', null),
+      candidature(2, 'demo-mission-009', 14.5, 'LIBERAL', 'Super-like : disponible sur toute la période.'),
+    ],
+    passees: [
+      passee('demo-terminee-001', 'Démonstration · Mission terminée 1', 'Médecine polyvalente', 'demo-etab-1', 'TERMINEE', 'SALARIE', [-1], 7,
+        { taux: 26, total_brut: 208, net_a_payer: 224.6, net_estime: 162.4, type_contrat_applique: 'SALARIE' }),
+      passee('demo-terminee-002', 'Démonstration · Mission terminée 2', 'Soins de suite', 'demo-etab-2', 'TERMINEE', 'LIBERAL', [-13, -12], 7,
+        { taux: 28, total_brut: 448, net_a_payer: 448, net_estime: null, type_contrat_applique: 'LIBERAL' }),
+      passee('demo-annulee-001', 'Démonstration · Mission annulée', 'Médecine polyvalente', 'demo-etab-3', 'ANNULEE_PAR_ETABLISSEMENT', 'SALARIE', [-21], 20,
+        { taux: 25, total_brut: null, net_a_payer: null, net_estime: null, type_contrat_applique: 'SALARIE' }),
+    ],
+  };
+}
+
 export function buildFixtures() {
   return {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
     'demo-profile.json': { fixed_now: FIXED_NOW, ...DEMO_PROFILE },
     'demo-dashboard.json': buildDemoDashboard(),
+    'demo-mes-missions.json': buildDemoMesMissions(),
   };
 }
 

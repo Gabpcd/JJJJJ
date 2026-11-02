@@ -1,0 +1,148 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "candidatures": [
+    {
+      "id": "demo-candidature-001",
+      "statut": "EN_ATTENTE",
+      "message": null,
+      "type_contrat_choisi": "SALARIE",
+      "cree_le": "2026-11-01T18:00:00.000Z",
+      "mission_id": "demo-mission-004"
+    },
+    {
+      "id": "demo-candidature-002",
+      "statut": "EN_ATTENTE",
+      "message": "Super-like : disponible sur toute la période.",
+      "type_contrat_choisi": "LIBERAL",
+      "cree_le": "2026-11-01T09:30:00.000Z",
+      "mission_id": "demo-mission-009"
+    }
+  ],
+  "passees": [
+    {
+      "id": "demo-terminee-001",
+      "intitule": "Démonstration · Mission terminée 1",
+      "description": "Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-11-01T07:00:00.000Z",
+      "fin_le": "2026-11-01T15:00:00.000Z",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 26,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": 208,
+      "net_a_payer": 224.6,
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-1",
+      "type_contrat_recherche": "SALARIE",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "soignant_assigne_id": "demo-soignant",
+      "type_contrat_applique": "SALARIE",
+      "net_estime": 162.4,
+      "creneaux": [
+        {
+          "id": "demo-terminee-001-slot-1",
+          "mission_id": "demo-terminee-001",
+          "debut": "2026-11-01T07:00:00.000Z",
+          "fin": "2026-11-01T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    {
+      "id": "demo-terminee-002",
+      "intitule": "Démonstration · Mission terminée 2",
+      "description": "Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Soins de suite",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-10-20T07:00:00.000Z",
+      "fin_le": "2026-10-21T15:00:00.000Z",
+      "duree_heures": 16,
+      "nb_creneaux": 2,
+      "taux_horaire_base": 28,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": 448,
+      "net_a_payer": 448,
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "statut": "TERMINEE",
+      "etablissement_id": "demo-etab-2",
+      "type_contrat_recherche": "LIBERAL",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "soignant_assigne_id": "demo-soignant",
+      "type_contrat_applique": "LIBERAL",
+      "net_estime": null,
+      "creneaux": [
+        {
+          "id": "demo-terminee-002-slot-1",
+          "mission_id": "demo-terminee-002",
+          "debut": "2026-10-20T07:00:00.000Z",
+          "fin": "2026-10-20T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        },
+        {
+          "id": "demo-terminee-002-slot-2",
+          "mission_id": "demo-terminee-002",
+          "debut": "2026-10-21T07:00:00.000Z",
+          "fin": "2026-10-21T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    },
+    {
+      "id": "demo-annulee-001",
+      "intitule": "Démonstration · Mission annulée",
+      "description": "Mission entièrement fictive pour découvrir la navigation native. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-10-12T20:00:00.000Z",
+      "fin_le": "2026-10-13T04:00:00.000Z",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 25,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": null,
+      "net_a_payer": null,
+      "est_urgente": false,
+      "niveau_urgence": 0,
+      "statut": "ANNULEE_PAR_ETABLISSEMENT",
+      "etablissement_id": "demo-etab-3",
+      "type_contrat_recherche": "SALARIE",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "soignant_assigne_id": "demo-soignant",
+      "type_contrat_applique": "SALARIE",
+      "net_estime": null,
+      "creneaux": [
+        {
+          "id": "demo-annulee-001-slot-1",
+          "mission_id": "demo-annulee-001",
+          "debut": "2026-10-12T20:00:00.000Z",
+          "fin": "2026-10-13T04:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    }
+  ]
+}

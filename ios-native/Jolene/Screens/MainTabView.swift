@@ -36,8 +36,7 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-explorer")
 
             NavigationStack {
-                PlaceholderScreen(titre: "Mes missions", identifier: "placeholder-missions",
-                                  description: "Candidatures, missions à venir et passées arrivent au lot 1.")
+                MesMissionsScreen(session: session, snapshot: snapshot) { selection = $0 }
             }
             .tabItem { Label("Mes missions", systemImage: "list.clipboard") }
             .tag(Tab.missions)
@@ -59,6 +58,8 @@ struct MainTabView: View {
             .accessibilityIdentifier("tab-profil")
         }
         .tint(JoleneColor.rose700)
+        // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
+        .ajoutCalendrier(modeDemo: container.isDemo, userId: snapshot.user.id)
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.
     }
 }

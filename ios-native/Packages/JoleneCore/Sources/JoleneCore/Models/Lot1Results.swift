@@ -61,6 +61,10 @@ public struct CandidatureRecord: Codable, Equatable, Sendable, Identifiable {
     public var message: String?
     public var typeContratChoisi: String?
     public var creeLe: String?
+    /// Mission de la candidature relue sous RLS et enrichie (`MissionBusiness.enrich`) par Mes missions
+    /// (T5, `MesMissionsPort.candidatures`) ; `nil` hors de cette lecture. Hors `CodingKeys` : jamais
+    /// encodée ni décodée avec la ligne `candidatures`.
+    public var mission: Mission? = nil
 
     public init(id: String, missionId: String, statut: String?, message: String?, typeContratChoisi: String?, creeLe: String?) {
         self.id = id; self.missionId = missionId; self.statut = statut; self.message = message
@@ -147,6 +151,10 @@ public struct MissionsPage: Equatable, Sendable {
     public var missions: [Mission]
     public var page: Int
     public var aSuivre: Bool
+    /// Colonnes financières relues avec les missions passées (T5 : `net_estime`, `type_contrat_applique`,
+    /// `total_brut`, `net_a_payer`), par id de mission ; vide pour « À venir ». Valeurs serveur affichées
+    /// par `MesMissionsPresentation.montantPassee`, jamais recalculées.
+    public var finances: [String: MissionGainLigne] = [:]
 
     public init(missions: [Mission], page: Int, aSuivre: Bool) { self.missions = missions; self.page = page; self.aSuivre = aSuivre }
 }

@@ -2,16 +2,15 @@ import SwiftUI
 import JoleneCore
 
 /// Point d'extension « Ajouter au calendrier » (décision 18 : bouton dans Mes missions › À venir
-/// ET sur l'Accueil). La tranche T5 le câble avec `CalendarWriter` (EventKit, un événement par
-/// créneau PREVISIONNEL, journal local de dédoublonnage) en injectant son implémentation dans
-/// l'environnement (`.environment(\.ajoutCalendrierMission, …)`) au-dessus des onglets.
+/// ET sur l'Accueil). Câblé par la tranche T5 : `CalendarWriter.swift` injecte `AjoutCalendrier`
+/// (JoleneCore : un événement par créneau PREVISIONNEL, journal local de dédoublonnage) dans
+/// l'environnement au-dessus des onglets (`MainTabView`, `.ajoutCalendrier(modeDemo:userId:)`).
 ///
-/// Tant qu'aucune implémentation n'est injectée, l'Accueil n'affiche aucun bouton calendrier :
-/// jamais un bouton sans effet ni un succès fabriqué. Verrou du gap : `DemoAccueilTests` affirme
-/// aujourd'hui l'absence de `accueil-calendrier-demo-assignee-001` ; T5 remplace cette assertion
-/// par la présence du bouton et l'issue `accueil-calendrier-issue` après un tap, et la clôture T12
-/// vérifie l'injection (`LOT1_PLAN.md` §3 T5 et T12). EventKit n'est pas `Sendable` : son
-/// enveloppe vit sur le main actor, seul le protocole est partagé.
+/// Sans implémentation injectée (aperçus, futur écran hors onglets), aucun bouton calendrier n'est
+/// rendu : jamais un bouton sans effet ni un succès fabriqué. Preuves : `DemoAccueilTests` (bouton
+/// `accueil-calendrier-demo-assignee-001` et issue `accueil-calendrier-issue`) et
+/// `DemoMesMissionsTests` (`calendrier-{id}`, `missions-calendrier-issue`). EventKit n'est pas
+/// `Sendable` : son enveloppe vit sur le main actor, seul le protocole est partagé.
 @MainActor
 protocol AjoutCalendrierMission: AnyObject, Sendable {
     /// Ajoute les créneaux planifiés de `mission` au calendrier de l'appareil et rend le message
@@ -30,7 +29,7 @@ private struct AjoutCalendrierMissionKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Implémentation de l'ajout au calendrier, `nil` tant que T5 ne l'a pas câblée.
+    /// Implémentation de l'ajout au calendrier (T5), `nil` hors des onglets d'une session prête.
     var ajoutCalendrierMission: (any AjoutCalendrierMission)? {
         get { self[AjoutCalendrierMissionKey.self] }
         set { self[AjoutCalendrierMissionKey.self] = newValue }
