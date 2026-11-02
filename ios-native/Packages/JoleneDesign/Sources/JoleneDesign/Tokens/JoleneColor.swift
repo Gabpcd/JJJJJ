@@ -113,4 +113,10 @@ public enum JoleneColor {
     /// Dégradé doux lavande → rose pâle (`.bg-gradient-soft`), arrière-plans.
     public static let softGradient = LinearGradient(
         colors: [lavender, rose100], startPoint: .top, endPoint: .bottom)
+
+    /// Dégradé des actions irréversibles, repris de `BoutonY2K` web (variant `destructive`,
+    /// `from-[#FF4D6B] to-[#FF6BBE]`). Valeurs hex exposées pour les tests.
+    public static let destructiveGradientHex = ["#FF4D6B", "#FF6BBE"]
+    public static let destructiveGradient = LinearGradient(
+        colors: destructiveGradientHex.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
 }

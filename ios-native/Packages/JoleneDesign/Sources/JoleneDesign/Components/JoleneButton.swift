@@ -1,9 +1,15 @@
 import SwiftUI
 
-/// Bouton Jolene : primaire (dégradé rose → mauve, texte blanc) ou secondaire (bordure rose).
+/// Bouton Jolene : primaire (dégradé rose → mauve, texte blanc), secondaire (bordure rose) ou
+/// destructif (dégradé rouge → rose `#FF4D6B → #FF6BBE`, texte blanc, actions irréversibles).
 /// Calqué sur `BoutonY2K` web ; la couleur seule ne porte jamais l'information (libellé explicite).
 public struct JoleneButton: View {
-    public enum Style: Sendable { case primary, secondary }
+    public enum Style: CaseIterable, Sendable {
+        case primary, secondary, destructive
+
+        /// Fond plein (dégradé) et texte blanc ; `false` pour le secondaire (surface claire, bordure rose).
+        public var isFilled: Bool { self != .secondary }
+    }
 
     private let title: String
     private let style: Style
@@ -17,7 +23,7 @@ public struct JoleneButton: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: JoleneSpacing.sm) {
-                if isLoading { ProgressView().tint(style == .primary ? .white : JoleneColor.rose700) }
+                if isLoading { ProgressView().tint(style.isFilled ? .white : JoleneColor.rose700) }
                 Text(title).font(JoleneFont.button)
             }
             .frame(maxWidth: .infinity, minHeight: 48)
@@ -34,7 +40,7 @@ struct JoleneButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(style == .primary ? Color.white : JoleneColor.rose700)
+            .foregroundStyle(style.isFilled ? Color.white : JoleneColor.rose700)
             .background(background)
             .overlay(
                 Capsule().strokeBorder(style == .secondary ? JoleneColor.rose : Color.clear, lineWidth: 1.5)
@@ -46,6 +52,10 @@ struct JoleneButtonStyle: ButtonStyle {
     }
 
     @ViewBuilder private var background: some View {
-        if style == .primary { JoleneColor.heroGradient } else { JoleneColor.cloud }
+        switch style {
+        case .primary: JoleneColor.heroGradient
+        case .destructive: JoleneColor.destructiveGradient
+        case .secondary: JoleneColor.cloud
+        }
     }
 }
