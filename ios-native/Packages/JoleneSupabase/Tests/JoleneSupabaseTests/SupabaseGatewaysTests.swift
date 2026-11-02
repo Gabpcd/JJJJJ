@@ -43,6 +43,20 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.role is SupabaseRoleGateway)
         XCTAssertTrue(gateways.missions is SupabaseMissionsGateway)
         XCTAssertEqual(gateways.clock.now(), Date(timeIntervalSince1970: 1))
+        XCTAssertTrue(gateways.audit is SupabaseAuditGateway)
+        XCTAssertTrue(gateways.flags is SupabaseFlagsGateway)
+    }
+
+    /// Ports du lot 1 que leur tranche n'a pas encore câblés : liste identique à
+    /// `DemoWorldTests.portsEnAttenteLot1` (JoleneCore). Chaque PR qui câble un port le retire
+    /// des deux listes ; vides à la clôture du lot (T12).
+    static let portsEnAttenteLot1 = ["dashboard", "candidature", "presence", "favoris", "mesMissions",
+                                     "compte", "recovery", "justificatifs"]
+
+    func testAucunPortNonCable() {
+        let gateways = SupabaseGateways.make(client: TestClient.make())
+        XCTAssertEqual(gateways.unwiredPorts, Self.portsEnAttenteLot1,
+                       "tout port livré doit être câblé dans SupabaseGateways.make(client:) dans la même PR")
     }
 
     func testClientOptionsUsePkceInjectedStorageAndJoleneHeader() {
