@@ -25823,18 +25823,8 @@ BEGIN
         );
     END;
 
-    -- Notifier l'établissement
-    INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
-    VALUES (
-        v_paiement.etablissement_id,
-        'CONTESTATION_PAIEMENT',
-        'Paiement contesté ⚠️',
-        'Le soignant conteste un paiement. Motif : ' || v_motif,
-        '/etablissement/facturation',
-        'ETABLISSEMENT',
-        'litige',
-        v_litige_id
-    );
+    -- L'établissement est notifié par trg_notifier_creation_litige (LITIGE_OUVERT,
+    -- litige initié par le soignant) : aucune notification dédiée ici.
 
     -- Notifier l'admin
     INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
@@ -70865,7 +70855,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "email_envoye" boolean DEFAULT false,
     "email_envoye_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text", 'CONTESTATION_PRESENCE'::"text", 'PRESENCE_VALIDEE'::"text", 'CONTESTATION_PAIEMENT'::"text"]))),
+    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text", 'CONTESTATION_PRESENCE'::"text", 'PRESENCE_VALIDEE'::"text"]))),
     CONSTRAINT "notifications_type_destinataire_check" CHECK (("type_destinataire" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'ADMIN'::"text"])))
 );
 

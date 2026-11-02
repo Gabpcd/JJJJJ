@@ -1,6 +1,6 @@
 -- B9 — app iOS native, lot 3, tranche B3 : contestation d'un paiement déclaré
--- exécutable et idempotente. Paiements + DROP CONSTRAINT : jamais d'auto-merge,
--- go explicite de Gabrielle requis (CLAUDE.md, B9). Préalable à la tranche T13.
+-- exécutable et idempotente. Paiements : jamais d'auto-merge, go explicite de
+-- Gabrielle requis (CLAUDE.md, B9). Préalable à la tranche T13.
 --
 -- Départ : définitions LIVE de production relues le 02/11/2026 (garde-fou 9.0
 -- n°2), identiques à supabase/schema/public.sql et capturées dans
@@ -18,18 +18,30 @@
 --      AUTRE sans facture est déjà ouvert sur la mission, échoue en 23505 sur
 --      uq_litige_mission_type_ouvert_legacy.
 --
--- Correctif :
---   - CHECK des notifications = liste LIVE (57 types, ordre conservé) suivie de
---     CONTESTATION_PAIEMENT ;
+-- Correctif (option D19, LOT3_PLAN.md §7 décision 19 et §3 B3 corrigé v2) :
+--   - aucun DDL : le CHECK des notifications reste la définition LIVE (vérifiée
+--     par le postflight) ; l'INSERT CONTESTATION_PAIEMENT est retiré, car
+--     trg_notifier_creation_litige (dec_notifier_creation_litige) notifie déjà
+--     l'établissement en LITIGE_OUVERT pour tout litige initié par le soignant ;
+--     le motif reste lisible dans litiges.motif (« Paiement contesté — … ») ;
 --   - fonction redéfinie depuis le corps LIVE : compte authentifié actif
 --     (fn_compte_auth_actif), motif obligatoire de 1 à 500 caractères (bornes des
---     deux clients), ligne verrouillée FOR UPDATE, statut DECLARE ou EN_ATTENTE
+--     deux clients ; char_length après btrim, donc en points de code Unicode),
+--     ligne verrouillée FOR UPDATE, statut DECLARE ou EN_ATTENTE
 --     (comme fn_confirmer_paiement_soignant), second appel refusé sans second
 --     litige, collision de litige restituée en erreur structurée sans écriture ;
---     textes du litige, des notifications et des erreurs historiques inchangés ;
---     error_code ajouté à côté de chaque error (le web ne lit que error).
+--     textes du litige, de la notification admin et des erreurs historiques
+--     inchangés ; error_code ajouté à côté de chaque error (le web ne lit que
+--     error).
 --   - Propriétaire, ACL, search_path et catégorie d'inventaire inchangés
 --     (CREATE OR REPLACE) ; seule l'empreinte d'inventaire suit le nouveau corps.
+--
+-- Comportement historique conservé (hors périmètre B3) : le litige est créé
+-- avec facture_id NULL, même quand le paiement porte facture_honoraire_id ; il
+-- n'y a donc ni gel ni traçage de la facture, et l'index legacy s'applique. Un
+-- litige AUTRE sans facture déjà ouvert sur la mission (présence, par exemple)
+-- bloque la contestation : choix « erreur LITIGE_DEJA_OUVERT » plutôt que
+-- rattachement du paiement à ce litige.
 -- Aucun BEGIN/COMMIT : la CLI ou le banc appelant possède la transaction.
 SET LOCAL lock_timeout = '5s';
 
@@ -48,13 +60,6 @@ BEGIN
     OR NOT has_function_privilege('service_role', v_fn, 'EXECUTE') THEN
     RAISE EXCEPTION 'CONTESTATION_SOURCE_OU_ACL_MODIFIEE : repartir de la définition LIVE';
   END IF;
-  IF (SELECT md5(pg_get_constraintdef(c.oid)) FROM pg_constraint c
-      WHERE c.conrelid = 'public.notifications'::regclass
-        AND c.conname = 'notifications_type_check'
-        AND c.contype = 'c' AND c.convalidated)
-       IS DISTINCT FROM '9abaa9884a7cba5a880244fb4a877d8c' THEN
-    RAISE EXCEPTION 'CONTESTATION_CHECK_NOTIFICATIONS_MODIFIE : repartir de pg_get_constraintdef LIVE';
-  END IF;
   -- Si l'inventaire connaît cette fonction, il doit décrire le corps LIVE.
   IF EXISTS (SELECT 1 FROM private.security_definer_inventory
       WHERE signature IN ('fn_contester_paiement_soignant(uuid,text)',
@@ -66,28 +71,7 @@ BEGIN
 END;
 $contestation_preflight$;
 
--- ── 1. CHECK notifications : liste LIVE + CONTESTATION_PAIEMENT ─────────────
-ALTER TABLE public.notifications
-  DROP CONSTRAINT notifications_type_check,
-  ADD CONSTRAINT notifications_type_check CHECK (type = ANY (ARRAY[
-    'CANDIDATURE_ACCEPTEE', 'CANDIDATURE_REFUSEE', 'CANDIDATURE_PROPOSEE', 'CANDIDATURE_RECUE',
-    'MISSION_ACCEPTEE', 'MISSION_ANNULEE', 'MISSION_TERMINEE', 'MISSION_URGENTE',
-    'MISSION_NON_POURVUE', 'MISSION_ASSIGNEE', 'MISSION_A_POURVOIR', 'CONTRAT_A_SIGNER',
-    'CONTRAT_SIGNE', 'FACTURE_EMISE', 'FACTURE_PAYEE', 'DOCUMENT_EXPIRANT', 'RAPPEL_DOCUMENTS',
-    'DOCUMENT_VERIFIE', 'DOCUMENT_REJETE', 'MESSAGE_RECU', 'MESSAGE_ADMIN', 'POINTAGE_ARRIVEE',
-    'POINTAGE_DEPART', 'EVALUATION_RECUE', 'PARRAINAGE', 'CREDIT_PARRAINAGE',
-    'PARRAINAGE_PRIME_VERSEE', 'RAPPEL_MISSION', 'RAPPEL_CANDIDATURES', 'POOL_URGENCE',
-    'POOL_URGENCE_ACCEPTATION', 'SYSTEM', 'LITIGE_OUVERT', 'LITIGE_REPONSE', 'LITIGE_RESOLU',
-    'LITIGE_MEDIATION', 'LITIGE_RESOLU_AJUSTE', 'LITIGE_ESCALADE_ADMIN',
-    'LITIGE_MEDIATION_PRIORITAIRE', 'LITIGE_RAPPEL_J1', 'LITIGE_RAPPEL_J3', 'LITIGE_RAPPEL_J5',
-    'CHORUS_DEPOSEE', 'CHORUS_MISE_A_DISPOSITION', 'CHORUS_PAIEMENT_EN_COURS',
-    'CHORUS_PAIEMENT_COMPTABILISE', 'CHORUS_REJETEE', 'FAVORI_NOUVELLE_MISSION', 'AVOIR_EMIS',
-    'COMMISSION_AJUSTEE', 'REMBOURSEMENT_MANUEL_A_FAIRE', 'REMBOURSEMENT_CONFIRME',
-    'MATCHING_SUPER_LIKE', 'FAVORI_MISSION_EXPIRE', 'RAPPEL_VALIDATION_PRESENCE',
-    'CONTESTATION_PRESENCE', 'PRESENCE_VALIDEE', 'CONTESTATION_PAIEMENT'
-  ]));
-
--- ── 2. Fonction : gardes, verrou et idempotence depuis le corps LIVE ────────
+-- ── 1. Fonction : gardes, verrou et idempotence depuis le corps LIVE ────────
 CREATE OR REPLACE FUNCTION public.fn_contester_paiement_soignant(p_paiement_id uuid, p_motif text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -175,18 +159,8 @@ BEGIN
         );
     END;
 
-    -- Notifier l'établissement
-    INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
-    VALUES (
-        v_paiement.etablissement_id,
-        'CONTESTATION_PAIEMENT',
-        'Paiement contesté ⚠️',
-        'Le soignant conteste un paiement. Motif : ' || v_motif,
-        '/etablissement/facturation',
-        'ETABLISSEMENT',
-        'litige',
-        v_litige_id
-    );
+    -- L'établissement est notifié par trg_notifier_creation_litige (LITIGE_OUVERT,
+    -- litige initié par le soignant) : aucune notification dédiée ici.
 
     -- Notifier l'admin
     INSERT INTO public.notifications (destinataire_id, type, titre, corps, lien, type_destinataire, type_ressource, id_ressource)
@@ -200,11 +174,11 @@ BEGIN
 END;
 $fn_contester$;
 
--- ── 3. Inventaire SECURITY DEFINER : seule l'empreinte suit le corps ────────
+-- ── 2. Inventaire SECURITY DEFINER : seule l'empreinte suit le corps ────────
 UPDATE private.security_definer_inventory
 SET definition_md5 = (SELECT md5(p.prosrc) FROM pg_proc p
       WHERE p.oid = 'public.fn_contester_paiement_soignant(uuid,text)'::regprocedure),
-    justification = 'RPC mixte : branche tenant (auth.uid, compte actif, paiement verrouillé du soignant appelant, statut DECLARE ou EN_ATTENTE, motif 1 à 500, litige unique) et notification admin (admin_plateforme) conservée. Source : migration B3 contestation_paiement_soignant (lot 3 iOS)',
+    justification = 'RPC mixte : branche tenant (auth.uid, compte actif, paiement verrouillé du soignant appelant, statut DECLARE ou EN_ATTENTE, motif 1 à 500, litige unique, établissement notifié par trg_notifier_creation_litige) et notification admin (admin_plateforme) conservée. Source : migration B3 contestation_paiement_soignant (lot 3 iOS)',
     recense_le = now()
 WHERE signature IN ('fn_contester_paiement_soignant(uuid,text)',
                     'public.fn_contester_paiement_soignant(uuid,text)')
@@ -215,7 +189,7 @@ DECLARE
   v_fn constant regprocedure := 'public.fn_contester_paiement_soignant(uuid,text)'::regprocedure;
 BEGIN
   IF (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = v_fn)
-       IS DISTINCT FROM 'c992ac5cea41693151dd38df0daf580f'
+       IS DISTINCT FROM '368f41ca6e0157cd48ebbf6a638cecae'
     OR (SELECT p.proconfig FROM pg_proc p WHERE p.oid = v_fn)
        IS DISTINCT FROM ARRAY['search_path=public']::text[]
     OR (SELECT p.prosecdef FROM pg_proc p WHERE p.oid = v_fn) IS DISTINCT FROM true
@@ -225,17 +199,18 @@ BEGIN
     OR NOT has_function_privilege('service_role', v_fn, 'EXECUTE') THEN
     RAISE EXCEPTION 'CONTESTATION_CORPS_OU_ACL_INATTENDU';
   END IF;
+  -- Option D19 : le CHECK des notifications reste la définition LIVE relue.
   IF (SELECT md5(pg_get_constraintdef(c.oid)) FROM pg_constraint c
       WHERE c.conrelid = 'public.notifications'::regclass
         AND c.conname = 'notifications_type_check'
         AND c.contype = 'c' AND c.convalidated)
-       IS DISTINCT FROM '14541c0abd3dd26e884e66e9fda9c3fc' THEN
-    RAISE EXCEPTION 'CONTESTATION_CHECK_NOTIFICATIONS_INATTENDU';
+       IS DISTINCT FROM '9abaa9884a7cba5a880244fb4a877d8c' THEN
+    RAISE EXCEPTION 'CONTESTATION_CHECK_NOTIFICATIONS_MODIFIE : repartir de pg_get_constraintdef LIVE';
   END IF;
   IF EXISTS (SELECT 1 FROM private.security_definer_inventory
       WHERE signature IN ('fn_contester_paiement_soignant(uuid,text)',
                           'public.fn_contester_paiement_soignant(uuid,text)')
-        AND (definition_md5 IS DISTINCT FROM 'c992ac5cea41693151dd38df0daf580f'
+        AND (definition_md5 IS DISTINCT FROM '368f41ca6e0157cd48ebbf6a638cecae'
              OR categorie IS DISTINCT FROM 'MIXTE_TENANT_ADMIN')) THEN
     RAISE EXCEPTION 'CONTESTATION_INVENTAIRE_NON_ALIGNE';
   END IF;
