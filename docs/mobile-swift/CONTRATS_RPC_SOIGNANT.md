@@ -60,8 +60,8 @@ serveur n'a pas agi : relecture obligatoire, jamais de renvoi automatique.
 | `fn_annuler_candidature_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_annuler_mission_soignant` | à venir | 1 (T7) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_repondre_proposition` | à venir | 1 (T6a, refus seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_favori_etablissement` | à venir | 1 (T4b, retrait seulement) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_favoris_etablissements` | à venir | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_favori_etablissement` | consommée lot 1 (T4b, retrait seulement) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_favoris_etablissements` | consommée lot 1 (T4b) | 1 (T4b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_audit_connexion` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_maj_activite_soignant` | à venir | 1 (T1/T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_ecrire_audit_safe` | à venir | 1 (T1/T6a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
@@ -565,11 +565,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 
 ## fn_toggle_favori_etablissement
 
-- **Statut natif** : à venir (lot 1, T4b — **retrait uniquement**, `p_actif = false`).
-- **Usage prévu** : Retrait d'un établissement favori depuis `/soignant/mes-favoris`. L'ajout (`p_actif = true`)
-  n'est exposé nulle part sur le web (`BoutonFavoriEtab` non monté) et n'est pas porté (décision 8).
-  Relecture : `fn_mes_favoris_etablissements`. Les favoris **mission** passent par PostgREST direct sur
-  `missions_sauvegardees` (RLS `soignant_id = auth.uid()`), pas par une RPC.
+- **Statut natif** : consommée (lot 1, T4b — **retrait uniquement**, `p_actif = false`) par
+  `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift` (`FavorisPort.basculerEtablissement`), modèle
+  `JoleneCore/Favoris/FavorisModel.swift` borné à `resolutionTimeout` (15 s).
+- **Usage** : « Retirer » d'un établissement suivi dans « Mes favoris » (`/soignant/mes-favoris`, poussé dans
+  l'onglet Explorer), après une feuille de confirmation. L'ajout (`p_actif = true`) n'est exposé nulle part
+  sur le web (`BoutonFavoriEtab` non monté) et n'est pas porté (décision 8) : **verrou** dans les deux mondes,
+  `actif = true` refusé avant tout appel (`.contract`, `FavorisRegles.ajoutEtablissementNonPropose`, tests
+  `SupabaseFavorisGatewayTests.testAjoutRefuseAvantToutAppel`, `DemoFavorisGatewayTests`). Paramètres
+  envoyés : `{p_etablissement_id, p_actif: false}` ; relecture par `fn_mes_favoris_etablissements` (la
+  gateway rend la liste relue, le modèle n'annonce le retrait que si l'établissement en est absent). Les
+  favoris **mission** passent par PostgREST direct sur `missions_sauvegardees` (fiche suivante).
+- **Interprétation** (`RPCResponse`) : « Non authentifié » (avec `success:false`) → `.unauthorized` ; autre
+  refus `{success:false, error}` → `.unknown`, message verbatim, aucune relecture par la gateway (le modèle
+  relit) ; corps sans `success:true` → `.contract` ; erreur PostgREST (uuid invalide…) → message générique.
 - **Signature SQL** (`supabase/schema/public.sql` l.61480) :
 
 ```sql
@@ -587,10 +596,18 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_favori_etablissement"("p_etabliss
 
 ## fn_mes_favoris_etablissements
 
-- **Statut natif** : à venir (lot 1, T4b).
-- **Usage prévu** : Liste des établissements favoris (écran Favoris, onglet Établissements) ; lecture seule,
-  `STABLE`. Chaque élément porte `nb_missions_ouvertes` (valeur serveur, affichée telle quelle) et un bouton
-  « Voir missions ouvertes » → Explorer filtré `etablissementId`.
+- **Statut natif** : consommée (lot 1, T4b) par `JoleneSupabase/Favoris/SupabaseFavorisGateway.swift`
+  (`FavorisPort.etablissementsFavoris`), appel sans paramètre, JWT du soignant.
+- **Usage** : section « Établissements suivis » de « Mes favoris » ; lecture seule, `STABLE`. Chaque élément
+  porte `nb_missions_ouvertes` (valeur serveur, affichée telle quelle en badge « N mission(s) ») et, s'il est
+  positif, « Voir les missions ouvertes » → Explorer filtré `etablissementId` (filtres initiaux du profil,
+  comme `/soignant/recherche-missions?etablissement=`), avec un bandeau retirable.
+- **Interprétation** : tableau → éléments décodés un à un (élément sans `etablissement_id` écarté seul,
+  champ d'un autre type ignoré seul) ; `{error:'Non authentifié'}` → `.unauthorized` ; autre `{error}` →
+  `.unknown` verbatim ; tout autre corps (`{}`) → `.contract` ; `PGRST202` → `.contract` sans renvoi. Puis
+  **noms** par `fn_etablissements_safe(p_ids)` (règle ci-dessous) : en échec de transport, de serveur ou de
+  contrat, le nom de la RPC reste (lecture complémentaire) ; session expirée et annulation propagées.
+  Tests : `SupabaseFavorisGatewayTests`.
 - **Signature SQL** (`supabase/schema/public.sql` l.41835) :
 
 ```sql
@@ -610,6 +627,23 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
   un `nom` nul). Le nom affiché reste celui de `fn_etablissements_safe` quand la ligne existe (règle « nom
   d'établissement », `LOT1_PLAN.md` §2.6).
 - **Exemple de réponse STAGING** : à enregistrer en T11.
+
+### Favoris mission : PostgREST direct sur `missions_sauvegardees` (hors RPC)
+
+- **Statut natif** : consommé (lot 1, T4b) par `SupabaseFavorisGateway` (`missionsSauvegardees`,
+  `sauvegarder`, `retirer`), comme `BoutonSauvegarderMission.tsx` et `MesFavorisSoignant.tsx`.
+- **Lecture** : `GET /rest/v1/missions_sauvegardees?select=id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)&soignant_id=eq.<uid>&order=cree_le.desc`
+  (RLS `missions_sauvegardees_select`, l.78149 ; restrictive `pol_compte_auth_actif_restrictive`, l.78751).
+  Jointure `missions` nulle (RLS des missions) : la ligne garde l'étoile allumée, la mission n'est pas
+  listée. « Mes favoris » ne liste que les missions `OUVERTE` à début futur (filtre du web,
+  `FavorisRegles.missionsAffichees`) ; montants non lus (non affichés par le web).
+- **Sauvegarde** : `POST` `{mission_id, soignant_id: <uid>}` avec `Prefer: return=minimal`, puis relecture ;
+  conflit UNIQUE `23505` (`missions_sauvegardees_soignant_id_mission_id_key`, l.73127) = déjà sauvegardée,
+  la relecture fait foi, sans erreur ; `42501` (RLS / compte non actif) → `.unauthorized` ; clé étrangère
+  `23503` → message générique, aucun détail technique.
+- **Retrait** : `DELETE …?mission_id=eq.<id>&soignant_id=eq.<uid>` avec `Prefer: return=minimal`, puis relecture.
+- **Règles** : une seule requête par mutation, aucun renvoi ; le modèle n'annonce un succès que si la liste
+  relue le confirme, relit après un délai dépassé ou une coupure (`FavorisModelTests`).
 
 ## fn_audit_connexion
 

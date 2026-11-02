@@ -62,8 +62,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_annuler_candidature_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_annuler_mission_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_repondre_proposition', statut: 'a_venir', lot: 1 },
-  { name: 'fn_toggle_favori_etablissement', statut: 'a_venir', lot: 1 },
-  { name: 'fn_mes_favoris_etablissements', statut: 'a_venir', lot: 1 },
+  { name: 'fn_toggle_favori_etablissement', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway (retrait seulement)
+  { name: 'fn_mes_favoris_etablissements', statut: 'consommee', lot: 1 }, // T4b : SupabaseFavorisGateway
   { name: 'fn_audit_connexion', statut: 'a_venir', lot: 1 },
   { name: 'fn_maj_activite_soignant', statut: 'a_venir', lot: 1 },
   { name: 'fn_ecrire_audit_safe', statut: 'a_venir', lot: 1 },

@@ -27,7 +27,10 @@ const LOT0 = ['fn_get_my_role', 'fn_etablissements_safe'];
 // Ordre et contenu attendus pour le lot 1 (blueprint §3 T0 + décision 5 : audit via
 // fn_audit_connexion / fn_maj_activite_soignant, et fn_ecrire_audit_safe pour MISSION_ASSIGNATION).
 // Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute à LOT1_CONSOMMEES.
-const LOT1_CONSOMMEES = ['fn_dashboard_soignant_complet']; // T3
+const LOT1_CONSOMMEES = [
+  'fn_dashboard_soignant_complet', // T3
+  'fn_toggle_favori_etablissement', 'fn_mes_favoris_etablissements', // T4b
+];
 // `fn_suggestions_missions_pour_soignant` en est sortie (revue B8 de T3) : reclassée lot 4.
 const LOT1 = [
   'fn_dashboard_soignant_complet',

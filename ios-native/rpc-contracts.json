@@ -261,7 +261,7 @@
     },
     {
       "name": "fn_toggle_favori_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "{ p_actif: boolean; p_etablissement_id: string }",
@@ -290,7 +290,7 @@
     },
     {
       "name": "fn_mes_favoris_etablissements",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 1,
       "types": {
         "args": "never",
