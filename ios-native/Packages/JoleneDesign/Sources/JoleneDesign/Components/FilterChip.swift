@@ -1,24 +1,32 @@
 import SwiftUI
 
 /// Pastille de filtre à bascule, port des chips de `src/pages/RechercheMissions.tsx`
-/// (« Urgentes », « Week-end », « Nuit », « Jour ») : `aria-pressed` → trait « sélectionné »
-/// + valeur vocalisée, cible tactile 44 pt, dégradé hero quand le filtre est actif.
-/// Écart assumé : texte actif sombre `#2B183D` (celui de `BoutonY2K` sur dégradé) au lieu du blanc
-/// des chips web, qui n'atteint pas 4,5:1 sur le rose. Le filtrage reste serveur (PostgREST) ;
-/// la pastille ne porte que l'état.
+/// (« Urgentes », « Week-end », « Nuit », « Jour ») : `aria-pressed` → trait « sélectionné »,
+/// cible tactile 44 pt, jeton `.bg-gradient-hero` quand le filtre est actif — dégradé rose → mauve
+/// → cyan (`heroGradientFull`) et encre `#2B183D` du même jeton (`src/index.css`, déclaré hors
+/// couche après les utilitaires Tailwind : il l'emporte sur le `text-white` des chips, rendu sombre
+/// sur le web aussi). Le filtrage reste serveur (PostgREST) ; la pastille ne porte que l'état.
 public struct FilterChip: View {
     /// `min-h-[44px]` du web : cible tactile minimale.
     nonisolated public static let minimumHeight: CGFloat = 44
 
+    /// Arrêts du dégradé d'une pastille active : `.bg-gradient-hero` web, trois arrêts.
+    nonisolated public static let activeGradientStops = JoleneColor.heroGradientFullStops
+
     /// Apparence calculable d'une pastille selon son état.
     public struct Appearance: Equatable, Sendable {
         public var usesGradient: Bool
-        public var accessibilityValue: String
+        /// `aria-pressed` → trait `.isSelected` (VoiceOver : « Sélectionné »), seul mécanisme vocalisé
+        /// de l'état : pas de valeur « activé / désactivé » en plus (double annonce, et « désactivé »
+        /// se confond avec un contrôle indisponible).
+        public var announcesSelected: Bool
+        public var accessibilityHint: String
         /// Couleur fixe du libellé sur le dégradé ; `nil` = jeton dynamique `bubblegum` (pastille inactive).
         public var foregroundHex: String?
 
         public static func resolve(isSelected: Bool) -> Appearance {
-            Appearance(usesGradient: isSelected, accessibilityValue: isSelected ? "activé" : "désactivé",
+            Appearance(usesGradient: isSelected, announcesSelected: isSelected,
+                       accessibilityHint: isSelected ? "Retire ce filtre" : "Applique ce filtre",
                        foregroundHex: isSelected ? JoleneColor.onGradientHex : nil)
         }
     }
@@ -54,9 +62,8 @@ public struct FilterChip: View {
         }
         .buttonStyle(FilterChipStyle(appearance: appearance))
         .accessibilityLabel(Self.spokenLabel(title))
-        .accessibilityValue(appearance.accessibilityValue)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint(isSelected ? "Retire ce filtre" : "Applique ce filtre")
+        .accessibilityAddTraits(appearance.announcesSelected ? .isSelected : [])
+        .accessibilityHint(appearance.accessibilityHint)
         .accessibilityIdentifier(identifier ?? "")
     }
 }
@@ -75,7 +82,7 @@ struct FilterChipStyle: ButtonStyle {
     }
 
     @ViewBuilder private var background: some View {
-        if appearance.usesGradient { JoleneColor.heroGradient } else { JoleneColor.cloud }
+        if appearance.usesGradient { JoleneColor.heroGradientFull } else { JoleneColor.cloud }
     }
 }
 

@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Bloc de chargement, port de `src/components/ui/skeleton.tsx` (`role="status"`, `aria-busy`,
-/// tailles `h-3` / `h-4` / `h-6`). Pulsation d'opacité désactivée quand « Réduire les
-/// animations » est actif. Un squelette n'est jamais un contenu : il disparaît dès la réponse
-/// serveur (succès ou erreur), il ne remplace pas un message d'erreur.
+/// Bloc de chargement, port de `src/components/ui/skeleton.tsx` (`role="status"` → élément
+/// d'accessibilité explicite libellé « Chargement en cours », `aria-busy` → trait
+/// `.updatesFrequently` ; tailles `h-3` / `h-4` / `h-6`). Pulsation d'opacité coupée quand
+/// « Réduire les animations » est actif, y compris si le réglage change pendant l'affichage.
+/// Un squelette n'est jamais un contenu : il disparaît dès la réponse serveur (succès ou
+/// erreur), il ne remplace pas un message d'erreur.
 public struct SkeletonBlock: View {
     public enum Size: CaseIterable, Sendable {
         case sm, md, lg
@@ -39,12 +41,24 @@ public struct SkeletonBlock: View {
             .frame(width: width, height: size.height)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
             .opacity(dimmed ? 0.45 : 1)
-            .onAppear {
-                guard Self.animates(reduceMotion: reduceMotion) else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dimmed = true }
-            }
+            .onAppear { appliquerPulsation(reduceMotion: reduceMotion) }
+            .onChange(of: reduceMotion) { appliquerPulsation(reduceMotion: $0) }
+            .accessibilityElement()
             .accessibilityLabel(Self.accessibilityLabel)
+            .accessibilityAddTraits(.updatesFrequently)
             .accessibilityIdentifier(identifier ?? "")
+    }
+
+    /// Démarre la pulsation, ou l'arrête net (opacité pleine, sans animation : interrompt la
+    /// répétition en cours) quand « Réduire les animations » est actif.
+    private func appliquerPulsation(reduceMotion: Bool) {
+        if Self.animates(reduceMotion: reduceMotion) {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dimmed = true }
+        } else {
+            var arret = Transaction(animation: nil)
+            arret.disablesAnimations = true
+            withTransaction(arret) { dimmed = false }
+        }
     }
 }
 
@@ -66,6 +80,7 @@ public struct SkeletonCard: View {
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(SkeletonBlock.accessibilityLabel)
+        .accessibilityAddTraits(.updatesFrequently)
         .accessibilityIdentifier(identifier ?? "")
     }
 }

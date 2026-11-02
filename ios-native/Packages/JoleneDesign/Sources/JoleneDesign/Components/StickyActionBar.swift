@@ -6,8 +6,14 @@ import SwiftUI
 /// figée à l'acceptation »), CTA à droite, toujours visibles. Les chaînes arrivent déjà
 /// formatées par le cœur (`MissionPresentation`) : valeurs serveur, jamais recalculées ici.
 /// À monter avec `.stickyActionBar(…)` (`safeAreaInset`) pour ne pas masquer le bas de page,
-/// équivalent de l'espaceur `h-16` du web.
+/// équivalent de l'espaceur `h-16` du web. Le montant n'est jamais tronqué : en ligne quand tout
+/// tient, sinon (et toujours aux tailles Dynamic Type d'accessibilité) montant au-dessus et CTA
+/// pleine largeur.
 public struct StickyActionBar: View {
+    /// Disposition imposée par la taille de texte ; `.horizontal` reste soumis à `ViewThatFits`
+    /// (repli en colonne si le montant et le CTA ne tiennent pas sur une ligne).
+    public enum Layout: Equatable, Sendable { case horizontal, vertical }
+
     public struct Content: Equatable, Sendable {
         public var montant: String
         public var precision: String?
@@ -34,6 +40,14 @@ public struct StickyActionBar: View {
     /// Web : `loading={…}` et `disabled={!conformiteOk || !planningCandidat.exact}` bloquent le CTA.
     nonisolated public static func isActionEnabled(isLoading: Bool, isDisabled: Bool) -> Bool { !isLoading && !isDisabled }
 
+    /// Tailles d'accessibilité (`accessibility1` à `accessibility5`) : toujours en colonne.
+    nonisolated public static func layout(for size: DynamicTypeSize) -> Layout {
+        size.isAccessibilitySize ? .vertical : .horizontal
+    }
+
+    /// Aucune limite de lignes sur le montant serveur (il passe à la ligne, jamais « … »).
+    nonisolated public static let montantLineLimit: Int? = nil
+
     private let content: Content
     private let isLoading: Bool
     private let isDisabled: Bool
@@ -43,28 +57,19 @@ public struct StickyActionBar: View {
         self.content = content; self.isLoading = isLoading; self.isDisabled = isDisabled; self.action = action
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     public var body: some View {
-        HStack(alignment: .center, spacing: JoleneSpacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(content.montant)
-                    .font(JoleneFont.headline)
-                    .foregroundStyle(JoleneColor.midnight)
-                    .lineLimit(2)
-                if let precision = content.precision {
-                    Text(precision)
-                        .font(JoleneFont.caption)
-                        .foregroundStyle(JoleneColor.bubblegum)
-                        .lineLimit(2)
+        Group {
+            switch Self.layout(for: dynamicTypeSize) {
+            case .vertical:
+                vertical
+            case .horizontal:
+                ViewThatFits(in: .horizontal) {
+                    horizontal
+                    vertical
                 }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(content.accessibilitySummary)
-            .accessibilityIdentifier(content.montantIdentifier)
-            Spacer(minLength: JoleneSpacing.sm)
-            JoleneButton(content.actionTitle, style: .primary, isLoading: isLoading, action: action)
-                .disabled(!Self.isActionEnabled(isLoading: isLoading, isDisabled: isDisabled))
-                .frame(maxWidth: 200)
-                .accessibilityIdentifier(content.actionIdentifier)
         }
         .frame(maxWidth: Self.maximumContentWidth)
         .padding(.horizontal, JoleneSpacing.lg)
@@ -75,6 +80,48 @@ public struct StickyActionBar: View {
         .shadow(color: JoleneColor.midnight.opacity(0.12), radius: 12, x: 0, y: -4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(content.identifier)
+    }
+
+    private var horizontal: some View {
+        HStack(alignment: .center, spacing: JoleneSpacing.md) {
+            // Priorité au montant : `ViewThatFits` a vérifié que le CTA tient dans le reste.
+            summary.layoutPriority(1)
+            Spacer(minLength: JoleneSpacing.sm)
+            actionButton.frame(maxWidth: 200)
+        }
+    }
+
+    private var vertical: some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+            summary.frame(maxWidth: .infinity, alignment: .leading)
+            actionButton
+        }
+    }
+
+    /// Montant + précision : un seul élément vocalisé, jamais tronqué.
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(content.montant)
+                .font(JoleneFont.headline)
+                .foregroundStyle(JoleneColor.midnight)
+                .lineLimit(Self.montantLineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+            if let precision = content.precision {
+                Text(precision)
+                    .font(JoleneFont.caption)
+                    .foregroundStyle(JoleneColor.bubblegum)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(content.accessibilitySummary)
+        .accessibilityIdentifier(content.montantIdentifier)
+    }
+
+    private var actionButton: some View {
+        JoleneButton(content.actionTitle, style: .primary, isLoading: isLoading, action: action)
+            .disabled(!Self.isActionEnabled(isLoading: isLoading, isDisabled: isDisabled))
+            .accessibilityIdentifier(content.actionIdentifier)
     }
 }
 

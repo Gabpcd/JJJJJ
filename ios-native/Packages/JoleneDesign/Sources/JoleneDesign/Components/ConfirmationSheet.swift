@@ -56,6 +56,13 @@ public struct ConfirmationSheet: View {
         public static func canDismiss(isLoading: Bool) -> Bool { !isLoading }
     }
 
+    /// Fermeture demandée (« Annuler ») : appliquée seulement hors chargement. Garde unique des deux
+    /// variantes du modificateur `.confirmationSheet`.
+    nonisolated static func requestDismiss(isLoading: Bool, close: () -> Void) {
+        guard Configuration.canDismiss(isLoading: isLoading) else { return }
+        close()
+    }
+
     private let configuration: Configuration
     private let isLoading: Bool
     private let isConfirmEnabled: Bool
@@ -156,13 +163,27 @@ public struct ConfirmationSheet: View {
 public extension View {
     /// Présente une `ConfirmationSheet` en feuille modale. `onConfirm` ne ferme pas la feuille :
     /// l'appelant la referme (`isPresented = false`) après la réponse serveur, ou affiche l'erreur.
+    /// Fermeture (« Annuler », geste) interdite pendant le chargement.
     func confirmationSheet(isPresented: Binding<Bool>, _ configuration: ConfirmationSheet.Configuration,
                            isLoading: Bool = false, isConfirmEnabled: Bool = true,
                            onConfirm: @escaping () -> Void) -> some View {
         sheet(isPresented: isPresented) {
             ConfirmationSheet(configuration, isLoading: isLoading, isConfirmEnabled: isConfirmEnabled,
-                              onCancel: { if ConfirmationSheet.Configuration.canDismiss(isLoading: isLoading) { isPresented.wrappedValue = false } },
+                              onCancel: { ConfirmationSheet.requestDismiss(isLoading: isLoading) { isPresented.wrappedValue = false } },
                               onConfirm: onConfirm)
+        }
+    }
+
+    /// Variante avec contenu libre entre le message et les boutons (ex. `SlotList` du récapitulatif
+    /// de candidature), même garde de fermeture pendant le chargement.
+    func confirmationSheet<Extra: View>(isPresented: Binding<Bool>, _ configuration: ConfirmationSheet.Configuration,
+                                        isLoading: Bool = false, isConfirmEnabled: Bool = true,
+                                        onConfirm: @escaping () -> Void,
+                                        @ViewBuilder extra: @escaping () -> Extra) -> some View {
+        sheet(isPresented: isPresented) {
+            ConfirmationSheet(configuration, isLoading: isLoading, isConfirmEnabled: isConfirmEnabled,
+                              onCancel: { ConfirmationSheet.requestDismiss(isLoading: isLoading) { isPresented.wrappedValue = false } },
+                              onConfirm: onConfirm, extra: extra)
         }
     }
 }

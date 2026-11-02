@@ -44,12 +44,41 @@ final class JoleneDesignLot1Tests: XCTestCase {
                           "Le texte blanc du primaire ne convient pas au dégradé destructif")
         XCTAssertTrue(JoleneButton.Style.destructive.isFilled)
         XCTAssertTrue(JoleneButton.Style.destructive.usesDarkTextOnFill)
-        // Le primaire du lot 0 garde son texte blanc (inchangé au lot 1) ; le secondaire reste en bordure rose.
+        // Revue B8 : le primaire passe lui aussi au texte sombre (BoutonY2K primary `text-[#2b183d]`,
+        // `.bg-gradient-hero { color: #2b183d }`) ; le secondaire reste en bordure rose.
         XCTAssertTrue(JoleneButton.Style.primary.isFilled)
-        XCTAssertFalse(JoleneButton.Style.primary.usesDarkTextOnFill)
+        XCTAssertTrue(JoleneButton.Style.primary.usesDarkTextOnFill)
         XCTAssertFalse(JoleneButton.Style.secondary.isFilled)
         XCTAssertFalse(JoleneButton.Style.secondary.usesDarkTextOnFill)
         XCTAssertEqual(JoleneButton.Style.allCases.count, 3)
+    }
+
+    func testToutBoutonPleinPorteLeTexteSombreAASurChaqueArretDeSonDegrade() {
+        // Revue B8 (majeur) : le texte blanc du primaire plafonnait à 2,59:1 sur le rose et 2,78:1 sur
+        // le mauve (#B57EFF : 2,84:1), sous le seuil AA (4,5:1) et même sous 3:1. Règle unique : tout
+        // style plein utilise `JoleneColor.onGradient`, vérifié sur chaque arrêt, en clair ET en sombre.
+        XCTAssertEqual(JoleneColor.roseHSL, JoleneDynamicHSL(light: JoleneHSL(326, 100, 71), dark: JoleneHSL(326, 90, 65)))
+        XCTAssertEqual(JoleneColor.mauveHSL, JoleneDynamicHSL(light: JoleneHSL(267, 100, 75), dark: JoleneHSL(267, 85, 70)))
+        XCTAssertEqual(JoleneColor.heroGradientStops, [JoleneColor.roseHSL, JoleneColor.mauveHSL])
+        let texte = JoleneHex.parse(JoleneColor.onGradientHex)!
+        for style in JoleneButton.Style.allCases {
+            XCTAssertEqual(style.usesDarkTextOnFill, style.isFilled, "\(style) : texte sombre si et seulement si plein")
+            for arret in style.fillStops {
+                XCTAssertGreaterThanOrEqual(texte.contrastRatio(with: arret), 4.5, "\(style) sur \(arret)")
+            }
+        }
+        XCTAssertEqual(JoleneButton.Style.primary.fillStops,
+                       [JoleneColor.roseHSL.light.rgb, JoleneColor.roseHSL.dark.rgb,
+                        JoleneColor.mauveHSL.light.rgb, JoleneColor.mauveHSL.dark.rgb],
+                       "Primaire : rose et mauve du dégradé hero, clair et sombre")
+        XCTAssertEqual(JoleneButton.Style.destructive.fillStops,
+                       JoleneColor.destructiveGradientHex.compactMap(JoleneHex.parse))
+        XCTAssertTrue(JoleneButton.Style.secondary.fillStops.isEmpty, "Secondaire : surface claire, pas de dégradé")
+        // Valeurs relevées avant correction (texte blanc du lot 0).
+        let blanc = JoleneHex(red: 1, green: 1, blue: 1)
+        XCTAssertEqual(blanc.contrastRatio(with: JoleneColor.roseHSL.light.rgb), 2.59, accuracy: 0.01)
+        XCTAssertEqual(blanc.contrastRatio(with: JoleneColor.mauveHSL.light.rgb), 2.78, accuracy: 0.01)
+        XCTAssertEqual(blanc.contrastRatio(with: JoleneHex.parse("#B57EFF")!), 2.84, accuracy: 0.01)
     }
 
     // MARK: - ConfirmationSheet
@@ -107,26 +136,44 @@ final class JoleneDesignLot1Tests: XCTestCase {
         XCTAssertEqual(libelle.resolvedPhrasePrompt, "Tapez SUPPRIMER", "Libellé fourni par l'écran, repris tel quel")
     }
 
+    func testConfirmationSheetFermetureDemandeeIgnoreePendantLeChargement() {
+        // Garde unique, partagée par les deux variantes du modificateur (avec ou sans contenu `extra`).
+        var fermee = false
+        ConfirmationSheet.requestDismiss(isLoading: true) { fermee = true }
+        XCTAssertFalse(fermee, "Pas de fermeture pendant l'appel serveur")
+        ConfirmationSheet.requestDismiss(isLoading: false) { fermee = true }
+        XCTAssertTrue(fermee)
+    }
+
     // MARK: - FilterChip
 
-    func testFilterChipExposeSonEtatCommeAriaPressedEtResteLisibleActif() {
-        // RechercheMissions.tsx : `aria-pressed={chip.actif}`, actif = dégradé hero.
+    func testFilterChipExposeSonEtatParLeSeulTraitSelectionneEtResteLisibleActif() {
+        // RechercheMissions.tsx : `aria-pressed={chip.actif}`, actif = `bg-gradient-hero`.
+        // Revue B8 : un seul mécanisme vocalisé (trait `.isSelected`, « Sélectionné ») ; plus de valeur
+        // « activé / désactivé » (double annonce, « désactivé » confondu avec un contrôle indisponible).
         let actif = FilterChip.Appearance.resolve(isSelected: true)
         XCTAssertTrue(actif.usesGradient)
-        XCTAssertEqual(actif.accessibilityValue, "activé")
+        XCTAssertTrue(actif.announcesSelected)
+        XCTAssertEqual(actif.accessibilityHint, "Retire ce filtre")
         XCTAssertEqual(actif.foregroundHex, JoleneColor.onGradientHex)
         let inactif = FilterChip.Appearance.resolve(isSelected: false)
         XCTAssertFalse(inactif.usesGradient)
-        XCTAssertEqual(inactif.accessibilityValue, "désactivé")
+        XCTAssertFalse(inactif.announcesSelected)
+        XCTAssertEqual(inactif.accessibilityHint, "Applique ce filtre")
         XCTAssertNil(inactif.foregroundHex, "Inactif : jeton dynamique bubblegum")
         XCTAssertEqual(FilterChip.minimumHeight, 44, "Cible tactile 44 pt (min-h-[44px] du web)")
-        // Texte d'une pastille active ≥ 4,5:1 sur les deux extrémités du dégradé hero, en clair et en sombre
-        // (JoleneColor.rose / .mauve) ; le blanc du web n'atteint pas le seuil AA sur le rose.
+        // `.bg-gradient-hero` web : trois arrêts rose → mauve → cyan (jeton `heroGradientFull`), encre
+        // `#2b183d` du même jeton (src/index.css), qui l'emporte sur le `text-white` des chips.
+        XCTAssertEqual(JoleneColor.cyanHSL, JoleneDynamicHSL(light: JoleneHSL(192, 100, 72), dark: JoleneHSL(192, 90, 68)))
+        XCTAssertEqual(JoleneColor.heroGradientFullStops, [JoleneColor.roseHSL, JoleneColor.mauveHSL, JoleneColor.cyanHSL])
+        XCTAssertEqual(FilterChip.activeGradientStops, JoleneColor.heroGradientFullStops)
+        // Texte d'une pastille active ≥ 4,5:1 sur chaque arrêt, en clair et en sombre.
         let texte = JoleneHex.parse(JoleneColor.onGradientHex)!
-        for teinte in [JoleneHSL(326, 100, 71), JoleneHSL(326, 90, 65), JoleneHSL(267, 100, 75), JoleneHSL(267, 85, 70)] {
-            XCTAssertGreaterThanOrEqual(texte.contrastRatio(with: teinte.rgb), 4.5, "\(teinte)")
+        for arret in FilterChip.activeGradientStops {
+            XCTAssertGreaterThanOrEqual(texte.contrastRatio(with: arret.light.rgb), 4.5, "\(arret.light)")
+            XCTAssertGreaterThanOrEqual(texte.contrastRatio(with: arret.dark.rgb), 4.5, "\(arret.dark)")
         }
-        XCTAssertLessThan(JoleneHex(red: 1, green: 1, blue: 1).contrastRatio(with: JoleneHSL(326, 100, 71).rgb), 4.5)
+        XCTAssertLessThan(JoleneHex(red: 1, green: 1, blue: 1).contrastRatio(with: JoleneColor.roseHSL.light.rgb), 4.5)
     }
 
     func testFilterChipNeVocalisePasLEmojiDecoratif() {
@@ -207,7 +254,7 @@ final class JoleneDesignLot1Tests: XCTestCase {
         // Planning non exact : encart « Planning exact à confirmer » + message de blocage du cœur, aucune ligne.
         let bloque = PlanningCandidat(creneaux: [], exact: false, totalHeures: 0, periodeEtendue: false,
                                       messageBlocage: PlanningCandidatRules.messagePlanningIncomplet)
-        let presentationBloquee = SlotList.Presentation.planning(bloque)
+        let presentationBloquee = SlotList.Presentation.planning(bloque, libelle: MissionPresentation.creneau)
         XCTAssertEqual(presentationBloquee.blocked,
                        SlotList.Presentation.Blocked(title: "Planning exact à confirmer",
                                                      message: PlanningCandidatRules.messagePlanningIncomplet))
@@ -217,19 +264,46 @@ final class JoleneDesignLot1Tests: XCTestCase {
         let lundi = MissionSlot(id: "c1", debut: "2026-11-02T07:00:00Z", fin: "2026-11-02T15:00:00Z", estPause: false, typeCreneau: "PREVISIONNEL")
         let mardi = MissionSlot(id: "c2", debut: "2026-11-03T07:00:00Z", fin: "2026-11-03T16:30:00Z", estPause: false, typeCreneau: "PREVISIONNEL")
         let exact = PlanningCandidat(creneaux: [lundi, mardi], exact: true, totalHeures: 17.5, periodeEtendue: true, messageBlocage: nil)
-        let presentation = SlotList.Presentation.planning(exact, limit: 1)
+        let presentation = SlotList.Presentation.planning(exact, libelle: MissionPresentation.creneau, limit: 1)
         XCTAssertNil(presentation.blocked)
         XCTAssertEqual(presentation.resume, "2 créneaux · 17,5 h au total")
         XCTAssertEqual(presentation.visibleItems.map(\.label), [MissionPresentation.creneau(lundi)])
         XCTAssertEqual(presentation.remainingText, "+ 1 autre créneau dans le récapitulatif complet")
         XCTAssertEqual(presentation.footnote,
                        "Seuls les créneaux listés sont travaillés. Les autres jours de la période ne sont pas travaillés.")
-        XCTAssertNil(SlotList.Presentation.planning(exact, mentionJoursNonTravailles: false).footnote)
+        XCTAssertNil(SlotList.Presentation.planning(exact, libelle: MissionPresentation.creneau,
+                                                    mentionJoursNonTravailles: false).footnote)
         let ponctuel = PlanningCandidat(creneaux: [lundi], exact: true, totalHeures: 8, periodeEtendue: false, messageBlocage: nil)
-        XCTAssertNil(SlotList.Presentation.planning(ponctuel).footnote, "Mention réservée à une période étendue")
+        XCTAssertNil(SlotList.Presentation.planning(ponctuel, libelle: MissionPresentation.creneau).footnote,
+                     "Mention réservée à une période étendue")
         // Planning non exact sans message (cas défensif) : message d'incomplétude du cœur, jamais un encart vide.
         let sansMessage = PlanningCandidat(creneaux: [], exact: false, totalHeures: 0, periodeEtendue: false, messageBlocage: nil)
-        XCTAssertEqual(SlotList.Presentation.planning(sansMessage).blocked?.message, PlanningCandidatRules.messagePlanningIncomplet)
+        XCTAssertEqual(SlotList.Presentation.planning(sansMessage, libelle: MissionPresentation.creneau).blocked?.message,
+                       PlanningCandidatRules.messagePlanningIncomplet)
+    }
+
+    func testSlotListPlanningUtiliseLeFormateurDeLigneFourniParLAppelant() {
+        // Revue B8 : le format des lignes du web (année, « → », date de fin + « (lendemain) », durée
+        // « · X h ») n'est PAS celui du détail lot 0 (`MissionPresentation.creneau`). La variante planning
+        // exige donc le formateur de ligne (aucun défaut) : le récapitulatif T6b branche celui du cœur.
+        let nuit = MissionSlot(id: "n1", debut: "2026-11-02T07:00:00Z", fin: "2026-11-03T07:00:00Z", estPause: false, typeCreneau: "PREVISIONNEL")
+        let planning = PlanningCandidat(creneaux: [nuit], exact: true, totalHeures: 24, periodeEtendue: false, messageBlocage: nil)
+        let presentation = SlotList.Presentation.planning(planning, libelle: { "ligne \($0.id ?? "?") du cœur" })
+        XCTAssertEqual(presentation.visibleItems.map(\.label), ["ligne n1 du cœur"])
+        XCTAssertEqual(presentation.visibleItems.map(\.id), ["creneau-1"], "Identifiant positionnel inchangé")
+        XCTAssertEqual(SlotList.items([nuit], libelle: { _ in "L" }).map(\.label), ["L"])
+        // Variante créneaux : format du détail lot 0 par défaut (écart documenté : un créneau
+        // 08:00 → 08:00 le lendemain n'y montre pas la date de fin).
+        XCTAssertEqual(SlotList.items([nuit]).map(\.label), [MissionPresentation.creneau(nuit)])
+    }
+
+    func testSlotListVideNAffichePasDeResumeRedondant() {
+        // Revue B8 : « Aucun créneau » puis « Aucun créneau communiqué. » — le résumé est masqué sur une liste vide.
+        let vide = SlotList.Presentation(items: [], resume: SlotList.resume(count: 0))
+        XCTAssertNil(vide.displayedResume)
+        let slot = MissionSlot(debut: "2026-11-02T07:00:00Z", fin: "2026-11-02T15:00:00Z", estPause: false, typeCreneau: "PREVISIONNEL")
+        let pleine = SlotList.Presentation(items: SlotList.items([slot]), resume: SlotList.resume(count: 1))
+        XCTAssertEqual(pleine.displayedResume, "1 créneau")
     }
 
     // MARK: - StickyActionBar
@@ -261,6 +335,16 @@ final class JoleneDesignLot1Tests: XCTestCase {
         XCTAssertEqual(StickyActionBar.maximumContentWidth, 640, "Même largeur utile que le détail mission sur iPad")
     }
 
+    func testStickyActionBarPasseEnColonneAuxTaillesDAccessibilite() {
+        // Revue B8 : aux tailles Dynamic Type d'accessibilité, montant au-dessus et CTA pleine largeur ;
+        // le montant serveur n'est jamais tronqué (aucune limite de lignes).
+        XCTAssertEqual(StickyActionBar.layout(for: .large), .horizontal)
+        XCTAssertEqual(StickyActionBar.layout(for: .xxxLarge), .horizontal)
+        XCTAssertEqual(StickyActionBar.layout(for: .accessibility1), .vertical)
+        XCTAssertEqual(StickyActionBar.layout(for: .accessibility5), .vertical)
+        XCTAssertNil(StickyActionBar.montantLineLimit, "Montant serveur jamais tronqué")
+    }
+
     // MARK: - InlineNotice
 
     func testInlineNoticeAnnonceSonTonAvantLeMessage() {
@@ -278,6 +362,43 @@ final class JoleneDesignLot1Tests: XCTestCase {
         XCTAssertEqual(InlineNotice.accessibilityLabel(tone: .warning, title: "Documents", message: "RCP expirée."),
                        "Attention : Documents. RCP expirée.")
         XCTAssertEqual(InlineNotice.Tone.allCases.count, 4)
+    }
+
+    func testInlineNoticeIconeEtTexteContrastentSurChaqueTonEnClairEtEnSombre() {
+        // Revue B8 : le ton n'est visible que par l'icône → ≥ 3:1 (WCAG 1.4.11) ; texte ≥ 4,5:1.
+        // butter-700 sur butter-100 ne faisait que ≈ 2,4:1 ; encres de BadgeY2K (text-jolene-*-800/900).
+        XCTAssertLessThan(JoleneColor.butter700HSL.light.rgb.contrastRatio(with: JoleneColor.butter100HSL.light.rgb), 3)
+        for tone in InlineNotice.Tone.allCases {
+            for (encre, fond) in [(tone.inkHSL.light, tone.backgroundHSL.light), (tone.inkHSL.dark, tone.backgroundHSL.dark)] {
+                XCTAssertGreaterThanOrEqual(encre.rgb.contrastRatio(with: fond.rgb), 3, "\(tone) : icône \(encre) sur \(fond)")
+            }
+            XCTAssertGreaterThanOrEqual(JoleneColor.midnightHSL.light.rgb.contrastRatio(with: tone.backgroundHSL.light.rgb), 4.5, "\(tone) clair")
+            XCTAssertGreaterThanOrEqual(JoleneColor.midnightHSL.dark.rgb.contrastRatio(with: tone.backgroundHSL.dark.rgb), 4.5, "\(tone) sombre")
+        }
+        // BadgeY2K : warning butter-800 / butter-100, success cyan-900 / cyan-100, info mauve-800 / mauve-100.
+        XCTAssertEqual(InlineNotice.Tone.warning.inkHSL, JoleneColor.butter800HSL)
+        XCTAssertEqual(InlineNotice.Tone.warning.backgroundHSL, JoleneColor.butter100HSL)
+        XCTAssertEqual(InlineNotice.Tone.success.inkHSL, JoleneColor.cyan900HSL)
+        XCTAssertEqual(InlineNotice.Tone.success.backgroundHSL, JoleneColor.cyan100HSL)
+        XCTAssertEqual(InlineNotice.Tone.info.inkHSL, JoleneColor.mauve800HSL)
+        XCTAssertEqual(InlineNotice.Tone.info.backgroundHSL, JoleneColor.mauve100HSL)
+        XCTAssertEqual(InlineNotice.Tone.error.inkHSL, JoleneColor.rose700HSL)
+        XCTAssertEqual(InlineNotice.Tone.error.backgroundHSL, JoleneColor.rose100HSL)
+        // Valeurs sources (src/index.css, `:root` puis `.dark`).
+        XCTAssertEqual(JoleneColor.butter800HSL, JoleneDynamicHSL(light: JoleneHSL(50, 70, 32), dark: JoleneHSL(50, 100, 89)))
+        XCTAssertEqual(JoleneColor.cyan900HSL, JoleneDynamicHSL(light: JoleneHSL(192, 65, 25), dark: JoleneHSL(192, 100, 95)))
+        XCTAssertEqual(JoleneColor.mauve800HSL, JoleneDynamicHSL(light: JoleneHSL(267, 65, 42), dark: JoleneHSL(267, 100, 91)))
+        XCTAssertEqual(JoleneColor.cyan100HSL, JoleneDynamicHSL(light: JoleneHSL(192, 100, 91), dark: JoleneHSL(192, 55, 18)))
+    }
+
+    func testInlineNoticeAnnonceLAlerteSeulementSurDemande() {
+        // `role="alert"` web : annoncé à l'apparition. VoiceOver ne le fait pas seul → option explicite,
+        // réservée aux encarts qui apparaissent après une action (erreur serveur, refus).
+        XCTAssertNil(InlineNotice.announcement(tone: .error, title: nil, message: "Session expirée.", announcesOnAppear: false))
+        XCTAssertEqual(InlineNotice.announcement(tone: .error, title: nil, message: "Session expirée.", announcesOnAppear: true),
+                       "Erreur : Session expirée.")
+        XCTAssertEqual(InlineNotice.announcement(tone: .warning, title: "Planning", message: "À confirmer.", announcesOnAppear: true),
+                       "Attention : Planning. À confirmer.")
     }
 
     // MARK: - SkeletonBlock
@@ -313,6 +434,9 @@ final class JoleneDesignLot1Tests: XCTestCase {
                                                           identifier: "compte-supprimer", requiredPhrase: "SUPPRIMER")
         let sticky = StickyActionBar.Content(montant: "70,00 €/h", precision: "estimation figée à l'acceptation",
                                              actionTitle: "Postuler", identifier: "sticky", actionIdentifier: "candidature-submit")
+        let longue = StickyActionBar.Content(montant: "~12 345,67 € net estimé sur la période complète",
+                                             precision: "estimation figée à l'acceptation", actionTitle: "Accepter la mission",
+                                             identifier: "sticky-a11y")
         let vues: [(String, AnyView)] = [
             ("destructif", AnyView(JoleneButton("Supprimer mon compte", style: .destructive) {})),
             ("destructif en chargement", AnyView(JoleneButton("Supprimer", style: .destructive, isLoading: true) {})),
@@ -320,7 +444,7 @@ final class JoleneDesignLot1Tests: XCTestCase {
             ("confirmation phrase", AnyView(ConfirmationSheet(suppression, isLoading: false, onCancel: {}, onConfirm: {}))),
             ("confirmation contenu", AnyView(ConfirmationSheet(.init(title: "T", message: "M", identifier: "recap"), isLoading: true,
                                                                 isConfirmEnabled: false, onCancel: {}, onConfirm: {}) {
-                SlotList(planning: planning, identifier: "recap-creneaux")
+                SlotList(planning: planning, identifier: "recap-creneaux", libelle: MissionPresentation.creneau)
             })),
             ("pastilles", AnyView(FilterChipRow(identifier: "explorer-chips") {
                 FilterChip("🔥 Urgentes", isSelected: true, identifier: "chip-urgentes") {}
@@ -328,9 +452,19 @@ final class JoleneDesignLot1Tests: XCTestCase {
             })),
             ("créneaux vides", AnyView(SlotList(items: [], identifier: "mission-detail-creneaux"))),
             ("créneaux", AnyView(SlotList(slots: [lundi], identifier: "mission-detail-creneaux", showsResume: true))),
-            ("planning exact", AnyView(SlotList(planning: planning, identifier: "recap-creneaux", limit: 1))),
-            ("planning bloqué", AnyView(SlotList(planning: bloque, identifier: "recap-creneaux"))),
+            ("planning exact", AnyView(SlotList(planning: planning, identifier: "recap-creneaux",
+                                                libelle: MissionPresentation.creneau, limit: 1))),
+            ("planning bloqué", AnyView(SlotList(planning: bloque, identifier: "recap-creneaux", libelle: MissionPresentation.creneau))),
             ("barre collante", AnyView(StickyActionBar(sticky, isLoading: true) {})),
+            ("barre collante accessibilité", AnyView(StickyActionBar(longue) {}.environment(\.dynamicTypeSize, .accessibility5))),
+            ("modificateur confirmation", AnyView(Color.clear.confirmationSheet(isPresented: .constant(true), suppression, onConfirm: {}))),
+            ("modificateur confirmation contenu", AnyView(Color.clear.confirmationSheet(
+                isPresented: .constant(true), .init(title: "T", message: "M", identifier: "recap"), isLoading: true, onConfirm: {}
+            ) { SlotList(planning: planning, identifier: "recap-creneaux", libelle: MissionPresentation.creneau) })),
+            ("créneaux identifiants doublons", AnyView(SlotList(items: [.init(id: "x", label: "A", isPause: false),
+                                                                       .init(id: "x", label: "B", isPause: true)],
+                                                               identifier: "doublons", showsResume: true))),
+            ("encart annoncé", AnyView(InlineNotice("Erreur serveur", tone: .error, identifier: "notice-annonce", announcesOnAppear: true))),
             ("barre montée", AnyView(Color.clear.stickyActionBar(isPresented: true, sticky) {})),
             ("encart", AnyView(InlineNotice("Message", title: "Titre", tone: .warning, identifier: "notice"))),
             ("squelette", AnyView(SkeletonBlock(size: .lg, identifier: "skeleton"))),
