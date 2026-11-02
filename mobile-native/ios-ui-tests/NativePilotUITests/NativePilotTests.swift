@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// Drives the prepared CI experience without launching, reopening or resetting it.
 final class NativePilotTests: XCTestCase {
@@ -884,6 +885,29 @@ final class NativePilotTests: XCTestCase {
         }
     }
 
+    /// The tab button is an accessible container, so its inner text is never exposed
+    /// to XCTest as a separate static text. The button's accessibility label carries the
+    /// rendered label, and the button width bounds the single-line label's room.
+    private func assertMissionsTabLabelFits() {
+        let missionsTab = element("tab-my-missions")
+        require("The caregiver missions tab is rendered") { self.visible(missionsTab) }
+        // react-navigation 7.21 derives the iOS accessibility label from the rendered
+        // tab label: "<label>, tab, <index> of <count>". Compare the rendered part only.
+        let renderedLabel = missionsTab.label.components(separatedBy: ", tab, ").first ?? missionsTab.label
+        XCTAssertEqual(renderedLabel, "Missions",
+            "The caregiver tab must expose the short Missions label (accessibility label: \(missionsTab.label))")
+        let requiredWidth = ("Missions" as NSString).size(withAttributes: [
+            .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+        ]).width
+        // react-navigation 7.21 bottom tab item: 5pt padding per side; the wide
+        // beside-icon layout also reserves the 26pt icon and its 5pt/12pt margins.
+        let besideIcon = UIDevice.current.userInterfaceIdiom == .pad
+        let reserved: CGFloat = besideIcon ? 10 + 26 + 5 + 12 : 10
+        let availableWidth = missionsTab.frame.width - reserved
+        XCTAssertGreaterThanOrEqual(availableWidth + 1, requiredWidth,
+            "The Missions label must fit its tab without truncation (available \(availableWidth) pt, required \(requiredWidth) pt)")
+    }
+
     private func openMissionAndReturn(detailProof: String, returnProof: String) {
         let list = element("missions-list")
         let mission = element("mission-card-demo-mission-016")
@@ -913,6 +937,7 @@ final class NativePilotTests: XCTestCase {
 
     private func runCaregiverWorkflows() {
         tap("tab-my-missions")
+        assertMissionsTabLabelFits()
         scrollTo(element("my-missions-empty"), in: element("my-missions-list"))
         tap("tab-explore")
         require("Switching tabs preserves the exploration position") { self.visible(self.element("mission-card-demo-mission-016")) }
