@@ -15,13 +15,13 @@
 -- colonne missions.code_pointage_actif (comme code_pointage_hmac) reste lisible
 -- par le soignant assigné en PostgREST direct
 -- (GET /rest/v1/missions?id=eq.<id>&select=code_pointage_actif) : SELECT de
--- table accordé à authenticated (supabase/schema/public.sql l.86259) et RLS
--- pol_mission_select (l.79361, branche soignant_assigne_id = auth.uid()). Le
--- filtre CASE WHEN v_is_etab de fn_etat_pointage_mission ne vaut qu'à l'étage
--- RPC. Relu en lecture seule le 2026-11-02 : has_column_privilege pour
--- authenticated sur missions.code_pointage_actif et code_pointage_hmac = true.
--- B1 retire seulement le code des réponses RPC. Instruction et proposition :
--- docs/POINTAGE_CODE_ROTATIF_VISIBILITE.md.
+-- table accordé à authenticated (supabase/schema/public.sql l.86265 à ce
+-- commit) et RLS pol_mission_select (l.79367, branche soignant_assigne_id =
+-- auth.uid()). Le filtre CASE WHEN v_is_etab de fn_etat_pointage_mission ne
+-- vaut qu'à l'étage RPC. Relu en lecture seule le 2026-11-02 :
+-- has_column_privilege pour authenticated sur missions.code_pointage_actif et
+-- code_pointage_hmac = true. B1 retire seulement le code des réponses RPC.
+-- Instruction et proposition : docs/POINTAGE_CODE_ROTATIF_VISIBILITE.md.
 --
 -- Sources : définitions LIVE production relues le 2026-11-02 (lecture seule,
 -- prosrc et pg_get_function_arguments) :
