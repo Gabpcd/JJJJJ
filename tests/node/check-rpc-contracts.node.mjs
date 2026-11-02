@@ -598,20 +598,26 @@ test('ios-native : tout littéral "fn_…" du Swift est une RPC suivie et autori
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 // Lot 4, tranche T0 (docs/mobile-swift/LOT4_PLAN.md §3 T0 ; décisions docs/mobile-swift/DECISIONS_LOT4.md).
-// Les 42 RPC du lot 4 sont sous contrat avant toute gateway Swift ; chaque fiche cite toutes les
-// réponses littérales du corps SQL (confrontées au dump, pas recopiées) ; les deux edges, le
-// Realtime, le double-aveugle et les surcharges du litige ont leur fiche ; garde-fous 18 et 19.
+// Les 42 RPC consommées par le lot 4 (41 propres au lot, 1 partagée avec le lot 2) sont sous contrat
+// avant toute gateway Swift ; chaque fiche cite toutes les réponses littérales du corps SQL
+// (confrontées au dump, pas recopiées) ; les deux edges, le Realtime, le double-aveugle et les
+// surcharges du litige ont leur fiche ; garde-fous 18 et 19.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// Exports ajoutés par le lot 4 (T0), lus par espace de noms comme ceux du lot 2 : le bloc d'import
+// du haut du fichier n'est pas modifié (fusion sans conflit avec les T0 des autres lots).
+import * as contratsLot4 from '../../scripts/mobile/check-rpc-contracts.mjs';
 
 // Ordre des tranches du lot 4 (LOT4_PLAN.md §3) : T3a swipe, T4 filtres, T5 disponibilités,
 // T6 parrainage, T8 litiges et réclamations, T9 score et évaluations, T7a/T7b messagerie (et entrées
 // du détail de mission, correction 20), T10 bulletins, T11 pool urgence et exclusions.
+// Les 41 RPC propres au lot 4, suivies en `a_venir`, `lot: 4`.
 const LOT4 = [
   'fn_obtenir_missions_swipe', 'fn_enregistrer_swipe', 'fn_retirer_candidature', 'fn_initialiser_preferences_matching',
   'fn_lister_mes_filtres_sauvegardes', 'fn_creer_filtre_sauvegarde', 'fn_modifier_filtre_sauvegarde', 'fn_supprimer_filtre_sauvegarde',
   'fn_definir_disponibilite',
   'fn_obtenir_mes_parrainages', 'fn_appliquer_parrainage',
-  'fn_ouvrir_litige_rate_limited', 'fn_ajouter_message_litige', 'fn_soumettre_reclamation',
+  'fn_ajouter_message_litige', 'fn_soumettre_reclamation',
   'fn_mon_breakdown_actuel', 'fn_mes_evenements_score', 'fn_evolution_score_soignant', 'fn_lister_notations_recues',
   'fn_creer_reclamation_score', 'fn_mes_notations_recues_avec_stats', 'fn_signaler_notation',
   'fn_lister_conversations_messagerie', 'fn_interlocuteurs_conversations', 'fn_marquer_messages_lus', 'fn_messages_non_lus',
@@ -621,6 +627,13 @@ const LOT4 = [
   'fn_pool_urgence_missions_pour_soignant', 'fn_toggle_pool_urgence', 'fn_toggle_pool_urgence_sms',
   'fn_mes_exclusions_recues', 'fn_retirer_exclusion', 'fn_exclure_utilisateur',
 ];
+// Partagée avec un lot antérieur (DECISIONS_LOT4.md, précision 10 ; précédent du T0 du lot 5) : le T0 du
+// lot 2 la suit en `lot: 2` (contestation d'une présence, `DESACCORD_HEURES_POINTAGE`, T5b) ; le lot 4
+// l'appelle aussi (T8, type `AUTRE`). Une seule entrée dans RPC_SUIVIES, celle du lot antérieur ; à défaut
+// (branche sans le T0 du lot 2), `ajouterPartageesLot4` l'ajoute en `a_venir`, `lot: 4`.
+const LOT4_PARTAGEES = ['fn_ouvrir_litige_rate_limited'];
+// Les 42 RPC consommées par le lot 4 (fiches confrontées au SQL, GRANT, refus 42501).
+const LOT4_TOUTES = [...LOT4, ...LOT4_PARTAGEES];
 
 // RPC du lot 4 absentes de `types.ts` (ou illisibles par `extractTypesSignature`) : `types: null` accepté
 // (précédent du lot 1). `fn_ouvrir_litige_rate_limited` y figure (l.10147) mais en union de surcharges.
@@ -652,28 +665,80 @@ function sqlBodiesAvecSignature(schema, name) {
 }
 
 const unquoteSql = s => s.replaceAll("''", "'");
+
+// Noms de condition PL/pgSQL qu'un corps peut écrire au lieu du code (`USING ERRCODE = 'insufficient_privilege'`),
+// ramenés au SQLSTATE que PostgREST renvoie. Une condition absente de cette table n'est pas reconnue :
+// `formesRaiseNonLues` la signale au lieu de laisser le refus hors de la table d'interception (fail-closed).
+const CONDITIONS_SQLSTATE_LOT4 = Object.freeze({
+  insufficient_privilege: '42501',
+  invalid_authorization_specification: '28000',
+  invalid_parameter_value: '22023',
+  check_violation: '23514',
+  raise_exception: 'P0001',
+  no_data_found: 'P0002',
+});
+/** Valeur d'une option `ERRCODE` → SQLSTATE : code de cinq caractères (casse indifférente) ou nom de condition connu ; sinon `null`. */
+function sqlstateLot4(valeur) {
+  const v = valeur.trim();
+  if (/^[0-9A-Z]{5}$/i.test(v)) return v.toUpperCase();
+  return CONDITIONS_SQLSTATE_LOT4[v.toLowerCase()] ?? null;
+}
+/**
+ * Instructions `RAISE EXCEPTION` d'un corps SQL, quels que soient les espaces et la casse : message littéral en
+ * tête (`RAISE EXCEPTION '<m>' [USING …]`) ou option `MESSAGE = '<m>'`, option `ERRCODE = '<x>'` dans un ordre
+ * quelconque ; un `;` entre apostrophes ne coupe pas l'instruction. `sqlstate` vaut `P0001` sans ERRCODE et
+ * `null` pour une valeur non reconnue.
+ */
+function raisesLot4(body) {
+  return [...body.matchAll(/\bRAISE\s+EXCEPTION\b((?:[^;']|'(?:[^']|'')*')*);/gi)].map(([instruction, suite]) => {
+    const message = suite.match(/^\s*'((?:[^']|'')*)'/)?.[1] ?? suite.match(/\bMESSAGE\s*=\s*'((?:[^']|'')*)'/i)?.[1];
+    const errcode = suite.match(/\bERRCODE\s*=\s*'([^']*)'/i)?.[1];
+    return {
+      instruction: instruction.replace(/\s+/g, ' '),
+      message: message === undefined ? null : unquoteSql(message),
+      errcode: errcode !== undefined,
+      sqlstate: errcode === undefined ? 'P0001' : sqlstateLot4(errcode),
+    };
+  });
+}
+/**
+ * Formes d'erreur qu'aucun extracteur ne lit : `RAISE <condition>` ou `RAISE SQLSTATE '…'` (tout ce qui n'est ni
+ * `RAISE EXCEPTION`, ni un niveau NOTICE / WARNING / INFO / LOG / DEBUG, ni la re-levée `RAISE;`), un `ERRCODE`
+ * hors d'un `RAISE EXCEPTION` lu, une valeur d'ERRCODE non reconnue, un refus 42501 sans message. Vide : tout
+ * SQLSTATE du corps est lu par `sqlstatesSql` et `refus42501`.
+ */
+function formesRaiseNonLues(body) {
+  const fautes = [];
+  for (const [, mot] of body.matchAll(/\bRAISE\b\s*(;|[A-Za-z_]+)/gi)) {
+    if (![';', 'EXCEPTION', 'NOTICE', 'WARNING', 'INFO', 'LOG', 'DEBUG'].includes(mot.toUpperCase())) fautes.push(`forme non lue : RAISE ${mot}`);
+  }
+  const raises = raisesLot4(body);
+  const errcodes = [...body.matchAll(/\bERRCODE\b/gi)].length;
+  const lus = raises.filter(r => r.errcode).length;
+  if (errcodes !== lus) fautes.push(`ERRCODE lus : ${lus} sur ${errcodes}`);
+  for (const r of raises) {
+    if (r.sqlstate === null) fautes.push(`ERRCODE non reconnu : ${r.instruction}`);
+    if (r.sqlstate === '42501' && r.message === null) fautes.push(`refus 42501 sans message : ${r.instruction}`);
+  }
+  return fautes;
+}
 /**
  * Messages littéraux qu'un corps SQL peut renvoyer au client : `'error', '…'`, `'message', '…'`,
- * JSON `{"error":"…"}`, `RAISE EXCEPTION '…'` et `MESSAGE='…'`, apostrophes SQL doublées ramenées à la
- * valeur réelle.
+ * JSON `{"error":"…"}`, message d'un `RAISE EXCEPTION` (en tête ou option `MESSAGE`), apostrophes SQL doublées
+ * ramenées à la valeur réelle.
  */
 function messagesSql(body) {
   return [...new Set([
     ...[...body.matchAll(/'(?:error|message)',\s*'((?:[^']|'')*)'/g)].map(m => unquoteSql(m[1])),
     ...[...body.matchAll(/'\{"error":"([^"]+)"\}'::jsonb/gi)].map(m => m[1]),
-    ...[...body.matchAll(/RAISE EXCEPTION '((?:[^']|'')*)'/g)].map(m => unquoteSql(m[1])),
-    ...[...body.matchAll(/MESSAGE\s*=\s*'([^']+)'/g)].map(m => m[1]),
+    ...raisesLot4(body).map(r => r.message).filter(m => m !== null),
   ])];
 }
 const codesErreurSql = body => [...new Set([...body.matchAll(/'error_code',\s*'([A-Z_]+)'/g)].map(m => m[1]))];
-const sqlstatesSql = body => [...new Set([...body.matchAll(/ERRCODE\s*=\s*'([0-9A-Z]{5})'/g)].map(m => m[1]))];
-/** Messages levés avec le SQLSTATE 42501 : `RAISE EXCEPTION '…' USING ERRCODE = '42501'` ou `USING ERRCODE='42501',MESSAGE='…'`. */
-function refus42501(body) {
-  return [
-    ...[...body.matchAll(/RAISE EXCEPTION '((?:[^']|'')*)' USING ERRCODE = '42501'/g)].map(m => unquoteSql(m[1])),
-    ...[...body.matchAll(/ERRCODE='42501',\s*MESSAGE='([^']+)'/g)].map(m => m[1]),
-  ];
-}
+/** SQLSTATE explicites (`USING ERRCODE`) d'un corps SQL, noms de condition ramenés au code. */
+const sqlstatesSql = body => [...new Set(raisesLot4(body).filter(r => r.errcode && r.sqlstate).map(r => r.sqlstate))];
+/** Messages levés avec le SQLSTATE 42501 (code ou `insufficient_privilege`), quelle que soit la forme de l'instruction. */
+const refus42501 = body => raisesLot4(body).filter(r => r.sqlstate === '42501').map(r => r.message);
 
 /** Surcharges confrontées pour une RPC : toutes, sauf la 4 arguments du litige (jamais appelée, fiche dédiée). */
 function corpsConfrontes(schema, name) {
@@ -683,12 +748,32 @@ function corpsConfrontes(schema, name) {
 
 const CONTRATS_DOC = 'docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md';
 
-test('Lot 4 — RPC_SUIVIES : les 42 RPC du lot 4 suivies en a_venir lot 4, dans l ordre des tranches', () => {
-  assert.equal(LOT4.length, 42);
-  assert.equal(new Set(LOT4).size, 42);
-  assert.deepEqual(RPC_SUIVIES.filter(r => r.lot === 4).map(r => r.name), LOT4);
-  // Les statuts du lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
+test('Lot 4 — RPC_SUIVIES : 41 RPC propres au lot 4 en a_venir lot 4, dans l ordre des tranches, et 1 partagée', () => {
+  assert.equal(LOT4.length, 41);
+  assert.equal(new Set(LOT4_TOUTES).size, 42);
+  assert.deepEqual([...contratsLot4.RPC_PARTAGEES_LOT4], LOT4_PARTAGEES);
+  assert.deepEqual(RPC_SUIVIES.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name)).map(r => r.name), LOT4);
+  // Les statuts propres au lot 4 ne bougent qu'en T0 (a_venir) et en T15 (consommee, en une fois) : LOT4_PLAN §3.
   for (const name of LOT4) assert.deepEqual(byName.get(name), { name, statut: 'a_venir', lot: 4 });
+  // Partagée : une seule entrée, celle du lot antérieur qui la suit (lot 2, statut porté par sa tranche T5b), ou
+  // `a_venir` lot 4 par repli ; jamais un lot postérieur au lot 4.
+  for (const name of LOT4_PARTAGEES) {
+    const entrees = RPC_SUIVIES.filter(r => r.name === name);
+    assert.equal(entrees.length, 1, `${name} : une seule entrée dans RPC_SUIVIES`);
+    const [{ lot, statut }] = entrees;
+    assert.ok(Number.isInteger(lot) && lot >= 1 && lot <= 4, `${name} : lot ${lot} (attendu ≤ 4)`);
+    assert.ok(['a_venir', 'consommee'].includes(statut), `${name} : statut ${statut}`);
+  }
+});
+
+test('Lot 4 — ajouterPartageesLot4 : l entrée d un lot antérieur est gardée, lot 4 seulement à défaut, jamais de doublon', () => {
+  const { ajouterPartageesLot4 } = contratsLot4;
+  assert.equal(typeof ajouterPartageesLot4, 'function', 'ajouterPartageesLot4 absente du script');
+  const lot2 = [{ name: 'fn_ouvrir_litige_rate_limited', statut: 'consommee', lot: 2 }];
+  assert.deepEqual(ajouterPartageesLot4(structuredClone(lot2)), lot2, 'l entrée du lot 2 garde son lot et son statut');
+  const repli = ajouterPartageesLot4([]);
+  assert.deepEqual(repli, [{ name: 'fn_ouvrir_litige_rate_limited', statut: 'a_venir', lot: 4 }]);
+  assert.deepEqual(ajouterPartageesLot4(structuredClone(repli)), repli, 'idempotent');
 });
 
 test('Lot 4 — rpc-contracts.json : définition SQL SECURITY DEFINER, GRANT authenticated, types null attendus', () => {
@@ -697,8 +782,9 @@ test('Lot 4 — rpc-contracts.json : définition SQL SECURITY DEFINER, GRANT aut
     schemaSource: read(SOURCES.schema),
     manifest: JSON.parse(read(SOURCES.manifest)),
   });
-  const lot4 = actual.rpcs.filter(r => r.lot === 4);
+  const lot4 = actual.rpcs.filter(r => LOT4_TOUTES.includes(r.name));
   assert.equal(lot4.length, 42);
+  assert.deepEqual(actual.rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name)).map(r => r.name), LOT4);
   for (const r of lot4) {
     assert.ok(r.sql.length >= 1, `${r.name} : aucune définition SQL`);
     assert.ok(r.grants.includes('authenticated'), `${r.name} : pas de GRANT authenticated`);
@@ -727,13 +813,59 @@ test('Lot 4 — confrontation : les extracteurs bornent les corps et lisent tout
   assert.equal(corpsConfrontes(schema, 'fn_ouvrir_litige_rate_limited').length, 2);
 });
 
+// Un gap connu reste verrouillé : une re-baseline qui écrirait `ERRCODE='42501'` sans espaces, `errcode` en
+// minuscules ou `ERRCODE = 'insufficient_privilege'` ne doit pas sortir la RPC de la garde 42501 sans bruit.
+test('Lot 4 — extracteurs SQLSTATE : espaces, casse et noms de condition tolérés, toute autre forme signalée', () => {
+  const temoin = [
+    "RAISE EXCEPTION 'A' USING ERRCODE='42501';",
+    "raise exception 'B' using errcode = 'insufficient_privilege';",
+    "RAISE EXCEPTION USING MESSAGE = 'C', ERRCODE = '42501';",
+    "RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='D';",
+    "RAISE EXCEPTION 'E ; point-virgule cité' USING ERRCODE = '22023';",
+    "RAISE EXCEPTION 'l''apostrophe';",
+    "RAISE NOTICE 'G';",
+    'RAISE;',
+  ].join('\n');
+  assert.deepEqual(refus42501(temoin), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(sqlstatesSql(temoin), ['42501', '22023']);
+  assert.deepEqual(messagesSql(temoin), ['A', 'B', 'C', 'D', 'E ; point-virgule cité', "l'apostrophe"]);
+  assert.deepEqual(formesRaiseNonLues(temoin), []);
+  for (const forme of [
+    "RAISE insufficient_privilege USING MESSAGE = 'H';",
+    "RAISE SQLSTATE '42501' USING MESSAGE = 'I';",
+    "RAISE EXCEPTION 'J' USING ERRCODE = 'condition_inconnue';",
+    "RAISE EXCEPTION USING ERRCODE = '42501';",
+    "v := 1; -- USING ERRCODE = '42501'",
+  ]) assert.notDeepEqual(formesRaiseNonLues(forme), [], `forme non signalée : ${forme}`);
+});
+
+test('Lot 4 — confrontation : chaque ERRCODE des 42 RPC (toutes surcharges) est lu, aucune forme RAISE ignorée', () => {
+  const schema = read(SOURCES.schema);
+  const fautes = [];
+  let errcodes = 0;
+  for (const name of LOT4_TOUTES) {
+    for (const { signature, body } of sqlBodiesAvecSignature(schema, name)) {
+      errcodes += raisesLot4(body).filter(r => r.errcode).length;
+      for (const faute of formesRaiseNonLues(body)) fautes.push(`${name} ${signature.slice(signature.indexOf('('))} : ${faute}`);
+    }
+  }
+  assert.deepEqual(fautes, []);
+  // Témoin : le dump du 01/11 porte vingt et un ERRCODE dans ces corps ; zéro trahirait un extracteur muet.
+  assert.ok(errcodes >= 20, `ERRCODE lus : ${errcodes}`);
+});
+
 test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, codes et SQLSTATE de son corps SQL', () => {
   const schema = read(SOURCES.schema);
   const doc = read(CONTRATS_DOC);
   let total = 0;
-  for (const name of LOT4) {
-    const fiche = section(doc, `${name}\n`);
-    assert.ok(fiche.includes('- **Statut natif** : à venir (lot 4'), `${name} : statut natif lot 4 absent`);
+  for (const name of LOT4_TOUTES) {
+    const partagee = LOT4_PARTAGEES.includes(name);
+    // Fiche partagée (précision 10) : un seul titre `## <nom>` ; l'usage du lot 4 en est la sous-section
+    // « Usage du lot 4 », déplacée telle quelle dans la fiche du lot 2 quand son T0 est fusionné.
+    if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
+    const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
+    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)' : '- **Statut natif** : à venir (lot 4';
+    assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {
         total++;
@@ -749,7 +881,7 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
 test('Lot 4 — CONTRATS : tout refus 42501 du lot 4 est un refus métier connu, jamais « session expirée »', () => {
   const schema = read(SOURCES.schema);
   const messages = new Set();
-  for (const name of LOT4) for (const { body } of corpsConfrontes(schema, name)) for (const m of refus42501(body)) messages.add(m);
+  for (const name of LOT4_TOUTES) for (const { body } of corpsConfrontes(schema, name)) for (const m of refus42501(body)) messages.add(m);
   // Témoins : fn_interlocuteurs_conversations, fn_marquer_messages_lus, fn_typing_start, fn_user_id_pour_etablissement,
   // fn_obtenir_conversation, fn_lister_copies_bulletins et fn_signaler_copie_bulletin.
   assert.deepEqual([...messages].sort(), ['Accès refusé', 'COPIE_ACCES_REFUSE', 'Compte inactif', 'Conversation non autorisée', 'NON_AUTORISE', 'Non autorisé'].sort());
@@ -864,6 +996,10 @@ test('Lot 4 — CONTRATS : surcharges de fn_ouvrir_litige_rate_limited, seule la
   for (const attendu of ['"p_type_litige" "public"."type_litige"', '"p_facture_id" "uuid"', 'DEPRECATED', 'AUTRE', 'jamais appelée']) {
     assert.ok(fiche.includes(attendu), `fiche surcharges : ${attendu} absent`);
   }
+  // Fiche unique partagée avec le lot 2 (précision 10) : les deux usages de la surcharge canonique sont nommés.
+  for (const attendu of ['DESACCORD_HEURES_POINTAGE', 'lot 2', 'RPC_PARTAGEES_LOT4', 'Usage du lot 4']) {
+    assert.ok(fiche.includes(attendu), `fiche surcharges : ${attendu} absent`);
+  }
 });
 
 test('Lot 4 — CONTRATS : classement manuel des RPC hors manifeste (modèle lot 1 décision 6), synthèse complète', () => {
@@ -875,17 +1011,39 @@ test('Lot 4 — CONTRATS : classement manuel des RPC hors manifeste (modèle lot
     assert.ok(classe && classe.includes('`RPC_UTILISATEUR_AUTH_INTERNE`') && classe.includes('classement manuel'), `${name} : classement manuel absent`);
   }
   const synthese = section(doc, 'Lot 4 — synthèse');
-  for (const name of LOT4) assert.ok(synthese.includes(`| \`${name}\` |`), `synthèse lot 4 : ligne ${name} absente`);
+  for (const name of LOT4_TOUTES) assert.ok(synthese.includes(`| \`${name}\` |`), `synthèse lot 4 : ligne ${name} absente`);
+  // Décompte : 41 propres au lot 4 + 1 partagée avec le lot 2 (précision 10), plus « 42 en lot 4 ».
+  const aplatie = synthese.replace(/\s+/g, ' ');
+  assert.ok(aplatie.includes('**quarante et une RPC** propres au lot 4') && aplatie.includes('une RPC partagée'), 'synthèse : décompte 41 + 1 absent');
+  assert.ok(!/quarante-deux RPC\*\* suivies en `a_venir`, `lot: 4`/.test(aplatie), 'synthèse : ancien décompte « 42 en lot 4 »');
+  const ligne = synthese.split('\n').find(l => l.startsWith('| `fn_ouvrir_litige_rate_limited` |'));
+  assert.ok(ligne.includes('partagée') && ligne.includes('lot 2'), 'synthèse : ligne de la RPC partagée sans renvoi au lot 2');
 });
+
+/** Texte du garde-fou `n` de guards.sh, de son `echo "── Garde-fou n :` au suivant (ou au verdict final). */
+function blocGardeFou(guards, n) {
+  const at = guards.indexOf(`echo "── Garde-fou ${n} :`);
+  assert.ok(at >= 0, `garde-fou ${n} absent`);
+  const next = guards.indexOf('echo "── Garde-fou ', at + 1);
+  return guards.slice(at, next < 0 ? guards.indexOf('\nif [ "$FAIL" -ne 0 ]', at) : next);
+}
+
+// Lecture de fichiers temporaires et exécution d'un bloc bash : espaces de noms propres au lot 4.
+import * as fsLot4 from 'node:fs';
+import * as osLot4 from 'node:os';
+import * as processusLot4 from 'node:child_process';
+
+/** Exécute un bloc de guards.sh dans `cwd` (même en-tête `set -uo pipefail`, FAIL=0) et renvoie FAIL. */
+function executerGardeFou(bloc, cwd) {
+  const r = processusLot4.spawnSync('bash', ['-c', `set -uo pipefail\nFAIL=0\n${bloc}\necho "FAIL=$FAIL"`], { cwd, encoding: 'utf8' });
+  const m = r.stdout.match(/FAIL=(\d+)\s*$/);
+  assert.ok(m, `bloc non exécuté : ${r.stderr}`);
+  return Number(m[1]);
+}
 
 test('Lot 4 — guards.sh : garde-fous 18 (aucun lecteur natif de notations) et 19 (aucun envoi hors edge)', () => {
   const guards = read('tests/non-regression/guards.sh');
-  const bloc = n => {
-    const at = guards.indexOf(`echo "── Garde-fou ${n} :`);
-    assert.ok(at >= 0, `garde-fou ${n} absent`);
-    const next = guards.indexOf('echo "── Garde-fou ', at + 1);
-    return guards.slice(at, next < 0 ? guards.indexOf('\nif [ "$FAIL" -ne 0 ]', at) : next);
-  };
+  const bloc = n => blocGardeFou(guards, n);
   const motif = (texte, nom) => {
     const m = texte.match(new RegExp(`${nom}='([^']+)'`));
     assert.ok(m, `variable ${nom} absente`);
@@ -893,6 +1051,10 @@ test('Lot 4 — guards.sh : garde-fous 18 (aucun lecteur natif de notations) et 
   };
   const b18 = bloc(18);
   assert.ok(b18.includes('ios-native/Packages') && b18.includes('ios-native/Jolene') && b18.includes('FAIL=1'));
+  // Littéral Swift seulement (fiche « Jamais notations_missions ») : fixtures, golden et Localizable hors motif.
+  assert.ok(b18.includes("--include='*.swift'"), '18 : périmètre *.swift absent');
+  // Code de retour de grep exploité : 2 (dossier absent ou illisible) n'est jamais « OK ».
+  for (const n of [18, 19]) assert.ok(/-ne 1 \]/.test(bloc(n)), `${n} : code de retour 2 de grep non traité`);
   const notations = motif(b18, 'MOTIF_NOTATIONS');
   for (const lecteur of ['.from("notations_missions")', 'table: "evaluations"', '.from("evaluations_publiees")']) assert.ok(notations.test(lecteur), `18 : ${lecteur} non détecté`);
   for (const licite of ['"total_evaluations"', '"ios_natif_\\(rawValue)_actif"', '"fn_mes_notations_recues_avec_stats"']) assert.ok(!notations.test(licite), `18 : faux positif ${licite}`);
@@ -909,6 +1071,46 @@ test('Lot 4 — guards.sh : garde-fous 18 (aucun lecteur natif de notations) et 
     for (const file of swiftFiles(join(root, dir))) assert.ok(!notations.test(readFileSync(file, 'utf8')), `${file} lit une table de notations`);
   }
   for (const file of swiftFiles(join(root, 'ios-native'))) assert.ok(!envoi.test(readFileSync(file, 'utf8')), `${file} envoie un message hors edge`);
+});
+
+// Un gap connu reste verrouillé : un dossier renommé (ex. `ios-native/Jolene`) rendait les garde-fous 18 et 19
+// muets, `if grep …` lisant le code 2 de grep comme « aucune occurrence ».
+test('Lot 4 — guards.sh : garde-fous 18 et 19 exécutés sur des arbres témoins (fail-closed, 18 limité au Swift)', () => {
+  const guards = read('tests/non-regression/guards.sh');
+  const [b18, b19] = [blocGardeFou(guards, 18), blocGardeFou(guards, 19)];
+  const tmp = fsLot4.mkdtempSync(join(osLot4.tmpdir(), 'garde-fous-lot4-'));
+  try {
+    const arbre = (nom, fichiers) => {
+      const dir = join(tmp, nom);
+      for (const [rel, contenu] of Object.entries(fichiers)) {
+        fsLot4.mkdirSync(dirname(join(dir, rel)), { recursive: true });
+        fsLot4.writeFileSync(join(dir, rel), contenu);
+      }
+      return dir;
+    };
+    const propre = {
+      'ios-native/Packages/A/Sources/A/A.swift': 'let total = "total_evaluations"\n',
+      'ios-native/Jolene/App.swift': 'let cle = "ios_natif_\\(rawValue)_actif"\n',
+    };
+    const sain = arbre('propre', propre);
+    assert.equal(executerGardeFou(b18, sain), 0, '18 : arbre propre');
+    assert.equal(executerGardeFou(b19, sain), 0, '19 : arbre propre');
+    // Fixture de démo, vecteur golden ou catalogue de chaînes portant la valeur brute : pas un lecteur de table.
+    const fixtures = arbre('fixtures', {
+      ...propre,
+      'ios-native/Packages/A/Tests/A/Fixtures/liens.json': '{"ecran": "evaluations"}\n',
+      'ios-native/Jolene/Resources/Localizable.xcstrings': '{"evaluations": {}}\n',
+    });
+    assert.equal(executerGardeFou(b18, fixtures), 0, '18 : une fixture JSON ou un catalogue de chaînes n est pas un lecteur');
+    assert.equal(executerGardeFou(b18, arbre('lecteur', { ...propre, 'ios-native/Jolene/Lecteur.swift': 'client.from("evaluations_publiees")\n' })), 1);
+    assert.equal(executerGardeFou(b19, arbre('envoi', { ...propre, 'ios-native/Jolene/Envoi.swift': 'rpc("fn_envoyer_message", params: p)\n' })), 1);
+    // Dossier absent (grep sort en 2) : rouge, jamais « OK ».
+    assert.equal(executerGardeFou(b18, arbre('sans-app', { 'ios-native/Packages/A/Sources/A/A.swift': 'let x = 1\n' })), 1, '18 : ios-native/Jolene absent');
+    assert.equal(executerGardeFou(b18, arbre('sans-swift', { 'ios-native/Packages/README.md': 'x\n', 'ios-native/Jolene/README.md': 'x\n' })), 1, '18 : aucun fichier Swift lu');
+    assert.equal(executerGardeFou(b19, arbre('sans-ios', { 'README.md': 'x\n' })), 1, '19 : ios-native absent');
+  } finally {
+    fsLot4.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test('Lot 4 — PARITE : statuts proposés de LOT4_PLAN §1.3 marqués « proposé — à signer », onze parcours cœur', () => {
@@ -934,6 +1136,12 @@ test('Lot 4 — PARITE : statuts proposés de LOT4_PLAN §1.3 marqués « propos
   const parcours = s.slice(at);
   for (let i = 1; i <= 11; i++) assert.ok(new RegExp(`\\n${i}\\. \\*\\*`).test(parcours), `parcours cœur ${i} absent`);
   assert.ok(!/\n12\. \*\*/.test(parcours), 'douzième parcours inattendu');
+  // Lecture : la décision 3 du lot 0 (WebView bornée ou Safari) est tranchée par D17 ; date de mise à jour du T0.
+  const lot4Lecture = section(parite, 'Lecture').split('\n- ').find(l => l.startsWith('**Lot 4**'));
+  assert.ok(lot4Lecture, 'Lecture : paragraphe lot 4 absent');
+  for (const attendu of ['D17', 'SFSafariViewController', 'Lot 4 — statuts proposés']) assert.ok(lot4Lecture.includes(attendu), `Lecture lot 4 : ${attendu} absent`);
+  assert.ok(!/à trancher par Gabrielle/.test(lot4Lecture), 'Lecture lot 4 : décision 3 encore « à trancher par Gabrielle » (D17 adoptée)');
+  assert.match(parite, /\nDernière mise à jour : 2026-11-02 \(lot 4, T0 /, '« Dernière mise à jour » non rafraîchie par le T0 du lot 4');
   // T0 ne statue rien : aucune ligne du tableau principal ciblant le lot 4 n'est passée « natif ».
   const principal = parite.slice(0, parite.indexOf('\n## '));
   for (const l of principal.split('\n').filter(x => /^\| `\/soignant\//.test(x))) {
@@ -962,6 +1170,29 @@ test('Lot 4 — DECISIONS_LOT4.md : §7 tranché (D1 à D27), « En attente de G
   for (const attendu of ['LOT4_PLAN.md', 'LOT1_PLAN.md', 'ios_natif_exclusions_actif', 'ios_natif_serie_actif', 'jamais mergée']) {
     assert.ok(dec.includes(attendu), `DECISIONS_LOT4 : ${attendu} absent`);
   }
+  const precisions = section(dec, 'Précisions apportées');
+  const precision = n => {
+    const at = precisions.indexOf(`\n${n}. **`);
+    assert.ok(at >= 0, `précision ${n} absente`);
+    const fin = precisions.indexOf(`\n${n + 1}. **`, at);
+    return precisions.slice(at, fin < 0 ? undefined : fin).replace(/\s+/g, ' ');
+  };
+  // Précision 1 : D-FLAGS cite déjà 13 clés (aucun écart) ; critère du lot 4 sur ses seules clés, total global de
+  // 28 renvoyé aux décisions du lot 5 (7 clés `ios_natif_etab_*`, `etab_pointage` comprise).
+  const p1 = precision(1);
+  for (const attendu of ['13 clés, blueprint v2', 'aucun écart', "cle IN ('ios_natif_swipe_actif'", '= **13**', '**28**', 'ios_natif_etab_pointage_actif', 'DECISIONS_LOT5.md']) {
+    assert.ok(p1.includes(attendu), `précision 1 : ${attendu} absent`);
+  }
+  for (const cle of ['swipe', 'recherches', 'disponibilites', 'parrainage', 'litiges', 'reclamations', 'messagerie', 'bulletins', 'evaluations', 'score', 'pool_urgence', 'exclusions', 'serie']) {
+    assert.ok(p1.includes(`'ios_natif_${cle}_actif'`), `précision 1 : clé ${cle} absente du critère`);
+  }
+  for (const faux of ['11 clés', '**27**', '6 du lot 5']) assert.ok(!dec.includes(faux), `DECISIONS_LOT4 : décompte faux « ${faux} »`);
+  assert.ok(section(dec, 'Critères du plan amendés').includes('= 13'), 'critère B0-bis amendé non reporté');
+  // Précision 10 : RPC partagée avec le lot 2, écart aux deux blueprints, fusion non mécanique de la fiche.
+  const p10 = precision(10);
+  for (const attendu of ['fn_ouvrir_litige_rate_limited', 'RPC_PARTAGEES_LOT4', 'LOT2_PLAN.md', 'LOT4_PLAN.md', 'origin/lot2/l2-t0', '41', 'Usage du lot 4', 'jamais « garder les deux côtés »']) {
+    assert.ok(p10.includes(attendu), `précision 10 : ${attendu} absent`);
+  }
 });
 
 test('Lot 4 — LOT4_PLAN.md versionné, squelettes RECETTE_DEVICE_LOT4 et BETA_LOT4', () => {
@@ -972,6 +1203,12 @@ test('Lot 4 — LOT4_PLAN.md versionné, squelettes RECETTE_DEVICE_LOT4 et BETA_
   const recette = read('docs/mobile-swift/RECETTE_DEVICE_LOT4.md');
   for (const attendu of ['Realtime', 'arrière-plan', 'coupure réseau', 'WhatsApp', 'QR', 'Fichiers', 'VoiceOver', 'Signature de clôture']) {
     assert.ok(recette.includes(attendu), `RECETTE_DEVICE_LOT4.md : ${attendu} absent`);
+  }
+  // Mode avion cohérent avec D8 : l'envoi part, puis « envoi non confirmé » ; le composeur n'est pas désactivé hors ligne.
+  const avion = section(recette, '2. Mode avion');
+  assert.ok(!/aucun envoi accepté/.test(avion), 'mode avion : « aucun envoi accepté » contredit D8');
+  for (const attendu of ['composeur reste actif', '`EnvoiOutcome.nonConfirme`', 'aucun renvoi automatique']) {
+    assert.ok(avion.includes(attendu), `mode avion : ${attendu} absent`);
   }
   const beta = read('docs/mobile-swift/BETA_LOT4.md');
   for (const attendu of ['bloquant', 'non bloquant', '14 jours', '400 sessions', '99,5 %', 'Beta App Review']) {
