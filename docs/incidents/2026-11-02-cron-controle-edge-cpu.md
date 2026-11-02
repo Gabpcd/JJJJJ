@@ -126,6 +126,39 @@ documentaire périmée. Correctif à instruire (fonction `SECURITY DEFINER`,
 catégorie B9) : code d'erreur non rejouable pour ce refus, et `verify-document`
 qui mappe ce nouveau code vers 409.
 
+## Vérification post-déploiement (PR #1105 mergée le 02/11/2026 à 11:07 UTC)
+
+Lecture seule en production, 13:35 UTC, soit 2 h 30 après le déploiement
+(`deploy-supabase` run 41434110569, vert ; gate
+`fn_ops_controler_crons_edge_critiques` passée, les 10 crons critiques
+réactivés) :
+
+- `private.cron_edge_execution_log` : 881 lignes acquittées
+  `NON_CONTROLE: contrôleur en pause…` par la migration `20261102040000`,
+  0 ligne `NON_CONTROLABLE` (toutes les demandes en retard étaient
+  antérieures à la purge pg_net, donc acquittées et non comptées en échec),
+  1 ligne en attente de contrôle (la dernière demande, normale).
+- Job 123 `jolene-monitor-crons-edge-critiques` : actif, dernier passage
+  13:34 UTC `succeeded`, durée 0,03 à 0,27 s par passage sur les 8 derniers
+  (contre 120 s de `statement_timeout` avant l'index) ; 188 appels Edge
+  contrôlés OK sur 2 h, 0 échec réel.
+- Les 7 jobs encore inactifs (`jolene_crm_generer_taches`,
+  `jolene_sourcing_*`, `jolene_acquisition_*`,
+  `jolene_prospection_compteurs_quotidien`) le sont depuis le 26-29/07/2026 :
+  sans rapport avec l'incident, non touchés.
+- Une seule alerte `CRON_EDGE_HTTP_FAILED` depuis le redémarrage (11:59 UTC,
+  auto-résolue 12:20) : `email-cron-hourly-immediate` a réellement répondu
+  HTTP 500 à 11:54 UTC. Cause lue dans les journaux Edge : `email-cron` a
+  envoyé deux emails de `email_queue` puis n'a pas pu les marquer `ENVOYE`
+  (« state conflict », 0 ligne mise à jour) parce que les lignes avaient
+  disparu entre l'envoi et le marquage. Les deux identifiants n'existent plus
+  en base ; les quatre occurrences des 24 dernières heures (01/11 20:10,
+  02/11 00:08, 00:50, 11:54) tombent toutes dans une fenêtre de recette
+  Playwright, dont les nettoyages suppriment `email_queue` par
+  `destinataire_id` / mission (`e2e/global-setup.ts`, `e2e/helpers/seed.ts`).
+  Le contrôleur a donc fait son travail ; le défaut est l'interférence
+  recette ↔ cron horaire de production, consignée ci-dessous.
+
 ## Points ouverts (hors périmètre de ce correctif)
 
 - Boucle `fn_finaliser_document_verification` (≈ 3 600 erreurs 40001/h
@@ -147,5 +180,13 @@ qui mappe ce nouveau code vers 409.
   (`playwright-test-etab-<ts>-<rand>@jolene.app`) s'accumulent toutes les
   10 min environ : aucun nettoyage ne les cible (le global setup ne purge que
   `playwright-test-gps-%`).
+- Interférence recette ↔ `email-cron` horaire : les fixtures Playwright
+  créent des lignes `email_queue` `EN_ATTENTE` que le cron de production
+  peut réclamer et envoyer (vers des adresses de test) avant que le
+  nettoyage E2E ne les supprime ; le marquage `ENVOYE` échoue alors et le
+  cron répond HTTP 500 → alerte CRITICAL légitime mais sans défaut de
+  production. À traiter côté recette (lignes seedées déjà `ENVOYE`, ou
+  nettoyage qui respecte une ligne réclamée) et côté `email-cron`
+  (ligne disparue ≠ conflit d'état).
 - Sept missions `[pw-test:…]` orphelines restaient en base ; la purge du
   global setup les traite dès que la base répond.
