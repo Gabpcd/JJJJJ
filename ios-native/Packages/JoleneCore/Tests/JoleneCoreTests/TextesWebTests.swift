@@ -36,7 +36,7 @@ final class TextesWebTests: XCTestCase {
         }
     }
 
-    /// Le web tutoie dans cinq textes : les reprendre au vouvoiement serait une reformulation
+    /// Le web tutoie dans huit textes : les reprendre au vouvoiement serait une reformulation
     /// (HARD STOP n°4). Ils restent verbatim, en attente de la décision de Gabrielle ; tout
     /// autre tutoiement fait échouer ce test, et une exception qui ne tutoie plus aussi.
     func testVouvoiementSaufTextesDuWebEnAttenteDeGabrielle() {
@@ -46,6 +46,9 @@ final class TextesWebTests: XCTestCase {
             "Presences.relanceTitre",
             "Presences.relanceExplication",
             "AttestationSante.documentsOriginaux",
+            "ProfilConsentementGps.explicationActive",
+            "ProfilConsentementGps.explicationRetiree",
+            "ProfilConsentementGps.retire",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in catalogue {
@@ -139,11 +142,93 @@ final class TextesWebTests: XCTestCase {
                        "✅ Attestation signée le 2 novembre 2026")
     }
 
-    func testDelaisAffichesParLeWebRestentCeuxDuWeb() {
-        // Q9 (en attente de Gabrielle) : le web annonce 72 h, le serveur lit
-        // `parametres_litiges.delai_contestation_pointage_h` (48 h par défaut). Le texte reste
-        // celui du web ; aucun délai n'est recalculé ni réécrit côté natif.
-        XCTAssertTrue(TextesWeb.Contestation.delaiContestation.hasPrefix("Vous avez 72 h après la validation"))
-        XCTAssertTrue(TextesWeb.CompteARebours.expire.contains("72h"))
+    /// Q9 (LOT2_PLAN §7, DECISIONS_LOT2, en attente de Gabrielle) : aucun texte de délai de
+    /// contestation n'est repris (le web annonce 72 h, le serveur lit
+    /// `parametres_litiges.delai_contestation_pointage_h`, 48 h par défaut). Seuls les libellés de
+    /// statut et les boutons du panneau sont portés ; le refus serveur s'affiche tel quel.
+    func testAucunTexteDeDelaiDeContestation() {
+        let contestation = catalogue.filter { $0.cle.hasPrefix("Contestation.") }
+        XCTAssertFalse(contestation.isEmpty)
+        for entree in contestation {
+            for marque in ["72", "48", "délai", "tranchera", "pour répondre", "pour contester"] {
+                XCTAssertFalse(entree.texte.lowercased().contains(marque), "\(entree.cle) contient « \(marque) »")
+            }
+        }
+    }
+
+    /// `STATUT_CONFIG[litige.statut]?.label || litige.statut` (`PanneauContestation.tsx` l.266).
+    func testLibelleDeStatutDeContestationCommeLeWeb() {
+        let contestation = TextesWeb.Contestation.self
+        XCTAssertEqual(contestation.libellesStatut.count, 13)
+        XCTAssertEqual(contestation.libelleStatut(code: "OUVERT"), "Ouvert")
+        XCTAssertEqual(contestation.libelleStatut(code: "EN_MEDIATION"), "En médiation")
+        XCTAssertEqual(contestation.libelleStatut(code: "RESOLU_FAVEUR_ETAB"), "Résolu en faveur de l’établissement")
+        XCTAssertEqual(contestation.libelleStatut(code: "STATUT_INCONNU"), "STATUT_INCONNU")
+    }
+
+    /// Interrupteur du Profil (`SectionPreferences.tsx` l.133-136) et retour après bascule (l.161).
+    func testConsentementGpsDuProfilCommeLeRenduWeb() {
+        let profil = TextesWeb.ProfilConsentementGps.self
+        XCTAssertEqual(profil.explication(consentementActif: true), profil.explicationActive)
+        XCTAssertEqual(profil.explication(consentementActif: false), profil.explicationRetiree)
+        XCTAssertEqual(profil.retourBascule(consentementActif: true), "Consentement GPS activé.")
+        XCTAssertEqual(profil.retourBascule(consentementActif: false), profil.retire)
+        XCTAssertEqual(profil.libelleAccessibilite, profil.libelle)
+    }
+
+    /// Message des tentatives restantes (`SignerContratOtp.tsx` l.322-327) : affiché sous 5 ;
+    /// pluriel au-delà de 1 ; à 0, le message des tentatives épuisées.
+    func testTentativesRestantesCommeLeRenduWeb() {
+        let otp = TextesWeb.SignatureOtp.self
+        XCTAssertEqual(otp.tentativesRestantes(n: 4), "Code incorrect. 4 tentatives restantes.")
+        XCTAssertEqual(otp.tentativesRestantes(n: 1), "Code incorrect. 1 tentative restante.")
+        XCTAssertEqual(otp.tentativesRestantes(n: 0), "Trop de tentatives. Renvoyez un nouveau code SMS.")
+        XCTAssertEqual(otp.tentativesRestantes(n: -1), otp.tentativesEpuisees)
+        XCTAssertNil(otp.tentativesRestantes(n: 5))
+        XCTAssertNil(otp.tentativesRestantes(n: 6))
+    }
+
+    /// Envoi du code (`SignerContratOtp.tsx` l.151, l.296, l.299) et minuteur (l.110, l.305).
+    func testEnvoiDuCodeEtMinuteurCommeLeRenduWeb() {
+        let otp = TextesWeb.SignatureOtp.self
+        XCTAssertEqual(otp.codeEnvoye(telephoneMasque: "06 •• •• •• 12", minutes: 10),
+                       "Code envoyé au 06 •• •• •• 12. Valide 10 min.")
+        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: "06 •• •• •• 12"), "Code envoyé au 06 •• •• •• 12")
+        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: nil), "Code envoyé au numéro masqué")
+        XCTAssertEqual(otp.codeEnvoyeAu(telephoneMasque: ""), "Code envoyé au numéro masqué")
+        XCTAssertEqual(otp.smsRestants(n: 0), "(dernier envoi possible)")
+        XCTAssertEqual(otp.smsRestants(n: 1), "(1 envoi restant)")
+        XCTAssertEqual(otp.smsRestants(n: 2), "(2 envois restants)")
+        XCTAssertEqual(otp.minuteur(secondesRestantes: 600), "10:00")
+        XCTAssertEqual(otp.minuteur(secondesRestantes: 65), "01:05")
+        XCTAssertEqual(otp.minuteur(secondesRestantes: 0), "Expiré")
+        XCTAssertEqual(otp.erreurReseauEnvoi, "Erreur réseau. Réessayez.")
+        XCTAssertEqual(otp.erreurReseauSignature, otp.erreurReseauEnvoi)
+        XCTAssertEqual(otp.renvoi(otpExpire: true), "Recevoir un nouveau code")
+        XCTAssertEqual(otp.renvoi(otpExpire: false), "Renvoyer le code")
+    }
+
+    /// Durée restante du compte à rebours (`Countdown72hSignature.tsx` l.49-51, l.72).
+    func testDureeDuCompteAReboursCommeLeRenduWeb() {
+        let rebours = TextesWeb.CompteARebours.self
+        XCTAssertEqual(rebours.duree(restantSecondes: 62 * 3600), "62h 00m 00s")
+        XCTAssertEqual(rebours.duree(restantSecondes: 3661), "1h 01m 01s")
+        XCTAssertEqual(rebours.duree(restantSecondes: 59), "0h 00m 59s")
+    }
+
+    /// Relance de l'établissement (`DetailPresencesMission.tsx` l.120-123) : message serveur
+    /// s'il existe (`??` : seul un message absent est remplacé), sinon le repli du web.
+    func testMessageDeRelanceCommeLeWeb() {
+        let presences = TextesWeb.Presences.self
+        XCTAssertEqual(presences.messageRelance(succes: true, message: nil, erreur: nil), "Établissement relancé.")
+        XCTAssertEqual(presences.messageRelance(succes: true, message: "Relance envoyée.", erreur: nil), "Relance envoyée.")
+        XCTAssertEqual(presences.messageRelance(succes: false, message: nil, erreur: "Déjà relancé."), "Déjà relancé.")
+        XCTAssertEqual(presences.messageRelance(succes: false, message: nil, erreur: nil), "Relance impossible.")
+        XCTAssertEqual(presences.relancer, "Relancer l'établissement")
+    }
+
+    /// Pied de la page `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.214-215).
+    func testMentionDeLaPageCertificat() {
+        XCTAssertTrue(TextesWeb.Certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
     }
 }
