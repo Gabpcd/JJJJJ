@@ -28808,8 +28808,6 @@ BEGIN
     'fin_declaree', p_heure_fin,
     'horodatage_arrondi', v_arrondi_audit,
     'validation_etab_requise', true,
-    'nouveau_code', v_new_code,
-    'nouveau_hmac', v_new_hmac,
     'prochain_type_scan', 'OUVERTURE',
     'numero_scan', v_scan_numero
   );
