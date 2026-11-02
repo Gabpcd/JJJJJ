@@ -47,8 +47,11 @@
    GPS + encart « Position exacte ») ; pas de `requestTemporaryFullAccuracyAuthorization` (nouvelle chaîne
    `Info.plist`, donc nouveau texte).
 6. **Messages de refus du pointage : messages serveur verbatim** (décision 9 du lot 1) ; une seule surcharge, celle
-   du web pour `P0002`, en vouvoiement : « Code de pointage invalide ou expiré. Demandez le code actuel à
-   l'établissement. ».
+   du web pour `P0002` (`src/components/pointage/PointageRotatifSoignant.tsx` l.136 : « Code de pointage invalide ou
+   expiré. Demande le code actuel à l’établissement. »), dont seule la personne du verbe change (vouvoiement) :
+   « Code de pointage invalide ou expiré. Demandez le code actuel à l’établissement. » — forme exacte affichée par
+   T4b, apostrophe typographique ’ du web comprise (le §7 Q6 du blueprint l'écrit avec une apostrophe droite).
+   Garde : `tests/node/check-rpc-contracts.node.mjs` relit la ligne du web et rougit si elle change.
 7. **Identifiant terminal : `TERM_IOS_` + 20 caractères base32 aléatoires**, générés une fois, Keychain
    `ThisDeviceOnly`, non synchronisé, conservé à la déconnexion ; jamais `identifierForVendor` ni empreinte d'appareil.
 8. **`nouveau_code` : faire B1** (PR backend séparée, B9 → en attente du go) ; d'ici là le décodeur Swift est une liste
@@ -132,12 +135,25 @@
 
 ## Ordonnancement et branches
 
-- **T0** (cette tranche) est préalable à toutes les autres ; **B1 se merge après T0** (elle bascule deux fichiers de T0 :
-  la fiche « `nouveau_code` jamais lu » et la garde correspondante).
+- **T0** (cette tranche) est préalable à toutes les autres. **B1** vise `main` et n'attend pas T0 ; tant que le lot 2
+  n'est pas sur `main`, la fiche « `nouveau_code` jamais lu » de `CONTRATS_RPC_SOIGNANT.md` et sa garde n'existent
+  que sur `feat/ios-lot2`. Elles basculent donc au **merge de `main` dans `feat/ios-lot2`** qui suit la re-baseline
+  du dump après B1 : la garde rougit à ce merge, et le commit de merge (ou celui qui le suit sur `feat/ios-lot2`)
+  met à jour la fiche et la garde. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
 - **T1** attend l'intégration du journal de reçus de lot 1 T7 (décision 23) : vague 1.
 - Branche d'intégration `feat/ios-lot2`, créée depuis `origin/feat/ios-lot1` ; elle reprend `main` puis `feat/ios-lot1`
   par merge (jamais de rebase ni de force-push). Aucune PR n'est ouverte sur cette branche avant la fin du lot 1
   (chaque PR lance la recette Playwright sur la base partagée).
+
+## Consignes aux tranches suivantes
+
+- **T2** (qui modifie les filtres de chemins de `.github/workflows/ios-swift-ci.yml`) : ajouter
+  `scripts/ci/sms-signature-staging.sql` aux deux listes `paths` (`pull_request` et `push`). Depuis T0,
+  `node scripts/mobile/check-rpc-contracts.mjs` (étape « Contrats RPC sans dérive », l.116) lit ce supplément pour
+  `fn_admission_otp_signature_recette` (statut `staging_seulement`). D'ici là, la garde Node de `validate-pr.yml`
+  couvre une modification du supplément ; `tests/node/check-rpc-contracts.node.mjs` exige cette consigne tant que le
+  filtre manque.
+- **T4b** : la surcharge `P0002` affiche exactement la forme de la décision 6 (apostrophe ’).
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 2 »)
 
@@ -174,7 +190,7 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 ### B9 (PR préparées et poussées, jamais mergées sans go)
 
 - **B1** — `fn_scanner_code_pointage` sans `nouveau_code` ni `nouveau_hmac` (fonction `SECURITY DEFINER`, depuis la
-  définition live), mergée après T0.
+  définition live) ; bascule de la fiche et de la garde de T0 : « Ordonnancement et branches ».
 - **S1** — allocateur STAGING de capacité SMS de signature (`scripts/ci/allouer-capacite-sms-signature-staging.mjs`,
   workflow protégé) : secrets STAGING, fonctions `SECURITY DEFINER` du supplément, données.
 - **T11** — go au dispatch du workflow STAGING du lot 2 et du mode `--appareil` de sa fixture pour T12 (secrets
@@ -185,6 +201,43 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
   (horaires, distance, alertes) ou ses segments de pointage. Constat sur le dump `public.sql` ; une PR backend séparée
   (B9) doit le confirmer sur la définition live et corriger la garde. Le natif n'appelle ces RPC que pour ses
   missions et n'en dépend pas.
+- **Constat T0 (nouveau, RLS/auth) — système ① toujours appelable, pointage à distance** (revue fraîche de T0 ;
+  constat sur le dump `public.sql`, à confirmer sur la définition live par une PR backend séparée, B9) : les huit RPC
+  de `RPC_POINTAGE_SYSTEME_1` ne sont plus montées côté web, mais gardent le `GRANT … TO authenticated` en
+  production (l.81953, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495, l.85523) : PostgREST les sert à tout
+  compte connecté. Deux chaînes permettent à un soignant de **pointer à distance** :
+  1. `fn_codes_pointage_mission` (l.23784) garde l'accès par `NOT est_admin() AND v_mission.etablissement_id !=
+     mon_etablissement_id()` (l.23799) ; `mon_etablissement_id()` vaut NULL pour un soignant, la condition vaut
+     NULL et la garde laisse passer : la RPC renvoie `code_arrivee` et `code_depart` de n'importe quelle mission
+     (et les crée par `UPDATE missions` s'ils manquent). `fn_pointer_arrivee` (l.47421) accepte ensuite ce code
+     **sans GPS** (l.47449-47455 : méthode `CODE`, `perimetre_gps_valide = true`), `dec_antifraude_presence` ne
+     recalculant le périmètre que si des coordonnées sont jointes (l.646) ; `fn_pointer_depart` fait de même avec
+     `code_depart` (l.47577-47582).
+  2. `fn_generer_qr_mission` (l.37981) garde l'accès par `NOT (est_admin() OR v_mission.etablissement_id =
+     mon_etablissement_id())` (l.38006), qui vaut aussi NULL pour un soignant : le soignant assigné génère son propre
+     jeton, que `fn_valider_scan_qr` (l.65545) accepte (affectation vérifiée, GPS non bloquant : « QR = source de
+     vérité »).
+  L'anti-triche du pointage est contournée, et les heures ainsi pointées faussent en aval la paie, la facturation et
+  l'escrow. Les fiches ① de `CONTRATS_RPC_SOIGNANT.md` les décrivent comme mortes côté web : elles restent appelables.
+  **Proposition** (PR backend séparée, B9, depuis la définition live, garde-fou 9.0 n°2) : `REVOKE EXECUTE ON
+  FUNCTION … FROM authenticated` sur les huit RPC ①, après vérification que `SyncHorsLigne` (monté par
+  `LayoutApp.tsx`, rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`) ne porte plus aucun pointage réel ; à
+  défaut, des gardes `IS DISTINCT FROM` / `COALESCE` qui refusent quand `mon_etablissement_id()` est NULL. Dans les
+  deux cas, un rejet explicite qui renvoie à ce constat (principe « un gap connu reste verrouillé »).
+- **Constat T0 (nouveau, RLS/auth) — `fn_creer_notification`** (revue fraîche de T0) : tout compte authentifié peut
+  écrire une notification arbitraire (destinataire, type, titre, corps, `lien`) à n'importe quel destinataire :
+  fonction `SECURITY DEFINER` (l.27450-27475), `GRANT … TO authenticated` (l.82276), seul contrôle
+  `auth.uid() IS NULL` (refus des appels anonymes hors cron). `docs/audit-fonctionnel-pre-lancement.md` l.177 la
+  marque pourtant « ✅ FIXÉ » : le correctif n'a ajouté que ce contrôle d'authentification. Le natif ne l'appelle
+  jamais (décision 9, `RPC_JAMAIS_SUIVIES`) ; le web l'appelle encore (`PanneauContestation.tsx` l.147-155).
+  **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
+  `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
+  destinataire et le type, avec un rejet explicite.
+- **Motif à auditer par ces PR backend** : la comparaison nue à `mon_etablissement_id()` (`!=` ou `=` sans
+  `IS DISTINCT FROM`) apparaît 18 fois au dump, dont `fn_generer_facture` (l.37629, hors lot 2) ; audit croisé sur
+  les définitions live.
+- **Remontée** : ces constats sont à remonter à Gabrielle par la session principale, hors branche, sans attendre la PR
+  de `feat/ios-lot2` (aucune PR n'est ouverte sur cette branche avant la fin du lot 1).
 
 ### Actions manuelles (STAGING, appareil, Apple)
 
@@ -204,7 +257,9 @@ Rien de ce qui suit n'est implémenté par les tranches iOS ; chaque point bloqu
 - `dec_fenetre_pointage` (`public.sql` l.1961) formate l'heure sans fuseau (UTC) dans « Pointage trop tôt. La mission
   commence à %. » : affiché verbatim ; correctif backend à proposer (consigné dans `PORTE_LOT2.md` à la clôture).
 - `SyncHorsLigne` (monté par `LayoutApp.tsx`) rejoue `fn_pointer_*` depuis `src/lib/horsLigne.ts`, alimenté seulement
-  par des fonctions web mortes : résidu web du système ①, non reproduit (retrait à proposer côté web).
+  par `stockerPointageHorsLigne`, appelée uniquement dans les fonctions web mortes `pointerArrivee` / `pointerDepart` :
+  résidu web du système ①, non reproduit (retrait à proposer côté web, préalable au REVOKE du constat B9). Une garde
+  Node rougit si `stockerPointageHorsLigne` gagne un importeur ou un appel ailleurs.
 - Le web journalise le retrait du consentement GPS sous `GPS_CONSENTEMENT_ACTIVE` / `GPS_CONSENTEMENT_RETIRE`, absents
   du CHECK `journaux_audit_action_check` : son audit échoue en silence (la trace serveur `DONNEES_PERSO_MODIFICATION`
   existe).

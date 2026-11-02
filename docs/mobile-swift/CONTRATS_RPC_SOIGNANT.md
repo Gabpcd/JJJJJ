@@ -34,7 +34,7 @@ plus de diff).
 
 **Autres sources lues par la garde.** Outre les trente-trois RPC suivies, la garde lit : les corps de six fonctions non suivies (`fn_conflit_planning_soignant`, `fn_postuler_mission`, `fn_postuler_mission_rate_limited`, `fn_finaliser_attribution_mission`, `fn_resoudre_contrat_mission`, `fn_demander_confirmations_presence`) ; le web `src/pages/DetailMissionSoignant.tsx` (chaînes de présence, tests `data?.choix_requis`, classement « mission perdue ») et `src/lib/erreurs.ts` (`estBlocageCodeTravail`) ; l'edge `supabase/functions/delete-account/index.ts` et `supabase/functions/_shared/admin-auth.ts` ; tout littéral `"fn_…"` des fichiers `ios-native/**/*.swift`. Une PR web, edge ou de re-baseline qui modifie l'une de ces sources met la fiche concernée à jour **dans la même PR**.
 
-**Sources ajoutées par le lot 2 (T0).** Les corps de `fn_exiger_conformite_demarrage_mission`, `trg_exiger_conformite_premier_pointage` et `dec_fenetre_pointage` (exceptions de la première OUVERTURE) et les triggers `dec_fenetre_pointage`, `trg_01_exiger_conformite_premier_pointage`, `trg_01_exiger_conformite_mission_en_cours`, `trg_notifier_creation_litige` ; le supplément `scripts/ci/sms-signature-staging.sql` (`fn_admission_otp_signature_recette`, statut `staging_seulement`) ; le web `src/components/pointage/PointageRotatifSoignant.tsx` (RPC appelées, clés `p_metadata`, surcharge du message `P0002`), `src/pages/PresencesSoignant.tsx` et `src/components/pointage/BlocPointageMission.tsx` (système ① non appelé), `src/components/CartePointage.tsx` et `src/lib/qr-offline-queue.ts` (importeurs), `src/components/PanneauContestation.tsx` (trois clés, `fn_creer_notification`, constante 72 h), `src/components/SignerContratOtp.tsx` (`MESSAGES_ERREUR`) et `src/lib/signatureSmsStagingAdmission.ts` (garde d'URL STAGING) ; les edges `supabase/functions/verify-document/index.ts` et `supabase/functions/generate-contrat-mission-pdf/index.ts` et leur ligne `verify_jwt` de `supabase/config.toml` ; les politiques Storage de `supabase/migrations/*.sql` ; aucun `nouveau_code` dans les sources Swift.
+**Sources ajoutées par le lot 2 (T0).** Les corps de `fn_exiger_conformite_demarrage_mission`, `trg_exiger_conformite_premier_pointage` et `dec_fenetre_pointage` (exceptions de la première OUVERTURE) et les triggers `dec_fenetre_pointage`, `trg_01_exiger_conformite_premier_pointage`, `trg_01_exiger_conformite_mission_en_cours`, `trg_notifier_creation_litige` ; le supplément `scripts/ci/sms-signature-staging.sql` (`fn_admission_otp_signature_recette`, statut `staging_seulement`) ; le web `src/components/pointage/PointageRotatifSoignant.tsx` (RPC appelées, clés `p_metadata`, surcharge du message `P0002`), `src/pages/PresencesSoignant.tsx` et `src/components/pointage/BlocPointageMission.tsx` (système ① non appelé), `src/components/CartePointage.tsx` et `src/lib/qr-offline-queue.ts` (importeurs), `src/components/PanneauContestation.tsx` (trois clés, `fn_creer_notification`, constante 72 h), `src/components/SignerContratOtp.tsx` (`MESSAGES_ERREUR`) et `src/lib/signatureSmsStagingAdmission.ts` (garde d'URL STAGING) ; les edges `supabase/functions/verify-document/index.ts` et `supabase/functions/generate-contrat-mission-pdf/index.ts` et leur ligne `verify_jwt` de `supabase/config.toml` ; toutes les politiques `storage.objects` de `supabase/migrations/*.sql` (état final, quel que soit leur nom) ; aucun `nouveau_code` dans les sources Swift. Ajouts de la revue fraîche de T0 : les corps de `fn_codes_pointage_mission`, `fn_pointer_arrivee`, `dec_antifraude_presence`, `fn_generer_qr_mission`, `fn_valider_scan_qr` et `fn_creer_notification`, et les GRANT `authenticated` des huit RPC ① et de `fn_creer_notification` (constats B9 de `DECISIONS_LOT2.md`) ; `docs/audit-fonctionnel-pre-lancement.md` (statut « FIXÉ » de `fn_creer_notification`) ; le rejoueur ① `src/lib/horsLigne.ts` (`stockerPointageHorsLigne`), `src/components/SyncHorsLigne.tsx` et `src/components/LayoutApp.tsx` (importeurs) ; les filtres de chemins de `.github/workflows/ios-swift-ci.yml` (supplément SMS, consigne pour T2).
 
 Règles (plan §4.4) : montants, net estimé et règles juridiques sont des valeurs serveur jamais recalculées ;
 chaque gateway relit l'objet après mutation ; les erreurs PostgREST PGRST202 et 300 à 303 sont des refus
@@ -342,7 +342,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", 
 - **Exceptions PostgREST de la RPC** (message `PostgrestError.message` verbatim ; `%` = valeur formatée par le
   serveur) :
   - `P0002` (`no_data_found`) « Code de pointage invalide ou expiré. » (l.55649) — seule surcharge client,
-    celle du web l.135-137, en vouvoiement (décision 6) : « Code de pointage invalide ou expiré. Demandez le code actuel à l'établissement. » ;
+    celle du web (`PointageRotatifSoignant.tsx` l.135-136 : « Code de pointage invalide ou expiré. Demande le code
+    actuel à l’établissement. »), dont seule la personne du verbe change (décision 6) : « Code de pointage invalide
+    ou expiré. Demandez le code actuel à l’établissement. » (forme exacte, apostrophe typographique ’ du web) ;
   - `42501` (`insufficient_privilege`) « Vous n'êtes pas assigné(e) à cette mission. » (l.55652) — **refus métier, jamais une session expirée** ;
   - `23514` (`check_violation`) « Scan déjà pris en compte. Prochain scan possible dans % secondes. » (l.55662, anti-rejeu de 2 min) ;
   - `23514` « Le contrat doit être signé avant le pointage. » (l.55677, OUVERTURE seulement) ;
@@ -1169,9 +1171,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   (tests de T3 : absents du modèle et de tout `attachText`). Aucun fichier source Swift (hors tests) ne mentionne
   ces clés ; garde `tests/node/check-rpc-contracts.node.mjs`.
 - **Correctif serveur** : PR backend **B1** (B9, `SECURITY DEFINER` → go explicite de Gabrielle,
-  `DECISIONS_LOT2.md` décision 8) qui retire les deux clés depuis la définition live. La garde « `nouveau_code`
-  présent dans le dump » de `tests/node/check-rpc-contracts.node.mjs` rougit à la re-baseline qui suit B1 : la
-  PR B1 bascule cette garde et la présente fiche dans la même PR (B1 se merge **après** T0).
+  `DECISIONS_LOT2.md` décision 8) qui retire les deux clés depuis la définition live. B1 vise `main`, où la présente
+  fiche et la garde « `nouveau_code` présent dans le dump » de `tests/node/check-rpc-contracts.node.mjs` n'existent
+  pas tant que le lot 2 n'y est pas : la garde rougit au merge de `main` dans `feat/ios-lot2` qui suit la
+  re-baseline du dump après B1, et ce merge (ou le commit qui le suit sur `feat/ios-lot2`) bascule la garde et la
+  fiche. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule elle-même.
 
 ## Edge `verify-document`
 
@@ -1267,8 +1271,14 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   compte actif, admin ou `contrats_mission.storage_path = name` pour le soignant ou l'établissement du contrat),
   `20260729143000` l.126-142. Aucune écriture client ; l'objet est écrit par l'edge `generate-contrat-mission-pdf`
   (service_role). Téléchargement `download(path:)` borné à 2 Mo, empreinte SHA-256 comparée à `hash_document`.
-- **Garde** : `tests/node/check-rpc-contracts.node.mjs` parcourt `supabase/migrations/*.sql` dans l'ordre et échoue si
-  l'une des trois politiques disparaît ou si une politique UPDATE/DELETE `jolene-documents` est recréée.
+- **Garde** : `tests/node/check-rpc-contracts.node.mjs` rejoue dans l'ordre toutes les instructions `CREATE`, `ALTER`
+  et `DROP POLICY … ON storage.objects` écrites en clair dans `supabase/migrations/*.sql` (commentaires `--`
+  retirés) et évalue l'état final : elle échoue si l'une des trois politiques disparaît ou change de commande, ou si
+  une politique permissive encore active, **quel que soit son nom**, ouvre `UPDATE`, `DELETE` ou `ALL` sur
+  `jolene-documents`, ou une écriture (`INSERT`, `UPDATE`, `DELETE`, `ALL`) sur `contrats-signes`. Une politique
+  sans `FOR` vaut `ALL`, une politique qui ne restreint aucun `bucket_id` vaut pour tous les buckets, une politique
+  `AS RESTRICTIVE` n'ouvre rien. Limite : une politique créée par SQL dynamique (`EXECUTE format(…)`) ou hors
+  migration n'est pas vue.
 
 ## Interdit côté natif : système de pointage ①
 
@@ -1291,13 +1301,25 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_code_secours"("p_mission_id" "uu
 CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "uuid") RETURNS "jsonb"
 ```
 
+- **Toujours appelables** (revue fraîche de T0) : « mortes » côté web, les huit RPC sont toujours GRANT
+  `authenticated` en production (`public.sql` l.81953, l.83079, l.83997, l.84003, l.84009, l.84015, l.85495,
+  l.85523) : PostgREST les sert à tout compte connecté. Deux gardes d'accès en logique ternaire
+  (`mon_etablissement_id()` NULL pour un soignant) permettent à un soignant de pointer à distance :
+  `fn_codes_pointage_mission` (l.23799) lui rend `code_arrivee` et `code_depart`, que `fn_pointer_arrivee` et
+  `fn_pointer_depart` acceptent sans GPS avec `perimetre_gps_valide = true` (l.47449-47455, l.47577-47582) ;
+  `fn_generer_qr_mission` (l.38006) laisse le soignant assigné générer son propre jeton, que `fn_valider_scan_qr`
+  accepte (GPS non bloquant). Constat B9 de `DECISIONS_LOT2.md` (« En attente de Gabrielle »), à confirmer sur la
+  définition live par une PR backend séparée ; proposition : `REVOKE EXECUTE … FROM authenticated` sur les huit RPC
+  après vérification de `SyncHorsLigne`, ou gardes `IS DISTINCT FROM`, avec un rejet explicite. Le natif n'en
+  dépend pas.
 - **Pourquoi** (`LOT2_PLAN.md` corrections 1 à 3) : depuis la PR #664 (22/06/2026), le seul composant de pointage
   monté côté soignant est `PointageRotatifSoignant` (via `BlocPointageMission`, `PresencesSoignant.tsx`), qui
   n'appelle que `fn_etat_pointage_mission` et `fn_scanner_code_pointage`. `pointerArrivee` et `pointerDepart`
   (`PresencesSoignant.tsx`) ne sont appelés nulle part ; `CartePointage` (qui monte `ScannerQRPointageSoignant` et
   `SaisieCodeSecours`) n'est importé par aucune page ; `src/lib/qr-offline-queue.ts` n'est importé que par
   `CartePointage.tsx`. `SyncHorsLigne` reste monté (`LayoutApp.tsx`) et rejoue `fn_pointer_*` depuis
-  `src/lib/horsLigne.ts`, alimenté seulement par les fonctions mortes : résidu web, non reproduit. Côté
+  `src/lib/horsLigne.ts`, alimenté seulement par `stockerPointageHorsLigne`, appelée uniquement dans les fonctions
+  mortes `pointerArrivee` / `pointerDepart` : résidu web, non reproduit. Côté
   établissement, le QR affiché par `AffichageCodeRotatifEtab` encode `code_pointage_actif`, pas un jeton de
   `fn_generer_qr_mission`. Porter ① ajouterait un chemin sans contrôle « contrat signé » (`fn_valider_scan_qr`
   ne le vérifie pas, contrairement à `fn_scanner_code_pointage`), bloquant pour les missions multi-jours, et une file
@@ -1307,8 +1329,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "
   rétroactive côté établissement (web).
 - **Garde de revue** : `tests/node/check-rpc-contracts.node.mjs` échoue si `pointerArrivee` ou `pointerDepart`
   redevient appelé dans `PresencesSoignant.tsx`, si `CartePointage` est de nouveau importé, si
-  `qr-offline-queue` gagne un importeur ou si `PointageRotatifSoignant` appelle une autre RPC : la décision 1 est
-  alors à revoir.
+  `qr-offline-queue` gagne un importeur, si `stockerPointageHorsLigne` gagne un importeur ou un appel hors de
+  `pointerArrivee` / `pointerDepart` (le rejoueur `SyncHorsLigne` reprendrait du service), ou si
+  `PointageRotatifSoignant` appelle une autre RPC : la décision 1 est alors à revoir. Elle échoue aussi quand une
+  PR backend retire le GRANT `authenticated` de l'une des huit RPC : basculer alors le paragraphe « Toujours
+  appelables » et le constat B9.
 
 ## Interdite côté natif : `fn_creer_notification`
 
@@ -1318,6 +1343,13 @@ CREATE OR REPLACE FUNCTION "public"."fn_codes_pointage_mission"("p_mission_id" "
   `trg_notifier_creation_litige` (`AFTER INSERT ON litiges`, `public.sql` l.76080) : l'appel client crée un doublon
   et suppose le droit, pour tout compte authentifié, d'écrire une notification arbitraire à un destinataire de son
   choix (`fn_creer_notification` l.27450). Le natif ne reproduit pas cet appel ; la relecture du litige suffit.
+- **Constat B9** (revue fraîche de T0, `DECISIONS_LOT2.md` « En attente de Gabrielle ») : la fonction est
+  `SECURITY DEFINER` (l.27450-27475), toujours GRANT `authenticated` (`public.sql` l.82276), et son seul contrôle
+  est `auth.uid() IS NULL` (refus des appels anonymes hors cron, l.27461-27463) : tout compte connecté peut écrire
+  une notification arbitraire (destinataire, type, titre, corps, `lien`). `docs/audit-fonctionnel-pre-lancement.md`
+  l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification a été ajouté). À confirmer sur la
+  définition live par une PR backend séparée ; la garde rougit si le GRANT disparaît ou si le destinataire est
+  contrôlé.
 - **Garde** : `verifierExclusions` refuse son entrée dans `RPC_SUIVIES` ; la garde des littéraux Swift la signale.
 
 ## Hors périmètre de ce document

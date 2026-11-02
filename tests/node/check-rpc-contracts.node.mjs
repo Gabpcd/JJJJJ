@@ -1081,6 +1081,9 @@ test('CONTRATS : sources lues par la garde du lot 2 listées dans l en-tête', (
     'src/lib/signatureSmsStagingAdmission.ts', 'scripts/ci/sms-signature-staging.sql',
     'supabase/functions/verify-document/index.ts', 'supabase/functions/generate-contrat-mission-pdf/index.ts',
     'src/pages/PresencesSoignant.tsx', 'src/components/PanneauContestation.tsx',
+    // Revue fraîche de T0 : rejoueur ①, constats B9, filtres de chemins.
+    'src/lib/horsLigne.ts', 'src/components/SyncHorsLigne.tsx', 'src/components/LayoutApp.tsx',
+    'docs/audit-fonctionnel-pre-lancement.md', '.github/workflows/ios-swift-ci.yml', 'fn_codes_pointage_mission',
   ]) assert.ok(entete.includes(source), `en-tête : source ${source} non listée`);
   // Les MESSAGES_ERREUR du web cités par la fiche OTP existent toujours tels quels.
   const otp = read('src/components/SignerContratOtp.tsx');
