@@ -16,20 +16,29 @@
  * Autres annotations :
  *   - `// source-objet: <fichier>:<ligne> <NOM>` avant un `[String: String]` : l'objet littéral
  *     `NOM` du web (même jeu de clés, chaque clé reliée à la constante du même texte) ;
+ *     `<NOM>.<champ>` pour un objet d'objets (`STATUT_CONFIG.label` : le champ `label` de chaque clé) ;
  *   - `// source-ensemble: <fichier>:<début>-<fin>` avant un `Set<String>` : `new Set([...])`.
  * `catalogue` doit lister toutes les constantes (le test Swift le parcourt). Tout autre littéral
- * de chaîne du fichier Swift est refusé (sauf `" "` et `""`, séparateurs des assemblages).
+ * de chaîne du fichier Swift est refusé (sauf `" "` et `""`, séparateurs des assemblages), de
+ * même que tout littéral multi-ligne (triple guillemet).
  *
- * Enfin, aucun texte juridique ne doit être écrit en dur dans les dossiers Swift du lot 2
+ * Verrou Q9 (LOT2_PLAN §7 Q9, DECISIONS_LOT2, en attente de Gabrielle) : aucune constante ne
+ * reprend un texte de délai de contestation de `PanneauContestation.tsx` (`ZONES_Q9`,
+ * `MOTIFS_Q9`), ni par sa ligne ni par sa valeur.
+ *
+ * Enfin, aucun texte juridique ne doit être écrit en dur dans les fichiers Swift du lot 2
  * (`DOSSIERS_LOT2`) hors de `TextesWeb.swift`.
  *
  * Usage :
- *   node scripts/mobile/check-textes-juridiques-ios.mjs          # vérifie, code 1 si écart
- *   node scripts/mobile/check-textes-juridiques-ios.mjs --liste  # tableau Markdown des textes
+ *   node scripts/mobile/check-textes-juridiques-ios.mjs                   # vérifie, code 1 si écart
+ *   node scripts/mobile/check-textes-juridiques-ios.mjs --liste           # tableau Markdown des textes
+ *   node scripts/mobile/check-textes-juridiques-ios.mjs --corriger-lignes # réécrit les annotations
+ *     des textes INCHANGÉS retrouvés à une autre ligne du même fichier (décalage d'une PR web),
+ *     puis revérifie ; un texte modifié n'est jamais « corrigé ».
  *
  * Aucune valeur secrète n'est lue : le script ne lit que des fichiers du dépôt.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -37,7 +46,11 @@ import ts from 'typescript';
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const TEXTES_SWIFT = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Legal/TextesWeb.swift';
 
-/** Dossiers Swift du lot 2 (LOT2_PLAN §2.1) où aucun texte juridique ne s'écrit en dur. */
+/**
+ * Dossiers et fichiers Swift du lot 2 (LOT2_PLAN §2.1 et §3) où aucun texte juridique ne s'écrit
+ * en dur. Les fichiers du lot 2 placés hors des dossiers d'écrans sont nommés un à un : aucun
+ * fichier du lot 1 n'est concerné.
+ */
 export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Pointage',
   'ios-native/Packages/JoleneCore/Sources/JoleneCore/Documents',
@@ -45,17 +58,57 @@ export const DOSSIERS_LOT2 = [
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Pointage',
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Documents',
   'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Contrats',
+  'ios-native/Packages/JoleneDesign/Sources/JoleneDesign/Components/CountdownLabel.swift',
+  'ios-native/Packages/JoleneDesign/Sources/JoleneDesign/Components/NumericCodeField.swift',
+  'ios-native/Packages/JoleneDesign/Sources/JoleneDesign/Components/StatusBadge.swift',
   'ios-native/Jolene/Screens/Presences',
   'ios-native/Jolene/Screens/Documents',
   'ios-native/Jolene/Screens/Contrats',
+  'ios-native/Jolene/Screens/Profil/ConsentementGpsRow.swift',
+  'ios-native/Jolene/Screens/Profil/EspaceSoignantSection.swift',
   'ios-native/Jolene/Composition/ContratReaderView.swift',
+  'ios-native/Jolene/Composition/Device',
+  'ios-native/Jolene/Composition/Media',
 ];
 
-/** Marques d'un texte juridique (citation de code, RGPD, attestation sur l'honneur). */
+/**
+ * Marques d'un texte juridique ou de consentement (citation de code, RGPD, attestation sur
+ * l'honneur, consentement GPS, signature électronique, délai de 72 h). Un identifiant
+ * d'accessibilité (`profil-gps-consentement`) n'est pas un texte : les marques de mot exigent
+ * qu'il ne soit pas collé à un tiret.
+ */
 const MARQUES_JURIDIQUES = [
   /Code civil/i, /Code du travail/i, /Code pénal/i, /RGPD/, /eIDAS/i, /Base légale/i,
   /J['’]atteste/i, /sur l['’]honneur/i, /\bart(?:icle|\.)\s*L?\.?\s*\d/i,
+  /(?<![-\w])consentement(?![-\w])/i, /géolocalisation/i, /signature électronique/i,
+  /pointage sans (?:GPS|localisation)/i, /\b72\s?h\b/i,
 ];
+
+/**
+ * Verrou Q9 (LOT2_PLAN v2 §1.2, correction 14, §7 Q9 ; DECISIONS_LOT2 « En attente de
+ * Gabrielle ») : les textes de délai du panneau de contestation contredisent le serveur
+ * (`delai_contestation_pointage_h`, 48 h par défaut ; escalade vers `EN_MEDIATION`) et ne sont
+ * pas affichés tant que Q9 n'est pas tranchée. Aucune constante ne pointe dans ces zones ; chaque
+ * ancre doit être à sa ligne (sinon le web a bougé : relire Q9 et ces zones).
+ */
+export const ZONES_Q9 = [
+  {
+    fichier: 'src/components/PanneauContestation.tsx', debut: 343, fin: 356,
+    ancres: [{ ligne: 347, motif: /72\s?h pour répondre/i }, { ligne: 354, motif: /admin plateforme tranchera/i }],
+  },
+  {
+    fichier: 'src/components/PanneauContestation.tsx', debut: 393, fin: 395,
+    ancres: [{ ligne: 394, motif: /après la validation pour contester/i }],
+  },
+];
+
+/** Motifs des textes de délai de contestation, refusés quelle que soit la source annoncée. */
+export const MOTIFS_Q9 = [/72\s?h pour répondre/i, /admin plateforme tranchera/i, /après la validation pour contester/i];
+
+const MESSAGE_Q9 = 'texte de délai de contestation interdit tant que Q9 n’est pas tranchée par Gabrielle '
+  + '(LOT2_PLAN §7 Q9, DECISIONS_LOT2 « En attente de Gabrielle »)';
+
+const TRIPLE_GUILLEMET = '"'.repeat(3);
 
 // ---------------------------------------------------------------------------------------------
 // Swift
@@ -127,12 +180,24 @@ export function lireTextesSwift(source) {
   let catalogue = null;
   let annotation = null;
   let bloc = null;
+  let dansMultiLigne = false;
   const chemin = () => pile.filter(Boolean).slice(1).join('.');
   const qualifier = nom => (chemin() ? `${chemin()}.${nom}` : nom);
 
   lignes.forEach((ligne, index) => {
     const numero = index + 1;
     const nette = ligne.trim();
+
+    // Littéral multi-ligne : ses lignes intérieures n'ont pas de guillemets et échapperaient à
+    // toutes les règles ci-dessous ; il est refusé en bloc (signalé à son ouverture).
+    const triples = ligne.split(TRIPLE_GUILLEMET).length - 1;
+    if (triples || dansMultiLigne) {
+      if (triples && !dansMultiLigne) {
+        erreurs.push(`${TEXTES_SWIFT}:${numero} : littéral multi-ligne (triple guillemet) interdit : texte hors constante annotée`);
+      }
+      if (triples % 2) dansMultiLigne = !dansMultiLigne;
+      return;
+    }
 
     if (bloc) {
       if (/^\]\s*$/.test(nette)) { bloc = null; return; }
@@ -162,11 +227,11 @@ export function lireTextesSwift(source) {
         else annotation = { genre: 'texte', source: src, ligne: numero };
         return;
       }
-      m = /^\/\/ source-objet: (\S+) (\w+)$/.exec(nette);
+      m = /^\/\/ source-objet: (\S+) (\w+)(?:\.(\w+))?$/.exec(nette);
       if (m) {
         const src = lireSource(m[1]);
         if (!src) erreurs.push(`${TEXTES_SWIFT}:${numero} : annotation illisible « ${nette} »`);
-        else annotation = { genre: 'objet', source: { ...src, variable: m[2] }, ligne: numero };
+        else annotation = { genre: 'objet', source: { ...src, variable: m[2], champ: m[3] ?? null }, ligne: numero };
         return;
       }
       m = /^\/\/ source-ensemble: (\S+)$/.exec(nette);
@@ -192,7 +257,9 @@ export function lireTextesSwift(source) {
       else if (!annotation || annotation.genre !== 'texte') {
         erreurs.push(`${nom} (${TEXTES_SWIFT}:${numero}) : constante sans annotation « // source: <fichier>:<ligne> »`);
       } else {
-        constantes.push({ nom, valeur: decode.valeur, source: annotation.source, ligneSwift: numero });
+        constantes.push({
+          nom, valeur: decode.valeur, source: annotation.source, ligneSwift: numero, ligneAnnotation: annotation.ligne,
+        });
       }
       annotation = null;
       return;
@@ -203,9 +270,10 @@ export function lireTextesSwift(source) {
       if (!annotation || annotation.genre !== genre) {
         erreurs.push(`${nom} (${TEXTES_SWIFT}:${numero}) : ${genre} sans annotation « // source-${genre}: … »`);
       }
+      const ligneAnnotation = annotation?.ligne;
       const cible = genre === 'objet'
-        ? { nom, chemin: chemin(), source: annotation?.source, entrees: [], ligneSwift: numero }
-        : { nom, source: annotation?.source, elements: [], ligneSwift: numero };
+        ? { nom, chemin: chemin(), source: annotation?.source, entrees: [], ligneSwift: numero, ligneAnnotation }
+        : { nom, source: annotation?.source, elements: [], ligneSwift: numero, ligneAnnotation };
       (genre === 'objet' ? objets : ensembles).push(cible);
       bloc = { genre, cible };
       annotation = null;
@@ -335,15 +403,27 @@ function structuresWeb(sf) {
     if (ts.isVariableDeclaration(noeud) && ts.isIdentifier(noeud.name)) {
       const init = deballer(noeud.initializer);
       if (init && ts.isObjectLiteralExpression(init)) {
+        const nomDe = p => p.name.getText(sf).replace(/^['"]|['"]$/g, '');
+        const estTexte = v => v && (ts.isStringLiteral(v) || ts.isNoSubstitutionTemplateLiteral(v));
         const proprietes = new Map();
+        // Objet d'objets (`{ OUVERT: { label: 'Ouvert', … } }`) : champ → (clé → texte).
+        const champs = new Map();
         for (const p of init.properties) {
           if (!ts.isPropertyAssignment(p)) continue;
           const valeur = deballer(p.initializer);
-          if (valeur && (ts.isStringLiteral(valeur) || ts.isNoSubstitutionTemplateLiteral(valeur))) {
-            proprietes.set(p.name.getText(sf).replace(/^['"]|['"]$/g, ''), { valeur: valeur.text, ligne: ligne(valeur.getStart(sf)) });
+          if (estTexte(valeur)) {
+            proprietes.set(nomDe(p), { valeur: valeur.text, ligne: ligne(valeur.getStart(sf)) });
+          } else if (valeur && ts.isObjectLiteralExpression(valeur)) {
+            for (const q of valeur.properties) {
+              if (!ts.isPropertyAssignment(q)) continue;
+              const texte = deballer(q.initializer);
+              if (!estTexte(texte)) continue;
+              if (!champs.has(nomDe(q))) champs.set(nomDe(q), new Map());
+              champs.get(nomDe(q)).set(nomDe(p), { valeur: texte.text, ligne: ligne(texte.getStart(sf)) });
+            }
           }
         }
-        objets.push({ nom: noeud.name.text, ligne: ligne(noeud.getStart(sf)), proprietes });
+        objets.push({ nom: noeud.name.text, ligne: ligne(noeud.getStart(sf)), proprietes, champs });
       }
     }
     if (ts.isNewExpression(noeud) && noeud.expression.getText(sf) === 'Set' && noeud.arguments?.length === 1
@@ -399,12 +479,57 @@ export function verifierTextes({ swiftSource, lireWeb }) {
     const ailleurs = web.unites.find(u => u.valeur === c.valeur);
     if (ailleurs) {
       erreurs.push(`${c.nom} : texte retrouvé ${lignesDe(ailleurs)} de ${c.source.fichier} et non ${lignesDe(c.source)} : `
-        + 'mettre à jour l’annotation source après relecture du texte');
+        + 'relire le texte puis mettre à jour l’annotation source '
+        + '(node scripts/mobile/check-textes-juridiques-ios.mjs --corriger-lignes)');
       continue;
     }
     const aLaLigne = web.unites.filter(u => u.debut === c.source.debut);
     erreurs.push(`${c.nom} : ${c.source.fichier} ${lignesDe(c.source)} n'affiche pas « ${c.valeur} »`
       + (aLaLigne.length ? ` (le web affiche : ${aLaLigne.map(u => `« ${u.valeur} »`).join(', ')})` : ' (aucun texte à cette ligne)'));
+  }
+
+  // Un texte répété à la même ligne (`'s'` deux fois dans un gabarit) : une constante par
+  // occurrence, sinon la modification d'une seule occurrence passerait inaperçue.
+  const groupes = new Map();
+  for (const c of lu.constantes) {
+    if (!c.unite) continue;
+    const cle = `${c.source.fichier}\u0000${c.source.debut}\u0000${c.source.fin}\u0000${c.valeur}`;
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    groupes.get(cle).push(c);
+  }
+  for (const groupe of groupes.values()) {
+    const [{ source, valeur }] = groupe;
+    const web = lireWeb(source.fichier);
+    const occurrences = web.unites.filter(u => u.valeur === valeur && u.debut === source.debut && u.fin === source.fin).length;
+    if (occurrences !== groupe.length) {
+      for (const c of groupe) {
+        erreurs.push(`${c.nom} : « ${valeur} » apparaît ${occurrences} fois ${lignesDe(source)} de ${source.fichier} `
+          + `pour ${groupe.length} constante(s) : une constante par occurrence`);
+      }
+    }
+  }
+
+  // Verrou Q9 : ni constante annoncée dans une zone verrouillée, ni valeur égale à un texte de
+  // ces zones ou à un motif de délai ; et chaque ancre toujours à sa ligne.
+  const valeursQ9 = new Set();
+  for (const zone of ZONES_Q9) {
+    const web = lireWeb(zone.fichier);
+    if (!web) { erreurs.push(`ZONES_Q9 : ${zone.fichier} introuvable`); continue; }
+    for (const u of web.unites) {
+      if (u.debut <= zone.fin && u.fin >= zone.debut && /\p{L}.*\p{L}.*\p{L}/u.test(u.valeur)) valeursQ9.add(u.valeur);
+    }
+    for (const ancre of zone.ancres) {
+      if (!web.unites.some(u => u.debut === ancre.ligne && ancre.motif.test(u.valeur))) {
+        erreurs.push(`ZONES_Q9 : ${zone.fichier} l.${ancre.ligne} n'affiche plus de texte ${ancre.motif} : `
+          + 'le web a changé, relire Q9 puis mettre à jour ZONES_Q9 (scripts/mobile/check-textes-juridiques-ios.mjs)');
+      }
+    }
+  }
+  for (const c of lu.constantes) {
+    const dansZone = ZONES_Q9.some(z => z.fichier === c.source.fichier && c.source.debut <= z.fin && c.source.fin >= z.debut);
+    if (dansZone || valeursQ9.has(c.valeur) || MOTIFS_Q9.some(m => m.test(c.valeur))) {
+      erreurs.push(`${c.nom} (${c.source.fichier} ${lignesDe(c.source)}) : ${MESSAGE_Q9}`);
+    }
   }
 
   // Référence locale à l'espace de noms du dictionnaire d'abord, puis qualifiée depuis `TextesWeb`.
@@ -414,26 +539,29 @@ export function verifierTextes({ swiftSource, lireWeb }) {
     if (!o.source) continue;
     const web = lireWeb(o.source.fichier);
     const cible = web?.objets.find(x => x.nom === o.source.variable && x.ligne === o.source.debut);
+    const nomWeb = o.source.champ ? `${o.source.variable}.${o.source.champ}` : o.source.variable;
     if (!cible) {
       erreurs.push(`${o.nom} : objet ${o.source.variable} introuvable ${lignesDe(o.source)} de ${o.source.fichier}`);
       continue;
     }
+    const proprietes = o.source.champ ? (cible.champs.get(o.source.champ) ?? new Map()) : cible.proprietes;
+    if (!proprietes.size) erreurs.push(`${o.nom} : ${nomWeb} n'a aucun texte (web)`);
     const clesSwift = new Set();
     for (const e of o.entrees) {
       if (clesSwift.has(e.cle)) erreurs.push(`${o.nom} : clé ${e.cle} répétée`);
       clesSwift.add(e.cle);
-      const attendu = cible.proprietes.get(e.cle);
+      const attendu = proprietes.get(e.cle);
       const constante = resoudre(e.ref, o.chemin);
-      if (!attendu) erreurs.push(`${o.nom} : clé ${e.cle} absente de ${o.source.variable} (web)`);
+      if (!attendu) erreurs.push(`${o.nom} : clé ${e.cle} absente de ${nomWeb} (web)`);
       else if (!constante) erreurs.push(`${o.nom} : ${e.cle} → ${e.ref}, constante inconnue`);
       else if (constante.valeur !== attendu.valeur || constante.source.fichier !== o.source.fichier
         || constante.source.debut !== attendu.ligne) {
-        erreurs.push(`${o.nom} : ${e.cle} → ${constante.nom} ne correspond pas à ${o.source.variable}.${e.cle} `
+        erreurs.push(`${o.nom} : ${e.cle} → ${constante.nom} ne correspond pas à ${nomWeb}[${e.cle}] `
           + `(web l.${attendu.ligne} : « ${attendu.valeur} »)`);
       }
     }
-    for (const cle of cible.proprietes.keys()) {
-      if (!clesSwift.has(cle)) erreurs.push(`${o.nom} : clé ${cle} de ${o.source.variable} absente du dictionnaire Swift`);
+    for (const cle of proprietes.keys()) {
+      if (!clesSwift.has(cle)) erreurs.push(`${o.nom} : clé ${cle} de ${nomWeb} absente du dictionnaire Swift`);
     }
   }
 
@@ -467,13 +595,113 @@ export function verifierTextes({ swiftSource, lireWeb }) {
   return { erreurs, constantes: lu.constantes, objets: lu.objets, ensembles: lu.ensembles };
 }
 
+const formatSource = (debut, fin) => (debut === fin ? `${debut}` : `${debut}-${fin}`);
+
+/** Réécrit, sur la ligne d'annotation, `fichier:ancienne` en `fichier:nouvelle`. */
+function reannoter(ligne, fichier, ancienne, nouvelle) {
+  const avant = `${fichier}:${formatSource(ancienne.debut, ancienne.fin)}`;
+  const apres = `${fichier}:${formatSource(nouvelle.debut, nouvelle.fin)}`;
+  const i = ligne.indexOf(avant);
+  if (i < 0 || !/^(?:\s|$)/.test(ligne.slice(i + avant.length))) return null;
+  return ligne.slice(0, i) + apres + ligne.slice(i + avant.length);
+}
+
+/**
+ * `--corriger-lignes` : pour chaque constante dont le texte, INCHANGÉ, n'est plus à la ligne
+ * annoncée mais existe ailleurs dans le même fichier web, réécrit l'annotation (couplage voulu
+ * avec les PR web, qui décalent des lignes sans toucher aux textes). Un texte présent plusieurs
+ * fois est départagé par le décalage commun des textes uniques du même fichier ; sinon il reste
+ * à corriger à la main. Les dictionnaires (`source-objet`) et ensembles (`source-ensemble`)
+ * suivent s'ils sont retrouvés sans ambiguïté. Un texte modifié n'est jamais « corrigé » :
+ * l'erreur de la garde demeure. Rend `{ source, corrections, restantes }`.
+ */
+export function corrigerLignes({ swiftSource, lireWeb }) {
+  const lu = lireTextesSwift(swiftSource);
+  const lignes = swiftSource.split('\n');
+  const corrections = [];
+  const restantes = [];
+  const appliquer = (nom, ligneAnnotation, fichier, ancienne, nouvelle) => {
+    const index = ligneAnnotation - 1;
+    const reecrite = reannoter(lignes[index] ?? '', fichier, ancienne, nouvelle);
+    if (reecrite === null) { restantes.push(`${nom} : annotation l.${ligneAnnotation} illisible`); return; }
+    lignes[index] = reecrite;
+    corrections.push(`${nom} : ${fichier} l.${formatSource(ancienne.debut, ancienne.fin)} → l.${formatSource(nouvelle.debut, nouvelle.fin)}`);
+  };
+
+  const candidats = [];
+  for (const c of lu.constantes) {
+    const web = lireWeb(c.source.fichier);
+    if (!web || !c.valeur) continue;
+    if (web.unites.some(u => u.valeur === c.valeur && u.debut === c.source.debut && u.fin === c.source.fin)) continue;
+    const occurrences = web.unites.filter(u => u.valeur === c.valeur);
+    if (occurrences.length) candidats.push({ c, occurrences });
+  }
+  // Décalage observé sur les textes uniques de chaque fichier.
+  const decalages = new Map();
+  for (const { c, occurrences } of candidats) {
+    if (occurrences.length !== 1) continue;
+    if (!decalages.has(c.source.fichier)) decalages.set(c.source.fichier, new Set());
+    decalages.get(c.source.fichier).add(occurrences[0].debut - c.source.debut);
+  }
+  const decalageCommun = fichier => {
+    const ensemble = decalages.get(fichier);
+    return ensemble && ensemble.size === 1 ? [...ensemble][0] : null;
+  };
+  for (const { c, occurrences } of candidats) {
+    let cible = occurrences.length === 1 ? occurrences[0] : null;
+    const d = decalageCommun(c.source.fichier);
+    if (!cible && d !== null) {
+      cible = occurrences.find(u => u.debut === c.source.debut + d && u.fin === c.source.fin + d) ?? null;
+    }
+    if (!cible) {
+      restantes.push(`${c.nom} : texte présent ${occurrences.map(lignesDe).join(', ')} de ${c.source.fichier}, `
+        + 'ligne à choisir à la main');
+      continue;
+    }
+    appliquer(c.nom, c.ligneAnnotation, c.source.fichier, c.source, cible);
+  }
+
+  for (const o of lu.objets) {
+    if (!o.source || !o.ligneAnnotation) continue;
+    const web = lireWeb(o.source.fichier);
+    if (!web || web.objets.some(x => x.nom === o.source.variable && x.ligne === o.source.debut)) continue;
+    const memeNom = web.objets.filter(x => x.nom === o.source.variable);
+    if (memeNom.length === 1) {
+      appliquer(o.nom, o.ligneAnnotation, o.source.fichier, o.source, { debut: memeNom[0].ligne, fin: memeNom[0].ligne });
+    } else if (memeNom.length > 1) restantes.push(`${o.nom} : objet ${o.source.variable} présent plusieurs fois`);
+  }
+  for (const e of lu.ensembles) {
+    if (!e.source || !e.ligneAnnotation) continue;
+    const web = lireWeb(e.source.fichier);
+    if (!web || web.ensembles.some(x => x.debut === e.source.debut && x.fin === e.source.fin)) continue;
+    const swift = [...new Set(e.elements)].sort().join('\n');
+    const memes = web.ensembles.filter(x => [...new Set(x.elements)].sort().join('\n') === swift);
+    if (memes.length === 1) appliquer(e.nom, e.ligneAnnotation, e.source.fichier, e.source, memes[0]);
+    else if (memes.length > 1) restantes.push(`${e.nom} : ensemble présent plusieurs fois`);
+  }
+
+  return { source: lignes.join('\n'), corrections, restantes };
+}
+
 /** Textes juridiques écrits en dur dans des fichiers Swift du lot 2 (hors `TextesWeb.swift`). */
 export function textesJuridiquesHorsTL(fichiers) {
   const fautes = [];
   for (const { chemin, contenu } of fichiers) {
     if (chemin === TEXTES_SWIFT) continue;
     if (!DOSSIERS_LOT2.some(d => chemin === d || chemin.startsWith(`${d}/`))) continue;
+    let dansMultiLigne = false;
     contenu.split('\n').forEach((ligne, i) => {
+      // Littéral multi-ligne : ses lignes intérieures n'ont pas de guillemets, aucune marque n'y
+      // serait vue ; il est refusé (signalé à son ouverture).
+      const triples = ligne.split(TRIPLE_GUILLEMET).length - 1;
+      if (triples || dansMultiLigne) {
+        if (triples && !dansMultiLigne) {
+          fautes.push(`${chemin}:${i + 1} : littéral multi-ligne (triple guillemet) interdit dans un fichier du lot 2 `
+            + '(texte non gardé par TL : utiliser des constantes de TextesWeb.swift)');
+        }
+        if (triples % 2) dansMultiLigne = !dansMultiLigne;
+        return;
+      }
       for (const m of litterauxHorsCommentaire(ligne)) {
         if (MARQUES_JURIDIQUES.some(r => r.test(m[1]))) {
           fautes.push(`${chemin}:${i + 1} : texte juridique en dur « ${m[1]} » (le reprendre de TextesWeb.swift)`);
@@ -498,8 +726,18 @@ export function textesJuridiquesHorsTLSurDisque(racine = ROOT) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  const swiftSource = readFileSync(join(ROOT, TEXTES_SWIFT), 'utf8');
+  let swiftSource = readFileSync(join(ROOT, TEXTES_SWIFT), 'utf8');
   const lireWeb = lecteurWeb(fichier => readFileSync(join(ROOT, fichier), 'utf8'));
+  if (argv.includes('--corriger-lignes')) {
+    const { source, corrections, restantes } = corrigerLignes({ swiftSource, lireWeb });
+    for (const c of corrections) console.log(`↻ ${c}`);
+    for (const r of restantes) console.error(`? ${r}`);
+    if (source !== swiftSource) {
+      writeFileSync(join(ROOT, TEXTES_SWIFT), source);
+      console.log(`${TEXTES_SWIFT} : ${corrections.length} annotation(s) réécrite(s), relire le diff`);
+      swiftSource = source;
+    }
+  }
   const { erreurs, constantes } = verifierTextes({ swiftSource, lireWeb });
   const fautes = [...erreurs, ...textesJuridiquesHorsTLSurDisque(ROOT)];
   if (argv.includes('--liste')) {

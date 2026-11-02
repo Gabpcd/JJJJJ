@@ -1,15 +1,20 @@
 import Foundation
 
 // HARD STOP n°4 (CLAUDE.md) — textes juridiques et de consentement de l'app iOS, lot 2 (tranche TL,
-// docs/mobile-swift/LOT2_PLAN.md §3 « TL », critère P9).
+// docs/mobile-swift/LOT2_PLAN.md §3 « TL », critère P9 ; décisions docs/mobile-swift/DECISIONS_LOT2.md ;
+// ces deux documents sont livrés par la tranche T0, intégrée avant TL).
 //
 // Chaque constante est le texte EXACT que le web affiche à la ligne annoncée par son annotation
 // « source » (fichier:ligne). La garde tests/node/textes-juridiques-ios.node.mjs (CI validate-pr)
 // le prouve au caractère près, rejoue une mutation d'un caractère sur chaque constante et rougit
-// si le texte web change ou se déplace. Aucune reformulation ici : un changement de wording part
-// d'abord sur le web, puis dans une PR HARD STOP validée par Gabrielle. Les valeurs (dates,
-// empreintes, durées) ne sont jamais des gabarits dans un texte : elles sont assemblées par les
-// fonctions ci-dessous, qui reproduisent le rendu React (tests TextesWebTests).
+// si le texte web change ou se déplace (un texte inchangé qui s'est seulement déplacé se réannote
+// par `node scripts/mobile/check-textes-juridiques-ios.mjs --corriger-lignes`). Aucune
+// reformulation ici : un changement de wording part d'abord sur le web, puis dans une PR HARD STOP
+// validée par Gabrielle. Les valeurs (dates, empreintes, durées, compteurs) ne sont jamais des
+// gabarits dans un texte : elles sont assemblées par les fonctions ci-dessous, qui reproduisent le
+// rendu React (tests TextesWebTests). Les libellés non juridiques des mêmes composants
+// (`SignerContratOtp`, relance des présences) sont repris ici aussi, pour qu'aucun écran du lot 2
+// n'écrive un libellé de ces composants.
 
 /// Entrée du catalogue des textes (clé « Groupe.constante », texte verbatim du web).
 public struct EntreeTexteWeb: Sendable, Hashable {
@@ -83,8 +88,52 @@ public enum TextesWeb {
         public static let texte = "Pointage sans localisation activé. Lorsque tu pointeras, l'établissement validera manuellement ta présence."
     }
 
+    /// Consentement GPS du Profil (`SectionPreferences.tsx` l.128-168) : retrait et réactivation que
+    /// promet le texte de consentement (« depuis votre profil », `ConsentementGPS.tsx` l.50 ;
+    /// LOT2_PLAN correction 15, §7 Q4). Interrupteur, explication selon l'état, retour après bascule.
+    public enum ProfilConsentementGps {
+        // source: src/components/profil-soignant/SectionPreferences.tsx:129
+        public static let titre = "Consentement GPS"
+
+        // source: src/components/profil-soignant/SectionPreferences.tsx:132
+        public static let libelle = "Autoriser la géolocalisation lors des pointages"
+
+        /// Libellé d'accessibilité de l'interrupteur (`aria-label`).
+        // source: src/components/profil-soignant/SectionPreferences.tsx:140
+        public static let libelleAccessibilite = "Autoriser la géolocalisation lors des pointages"
+
+        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
+        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        // source: src/components/profil-soignant/SectionPreferences.tsx:135
+        public static let explicationActive = "Ta position sera capturée uniquement au moment de l'arrivée et du départ."
+
+        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
+        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        // source: src/components/profil-soignant/SectionPreferences.tsx:136
+        public static let explicationRetiree = "Sans GPS, tes pointages seront validés manuellement par l'établissement — rien à faire de ton côté."
+
+        // source: src/components/profil-soignant/SectionPreferences.tsx:161
+        public static let active = "Consentement GPS activé."
+
+        /// Tutoiement du web conservé verbatim : le passage au vouvoiement serait une reformulation
+        /// (HARD STOP n°4), en attente de la décision de Gabrielle.
+        // source: src/components/profil-soignant/SectionPreferences.tsx:161
+        public static let retire = "Consentement GPS retiré — tes pointages seront validés manuellement par l'établissement."
+
+        /// Explication sous l'interrupteur selon le consentement relu (l.134-136).
+        public static func explication(consentementActif: Bool) -> String {
+            consentementActif ? explicationActive : explicationRetiree
+        }
+
+        /// Retour affiché après une bascule acceptée par `fn_consentir_gps` (l.159-162).
+        public static func retourBascule(consentementActif: Bool) -> String {
+            consentementActif ? active : retire
+        }
+    }
+
     /// Présences : retour du consentement GPS (`PresencesSoignant.tsx` l.82, l.101), bandeau du filtre
-    /// « à valider » (l.715-719) et relance de l'établissement (`DetailPresencesMission.tsx` l.695-703).
+    /// « à valider » (l.715-719) et relance de l'établissement (`DetailPresencesMission.tsx` l.115-124,
+    /// l.695-703).
     public enum Presences {
         // source: src/pages/PresencesSoignant.tsx:82
         public static let consentementGpsEnregistre = "Consentement GPS enregistré."
@@ -106,15 +155,100 @@ public enum TextesWeb {
         /// (HARD STOP n°4), en attente de la décision de Gabrielle.
         // source: src/pages/DetailPresencesMission.tsx:698
         public static let relanceExplication = "La validation des heures (automatique sous 72 h) est distincte du versement. En salarié, le salaire est versé par l'établissement employeur. En libéral, le paiement suit les modalités de la mission. Tu peux envoyer un rappel."
+
+        // source: src/pages/DetailPresencesMission.tsx:700
+        public static let relancer = "Relancer l'établissement"
+
+        // source: src/pages/DetailPresencesMission.tsx:700
+        public static let relanceEnvoi = "Envoi…"
+
+        // source: src/pages/DetailPresencesMission.tsx:122
+        public static let relanceSucces = "Établissement relancé."
+
+        // source: src/pages/DetailPresencesMission.tsx:123
+        public static let relanceImpossible = "Relance impossible."
+
+        /// Retour de `fn_relancer_validation_presence` (l.121-123) : en succès `message ?? repli`,
+        /// sinon `message ?? error ?? repli` (`??` : seul un message absent est remplacé). Une erreur
+        /// PostgREST (l.120) affiche son message serveur tel quel, hors de cette fonction.
+        public static func messageRelance(succes: Bool, message: String?, erreur: String?) -> String {
+            succes ? (message ?? relanceSucces) : (message ?? erreur ?? relanceImpossible)
+        }
     }
 
-    /// Contestation d'une présence validée (`PanneauContestation.tsx` l.343-397).
+    /// Contestation d'une présence validée (`PanneauContestation.tsx`) : libellés de statut
+    /// (`STATUT_CONFIG` l.48-62) et boutons du formulaire.
     ///
-    /// Délai (LOT2_PLAN correction 12, §7 Q9, en attente de Gabrielle) : le web annonce 72 h
-    /// (`DELAI_CONTESTATION_MS` l.43-46), le serveur lit `parametres_litiges.delai_contestation_pointage_h`
-    /// (48 h par défaut, `fn_fenetre_contestation_ouverte`). Ces textes restent ceux du web ; le refus
-    /// du serveur, s'il survient, s'affiche tel quel.
+    /// Aucun texte de délai tant que Q9 n'est pas tranchée par Gabrielle (LOT2_PLAN v2 §1.2,
+    /// correction 14, §7 Q9 ; DECISIONS_LOT2 « En attente de Gabrielle ») : les textes l.347, l.354
+    /// et l.394 du web contredisent le serveur (`parametres_litiges.delai_contestation_pointage_h`,
+    /// 48 h par défaut ; escalade vers `EN_MEDIATION`). Ils ne sont pas repris et la garde Node les
+    /// refuse (`ZONES_Q9`). La fenêtre est décidée par `fn_fenetre_contestation_ouverte` ; un refus
+    /// du serveur s'affiche tel quel.
     public enum Contestation {
+        // source: src/components/PanneauContestation.tsx:49
+        public static let statutOuvert = "Ouvert"
+
+        // source: src/components/PanneauContestation.tsx:50
+        public static let statutEnDiscussion = "En discussion"
+
+        // source: src/components/PanneauContestation.tsx:51
+        public static let statutEnMediation = "En médiation"
+
+        // source: src/components/PanneauContestation.tsx:52
+        public static let statutMediationEnCours = "Médiation en cours"
+
+        // source: src/components/PanneauContestation.tsx:53
+        public static let statutRevueAdmin = "Revue admin"
+
+        // source: src/components/PanneauContestation.tsx:54
+        public static let statutResoluSoignant = "Résolu (soignant)"
+
+        // source: src/components/PanneauContestation.tsx:55
+        public static let statutResoluEtablissement = "Résolu (établissement)"
+
+        // source: src/components/PanneauContestation.tsx:56
+        public static let statutResoluAdmin = "Résolu (admin)"
+
+        // source: src/components/PanneauContestation.tsx:57
+        public static let statutResoluAccordParties = "Résolu par accord"
+
+        // source: src/components/PanneauContestation.tsx:58
+        public static let statutResoluFaveurSoignant = "Résolu en faveur du soignant"
+
+        // source: src/components/PanneauContestation.tsx:59
+        public static let statutResoluFaveurEtab = "Résolu en faveur de l’établissement"
+
+        // source: src/components/PanneauContestation.tsx:60
+        public static let statutResoluPartage = "Résolution partagée"
+
+        // source: src/components/PanneauContestation.tsx:61
+        public static let statutFerme = "Fermé"
+
+        /// Libellé de chaque statut de litige (`STATUT_CONFIG[statut].label`).
+        // source-objet: src/components/PanneauContestation.tsx:48 STATUT_CONFIG.label
+        public static let libellesStatut: [String: String] = [
+            "OUVERT": statutOuvert,
+            "EN_DISCUSSION": statutEnDiscussion,
+            "EN_MEDIATION": statutEnMediation,
+            "MEDIATION_EN_COURS": statutMediationEnCours,
+            "REVUE_ADMIN": statutRevueAdmin,
+            "RESOLU_SOIGNANT": statutResoluSoignant,
+            "RESOLU_ETABLISSEMENT": statutResoluEtablissement,
+            "RESOLU_ADMIN": statutResoluAdmin,
+            "RESOLU_ACCORD_PARTIES": statutResoluAccordParties,
+            "RESOLU_FAVEUR_SOIGNANT": statutResoluFaveurSoignant,
+            "RESOLU_FAVEUR_ETAB": statutResoluFaveurEtab,
+            "RESOLU_PARTAGE": statutResoluPartage,
+            "FERME": statutFerme,
+        ]
+
+        /// `STATUT_CONFIG[litige.statut]?.label || litige.statut` (l.266) : un statut inconnu
+        /// s'affiche tel quel.
+        public static func libelleStatut(code: String) -> String {
+            libellesStatut[code] ?? code
+        }
+
         // source: src/components/PanneauContestation.tsx:366
         public static let contester = "Contester cette présence"
 
@@ -123,15 +257,6 @@ public enum TextesWeb {
 
         // source: src/components/PanneauContestation.tsx:387
         public static let envoyer = "Envoyer la contestation"
-
-        // source: src/components/PanneauContestation.tsx:394
-        public static let delaiContestation = "Vous avez 72 h après la validation pour contester. Sans résolution sous 72 h, l'admin plateforme tranchera."
-
-        // source: src/components/PanneauContestation.tsx:347
-        public static let delaiReponse = "72h pour répondre"
-
-        // source: src/components/PanneauContestation.tsx:354
-        public static let discussionEnCours = "Discussion en cours — si pas de résolution sous 72h, l'admin plateforme tranchera."
     }
 
     /// Attestation sur l'honneur de santé (`DocumentsSoignant.tsx` l.27-135), signée par
@@ -404,6 +529,141 @@ public enum TextesWeb {
         public static func confirmationSignature(contratComplet: Bool) -> String {
             contratComplet ? contratSigne + " " + missionConfirmee : contratSigne
         }
+
+        /// Envoi du code accepté (l.149-152) : « Code envoyé au <numéro masqué>. Valide <n> min. ».
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyePrefixe = "Code envoyé au"
+
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyeValide = ". Valide"
+
+        // source: src/components/SignerContratOtp.tsx:151
+        public static let codeEnvoyeMinutes = "min."
+
+        /// Erreur réseau sans message lisible, à l'envoi du code (l.156) et à la signature (l.202).
+        // source: src/components/SignerContratOtp.tsx:156
+        public static let erreurReseauEnvoi = "Erreur réseau. Réessayez."
+
+        // source: src/components/SignerContratOtp.tsx:202
+        public static let erreurReseauSignature = "Erreur réseau. Réessayez."
+
+        // source: src/components/SignerContratOtp.tsx:265
+        public static let verificationSignatureEnCours = "Vérification de la signature en cours…"
+
+        /// Rappel au-dessus du champ (l.296-302) : voir `codeEnvoyeAu(telephoneMasque:)` et `smsRestants(n:)`.
+        // source: src/components/SignerContratOtp.tsx:296
+        public static let codeEnvoyeAuLibelle = "Code envoyé au"
+
+        // source: src/components/SignerContratOtp.tsx:296
+        public static let numeroMasque = "numéro masqué"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsParentheseOuvrante = "("
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsDernierEnvoi = "dernier envoi possible"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsEnvoiMot = "envoi"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsPlurielEnvoi = "s"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsRestantMot = "restant"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsPlurielRestant = "s"
+
+        // source: src/components/SignerContratOtp.tsx:299
+        public static let smsParentheseFermante = ")"
+
+        // source: src/components/SignerContratOtp.tsx:110
+        public static let minuteurSeparateur = ":"
+
+        // source: src/components/SignerContratOtp.tsx:305
+        public static let minuteurExpire = "Expiré"
+
+        /// Libellé d'accessibilité du champ du code (`aria-label`).
+        // source: src/components/SignerContratOtp.tsx:319
+        public static let champCodeAccessibilite = "Code SMS à 6 chiffres"
+
+        /// Tentatives restantes après un code faux (l.322-328) : voir `tentativesRestantes(n:)`.
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesCodeIncorrect = "Code incorrect."
+
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesMot = "tentative"
+
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesPlurielTentative = "s"
+
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesRestanteMot = "restante"
+
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesPlurielRestante = "s"
+
+        // source: src/components/SignerContratOtp.tsx:326
+        public static let tentativesPoint = "."
+
+        // source: src/components/SignerContratOtp.tsx:327
+        public static let tentativesEpuisees = "Trop de tentatives. Renvoyez un nouveau code SMS."
+
+        /// Infobulles du bouton de renvoi désactivé (l.336) : recette STAGING sans nouvel envoi, plafond de SMS.
+        // source: src/components/SignerContratOtp.tsx:336
+        public static let renvoiNonAutoriseRecette = "Aucun nouvel envoi autorisé pour cette recette"
+
+        // source: src/components/SignerContratOtp.tsx:336
+        public static let plafondSmsAtteint = "3 SMS max par 24h atteints"
+
+        // source: src/components/SignerContratOtp.tsx:339
+        public static let recevoirNouveauCode = "Recevoir un nouveau code"
+
+        // source: src/components/SignerContratOtp.tsx:339
+        public static let renvoyerCode = "Renvoyer le code"
+
+        /// « Code envoyé au <numéro>. Valide <n> min. » (l.151), tel que le gabarit du web l'assemble.
+        public static func codeEnvoye(telephoneMasque: String, minutes: Int) -> String {
+            codeEnvoyePrefixe + " " + telephoneMasque + codeEnvoyeValide + " " + String(minutes) + " " + codeEnvoyeMinutes
+        }
+
+        /// « Code envoyé au <numéro> » (l.296), « numéro masqué » si le serveur n'en donne pas.
+        public static func codeEnvoyeAu(telephoneMasque: String?) -> String {
+            let numero = telephoneMasque.flatMap { $0.isEmpty ? nil : $0 } ?? numeroMasque
+            return codeEnvoyeAuLibelle + " " + numero
+        }
+
+        /// SMS encore possibles (l.299) : « (dernier envoi possible) » à 0, sinon « (<n> envoi(s)
+        /// restant(s)) », pluriel au-delà de 1.
+        public static func smsRestants(n: Int) -> String {
+            let detail = n == 0 ? smsDernierEnvoi
+                : String(n) + " " + smsEnvoiMot + (n > 1 ? smsPlurielEnvoi : "") + " "
+                    + smsRestantMot + (n > 1 ? smsPlurielRestant : "")
+            return smsParentheseOuvrante + detail + smsParentheseFermante
+        }
+
+        /// Minuteur de validité du code (l.109-110, l.305) : « mm:ss », « Expiré » à zéro.
+        public static func minuteur(secondesRestantes: Int) -> String {
+            guard secondesRestantes > 0 else { return minuteurExpire }
+            return TextesWeb.deuxChiffres(secondesRestantes / 60) + minuteurSeparateur
+                + TextesWeb.deuxChiffres(secondesRestantes % 60)
+        }
+
+        /// Tentatives restantes (l.322-328) : rien à partir de 5 ; « Code incorrect. <n> tentative(s)
+        /// restante(s). » au-dessus de 0 (pluriel au-delà de 1) ; sinon les tentatives épuisées.
+        public static func tentativesRestantes(n: Int) -> String? {
+            guard n < 5 else { return nil }
+            guard n > 0 else { return tentativesEpuisees }
+            let tentative = tentativesMot + (n > 1 ? tentativesPlurielTentative : "")
+            let restante = tentativesRestanteMot + (n > 1 ? tentativesPlurielRestante : "")
+            return tentativesCodeIncorrect + " " + String(n) + " " + tentative + " " + restante + tentativesPoint
+        }
+
+        /// Bouton de renvoi (l.339) : « Recevoir un nouveau code » une fois le code expiré.
+        public static func renvoi(otpExpire: Bool) -> String {
+            otpExpire ? recevoirNouveauCode : renvoyerCode
+        }
     }
 
     /// Compte à rebours de 72 h de la signature (`Countdown72hSignature.tsx`), dérivé de
@@ -415,13 +675,32 @@ public enum TextesWeb {
         // source: src/components/Countdown72hSignature.tsx:69
         public static let urgent = "Signature urgente — moins de 24h restantes !"
 
-        /// Suivi de la durée restante « <h>h <mm>m <ss>s » (l.71-73).
+        /// Suivi de la durée restante « <h>h <mm>m <ss>s » (l.71-73) : voir `duree(restantSecondes:)`.
         // source: src/components/Countdown72hSignature.tsx:70
         public static let aFinaliserSous = "Signature à finaliser sous"
+
+        // source: src/components/Countdown72hSignature.tsx:72
+        public static let uniteHeures = "h"
+
+        // source: src/components/Countdown72hSignature.tsx:72
+        public static let uniteMinutes = "m"
+
+        // source: src/components/Countdown72hSignature.tsx:72
+        public static let uniteSecondes = "s"
+
+        /// Durée restante « <h>h <mm>m <ss>s » (l.49-51, l.72), minutes et secondes sur deux chiffres.
+        public static func duree(restantSecondes: Int) -> String {
+            let heures = restantSecondes / 3600
+            let minutes = (restantSecondes % 3600) / 60
+            let secondes = restantSecondes % 60
+            return String(heures) + uniteHeures + " " + TextesWeb.deuxChiffres(minutes) + uniteMinutes + " "
+                + TextesWeb.deuxChiffres(secondes) + uniteSecondes
+        }
     }
 
     /// Certificat des signatures (`CertificatSignature.tsx`, variante « résumé » des parties) :
-    /// titre, libellés des preuves et mention juridique (l.171-176).
+    /// titre, libellés des preuves et mention juridique (l.171-176) ; mention de la page
+    /// `/contrat/:id/certificat` (`CertificatSignaturePage.tsx` l.213-216), qui monte ce composant.
     public enum Certificat {
         // source: src/components/CertificatSignature.tsx:95
         public static let titre = "Certificat de signature Jolene"
@@ -446,6 +725,14 @@ public enum TextesWeb {
 
         // source: src/components/CertificatSignature.tsx:172-175
         public static let mention = "Signature électronique sécurisée Jolene — conforme art. 1366-1367 Code civil (signature électronique simple/avancée renforcée par OTP SMS + horodatage + IP). Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié."
+
+        // source: src/pages/CertificatSignaturePage.tsx:214-215
+        public static let mentionPage = "Conforme art. 1366-1367 Code civil — Signature électronique sécurisée Jolene renforcée par OTP SMS + horodatage + IP + hash SHA-256. Audit trail complet disponible sur demande pour les admins plateforme."
+    }
+
+    /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
+    static func deuxChiffres(_ valeur: Int) -> String {
+        valeur < 10 ? String(0) + String(valeur) : String(valeur)
     }
 
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
@@ -464,17 +751,38 @@ public enum TextesWeb {
         .init(cle: "ConsentementGps.refuser", texte: ConsentementGps.refuser),
         .init(cle: "ConsentementGps.accepter", texte: ConsentementGps.accepter),
         .init(cle: "BandeauSansGps.texte", texte: BandeauSansGps.texte),
+        .init(cle: "ProfilConsentementGps.titre", texte: ProfilConsentementGps.titre),
+        .init(cle: "ProfilConsentementGps.libelle", texte: ProfilConsentementGps.libelle),
+        .init(cle: "ProfilConsentementGps.libelleAccessibilite", texte: ProfilConsentementGps.libelleAccessibilite),
+        .init(cle: "ProfilConsentementGps.explicationActive", texte: ProfilConsentementGps.explicationActive),
+        .init(cle: "ProfilConsentementGps.explicationRetiree", texte: ProfilConsentementGps.explicationRetiree),
+        .init(cle: "ProfilConsentementGps.active", texte: ProfilConsentementGps.active),
+        .init(cle: "ProfilConsentementGps.retire", texte: ProfilConsentementGps.retire),
         .init(cle: "Presences.consentementGpsEnregistre", texte: Presences.consentementGpsEnregistre),
         .init(cle: "Presences.pointageSansGpsActive", texte: Presences.pointageSansGpsActive),
         .init(cle: "Presences.bandeauAValider", texte: Presences.bandeauAValider),
         .init(cle: "Presences.relanceTitre", texte: Presences.relanceTitre),
         .init(cle: "Presences.relanceExplication", texte: Presences.relanceExplication),
+        .init(cle: "Presences.relancer", texte: Presences.relancer),
+        .init(cle: "Presences.relanceEnvoi", texte: Presences.relanceEnvoi),
+        .init(cle: "Presences.relanceSucces", texte: Presences.relanceSucces),
+        .init(cle: "Presences.relanceImpossible", texte: Presences.relanceImpossible),
+        .init(cle: "Contestation.statutOuvert", texte: Contestation.statutOuvert),
+        .init(cle: "Contestation.statutEnDiscussion", texte: Contestation.statutEnDiscussion),
+        .init(cle: "Contestation.statutEnMediation", texte: Contestation.statutEnMediation),
+        .init(cle: "Contestation.statutMediationEnCours", texte: Contestation.statutMediationEnCours),
+        .init(cle: "Contestation.statutRevueAdmin", texte: Contestation.statutRevueAdmin),
+        .init(cle: "Contestation.statutResoluSoignant", texte: Contestation.statutResoluSoignant),
+        .init(cle: "Contestation.statutResoluEtablissement", texte: Contestation.statutResoluEtablissement),
+        .init(cle: "Contestation.statutResoluAdmin", texte: Contestation.statutResoluAdmin),
+        .init(cle: "Contestation.statutResoluAccordParties", texte: Contestation.statutResoluAccordParties),
+        .init(cle: "Contestation.statutResoluFaveurSoignant", texte: Contestation.statutResoluFaveurSoignant),
+        .init(cle: "Contestation.statutResoluFaveurEtab", texte: Contestation.statutResoluFaveurEtab),
+        .init(cle: "Contestation.statutResoluPartage", texte: Contestation.statutResoluPartage),
+        .init(cle: "Contestation.statutFerme", texte: Contestation.statutFerme),
         .init(cle: "Contestation.contester", texte: Contestation.contester),
         .init(cle: "Contestation.placeholderSoignant", texte: Contestation.placeholderSoignant),
         .init(cle: "Contestation.envoyer", texte: Contestation.envoyer),
-        .init(cle: "Contestation.delaiContestation", texte: Contestation.delaiContestation),
-        .init(cle: "Contestation.delaiReponse", texte: Contestation.delaiReponse),
-        .init(cle: "Contestation.discussionEnCours", texte: Contestation.discussionEnCours),
         .init(cle: "AttestationSante.titre", texte: AttestationSante.titre),
         .init(cle: "AttestationSante.signee", texte: AttestationSante.signee),
         .init(cle: "AttestationSante.vaccinations", texte: AttestationSante.vaccinations),
@@ -532,9 +840,41 @@ public enum TextesWeb {
         .init(cle: "SignatureOtp.missionConfirmee", texte: SignatureOtp.missionConfirmee),
         .init(cle: "SignatureOtp.signeAvecSucces", texte: SignatureOtp.signeAvecSucces),
         .init(cle: "SignatureOtp.signatureNonDisponible", texte: SignatureOtp.signatureNonDisponible),
+        .init(cle: "SignatureOtp.codeEnvoyePrefixe", texte: SignatureOtp.codeEnvoyePrefixe),
+        .init(cle: "SignatureOtp.codeEnvoyeValide", texte: SignatureOtp.codeEnvoyeValide),
+        .init(cle: "SignatureOtp.codeEnvoyeMinutes", texte: SignatureOtp.codeEnvoyeMinutes),
+        .init(cle: "SignatureOtp.erreurReseauEnvoi", texte: SignatureOtp.erreurReseauEnvoi),
+        .init(cle: "SignatureOtp.erreurReseauSignature", texte: SignatureOtp.erreurReseauSignature),
+        .init(cle: "SignatureOtp.verificationSignatureEnCours", texte: SignatureOtp.verificationSignatureEnCours),
+        .init(cle: "SignatureOtp.codeEnvoyeAuLibelle", texte: SignatureOtp.codeEnvoyeAuLibelle),
+        .init(cle: "SignatureOtp.numeroMasque", texte: SignatureOtp.numeroMasque),
+        .init(cle: "SignatureOtp.smsParentheseOuvrante", texte: SignatureOtp.smsParentheseOuvrante),
+        .init(cle: "SignatureOtp.smsDernierEnvoi", texte: SignatureOtp.smsDernierEnvoi),
+        .init(cle: "SignatureOtp.smsEnvoiMot", texte: SignatureOtp.smsEnvoiMot),
+        .init(cle: "SignatureOtp.smsPlurielEnvoi", texte: SignatureOtp.smsPlurielEnvoi),
+        .init(cle: "SignatureOtp.smsRestantMot", texte: SignatureOtp.smsRestantMot),
+        .init(cle: "SignatureOtp.smsPlurielRestant", texte: SignatureOtp.smsPlurielRestant),
+        .init(cle: "SignatureOtp.smsParentheseFermante", texte: SignatureOtp.smsParentheseFermante),
+        .init(cle: "SignatureOtp.minuteurSeparateur", texte: SignatureOtp.minuteurSeparateur),
+        .init(cle: "SignatureOtp.minuteurExpire", texte: SignatureOtp.minuteurExpire),
+        .init(cle: "SignatureOtp.champCodeAccessibilite", texte: SignatureOtp.champCodeAccessibilite),
+        .init(cle: "SignatureOtp.tentativesCodeIncorrect", texte: SignatureOtp.tentativesCodeIncorrect),
+        .init(cle: "SignatureOtp.tentativesMot", texte: SignatureOtp.tentativesMot),
+        .init(cle: "SignatureOtp.tentativesPlurielTentative", texte: SignatureOtp.tentativesPlurielTentative),
+        .init(cle: "SignatureOtp.tentativesRestanteMot", texte: SignatureOtp.tentativesRestanteMot),
+        .init(cle: "SignatureOtp.tentativesPlurielRestante", texte: SignatureOtp.tentativesPlurielRestante),
+        .init(cle: "SignatureOtp.tentativesPoint", texte: SignatureOtp.tentativesPoint),
+        .init(cle: "SignatureOtp.tentativesEpuisees", texte: SignatureOtp.tentativesEpuisees),
+        .init(cle: "SignatureOtp.renvoiNonAutoriseRecette", texte: SignatureOtp.renvoiNonAutoriseRecette),
+        .init(cle: "SignatureOtp.plafondSmsAtteint", texte: SignatureOtp.plafondSmsAtteint),
+        .init(cle: "SignatureOtp.recevoirNouveauCode", texte: SignatureOtp.recevoirNouveauCode),
+        .init(cle: "SignatureOtp.renvoyerCode", texte: SignatureOtp.renvoyerCode),
         .init(cle: "CompteARebours.expire", texte: CompteARebours.expire),
         .init(cle: "CompteARebours.urgent", texte: CompteARebours.urgent),
         .init(cle: "CompteARebours.aFinaliserSous", texte: CompteARebours.aFinaliserSous),
+        .init(cle: "CompteARebours.uniteHeures", texte: CompteARebours.uniteHeures),
+        .init(cle: "CompteARebours.uniteMinutes", texte: CompteARebours.uniteMinutes),
+        .init(cle: "CompteARebours.uniteSecondes", texte: CompteARebours.uniteSecondes),
         .init(cle: "Certificat.titre", texte: Certificat.titre),
         .init(cle: "Certificat.signe", texte: Certificat.signe),
         .init(cle: "Certificat.dateHeure", texte: Certificat.dateHeure),
@@ -543,5 +883,6 @@ public enum TextesWeb {
         .init(cle: "Certificat.rppsVerifie", texte: Certificat.rppsVerifie),
         .init(cle: "Certificat.pscActif", texte: Certificat.pscActif),
         .init(cle: "Certificat.mention", texte: Certificat.mention),
+        .init(cle: "Certificat.mentionPage", texte: Certificat.mentionPage),
     ]
 }
