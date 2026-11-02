@@ -42,6 +42,8 @@ BEGIN
     PERFORM set_config('request.jwt.claim.sub', COALESCE(a.uid::text, ''), true);
     INSERT INTO pg_temp.observations VALUES
       (p_phase, a.nom, 'etat_m1', public.fn_etat_pointage_mission('b5b00000-0000-4000-8000-00000000a001')),
+      -- M2 n'est affectée à personne : v_is_soignant y vaut NULL pour tout acteur.
+      (p_phase, a.nom, 'etat_m2', public.fn_etat_pointage_mission('b5b00000-0000-4000-8000-00000000a002')),
       (p_phase, a.nom, 'etat_ml', public.fn_etat_pointage_mission('b5b00000-0000-4000-8000-00000000a003')),
       (p_phase, a.nom, 'stats', public.fn_stats_dashboard_etablissement()),
       (p_phase, a.nom, 'profil', public.fn_mon_etablissement_complet());
@@ -68,18 +70,28 @@ INSERT INTO attendus VALUES
   ('pointage_only', 'profil', 'stripe_customer_id', 'null'),
   ('pointage_only', 'profil', 'stripe_account_id', 'null'),
   ('pointage_only', 'profil', 'iban_last4', 'null'),
+  -- Identifiants Stripe : permission « paiement » seule ; LECTURE_SEULE garde
+  -- le suffixe IBAN (lecture_paiement), affiché dans Paramètres › Facturation.
+  ('lecture_seule', 'profil', 'stripe_customer_id', 'null'),
+  ('lecture_seule', 'profil', 'stripe_account_id', 'null'),
+  -- Garde d'accès : chaque NULL qui laissait lire l'état devient un refus.
   ('soignant_tiers', 'etat_m1', NULL, 'refus'),
+  ('soignant_tiers', 'etat_m2', NULL, 'refus'),
   ('soignant_tiers', 'etat_ml', NULL, 'refus'),
   ('sans_identite', 'etat_m1', NULL, 'refus'),
-  ('sans_identite', 'etat_ml', NULL, 'refus');
+  ('sans_identite', 'etat_m2', NULL, 'refus'),
+  ('sans_identite', 'etat_ml', NULL, 'refus'),
+  ('soignant_affecte', 'etat_m2', NULL, 'refus'),
+  ('membre_autre_etab', 'etat_m2', NULL, 'refus'),
+  ('proprietaire_historique', 'etat_m2', NULL, 'refus');
 
 SELECT pg_temp.observer('avant');
 
 -- Rouge historique : chaque fuite corrigée existe avant la migration.
 DO $avant$
-DECLARE o jsonb;
+DECLARE o jsonb; r record; nb integer := 0;
 BEGIN
-  IF (SELECT count(*) FROM observations WHERE phase = 'avant') <> 44 THEN
+  IF (SELECT count(*) FROM observations WHERE phase = 'avant') <> 55 THEN
     RAISE EXCEPTION 'VISIBILITE_ETAB_OBSERVATIONS_AVANT_INCOMPLETES';
   END IF;
   SELECT resultat INTO o FROM observations WHERE phase='avant' AND acteur='lecture_seule' AND rpc='etat_m1';
@@ -93,8 +105,28 @@ BEGIN
   SELECT resultat INTO o FROM observations WHERE phase='avant' AND acteur='pointage_only' AND rpc='profil';
   IF o->>'iban_last4' IS DISTINCT FROM '0042' OR o->>'stripe_customer_id' IS DISTINCT FROM 'client-fixture-e'
   THEN RAISE EXCEPTION 'VISIBILITE_ETAB_FUITE_PAIEMENT_NON_REPRODUITE'; END IF;
+  SELECT resultat INTO o FROM observations WHERE phase='avant' AND acteur='lecture_seule' AND rpc='profil';
+  IF o->>'stripe_customer_id' IS DISTINCT FROM 'client-fixture-e' OR o->>'stripe_account_id' IS DISTINCT FROM 'compte-fixture-e'
+  THEN RAISE EXCEPTION 'VISIBILITE_ETAB_FUITE_STRIPE_LECTURE_SEULE_NON_REPRODUITE'; END IF;
+  -- Chaque ligne « refus » est une fuite réelle avant la migration : l'état de
+  -- la mission est servi (intitulé exact, segments), pas déjà une erreur.
+  FOR r IN
+    SELECT a.acteur, a.rpc, ob.resultat
+      FROM attendus a
+      LEFT JOIN observations ob ON ob.phase = 'avant' AND ob.acteur = a.acteur AND ob.rpc = a.rpc
+     WHERE a.effet = 'refus'
+  LOOP
+    IF r.resultat IS NULL OR r.resultat ? 'error'
+      -- Parenthèses : sans elles, le THEN du CASE clôturerait la condition du IF.
+      OR r.resultat->>'intitule' IS DISTINCT FROM (CASE r.rpc
+        WHEN 'etat_m1' THEN 'Nuit IDE' WHEN 'etat_m2' THEN 'Jour AS' WHEN 'etat_ml' THEN 'Matin IDE' END)
+      OR jsonb_typeof(r.resultat->'segments') IS DISTINCT FROM 'array'
+    THEN RAISE EXCEPTION 'VISIBILITE_ETAB_REFUS_SANS_FUITE_AVANT: % %', r.acteur, r.rpc; END IF;
+    nb := nb + 1;
+  END LOOP;
+  IF nb <> 9 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_REFUS_ATTENDUS_INCOMPLETS: %', nb; END IF;
   SELECT resultat INTO o FROM observations WHERE phase='avant' AND acteur='soignant_tiers' AND rpc='etat_m1';
-  IF o ? 'error' OR jsonb_array_length(o->'segments') <> 1 OR o->>'intitule' IS DISTINCT FROM 'Nuit IDE'
+  IF jsonb_array_length(o->'segments') <> 1
   THEN RAISE EXCEPTION 'VISIBILITE_ETAB_FUITE_LOGIQUE_NULL_NON_REPRODUITE'; END IF;
 END $avant$;
 
@@ -118,7 +150,7 @@ DO $apres$
 DECLARE
   r record; attendu jsonb; m record; o jsonb; nb integer;
 BEGIN
-  IF (SELECT count(*) FROM observations WHERE phase = 'apres') <> 44 THEN
+  IF (SELECT count(*) FROM observations WHERE phase = 'apres') <> 55 THEN
     RAISE EXCEPTION 'VISIBILITE_ETAB_OBSERVATIONS_APRES_INCOMPLETES';
   END IF;
   -- 1. Toute réponse est identique, hors différences attendues.
@@ -152,6 +184,18 @@ BEGIN
   WHERE phase = 'apres' AND rpc = 'etat_ml' AND resultat->>'code_pointage_actif' = '654321'
     AND acteur IN ('admin_plateforme', 'proprietaire_historique');
   IF nb <> 2 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_CODE_PERDU_POUR_HISTORIQUE'; END IF;
+  -- La mission non affectée reste lisible par l'admin et les cinq rôles de E.
+  SELECT count(*) INTO nb FROM observations
+  WHERE phase = 'apres' AND rpc = 'etat_m2' AND NOT (resultat ? 'error')
+    AND resultat->>'intitule' = 'Jour AS' AND resultat->'est_etab' = 'true'::jsonb
+    AND acteur IN ('admin_plateforme', 'proprietaire', 'admin_groupe', 'rh', 'pointage_only', 'lecture_seule');
+  IF nb <> 6 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_MISSION_NON_AFFECTEE_PERDUE_POUR_HABILITE'; END IF;
+  -- Aucun refus hors de la liste fermée : refus après = refus avant + 9.
+  SELECT count(*) INTO nb FROM observations
+  WHERE phase = 'apres' AND rpc IN ('etat_m1', 'etat_m2', 'etat_ml') AND resultat = '{"error":"Accès interdit"}'::jsonb;
+  IF nb <> (SELECT count(*) FROM observations WHERE phase = 'avant' AND rpc IN ('etat_m1', 'etat_m2', 'etat_ml')
+              AND resultat = '{"error":"Accès interdit"}'::jsonb) + 9
+  THEN RAISE EXCEPTION 'VISIBILITE_ETAB_REFUS_EN_TROP: %', nb; END IF;
   SELECT resultat INTO o FROM observations WHERE phase='apres' AND acteur='lecture_seule' AND rpc='etat_m1';
   IF o ? 'error' OR o->'est_etab' IS DISTINCT FROM 'true'::jsonb
     OR jsonb_typeof(o->'code_pointage_actif') IS DISTINCT FROM 'null'
@@ -182,9 +226,19 @@ BEGIN
   SELECT count(*) INTO nb FROM observations
   WHERE phase = 'apres' AND rpc = 'profil'
     AND resultat->>'iban_last4' = CASE WHEN acteur = 'proprietaire_historique' THEN '0077' ELSE '0042' END
-    AND resultat->>'stripe_customer_id' IS NOT NULL AND resultat->>'stripe_account_id' IS NOT NULL
     AND acteur IN ('proprietaire', 'admin_groupe', 'lecture_seule', 'proprietaire_historique');
-  IF nb <> 4 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_PAIEMENT_PERDU_POUR_HABILITE'; END IF;
+  IF nb <> 4 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_IBAN_PERDU_POUR_HABILITE'; END IF;
+  SELECT count(*) INTO nb FROM observations
+  WHERE phase = 'apres' AND rpc = 'profil'
+    AND resultat->>'stripe_customer_id' = CASE WHEN acteur = 'proprietaire_historique' THEN 'client-fixture-l' ELSE 'client-fixture-e' END
+    AND resultat->>'stripe_account_id' = CASE WHEN acteur = 'proprietaire_historique' THEN 'compte-fixture-l' ELSE 'compte-fixture-e' END
+    AND acteur IN ('proprietaire', 'admin_groupe', 'proprietaire_historique');
+  IF nb <> 3 THEN RAISE EXCEPTION 'VISIBILITE_ETAB_PAIEMENT_PERDU_POUR_HABILITE'; END IF;
+  SELECT resultat INTO o FROM observations WHERE phase='apres' AND acteur='lecture_seule' AND rpc='profil';
+  IF o->>'iban_last4' IS DISTINCT FROM '0042'
+    OR jsonb_typeof(o->'stripe_customer_id') IS DISTINCT FROM 'null'
+    OR jsonb_typeof(o->'stripe_account_id') IS DISTINCT FROM 'null'
+  THEN RAISE EXCEPTION 'VISIBILITE_ETAB_LECTURE_SEULE_PROFIL_INATTENDU'; END IF;
   -- rib_s3_key reste servi à tous les membres (le masquer afficherait « Aucun RIB fourni »).
   SELECT count(*) INTO nb FROM observations
   WHERE phase = 'apres' AND rpc = 'profil' AND resultat->>'rib_s3_key' = 'e1/rib-fixture.pdf'
@@ -212,20 +266,29 @@ BEGIN
     WHERE NOT EXISTS (SELECT FROM pg_description d WHERE d.objoid = c.objoid AND d.description = c.description)
   ) OR (SELECT count(*) FROM commentaires_avant) <> 1
   THEN RAISE EXCEPTION 'VISIBILITE_ETAB_COMMENTAIRE_PERDU'; END IF;
-  IF EXISTS (
+  -- Jointure par to_regprocedure('public.' || signature), indépendante du
+  -- search_path ; elle doit couvrir exactement les trois entrées, sinon un
+  -- EXISTS vide passerait sans rien comparer.
+  SELECT count(*) INTO nb
+    FROM inventaire_avant i
+    JOIN private.security_definer_inventory n USING (signature)
+    JOIN pg_proc p ON p.oid = to_regprocedure('public.' || i.signature)
+    JOIN attributs_avant a ON a.oid = p.oid;
+  IF nb <> 3 OR EXISTS (
     SELECT FROM inventaire_avant i
     JOIN private.security_definer_inventory n USING (signature)
-    JOIN attributs_avant a ON a.signature = i.signature
-    JOIN pg_proc p ON p.oid = a.oid
+    JOIN pg_proc p ON p.oid = to_regprocedure('public.' || i.signature)
     WHERE n.categorie IS DISTINCT FROM i.categorie OR n.justification IS DISTINCT FROM i.justification
       OR n.definition_md5 IS DISTINCT FROM md5(p.prosrc)
+      OR n.definition_md5 IS NOT DISTINCT FROM i.definition_md5
   ) OR (SELECT count(*) FROM private.security_definer_inventory) <> 3
-  THEN RAISE EXCEPTION 'VISIBILITE_ETAB_INVENTAIRE_INCOHERENT'; END IF;
+  THEN RAISE EXCEPTION 'VISIBILITE_ETAB_INVENTAIRE_INCOHERENT: %', nb; END IF;
 END $apres$;
 
 SELECT jsonb_build_object('postgres', 17, 'liveBodiesLoaded', true, 'realMigrationLoaded', true,
-  'acteurs', (SELECT count(*) FROM acteurs), 'reponsesComparees', 44,
+  'acteurs', (SELECT count(*) FROM acteurs), 'reponsesComparees', 55,
   'differencesAttendues', (SELECT count(*) FROM attendus),
-  'fuitesReproduitesAvant', 5, 'habilitesInchanges', true,
+  'masquesAvecDonneeAvant', (SELECT count(*) FROM attendus WHERE effet = 'null'),
+  'refusAvecFuiteAvant', (SELECT count(*) FROM attendus WHERE effet = 'refus'), 'habilitesInchanges', true,
   'aclProprietaireInventairePreserves', true, 'transactionEnd', 'ROLLBACK') AS visibilite_etablissement_proof;
 ROLLBACK;

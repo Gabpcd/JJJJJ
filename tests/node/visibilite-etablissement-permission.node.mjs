@@ -103,6 +103,9 @@ test('aucun GRANT, REVOKE, DROP, ALTER, INSERT ni DELETE ; trois redéfinitions 
   assert.match(squelette, /SET definition_md5 = v_attendu\.nouveau_md5, recense_le = pg_catalog\.now\(\)/);
   assert.match(squelette, /AND i\.definition_md5 = v_attendu\.ancien_md5;/);
   assert.match(squelette, /NOTIFY pgrst, 'reload schema';\s*$/);
+  // La consigne de merge vit dans le corps de PR : dans le fichier (et dans
+  // schema_migrations.statements) elle deviendrait périmée après le merge.
+  assert.doesNotMatch(migration, /NE PAS MERGER|go explicite/i);
   // Les qualificatifs LIVE sont reconduits à l'identique.
   assert.match(migration, /public\.fn_etat_pointage_mission\(p_mission_id uuid\)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS \$etat_pointage\$/);
   assert.match(migration, /public\.fn_stats_dashboard_etablissement\(\)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS \$stats_dashboard\$/);
@@ -196,19 +199,29 @@ test('règles de visibilité : permissions du serveur, clés conservées, rôles
   assert.ok(stats.includes("'candidatures_en_attente', ("), 'compteur de candidatures conservé');
 
   const profil = sourceBody(migration, 'fn_mon_etablissement_complet');
-  assert.ok(profil.includes("v_lecture_finances := public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE\n    OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;"));
+  assert.ok(profil.includes("v_paiement := public.fn_a_permission_etablissement('paiement', v_etab_id) IS TRUE;"));
+  assert.ok(profil.includes("v_lecture_finances := v_paiement\n    OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS TRUE;"));
+  // Identifiants Stripe : « paiement » seul (aucun lecteur web, blueprint §3 B5b) ;
+  // suffixe IBAN : lecture financière (Paramètres › Facturation, ProfilEtablissement.tsx).
+  assert.ok(profil.includes('      CASE WHEN v_paiement THEN et.stripe_customer_id END AS stripe_customer_id,\n'));
+  assert.ok(profil.includes('      CASE WHEN v_paiement THEN et.stripe_account_id END AS stripe_account_id,\n'));
+  assert.ok(profil.includes('      CASE WHEN v_lecture_finances THEN et.iban_last4 END AS iban_last4, et.sms_actif,\n'));
   assert.ok(profil.includes('      et.rib_s3_key, et.rib_ia_coherent,\n'), 'rib_s3_key et rib_ia_coherent inchangés');
 
   // Clés masquées par la migration = clés masquées attendues par le banc PG17.
   const masquees = new Set([
     ...[...stats.matchAll(/'(\w+)', CASE WHEN v_lecture_\w+ THEN/g)].map(m => m[1]),
-    ...[...profil.matchAll(/CASE WHEN v_lecture_finances THEN et\.\w+ END AS (\w+)/g)].map(m => m[1]),
+    ...[...profil.matchAll(/CASE WHEN v_(?:lecture_finances|paiement) THEN et\.\w+ END AS (\w+)/g)].map(m => m[1]),
     ...[...etat.matchAll(/'(\w+)', CASE WHEN v_peut_voir_code THEN/g)].map(m => m[1]),
   ]);
   assert.deepEqual([...masquees].sort(), ['candidatures_recentes', 'code_pointage_actif', 'commissions_cumulees',
     'commissions_impayees', 'iban_last4', 'stripe_account_id', 'stripe_customer_id']);
-  const dansBanc = new Set([...bancTest.matchAll(/^\s*\('[a-z_]+', '[a-z_0-9]+', '(\w+)', 'null'\)/gm)].map(m => m[1]));
+  const lignesNull = [...bancTest.matchAll(/^\s*\('([a-z_]+)', '([a-z_0-9]+)', '(\w+)', 'null'\)/gm)];
+  const dansBanc = new Set(lignesNull.map(m => m[3]));
   assert.deepEqual([...dansBanc].sort(), [...masquees].sort());
+  // Les identifiants Stripe sont aussi retirés à LECTURE_SEULE, pas le suffixe IBAN.
+  const lectureSeule = lignesNull.filter(m => m[1] === 'lecture_seule' && m[2] === 'profil').map(m => m[3]).sort();
+  assert.deepEqual(lectureSeule, ['stripe_account_id', 'stripe_customer_id']);
 });
 
 test('bancs PG17 : vraie migration, fixture commune, garde base vide et câblage CI', () => {
@@ -219,6 +232,19 @@ test('bancs PG17 : vraie migration, fixture commune, garde base vide et câblage
     assert.match(texte, /ROLLBACK;\s*$/);
   }
   assert.equal(rejeuTest.split(`\\ir ../../${migrationPath}`).length - 1, 2);
+  // Garde d'accès : la mission non affectée est observée et chaque refus
+  // attendu doit être une fuite reproduite avant la migration.
+  assert.ok(bancTest.includes("'etat_m2', public.fn_etat_pointage_mission('b5b00000-0000-4000-8000-00000000a002')"));
+  const refus = [...bancTest.matchAll(/^\s*\('([a-z_]+)', '(etat_m[12l])', NULL, 'refus'\)/gm)].map(m => `${m[1]}/${m[2]}`).sort();
+  assert.deepEqual(refus, ['membre_autre_etab/etat_m2', 'proprietaire_historique/etat_m2', 'sans_identite/etat_m1',
+    'sans_identite/etat_m2', 'sans_identite/etat_ml', 'soignant_affecte/etat_m2', 'soignant_tiers/etat_m1',
+    'soignant_tiers/etat_m2', 'soignant_tiers/etat_ml']);
+  assert.ok(bancTest.includes("RAISE EXCEPTION 'VISIBILITE_ETAB_REFUS_SANS_FUITE_AVANT: % %'"));
+  assert.ok(bancTest.includes('IF nb <> 9 THEN RAISE EXCEPTION'));
+  // Contrôle d'inventaire indépendant du search_path et non vide.
+  assert.ok(bancTest.includes("JOIN pg_proc p ON p.oid = to_regprocedure('public.' || i.signature)"));
+  assert.doesNotMatch(bancTest, /a\.signature = i\.signature/);
+  assert.ok(bancTest.includes('IF nb <> 3 OR EXISTS ('));
   assert.ok(banc.includes('\\ir visibilite-etablissement-permission-live.sql'));
   for (const role of ['PROPRIETAIRE', 'ADMIN_GROUPE', 'RH', 'POINTAGE_ONLY', 'LECTURE_SEULE']) {
     assert.ok(banc.includes(`'${role}', true)`), role);
