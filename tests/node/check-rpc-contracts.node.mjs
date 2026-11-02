@@ -772,19 +772,38 @@ test('CONTRATS fn_scanner_code_pointage : exceptions de la RPC et des triggers d
   const union = [...new Set([...scanner, ...conformite, ...fenetre].map(r => r.sqlstate))].sort();
   assert.deepEqual(union, ['22023', '23503', '23514', '42501', 'P0001', 'P0002']);
   assert.ok(fiche.includes('`["P0001", "P0002", "22023", "23503", "23514", "42501"]`'), 'ensemble exceptionsMetier absent de la fiche');
-  // Surcharge du web pour P0002, reprise en vouvoiement (décision 6).
+  // Surcharge du web pour P0002, reprise en vouvoiement (décision 6) : seule la personne du verbe change
+  // (« Demande » → « Demandez »), apostrophe typographique ’ du web comprise. T4b affiche exactement cette forme.
   const rotatif = read('src/components/pointage/PointageRotatifSoignant.tsx');
-  assert.ok(rotatif.includes("error.message === 'Code de pointage invalide ou expiré.'"));
-  assert.ok(fiche.includes("Code de pointage invalide ou expiré. Demandez le code actuel à l'établissement."));
+  const surcharge = rotatif.match(/error\.message === 'Code de pointage invalide ou expiré\.'\s*\?\s*'([^']+)'/);
+  assert.ok(surcharge, 'surcharge P0002 introuvable dans PointageRotatifSoignant.tsx : revoir la décision 6 et la fiche');
+  const web = surcharge[1];
+  assert.equal(web, 'Code de pointage invalide ou expiré. Demande le code actuel à l’établissement.',
+    'surcharge P0002 du web modifiée : revoir la décision 6 et la fiche');
+  const natif = web.replace('Demande le code', 'Demandez le code');
+  assert.notEqual(natif, web);
+  const decisions = aplati(read('docs/mobile-swift/DECISIONS_LOT2.md'));
+  for (const [nom, texte] of [['fiche fn_scanner_code_pointage', fiche], ['DECISIONS_LOT2.md', decisions]]) {
+    assert.ok(texte.includes(`« ${natif} »`), `${nom} : forme vouvoyée exacte absente (« ${natif} »)`);
+    assert.ok(!texte.includes("Demandez le code actuel à l'établissement"), `${nom} : apostrophe ASCII, le web écrit ’`);
+  }
 });
 
 test('CONTRATS fn_scanner_code_pointage : nouveau_code renvoyé tant que B1 n est pas mergée, jamais lu par le natif', () => {
   const body = corpsSql(read(SOURCES.schema), enteteFn('fn_scanner_code_pointage'));
-  // Bascule avec B1 (LOT2_PLAN §3 B1) : la PR B1 met à jour cette garde et la fiche dans la même PR.
+  // Bascule avec B1 : B1 vise `main`, où cette garde n'existe pas tant que le lot 2 n'y est pas. Elle rougit au merge
+  // de `main` dans `feat/ios-lot2` qui suit la re-baseline du dump après B1 : ce merge (ou le commit qui le suit sur
+  // `feat/ios-lot2`) bascule la garde et la fiche. Si T0 est déjà sur `main` quand B1 arrive, la PR B1 les bascule.
   assert.ok(body.includes("'nouveau_code', v_new_code") && body.includes("'nouveau_hmac', v_new_hmac"),
-    'nouveau_code n est plus renvoyé : B1 mergée, basculer la fiche « nouveau_code jamais lu » et cette garde');
+    'nouveau_code n est plus renvoyé (B1 mergée, dump re-baseliné) : au merge de main dans feat/ios-lot2, basculer la fiche « nouveau_code jamais lu » de CONTRATS_RPC_SOIGNANT.md et cette garde');
   const fiche = sectionContrats('`fn_scanner_code_pointage` : `nouveau_code` jamais lu');
   assert.ok(fiche.includes('B1') && fiche.includes('liste blanche'), 'fiche nouveau_code : B1 / liste blanche absents');
+  // Revue de T0 : une bascule « dans la PR B1 » est irréalisable tant que T0 n'est pas sur `main`.
+  for (const [nom, texte] of [['fiche nouveau_code', fiche], ['DECISIONS_LOT2.md', aplati(read('docs/mobile-swift/DECISIONS_LOT2.md'))]]) {
+    assert.ok(texte.includes('merge de `main` dans `feat/ios-lot2`') && texte.includes('re-baseline'), `${nom} : moment de la bascule B1 absent`);
+    assert.ok(!texte.includes('dans la même PR') && !texte.includes('B1 se merge après T0') && !texte.includes('mergée après T0'),
+      `${nom} : bascule « dans la PR B1 » irréalisable (B1 vise main)`);
+  }
   for (const cle of ['type_scan_effectue', 'prochain_type_scan', 'creneau_effectif_id', 'horodatage_effectif',
     'horodatage_arrondi', 'numero_scan', 'validation_etab_requise']) {
     assert.ok(body.includes(`'${cle}'`), `témoin SQL : clé ${cle}`);
@@ -899,9 +918,32 @@ test('Web : le système ① reste mort (sinon la décision 1 du lot 2 est à rev
     ['fn_etat_pointage_mission', 'fn_scanner_code_pointage']);
   assert.ok(rotatif.includes('let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };'));
   assert.ok(rotatif.includes('meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };'));
+  // Rejoueur ① encore monté (revue de T0) : `SyncHorsLigne` (LayoutApp) rejoue `fn_pointer_*` depuis la file de
+  // `src/lib/horsLigne.ts`, alimentée seulement par `stockerPointageHorsLigne`, elle-même appelée uniquement dans
+  // pointerArrivee / pointerDepart (morts). Un nouvel appelant remettrait ① en service sans signal.
+  const usages = motif => webFiles().filter(f => motif.test(readFileSync(f, 'utf8'))).map(relatif).sort();
+  assert.deepEqual(usages(/\bstockerPointageHorsLigne\b/), ['src/lib/horsLigne.ts', 'src/pages/PresencesSoignant.tsx'],
+    'stockerPointageHorsLigne : nouvel importeur — revoir la décision 1');
+  const corpsFleche = nom => {
+    const debut = presences.indexOf(`\n  const ${nom} = async (`);
+    assert.ok(debut >= 0, `${nom} introuvable dans PresencesSoignant.tsx`);
+    const fin = presences.indexOf('\n  };\n', debut);
+    assert.ok(fin > debut, `${nom} : fin de corps introuvable`);
+    return [debut, fin];
+  };
+  const bornes = ['pointerArrivee', 'pointerDepart'].map(corpsFleche);
+  const appels = [...presences.matchAll(/\bstockerPointageHorsLigne\(/g)].map(m => m.index);
+  assert.equal(appels.length, 2, `stockerPointageHorsLigne : ${appels.length} appel(s) dans PresencesSoignant.tsx, 2 attendus`);
+  for (const at of appels) {
+    assert.ok(bornes.some(([d, f]) => at > d && at < f), 'stockerPointageHorsLigne appelée hors de pointerArrivee / pointerDepart — revoir la décision 1');
+  }
+  assert.deepEqual(usages(/from '[^']*\/horsLigne'/), ['src/components/SyncHorsLigne.tsx', 'src/pages/PresencesSoignant.tsx']);
+  assert.deepEqual(usages(/from '[^']*\/SyncHorsLigne'/), ['src/components/LayoutApp.tsx']);
   const fiche = sectionContrats('Interdit côté natif : système de pointage ①');
   for (const name of POINTAGE_SYSTEME_1) assert.ok(fiche.includes(`\`${name}\``), `fiche système ① : ${name} absente`);
-  for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', '#664', 'contrat signé']) assert.ok(fiche.includes(temoin), `fiche système ① : ${temoin}`);
+  for (const temoin of ['qr-offline-queue.ts', 'SyncHorsLigne', 'stockerPointageHorsLigne', '#664', 'contrat signé']) {
+    assert.ok(fiche.includes(temoin), `fiche système ① : ${temoin}`);
+  }
 });
 
 test('CONTRATS edge verify-document : chaque statut et chaque message de index.ts, un seul appel par document', () => {
@@ -932,35 +974,101 @@ test('CONTRATS edge generate-contrat-mission-pdf : statuts, messages et codes de
     assert.ok(fiche.includes(`**${statut}**`), `statut ${statut} absent`);
     assert.ok(fiche.includes(message), `message absent : « ${message} »`);
   }
-  for (const [, code] of index.matchAll(/code:\s*'([A-Z_]+)'/g)) assert.ok(fiche.includes(`\`${code}\``), `code ${code} absent`);
+  const codes = [...index.matchAll(/code:\s*'([A-Z_]+)'/g)].map(m => m[1]);
+  assert.ok(codes.length >= 2, `codes lus : ${codes.length}`); // témoin : un format de guillemets changé ne vérifierait plus rien
+  for (const code of codes) assert.ok(fiche.includes(`\`${code}\``), `code ${code} absent`);
   for (const cle of ['contrat_id', 'storage_path', 'hash_document', 'signed_url', 'ttl_seconds']) assert.ok(fiche.includes(`\`${cle}\``), `clé ${cle}`);
   assert.ok(index.includes("{ contentType: 'text/html', upsert: false }") && fiche.includes('text/html'));
   assert.ok(index.includes("createSignedUrl(contrat.storage_path, 24 * 3600)") && fiche.includes('24 h'));
   assert.ok(fiche.includes('donnees_cdd'), 'fiche : aucun donnees_cdd côté soignant non consigné');
 });
 
+/**
+ * Politiques de `storage.objects` encore actives après le rejeu, dans l'ordre, des instructions écrites en clair dans
+ * `sources` (paires [migration, sql], commentaires `--` retirés) : CREATE pose le texte, ALTER le complète ou le
+ * renomme, DROP le retire. Une politique créée par SQL dynamique (`EXECUTE format(…)`) ou hors migration n'est pas vue.
+ */
+function politiquesStorageActives(sources) {
+  const IDENT = '("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)';
+  const nom = brut => (brut.startsWith('"') ? brut.slice(1, -1).replaceAll('""', '"') : brut.toLowerCase());
+  const instruction = new RegExp(
+    `\\b(CREATE|ALTER|DROP)\\s+POLICY\\s+(?:IF\\s+EXISTS\\s+)?${IDENT}\\s+ON\\s+(?:storage|"storage")\\.(?:objects|"objects")(?![A-Za-z0-9_])[^;]*;`, 'gi');
+  const actives = new Map();
+  for (const [migration, sql] of sources) {
+    for (const [texte, verbe, brut] of sql.replace(/--[^\n]*/g, '').matchAll(instruction)) {
+      const cle = nom(brut);
+      const v = verbe.toUpperCase();
+      if (v === 'DROP') actives.delete(cle);
+      else if (v === 'CREATE') actives.set(cle, { texte, migration });
+      else {
+        const avant = actives.get(cle);
+        const renomme = texte.match(new RegExp(`\\bRENAME\\s+TO\\s+${IDENT}`, 'i'));
+        if (renomme) {
+          actives.delete(cle);
+          if (avant) actives.set(nom(renomme[1]), avant);
+        } else actives.set(cle, { texte: `${avant?.texte ?? ''}\n${texte}`, migration });
+      }
+    }
+  }
+  return actives;
+}
+/** Commande d'une politique (ALL par défaut) et caractère restrictif (une politique RESTRICTIVE n'ouvre rien). */
+function commandePolitique(texte) {
+  const tete = texte.split(/\b(?:USING|WITH\s+CHECK)\s*\(/i)[0];
+  return {
+    cmd: (tete.match(/\bFOR\s+(ALL|SELECT|INSERT|UPDATE|DELETE)\b/i)?.[1] ?? 'ALL').toUpperCase(),
+    restrictive: /\bAS\s+RESTRICTIVE\b/i.test(tete),
+  };
+}
+/**
+ * Écritures client ouvertes par les politiques permissives actives, quel que soit leur nom : UPDATE, DELETE ou ALL
+ * sur `jolene-documents`, toute écriture sur `contrats-signes`. Une politique qui ne restreint aucun `bucket_id`
+ * vaut pour tous les buckets.
+ */
+function ouverturesStorage(actives) {
+  const vise = (texte, bucket) => texte.includes(`'${bucket}'`) || !/\bbucket_id\b/.test(texte);
+  const interdits = { 'jolene-documents': ['UPDATE', 'DELETE', 'ALL'], 'contrats-signes': ['INSERT', 'UPDATE', 'DELETE', 'ALL'] };
+  const out = [];
+  for (const [nom, { texte, migration }] of actives) {
+    const { cmd, restrictive } = commandePolitique(texte);
+    if (restrictive) continue;
+    for (const [bucket, cmds] of Object.entries(interdits)) {
+      if (cmds.includes(cmd) && vise(texte, bucket)) out.push(`${nom} (${migration}) : ${cmd} sur ${bucket}`);
+    }
+  }
+  return out;
+}
+
 test('CONTRATS Storage du lot 2 : jolene-documents INSERT/SELECT sans UPDATE/DELETE client, contrats-signes SELECT', () => {
   const dir = join(root, 'supabase', 'migrations');
-  const migrations = readdirSync(dir).filter(n => n.endsWith('.sql')).sort();
-  /** Dernière instruction (CREATE ou DROP) qui vise une politique, par ordre des migrations. */
-  const derniere = politique => {
-    let etat = null;
-    for (const m of migrations) {
-      const sql = readFileSync(join(dir, m), 'utf8');
-      for (const [, verbe] of sql.matchAll(new RegExp(`(CREATE|DROP) POLICY (?:IF EXISTS )?"?${politique}"?\\s+ON\\s+storage\\.objects`, 'g'))) etat = { verbe, m };
-    }
-    return etat;
-  };
-  for (const politique of ['pol_storage_jolene_insert', 'pol_storage_jolene_select', 'pol_contrats_signes_select']) {
-    assert.equal(derniere(politique)?.verbe, 'CREATE', `${politique} : politique absente`);
+  const sources = readdirSync(dir).filter(n => n.endsWith('.sql')).sort().map(n => [n, readFileSync(join(dir, n), 'utf8')]);
+  const actives = politiquesStorageActives(sources);
+  // Témoin : l'extraction voit les politiques actuelles (une regex muette passerait sans rien vérifier).
+  assert.ok(actives.size >= 10, `politiques storage.objects actives lues : ${actives.size}`);
+  for (const [politique, cmd, bucket] of [
+    ['pol_storage_jolene_insert', 'INSERT', 'jolene-documents'],
+    ['pol_storage_jolene_select', 'SELECT', 'jolene-documents'],
+    ['pol_contrats_signes_select', 'SELECT', 'contrats-signes'],
+  ]) {
+    const p = actives.get(politique);
+    assert.ok(p, `${politique} : politique absente de l'état final des migrations`);
+    assert.equal(commandePolitique(p.texte).cmd, cmd, `${politique} : commande`);
+    assert.ok(p.texte.includes(`'${bucket}'`), `${politique} : bucket ${bucket}`);
   }
-  for (const politique of ['pol_storage_jolene_update', 'pol_storage_jolene_delete']) {
-    const etat = derniere(politique);
-    assert.ok(etat === null || etat.verbe === 'DROP', `${politique} recréée par ${etat?.m} : la fiche Storage est à revoir`);
-  }
+  assert.deepEqual(ouverturesStorage(actives), [], 'écriture client ouverte sur un bucket du lot 2 : la fiche Storage est à revoir');
+  // Revue de T0 : la garde vaut quel que soit le nom de la politique (mutations synthétiques ajoutées aux migrations).
+  const avec = sql => ouverturesStorage(politiquesStorageActives([...sources, ['99999999999999_mutation.sql', sql]]));
+  assert.equal(avec("CREATE POLICY autre_nom ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'jolene-documents');").length, 1);
+  assert.equal(avec('CREATE POLICY "Tout supprimer" ON storage.objects FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);').length, 2);
+  assert.equal(avec("CREATE POLICY depot_contrat\nON storage.objects\nFOR INSERT TO authenticated\nWITH CHECK (bucket_id = 'contrats-signes');").length, 1);
+  assert.equal(avec("CREATE POLICY tout_jolene ON storage.objects USING (bucket_id = 'jolene-documents');").length, 1);
+  assert.equal(avec("CREATE POLICY garde ON storage.objects AS RESTRICTIVE FOR UPDATE TO authenticated USING (bucket_id <> 'jolene-documents');").length, 0);
+  assert.equal(avec("CREATE POLICY x ON storage.objects FOR UPDATE USING (bucket_id = 'jolene-documents');\nDROP POLICY IF EXISTS x ON storage.objects;").length, 0);
+  assert.equal(avec("CREATE POLICY x ON storage.objects FOR UPDATE USING (bucket_id = 'jolene-documents');\nALTER POLICY x ON storage.objects RENAME TO y;").length, 1);
+  assert.equal(avec("-- CREATE POLICY commentee ON storage.objects FOR UPDATE USING (bucket_id = 'jolene-documents');").length, 0);
   const fiche = sectionContrats('Storage du lot 2');
   for (const temoin of ['jolene-documents', 'contrats-signes', 'pol_storage_jolene_insert', 'pol_storage_jolene_select',
-    'pol_contrats_signes_select', 'upsert: false', 'exists(path:)', '20260729143000']) {
+    'pol_contrats_signes_select', 'upsert: false', 'exists(path:)', '20260729143000', 'quel que soit son nom', 'EXECUTE format']) {
     assert.ok(fiche.includes(temoin), `fiche Storage : ${temoin} absent`);
   }
 });
@@ -977,7 +1085,10 @@ test('CONTRATS : sources lues par la garde du lot 2 listées dans l en-tête', (
   // Les MESSAGES_ERREUR du web cités par la fiche OTP existent toujours tels quels.
   const otp = read('src/components/SignerContratOtp.tsx');
   const fiche = aplati(section(doc, 'fn_envoyer_otp_signature'));
-  for (const [, code, message] of otp.slice(otp.indexOf('const MESSAGES_ERREUR'), otp.indexOf('function messageDepuisCode')).matchAll(/([A-Z_]+): '((?:[^'\\]|\\')+)'/g)) {
+  const messagesErreur = [...otp.slice(otp.indexOf('const MESSAGES_ERREUR'), otp.indexOf('function messageDepuisCode'))
+    .matchAll(/([A-Z_]+): '((?:[^'\\]|\\')+)'/g)];
+  assert.ok(messagesErreur.length >= 13, `MESSAGES_ERREUR lus : ${messagesErreur.length}`); // témoin de cardinalité
+  for (const [, code, message] of messagesErreur) {
     assert.ok(fiche.includes(`\`${code}\``) && fiche.includes(message.replaceAll("\\'", "'")), `MESSAGES_ERREUR ${code} absent de la fiche OTP`);
   }
 });
@@ -1045,4 +1156,67 @@ test('PRINCIPES §4 et plan : file hors ligne QR retirée, critères du lot 2 am
     const ligne = plan.find(l => l.startsWith(temoin) || l.includes(temoin));
     assert.ok(ligne && ligne.includes('DECISIONS_LOT2.md'), `plan : « ${temoin} » non amendée`);
   }
+});
+
+// Revue fraîche de T0 : les constats RLS/auth relevés sur le dump sont consignés sous « En attente de Gabrielle › B9 »
+// et confrontés à leurs sources. Chaque témoin SQL rougit quand une PR backend (B9) corrige le constat : basculer
+// alors le constat de DECISIONS_LOT2.md et la fiche concernée de CONTRATS_RPC_SOIGNANT.md.
+test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn_creer_notification) confrontés au dump et consignés', () => {
+  const schema = read(SOURCES.schema);
+  const grantAuthenticated = name => new RegExp(`\\nGRANT ALL ON FUNCTION "public"\\."${name}"\\([^\\n]*\\) TO "authenticated";\\n`).test(schema);
+  // (b) Les huit RPC ① restent appelables par PostgREST.
+  for (const name of POINTAGE_SYSTEME_1) {
+    assert.ok(grantAuthenticated(name), `${name} : plus de GRANT authenticated au dump (REVOKE appliqué ?) — basculer la fiche ① et le constat B9`);
+  }
+  // Chaîne « code sans GPS » : garde ternaire de fn_codes_pointage_mission (mon_etablissement_id() NULL pour un
+  // soignant), codes rendus et créés ; fn_pointer_arrivee accepte le code avec perimetre_gps_valide = true ;
+  // dec_antifraude_presence ne recalcule rien sans coordonnées.
+  const codes = corpsSql(schema, enteteFn('fn_codes_pointage_mission'));
+  assert.ok(codes.includes('IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN'), 'fn_codes_pointage_mission : garde corrigée');
+  assert.ok(codes.includes("'code_arrivee', v_mission.code_arrivee") && codes.includes("'code_depart', v_mission.code_depart") && codes.includes('UPDATE missions SET'));
+  assert.match(corpsSql(schema, enteteFn('fn_pointer_arrivee')), /IF p_code_arrivee IS NOT NULL THEN[\s\S]*?v_methode := 'CODE';\s*v_perimetre_ok := true;/);
+  assert.ok(corpsSql(schema, enteteFn('dec_antifraude_presence')).includes('IF NEW.pointage_arrivee_le IS NOT NULL AND NEW.arrivee_lat IS NOT NULL THEN'));
+  // Chaîne « jeton auto-généré » : garde ternaire de fn_generer_qr_mission, puis fn_valider_scan_qr (soignant assigné,
+  // GPS non bloquant).
+  assert.ok(corpsSql(schema, enteteFn('fn_generer_qr_mission')).includes('IF NOT (est_admin() OR v_mission.etablissement_id = mon_etablissement_id()) THEN'),
+    'fn_generer_qr_mission : garde corrigée');
+  const scan = corpsSql(schema, enteteFn('fn_valider_scan_qr'));
+  assert.ok(scan.includes('soignant_assigne_id IS DISTINCT FROM v_uid') && scan.includes('QR = source de vérité'));
+  // (a) fn_creer_notification : tout compte authentifié écrit une notification arbitraire (destinataire, titre,
+  // corps, lien) ; seul contrôle : auth.uid() non nul. L'audit pré-lancement la marque « FIXÉ ».
+  assert.ok(grantAuthenticated('fn_creer_notification'), 'fn_creer_notification : plus de GRANT authenticated — basculer le constat B9');
+  const notif = corpsSql(schema, enteteFn('fn_creer_notification'));
+  assert.ok(notif.includes('IF auth.uid() IS NULL AND NOT fn_est_contexte_cron_ou_admin() THEN'));
+  assert.ok(!/p_destinataire_id\s*(?:<>|!=|=|IS DISTINCT FROM|IS NOT DISTINCT FROM)/.test(notif) && notif.includes('p_lien'),
+    'fn_creer_notification contrôle désormais le destinataire : basculer le constat B9');
+  assert.ok(read('docs/audit-fonctionnel-pre-lancement.md').includes('| 4 | `fn_creer_notification` exposée sans check auth → spam notifications | MAJEUR | ✅ FIXÉ |'));
+  // Consignation : DECISIONS_LOT2.md › En attente de Gabrielle › B9, fiche ① et fiche fn_creer_notification.
+  const b9 = aplati(sousSection(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'En attente de Gabrielle'),
+    'B9 (PR préparées et poussées, jamais mergées sans go)'));
+  for (const temoin of ['fn_creer_notification', 'l.82276', '`auth.uid() IS NULL`', 'FIXÉ', 'docs/audit-fonctionnel-pre-lancement.md',
+    'fn_codes_pointage_mission', 'fn_pointer_arrivee', '`perimetre_gps_valide = true`', 'fn_generer_qr_mission', 'fn_valider_scan_qr',
+    'pointer à distance', 'REVOKE EXECUTE', 'FROM authenticated', 'SyncHorsLigne', 'IS DISTINCT FROM', 'COALESCE',
+    'un gap connu reste verrouillé', 'définition live', 'PR backend séparée', 'fn_presences_detail_mission', 'fn_etat_pointage_mission']) {
+    assert.ok(b9.includes(temoin), `En attente de Gabrielle › B9 : ${temoin} absent`);
+  }
+  const fiche1 = sectionContrats('Interdit côté natif : système de pointage ①');
+  for (const temoin of ['toujours GRANT `authenticated` en production', 'PostgREST', 'pointer à distance', 'B9', 'REVOKE EXECUTE']) {
+    assert.ok(fiche1.includes(temoin), `fiche système ① : ${temoin} absent`);
+  }
+  const ficheNotif = sectionContrats('Interdite côté natif : `fn_creer_notification`');
+  for (const temoin of ['GRANT `authenticated`', 'l.82276', '`auth.uid() IS NULL`', 'B9', 'FIXÉ']) {
+    assert.ok(ficheNotif.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
+  }
+});
+
+// Revue fraîche de T0 : check-rpc-contracts.mjs lit le supplément STAGING (statut `staging_seulement`) ; tant que
+// T2 ne l'a pas ajouté aux filtres de chemins de ios-swift-ci.yml, la consigne reste écrite dans DECISIONS_LOT2.md.
+test('ios-swift-ci.yml : le supplément SMS lu par le script est dans les filtres de chemins, ou consigné pour T2', () => {
+  assert.ok(read('scripts/mobile/check-rpc-contracts.mjs').includes(`'${SUPPLEMENT_SMS}'`), 'le script ne lit plus le supplément : retirer cette garde');
+  const filtres = [...read('.github/workflows/ios-swift-ci.yml').matchAll(/^\s+- '([^']+)'$/gm)].map(m => m[1]);
+  assert.ok(filtres.includes('scripts/mobile/check-rpc-contracts.mjs'), 'filtres de chemins de ios-swift-ci.yml non lus');
+  if (filtres.filter(f => f === SUPPLEMENT_SMS).length >= 2) return; // pull_request et push
+  const consignes = aplati(section(read('docs/mobile-swift/DECISIONS_LOT2.md'), 'Consignes aux tranches suivantes'));
+  assert.ok(consignes.includes(`**T2**`) && consignes.includes(`\`${SUPPLEMENT_SMS}\``) && consignes.includes('ios-swift-ci.yml'),
+    'supplément SMS absent des filtres de chemins de ios-swift-ci.yml et non consigné pour T2');
 });
