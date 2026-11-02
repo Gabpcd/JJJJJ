@@ -32,7 +32,8 @@ public struct DemoDashboardGateway: DashboardPort {
         self.clock = clock
     }
 
-    public func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
+    /// `delaiEcran` sans objet : fixtures embarquées, aucune lecture à sous-budgéter.
+    public func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot {
         try MissionBusiness.validateContext(context)
         guard context.userId == DemoWorld.context.userId else {
             throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement)
@@ -65,7 +66,7 @@ public actor DemoDashboardEchecGateway: DashboardPort {
         self.relais = relais
     }
 
-    public func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
+    public func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot {
         try MissionBusiness.validateContext(context)
         guard context.userId == DemoWorld.context.userId else {
             throw JoleneError(.demoOnly, DemoWorld.messageDemoSeulement)
@@ -75,6 +76,6 @@ public actor DemoDashboardEchecGateway: DashboardPort {
             echecsRestants -= 1
             throw JoleneError(.network, SessionController.timeoutMessage)
         }
-        return try await relais.dashboard(context: context)
+        return try await relais.dashboard(context: context, delaiEcran: delaiEcran)
     }
 }

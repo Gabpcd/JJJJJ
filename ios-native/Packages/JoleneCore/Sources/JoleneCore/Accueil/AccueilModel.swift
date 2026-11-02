@@ -2,12 +2,17 @@ import Foundation
 import Combine
 
 /// Modèle de l'onglet Accueil (lot 1, T3) : tableau de bord lu par `gateways.dashboard` pour
-/// l'epoch de la session, borné à `SessionController.resolutionTimeout` (décision 14). Mêmes
-/// règles d'état que `MissionsListModel` :
+/// l'epoch de la session, borné à `SessionController.resolutionTimeout` (décision 14), délai
+/// transmis tel quel au port (`delaiEcran`) : une seule source pour la borne de l'écran et les
+/// sous-budgets de la gateway. Mêmes règles d'état que `MissionsListModel` :
 /// - une annulation de tâche SwiftUI n'est jamais une erreur (l'état reste `.loading`) ;
 /// - un rafraîchissement conserve le tableau affiché et n'expose qu'un `refreshError` ;
 /// - `.unauthorized` lève `sessionExpired` (revalidation de session plutôt que « Réessayer ») ;
 /// - une réponse reçue pour un epoch périmé est abandonnée.
+/// Chargements sérialisés (revue B8 de T3, 2e passe) : `.task`, le tirer-pour-rafraîchir et
+/// « Réessayer » peuvent se chevaucher ; seul le plus récent publie son résultat (instantané,
+/// erreur) et éteint l'indicateur `isRefreshing`. Une réponse plus lente d'un chargement dépassé
+/// est ignorée.
 /// Relecture à l'apparition au-delà de `delaiRelecture` (web : `staleTime: 60_000`) et par
 /// pull-to-refresh. Lecture seule : aucune mutation n'est faite depuis l'Accueil au lot 1 T3.
 @MainActor
@@ -33,6 +38,8 @@ public final class AccueilModel: ObservableObject {
 
     private let controller: SessionController
     private let snapshot: SessionSnapshot
+    /// Numéro du dernier chargement lancé : seul ce chargement publie (main actor, donc sans course).
+    private var generation = 0
 
     public init(controller: SessionController, snapshot: SessionSnapshot) {
         self.controller = controller
@@ -48,26 +55,31 @@ public final class AccueilModel: ObservableObject {
     public func mission(id: String) -> Mission? { tableau?.mission(id: id) }
 
     public func load() async {
+        generation += 1
+        let courant = generation
         let refreshing: Bool
         if case .loaded = state { refreshing = true } else { refreshing = false }
         if refreshing { isRefreshing = true } else { state = .loading }
         refreshError = nil
-        defer { isRefreshing = false }
+        // Un chargement dépassé n'éteint pas l'indicateur du chargement qui l'a remplacé.
+        defer { if generation == courant { isRefreshing = false } }
 
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard generation == courant else { return }
         horloge = gateways.clock
         let port = gateways.dashboard
         let context = snapshot.context
+        let delai = controller.resolutionTimeout
         do {
-            let tableau = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.dashboard(context: context)
+            let tableau = try await bounded(timeout: delai) {
+                try await port.dashboard(context: context, delaiEcran: delai)
             }
-            guard await controller.epoch == snapshot.epoch else { return }
+            guard await controller.epoch == snapshot.epoch, generation == courant else { return }
             sessionExpired = false
             chargeLe = gateways.clock.now()
             state = .loaded(tableau)
         } catch {
-            guard await controller.epoch == snapshot.epoch, !Task.isCancelled else { return }
+            guard await controller.epoch == snapshot.epoch, generation == courant, !Task.isCancelled else { return }
             let message: String
             if let jolene = error as? JoleneError {
                 if jolene.kind == .cancelled { return }
@@ -80,6 +92,18 @@ public final class AccueilModel: ObservableObject {
             }
             if refreshing { refreshError = message } else { state = .failed(message) }
         }
+    }
+
+    /// « Vérifier ma session » (état session expirée) : revalide la session, puis relit le tableau
+    /// de bord si elle est toujours prête pour l'epoch de cet écran. Sans cette relecture, une
+    /// session encore valide (même epoch : `SessionStore.start` ne démonte pas un espace prêt)
+    /// laisserait l'écran sur « Session à vérifier », `loadIfStale` ne relançant jamais un échec.
+    /// Une session fermée ou une autre identité est reprise par la racine (`RootView`, `.id(epoch)`),
+    /// sans lecture pour l'identité périmée.
+    public func verifierSession(_ session: SessionStore) async {
+        await session.start()
+        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        await load()
     }
 
     /// Apparition de l'onglet : premier chargement (ou relance après une tâche annulée), ou

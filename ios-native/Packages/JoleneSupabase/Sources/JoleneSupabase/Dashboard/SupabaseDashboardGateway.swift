@@ -21,8 +21,9 @@ import os
 /// Repli (`nil`) sur une erreur de transport, de serveur ou de contrat, et au dépassement du
 /// sous-budget ; une session expirée (`.unauthorized`) et l'annulation sont propagées : l'écran
 /// propose alors « Vérifier ma session », jamais un tableau partiel qui masquerait l'expiration.
-/// Le sous-budget est réduit à ce qu'il reste du délai de l'écran (`AccueilModel` borne l'appel à
-/// `resolutionTimeout`, 15 s) : une lecture lente ne jette jamais une RPC réussie.
+/// Le sous-budget est réduit à ce qu'il reste du délai de l'écran, `delaiEcran`, transmis par
+/// l'appelant (`AccueilModel` borne l'appel à `SessionController.resolutionTimeout` et passe cette
+/// même valeur, seule source du délai) : une lecture lente ne jette jamais une RPC réussie.
 /// Aucun montant n'est recalculé ; `gains_mois.net_total` n'est jamais affiché.
 public struct SupabaseDashboardGateway: DashboardPort {
     public static let rpc = "fn_dashboard_soignant_complet"
@@ -40,34 +41,30 @@ public struct SupabaseDashboardGateway: DashboardPort {
     private let clock: any ClockPort
     private let missions: SupabaseMissionsGateway
     private let sousBudget: TimeInterval
-    private let budgetEcran: TimeInterval
 
-    /// `budgetEcran` : délai qui borne tout l'appel côté modèle (`SessionController.resolutionTimeout`).
     public init(client: SupabaseClient, clock: any ClockPort = SystemClock(),
-                sousBudgetLecture: TimeInterval = SupabaseDashboardGateway.sousBudgetLecture,
-                budgetEcran: TimeInterval = SessionController.defaultResolutionTimeout) {
+                sousBudgetLecture: TimeInterval = SupabaseDashboardGateway.sousBudgetLecture) {
         self.client = client
         self.clock = clock
         self.missions = SupabaseMissionsGateway(client: client, clock: clock)
         self.sousBudget = sousBudgetLecture
-        self.budgetEcran = budgetEcran
     }
 
-    public func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
+    public func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot {
         try MissionQuery.validate(context: context)
         let debut = ContinuousClock.now
         let maintenant = clock.now()
 
         // Comme le `Promise.all` du web : la relecture des gains ne dépend pas de la RPC. Si la RPC
         // échoue, la sortie de portée annule cette lecture et son résultat est ignoré.
-        let budgetGains = Self.budgetLecture(ecoule: 0, sousBudget: sousBudget, budgetEcran: budgetEcran)
+        let budgetGains = Self.budgetLecture(ecoule: 0, sousBudget: sousBudget, delaiEcran: delaiEcran)
         async let gains = Self.lectureComplementaire("gains du mois", budget: budgetGains) {
             try await self.lireGains(context: context, maintenant: maintenant)
         }
 
         let corps = try await lireCorps()
         let budget = Self.budgetLecture(ecoule: Self.secondes(ContinuousClock.now - debut),
-                                        sousBudget: sousBudget, budgetEcran: budgetEcran)
+                                        sousBudget: sousBudget, delaiEcran: delaiEcran)
         let idsMissions = AccueilAssemblage.identifiantsMissions(corps, email: context.email)
         let idsEtablissements = AccueilAssemblage.identifiantsEtablissements(corps)
         async let lecture = Self.lectureComplementaire("fiches et créneaux", budget: budget) {
@@ -83,11 +80,12 @@ public struct SupabaseDashboardGateway: DashboardPort {
     // MARK: - Lectures complémentaires (rendu partiel)
 
     /// Budget d'une lecture complémentaire lancée `ecoule` secondes après le début de l'appel : le
-    /// sous-budget, réduit à ce qu'il reste de `budgetEcran` moins `margeEcran`, jamais négatif.
+    /// sous-budget, réduit à ce qu'il reste de `delaiEcran` moins `margeEcran`, jamais négatif.
+    /// `delaiEcran` n'a pas de valeur par défaut : il vient toujours de l'appelant.
     static func budgetLecture(ecoule: TimeInterval,
                               sousBudget: TimeInterval = SupabaseDashboardGateway.sousBudgetLecture,
-                              budgetEcran: TimeInterval = SessionController.defaultResolutionTimeout) -> TimeInterval {
-        max(0, min(sousBudget, budgetEcran - ecoule - margeEcran))
+                              delaiEcran: TimeInterval) -> TimeInterval {
+        max(0, min(sousBudget, delaiEcran - ecoule - margeEcran))
     }
 
     /// Lecture bornée à `budget` : `nil` (rendu partiel) au dépassement ou sur une erreur de

@@ -30,6 +30,7 @@
 		BA3D823586A58A6220538174 /* LoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */; };
 		C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E960FB56B5063137621FDF /* UITestSupport.swift */; };
 		C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB01F07311DA9F04A88388A /* MissionsListScreen.swift */; };
+		D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */; };
 		D3C7C3722CF27996A3A3CA9F /* JoleneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C216B466C241777BFC4541 /* JoleneApp.swift */; };
 		DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */; };
 /* End PBXBuildFile section */
@@ -46,6 +47,7 @@
 
 /* Begin PBXFileReference section */
 		07388306B298067BAF72F868 /* DemoConsultationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoConsultationTests.swift; sourceTree = "<group>"; };
+		0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentateurRenvoiWeb.swift; sourceTree = "<group>"; };
 		092224AB4FC11F33F59E094D /* JoleneDesign */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneDesign; path = Packages/JoleneDesign; sourceTree = SOURCE_ROOT; };
 		0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSentinel.swift; sourceTree = "<group>"; };
 		1A8E49868C321275FFB1BD6C /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				92467ECFCEBFFC4A3024CA6F /* AjoutCalendrierMission.swift */,
 				1B12ED2CF03F5935EB224B9A /* AppContainer.swift */,
 				0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */,
+				0747FCCBC21B648A9985AA76 /* PresentateurRenvoiWeb.swift */,
 				3F564268833C084BE055A9D3 /* ResumePolicy.swift */,
 			);
 			path = Composition;
@@ -316,6 +319,7 @@
 				C58B6F5E0E8386082C59403E /* MissionsListScreen.swift in Sources */,
 				DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */,
 				2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */,
+				D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */,
 				7EE48E9A00576297AD1657A1 /* ProfileScreen.swift in Sources */,
 				55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */,
 				12E6B9193B807F15C95D84AE /* RootView.swift in Sources */,

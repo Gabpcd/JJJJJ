@@ -103,7 +103,17 @@ public struct DemoRoleGateway: RolePort {
 /// (`MissionBusiness`). Refuse tout contexte dont l'identifiant n'est pas celui du
 /// profil fictif : la démo n'est jamais un repli pour un compte réel.
 public struct DemoMissionsGateway: MissionsPort {
-    public init() {}
+    /// Source des missions ASSIGNEE ouvrables en détail depuis l'Accueil (T3 : fiches de
+    /// `demo-dashboard.json`). Lue seulement pour un identifiant absent de `demo-missions.json` :
+    /// une fixture de tableau de bord illisible ne casse jamais le détail Explorer. Point de fusion
+    /// T5 : cette source devient celle des missions ASSIGNEE de Mes missions (`LOT1_PLAN.md` §3 T5).
+    private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
+
+    public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+        try DemoFixtures.loadDashboard().missionsAssignees
+    }) {
+        self.missionsAssignees = missionsAssignees
+    }
 
     public func profile(userId: String) async throws -> SoignantProfile? {
         userId == DemoWorld.context.userId ? DemoWorld.context.profile : nil
@@ -119,9 +129,11 @@ public struct DemoMissionsGateway: MissionsPort {
     public func mission(id: String, context: MissionReadContext) async throws -> Mission? {
         try check(context)
         let (missions, etablissements) = try chargerFixtures()
+        if let fixture = missions.first(where: { $0.record.id == id }) {
+            return enrich(fixture, context: context, etablissements: etablissements)
+        }
         // T3 : les missions ASSIGNEE du tableau de bord démo s'ouvrent en détail, sans entrer dans Explorer.
-        let assignees = try DemoFixtures.loadDashboard().missionsAssignees
-        guard let fixture = (missions + assignees).first(where: { $0.record.id == id }) else { return nil }
+        guard let fixture = try missionsAssignees().first(where: { $0.record.id == id }) else { return nil }
         return enrich(fixture, context: context, etablissements: etablissements)
     }
 

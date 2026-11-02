@@ -13,7 +13,10 @@ import JoleneDesign
 /// Exclus (HARD STOP n°4) : `BandeauAlerte48h` et l'encart « cumul d'activité ».
 ///
 /// Renvois web (pointage, notifications) : routes `.safari` résolues par `LinkRouter`
-/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur.
+/// (`AccueilPresentation.renvoiWeb`), jamais une URL écrite en dur, présentées seulement par le
+/// présentateur injecté par T10 (`PresentateurRenvoiWeb`, `SFSafariViewController`), jamais par
+/// `openURL` (chemins AASA : retour silencieux dans l'app). Sans présentateur, le compteur reste
+/// affiché et aucun bouton n'est rendu (gap verrouillé, `DemoAccueilTests`).
 struct AccueilScreen: View {
     static let renvoiPresences = AccueilPresentation.renvoiWeb(AccueilPresentation.lienPresences)
     static let renvoiNotifications = AccueilPresentation.renvoiWeb(AccueilPresentation.lienNotifications)
@@ -22,7 +25,7 @@ struct AccueilScreen: View {
     @ObservedObject private var session: SessionStore
     private let snapshot: SessionSnapshot
     private let ouvrirOnglet: (MainTabView.Tab) -> Void
-    @Environment(\.openURL) private var openURL
+    @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @Environment(\.ajoutCalendrierMission) private var calendrier
     @State private var issueCalendrier: AjoutCalendrierIssue?
 
@@ -40,10 +43,11 @@ struct AccueilScreen: View {
                 case .loading:
                     chargement
                 case let .failed(message) where model.sessionExpired:
-                    // Session expirée côté serveur : revalider la session plutôt que rejouer la lecture.
+                    // Session expirée côté serveur : revalider la session, puis relire le tableau si elle
+                    // reste valide pour cet epoch (`AccueilModel.verifierSession`).
                     EmptyState(systemImage: "person.crop.circle.badge.exclamationmark", title: "Session à vérifier", message: message,
                                identifier: "accueil-session-expired", actionTitle: "Vérifier ma session",
-                               actionIdentifier: "accueil-session-check") { Task { await session.start() } }
+                               actionIdentifier: "accueil-session-check") { Task { await model.verifierSession(session) } }
                 case let .failed(message):
                     EmptyState(systemImage: "wifi.exclamationmark", title: "Impossible de charger votre tableau de bord",
                                message: message, identifier: "accueil-error", actionTitle: "Réessayer",
@@ -123,8 +127,8 @@ struct AccueilScreen: View {
     private func oubliPointage(_ texte: String) -> some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
             InlineNotice(texte, title: "Oubli de pointage ?", tone: .warning, identifier: "accueil-oubli-pointage")
-            if let route = Self.renvoiPresences {
-                JoleneButton("Vérifier mes présences sur jolene.app", style: .secondary) { ouvrir(route) }
+            if let presentateurRenvoiWeb, let route = Self.renvoiPresences {
+                JoleneButton("Vérifier mes présences sur jolene.app", style: .secondary) { presentateurRenvoiWeb.presenter(route) }
                     .accessibilityIdentifier("accueil-oubli-pointage-action")
             }
         }
@@ -275,8 +279,8 @@ struct AccueilScreen: View {
                 .foregroundStyle(JoleneColor.midnight)
                 .accessibilityIdentifier("accueil-notifications")
             Spacer(minLength: 0)
-            if let route = Self.renvoiNotifications {
-                Button("Voir sur jolene.app") { ouvrir(route) }
+            if let presentateurRenvoiWeb, let route = Self.renvoiNotifications {
+                Button("Voir sur jolene.app") { presentateurRenvoiWeb.presenter(route) }
                     .font(JoleneFont.callout.weight(.semibold))
                     .foregroundStyle(JoleneColor.rose800)
                     .frame(minHeight: 44)
@@ -287,17 +291,5 @@ struct AccueilScreen: View {
         .padding(.vertical, JoleneSpacing.sm)
         .background(JoleneColor.cloud)
         .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
-    }
-
-    // MARK: - Renvois web
-
-    /// Ouvre une route `.safari` hors de l'app. Point de fusion T10 (`LOT1_PLAN.md` §3 T10) : quand
-    /// `onOpenURL` / `onContinueUserActivity` seront branchés, ce renvoi passera par le présentateur
-    /// `.safari` du `DeepLinkCoordinator` (SFSafariViewController), jamais par `openURL` : ces chemins
-    /// sont couverts par l'AASA `/soignant/*` et reviendraient dans l'app par lien universel, que
-    /// `LinkRouter` renverrait en `.safari` (boucle).
-    private func ouvrir(_ route: JoleneRoute) {
-        guard let url = route.externalURL else { return }
-        openURL(url)
     }
 }

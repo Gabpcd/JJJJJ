@@ -11,7 +11,10 @@ import Foundation
 
 /// Tableau de bord soignant (`fn_dashboard_soignant_complet`) — tranche T3.
 public protocol DashboardPort: Sendable {
-    func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot
+    /// `delaiEcran` : délai qui borne tout l'appel côté écran, transmis par l'appelant
+    /// (`AccueilModel` : `SessionController.resolutionTimeout`). Seule source de ce délai : une
+    /// gateway qui enchaîne des lectures y réduit ses sous-budgets, jamais à une constante à elle.
+    func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot
 }
 
 /// Candidature (`fn_confirmer_action_planning_v1`, `fn_repondre_proposition`) — tranche T6a ;
@@ -129,7 +132,7 @@ public enum UnwiredPorts {
 
 public struct UnwiredDashboardPort: DashboardPort, UnwiredPort {
     public init() {}
-    public func dashboard(context: MissionReadContext) async throws -> DashboardSnapshot {
+    public func dashboard(context: MissionReadContext, delaiEcran: TimeInterval) async throws -> DashboardSnapshot {
         throw UnwiredPorts.erreur(port: "tableau de bord", tranche: "T3")
     }
 }
